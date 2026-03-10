@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TipoDireccion {
+  PRINCIPAL
+  FACTURACION
+  ENTREGA
+}
+
+enum SexoEmpleado {
+  MASCULINO
+  FEMENINO
+  NO_BINARIO
+  PREFIERO_NO_DECIR
+}
+
+enum RolSistema {
+  ADMINISTRADOR
+  SUPERVISOR
+  OPERADOR
+}
+
+enum TipoComision {
+  PORCENTAJE
+  FIJO
+}
+
+model Cliente {
+  id             String             @id @default(uuid()) @db.Uuid
+  nombre         String
+  razonSocial    String?
+  emailPrincipal String
+  telefonoCodigo String
+  telefonoNumero String
+  paisCodigo     String             @db.VarChar(2)
+  contactos      ClienteContacto[]
+  direcciones    ClienteDireccion[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([nombre])
+}
+
+model Proveedor {
+  id             String               @id @default(uuid()) @db.Uuid
+  nombre         String
+  razonSocial    String?
+  emailPrincipal String
+  telefonoCodigo String
+  telefonoNumero String
+  paisCodigo     String               @db.VarChar(2)
+  contactos      ProveedorContacto[]
+  direcciones    ProveedorDireccion[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([nombre])
+}
+
+model Empleado {
+  id                   String              @id @default(uuid()) @db.Uuid
+  nombreCompleto       String
+  emailPrincipal       String
+  telefonoCodigo       String
+  telefonoNumero       String
+  sector               String
+  ocupacion            String?
+  sexo                 SexoEmpleado?
+  fechaIngreso         DateTime            @db.Date
+  fechaNacimiento      DateTime?           @db.Date
+  usuarioSistema       Boolean             @default(false)
+  emailAcceso          String?
+  rolSistema           RolSistema?
+  comisionesHabilitadas Boolean            @default(false)
+  direcciones          EmpleadoDireccion[]
+  comisiones           EmpleadoComision[]
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  @@index([nombreCompleto])
+  @@index([sector])
+}
+
+model ClienteContacto {
+  id             String   @id @default(uuid()) @db.Uuid
+  clienteId      String   @db.Uuid
+  cliente        Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  nombre         String
+  cargo          String?
+  email          String?
+  telefonoCodigo String?
+  telefonoNumero String?
+  principal      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([clienteId])
+}
+
+model ClienteDireccion {
+  id           String        @id @default(uuid()) @db.Uuid
+  clienteId    String        @db.Uuid
+  cliente      Cliente       @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  descripcion  String
+  paisCodigo   String        @db.VarChar(2)
+  codigoPostal String?
+  direccion    String
+  numero       String?
+  ciudad       String
+  tipo         TipoDireccion
+  principal    Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([clienteId])
+}
+
+model ProveedorContacto {
+  id             String    @id @default(uuid()) @db.Uuid
+  proveedorId    String    @db.Uuid
+  proveedor      Proveedor @relation(fields: [proveedorId], references: [id], onDelete: Cascade)
+  nombre         String
+  cargo          String?
+  email          String?
+  telefonoCodigo String?
+  telefonoNumero String?
+  principal      Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([proveedorId])
+}
+
+model ProveedorDireccion {
+  id           String        @id @default(uuid()) @db.Uuid
+  proveedorId  String        @db.Uuid
+  proveedor    Proveedor     @relation(fields: [proveedorId], references: [id], onDelete: Cascade)
+  descripcion  String
+  paisCodigo   String        @db.VarChar(2)
+  codigoPostal String?
+  direccion    String
+  numero       String?
+  ciudad       String
+  tipo         TipoDireccion
+  principal    Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([proveedorId])
+}
+
+model EmpleadoDireccion {
+  id           String        @id @default(uuid()) @db.Uuid
+  empleadoId   String        @db.Uuid
+  empleado     Empleado      @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  descripcion  String
+  paisCodigo   String        @db.VarChar(2)
+  codigoPostal String?
+  direccion    String
+  numero       String?
+  ciudad       String
+  tipo         TipoDireccion
+  principal    Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([empleadoId])
+}
+
+model EmpleadoComision {
+  id          String       @id @default(uuid()) @db.Uuid
+  empleadoId  String       @db.Uuid
+  empleado    Empleado     @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  descripcion String
+  tipo        TipoComision
+  valor       Decimal      @db.Decimal(10, 2)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([empleadoId])
+}

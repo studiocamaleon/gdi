@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gdi-saas-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gdi_saas
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5436:5432"
+    volumes:
+      - gdi_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  gdi_postgres_data:
