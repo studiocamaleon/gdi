@@ -98,6 +98,118 @@ enum EstadoTarifaCentroCostoPeriodo {
   PUBLICADA
 }
 
+enum PlantillaMaquinaria {
+  ROUTER_CNC
+  CORTE_LASER
+  IMPRESORA_3D
+  IMPRESORA_DTF
+  IMPRESORA_DTF_UV
+  IMPRESORA_UV_MESA_EXTENSORA
+  IMPRESORA_UV_CILINDRICA
+  IMPRESORA_UV_FLATBED
+  IMPRESORA_UV_ROLLO
+  IMPRESORA_SOLVENTE
+  IMPRESORA_INYECCION_TINTA
+  IMPRESORA_LATEX
+  IMPRESORA_SUBLIMACION_GRAN_FORMATO
+  IMPRESORA_LASER
+  PLOTTER_CAD
+  MESA_DE_CORTE
+  PLOTTER_DE_CORTE
+}
+
+enum EstadoMaquina {
+  ACTIVA
+  INACTIVA
+  MANTENIMIENTO
+  BAJA
+}
+
+enum EstadoConfiguracionMaquina {
+  BORRADOR
+  INCOMPLETA
+  LISTA
+}
+
+enum GeometriaTrabajoMaquina {
+  PLIEGO
+  ROLLO
+  PLANO
+  CILINDRICO
+  VOLUMEN
+}
+
+enum UnidadProduccionMaquina {
+  HORA
+  HOJA
+  COPIA
+  PPM
+  A4_EQUIV
+  M2
+  M2_H
+  METRO_LINEAL
+  PIEZAS_H
+  PIEZA
+  CICLO
+}
+
+enum TipoPerfilOperativoMaquina {
+  IMPRESION
+  CORTE
+  MECANIZADO
+  GRABADO
+  FABRICACION
+  MIXTO
+}
+
+enum TipoConsumibleMaquina {
+  TONER
+  TINTA
+  BARNIZ
+  PRIMER
+  FILM
+  POLVO
+  ADHESIVO
+  RESINA
+  LUBRICANTE
+  OTRO
+}
+
+enum UnidadConsumoMaquina {
+  ML
+  LITRO
+  GRAMO
+  KG
+  UNIDAD
+  M2
+  METRO_LINEAL
+  PAGINA
+  A4_EQUIV
+}
+
+enum TipoComponenteDesgasteMaquina {
+  FUSOR
+  DRUM
+  DEVELOPER
+  CORREA_TRANSFERENCIA
+  CABEZAL
+  LAMPARA_UV
+  FRESA
+  CUCHILLA
+  FILTRO
+  KIT_MANTENIMIENTO
+  OTRO
+}
+
+enum UnidadDesgasteMaquina {
+  COPIAS_A4_EQUIV
+  M2
+  METROS_LINEALES
+  HORAS
+  CICLOS
+  PIEZAS
+}
+
 model Tenant {
   id                                 String                              @id @default(uuid()) @db.Uuid
   nombre                             String
@@ -118,6 +230,10 @@ model Tenant {
   centroCostoComponentesCostoPeriodo CentroCostoComponenteCostoPeriodo[]
   centroCostoCapacidadesPeriodo      CentroCostoCapacidadPeriodo[]
   centroCostoTarifasPeriodo          CentroCostoTarifaPeriodo[]
+  maquinas                           Maquina[]
+  maquinaPerfilesOperativos          MaquinaPerfilOperativo[]
+  maquinaConsumibles                 MaquinaConsumible[]
+  maquinaComponentesDesgaste         MaquinaComponenteDesgaste[]
   clienteContactos                   ClienteContacto[]
   clienteDireccions                  ClienteDireccion[]
   proveedorContactos                 ProveedorContacto[]
@@ -388,6 +504,7 @@ model Planta {
   tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   areasCosto   AreaCosto[]
   centrosCosto CentroCosto[]
+  maquinas     Maquina[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, nombre])
@@ -437,6 +554,7 @@ model CentroCosto {
   componentesCostoPeriodo CentroCostoComponenteCostoPeriodo[]
   capacidadesPeriodo      CentroCostoCapacidadPeriodo[]
   tarifasPeriodo          CentroCostoTarifaPeriodo[]
+  maquinasPrincipales     Maquina[]                          @relation("MaquinaCentroCostoPrincipal")
 
   @@unique([tenantId, codigo])
   @@index([tenantId, plantaId, areaCostoId])
@@ -523,4 +641,121 @@ model CentroCostoTarifaPeriodo {
 
   @@unique([tenantId, centroCostoId, periodo, estado])
   @@index([tenantId, centroCostoId, periodo])
+}
+
+model Maquina {
+  id                        String                      @id @default(uuid()) @db.Uuid
+  tenantId                  String                      @db.Uuid
+  codigo                    String
+  nombre                    String
+  plantilla                 PlantillaMaquinaria
+  plantillaVersion          Int                         @default(1)
+  fabricante                String?
+  modelo                    String?
+  numeroSerie               String?
+  plantaId                  String                      @db.Uuid
+  centroCostoPrincipalId    String?                     @db.Uuid
+  estado                    EstadoMaquina               @default(ACTIVA)
+  estadoConfiguracion       EstadoConfiguracionMaquina  @default(BORRADOR)
+  geometriaTrabajo          GeometriaTrabajoMaquina
+  unidadProduccionPrincipal UnidadProduccionMaquina
+  anchoUtil                 Decimal?                    @db.Decimal(12, 2)
+  largoUtil                 Decimal?                    @db.Decimal(12, 2)
+  altoUtil                  Decimal?                    @db.Decimal(12, 2)
+  espesorMaximo             Decimal?                    @db.Decimal(12, 2)
+  pesoMaximo                Decimal?                    @db.Decimal(12, 2)
+  fechaAlta                 DateTime?                   @db.Date
+  activo                    Boolean                     @default(true)
+  observaciones             String?
+  parametrosTecnicosJson    Json?
+  capacidadesAvanzadasJson  Json?
+  createdAt                 DateTime                    @default(now())
+  updatedAt                 DateTime                    @updatedAt
+  tenant                    Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planta                    Planta                      @relation(fields: [plantaId], references: [id], onDelete: Cascade)
+  centroCostoPrincipal      CentroCosto?                @relation("MaquinaCentroCostoPrincipal", fields: [centroCostoPrincipalId], references: [id], onDelete: SetNull)
+  perfilesOperativos        MaquinaPerfilOperativo[]
+  consumibles               MaquinaConsumible[]
+  componentesDesgaste       MaquinaComponenteDesgaste[]
+
+  @@unique([tenantId, codigo])
+  @@index([tenantId, plantilla, activo])
+  @@index([tenantId, plantaId, activo])
+  @@index([tenantId, estado])
+  @@index([tenantId, centroCostoPrincipalId])
+}
+
+model MaquinaPerfilOperativo {
+  id                   String                    @id @default(uuid()) @db.Uuid
+  tenantId             String                    @db.Uuid
+  maquinaId            String                    @db.Uuid
+  nombre               String
+  tipoPerfil           TipoPerfilOperativoMaquina
+  activo               Boolean                   @default(true)
+  anchoAplicable       Decimal?                  @db.Decimal(12, 2)
+  altoAplicable        Decimal?                  @db.Decimal(12, 2)
+  modoTrabajo          String?
+  calidad              String?
+  productividad        Decimal?                  @db.Decimal(12, 2)
+  unidadProductividad  UnidadProduccionMaquina?
+  tiempoPreparacionMin Decimal?                  @db.Decimal(12, 2)
+  tiempoCargaMin       Decimal?                  @db.Decimal(12, 2)
+  tiempoDescargaMin    Decimal?                  @db.Decimal(12, 2)
+  tiempoRipMin         Decimal?                  @db.Decimal(12, 2)
+  cantidadPasadas      Int?
+  dobleFaz             Boolean                   @default(false)
+  detalleJson          Json?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  tenant               Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  maquina              Maquina                   @relation(fields: [maquinaId], references: [id], onDelete: Cascade)
+  consumibles          MaquinaConsumible[]
+
+  @@unique([tenantId, maquinaId, nombre])
+  @@index([tenantId, maquinaId, activo])
+}
+
+model MaquinaConsumible {
+  id                 String                @id @default(uuid()) @db.Uuid
+  tenantId           String                @db.Uuid
+  maquinaId          String                @db.Uuid
+  perfilOperativoId  String?               @db.Uuid
+  nombre             String
+  tipo               TipoConsumibleMaquina
+  unidad             UnidadConsumoMaquina
+  costoReferencia    Decimal?              @db.Decimal(12, 2)
+  rendimientoEstimado Decimal?             @db.Decimal(12, 2)
+  consumoBase        Decimal?              @db.Decimal(12, 4)
+  activo             Boolean               @default(true)
+  detalleJson        Json?
+  observaciones      String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  tenant             Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  maquina            Maquina               @relation(fields: [maquinaId], references: [id], onDelete: Cascade)
+  perfilOperativo    MaquinaPerfilOperativo? @relation(fields: [perfilOperativoId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, maquinaId, activo])
+  @@index([tenantId, perfilOperativoId])
+}
+
+model MaquinaComponenteDesgaste {
+  id                String                       @id @default(uuid()) @db.Uuid
+  tenantId          String                       @db.Uuid
+  maquinaId         String                       @db.Uuid
+  nombre            String
+  tipo              TipoComponenteDesgasteMaquina
+  vidaUtilEstimada  Decimal?                     @db.Decimal(12, 2)
+  unidadDesgaste    UnidadDesgasteMaquina
+  costoReposicion   Decimal?                     @db.Decimal(12, 2)
+  modoProrrateo     String?
+  activo            Boolean                      @default(true)
+  detalleJson       Json?
+  observaciones     String?
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  tenant            Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  maquina           Maquina                      @relation(fields: [maquinaId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, maquinaId, activo])
 }

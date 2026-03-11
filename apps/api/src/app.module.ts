@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { ClientesModule } from './clientes/clientes.module';
 import { CostosModule } from './costos/costos.module';
 import { EmpleadosModule } from './empleados/empleados.module';
+import { MaquinariaModule } from './maquinaria/maquinaria.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProveedoresModule } from './proveedores/proveedores.module';
 import { TenantsModule } from './tenants/tenants.module';
@@ -22,6 +23,7 @@ import { TenantsModule } from './tenants/tenants.module';
     EmpleadosModule,
     ProveedoresModule,
     CostosModule,
+    MaquinariaModule,
   ],
   controllers: [AppController],
   providers: [

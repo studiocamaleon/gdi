@@ -14,6 +14,7 @@ import {
   IdCardIcon,
   LayoutDashboardIcon,
   LogOutIcon,
+  PrinterIcon,
   Settings2Icon,
   UsersIcon,
 } from "lucide-react";
@@ -82,6 +83,11 @@ const costos = [
     title: "Centros de costo",
     href: "/costos/centros-de-costo",
     icon: FolderTreeIcon,
+  },
+  {
+    title: "Maquinaria",
+    href: "/costos/maquinaria",
+    icon: PrinterIcon,
   },
 ];
 

@@ -1,0 +1,574 @@
+"use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var MaquinariaService_1;
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.MaquinariaService = void 0;
+const common_1 = require("@nestjs/common");
+const node_crypto_1 = require("node:crypto");
+const client_1 = require("@prisma/client");
+const library_1 = require("@prisma/client/runtime/library");
+const prisma_service_1 = require("../prisma/prisma.service");
+const upsert_maquina_dto_1 = require("./dto/upsert-maquina.dto");
+const maquinaria_template_profile_rules_1 = require("./maquinaria-template-profile-rules");
+let MaquinariaService = class MaquinariaService {
+    static { MaquinariaService_1 = this; }
+    prisma;
+    static CODIGO_PREFIX = 'MAQ';
+    static CODIGO_MAX_RETRIES = 5;
+    static COMBINED_PRODUCTIVITY_UNITS = new Set([
+        upsert_maquina_dto_1.UnidadProduccionMaquinaDto.ppm,
+        upsert_maquina_dto_1.UnidadProduccionMaquinaDto.m2_h,
+        upsert_maquina_dto_1.UnidadProduccionMaquinaDto.piezas_h,
+    ]);
+    constructor(prisma) {
+        this.prisma = prisma;
+    }
+    async findAll(auth) {
+        const maquinas = await this.prisma.maquina.findMany({
+            where: { tenantId: auth.tenantId },
+            include: {
+                planta: true,
+                centroCostoPrincipal: true,
+                perfilesOperativos: true,
+                consumibles: {
+                    include: {
+                        perfilOperativo: true,
+                    },
+                },
+                componentesDesgaste: true,
+            },
+            orderBy: [{ nombre: 'asc' }],
+        });
+        return maquinas.map((maquina) => this.toMaquinaResponse(maquina));
+    }
+    async findOne(auth, id) {
+        const maquina = await this.findMaquinaOrThrow(auth, id);
+        return this.toMaquinaResponse(maquina);
+    }
+    async create(auth, payload) {
+        await this.validateReferences(auth, payload);
+        for (let attempt = 0; attempt < MaquinariaService_1.CODIGO_MAX_RETRIES; attempt += 1) {
+            const generatedCodigo = this.generateCodigoMaquina();
+            try {
+                const maquina = await this.prisma.$transaction(async (tx) => {
+                    const created = await tx.maquina.create({
+                        data: this.buildMaquinaWriteData(auth, payload, generatedCodigo),
+                    });
+                    await this.replaceNestedData(tx, auth.tenantId, created.id, payload);
+                    return tx.maquina.findUniqueOrThrow({
+                        where: { id: created.id },
+                        include: {
+                            planta: true,
+                            centroCostoPrincipal: true,
+                            perfilesOperativos: true,
+                            consumibles: {
+                                include: {
+                                    perfilOperativo: true,
+                                },
+                            },
+                            componentesDesgaste: true,
+                        },
+                    });
+                });
+                return this.toMaquinaResponse(maquina);
+            }
+            catch (error) {
+                if (this.isCodigoConflictError(error)) {
+                    continue;
+                }
+                this.handleWriteError(error);
+            }
+        }
+        throw new common_1.ConflictException('No se pudo generar un codigo unico para la maquina.');
+    }
+    async update(auth, id, payload) {
+        await this.findMaquinaOrThrow(auth, id);
+        await this.validateReferences(auth, payload);
+        if (!payload.codigo?.trim()) {
+            throw new common_1.BadRequestException('El codigo de la maquina es obligatorio para actualizar.');
+        }
+        try {
+            const maquina = await this.prisma.$transaction(async (tx) => {
+                await tx.maquina.update({
+                    where: { id },
+                    data: this.buildMaquinaWriteData(auth, payload),
+                });
+                await this.replaceNestedData(tx, auth.tenantId, id, payload);
+                return tx.maquina.findUniqueOrThrow({
+                    where: { id },
+                    include: {
+                        planta: true,
+                        centroCostoPrincipal: true,
+                        perfilesOperativos: true,
+                        consumibles: {
+                            include: {
+                                perfilOperativo: true,
+                            },
+                        },
+                        componentesDesgaste: true,
+                    },
+                });
+            });
+            return this.toMaquinaResponse(maquina);
+        }
+        catch (error) {
+            this.handleWriteError(error);
+        }
+    }
+    async toggle(auth, id) {
+        const maquina = await this.findMaquinaBaseOrThrow(auth, id);
+        const updated = await this.prisma.maquina.update({
+            where: { id },
+            data: {
+                activo: !maquina.activo,
+            },
+            include: {
+                planta: true,
+                centroCostoPrincipal: true,
+                perfilesOperativos: true,
+                consumibles: {
+                    include: {
+                        perfilOperativo: true,
+                    },
+                },
+                componentesDesgaste: true,
+            },
+        });
+        return this.toMaquinaResponse(updated);
+    }
+    async replaceNestedData(tx, tenantId, maquinaId, payload) {
+        await tx.maquinaConsumible.deleteMany({ where: { tenantId, maquinaId } });
+        await tx.maquinaComponenteDesgaste.deleteMany({ where: { tenantId, maquinaId } });
+        await tx.maquinaPerfilOperativo.deleteMany({ where: { tenantId, maquinaId } });
+        const perfiles = await Promise.all(payload.perfilesOperativos.map((perfil) => tx.maquinaPerfilOperativo.create({
+            data: this.buildPerfilData(tenantId, maquinaId, perfil),
+        })));
+        const perfilIdByName = new Map(perfiles.map((perfil) => [perfil.nombre, perfil.id]));
+        for (const consumible of payload.consumibles) {
+            const perfilOperativoId = consumible.perfilOperativoNombre
+                ? perfilIdByName.get(consumible.perfilOperativoNombre.trim())
+                : undefined;
+            if (consumible.perfilOperativoNombre && !perfilOperativoId) {
+                throw new common_1.BadRequestException(`El consumible ${consumible.nombre.trim()} referencia un perfil operativo inexistente.`);
+            }
+            await tx.maquinaConsumible.create({
+                data: this.buildConsumibleData(tenantId, maquinaId, consumible, perfilOperativoId),
+            });
+        }
+        await Promise.all(payload.componentesDesgaste.map((componente) => tx.maquinaComponenteDesgaste.create({
+            data: this.buildComponenteDesgasteData(tenantId, maquinaId, componente),
+        })));
+    }
+    buildMaquinaWriteData(auth, payload, forcedCodigo) {
+        const estadoConfiguracion = this.getDerivedEstadoConfiguracion(payload);
+        const parametrosTecnicos = this.withDerivedTemplateParams(payload);
+        const dimensionesDerivadas = this.getDerivedMachineDimensions(payload, parametrosTecnicos);
+        return {
+            tenantId: auth.tenantId,
+            codigo: (forcedCodigo ?? payload.codigo ?? '').trim().toUpperCase(),
+            nombre: payload.nombre.trim(),
+            plantilla: this.toPrismaEnum(payload.plantilla),
+            plantillaVersion: payload.plantillaVersion ?? 1,
+            fabricante: payload.fabricante?.trim() || null,
+            modelo: payload.modelo?.trim() || null,
+            numeroSerie: payload.numeroSerie?.trim() || null,
+            plantaId: payload.plantaId,
+            centroCostoPrincipalId: payload.centroCostoPrincipalId ?? null,
+            estado: this.toPrismaEnum(payload.estado),
+            estadoConfiguracion: this.toPrismaEnum(estadoConfiguracion),
+            geometriaTrabajo: this.toPrismaEnum(payload.geometriaTrabajo),
+            unidadProduccionPrincipal: this.toPrismaEnum(payload.unidadProduccionPrincipal),
+            anchoUtil: this.toDecimal(dimensionesDerivadas.anchoUtil),
+            largoUtil: this.toDecimal(dimensionesDerivadas.largoUtil),
+            altoUtil: this.toDecimal(payload.altoUtil),
+            espesorMaximo: this.toDecimal(payload.espesorMaximo),
+            pesoMaximo: this.toDecimal(payload.pesoMaximo),
+            fechaAlta: payload.fechaAlta ? new Date(payload.fechaAlta) : null,
+            activo: payload.activo,
+            observaciones: payload.observaciones?.trim() || null,
+            parametrosTecnicosJson: this.toNullableJson(parametrosTecnicos),
+            capacidadesAvanzadasJson: this.toNullableJson(payload.capacidadesAvanzadas),
+        };
+    }
+    buildPerfilData(tenantId, maquinaId, payload) {
+        return {
+            tenantId,
+            maquinaId,
+            nombre: payload.nombre.trim(),
+            tipoPerfil: this.toPrismaEnum(payload.tipoPerfil),
+            activo: payload.activo,
+            anchoAplicable: this.toDecimal(payload.anchoAplicable),
+            altoAplicable: this.toDecimal(payload.altoAplicable),
+            modoTrabajo: payload.modoTrabajo?.trim() || null,
+            calidad: payload.calidad?.trim() || null,
+            productividad: this.toDecimal(payload.productividad),
+            unidadProductividad: payload.unidadProductividad
+                ? this.toPrismaEnum(payload.unidadProductividad)
+                : null,
+            tiempoPreparacionMin: this.toDecimal(payload.tiempoPreparacionMin),
+            tiempoCargaMin: this.toDecimal(payload.tiempoCargaMin),
+            tiempoDescargaMin: this.toDecimal(payload.tiempoDescargaMin),
+            tiempoRipMin: this.toDecimal(payload.tiempoRipMin),
+            cantidadPasadas: payload.cantidadPasadas !== undefined ? Math.round(payload.cantidadPasadas) : null,
+            dobleFaz: payload.dobleFaz ?? false,
+            detalleJson: this.toNullableJson(payload.detalle),
+        };
+    }
+    buildConsumibleData(tenantId, maquinaId, payload, perfilOperativoId) {
+        return {
+            tenantId,
+            maquinaId,
+            perfilOperativoId: perfilOperativoId ?? null,
+            nombre: payload.nombre.trim(),
+            tipo: this.toPrismaEnum(payload.tipo),
+            unidad: this.toPrismaEnum(payload.unidad),
+            costoReferencia: this.toDecimal(payload.costoReferencia),
+            rendimientoEstimado: this.toDecimal(payload.rendimientoEstimado),
+            consumoBase: this.toDecimal(payload.consumoBase),
+            activo: payload.activo,
+            detalleJson: this.toNullableJson(payload.detalle),
+            observaciones: payload.observaciones?.trim() || null,
+        };
+    }
+    buildComponenteDesgasteData(tenantId, maquinaId, payload) {
+        return {
+            tenantId,
+            maquinaId,
+            nombre: payload.nombre.trim(),
+            tipo: this.toPrismaEnum(payload.tipo),
+            vidaUtilEstimada: this.toDecimal(payload.vidaUtilEstimada),
+            unidadDesgaste: this.toPrismaEnum(payload.unidadDesgaste),
+            costoReposicion: this.toDecimal(payload.costoReposicion),
+            modoProrrateo: payload.modoProrrateo?.trim() || null,
+            activo: payload.activo,
+            detalleJson: this.toNullableJson(payload.detalle),
+            observaciones: payload.observaciones?.trim() || null,
+        };
+    }
+    getDerivedEstadoConfiguracion(payload) {
+        if (!this.hasMinimumBaseData(payload)) {
+            return upsert_maquina_dto_1.EstadoConfiguracionMaquinaDto.borrador;
+        }
+        if (!this.hasCoreCostingData(payload)) {
+            return upsert_maquina_dto_1.EstadoConfiguracionMaquinaDto.incompleta;
+        }
+        if (!this.hasTemplateSpecificData(payload)) {
+            return upsert_maquina_dto_1.EstadoConfiguracionMaquinaDto.incompleta;
+        }
+        return upsert_maquina_dto_1.EstadoConfiguracionMaquinaDto.lista;
+    }
+    hasMinimumBaseData(payload) {
+        return Boolean(payload.nombre?.trim() &&
+            payload.plantaId &&
+            payload.plantilla &&
+            payload.estado &&
+            payload.unidadProduccionPrincipal);
+    }
+    hasCoreCostingData(payload) {
+        const hasPerfilValido = payload.perfilesOperativos.some((perfil) => Boolean(perfil.nombre?.trim()) &&
+            perfil.productividad !== undefined &&
+            Boolean(perfil.unidadProductividad));
+        const hasConsumibleValido = payload.consumibles.some((consumible) => Boolean(consumible.nombre?.trim()) &&
+            Boolean(consumible.tipo) &&
+            Boolean(consumible.unidad));
+        const hasDesgasteValido = payload.componentesDesgaste.some((componente) => Boolean(componente.nombre?.trim()) &&
+            Boolean(componente.tipo) &&
+            Boolean(componente.unidadDesgaste) &&
+            componente.vidaUtilEstimada !== undefined);
+        return hasPerfilValido && hasConsumibleValido && hasDesgasteValido;
+    }
+    hasTemplateSpecificData(payload) {
+        const technicalValues = [
+            payload.anchoUtil,
+            payload.largoUtil,
+            payload.altoUtil,
+            payload.espesorMaximo,
+            payload.pesoMaximo,
+        ].filter((value) => value !== undefined && value !== null);
+        const paramKeys = Object.entries(payload.parametrosTecnicos ?? {}).filter(([, value]) => {
+            if (value === null || value === undefined) {
+                return false;
+            }
+            if (typeof value === 'string') {
+                return value.trim().length > 0;
+            }
+            return true;
+        });
+        if (payload.plantilla === 'impresora_laser') {
+            const hasLaserSpecific = paramKeys.some(([key]) => ['gramaje', 'margen', 'resolucion', 'duplex', 'formato'].some((token) => key.toLowerCase().includes(token)));
+            return hasLaserSpecific || technicalValues.length >= 2;
+        }
+        if (payload.geometriaTrabajo === 'volumen') {
+            return (payload.anchoUtil !== undefined &&
+                payload.largoUtil !== undefined &&
+                payload.altoUtil !== undefined);
+        }
+        if (payload.geometriaTrabajo === 'rollo') {
+            const hasRolloSpecific = paramKeys.some(([key]) => ['bobina', 'diametro', 'ancho', 'material'].some((token) => key.toLowerCase().includes(token)));
+            return hasRolloSpecific || technicalValues.length >= 2;
+        }
+        return technicalValues.length >= 2 || paramKeys.length >= 2;
+    }
+    async validateReferences(auth, payload) {
+        const planta = await this.prisma.planta.findFirst({
+            where: {
+                id: payload.plantaId,
+                tenantId: auth.tenantId,
+            },
+            select: { id: true },
+        });
+        if (!planta) {
+            throw new common_1.BadRequestException('La planta seleccionada no existe.');
+        }
+        if (payload.centroCostoPrincipalId) {
+            const centro = await this.prisma.centroCosto.findFirst({
+                where: {
+                    id: payload.centroCostoPrincipalId,
+                    tenantId: auth.tenantId,
+                },
+                select: {
+                    id: true,
+                    plantaId: true,
+                },
+            });
+            if (!centro) {
+                throw new common_1.BadRequestException('El centro de costo principal no existe.');
+            }
+            if (centro.plantaId !== payload.plantaId) {
+                throw new common_1.BadRequestException('La maquina y el centro de costo principal deben pertenecer a la misma planta.');
+            }
+        }
+        const normalizedPerfilNames = new Set();
+        for (const perfil of payload.perfilesOperativos) {
+            const key = perfil.nombre.trim().toLowerCase();
+            if (normalizedPerfilNames.has(key)) {
+                throw new common_1.BadRequestException(`El perfil operativo ${perfil.nombre.trim()} esta duplicado.`);
+            }
+            if (perfil.unidadProductividad &&
+                !MaquinariaService_1.COMBINED_PRODUCTIVITY_UNITS.has(perfil.unidadProductividad)) {
+                throw new common_1.BadRequestException(`El perfil operativo ${perfil.nombre.trim()} debe usar una unidad de productividad combinada (pag/min, m2/h o piezas/h).`);
+            }
+            try {
+                (0, maquinaria_template_profile_rules_1.validatePerfilOperativoByTemplate)(payload.plantilla, perfil);
+            }
+            catch (error) {
+                throw new common_1.BadRequestException(error instanceof Error
+                    ? error.message
+                    : `Perfil operativo invalido para la plantilla ${payload.plantilla}.`);
+            }
+            normalizedPerfilNames.add(key);
+        }
+    }
+    async findMaquinaOrThrow(auth, id) {
+        const maquina = await this.prisma.maquina.findFirst({
+            where: {
+                id,
+                tenantId: auth.tenantId,
+            },
+            include: {
+                planta: true,
+                centroCostoPrincipal: true,
+                perfilesOperativos: true,
+                consumibles: {
+                    include: {
+                        perfilOperativo: true,
+                    },
+                },
+                componentesDesgaste: true,
+            },
+        });
+        if (!maquina) {
+            throw new common_1.NotFoundException('La maquina no existe.');
+        }
+        return maquina;
+    }
+    async findMaquinaBaseOrThrow(auth, id) {
+        const maquina = await this.prisma.maquina.findFirst({
+            where: {
+                id,
+                tenantId: auth.tenantId,
+            },
+        });
+        if (!maquina) {
+            throw new common_1.NotFoundException('La maquina no existe.');
+        }
+        return maquina;
+    }
+    toMaquinaResponse(maquina) {
+        return {
+            id: maquina.id,
+            codigo: maquina.codigo,
+            nombre: maquina.nombre,
+            plantilla: this.toApiEnum(maquina.plantilla),
+            plantillaVersion: maquina.plantillaVersion,
+            fabricante: maquina.fabricante ?? '',
+            modelo: maquina.modelo ?? '',
+            numeroSerie: maquina.numeroSerie ?? '',
+            plantaId: maquina.plantaId,
+            plantaNombre: maquina.planta.nombre,
+            centroCostoPrincipalId: maquina.centroCostoPrincipalId ?? '',
+            centroCostoPrincipalNombre: maquina.centroCostoPrincipal?.nombre ?? '',
+            estado: this.toApiEnum(maquina.estado),
+            estadoConfiguracion: this.toApiEnum(maquina.estadoConfiguracion),
+            geometriaTrabajo: this.toApiEnum(maquina.geometriaTrabajo),
+            unidadProduccionPrincipal: this.toApiEnum(maquina.unidadProduccionPrincipal),
+            anchoUtil: this.toNumber(maquina.anchoUtil),
+            largoUtil: this.toNumber(maquina.largoUtil),
+            altoUtil: this.toNumber(maquina.altoUtil),
+            espesorMaximo: this.toNumber(maquina.espesorMaximo),
+            pesoMaximo: this.toNumber(maquina.pesoMaximo),
+            fechaAlta: maquina.fechaAlta?.toISOString().slice(0, 10) ?? '',
+            activo: maquina.activo,
+            observaciones: maquina.observaciones ?? '',
+            parametrosTecnicos: maquina.parametrosTecnicosJson ?? null,
+            capacidadesAvanzadas: maquina.capacidadesAvanzadasJson ?? null,
+            perfilesOperativos: maquina.perfilesOperativos.map((perfil) => ({
+                id: perfil.id,
+                nombre: perfil.nombre,
+                tipoPerfil: this.toApiEnum(perfil.tipoPerfil),
+                activo: perfil.activo,
+                anchoAplicable: this.toNumber(perfil.anchoAplicable),
+                altoAplicable: this.toNumber(perfil.altoAplicable),
+                modoTrabajo: perfil.modoTrabajo ?? '',
+                calidad: perfil.calidad ?? '',
+                productividad: this.toNumber(perfil.productividad),
+                unidadProductividad: perfil.unidadProductividad
+                    ? this.toApiEnum(perfil.unidadProductividad)
+                    : '',
+                tiempoPreparacionMin: this.toNumber(perfil.tiempoPreparacionMin),
+                tiempoCargaMin: this.toNumber(perfil.tiempoCargaMin),
+                tiempoDescargaMin: this.toNumber(perfil.tiempoDescargaMin),
+                tiempoRipMin: this.toNumber(perfil.tiempoRipMin),
+                cantidadPasadas: perfil.cantidadPasadas ?? null,
+                dobleFaz: perfil.dobleFaz,
+                detalle: perfil.detalleJson ?? null,
+            })),
+            consumibles: maquina.consumibles.map((consumible) => ({
+                id: consumible.id,
+                nombre: consumible.nombre,
+                tipo: this.toApiEnum(consumible.tipo),
+                unidad: this.toApiEnum(consumible.unidad),
+                costoReferencia: this.toNumber(consumible.costoReferencia),
+                rendimientoEstimado: this.toNumber(consumible.rendimientoEstimado),
+                consumoBase: this.toNumber(consumible.consumoBase),
+                perfilOperativoNombre: consumible.perfilOperativo?.nombre ?? '',
+                activo: consumible.activo,
+                detalle: consumible.detalleJson ?? null,
+                observaciones: consumible.observaciones ?? '',
+            })),
+            componentesDesgaste: maquina.componentesDesgaste.map((componente) => ({
+                id: componente.id,
+                nombre: componente.nombre,
+                tipo: this.toApiEnum(componente.tipo),
+                vidaUtilEstimada: this.toNumber(componente.vidaUtilEstimada),
+                unidadDesgaste: this.toApiEnum(componente.unidadDesgaste),
+                costoReposicion: this.toNumber(componente.costoReposicion),
+                modoProrrateo: componente.modoProrrateo ?? '',
+                activo: componente.activo,
+                detalle: componente.detalleJson ?? null,
+                observaciones: componente.observaciones ?? '',
+            })),
+            createdAt: maquina.createdAt.toISOString(),
+            updatedAt: maquina.updatedAt.toISOString(),
+        };
+    }
+    handleWriteError(error) {
+        if (error instanceof library_1.PrismaClientKnownRequestError && error.code === 'P2002') {
+            throw new common_1.ConflictException('Ya existe una maquina con ese codigo.');
+        }
+        throw error;
+    }
+    isCodigoConflictError(error) {
+        return (error instanceof library_1.PrismaClientKnownRequestError &&
+            error.code === 'P2002' &&
+            Array.isArray(error.meta?.target) &&
+            error.meta?.target.includes('tenantId') &&
+            error.meta?.target.includes('codigo'));
+    }
+    generateCodigoMaquina() {
+        const randomChunk = (0, node_crypto_1.randomUUID)().replace(/-/g, '').slice(0, 8).toUpperCase();
+        return `${MaquinariaService_1.CODIGO_PREFIX}-${randomChunk}`;
+    }
+    toDecimal(value) {
+        return value === undefined || value === null ? null : new client_1.Prisma.Decimal(value);
+    }
+    toNumber(value) {
+        return value === null || value === undefined ? null : Number(value);
+    }
+    toNullableJson(value) {
+        if (!value) {
+            return client_1.Prisma.JsonNull;
+        }
+        return value;
+    }
+    toPrismaEnum(value) {
+        return value.toUpperCase();
+    }
+    toApiEnum(value) {
+        return value.toLowerCase();
+    }
+    withDerivedTemplateParams(payload) {
+        if (!payload.parametrosTecnicos) {
+            return undefined;
+        }
+        const params = { ...(payload.parametrosTecnicos ?? {}) };
+        if (!payload.plantilla.startsWith('impresora_')) {
+            return params;
+        }
+        const anchoMaxHoja = this.toNumeric(params.anchoMaxHoja);
+        const altoMaxHoja = this.toNumeric(params.altoMaxHoja);
+        const margenSuperior = this.toNumeric(params.margenSuperior) ?? 0;
+        const margenInferior = this.toNumeric(params.margenInferior) ?? 0;
+        const margenIzquierdo = this.toNumeric(params.margenIzquierdo) ?? 0;
+        const margenDerecho = this.toNumeric(params.margenDerecho) ?? 0;
+        if (anchoMaxHoja === null || altoMaxHoja === null) {
+            return params;
+        }
+        const anchoImprimible = Number((anchoMaxHoja - margenIzquierdo - margenDerecho).toFixed(2));
+        const altoImprimible = Number((altoMaxHoja - margenSuperior - margenInferior).toFixed(2));
+        if (anchoImprimible <= 0 || altoImprimible <= 0) {
+            return params;
+        }
+        return {
+            ...params,
+            anchoImprimibleMaximo: anchoImprimible,
+            altoImprimibleMaximo: altoImprimible,
+            areaImprimibleMaxima: Number(((anchoImprimible * altoImprimible) / 10000).toFixed(4)),
+        };
+    }
+    toNumeric(value) {
+        if (value === null || value === undefined || value === '') {
+            return null;
+        }
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    getDerivedMachineDimensions(payload, parametrosTecnicos) {
+        if (payload.plantilla !== 'impresora_laser' || !parametrosTecnicos) {
+            return {
+                anchoUtil: payload.anchoUtil,
+                largoUtil: payload.largoUtil,
+            };
+        }
+        const ancho = this.toNumeric(parametrosTecnicos.anchoImprimibleMaximo);
+        const largo = this.toNumeric(parametrosTecnicos.altoImprimibleMaximo);
+        return {
+            anchoUtil: ancho ?? payload.anchoUtil,
+            largoUtil: largo ?? payload.largoUtil,
+        };
+    }
+};
+exports.MaquinariaService = MaquinariaService;
+exports.MaquinariaService = MaquinariaService = MaquinariaService_1 = __decorate([
+    (0, common_1.Injectable)(),
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+], MaquinariaService);
+//# sourceMappingURL=maquinaria.service.js.map
