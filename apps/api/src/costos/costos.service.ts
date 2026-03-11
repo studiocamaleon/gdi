@@ -868,9 +868,7 @@ export class CostosService {
       return {
         empleadoId: empleado.id,
         empleadoNombre: empleado.nombreCompleto,
-        porcentajeAsignadoEnEsteCentro: Number(
-          asignadoEnEsteCentro.toFixed(2),
-        ),
+        porcentajeAsignadoEnEsteCentro: Number(asignadoEnEsteCentro.toFixed(2)),
         porcentajeAsignadoEnOtrosCentros: Number(
           porcentajeAsignadoEnOtrosCentros.toFixed(2),
         ),
@@ -1106,7 +1104,9 @@ export class CostosService {
         },
         select: { id: true },
       });
-      const existingEmployeeIds = new Set(existingEmployees.map((item) => item.id));
+      const existingEmployeeIds = new Set(
+        existingEmployees.map((item) => item.id),
+      );
 
       for (const empleadoId of employeeIds) {
         if (!existingEmployeeIds.has(empleadoId)) {
@@ -1155,7 +1155,9 @@ export class CostosService {
         },
         select: { id: true },
       });
-      const existingProviderIds = new Set(existingProviders.map((item) => item.id));
+      const existingProviderIds = new Set(
+        existingProviders.map((item) => item.id),
+      );
 
       for (const proveedorId of providerIds) {
         if (!existingProviderIds.has(proveedorId)) {
@@ -1169,7 +1171,9 @@ export class CostosService {
     if (
       recursosActivos.length === 0 &&
       recursos.length > 0 &&
-      recursos.some((recurso) => recurso.tipoRecurso === TipoRecursoCentroCostoDto.empleado)
+      recursos.some(
+        (recurso) => recurso.tipoRecurso === TipoRecursoCentroCostoDto.empleado,
+      )
     ) {
       throw new BadRequestException(
         'Si asignas personas al centro, al menos una debe quedar activa para el mes.',
@@ -1345,7 +1349,8 @@ export class CostosService {
       origen: this.fromPrismaOrigenComponente(componente.origen),
       importeMensual: this.decimalToNumber(componente.importeMensual),
       notas: componente.notas ?? '',
-      detalle: (componente.detalleJson as Record<string, unknown> | null) ?? null,
+      detalle:
+        (componente.detalleJson as Record<string, unknown> | null) ?? null,
     };
   }
 

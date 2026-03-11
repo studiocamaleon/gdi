@@ -811,12 +811,51 @@ function buildUvRolloSections(): MaquinariaTemplateSection[] {
           options: uvPrintModeOptions,
         }),
         field({
+          key: "blancoDisponible",
+          label: "Blanco disponible",
+          scope: "maquina",
+          kind: "boolean",
+          description: "Indica si la maquina imprime tinta blanca.",
+        }),
+        field({
+          key: "barnizDisponible",
+          label: "Barniz disponible",
+          scope: "maquina",
+          kind: "boolean",
+          description: "Indica si la maquina aplica barniz o clear.",
+        }),
+        field({
+          key: "primerDisponible",
+          label: "Primer disponible",
+          scope: "maquina",
+          kind: "boolean",
+          description: "Activalo si el equipo puede usar primer en linea.",
+        }),
+        field({
           key: "sistemaCurado",
           label: "Sistema curado",
           scope: "maquina",
           kind: "select",
           description: "Tipo de curado principal del equipo.",
           options: [option("uv_led", "UV LED")],
+        }),
+        field({
+          key: "margenInicioNoImprimible",
+          label: "Margen inicio no imprimible",
+          scope: "maquina",
+          kind: "number",
+          unit: "cm",
+          description: "Avance inicial de material que no se utiliza para impresion.",
+          placeholder: "15",
+        }),
+        field({
+          key: "margenFinalNoImprimible",
+          label: "Margen final no imprimible",
+          scope: "maquina",
+          kind: "number",
+          unit: "cm",
+          description: "Reserva de material al final de tirada que no se imprime.",
+          placeholder: "8",
         }),
         field({
           key: "materialesCompatibles",
@@ -967,6 +1006,20 @@ function buildUvCylindricalSections(): MaquinariaTemplateSection[] {
           options: uvPrintModeOptions,
         }),
         field({
+          key: "blancoDisponible",
+          label: "Blanco disponible",
+          scope: "maquina",
+          kind: "boolean",
+          description: "Indica si la maquina imprime tinta blanca.",
+        }),
+        field({
+          key: "barnizDisponible",
+          label: "Barniz disponible",
+          scope: "maquina",
+          kind: "boolean",
+          description: "Indica si la maquina aplica barniz o clear.",
+        }),
+        field({
           key: "objetosCompatibles",
           label: "Objetos compatibles",
           scope: "maquina",
@@ -980,6 +1033,14 @@ function buildUvCylindricalSections(): MaquinariaTemplateSection[] {
           scope: "maquina",
           kind: "boolean",
           description: "Activalo si controla automaticamente la rotacion del objeto.",
+        }),
+        field({
+          key: "anguloConicidadMaxima",
+          label: "Conicidad maxima",
+          scope: "maquina",
+          kind: "number",
+          description: "Angulo maximo de conicidad soportado por accesorio cilindrico.",
+          placeholder: "7.5",
         }),
       ],
     }),
@@ -1252,12 +1313,12 @@ function buildDtfSections(kind: "dtf" | "dtf_uv"): MaquinariaTemplateSection[] {
           : "Canales, materiales y laminacion para transferencia DTF UV.",
       fields: [
         field({
-          key: "configuracionTintas",
-          label: "Configuracion de tintas",
+          key: "configuracionCanales",
+          label: "Configuracion de canales",
           scope: "maquina",
           kind: "select",
           required: true,
-          description: "Configuracion de tintas del equipo.",
+          description: "Configuracion de canales/tintas del equipo.",
           options:
             kind === "dtf"
               ? dtfInkOptions
@@ -1266,6 +1327,24 @@ function buildDtfSections(kind: "dtf" | "dtf_uv"): MaquinariaTemplateSection[] {
                   option("cmyk_blanco", "CMYK + Blanco"),
                 ],
         }),
+        field({
+          key: "blancoDisponible",
+          label: "Blanco disponible",
+          scope: "maquina",
+          kind: "boolean",
+          description: "Indica si la maquina cuenta con canal de tinta blanca.",
+        }),
+        ...(kind === "dtf_uv"
+          ? [
+              field({
+                key: "barnizDisponible",
+                label: "Barniz disponible",
+                scope: "maquina",
+                kind: "boolean",
+                description: "Indica si la maquina aplica barniz UV.",
+              }),
+            ]
+          : []),
         field({
           key: "tipoFilm",
           label: "Tipo de film",
@@ -1286,10 +1365,36 @@ function buildDtfSections(kind: "dtf" | "dtf_uv"): MaquinariaTemplateSection[] {
               : [option("uv_led", "UV LED")],
         }),
         field({
+          key: "resolucionNominal",
+          label: "Resolucion nominal",
+          scope: "maquina",
+          kind: "number",
+          unit: "dpi",
+          description: "Resolucion nominal del equipo en modo productivo.",
+          placeholder: "1440",
+        }),
+        ...(kind === "dtf_uv"
+          ? [
+              field({
+                key: "sistemaLaminacionTransferencia",
+                label: "Sistema laminacion/transferencia",
+                scope: "maquina",
+                kind: "select",
+                required: true,
+                description: "Define como se realiza la laminacion o transferencia UV.",
+                options: [
+                  option("inline", "Laminacion en linea"),
+                  option("laminador_externo", "Laminador externo"),
+                  option("manual", "Aplicacion manual"),
+                ],
+              }),
+            ]
+          : []),
+        field({
           key: "materialesCompatibles",
           label: "Materiales compatibles",
           scope: "maquina",
-          kind: kind === "dtf" ? "multiselect" : "multiselect",
+          kind: "multiselect",
           description:
             kind === "dtf"
               ? "Textiles sobre los que suele aplicarse la transferencia."
@@ -1806,6 +1911,14 @@ function buildLaserCutSections(): MaquinariaTemplateSection[] {
           required: true,
           description: "Tecnologia principal del tubo o fuente.",
           options: laserTypeOptions,
+        }),
+        field({
+          key: "espesorMaximoPorMaterial",
+          label: "Espesor maximo por material",
+          scope: "maquina",
+          kind: "textarea",
+          description: "Limites de espesor por material para evitar sobreestimar capacidad.",
+          placeholder: "Acrilico: 8 mm; MDF: 6 mm; Carton: 4 mm",
         }),
         field({
           key: "potenciaLaser",

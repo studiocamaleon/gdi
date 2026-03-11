@@ -1,6 +1,6 @@
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
-import { EstadoConfiguracionMaquinaDto, UnidadProduccionMaquinaDto, type EstadoMaquinaDto, type GeometriaTrabajoMaquinaDto, type PlantillaMaquinariaDto, type TipoComponenteDesgasteMaquinaDto, type TipoConsumibleMaquinaDto, type TipoPerfilOperativoMaquinaDto, type UnidadConsumoMaquinaDto, type UnidadDesgasteMaquinaDto, UpsertMaquinaDto } from './dto/upsert-maquina.dto';
+import { EstadoConfiguracionMaquinaDto, GeometriaTrabajoMaquinaDto, PlantillaMaquinariaDto, UnidadProduccionMaquinaDto, type EstadoMaquinaDto, type TipoComponenteDesgasteMaquinaDto, type TipoConsumibleMaquinaDto, type TipoPerfilOperativoMaquinaDto, type UnidadConsumoMaquinaDto, type UnidadDesgasteMaquinaDto, UpsertMaquinaDto } from './dto/upsert-maquina.dto';
 export declare class MaquinariaService {
     private readonly prisma;
     private static readonly CODIGO_PREFIX;
@@ -387,6 +387,7 @@ export declare class MaquinariaService {
     private hasCoreCostingData;
     private hasTemplateSpecificData;
     private validateReferences;
+    private validateTechnicalPayload;
     private findMaquinaOrThrow;
     private findMaquinaBaseOrThrow;
     private toMaquinaResponse;

@@ -115,6 +115,34 @@ const PERFIL_DIRECT_FIELD_KEYS = new Set([
   "modoTrabajo",
 ]);
 const PERFIL_MODE_SOURCE_KEYS = new Set(["modoTrabajo", "modoImpresion", "tipoOperacion"]);
+const CONSUMIBLE_DIRECT_FIELD_KEYS = new Set([
+  "nombre",
+  "tipo",
+  "unidad",
+  "costoReferencia",
+  "rendimientoEstimado",
+  "consumoBase",
+  "perfilOperativoNombre",
+  "activo",
+  "observaciones",
+]);
+const DESGASTE_DIRECT_FIELD_KEYS = new Set([
+  "nombre",
+  "tipo",
+  "vidaUtilEstimada",
+  "unidadDesgaste",
+  "costoReposicion",
+  "modoProrrateo",
+  "activo",
+  "observaciones",
+]);
+const MACHINE_DIRECT_FIELD_KEYS = new Set([
+  "anchoUtil",
+  "largoUtil",
+  "altoUtil",
+  "espesorMaximo",
+  "pesoMaximo",
+]);
 const SHEET_FORMAT_DIMENSIONS_CM: Record<string, { ancho: number; alto: number }> = {
   a5: { ancho: 14.8, alto: 21 },
   a4: { ancho: 21, alto: 29.7 },
@@ -299,6 +327,21 @@ function getDerivedPrintableAreaParams(source: Record<string, unknown> | undefin
   };
 }
 
+function toTemplateMultiselectValue(raw: unknown) {
+  if (Array.isArray(raw)) {
+    return raw.map((item) => String(item).trim()).filter(Boolean);
+  }
+
+  if (typeof raw === "string") {
+    return raw
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
 function mapTemplateUnitToProductivityUnit(
   templateUnit?: string,
 ): LocalPerfilOperativo["unidadProductividad"] | undefined {
@@ -358,6 +401,54 @@ function toModeTrabajoLabel(
   value: string,
 ) {
   return field.options?.find((option) => option.value === value)?.label ?? value;
+}
+
+function getTemplateSelectOptions(
+  fieldItem: MaquinariaTemplateField | undefined,
+  fallback: Array<{ value: string; label: string }>,
+) {
+  if (!fieldItem?.options || fieldItem.options.length === 0) {
+    return fallback;
+  }
+
+  return fieldItem.options.map((option) => ({
+    value: option.value,
+    label: option.label,
+  }));
+}
+
+function pickDefaultSelectValue(
+  fieldItem: MaquinariaTemplateField | undefined,
+  preferred: string,
+) {
+  const options = fieldItem?.options ?? [];
+  if (options.some((option) => option.value === preferred)) {
+    return preferred;
+  }
+
+  return options[0]?.value ?? preferred;
+}
+
+function toFiniteNumberOrUndefined(value: string) {
+  const normalized = value.trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function renderRequiredAsterisk(required?: boolean) {
+  if (!required) {
+    return null;
+  }
+
+  return (
+    <span className="ml-1 font-semibold text-destructive" aria-label="Campo obligatorio">
+      *
+    </span>
+  );
 }
 
 function renderTooltipIcon(text?: string) {
@@ -441,6 +532,84 @@ function getPerfilValueByTemplateField(
   }
 }
 
+function getConsumibleValueByTemplateField(
+  consumible: LocalConsumible,
+  fieldItem: MaquinariaTemplateField,
+) {
+  switch (fieldItem.key) {
+    case "nombre":
+      return consumible.nombre;
+    case "tipo":
+      return consumible.tipo;
+    case "unidad":
+      return consumible.unidad;
+    case "costoReferencia":
+      return consumible.costoReferencia ?? "";
+    case "rendimientoEstimado":
+      return consumible.rendimientoEstimado ?? "";
+    case "consumoBase":
+      return consumible.consumoBase ?? "";
+    case "perfilOperativoNombre":
+      return consumible.perfilOperativoNombre ?? "";
+    case "activo":
+      return Boolean(consumible.activo);
+    case "observaciones":
+      return consumible.observaciones ?? "";
+    default: {
+      const fromDetail = consumible.detalle?.[fieldItem.key];
+      if (fromDetail !== undefined && fromDetail !== null) {
+        return fromDetail;
+      }
+
+      if (fieldItem.kind === "boolean") {
+        return false;
+      }
+      if (fieldItem.kind === "multiselect") {
+        return [];
+      }
+      return "";
+    }
+  }
+}
+
+function getDesgasteValueByTemplateField(
+  desgaste: LocalDesgaste,
+  fieldItem: MaquinariaTemplateField,
+) {
+  switch (fieldItem.key) {
+    case "nombre":
+      return desgaste.nombre;
+    case "tipo":
+      return desgaste.tipo;
+    case "vidaUtilEstimada":
+      return desgaste.vidaUtilEstimada ?? "";
+    case "unidadDesgaste":
+      return desgaste.unidadDesgaste;
+    case "costoReposicion":
+      return desgaste.costoReposicion ?? "";
+    case "modoProrrateo":
+      return desgaste.modoProrrateo ?? "";
+    case "activo":
+      return Boolean(desgaste.activo);
+    case "observaciones":
+      return desgaste.observaciones ?? "";
+    default: {
+      const fromDetail = desgaste.detalle?.[fieldItem.key];
+      if (fromDetail !== undefined && fromDetail !== null) {
+        return fromDetail;
+      }
+
+      if (fieldItem.kind === "boolean") {
+        return false;
+      }
+      if (fieldItem.kind === "multiselect") {
+        return [];
+      }
+      return "";
+    }
+  }
+}
+
 function createLocalId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 }
@@ -458,12 +627,15 @@ function createPerfilOperativo(
   };
 }
 
-function createConsumible(): LocalConsumible {
+function createConsumible(consumibleTemplateFields: MaquinariaTemplateField[] = []): LocalConsumible {
+  const tipoField = consumibleTemplateFields.find((fieldItem) => fieldItem.key === "tipo");
+  const unidadField = consumibleTemplateFields.find((fieldItem) => fieldItem.key === "unidad");
+
   return {
     id: createLocalId(),
     nombre: "",
-    tipo: "otro",
-    unidad: "unidad",
+    tipo: pickDefaultSelectValue(tipoField, "otro") as LocalConsumible["tipo"],
+    unidad: pickDefaultSelectValue(unidadField, "unidad") as LocalConsumible["unidad"],
     activo: true,
     costoReferencia: undefined,
     rendimientoEstimado: undefined,
@@ -472,12 +644,15 @@ function createConsumible(): LocalConsumible {
   };
 }
 
-function createDesgaste(): LocalDesgaste {
+function createDesgaste(desgasteTemplateFields: MaquinariaTemplateField[] = []): LocalDesgaste {
+  const tipoField = desgasteTemplateFields.find((fieldItem) => fieldItem.key === "tipo");
+  const unidadField = desgasteTemplateFields.find((fieldItem) => fieldItem.key === "unidadDesgaste");
+
   return {
     id: createLocalId(),
     nombre: "",
-    tipo: "otro",
-    unidadDesgaste: "horas",
+    tipo: pickDefaultSelectValue(tipoField, "otro") as LocalDesgaste["tipo"],
+    unidadDesgaste: pickDefaultSelectValue(unidadField, "horas") as LocalDesgaste["unidadDesgaste"],
     activo: true,
     vidaUtilEstimada: undefined,
     costoReposicion: undefined,
@@ -572,11 +747,17 @@ function fromMaquina(maquina: Maquina): {
       estadoConfiguracion: maquina.estadoConfiguracion,
       geometriaTrabajo: maquina.geometriaTrabajo,
       unidadProduccionPrincipal: maquina.unidadProduccionPrincipal,
-      anchoUtil: maquina.anchoUtil ?? undefined,
-      largoUtil: maquina.largoUtil ?? undefined,
-      altoUtil: maquina.altoUtil ?? undefined,
-      espesorMaximo: maquina.espesorMaximo ?? undefined,
-      pesoMaximo: maquina.pesoMaximo ?? undefined,
+      anchoUtil:
+        maquina.anchoUtil ?? getNumericParamValue(maquina.parametrosTecnicos ?? undefined, "anchoUtil"),
+      largoUtil:
+        maquina.largoUtil ?? getNumericParamValue(maquina.parametrosTecnicos ?? undefined, "largoUtil"),
+      altoUtil:
+        maquina.altoUtil ?? getNumericParamValue(maquina.parametrosTecnicos ?? undefined, "altoUtil"),
+      espesorMaximo:
+        maquina.espesorMaximo ??
+        getNumericParamValue(maquina.parametrosTecnicos ?? undefined, "espesorMaximo"),
+      pesoMaximo:
+        maquina.pesoMaximo ?? getNumericParamValue(maquina.parametrosTecnicos ?? undefined, "pesoMaximo"),
       fechaAlta: maquina.fechaAlta || undefined,
       activo: maquina.activo,
       observaciones: maquina.observaciones,
@@ -662,12 +843,110 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
   const [isModeloOtro, setIsModeloOtro] = React.useState(false);
 
   const templateInfo = React.useMemo(() => getMaquinariaTemplate(form.plantilla), [form.plantilla]);
+  const templateMachineFields = React.useMemo(() => {
+    if (!templateInfo) {
+      return [];
+    }
+
+    const sections = templateInfo.sections.filter(
+      (sectionItem) =>
+        sectionItem.id === "capacidades_fisicas" || sectionItem.id === "parametros_tecnicos",
+    );
+
+    return sections.flatMap((sectionItem) =>
+      sectionItem.fields
+        .filter((fieldItem) => fieldItem.scope === "maquina")
+        .map((fieldItem) => ({
+          sectionId: sectionItem.id,
+          sectionTitle: sectionItem.title,
+          field: fieldItem,
+        })),
+    );
+  }, [templateInfo]);
+  const templateEditableFields = React.useMemo(
+    () =>
+      templateMachineFields.filter(
+        (entry) => !MACHINE_DIRECT_FIELD_KEYS.has(entry.field.key),
+      ),
+    [templateMachineFields],
+  );
+  const requiredTemplateMachineKeySet = React.useMemo(
+    () =>
+      new Set(
+        templateMachineFields
+          .filter((entry) => entry.field.required)
+          .map((entry) => entry.field.key),
+      ),
+    [templateMachineFields],
+  );
   const perfilTemplateFields = React.useMemo(
     () =>
       templateInfo?.sections
         .find((sectionItem) => sectionItem.id === "perfiles_operativos")
         ?.fields.filter((fieldItem) => fieldItem.scope === "perfil_operativo") ?? [],
     [templateInfo],
+  );
+  const consumibleTemplateFields = React.useMemo(
+    () =>
+      templateInfo?.sections
+        .find((sectionItem) => sectionItem.id === "consumibles")
+        ?.fields.filter((fieldItem) => fieldItem.scope === "consumible") ?? [],
+    [templateInfo],
+  );
+  const desgasteTemplateFields = React.useMemo(
+    () =>
+      templateInfo?.sections
+        .find((sectionItem) => sectionItem.id === "desgaste_repuestos")
+        ?.fields.filter((fieldItem) => fieldItem.scope === "desgaste") ?? [],
+    [templateInfo],
+  );
+  const consumibleTemplateFieldByKey = React.useMemo(
+    () => new Map(consumibleTemplateFields.map((fieldItem) => [fieldItem.key, fieldItem])),
+    [consumibleTemplateFields],
+  );
+  const desgasteTemplateFieldByKey = React.useMemo(
+    () => new Map(desgasteTemplateFields.map((fieldItem) => [fieldItem.key, fieldItem])),
+    [desgasteTemplateFields],
+  );
+  const consumibleTipoOptions = React.useMemo(
+    () =>
+      getTemplateSelectOptions(
+        consumibleTemplateFieldByKey.get("tipo"),
+        tipoConsumibleMaquinaItems as Array<{ value: string; label: string }>,
+      ),
+    [consumibleTemplateFieldByKey],
+  );
+  const consumibleUnidadOptions = React.useMemo(
+    () =>
+      getTemplateSelectOptions(
+        consumibleTemplateFieldByKey.get("unidad"),
+        unidadConsumoMaquinaItems as Array<{ value: string; label: string }>,
+      ),
+    [consumibleTemplateFieldByKey],
+  );
+  const desgasteTipoOptions = React.useMemo(
+    () =>
+      getTemplateSelectOptions(
+        desgasteTemplateFieldByKey.get("tipo"),
+        tipoComponenteDesgasteMaquinaItems as Array<{ value: string; label: string }>,
+      ),
+    [desgasteTemplateFieldByKey],
+  );
+  const desgasteUnidadOptions = React.useMemo(
+    () =>
+      getTemplateSelectOptions(
+        desgasteTemplateFieldByKey.get("unidadDesgaste"),
+        unidadDesgasteMaquinaItems as Array<{ value: string; label: string }>,
+      ),
+    [desgasteTemplateFieldByKey],
+  );
+  const consumibleExtraTemplateFields = React.useMemo(
+    () => consumibleTemplateFields.filter((fieldItem) => !CONSUMIBLE_DIRECT_FIELD_KEYS.has(fieldItem.key)),
+    [consumibleTemplateFields],
+  );
+  const desgasteExtraTemplateFields = React.useMemo(
+    () => desgasteTemplateFields.filter((fieldItem) => !DESGASTE_DIRECT_FIELD_KEYS.has(fieldItem.key)),
+    [desgasteTemplateFields],
   );
   const perfilTemplateProductividadField = React.useMemo(
     () => perfilTemplateFields.find((fieldItem) => fieldItem.key === "productividad"),
@@ -949,6 +1228,34 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
 
   const handleTemplateChange = React.useCallback((value: PlantillaMaquinaria) => {
     const template = getMaquinariaTemplate(value);
+    const nextConsumibleFields =
+      template?.sections
+        .find((sectionItem) => sectionItem.id === "consumibles")
+        ?.fields.filter((fieldItem) => fieldItem.scope === "consumible") ?? [];
+    const nextDesgasteFields =
+      template?.sections
+        .find((sectionItem) => sectionItem.id === "desgaste_repuestos")
+        ?.fields.filter((fieldItem) => fieldItem.scope === "desgaste") ?? [];
+
+    const defaultConsumible = createConsumible(nextConsumibleFields);
+    const defaultDesgaste = createDesgaste(nextDesgasteFields);
+    const nextConsumibleTipoOptions = getTemplateSelectOptions(
+      nextConsumibleFields.find((fieldItem) => fieldItem.key === "tipo"),
+      tipoConsumibleMaquinaItems as Array<{ value: string; label: string }>,
+    );
+    const nextConsumibleUnidadOptions = getTemplateSelectOptions(
+      nextConsumibleFields.find((fieldItem) => fieldItem.key === "unidad"),
+      unidadConsumoMaquinaItems as Array<{ value: string; label: string }>,
+    );
+    const nextDesgasteTipoOptions = getTemplateSelectOptions(
+      nextDesgasteFields.find((fieldItem) => fieldItem.key === "tipo"),
+      tipoComponenteDesgasteMaquinaItems as Array<{ value: string; label: string }>,
+    );
+    const nextDesgasteUnidadOptions = getTemplateSelectOptions(
+      nextDesgasteFields.find((fieldItem) => fieldItem.key === "unidadDesgaste"),
+      unidadDesgasteMaquinaItems as Array<{ value: string; label: string }>,
+    );
+
     setForm((current) => ({
       ...current,
       plantilla: value,
@@ -957,6 +1264,28 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
       geometriaTrabajo: template?.geometry ?? current.geometriaTrabajo,
       unidadProduccionPrincipal: template?.defaultProductionUnit ?? current.unidadProduccionPrincipal,
     }));
+    setConsumibles((current) =>
+      current.map((item) => ({
+        ...item,
+        tipo: nextConsumibleTipoOptions.some((option) => option.value === item.tipo)
+          ? item.tipo
+          : defaultConsumible.tipo,
+        unidad: nextConsumibleUnidadOptions.some((option) => option.value === item.unidad)
+          ? item.unidad
+          : defaultConsumible.unidad,
+      })),
+    );
+    setDesgastes((current) =>
+      current.map((item) => ({
+        ...item,
+        tipo: nextDesgasteTipoOptions.some((option) => option.value === item.tipo)
+          ? item.tipo
+          : defaultDesgaste.tipo,
+        unidadDesgaste: nextDesgasteUnidadOptions.some((option) => option.value === item.unidadDesgaste)
+          ? item.unidadDesgaste
+          : defaultDesgaste.unidadDesgaste,
+      })),
+    );
     setLastAppliedPresetKey("");
     setPresetAppliedParamKeys(new Set());
     setFabricanteSearch("");
@@ -969,6 +1298,46 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
     if ((editingId && !(form.codigo ?? "").trim()) || !form.nombre.trim() || !form.plantaId) {
       toast.error("Completa nombre y planta.");
       return;
+    }
+
+    for (const entry of templateMachineFields) {
+      const fieldItem = entry.field;
+      if (!fieldItem.required) {
+        continue;
+      }
+
+      const directValue = MACHINE_DIRECT_FIELD_KEYS.has(fieldItem.key)
+        ? (() => {
+            switch (fieldItem.key) {
+              case "anchoUtil":
+                return form.anchoUtil;
+              case "largoUtil":
+                return form.largoUtil;
+              case "altoUtil":
+                return form.altoUtil;
+              case "espesorMaximo":
+                return form.espesorMaximo;
+              case "pesoMaximo":
+                return form.pesoMaximo;
+              default:
+                return undefined;
+            }
+          })()
+        : undefined;
+      const rawValue =
+        directValue !== undefined ? directValue : (form.parametrosTecnicos ?? {})[fieldItem.key];
+      const currentValue =
+        fieldItem.kind === "multiselect" ? toTemplateMultiselectValue(rawValue) : rawValue;
+      const hasValue = Array.isArray(currentValue)
+        ? currentValue.length > 0
+        : fieldItem.kind === "boolean"
+          ? true
+          : String(currentValue ?? "").trim().length > 0;
+
+      if (!hasValue) {
+        toast.error(`Completa ${fieldItem.label} en parametros de maquina.`);
+        return;
+      }
     }
 
     for (const perfil of perfiles) {
@@ -995,6 +1364,50 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
       }
     }
 
+    for (const consumible of consumibles) {
+      const consumibleLabel = consumible.nombre.trim() || "sin nombre";
+
+      for (const fieldItem of consumibleTemplateFields) {
+        if (!fieldItem.required) {
+          continue;
+        }
+
+        const currentValue = getConsumibleValueByTemplateField(consumible, fieldItem);
+        const hasValue = Array.isArray(currentValue)
+          ? currentValue.length > 0
+          : fieldItem.kind === "boolean"
+            ? true
+            : String(currentValue ?? "").trim().length > 0;
+
+        if (!hasValue) {
+          toast.error(`Completa ${fieldItem.label} en el consumible ${consumibleLabel}.`);
+          return;
+        }
+      }
+    }
+
+    for (const desgaste of desgastes) {
+      const desgasteLabel = desgaste.nombre.trim() || "sin nombre";
+
+      for (const fieldItem of desgasteTemplateFields) {
+        if (!fieldItem.required) {
+          continue;
+        }
+
+        const currentValue = getDesgasteValueByTemplateField(desgaste, fieldItem);
+        const hasValue = Array.isArray(currentValue)
+          ? currentValue.length > 0
+          : fieldItem.kind === "boolean"
+            ? true
+            : String(currentValue ?? "").trim().length > 0;
+
+        if (!hasValue) {
+          toast.error(`Completa ${fieldItem.label} en el componente ${desgasteLabel}.`);
+          return;
+        }
+      }
+    }
+
     const payload = toPayload(form, perfiles, consumibles, desgastes);
 
     startSaving(async () => {
@@ -1015,7 +1428,18 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
         toast.error(error instanceof Error ? error.message : "No se pudo guardar la maquina.");
       }
     });
-  }, [consumibles, desgastes, editingId, form, perfilTemplateFields, perfiles, resetEditor]);
+  }, [
+    consumibleTemplateFields,
+    consumibles,
+    desgasteTemplateFields,
+    desgastes,
+    editingId,
+    form,
+    perfilTemplateFields,
+    perfiles,
+    resetEditor,
+    templateMachineFields,
+  ]);
 
   const selectedPerfil = React.useMemo(
     () => perfiles.find((item) => item.id === selectedPerfilId) ?? null,
@@ -1094,27 +1518,6 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
     },
     [handleQuickEditCancel, quickEditEstado, quickEditNombre],
   );
-
-  const templateEditableFields = React.useMemo(() => {
-    if (!templateInfo) {
-      return [];
-    }
-
-    const sections = templateInfo.sections.filter(
-      (sectionItem) =>
-        sectionItem.id === "capacidades_fisicas" || sectionItem.id === "parametros_tecnicos",
-    );
-
-    return sections.flatMap((sectionItem) =>
-      sectionItem.fields
-        .filter((fieldItem) => fieldItem.scope === "maquina")
-        .map((fieldItem) => ({
-          sectionId: sectionItem.id,
-          sectionTitle: sectionItem.title,
-          field: fieldItem,
-        })),
-    );
-  }, [templateInfo]);
 
   const groupedTemplateEditableFields = React.useMemo(() => {
     const grouped = new Map<
@@ -1310,21 +1713,82 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
 
   const getTemplateFieldValue = React.useCallback(
     (fieldItem: MaquinariaTemplateField) => {
-      const current = (form.parametrosTecnicos ?? {})[fieldItem.key];
+      const directValue = MACHINE_DIRECT_FIELD_KEYS.has(fieldItem.key)
+        ? (() => {
+            switch (fieldItem.key) {
+              case "anchoUtil":
+                return form.anchoUtil;
+              case "largoUtil":
+                return form.largoUtil;
+              case "altoUtil":
+                return form.altoUtil;
+              case "espesorMaximo":
+                return form.espesorMaximo;
+              case "pesoMaximo":
+                return form.pesoMaximo;
+              default:
+                return undefined;
+            }
+          })()
+        : undefined;
+      const current =
+        directValue !== undefined ? directValue : (form.parametrosTecnicos ?? {})[fieldItem.key];
+
       if (fieldItem.kind === "boolean") {
         return Boolean(current);
+      }
+      if (fieldItem.kind === "multiselect") {
+        return toTemplateMultiselectValue(current);
       }
       if (current === undefined || current === null) {
         return "";
       }
       return String(current);
     },
-    [form.parametrosTecnicos],
+    [
+      form.altoUtil,
+      form.anchoUtil,
+      form.espesorMaximo,
+      form.largoUtil,
+      form.parametrosTecnicos,
+      form.pesoMaximo,
+    ],
   );
 
   const setTemplateFieldValue = React.useCallback(
-    (fieldItem: MaquinariaTemplateField, value: string | boolean) => {
+    (
+      fieldItem: MaquinariaTemplateField,
+      value: string | boolean | string[] | null,
+    ) => {
       if (fieldItem.key === "areaImprimibleMaxima") {
+        return;
+      }
+
+      if (MACHINE_DIRECT_FIELD_KEYS.has(fieldItem.key)) {
+        const numericValue = toFiniteNumberOrUndefined(String(value));
+        setForm((current) => {
+          const nextParams = { ...(current.parametrosTecnicos ?? {}) };
+          delete nextParams[fieldItem.key];
+          const base = {
+            ...current,
+            parametrosTecnicos: Object.keys(nextParams).length > 0 ? nextParams : undefined,
+          };
+
+          switch (fieldItem.key) {
+            case "anchoUtil":
+              return { ...base, anchoUtil: numericValue };
+            case "largoUtil":
+              return { ...base, largoUtil: numericValue };
+            case "altoUtil":
+              return { ...base, altoUtil: numericValue };
+            case "espesorMaximo":
+              return { ...base, espesorMaximo: numericValue };
+            case "pesoMaximo":
+              return { ...base, pesoMaximo: numericValue };
+            default:
+              return base;
+          }
+        });
         return;
       }
 
@@ -1354,8 +1818,12 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
         if (fieldItem.kind === "boolean") {
           nextParams[fieldItem.key] = Boolean(value);
         } else if (fieldItem.kind === "number") {
-          const normalized = String(value).trim();
-          nextParams[fieldItem.key] = normalized ? Number(normalized) : null;
+          nextParams[fieldItem.key] = toFiniteNumberOrUndefined(String(value)) ?? null;
+        } else if (fieldItem.kind === "multiselect") {
+          const normalized = Array.isArray(value)
+            ? value.map((itemValue) => itemValue.trim()).filter(Boolean)
+            : toTemplateMultiselectValue(value);
+          nextParams[fieldItem.key] = normalized.length > 0 ? normalized : null;
         } else {
           const normalized = String(value).trim();
           nextParams[fieldItem.key] = normalized || null;
@@ -1389,7 +1857,11 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
   );
 
   const setPerfilTemplateFieldValue = React.useCallback(
-    (perfilId: string, fieldItem: MaquinariaTemplateField, value: string | boolean | string[]) => {
+    (
+      perfilId: string,
+      fieldItem: MaquinariaTemplateField,
+      value: string | boolean | string[] | null,
+    ) => {
       setPerfiles((current) =>
         current.map((item) => {
           if (item.id !== perfilId) {
@@ -1427,42 +1899,34 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
               }
             }
           } else if (fieldItem.key === "productividad") {
-            const normalized = String(value).trim();
-            next.productividad = normalized ? Number(normalized) : undefined;
+            next.productividad = toFiniteNumberOrUndefined(String(value));
           } else if (fieldItem.key === "tiempoPreparacionMin") {
-            const normalized = String(value).trim();
-            next.tiempoPreparacionMin = normalized ? Number(normalized) : undefined;
+            next.tiempoPreparacionMin = toFiniteNumberOrUndefined(String(value));
           } else if (fieldItem.key === "tiempoCargaMin") {
-            const normalized = String(value).trim();
-            next.tiempoCargaMin = normalized ? Number(normalized) : undefined;
+            next.tiempoCargaMin = toFiniteNumberOrUndefined(String(value));
           } else if (fieldItem.key === "tiempoDescargaMin") {
-            const normalized = String(value).trim();
-            next.tiempoDescargaMin = normalized ? Number(normalized) : undefined;
+            next.tiempoDescargaMin = toFiniteNumberOrUndefined(String(value));
           } else if (fieldItem.key === "tiempoRipMin") {
-            const normalized = String(value).trim();
-            next.tiempoRipMin = normalized ? Number(normalized) : undefined;
+            next.tiempoRipMin = toFiniteNumberOrUndefined(String(value));
           } else if (fieldItem.key === "cantidadPasadas") {
-            const normalized = String(value).trim();
-            next.cantidadPasadas = normalized ? Number(normalized) : undefined;
+            next.cantidadPasadas = toFiniteNumberOrUndefined(String(value));
           } else if (fieldItem.key === "dobleFaz") {
             next.dobleFaz = Boolean(value);
           } else if (fieldItem.key === "anchoAplicable") {
-            const normalized = String(value).trim();
-            next.anchoAplicable = normalized ? Number(normalized) : undefined;
+            next.anchoAplicable = toFiniteNumberOrUndefined(String(value));
           } else if (fieldItem.key === "altoAplicable") {
-            const normalized = String(value).trim();
-            next.altoAplicable = normalized ? Number(normalized) : undefined;
+            next.altoAplicable = toFiniteNumberOrUndefined(String(value));
           } else if (fieldItem.key === "modoTrabajo") {
             next.modoTrabajo = String(value || "").trim() || undefined;
           } else if (!isDirectField) {
             if (fieldItem.kind === "boolean") {
               detail[fieldItem.key] = Boolean(value);
             } else if (fieldItem.kind === "number") {
-              const normalized = String(value).trim();
-              if (!normalized) {
+              const numeric = toFiniteNumberOrUndefined(String(value));
+              if (numeric === undefined) {
                 delete detail[fieldItem.key];
               } else {
-                detail[fieldItem.key] = Number(normalized);
+                detail[fieldItem.key] = numeric;
               }
             } else if (fieldItem.kind === "multiselect") {
               const normalized = Array.isArray(value)
@@ -1505,6 +1969,152 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
       );
     },
     [templatePerfilProductivityUnit],
+  );
+
+  const setConsumibleTemplateFieldValue = React.useCallback(
+    (
+      consumibleId: string,
+      fieldItem: MaquinariaTemplateField,
+      value: string | boolean | string[] | null,
+    ) => {
+      setConsumibles((current) =>
+        current.map((item) => {
+          if (item.id !== consumibleId) {
+            return item;
+          }
+
+          const next: LocalConsumible = { ...item };
+          const detail = { ...(item.detalle ?? {}) };
+          const isDirectField = CONSUMIBLE_DIRECT_FIELD_KEYS.has(fieldItem.key);
+
+          if (fieldItem.key === "nombre") {
+            next.nombre = String(value || "");
+          } else if (fieldItem.key === "tipo") {
+            next.tipo = String(value || "").trim() as LocalConsumible["tipo"];
+          } else if (fieldItem.key === "unidad") {
+            next.unidad = String(value || "").trim() as LocalConsumible["unidad"];
+          } else if (fieldItem.key === "costoReferencia") {
+            next.costoReferencia = toFiniteNumberOrUndefined(String(value || ""));
+          } else if (fieldItem.key === "rendimientoEstimado") {
+            next.rendimientoEstimado = toFiniteNumberOrUndefined(String(value || ""));
+          } else if (fieldItem.key === "consumoBase") {
+            next.consumoBase = toFiniteNumberOrUndefined(String(value || ""));
+          } else if (fieldItem.key === "perfilOperativoNombre") {
+            next.perfilOperativoNombre = String(value || "").trim() || undefined;
+          } else if (fieldItem.key === "activo") {
+            next.activo = Boolean(value);
+          } else if (fieldItem.key === "observaciones") {
+            next.observaciones = String(value || "");
+          } else if (!isDirectField) {
+            if (fieldItem.kind === "boolean") {
+              detail[fieldItem.key] = Boolean(value);
+            } else if (fieldItem.kind === "number") {
+              const numeric = toFiniteNumberOrUndefined(String(value || ""));
+              if (numeric === undefined) {
+                delete detail[fieldItem.key];
+              } else {
+                detail[fieldItem.key] = numeric;
+              }
+            } else if (fieldItem.kind === "multiselect") {
+              const normalized = Array.isArray(value)
+                ? value.map((itemValue) => itemValue.trim()).filter(Boolean)
+                : [];
+              if (normalized.length === 0) {
+                delete detail[fieldItem.key];
+              } else {
+                detail[fieldItem.key] = normalized;
+              }
+            } else {
+              const normalized = String(value || "").trim();
+              if (!normalized) {
+                delete detail[fieldItem.key];
+              } else {
+                detail[fieldItem.key] = normalized;
+              }
+            }
+          }
+
+          if (!isDirectField) {
+            next.detalle = Object.keys(detail).length > 0 ? detail : undefined;
+          }
+
+          return next;
+        }),
+      );
+    },
+    [],
+  );
+
+  const setDesgasteTemplateFieldValue = React.useCallback(
+    (
+      desgasteId: string,
+      fieldItem: MaquinariaTemplateField,
+      value: string | boolean | string[] | null,
+    ) => {
+      setDesgastes((current) =>
+        current.map((item) => {
+          if (item.id !== desgasteId) {
+            return item;
+          }
+
+          const next: LocalDesgaste = { ...item };
+          const detail = { ...(item.detalle ?? {}) };
+          const isDirectField = DESGASTE_DIRECT_FIELD_KEYS.has(fieldItem.key);
+
+          if (fieldItem.key === "nombre") {
+            next.nombre = String(value || "");
+          } else if (fieldItem.key === "tipo") {
+            next.tipo = String(value || "").trim() as LocalDesgaste["tipo"];
+          } else if (fieldItem.key === "vidaUtilEstimada") {
+            next.vidaUtilEstimada = toFiniteNumberOrUndefined(String(value || ""));
+          } else if (fieldItem.key === "unidadDesgaste") {
+            next.unidadDesgaste = String(value || "").trim() as LocalDesgaste["unidadDesgaste"];
+          } else if (fieldItem.key === "costoReposicion") {
+            next.costoReposicion = toFiniteNumberOrUndefined(String(value || ""));
+          } else if (fieldItem.key === "modoProrrateo") {
+            next.modoProrrateo = String(value || "");
+          } else if (fieldItem.key === "activo") {
+            next.activo = Boolean(value);
+          } else if (fieldItem.key === "observaciones") {
+            next.observaciones = String(value || "");
+          } else if (!isDirectField) {
+            if (fieldItem.kind === "boolean") {
+              detail[fieldItem.key] = Boolean(value);
+            } else if (fieldItem.kind === "number") {
+              const numeric = toFiniteNumberOrUndefined(String(value || ""));
+              if (numeric === undefined) {
+                delete detail[fieldItem.key];
+              } else {
+                detail[fieldItem.key] = numeric;
+              }
+            } else if (fieldItem.kind === "multiselect") {
+              const normalized = Array.isArray(value)
+                ? value.map((itemValue) => itemValue.trim()).filter(Boolean)
+                : [];
+              if (normalized.length === 0) {
+                delete detail[fieldItem.key];
+              } else {
+                detail[fieldItem.key] = normalized;
+              }
+            } else {
+              const normalized = String(value || "").trim();
+              if (!normalized) {
+                delete detail[fieldItem.key];
+              } else {
+                detail[fieldItem.key] = normalized;
+              }
+            }
+          }
+
+          if (!isDirectField) {
+            next.detalle = Object.keys(detail).length > 0 ? detail : undefined;
+          }
+
+          return next;
+        }),
+      );
+    },
+    [],
   );
 
   return (
@@ -1807,6 +2417,9 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                 </FieldDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-semibold text-destructive">*</span> Campo obligatorio
+                </p>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium">Total</span>
@@ -1871,14 +2484,12 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                           value={editingId ? form.codigo ?? "" : "Se asignara automaticamente al guardar"}
                           disabled
                         />
-                        {editingId ? null : (
-                          <FieldDescription>
-                            El codigo se autogenera y evita duplicados dentro del tenant.
-                          </FieldDescription>
-                        )}
                       </Field>
                       <Field>
-                        <FieldLabel htmlFor="nombre">Nombre</FieldLabel>
+                        <FieldLabel htmlFor="nombre">
+                          Nombre
+                          {renderRequiredAsterisk(true)}
+                        </FieldLabel>
                         <Input
                           id="nombre"
                           value={form.nombre}
@@ -1889,7 +2500,10 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                       </Field>
                       <Field>
                         <div className="flex items-center gap-1">
-                          <FieldLabel>Plantilla</FieldLabel>
+                          <FieldLabel>
+                            Plantilla
+                            {renderRequiredAsterisk(true)}
+                          </FieldLabel>
                           <Tooltip>
                             <TooltipTrigger className="inline-flex items-center text-muted-foreground">
                               <InfoIcon className="size-4" />
@@ -1898,6 +2512,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                               La plantilla define campos y defaults tecnicos. No se recomienda cambiarla despues.
                             </TooltipContent>
                           </Tooltip>
+                          {renderTooltipIcon(templateInfo?.help.summary)}
                         </div>
                         <Select
                           value={form.plantilla}
@@ -1919,14 +2534,37 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             </SelectGroup>
                           </SelectContent>
                         </Select>
-                        {templateInfo ? (
-                          <FieldDescription>{templateInfo.help.summary}</FieldDescription>
-                        ) : null}
+                      </Field>
+                      <Field>
+                        <FieldLabel>Numero de serie</FieldLabel>
+                        <Input
+                          value={form.numeroSerie || ""}
+                          onChange={(event) =>
+                            setForm((current) => ({ ...current, numeroSerie: event.target.value }))
+                          }
+                          placeholder="Opcional"
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel>Fecha de alta</FieldLabel>
+                        <Input
+                          type="date"
+                          value={form.fechaAlta || ""}
+                          onChange={(event) =>
+                            setForm((current) => ({
+                              ...current,
+                              fechaAlta: event.target.value || undefined,
+                            }))
+                          }
+                        />
                       </Field>
                       {form.plantilla === "impresora_laser" ? (
                         <>
                           <Field>
-                            <FieldLabel>Fabricante</FieldLabel>
+                            <div className="flex items-center gap-1">
+                              <FieldLabel>Fabricante</FieldLabel>
+                              {renderTooltipIcon("Selecciona del catalogo o usa Otro si no aparece.")}
+                            </div>
                             {isFabricanteOtro ? (
                               <div className="space-y-2">
                                 <Input
@@ -2014,12 +2652,12 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                                 </SelectContent>
                               </Select>
                             )}
-                            <FieldDescription>
-                              Selecciona del catalogo o usa &quot;Otro&quot; si no aparece.
-                            </FieldDescription>
                           </Field>
                           <Field>
-                            <FieldLabel>Modelo</FieldLabel>
+                            <div className="flex items-center gap-1">
+                              <FieldLabel>Modelo</FieldLabel>
+                              {renderTooltipIcon("El listado se filtra segun el fabricante seleccionado.")}
+                            </div>
                             {isModeloOtro || isFabricanteOtro ? (
                               <div className="space-y-2">
                                 <Input
@@ -2100,9 +2738,6 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                                 </SelectContent>
                               </Select>
                             )}
-                            <FieldDescription>
-                              El listado se filtra segun el fabricante seleccionado.
-                            </FieldDescription>
                           </Field>
                         </>
                       ) : (
@@ -2138,7 +2773,10 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                   <CardContent>
                     <FieldGroup className="grid gap-4 md:grid-cols-2">
                       <Field>
-                        <FieldLabel>Estado operativo</FieldLabel>
+                        <FieldLabel>
+                          Estado operativo
+                          {renderRequiredAsterisk(true)}
+                        </FieldLabel>
                         <Select
                           value={form.estado}
                           onValueChange={(value) =>
@@ -2166,7 +2804,10 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                         </Select>
                       </Field>
                       <Field>
-                        <FieldLabel>Completitud de ficha</FieldLabel>
+                        <div className="flex items-center gap-1">
+                          <FieldLabel>Completitud de ficha</FieldLabel>
+                          {renderTooltipIcon("Se calcula automaticamente al guardar segun los datos cargados.")}
+                        </div>
                         <Input
                           value={
                             estadoConfiguracionMaquinaItems.find(
@@ -2175,12 +2816,15 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                           }
                           disabled
                         />
-                        <FieldDescription>
-                          Se calcula automaticamente al guardar segun los datos cargados.
-                        </FieldDescription>
                       </Field>
                       <Field>
-                        <FieldLabel>Geometria de trabajo</FieldLabel>
+                        <div className="flex items-center gap-1">
+                          <FieldLabel>
+                            Geometria de trabajo
+                            {renderRequiredAsterisk(true)}
+                          </FieldLabel>
+                          {renderTooltipIcon("Se completa automaticamente segun la plantilla seleccionada.")}
+                        </div>
                         <Select
                           value={form.geometriaTrabajo}
                           disabled
@@ -2208,12 +2852,12 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             </SelectGroup>
                           </SelectContent>
                         </Select>
-                        <FieldDescription>
-                          Se completa automaticamente segun la plantilla seleccionada.
-                        </FieldDescription>
                       </Field>
                       <Field>
-                        <FieldLabel>Unidad de produccion</FieldLabel>
+                        <FieldLabel>
+                          Unidad de produccion
+                          {renderRequiredAsterisk(true)}
+                        </FieldLabel>
                         <Select
                           value={form.unidadProduccionPrincipal}
                           onValueChange={(value) =>
@@ -2245,10 +2889,10 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                       <Field className="md:col-span-2">
                         <div className="flex items-center justify-between rounded-md border p-3">
                           <div className="flex flex-col">
-                            <FieldLabel>Maquina activa</FieldLabel>
-                            <FieldDescription>
-                              La maquina puede usarse en operacion y costeo.
-                            </FieldDescription>
+                            <div className="flex items-center gap-1">
+                              <FieldLabel>Maquina activa</FieldLabel>
+                              {renderTooltipIcon("La maquina puede usarse en operacion y costeo.")}
+                            </div>
                           </div>
                           <Switch
                             checked={form.activo}
@@ -2269,7 +2913,10 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                   <CardContent>
                     <FieldGroup className="grid gap-4 md:grid-cols-2">
                       <Field>
-                        <FieldLabel>Planta</FieldLabel>
+                        <FieldLabel>
+                          Planta
+                          {renderRequiredAsterisk(true)}
+                        </FieldLabel>
                         <Select
                           value={form.plantaId}
                           onValueChange={(value) =>
@@ -2342,7 +2989,10 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                     <FieldGroup className="grid gap-4 md:grid-cols-4">
                       {visibleCapacityFields.anchoUtil ? (
                         <Field>
-                          <FieldLabel>Ancho util (cm)</FieldLabel>
+                          <FieldLabel>
+                            Ancho util (cm)
+                            {renderRequiredAsterisk(requiredTemplateMachineKeySet.has("anchoUtil"))}
+                          </FieldLabel>
                           <Input
                             className="max-w-48"
                             type="number"
@@ -2352,18 +3002,26 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                                 : form.anchoUtil ?? ""
                             }
                             disabled={form.plantilla === "impresora_laser"}
-                            onChange={(event) =>
-                              setForm((current) => ({
-                                ...current,
-                                anchoUtil: event.target.value ? Number(event.target.value) : undefined,
-                              }))
-                            }
+                              onChange={(event) =>
+                                setForm((current) => ({
+                                  ...current,
+                                  anchoUtil: toFiniteNumberOrUndefined(event.target.value),
+                                }))
+                              }
                           />
                         </Field>
                       ) : null}
                       {visibleCapacityFields.largoUtil ? (
                         <Field>
-                          <FieldLabel>Largo util (cm)</FieldLabel>
+                          <div className="flex items-center gap-1">
+                            <FieldLabel>
+                              Largo util (cm)
+                              {renderRequiredAsterisk(requiredTemplateMachineKeySet.has("largoUtil"))}
+                            </FieldLabel>
+                            {form.plantilla === "impresora_laser"
+                              ? renderTooltipIcon("Se deriva automaticamente desde hoja maxima y margenes.")
+                              : null}
+                          </div>
                           <Input
                             className="max-w-48"
                             type="number"
@@ -2373,23 +3031,21 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                                 : form.largoUtil ?? ""
                             }
                             disabled={form.plantilla === "impresora_laser"}
-                            onChange={(event) =>
-                              setForm((current) => ({
-                                ...current,
-                                largoUtil: event.target.value ? Number(event.target.value) : undefined,
-                              }))
-                            }
+                              onChange={(event) =>
+                                setForm((current) => ({
+                                  ...current,
+                                  largoUtil: toFiniteNumberOrUndefined(event.target.value),
+                                }))
+                              }
                           />
-                          {form.plantilla === "impresora_laser" ? (
-                            <FieldDescription>
-                              Se deriva automaticamente desde hoja maxima y margenes.
-                            </FieldDescription>
-                          ) : null}
                         </Field>
                       ) : null}
                       {visibleCapacityFields.altoUtil ? (
                         <Field>
-                          <FieldLabel>Alto util (cm)</FieldLabel>
+                          <FieldLabel>
+                            Alto util (cm)
+                            {renderRequiredAsterisk(requiredTemplateMachineKeySet.has("altoUtil"))}
+                          </FieldLabel>
                           <Input
                             className="max-w-48"
                             type="number"
@@ -2397,7 +3053,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             onChange={(event) =>
                               setForm((current) => ({
                                 ...current,
-                                altoUtil: event.target.value ? Number(event.target.value) : undefined,
+                                altoUtil: toFiniteNumberOrUndefined(event.target.value),
                               }))
                             }
                           />
@@ -2405,7 +3061,10 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                       ) : null}
                       {visibleCapacityFields.espesorMaximo ? (
                         <Field>
-                          <FieldLabel>Espesor maximo (mm)</FieldLabel>
+                          <FieldLabel>
+                            Espesor maximo (mm)
+                            {renderRequiredAsterisk(requiredTemplateMachineKeySet.has("espesorMaximo"))}
+                          </FieldLabel>
                           <Input
                             className="max-w-48"
                             type="number"
@@ -2413,7 +3072,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             onChange={(event) =>
                               setForm((current) => ({
                                 ...current,
-                                espesorMaximo: event.target.value ? Number(event.target.value) : undefined,
+                                espesorMaximo: toFiniteNumberOrUndefined(event.target.value),
                               }))
                             }
                           />
@@ -2421,7 +3080,10 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                       ) : null}
                       {visibleCapacityFields.pesoMaximo ? (
                         <Field>
-                          <FieldLabel>Peso maximo (kg)</FieldLabel>
+                          <FieldLabel>
+                            Peso maximo (kg)
+                            {renderRequiredAsterisk(requiredTemplateMachineKeySet.has("pesoMaximo"))}
+                          </FieldLabel>
                           <Input
                             className="max-w-48"
                             type="number"
@@ -2429,7 +3091,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             onChange={(event) =>
                               setForm((current) => ({
                                 ...current,
-                                pesoMaximo: event.target.value ? Number(event.target.value) : undefined,
+                                pesoMaximo: toFiniteNumberOrUndefined(event.target.value),
                               }))
                             }
                           />
@@ -2474,90 +3136,163 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                       <div className="space-y-6">
                         {groupedTemplateEditableFields.map((group) => (
                           <section key={group.key} className="space-y-3">
-                            <div className="space-y-1">
+                            <div className="flex items-center gap-1">
                               <h4 className="text-sm font-semibold">{group.title}</h4>
-                              <p className="text-xs text-muted-foreground">{group.description}</p>
+                              {renderTooltipIcon(group.description)}
                             </div>
                             <FieldGroup className="grid gap-4 md:grid-cols-2">
-                              {group.entries.map((entry) => (
-                                <Field key={`${entry.sectionId}:${entry.field.key}`}>
-                                  <div className="flex items-center gap-1">
-                                    <FieldLabel>
-                                      {entry.field.label}
-                                      {entry.field.unit ? ` (${getUnitLabel(entry.field.unit)})` : ""}
-                                    </FieldLabel>
-                                    {entry.field.tooltip ? (
-                                      <Tooltip>
-                                        <TooltipTrigger className="inline-flex items-center text-muted-foreground">
-                                          <InfoIcon className="size-4" />
-                                        </TooltipTrigger>
-                                        <TooltipContent side="top">{entry.field.tooltip}</TooltipContent>
-                                      </Tooltip>
-                                    ) : null}
-                                  </div>
-                                  {entry.field.kind === "select" ? (
-                                    <Select
-                                      value={String(getTemplateFieldValue(entry.field) || "")}
-                                      onValueChange={(value) =>
-                                        setTemplateFieldValue(entry.field, value ?? "")
-                                      }
-                                    >
-                                      <SelectTrigger
-                                        className={isPresetParamField(entry.field.key) ? PRESET_FIELD_CLASSNAME : ""}
-                                      >
-                                        <SelectValue placeholder={entry.field.placeholder || "Seleccionar"}>
-                                          {(entry.field.options ?? []).find(
-                                            (option) =>
-                                              option.value === String(getTemplateFieldValue(entry.field) || ""),
-                                          )?.label ??
-                                            (getTemplateFieldValue(entry.field)
-                                              ? formatTechnicalValue(
-                                                  String(getTemplateFieldValue(entry.field)),
-                                                )
-                                              : entry.field.placeholder || "Seleccionar")}
-                                        </SelectValue>
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectGroup>
-                                          {(entry.field.options ?? []).map((option) => (
-                                            <SelectItem key={option.value} value={option.value}>
-                                              {option.label}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectGroup>
-                                      </SelectContent>
-                                    </Select>
-                                  ) : entry.field.kind === "boolean" ? (
-                                    <div
-                                      className={`flex items-center justify-between rounded-md border p-3 ${
-                                        isPresetParamField(entry.field.key)
-                                          ? "border-sky-300 bg-sky-50/70"
-                                          : ""
-                                      }`}
-                                    >
-                                      <FieldDescription>{entry.sectionTitle}</FieldDescription>
-                                      <Switch
-                                        checked={Boolean(getTemplateFieldValue(entry.field))}
-                                        onCheckedChange={(checked) =>
-                                          setTemplateFieldValue(entry.field, checked)
+                              {group.entries.map((entry) => {
+                                const rawValue = getTemplateFieldValue(entry.field);
+                                const isPresetField = isPresetParamField(entry.field.key);
+
+                                if (entry.field.kind === "select") {
+                                  const currentValue = String(rawValue || "");
+                                  return (
+                                    <Field key={`${entry.sectionId}:${entry.field.key}`}>
+                                      <div className="flex items-center gap-1">
+                                        <FieldLabel>
+                                          {entry.field.label}
+                                          {renderRequiredAsterisk(entry.field.required)}
+                                          {entry.field.unit ? ` (${getUnitLabel(entry.field.unit)})` : ""}
+                                        </FieldLabel>
+                                        {renderTooltipIcon(entry.field.tooltip || entry.field.description)}
+                                      </div>
+                                      <Select
+                                        value={currentValue}
+                                        onValueChange={(value) =>
+                                          setTemplateFieldValue(entry.field, value ?? "")
                                         }
+                                      >
+                                        <SelectTrigger className={isPresetField ? PRESET_FIELD_CLASSNAME : ""}>
+                                          <SelectValue placeholder={entry.field.placeholder || "Seleccionar"}>
+                                            {(entry.field.options ?? []).find(
+                                              (option) => option.value === currentValue,
+                                            )?.label ??
+                                              (currentValue
+                                                ? formatTechnicalValue(currentValue)
+                                                : entry.field.placeholder || "Seleccionar")}
+                                          </SelectValue>
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectGroup>
+                                            {(entry.field.options ?? []).map((option) => (
+                                              <SelectItem key={option.value} value={option.value}>
+                                                {option.label}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectGroup>
+                                        </SelectContent>
+                                      </Select>
+                                    </Field>
+                                  );
+                                }
+
+                                if (entry.field.kind === "boolean") {
+                                  return (
+                                    <Field key={`${entry.sectionId}:${entry.field.key}`}>
+                                      <div className="flex items-center gap-1">
+                                        <FieldLabel>
+                                          {entry.field.label}
+                                          {renderRequiredAsterisk(entry.field.required)}
+                                          {entry.field.unit ? ` (${getUnitLabel(entry.field.unit)})` : ""}
+                                        </FieldLabel>
+                                        {renderTooltipIcon(entry.field.tooltip || entry.field.description)}
+                                      </div>
+                                      <div
+                                        className={`flex items-center justify-between rounded-md border p-3 ${
+                                          isPresetField ? "border-sky-300 bg-sky-50/70" : ""
+                                        }`}
+                                      >
+                                        <span className="text-sm text-muted-foreground">Habilitado</span>
+                                        <Switch
+                                          checked={Boolean(rawValue)}
+                                          onCheckedChange={(checked) =>
+                                            setTemplateFieldValue(entry.field, checked)
+                                          }
+                                        />
+                                      </div>
+                                    </Field>
+                                  );
+                                }
+
+                                if (entry.field.kind === "textarea") {
+                                  return (
+                                    <Field key={`${entry.sectionId}:${entry.field.key}`} className="md:col-span-2">
+                                      <div className="flex items-center gap-1">
+                                        <FieldLabel>
+                                          {entry.field.label}
+                                          {renderRequiredAsterisk(entry.field.required)}
+                                          {entry.field.unit ? ` (${getUnitLabel(entry.field.unit)})` : ""}
+                                        </FieldLabel>
+                                        {renderTooltipIcon(entry.field.tooltip || entry.field.description)}
+                                      </div>
+                                      <Textarea
+                                        className={isPresetField ? PRESET_FIELD_CLASSNAME : ""}
+                                        rows={2}
+                                        value={String(rawValue ?? "")}
+                                        onChange={(event) =>
+                                          setTemplateFieldValue(entry.field, event.target.value)
+                                        }
+                                        placeholder={entry.field.placeholder}
                                       />
+                                    </Field>
+                                  );
+                                }
+
+                                if (entry.field.kind === "multiselect") {
+                                  const valueList = Array.isArray(rawValue) ? rawValue.join(", ") : "";
+                                  return (
+                                    <Field key={`${entry.sectionId}:${entry.field.key}`} className="md:col-span-2">
+                                      <div className="flex items-center gap-1">
+                                        <FieldLabel>
+                                          {entry.field.label}
+                                          {renderRequiredAsterisk(entry.field.required)}
+                                          {entry.field.unit ? ` (${getUnitLabel(entry.field.unit)})` : ""}
+                                        </FieldLabel>
+                                        {renderTooltipIcon(entry.field.tooltip || entry.field.description)}
+                                      </div>
+                                      <Textarea
+                                        className={isPresetField ? PRESET_FIELD_CLASSNAME : ""}
+                                        rows={2}
+                                        value={valueList}
+                                        onChange={(event) =>
+                                          setTemplateFieldValue(
+                                            entry.field,
+                                            event.target.value
+                                              .split(",")
+                                              .map((itemValue) => itemValue.trim())
+                                              .filter(Boolean),
+                                          )
+                                        }
+                                        placeholder={entry.field.placeholder || "Valor 1, Valor 2"}
+                                      />
+                                    </Field>
+                                  );
+                                }
+
+                                return (
+                                  <Field key={`${entry.sectionId}:${entry.field.key}`}>
+                                    <div className="flex items-center gap-1">
+                                      <FieldLabel>
+                                        {entry.field.label}
+                                        {renderRequiredAsterisk(entry.field.required)}
+                                        {entry.field.unit ? ` (${getUnitLabel(entry.field.unit)})` : ""}
+                                      </FieldLabel>
+                                      {renderTooltipIcon(entry.field.tooltip || entry.field.description)}
                                     </div>
-                                  ) : (
                                     <Input
-                                      className={isPresetParamField(entry.field.key) ? PRESET_FIELD_CLASSNAME : ""}
+                                      className={isPresetField ? PRESET_FIELD_CLASSNAME : ""}
                                       disabled={entry.field.key === "areaImprimibleMaxima"}
                                       type={entry.field.kind === "number" ? "number" : "text"}
-                                      value={String(getTemplateFieldValue(entry.field))}
+                                      value={String(rawValue ?? "")}
                                       onChange={(event) =>
                                         setTemplateFieldValue(entry.field, event.target.value)
                                       }
                                       placeholder={entry.field.placeholder}
                                     />
-                                  )}
-                                  <FieldDescription>{entry.field.description}</FieldDescription>
-                                </Field>
-                              ))}
+                                  </Field>
+                                );
+                              })}
                             </FieldGroup>
                           </section>
                         ))}
@@ -2588,7 +3323,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
 
             <TabsContent value="perfiles" className="m-0">
               <Card className="mx-auto w-full max-w-5xl">
-                <CardHeader className="flex-row items-center justify-between">
+                <CardHeader className="flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <CardTitle className="text-base">Perfiles operativos</CardTitle>
                   <Button
                     size="sm"
@@ -2688,9 +3423,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                                         item.id === perfil.id
                                           ? {
                                               ...item,
-                                              productividad: event.target.value
-                                                ? Number(event.target.value)
-                                                : undefined,
+                                              productividad: toFiniteNumberOrUndefined(event.target.value),
                                             }
                                           : item,
                                       ),
@@ -2802,11 +3535,14 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             if (fieldItem.kind === "boolean") {
                               return (
                                 <Field key={`${selectedPerfil.id}-${fieldItem.key}`}>
-                                  <div className="flex items-center justify-between rounded-md border p-3">
-                                    <div className="flex items-center gap-1">
-                                      <FieldLabel>{fieldItem.label}</FieldLabel>
-                                      {renderTooltipIcon(helper)}
-                                    </div>
+                                  <div className="flex min-h-10 items-start gap-1">
+                                    <FieldLabel>
+                                      {fieldItem.label}
+                                      {renderRequiredAsterisk(fieldItem.required)}
+                                    </FieldLabel>
+                                    {renderTooltipIcon(helper)}
+                                  </div>
+                                  <div className="flex h-10 items-center justify-end rounded-md border px-3">
                                     <Switch
                                       checked={Boolean(rawValue)}
                                       onCheckedChange={(checked) =>
@@ -2821,8 +3557,11 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             if (fieldItem.kind === "select") {
                               return (
                                 <Field key={`${selectedPerfil.id}-${fieldItem.key}`}>
-                                  <div className="flex items-center gap-1">
-                                    <FieldLabel>{fieldItem.label}</FieldLabel>
+                                  <div className="flex min-h-10 items-start gap-1">
+                                    <FieldLabel>
+                                      {fieldItem.label}
+                                      {renderRequiredAsterisk(fieldItem.required)}
+                                    </FieldLabel>
                                     {renderTooltipIcon(helper)}
                                   </div>
                                   <Select
@@ -2867,8 +3606,11 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             if (fieldItem.kind === "textarea") {
                               return (
                                 <Field key={`${selectedPerfil.id}-${fieldItem.key}`} className="md:col-span-6">
-                                  <div className="flex items-center gap-1">
-                                    <FieldLabel>{fieldItem.label}</FieldLabel>
+                                  <div className="flex min-h-10 items-start gap-1">
+                                    <FieldLabel>
+                                      {fieldItem.label}
+                                      {renderRequiredAsterisk(fieldItem.required)}
+                                    </FieldLabel>
                                     {renderTooltipIcon(helper)}
                                   </div>
                                   <Textarea
@@ -2891,8 +3633,11 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                               const listValue = Array.isArray(rawValue) ? rawValue.join(", ") : "";
                               return (
                                 <Field key={`${selectedPerfil.id}-${fieldItem.key}`} className="md:col-span-6">
-                                  <div className="flex items-center gap-1">
-                                    <FieldLabel>{fieldItem.label}</FieldLabel>
+                                  <div className="flex min-h-10 items-start gap-1">
+                                    <FieldLabel>
+                                      {fieldItem.label}
+                                      {renderRequiredAsterisk(fieldItem.required)}
+                                    </FieldLabel>
                                     {renderTooltipIcon(helper)}
                                   </div>
                                   <Textarea
@@ -2920,8 +3665,11 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
 
                             return (
                               <Field key={`${selectedPerfil.id}-${fieldItem.key}`}>
-                                <div className="flex items-center gap-1">
-                                  <FieldLabel>{fieldItem.label}</FieldLabel>
+                                <div className="flex min-h-10 items-start gap-1">
+                                  <FieldLabel>
+                                    {fieldItem.label}
+                                    {renderRequiredAsterisk(fieldItem.required)}
+                                  </FieldLabel>
                                   {renderTooltipIcon(helper)}
                                 </div>
                                 <Input
@@ -2943,7 +3691,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                         {selectedFormatoObjetivo === "personalizado" ? (
                           <>
                             <Field>
-                              <div className="flex items-center gap-1">
+                              <div className="flex min-h-10 items-start gap-1">
                                 <FieldLabel>Ancho personalizado (cm)</FieldLabel>
                                 {renderTooltipIcon("Medida de impresion util para el formato personalizado.")}
                               </div>
@@ -2956,9 +3704,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                                       item.id === selectedPerfil.id
                                         ? {
                                             ...item,
-                                            anchoAplicable: event.target.value
-                                              ? Number(event.target.value)
-                                              : undefined,
+                                            anchoAplicable: toFiniteNumberOrUndefined(event.target.value),
                                           }
                                         : item,
                                     ),
@@ -2968,7 +3714,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                               />
                             </Field>
                             <Field>
-                              <div className="flex items-center gap-1">
+                              <div className="flex min-h-10 items-start gap-1">
                                 <FieldLabel>Alto personalizado (cm)</FieldLabel>
                                 {renderTooltipIcon("Medida de impresion util para el formato personalizado.")}
                               </div>
@@ -2981,9 +3727,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                                       item.id === selectedPerfil.id
                                         ? {
                                             ...item,
-                                            altoAplicable: event.target.value
-                                              ? Number(event.target.value)
-                                              : undefined,
+                                            altoAplicable: toFiniteNumberOrUndefined(event.target.value),
                                           }
                                         : item,
                                     ),
@@ -3008,7 +3752,9 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => setConsumibles((current) => [...current, createConsumible()])}
+                    onClick={() =>
+                      setConsumibles((current) => [...current, createConsumible(consumibleTemplateFields)])
+                    }
                   >
                     <PlusIcon data-icon="inline-start" />
                     Agregar consumible
@@ -3035,46 +3781,66 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                           Quitar
                         </Button>
                       </div>
-                      <FieldGroup className="grid gap-3 md:grid-cols-6">
-                        <Field className="md:col-span-3">
-                          <FieldLabel>Nombre</FieldLabel>
+                      <FieldGroup className="grid gap-3 md:grid-cols-12">
+                        <Field className="md:col-span-6">
+                          <div className="flex min-h-10 items-start gap-1">
+                            <FieldLabel>
+                              {consumibleTemplateFieldByKey.get("nombre")?.label ?? "Nombre"}
+                              {renderRequiredAsterisk(consumibleTemplateFieldByKey.get("nombre")?.required)}
+                            </FieldLabel>
+                            {renderTooltipIcon(consumibleTemplateFieldByKey.get("nombre")?.description)}
+                          </div>
                           <Input
                             value={consumible.nombre}
                             onChange={(event) =>
-                              setConsumibles((current) =>
-                                current.map((item) =>
-                                  item.id === consumible.id
-                                    ? { ...item, nombre: event.target.value }
-                                    : item,
-                                ),
+                              setConsumibleTemplateFieldValue(
+                                consumible.id,
+                                consumibleTemplateFieldByKey.get("nombre") ?? {
+                                  key: "nombre",
+                                  label: "Nombre",
+                                  scope: "consumible",
+                                  kind: "text",
+                                  description: "",
+                                },
+                                event.target.value,
                               )
                             }
                           />
                         </Field>
-                        <Field>
-                          <FieldLabel>Tipo</FieldLabel>
+                        <Field className="md:col-span-3">
+                          <div className="flex min-h-10 items-start gap-1">
+                            <FieldLabel>
+                              {consumibleTemplateFieldByKey.get("tipo")?.label ?? "Tipo"}
+                              {renderRequiredAsterisk(consumibleTemplateFieldByKey.get("tipo")?.required)}
+                            </FieldLabel>
+                            {renderTooltipIcon(consumibleTemplateFieldByKey.get("tipo")?.description)}
+                          </div>
                           <Select
                             value={consumible.tipo}
-                            onValueChange={(value) =>
-                              setConsumibles((current) =>
-                                current.map((item) =>
-                                  item.id === consumible.id
-                                    ? { ...item, tipo: value as LocalConsumible["tipo"] }
-                                    : item,
-                                ),
-                              )
-                            }
+                            onValueChange={(value) => {
+                              const fieldItem = consumibleTemplateFieldByKey.get("tipo");
+                              if (!fieldItem) {
+                                setConsumibles((current) =>
+                                  current.map((item) =>
+                                    item.id === consumible.id
+                                      ? { ...item, tipo: value as LocalConsumible["tipo"] }
+                                      : item,
+                                  ),
+                                );
+                                return;
+                              }
+                              setConsumibleTemplateFieldValue(consumible.id, fieldItem, value);
+                            }}
                           >
                             <SelectTrigger>
                               <SelectValue>
-                                {tipoConsumibleMaquinaItems.find(
-                                  (item) => item.value === consumible.tipo,
-                                )?.label ?? formatTechnicalValue(consumible.tipo)}
+                                {consumibleTipoOptions.find((item) => item.value === consumible.tipo)?.label ??
+                                  formatTechnicalValue(consumible.tipo)}
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               <SelectGroup>
-                                {tipoConsumibleMaquinaItems.map((item) => (
+                                {consumibleTipoOptions.map((item) => (
                                   <SelectItem key={item.value} value={item.value}>
                                     {item.label}
                                   </SelectItem>
@@ -3083,29 +3849,40 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             </SelectContent>
                           </Select>
                         </Field>
-                        <Field>
-                          <FieldLabel>Unidad</FieldLabel>
+                        <Field className="md:col-span-3">
+                          <div className="flex min-h-10 items-start gap-1">
+                            <FieldLabel>
+                              {consumibleTemplateFieldByKey.get("unidad")?.label ?? "Unidad"}
+                              {renderRequiredAsterisk(consumibleTemplateFieldByKey.get("unidad")?.required)}
+                            </FieldLabel>
+                            {renderTooltipIcon(consumibleTemplateFieldByKey.get("unidad")?.description)}
+                          </div>
                           <Select
                             value={consumible.unidad}
-                            onValueChange={(value) =>
-                              setConsumibles((current) =>
-                                current.map((item) =>
-                                  item.id === consumible.id
-                                    ? { ...item, unidad: value as LocalConsumible["unidad"] }
-                                    : item,
-                                ),
-                              )
-                            }
+                            onValueChange={(value) => {
+                              const fieldItem = consumibleTemplateFieldByKey.get("unidad");
+                              if (!fieldItem) {
+                                setConsumibles((current) =>
+                                  current.map((item) =>
+                                    item.id === consumible.id
+                                      ? { ...item, unidad: value as LocalConsumible["unidad"] }
+                                      : item,
+                                  ),
+                                );
+                                return;
+                              }
+                              setConsumibleTemplateFieldValue(consumible.id, fieldItem, value);
+                            }}
                           >
                             <SelectTrigger>
                               <SelectValue>
-                                {unidadConsumoMaquinaItems.find((item) => item.value === consumible.unidad)
+                                {consumibleUnidadOptions.find((item) => item.value === consumible.unidad)
                                   ?.label ?? formatTechnicalValue(consumible.unidad)}
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               <SelectGroup>
-                                {unidadConsumoMaquinaItems.map((item) => (
+                                {consumibleUnidadOptions.map((item) => (
                                   <SelectItem key={item.value} value={item.value}>
                                     {item.label}
                                   </SelectItem>
@@ -3114,73 +3891,198 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             </SelectContent>
                           </Select>
                         </Field>
-                        <Field>
-                          <FieldLabel>Costo referencia ($)</FieldLabel>
+                        <Field className="md:col-span-3">
+                          <div className="flex min-h-10 items-start gap-1">
+                            <FieldLabel>
+                              {consumibleTemplateFieldByKey.get("costoReferencia")?.label ?? "Costo referencia"} ($)
+                              {renderRequiredAsterisk(
+                                consumibleTemplateFieldByKey.get("costoReferencia")?.required,
+                              )}
+                            </FieldLabel>
+                            {renderTooltipIcon(consumibleTemplateFieldByKey.get("costoReferencia")?.description)}
+                          </div>
                           <Input
                             type="number"
                             value={consumible.costoReferencia ?? ""}
                             onChange={(event) =>
-                              setConsumibles((current) =>
-                                current.map((item) =>
-                                  item.id === consumible.id
-                                    ? {
-                                        ...item,
-                                        costoReferencia: event.target.value
-                                          ? Number(event.target.value)
-                                          : undefined,
-                                      }
-                                    : item,
-                                ),
-                              )
-                            }
-                          />
-                        </Field>
-                        <Field>
-                          <FieldLabel>Rendimiento estimado</FieldLabel>
-                          <Input
-                            type="number"
-                            value={consumible.rendimientoEstimado ?? ""}
-                            onChange={(event) =>
-                              setConsumibles((current) =>
-                                current.map((item) =>
-                                  item.id === consumible.id
-                                    ? {
-                                        ...item,
-                                        rendimientoEstimado: event.target.value
-                                          ? Number(event.target.value)
-                                          : undefined,
-                                      }
-                                    : item,
-                                ),
+                              setConsumibleTemplateFieldValue(
+                                consumible.id,
+                                consumibleTemplateFieldByKey.get("costoReferencia") ?? {
+                                  key: "costoReferencia",
+                                  label: "Costo referencia",
+                                  scope: "consumible",
+                                  kind: "number",
+                                  description: "",
+                                },
+                                event.target.value,
                               )
                             }
                           />
                         </Field>
                         <Field className="md:col-span-3">
-                          <FieldLabel>Observaciones</FieldLabel>
+                          <div className="flex min-h-10 items-start gap-1">
+                            <FieldLabel>
+                              {consumibleTemplateFieldByKey.get("rendimientoEstimado")?.label ??
+                                "Rendimiento estimado"}
+                              {renderRequiredAsterisk(
+                                consumibleTemplateFieldByKey.get("rendimientoEstimado")?.required,
+                              )}
+                            </FieldLabel>
+                            {renderTooltipIcon(consumibleTemplateFieldByKey.get("rendimientoEstimado")?.description)}
+                          </div>
                           <Input
-                            value={consumible.observaciones || ""}
+                            type="number"
+                            value={consumible.rendimientoEstimado ?? ""}
                             onChange={(event) =>
-                              setConsumibles((current) =>
-                                current.map((item) =>
-                                  item.id === consumible.id
-                                    ? { ...item, observaciones: event.target.value }
-                                    : item,
-                                ),
+                              setConsumibleTemplateFieldValue(
+                                consumible.id,
+                                consumibleTemplateFieldByKey.get("rendimientoEstimado") ?? {
+                                  key: "rendimientoEstimado",
+                                  label: "Rendimiento estimado",
+                                  scope: "consumible",
+                                  kind: "number",
+                                  description: "",
+                                },
+                                event.target.value,
                               )
                             }
                           />
                         </Field>
-                        <Field>
-                          <div className="flex items-center justify-between rounded-md border p-3">
+                        {consumibleExtraTemplateFields.map((fieldItem) => {
+                          const rawValue = getConsumibleValueByTemplateField(consumible, fieldItem);
+                          const key = `${consumible.id}-${fieldItem.key}`;
+
+                          if (fieldItem.kind === "boolean") {
+                            return (
+                              <Field key={key} className="md:col-span-3">
+                                <div className="flex min-h-10 items-start gap-1">
+                                  <FieldLabel>
+                                    {fieldItem.label}
+                                    {renderRequiredAsterisk(fieldItem.required)}
+                                  </FieldLabel>
+                                  {renderTooltipIcon(fieldItem.description)}
+                                </div>
+                                <div className="flex h-10 items-center justify-end rounded-md border px-3">
+                                  <Switch
+                                    checked={Boolean(rawValue)}
+                                    onCheckedChange={(checked) =>
+                                      setConsumibleTemplateFieldValue(consumible.id, fieldItem, checked)
+                                    }
+                                  />
+                                </div>
+                              </Field>
+                            );
+                          }
+
+                          if (fieldItem.kind === "select") {
+                            const currentSelectValue =
+                              typeof rawValue === "string" && rawValue.trim().length > 0
+                                ? rawValue
+                                : EMPTY_SELECT_VALUE;
+                            return (
+                              <Field key={key} className="md:col-span-3">
+                                <div className="flex min-h-10 items-start gap-1">
+                                  <FieldLabel>
+                                    {fieldItem.label}
+                                    {renderRequiredAsterisk(fieldItem.required)}
+                                  </FieldLabel>
+                                  {renderTooltipIcon(fieldItem.description)}
+                                </div>
+                                <Select
+                                  value={currentSelectValue}
+                                  onValueChange={(value) =>
+                                    setConsumibleTemplateFieldValue(
+                                      consumible.id,
+                                      fieldItem,
+                                      value === EMPTY_SELECT_VALUE ? "" : value,
+                                    )
+                                  }
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder={fieldItem.placeholder || "Seleccionar"}>
+                                      {fieldItem.options?.find((option) => option.value === currentSelectValue)
+                                        ?.label ??
+                                        (currentSelectValue !== EMPTY_SELECT_VALUE
+                                          ? formatTechnicalValue(currentSelectValue)
+                                          : fieldItem.placeholder || "Seleccionar")}
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectGroup>
+                                      <SelectItem value={EMPTY_SELECT_VALUE}>Sin seleccionar</SelectItem>
+                                      {(fieldItem.options ?? []).map((option) => (
+                                        <SelectItem key={option.value} value={option.value}>
+                                          {option.label}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectGroup>
+                                  </SelectContent>
+                                </Select>
+                              </Field>
+                            );
+                          }
+
+                          const inputType = fieldItem.kind === "number" ? "number" : "text";
+                          return (
+                            <Field key={key} className="md:col-span-3">
+                              <div className="flex min-h-10 items-start gap-1">
+                                <FieldLabel>
+                                  {fieldItem.label}
+                                  {renderRequiredAsterisk(fieldItem.required)}
+                                </FieldLabel>
+                                {renderTooltipIcon(fieldItem.description)}
+                              </div>
+                              <Input
+                                type={inputType}
+                                value={String(rawValue ?? "")}
+                                onChange={(event) =>
+                                  setConsumibleTemplateFieldValue(consumible.id, fieldItem, event.target.value)
+                                }
+                                placeholder={fieldItem.placeholder}
+                              />
+                            </Field>
+                          );
+                        })}
+                        <Field className="md:col-span-9">
+                          <div className="flex min-h-10 items-start gap-1">
+                            <FieldLabel>Observaciones</FieldLabel>
+                            {renderTooltipIcon("Notas operativas o de compra para el consumible.")}
+                          </div>
+                          <Input
+                            value={consumible.observaciones || ""}
+                            onChange={(event) =>
+                              setConsumibleTemplateFieldValue(
+                                consumible.id,
+                                {
+                                  key: "observaciones",
+                                  label: "Observaciones",
+                                  scope: "consumible",
+                                  kind: "text",
+                                  description: "",
+                                },
+                                event.target.value,
+                              )
+                            }
+                          />
+                        </Field>
+                        <Field className="md:col-span-3">
+                          <div className="flex min-h-10 items-start gap-1">
                             <FieldLabel>Activo</FieldLabel>
+                          </div>
+                          <div className="flex h-10 items-center justify-end rounded-md border px-3">
                             <Switch
                               checked={consumible.activo}
                               onCheckedChange={(checked) =>
-                                setConsumibles((current) =>
-                                  current.map((item) =>
-                                    item.id === consumible.id ? { ...item, activo: checked } : item,
-                                  ),
+                                setConsumibleTemplateFieldValue(
+                                  consumible.id,
+                                  {
+                                    key: "activo",
+                                    label: "Activo",
+                                    scope: "consumible",
+                                    kind: "boolean",
+                                    description: "",
+                                  },
+                                  checked,
                                 )
                               }
                             />
@@ -3195,12 +4097,14 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
 
             <TabsContent value="desgaste" className="m-0">
               <Card className="mx-auto w-full max-w-5xl">
-                <CardHeader className="flex-row items-center justify-between">
+                <CardHeader className="flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <CardTitle className="text-base">Desgaste y repuestos</CardTitle>
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => setDesgastes((current) => [...current, createDesgaste()])}
+                    onClick={() =>
+                      setDesgastes((current) => [...current, createDesgaste(desgasteTemplateFields)])
+                    }
                   >
                     <PlusIcon data-icon="inline-start" />
                     Agregar componente
@@ -3227,46 +4131,66 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                           Quitar
                         </Button>
                       </div>
-                      <FieldGroup className="grid gap-3 md:grid-cols-6">
-                        <Field className="md:col-span-3">
-                          <FieldLabel>Nombre</FieldLabel>
+                      <FieldGroup className="grid gap-3 md:grid-cols-12">
+                        <Field className="md:col-span-6">
+                          <div className="flex min-h-10 items-start gap-1">
+                            <FieldLabel>
+                              {desgasteTemplateFieldByKey.get("nombre")?.label ?? "Nombre"}
+                              {renderRequiredAsterisk(desgasteTemplateFieldByKey.get("nombre")?.required)}
+                            </FieldLabel>
+                            {renderTooltipIcon(desgasteTemplateFieldByKey.get("nombre")?.description)}
+                          </div>
                           <Input
                             value={desgaste.nombre}
                             onChange={(event) =>
-                              setDesgastes((current) =>
-                                current.map((item) =>
-                                  item.id === desgaste.id
-                                    ? { ...item, nombre: event.target.value }
-                                    : item,
-                                ),
+                              setDesgasteTemplateFieldValue(
+                                desgaste.id,
+                                desgasteTemplateFieldByKey.get("nombre") ?? {
+                                  key: "nombre",
+                                  label: "Nombre",
+                                  scope: "desgaste",
+                                  kind: "text",
+                                  description: "",
+                                },
+                                event.target.value,
                               )
                             }
                           />
                         </Field>
-                        <Field>
-                          <FieldLabel>Tipo</FieldLabel>
+                        <Field className="md:col-span-3">
+                          <div className="flex min-h-10 items-start gap-1">
+                            <FieldLabel>
+                              {desgasteTemplateFieldByKey.get("tipo")?.label ?? "Tipo"}
+                              {renderRequiredAsterisk(desgasteTemplateFieldByKey.get("tipo")?.required)}
+                            </FieldLabel>
+                            {renderTooltipIcon(desgasteTemplateFieldByKey.get("tipo")?.description)}
+                          </div>
                           <Select
                             value={desgaste.tipo}
-                            onValueChange={(value) =>
-                              setDesgastes((current) =>
-                                current.map((item) =>
-                                  item.id === desgaste.id
-                                    ? { ...item, tipo: value as LocalDesgaste["tipo"] }
-                                    : item,
-                                ),
-                              )
-                            }
+                            onValueChange={(value) => {
+                              const fieldItem = desgasteTemplateFieldByKey.get("tipo");
+                              if (!fieldItem) {
+                                setDesgastes((current) =>
+                                  current.map((item) =>
+                                    item.id === desgaste.id
+                                      ? { ...item, tipo: value as LocalDesgaste["tipo"] }
+                                      : item,
+                                  ),
+                                );
+                                return;
+                              }
+                              setDesgasteTemplateFieldValue(desgaste.id, fieldItem, value);
+                            }}
                           >
                             <SelectTrigger>
                               <SelectValue>
-                                {tipoComponenteDesgasteMaquinaItems.find(
-                                  (item) => item.value === desgaste.tipo,
-                                )?.label ?? formatTechnicalValue(desgaste.tipo)}
+                                {desgasteTipoOptions.find((item) => item.value === desgaste.tipo)?.label ??
+                                  formatTechnicalValue(desgaste.tipo)}
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               <SelectGroup>
-                                {tipoComponenteDesgasteMaquinaItems.map((item) => (
+                                {desgasteTipoOptions.map((item) => (
                                   <SelectItem key={item.value} value={item.value}>
                                     {item.label}
                                   </SelectItem>
@@ -3275,33 +4199,45 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             </SelectContent>
                           </Select>
                         </Field>
-                        <Field>
-                          <FieldLabel>Unidad desgaste</FieldLabel>
+                        <Field className="md:col-span-3">
+                          <div className="flex min-h-10 items-start gap-1">
+                            <FieldLabel>
+                              {desgasteTemplateFieldByKey.get("unidadDesgaste")?.label ?? "Unidad desgaste"}
+                              {renderRequiredAsterisk(
+                                desgasteTemplateFieldByKey.get("unidadDesgaste")?.required,
+                              )}
+                            </FieldLabel>
+                            {renderTooltipIcon(desgasteTemplateFieldByKey.get("unidadDesgaste")?.description)}
+                          </div>
                           <Select
                             value={desgaste.unidadDesgaste}
-                            onValueChange={(value) =>
-                              setDesgastes((current) =>
-                                current.map((item) =>
-                                  item.id === desgaste.id
-                                    ? {
-                                        ...item,
-                                        unidadDesgaste: value as LocalDesgaste["unidadDesgaste"],
-                                      }
-                                    : item,
-                                ),
-                              )
-                            }
+                            onValueChange={(value) => {
+                              const fieldItem = desgasteTemplateFieldByKey.get("unidadDesgaste");
+                              if (!fieldItem) {
+                                setDesgastes((current) =>
+                                  current.map((item) =>
+                                    item.id === desgaste.id
+                                      ? {
+                                          ...item,
+                                          unidadDesgaste: value as LocalDesgaste["unidadDesgaste"],
+                                        }
+                                      : item,
+                                  ),
+                                );
+                                return;
+                              }
+                              setDesgasteTemplateFieldValue(desgaste.id, fieldItem, value);
+                            }}
                           >
                             <SelectTrigger>
                               <SelectValue>
-                                {unidadDesgasteMaquinaItems.find(
-                                  (item) => item.value === desgaste.unidadDesgaste,
-                                )?.label ?? formatTechnicalValue(desgaste.unidadDesgaste)}
+                                {desgasteUnidadOptions.find((item) => item.value === desgaste.unidadDesgaste)
+                                  ?.label ?? formatTechnicalValue(desgaste.unidadDesgaste)}
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               <SelectGroup>
-                                {unidadDesgasteMaquinaItems.map((item) => (
+                                {desgasteUnidadOptions.map((item) => (
                                   <SelectItem key={item.value} value={item.value}>
                                     {item.label}
                                   </SelectItem>
@@ -3310,74 +4246,203 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             </SelectContent>
                           </Select>
                         </Field>
-                        <Field>
-                          <FieldLabel>Vida util estimada (segun unidad)</FieldLabel>
+                        <Field className="md:col-span-3">
+                          <div className="flex min-h-10 items-start gap-1">
+                            <FieldLabel>
+                              {desgasteTemplateFieldByKey.get("vidaUtilEstimada")?.label ?? "Vida util estimada"}{" "}
+                              (segun unidad)
+                              {renderRequiredAsterisk(
+                                desgasteTemplateFieldByKey.get("vidaUtilEstimada")?.required,
+                              )}
+                            </FieldLabel>
+                            {renderTooltipIcon(desgasteTemplateFieldByKey.get("vidaUtilEstimada")?.description)}
+                          </div>
                           <Input
                             type="number"
                             value={desgaste.vidaUtilEstimada ?? ""}
                             onChange={(event) =>
-                              setDesgastes((current) =>
-                                current.map((item) =>
-                                  item.id === desgaste.id
-                                    ? {
-                                        ...item,
-                                        vidaUtilEstimada: event.target.value
-                                          ? Number(event.target.value)
-                                          : undefined,
-                                      }
-                                    : item,
-                                ),
+                              setDesgasteTemplateFieldValue(
+                                desgaste.id,
+                                desgasteTemplateFieldByKey.get("vidaUtilEstimada") ?? {
+                                  key: "vidaUtilEstimada",
+                                  label: "Vida util estimada",
+                                  scope: "desgaste",
+                                  kind: "number",
+                                  description: "",
+                                },
+                                event.target.value,
                               )
                             }
                           />
                         </Field>
-                        <Field>
-                          <FieldLabel>Costo reposicion ($)</FieldLabel>
+                        <Field className="md:col-span-3">
+                          <div className="flex min-h-10 items-start gap-1">
+                            <FieldLabel>
+                              {desgasteTemplateFieldByKey.get("costoReposicion")?.label ?? "Costo reposicion"} ($)
+                              {renderRequiredAsterisk(
+                                desgasteTemplateFieldByKey.get("costoReposicion")?.required,
+                              )}
+                            </FieldLabel>
+                            {renderTooltipIcon(desgasteTemplateFieldByKey.get("costoReposicion")?.description)}
+                          </div>
                           <Input
                             type="number"
                             value={desgaste.costoReposicion ?? ""}
                             onChange={(event) =>
-                              setDesgastes((current) =>
-                                current.map((item) =>
-                                  item.id === desgaste.id
-                                    ? {
-                                        ...item,
-                                        costoReposicion: event.target.value
-                                          ? Number(event.target.value)
-                                          : undefined,
-                                      }
-                                    : item,
-                                ),
+                              setDesgasteTemplateFieldValue(
+                                desgaste.id,
+                                desgasteTemplateFieldByKey.get("costoReposicion") ?? {
+                                  key: "costoReposicion",
+                                  label: "Costo reposicion",
+                                  scope: "desgaste",
+                                  kind: "number",
+                                  description: "",
+                                },
+                                event.target.value,
                               )
                             }
                           />
                         </Field>
-                        <Field>
-                          <FieldLabel>Modo prorrateo</FieldLabel>
+                        {desgasteExtraTemplateFields.map((fieldItem) => {
+                          const rawValue = getDesgasteValueByTemplateField(desgaste, fieldItem);
+                          const key = `${desgaste.id}-${fieldItem.key}`;
+
+                          if (fieldItem.kind === "boolean") {
+                            return (
+                              <Field key={key} className="md:col-span-3">
+                                <div className="flex min-h-10 items-start gap-1">
+                                  <FieldLabel>
+                                    {fieldItem.label}
+                                    {renderRequiredAsterisk(fieldItem.required)}
+                                  </FieldLabel>
+                                  {renderTooltipIcon(fieldItem.description)}
+                                </div>
+                                <div className="flex h-10 items-center justify-end rounded-md border px-3">
+                                  <Switch
+                                    checked={Boolean(rawValue)}
+                                    onCheckedChange={(checked) =>
+                                      setDesgasteTemplateFieldValue(desgaste.id, fieldItem, checked)
+                                    }
+                                  />
+                                </div>
+                              </Field>
+                            );
+                          }
+
+                          if (fieldItem.kind === "select") {
+                            const currentSelectValue =
+                              typeof rawValue === "string" && rawValue.trim().length > 0
+                                ? rawValue
+                                : EMPTY_SELECT_VALUE;
+                            return (
+                              <Field key={key} className="md:col-span-3">
+                                <div className="flex min-h-10 items-start gap-1">
+                                  <FieldLabel>
+                                    {fieldItem.label}
+                                    {renderRequiredAsterisk(fieldItem.required)}
+                                  </FieldLabel>
+                                  {renderTooltipIcon(fieldItem.description)}
+                                </div>
+                                <Select
+                                  value={currentSelectValue}
+                                  onValueChange={(value) =>
+                                    setDesgasteTemplateFieldValue(
+                                      desgaste.id,
+                                      fieldItem,
+                                      value === EMPTY_SELECT_VALUE ? "" : value,
+                                    )
+                                  }
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder={fieldItem.placeholder || "Seleccionar"}>
+                                      {fieldItem.options?.find((option) => option.value === currentSelectValue)
+                                        ?.label ??
+                                        (currentSelectValue !== EMPTY_SELECT_VALUE
+                                          ? formatTechnicalValue(currentSelectValue)
+                                          : fieldItem.placeholder || "Seleccionar")}
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectGroup>
+                                      <SelectItem value={EMPTY_SELECT_VALUE}>Sin seleccionar</SelectItem>
+                                      {(fieldItem.options ?? []).map((option) => (
+                                        <SelectItem key={option.value} value={option.value}>
+                                          {option.label}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectGroup>
+                                  </SelectContent>
+                                </Select>
+                              </Field>
+                            );
+                          }
+
+                          const inputType = fieldItem.kind === "number" ? "number" : "text";
+                          return (
+                            <Field key={key} className="md:col-span-3">
+                              <div className="flex min-h-10 items-start gap-1">
+                                <FieldLabel>
+                                  {fieldItem.label}
+                                  {renderRequiredAsterisk(fieldItem.required)}
+                                </FieldLabel>
+                                {renderTooltipIcon(fieldItem.description)}
+                              </div>
+                              <Input
+                                type={inputType}
+                                value={String(rawValue ?? "")}
+                                onChange={(event) =>
+                                  setDesgasteTemplateFieldValue(desgaste.id, fieldItem, event.target.value)
+                                }
+                                placeholder={fieldItem.placeholder}
+                              />
+                            </Field>
+                          );
+                        })}
+                        <Field className="md:col-span-6">
+                          <div className="flex min-h-10 items-start gap-1">
+                            <FieldLabel>
+                              Modo prorrateo
+                              {renderRequiredAsterisk(
+                                desgasteTemplateFieldByKey.get("modoProrrateo")?.required,
+                              )}
+                            </FieldLabel>
+                          </div>
                           <Input
                             value={desgaste.modoProrrateo || ""}
                             onChange={(event) =>
-                              setDesgastes((current) =>
-                                current.map((item) =>
-                                  item.id === desgaste.id
-                                    ? { ...item, modoProrrateo: event.target.value }
-                                    : item,
-                                ),
+                              setDesgasteTemplateFieldValue(
+                                desgaste.id,
+                                {
+                                  key: "modoProrrateo",
+                                  label: "Modo prorrateo",
+                                  scope: "desgaste",
+                                  kind: "text",
+                                  description: "",
+                                },
+                                event.target.value,
                               )
                             }
                             placeholder="Ejemplo: lineal por horas"
                           />
                         </Field>
-                        <Field>
-                          <div className="flex items-center justify-between rounded-md border p-3">
+                        <Field className="md:col-span-3">
+                          <div className="flex min-h-10 items-start gap-1">
                             <FieldLabel>Activo</FieldLabel>
+                          </div>
+                          <div className="flex h-10 items-center justify-end rounded-md border px-3">
                             <Switch
                               checked={desgaste.activo}
                               onCheckedChange={(checked) =>
-                                setDesgastes((current) =>
-                                  current.map((item) =>
-                                    item.id === desgaste.id ? { ...item, activo: checked } : item,
-                                  ),
+                                setDesgasteTemplateFieldValue(
+                                  desgaste.id,
+                                  {
+                                    key: "activo",
+                                    label: "Activo",
+                                    scope: "desgaste",
+                                    kind: "boolean",
+                                    description: "",
+                                  },
+                                  checked,
                                 )
                               }
                             />

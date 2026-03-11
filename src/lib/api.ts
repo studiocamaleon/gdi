@@ -36,14 +36,23 @@ export async function apiRequest<T>(
     }
   }
 
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
-    cache: "no-store",
-    ...init,
-    headers,
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}${path}`, {
+      cache: "no-store",
+      ...init,
+      headers,
+    });
+  } catch {
+    throw new ApiError(
+      "No se pudo conectar con el API. Verifica que el backend este levantado y la URL configurada.",
+      503,
+    );
+  }
 
   if (!response.ok) {
-    let message = "No se pudo completar la solicitud.";
+    let message = `Error ${response.status}: ${response.statusText || "No se pudo completar la solicitud."}`;
 
     try {
       const data = (await response.json()) as { message?: string | string[] };
@@ -52,7 +61,14 @@ export async function apiRequest<T>(
       } else if (typeof data.message === "string") {
         message = data.message;
       }
-    } catch {}
+    } catch {
+      try {
+        const raw = await response.text();
+        if (raw.trim().length > 0) {
+          message = raw.trim().slice(0, 300);
+        }
+      } catch {}
+    }
 
     throw new ApiError(message, response.status);
   }

@@ -209,6 +209,7 @@ Toda maquina deberia dividirse en estas secciones dentro de la UI:
 - ancho util
 - diametro o peso maximo de bobina
 - espesor maximo material
+- margenes no imprimibles por avance de material (inicio/fin)
 - blanco
 - barniz
 - primer
@@ -221,6 +222,7 @@ Toda maquina deberia dividirse en estas secciones dentro de la UI:
 - diametro maximo
 - largo util
 - peso maximo
+- conicidad maxima soportada (si aplica)
 - blanco
 - barniz
 - objetos compatibles

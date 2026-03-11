@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { ApiError } from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
+import { getSessionToken } from "@/lib/session";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -15,6 +16,11 @@ export default async function DashboardLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const sessionToken = await getSessionToken();
+  if (!sessionToken) {
+    redirect("/login");
+  }
+
   let current;
 
   try {
@@ -22,6 +28,19 @@ export default async function DashboardLayout({
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
       redirect("/login");
+    }
+
+    if (error instanceof ApiError && error.status === 503) {
+      return (
+        <main className="flex min-h-screen items-center justify-center bg-background px-6">
+          <div className="max-w-xl space-y-3 text-center">
+            <h1 className="text-xl font-semibold">No se pudo conectar con el backend</h1>
+            <p className="text-sm text-muted-foreground">
+              Revisa que el API este ejecutandose en la URL configurada y vuelve a intentar.
+            </p>
+          </div>
+        </main>
+      );
     }
 
     throw error;

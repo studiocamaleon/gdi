@@ -17,7 +17,159 @@ const client_1 = require("@prisma/client");
 const library_1 = require("@prisma/client/runtime/library");
 const prisma_service_1 = require("../prisma/prisma.service");
 const upsert_maquina_dto_1 = require("./dto/upsert-maquina.dto");
+const maquinaria_template_machine_rules_1 = require("./maquinaria-template-machine-rules");
 const maquinaria_template_profile_rules_1 = require("./maquinaria-template-profile-rules");
+const TEMPLATE_CATALOG_RULES = {
+    router_cnc: {
+        geometry: upsert_maquina_dto_1.GeometriaTrabajoMaquinaDto.volumen,
+        defaultProductionUnit: upsert_maquina_dto_1.UnidadProduccionMaquinaDto.hora,
+    },
+    corte_laser: {
+        geometry: upsert_maquina_dto_1.GeometriaTrabajoMaquinaDto.plano,
+        defaultProductionUnit: upsert_maquina_dto_1.UnidadProduccionMaquinaDto.hora,
+    },
+    impresora_3d: {
+        geometry: upsert_maquina_dto_1.GeometriaTrabajoMaquinaDto.volumen,
+        defaultProductionUnit: upsert_maquina_dto_1.UnidadProduccionMaquinaDto.pieza,
+    },
+    impresora_dtf: {
+        geometry: upsert_maquina_dto_1.GeometriaTrabajoMaquinaDto.rollo,
+        defaultProductionUnit: upsert_maquina_dto_1.UnidadProduccionMaquinaDto.m2,
+    },
+    impresora_dtf_uv: {
+        geometry: upsert_maquina_dto_1.GeometriaTrabajoMaquinaDto.rollo,
+        defaultProductionUnit: upsert_maquina_dto_1.UnidadProduccionMaquinaDto.m2,
+    },
+    impresora_uv_mesa_extensora: {
+        geometry: upsert_maquina_dto_1.GeometriaTrabajoMaquinaDto.plano,
+        defaultProductionUnit: upsert_maquina_dto_1.UnidadProduccionMaquinaDto.m2,
+    },
+    impresora_uv_cilindrica: {
+        geometry: upsert_maquina_dto_1.GeometriaTrabajoMaquinaDto.cilindrico,
+        defaultProductionUnit: upsert_maquina_dto_1.UnidadProduccionMaquinaDto.pieza,
+    },
+    impresora_uv_flatbed: {
+        geometry: upsert_maquina_dto_1.GeometriaTrabajoMaquinaDto.plano,
+        defaultProductionUnit: upsert_maquina_dto_1.UnidadProduccionMaquinaDto.m2,
+    },
+    impresora_uv_rollo: {
+        geometry: upsert_maquina_dto_1.GeometriaTrabajoMaquinaDto.rollo,
+        defaultProductionUnit: upsert_maquina_dto_1.UnidadProduccionMaquinaDto.m2,
+    },
+    impresora_solvente: {
+        geometry: upsert_maquina_dto_1.GeometriaTrabajoMaquinaDto.rollo,
+        defaultProductionUnit: upsert_maquina_dto_1.UnidadProduccionMaquinaDto.m2,
+    },
+    impresora_inyeccion_tinta: {
+        geometry: upsert_maquina_dto_1.GeometriaTrabajoMaquinaDto.rollo,
+        defaultProductionUnit: upsert_maquina_dto_1.UnidadProduccionMaquinaDto.m2,
+    },
+    impresora_latex: {
+        geometry: upsert_maquina_dto_1.GeometriaTrabajoMaquinaDto.rollo,
+        defaultProductionUnit: upsert_maquina_dto_1.UnidadProduccionMaquinaDto.m2,
+    },
+    impresora_sublimacion_gran_formato: {
+        geometry: upsert_maquina_dto_1.GeometriaTrabajoMaquinaDto.rollo,
+        defaultProductionUnit: upsert_maquina_dto_1.UnidadProduccionMaquinaDto.m2,
+    },
+    impresora_laser: {
+        geometry: upsert_maquina_dto_1.GeometriaTrabajoMaquinaDto.pliego,
+        defaultProductionUnit: upsert_maquina_dto_1.UnidadProduccionMaquinaDto.copia,
+    },
+    plotter_cad: {
+        geometry: upsert_maquina_dto_1.GeometriaTrabajoMaquinaDto.rollo,
+        defaultProductionUnit: upsert_maquina_dto_1.UnidadProduccionMaquinaDto.metro_lineal,
+    },
+    mesa_de_corte: {
+        geometry: upsert_maquina_dto_1.GeometriaTrabajoMaquinaDto.plano,
+        defaultProductionUnit: upsert_maquina_dto_1.UnidadProduccionMaquinaDto.m2,
+    },
+    plotter_de_corte: {
+        geometry: upsert_maquina_dto_1.GeometriaTrabajoMaquinaDto.rollo,
+        defaultProductionUnit: upsert_maquina_dto_1.UnidadProduccionMaquinaDto.metro_lineal,
+    },
+};
+const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
+    'altoMaxHoja',
+    'altoMinHoja',
+    'alturaMaximaCapa',
+    'alturaMaximaObjeto',
+    'alturaMinimaCapa',
+    'anchoCama',
+    'anchoMaxHoja',
+    'anchoMinHoja',
+    'anchoUtil',
+    'areaImprimibleMaxima',
+    'bannerSoportado',
+    'barnizDisponible',
+    'blancoDisponible',
+    'cambiadorAutomatico',
+    'cantidadExtrusores',
+    'cantidadHerramientas',
+    'configuracionCanales',
+    'configuracionColor',
+    'configuracionTintas',
+    'controladorRip',
+    'despejeZ',
+    'diametroBoquilla',
+    'diametroMaximo',
+    'diametroMaximoBobina',
+    'diametroMinimo',
+    'duplexSoportado',
+    'ejeXUtil',
+    'ejeYUtil',
+    'ejeZUtil',
+    'espesorMaximo',
+    'espesorMaximoFilm',
+    'espesorMaximoPorMaterial',
+    'espesorMaximoMaterial',
+    'extraccionAsistida',
+    'gramajeMaximo',
+    'gramajeMinimo',
+    'herramientasCompatibles',
+    'largoCama',
+    'largoMaximoBanner',
+    'largoUtil',
+    'margenDerecho',
+    'margenFinalNoImprimible',
+    'margenInferior',
+    'margenInicioNoImprimible',
+    'margenIzquierdo',
+    'margenSuperior',
+    'materialesCompatibles',
+    'objetosCompatibles',
+    'pesoMaximoBobina',
+    'pesoMaximoObjeto',
+    'pesoMaximoSoportado',
+    'potenciaLaser',
+    'potenciaSpindle',
+    'primerDisponible',
+    'resolucionNominal',
+    'rotacionControlada',
+    'rpmMaxima',
+    'rpmMinima',
+    'sistemaCurado',
+    'sistemaSecadoCurado',
+    'sistemaLaminacionTransferencia',
+    'tecnologia',
+    'tipoFilm',
+    'tipoLaser',
+    'tipoMesa',
+    'vacioSujecion',
+    'velocidadAvance',
+    'velocidadCorte',
+    'velocidadDesplazamiento',
+    'velocidadGrabado',
+    'volumenX',
+    'volumenY',
+    'volumenZ',
+    'zonasVacio',
+    'anguloConicidadMaxima',
+    'anchoImprimibleMaximo',
+    'altoImprimibleMaximo',
+]);
+const ALLOWED_CONSUMABLE_DETAIL_KEYS = new Set(['dependePerfilOperativo']);
+const ALLOWED_WEAR_DETAIL_KEYS = new Set();
 let MaquinariaService = class MaquinariaService {
     static { MaquinariaService_1 = this; }
     prisma;
@@ -146,8 +298,12 @@ let MaquinariaService = class MaquinariaService {
     }
     async replaceNestedData(tx, tenantId, maquinaId, payload) {
         await tx.maquinaConsumible.deleteMany({ where: { tenantId, maquinaId } });
-        await tx.maquinaComponenteDesgaste.deleteMany({ where: { tenantId, maquinaId } });
-        await tx.maquinaPerfilOperativo.deleteMany({ where: { tenantId, maquinaId } });
+        await tx.maquinaComponenteDesgaste.deleteMany({
+            where: { tenantId, maquinaId },
+        });
+        await tx.maquinaPerfilOperativo.deleteMany({
+            where: { tenantId, maquinaId },
+        });
         const perfiles = await Promise.all(payload.perfilesOperativos.map((perfil) => tx.maquinaPerfilOperativo.create({
             data: this.buildPerfilData(tenantId, maquinaId, perfil),
         })));
@@ -217,7 +373,9 @@ let MaquinariaService = class MaquinariaService {
             tiempoCargaMin: this.toDecimal(payload.tiempoCargaMin),
             tiempoDescargaMin: this.toDecimal(payload.tiempoDescargaMin),
             tiempoRipMin: this.toDecimal(payload.tiempoRipMin),
-            cantidadPasadas: payload.cantidadPasadas !== undefined ? Math.round(payload.cantidadPasadas) : null,
+            cantidadPasadas: payload.cantidadPasadas !== undefined
+                ? Math.round(payload.cantidadPasadas)
+                : null,
             dobleFaz: payload.dobleFaz ?? false,
             detalleJson: this.toNullableJson(payload.detalle),
         };
@@ -286,38 +444,31 @@ let MaquinariaService = class MaquinariaService {
         return hasPerfilValido && hasConsumibleValido && hasDesgasteValido;
     }
     hasTemplateSpecificData(payload) {
-        const technicalValues = [
-            payload.anchoUtil,
-            payload.largoUtil,
-            payload.altoUtil,
-            payload.espesorMaximo,
-            payload.pesoMaximo,
-        ].filter((value) => value !== undefined && value !== null);
-        const paramKeys = Object.entries(payload.parametrosTecnicos ?? {}).filter(([, value]) => {
-            if (value === null || value === undefined) {
-                return false;
-            }
-            if (typeof value === 'string') {
-                return value.trim().length > 0;
-            }
-            return true;
-        });
-        if (payload.plantilla === 'impresora_laser') {
-            const hasLaserSpecific = paramKeys.some(([key]) => ['gramaje', 'margen', 'resolucion', 'duplex', 'formato'].some((token) => key.toLowerCase().includes(token)));
-            return hasLaserSpecific || technicalValues.length >= 2;
+        if (!(0, maquinaria_template_machine_rules_1.hasRequiredMachineDataByTemplate)(payload)) {
+            return false;
         }
-        if (payload.geometriaTrabajo === 'volumen') {
-            return (payload.anchoUtil !== undefined &&
-                payload.largoUtil !== undefined &&
-                payload.altoUtil !== undefined);
-        }
-        if (payload.geometriaTrabajo === 'rollo') {
-            const hasRolloSpecific = paramKeys.some(([key]) => ['bobina', 'diametro', 'ancho', 'material'].some((token) => key.toLowerCase().includes(token)));
-            return hasRolloSpecific || technicalValues.length >= 2;
-        }
-        return technicalValues.length >= 2 || paramKeys.length >= 2;
+        return true;
     }
     async validateReferences(auth, payload) {
+        const templateRule = TEMPLATE_CATALOG_RULES[payload.plantilla];
+        if (!templateRule) {
+            throw new common_1.BadRequestException(`La plantilla ${payload.plantilla} no existe en el catalogo del sistema.`);
+        }
+        if (payload.geometriaTrabajo !== templateRule.geometry) {
+            throw new common_1.BadRequestException(`La geometria ${payload.geometriaTrabajo} no coincide con la plantilla ${payload.plantilla}. Debe ser ${templateRule.geometry}.`);
+        }
+        if (payload.unidadProduccionPrincipal !== templateRule.defaultProductionUnit) {
+            throw new common_1.BadRequestException(`La unidad ${payload.unidadProduccionPrincipal} no coincide con la plantilla ${payload.plantilla}. Debe ser ${templateRule.defaultProductionUnit}.`);
+        }
+        this.validateTechnicalPayload(payload);
+        try {
+            (0, maquinaria_template_machine_rules_1.validateMachinePayloadByTemplate)(payload);
+        }
+        catch (error) {
+            throw new common_1.BadRequestException(error instanceof Error
+                ? error.message
+                : `Maquina invalida para la plantilla ${payload.plantilla}.`);
+        }
         const planta = await this.prisma.planta.findFirst({
             where: {
                 id: payload.plantaId,
@@ -365,6 +516,50 @@ let MaquinariaService = class MaquinariaService {
                     : `Perfil operativo invalido para la plantilla ${payload.plantilla}.`);
             }
             normalizedPerfilNames.add(key);
+        }
+        for (const consumible of payload.consumibles) {
+            const consumibleName = consumible.nombre.trim() || 'sin nombre';
+            for (const detailKey of Object.keys(consumible.detalle ?? {})) {
+                if (!ALLOWED_CONSUMABLE_DETAIL_KEYS.has(detailKey)) {
+                    throw new common_1.BadRequestException(`El consumible ${consumibleName} incluye el campo ${detailKey}, que no corresponde a la plantilla ${payload.plantilla}.`);
+                }
+            }
+        }
+        for (const componente of payload.componentesDesgaste) {
+            const componenteName = componente.nombre.trim() || 'sin nombre';
+            for (const detailKey of Object.keys(componente.detalle ?? {})) {
+                if (!ALLOWED_WEAR_DETAIL_KEYS.has(detailKey)) {
+                    throw new common_1.BadRequestException(`El componente de desgaste ${componenteName} incluye el campo ${detailKey}, que no corresponde a la plantilla ${payload.plantilla}.`);
+                }
+            }
+        }
+    }
+    validateTechnicalPayload(payload) {
+        if (!payload.parametrosTecnicos) {
+            return;
+        }
+        for (const [key, value] of Object.entries(payload.parametrosTecnicos)) {
+            if (!TEMPLATE_ALLOWED_TECHNICAL_KEYS.has(key)) {
+                throw new common_1.BadRequestException(`El parametro tecnico ${key} no corresponde al catalogo de plantillas.`);
+            }
+            if (value === null || value === undefined) {
+                continue;
+            }
+            if (typeof value === 'string' ||
+                typeof value === 'number' ||
+                typeof value === 'boolean') {
+                continue;
+            }
+            if (Array.isArray(value)) {
+                const isValidArray = value.every((item) => typeof item === 'string' ||
+                    typeof item === 'number' ||
+                    typeof item === 'boolean');
+                if (!isValidArray) {
+                    throw new common_1.BadRequestException(`El parametro tecnico ${key} contiene un formato invalido.`);
+                }
+                continue;
+            }
+            throw new common_1.BadRequestException(`El parametro tecnico ${key} contiene un formato invalido.`);
         }
     }
     async findMaquinaOrThrow(auth, id) {
@@ -428,8 +623,10 @@ let MaquinariaService = class MaquinariaService {
             fechaAlta: maquina.fechaAlta?.toISOString().slice(0, 10) ?? '',
             activo: maquina.activo,
             observaciones: maquina.observaciones ?? '',
-            parametrosTecnicos: maquina.parametrosTecnicosJson ?? null,
-            capacidadesAvanzadas: maquina.capacidadesAvanzadasJson ?? null,
+            parametrosTecnicos: maquina.parametrosTecnicosJson ??
+                null,
+            capacidadesAvanzadas: maquina.capacidadesAvanzadasJson ??
+                null,
             perfilesOperativos: maquina.perfilesOperativos.map((perfil) => ({
                 id: perfil.id,
                 nombre: perfil.nombre,
@@ -481,8 +678,22 @@ let MaquinariaService = class MaquinariaService {
         };
     }
     handleWriteError(error) {
-        if (error instanceof library_1.PrismaClientKnownRequestError && error.code === 'P2002') {
+        if (error instanceof library_1.PrismaClientKnownRequestError &&
+            error.code === 'P2002') {
             throw new common_1.ConflictException('Ya existe una maquina con ese codigo.');
+        }
+        if (error instanceof library_1.PrismaClientKnownRequestError &&
+            error.code === 'P2000') {
+            throw new common_1.BadRequestException('Al menos un valor cargado supera el formato permitido.');
+        }
+        if (error instanceof library_1.PrismaClientKnownRequestError &&
+            (error.code === 'P2005' ||
+                error.code === 'P2006' ||
+                error.code === 'P2009')) {
+            throw new common_1.BadRequestException('Hay datos invalidos en la carga. Revisa campos numericos y opciones seleccionadas.');
+        }
+        if (error instanceof library_1.PrismaClientUnknownRequestError) {
+            throw new common_1.BadRequestException('Hay un dato incompatible con la base. Revisa unidades, tipos y campos numericos.');
         }
         throw error;
     }
@@ -494,11 +705,21 @@ let MaquinariaService = class MaquinariaService {
             error.meta?.target.includes('codigo'));
     }
     generateCodigoMaquina() {
-        const randomChunk = (0, node_crypto_1.randomUUID)().replace(/-/g, '').slice(0, 8).toUpperCase();
+        const randomChunk = (0, node_crypto_1.randomUUID)()
+            .replace(/-/g, '')
+            .slice(0, 8)
+            .toUpperCase();
         return `${MaquinariaService_1.CODIGO_PREFIX}-${randomChunk}`;
     }
     toDecimal(value) {
-        return value === undefined || value === null ? null : new client_1.Prisma.Decimal(value);
+        if (value === undefined || value === null) {
+            return null;
+        }
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+            return null;
+        }
+        return new client_1.Prisma.Decimal(numeric);
     }
     toNumber(value) {
         return value === null || value === undefined ? null : Number(value);
@@ -552,7 +773,8 @@ let MaquinariaService = class MaquinariaService {
         return Number.isFinite(parsed) ? parsed : null;
     }
     getDerivedMachineDimensions(payload, parametrosTecnicos) {
-        if (payload.plantilla !== 'impresora_laser' || !parametrosTecnicos) {
+        if (payload.plantilla !== upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_laser ||
+            !parametrosTecnicos) {
             return {
                 anchoUtil: payload.anchoUtil,
                 largoUtil: payload.largoUtil,

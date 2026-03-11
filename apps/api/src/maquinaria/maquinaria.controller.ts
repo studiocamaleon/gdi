@@ -19,7 +19,10 @@ export class MaquinariaController {
   }
 
   @Post()
-  create(@CurrentSession() auth: CurrentAuth, @Body() payload: UpsertMaquinaDto) {
+  create(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: UpsertMaquinaDto,
+  ) {
     return this.maquinariaService.create(auth, payload);
   }
 

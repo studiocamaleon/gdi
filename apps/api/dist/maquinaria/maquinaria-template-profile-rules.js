@@ -35,7 +35,10 @@ const DIRECT_PROFILE_FIELD_KEYS = new Set([
 ]);
 function buildRule(params) {
     return {
-        allowedProfileKeys: new Set([...COMMON_PROFILE_KEYS, ...params.profileFieldKeys]),
+        allowedProfileKeys: new Set([
+            ...COMMON_PROFILE_KEYS,
+            ...params.profileFieldKeys,
+        ]),
         requiredProfileKeys: new Set(params.requiredFieldKeys),
         modeSourceKeys: new Set(params.modeSourceKeys ?? []),
     };
@@ -43,7 +46,13 @@ function buildRule(params) {
 const RULES = {
     [upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_laser]: buildRule({
         profileFieldKeys: ['formatoObjetivo', 'modoImpresion'],
-        requiredFieldKeys: ['nombre', 'formatoObjetivo', 'modoImpresion', 'calidad', 'productividad'],
+        requiredFieldKeys: [
+            'nombre',
+            'formatoObjetivo',
+            'modoImpresion',
+            'calidad',
+            'productividad',
+        ],
         modeSourceKeys: ['modoImpresion'],
     }),
     [upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_uv_flatbed]: buildRule({
@@ -111,7 +120,12 @@ const RULES = {
         modeSourceKeys: ['tipoOperacion'],
     }),
     [upsert_maquina_dto_1.PlantillaMaquinariaDto.corte_laser]: buildRule({
-        profileFieldKeys: ['tipoOperacion', 'materialObjetivo', 'potenciaAplicada', 'velocidadTrabajo'],
+        profileFieldKeys: [
+            'tipoOperacion',
+            'materialObjetivo',
+            'potenciaAplicada',
+            'velocidadTrabajo',
+        ],
         requiredFieldKeys: ['nombre', 'tipoOperacion'],
         modeSourceKeys: ['tipoOperacion'],
     }),

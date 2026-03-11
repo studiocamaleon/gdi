@@ -1,4 +1,7 @@
-import { type MaquinaPerfilOperativoItemDto, PlantillaMaquinariaDto } from './dto/upsert-maquina.dto';
+import {
+  type MaquinaPerfilOperativoItemDto,
+  PlantillaMaquinariaDto,
+} from './dto/upsert-maquina.dto';
 
 type PerfilTemplateRule = {
   allowedProfileKeys: Set<string>;
@@ -45,7 +48,10 @@ function buildRule(params: {
   modeSourceKeys?: string[];
 }): PerfilTemplateRule {
   return {
-    allowedProfileKeys: new Set([...COMMON_PROFILE_KEYS, ...params.profileFieldKeys]),
+    allowedProfileKeys: new Set([
+      ...COMMON_PROFILE_KEYS,
+      ...params.profileFieldKeys,
+    ]),
     requiredProfileKeys: new Set(params.requiredFieldKeys),
     modeSourceKeys: new Set(params.modeSourceKeys ?? []),
   };
@@ -54,7 +60,13 @@ function buildRule(params: {
 const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   [PlantillaMaquinariaDto.impresora_laser]: buildRule({
     profileFieldKeys: ['formatoObjetivo', 'modoImpresion'],
-    requiredFieldKeys: ['nombre', 'formatoObjetivo', 'modoImpresion', 'calidad', 'productividad'],
+    requiredFieldKeys: [
+      'nombre',
+      'formatoObjetivo',
+      'modoImpresion',
+      'calidad',
+      'productividad',
+    ],
     modeSourceKeys: ['modoImpresion'],
   }),
   [PlantillaMaquinariaDto.impresora_uv_flatbed]: buildRule({
@@ -122,7 +134,12 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
     modeSourceKeys: ['tipoOperacion'],
   }),
   [PlantillaMaquinariaDto.corte_laser]: buildRule({
-    profileFieldKeys: ['tipoOperacion', 'materialObjetivo', 'potenciaAplicada', 'velocidadTrabajo'],
+    profileFieldKeys: [
+      'tipoOperacion',
+      'materialObjetivo',
+      'potenciaAplicada',
+      'velocidadTrabajo',
+    ],
     requiredFieldKeys: ['nombre', 'tipoOperacion'],
     modeSourceKeys: ['tipoOperacion'],
   }),
@@ -152,7 +169,10 @@ function hasValue(value: unknown) {
   return true;
 }
 
-function getPerfilFieldValue(perfil: MaquinaPerfilOperativoItemDto, fieldKey: string) {
+function getPerfilFieldValue(
+  perfil: MaquinaPerfilOperativoItemDto,
+  fieldKey: string,
+) {
   const directRecord = perfil as unknown as Record<string, unknown>;
   const directValue = directRecord[fieldKey];
 

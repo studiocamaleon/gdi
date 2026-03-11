@@ -18,18 +18,21 @@ import {
   UnidadDesgasteMaquina,
   UnidadProduccionMaquina,
 } from '@prisma/client';
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import {
+  PrismaClientKnownRequestError,
+  PrismaClientUnknownRequestError,
+} from '@prisma/client/runtime/library';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   EstadoConfiguracionMaquinaDto,
+  GeometriaTrabajoMaquinaDto,
+  PlantillaMaquinariaDto,
   UnidadProduccionMaquinaDto,
   type EstadoMaquinaDto,
-  type GeometriaTrabajoMaquinaDto,
   type MaquinaComponenteDesgasteItemDto,
   type MaquinaConsumibleItemDto,
   type MaquinaPerfilOperativoItemDto,
-  type PlantillaMaquinariaDto,
   type TipoComponenteDesgasteMaquinaDto,
   type TipoConsumibleMaquinaDto,
   type TipoPerfilOperativoMaquinaDto,
@@ -37,6 +40,10 @@ import {
   type UnidadDesgasteMaquinaDto,
   UpsertMaquinaDto,
 } from './dto/upsert-maquina.dto';
+import {
+  hasRequiredMachineDataByTemplate,
+  validateMachinePayloadByTemplate,
+} from './maquinaria-template-machine-rules';
 import { validatePerfilOperativoByTemplate } from './maquinaria-template-profile-rules';
 
 type MaquinaCompleta = Prisma.MaquinaGetPayload<{
@@ -53,17 +60,178 @@ type MaquinaCompleta = Prisma.MaquinaGetPayload<{
   };
 }>;
 
+type TemplateCatalogRule = {
+  geometry: GeometriaTrabajoMaquinaDto;
+  defaultProductionUnit: UnidadProduccionMaquinaDto;
+};
+
+const TEMPLATE_CATALOG_RULES: Record<
+  PlantillaMaquinariaDto,
+  TemplateCatalogRule
+> = {
+  router_cnc: {
+    geometry: GeometriaTrabajoMaquinaDto.volumen,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.hora,
+  },
+  corte_laser: {
+    geometry: GeometriaTrabajoMaquinaDto.plano,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.hora,
+  },
+  impresora_3d: {
+    geometry: GeometriaTrabajoMaquinaDto.volumen,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.pieza,
+  },
+  impresora_dtf: {
+    geometry: GeometriaTrabajoMaquinaDto.rollo,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
+  },
+  impresora_dtf_uv: {
+    geometry: GeometriaTrabajoMaquinaDto.rollo,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
+  },
+  impresora_uv_mesa_extensora: {
+    geometry: GeometriaTrabajoMaquinaDto.plano,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
+  },
+  impresora_uv_cilindrica: {
+    geometry: GeometriaTrabajoMaquinaDto.cilindrico,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.pieza,
+  },
+  impresora_uv_flatbed: {
+    geometry: GeometriaTrabajoMaquinaDto.plano,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
+  },
+  impresora_uv_rollo: {
+    geometry: GeometriaTrabajoMaquinaDto.rollo,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
+  },
+  impresora_solvente: {
+    geometry: GeometriaTrabajoMaquinaDto.rollo,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
+  },
+  impresora_inyeccion_tinta: {
+    geometry: GeometriaTrabajoMaquinaDto.rollo,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
+  },
+  impresora_latex: {
+    geometry: GeometriaTrabajoMaquinaDto.rollo,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
+  },
+  impresora_sublimacion_gran_formato: {
+    geometry: GeometriaTrabajoMaquinaDto.rollo,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
+  },
+  impresora_laser: {
+    geometry: GeometriaTrabajoMaquinaDto.pliego,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.copia,
+  },
+  plotter_cad: {
+    geometry: GeometriaTrabajoMaquinaDto.rollo,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.metro_lineal,
+  },
+  mesa_de_corte: {
+    geometry: GeometriaTrabajoMaquinaDto.plano,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
+  },
+  plotter_de_corte: {
+    geometry: GeometriaTrabajoMaquinaDto.rollo,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.metro_lineal,
+  },
+};
+
+const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
+  'altoMaxHoja',
+  'altoMinHoja',
+  'alturaMaximaCapa',
+  'alturaMaximaObjeto',
+  'alturaMinimaCapa',
+  'anchoCama',
+  'anchoMaxHoja',
+  'anchoMinHoja',
+  'anchoUtil',
+  'areaImprimibleMaxima',
+  'bannerSoportado',
+  'barnizDisponible',
+  'blancoDisponible',
+  'cambiadorAutomatico',
+  'cantidadExtrusores',
+  'cantidadHerramientas',
+  'configuracionCanales',
+  'configuracionColor',
+  'configuracionTintas',
+  'controladorRip',
+  'despejeZ',
+  'diametroBoquilla',
+  'diametroMaximo',
+  'diametroMaximoBobina',
+  'diametroMinimo',
+  'duplexSoportado',
+  'ejeXUtil',
+  'ejeYUtil',
+  'ejeZUtil',
+  'espesorMaximo',
+  'espesorMaximoFilm',
+  'espesorMaximoPorMaterial',
+  'espesorMaximoMaterial',
+  'extraccionAsistida',
+  'gramajeMaximo',
+  'gramajeMinimo',
+  'herramientasCompatibles',
+  'largoCama',
+  'largoMaximoBanner',
+  'largoUtil',
+  'margenDerecho',
+  'margenFinalNoImprimible',
+  'margenInferior',
+  'margenInicioNoImprimible',
+  'margenIzquierdo',
+  'margenSuperior',
+  'materialesCompatibles',
+  'objetosCompatibles',
+  'pesoMaximoBobina',
+  'pesoMaximoObjeto',
+  'pesoMaximoSoportado',
+  'potenciaLaser',
+  'potenciaSpindle',
+  'primerDisponible',
+  'resolucionNominal',
+  'rotacionControlada',
+  'rpmMaxima',
+  'rpmMinima',
+  'sistemaCurado',
+  'sistemaSecadoCurado',
+  'sistemaLaminacionTransferencia',
+  'tecnologia',
+  'tipoFilm',
+  'tipoLaser',
+  'tipoMesa',
+  'vacioSujecion',
+  'velocidadAvance',
+  'velocidadCorte',
+  'velocidadDesplazamiento',
+  'velocidadGrabado',
+  'volumenX',
+  'volumenY',
+  'volumenZ',
+  'zonasVacio',
+  'anguloConicidadMaxima',
+  'anchoImprimibleMaximo',
+  'altoImprimibleMaximo',
+]);
+
+const ALLOWED_CONSUMABLE_DETAIL_KEYS = new Set(['dependePerfilOperativo']);
+const ALLOWED_WEAR_DETAIL_KEYS = new Set<string>();
+
 @Injectable()
 export class MaquinariaService {
   private static readonly CODIGO_PREFIX = 'MAQ';
   private static readonly CODIGO_MAX_RETRIES = 5;
-  private static readonly COMBINED_PRODUCTIVITY_UNITS = new Set<
-    UnidadProduccionMaquinaDto
-  >([
-    UnidadProduccionMaquinaDto.ppm,
-    UnidadProduccionMaquinaDto.m2_h,
-    UnidadProduccionMaquinaDto.piezas_h,
-  ]);
+  private static readonly COMBINED_PRODUCTIVITY_UNITS =
+    new Set<UnidadProduccionMaquinaDto>([
+      UnidadProduccionMaquinaDto.ppm,
+      UnidadProduccionMaquinaDto.m2_h,
+      UnidadProduccionMaquinaDto.piezas_h,
+    ]);
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -95,7 +263,11 @@ export class MaquinariaService {
   async create(auth: CurrentAuth, payload: UpsertMaquinaDto) {
     await this.validateReferences(auth, payload);
 
-    for (let attempt = 0; attempt < MaquinariaService.CODIGO_MAX_RETRIES; attempt += 1) {
+    for (
+      let attempt = 0;
+      attempt < MaquinariaService.CODIGO_MAX_RETRIES;
+      attempt += 1
+    ) {
       const generatedCodigo = this.generateCodigoMaquina();
 
       try {
@@ -132,14 +304,18 @@ export class MaquinariaService {
       }
     }
 
-    throw new ConflictException('No se pudo generar un codigo unico para la maquina.');
+    throw new ConflictException(
+      'No se pudo generar un codigo unico para la maquina.',
+    );
   }
 
   async update(auth: CurrentAuth, id: string, payload: UpsertMaquinaDto) {
     await this.findMaquinaOrThrow(auth, id);
     await this.validateReferences(auth, payload);
     if (!payload.codigo?.trim()) {
-      throw new BadRequestException('El codigo de la maquina es obligatorio para actualizar.');
+      throw new BadRequestException(
+        'El codigo de la maquina es obligatorio para actualizar.',
+      );
     }
 
     try {
@@ -204,8 +380,12 @@ export class MaquinariaService {
     payload: UpsertMaquinaDto,
   ) {
     await tx.maquinaConsumible.deleteMany({ where: { tenantId, maquinaId } });
-    await tx.maquinaComponenteDesgaste.deleteMany({ where: { tenantId, maquinaId } });
-    await tx.maquinaPerfilOperativo.deleteMany({ where: { tenantId, maquinaId } });
+    await tx.maquinaComponenteDesgaste.deleteMany({
+      where: { tenantId, maquinaId },
+    });
+    await tx.maquinaPerfilOperativo.deleteMany({
+      where: { tenantId, maquinaId },
+    });
 
     const perfiles = await Promise.all(
       payload.perfilesOperativos.map((perfil) =>
@@ -215,7 +395,9 @@ export class MaquinariaService {
       ),
     );
 
-    const perfilIdByName = new Map(perfiles.map((perfil) => [perfil.nombre, perfil.id]));
+    const perfilIdByName = new Map(
+      perfiles.map((perfil) => [perfil.nombre, perfil.id]),
+    );
 
     for (const consumible of payload.consumibles) {
       const perfilOperativoId = consumible.perfilOperativoNombre
@@ -229,14 +411,23 @@ export class MaquinariaService {
       }
 
       await tx.maquinaConsumible.create({
-        data: this.buildConsumibleData(tenantId, maquinaId, consumible, perfilOperativoId),
+        data: this.buildConsumibleData(
+          tenantId,
+          maquinaId,
+          consumible,
+          perfilOperativoId,
+        ),
       });
     }
 
     await Promise.all(
       payload.componentesDesgaste.map((componente) =>
         tx.maquinaComponenteDesgaste.create({
-          data: this.buildComponenteDesgasteData(tenantId, maquinaId, componente),
+          data: this.buildComponenteDesgasteData(
+            tenantId,
+            maquinaId,
+            componente,
+          ),
         }),
       ),
     );
@@ -249,7 +440,10 @@ export class MaquinariaService {
   ) {
     const estadoConfiguracion = this.getDerivedEstadoConfiguracion(payload);
     const parametrosTecnicos = this.withDerivedTemplateParams(payload);
-    const dimensionesDerivadas = this.getDerivedMachineDimensions(payload, parametrosTecnicos);
+    const dimensionesDerivadas = this.getDerivedMachineDimensions(
+      payload,
+      parametrosTecnicos,
+    );
 
     return {
       tenantId: auth.tenantId,
@@ -265,8 +459,9 @@ export class MaquinariaService {
       estado: this.toPrismaEnum<EstadoMaquina>(payload.estado),
       estadoConfiguracion:
         this.toPrismaEnum<EstadoConfiguracionMaquina>(estadoConfiguracion),
-      geometriaTrabajo:
-        this.toPrismaEnum<GeometriaTrabajoMaquina>(payload.geometriaTrabajo),
+      geometriaTrabajo: this.toPrismaEnum<GeometriaTrabajoMaquina>(
+        payload.geometriaTrabajo,
+      ),
       unidadProduccionPrincipal: this.toPrismaEnum<UnidadProduccionMaquina>(
         payload.unidadProduccionPrincipal,
       ),
@@ -279,7 +474,9 @@ export class MaquinariaService {
       activo: payload.activo,
       observaciones: payload.observaciones?.trim() || null,
       parametrosTecnicosJson: this.toNullableJson(parametrosTecnicos),
-      capacidadesAvanzadasJson: this.toNullableJson(payload.capacidadesAvanzadas),
+      capacidadesAvanzadasJson: this.toNullableJson(
+        payload.capacidadesAvanzadas,
+      ),
     };
   }
 
@@ -292,7 +489,9 @@ export class MaquinariaService {
       tenantId,
       maquinaId,
       nombre: payload.nombre.trim(),
-      tipoPerfil: this.toPrismaEnum<TipoPerfilOperativoMaquina>(payload.tipoPerfil),
+      tipoPerfil: this.toPrismaEnum<TipoPerfilOperativoMaquina>(
+        payload.tipoPerfil,
+      ),
       activo: payload.activo,
       anchoAplicable: this.toDecimal(payload.anchoAplicable),
       altoAplicable: this.toDecimal(payload.altoAplicable),
@@ -300,14 +499,18 @@ export class MaquinariaService {
       calidad: payload.calidad?.trim() || null,
       productividad: this.toDecimal(payload.productividad),
       unidadProductividad: payload.unidadProductividad
-        ? this.toPrismaEnum<UnidadProduccionMaquina>(payload.unidadProductividad)
+        ? this.toPrismaEnum<UnidadProduccionMaquina>(
+            payload.unidadProductividad,
+          )
         : null,
       tiempoPreparacionMin: this.toDecimal(payload.tiempoPreparacionMin),
       tiempoCargaMin: this.toDecimal(payload.tiempoCargaMin),
       tiempoDescargaMin: this.toDecimal(payload.tiempoDescargaMin),
       tiempoRipMin: this.toDecimal(payload.tiempoRipMin),
       cantidadPasadas:
-        payload.cantidadPasadas !== undefined ? Math.round(payload.cantidadPasadas) : null,
+        payload.cantidadPasadas !== undefined
+          ? Math.round(payload.cantidadPasadas)
+          : null,
       dobleFaz: payload.dobleFaz ?? false,
       detalleJson: this.toNullableJson(payload.detalle),
     };
@@ -346,7 +549,9 @@ export class MaquinariaService {
       nombre: payload.nombre.trim(),
       tipo: this.toPrismaEnum<TipoComponenteDesgasteMaquina>(payload.tipo),
       vidaUtilEstimada: this.toDecimal(payload.vidaUtilEstimada),
-      unidadDesgaste: this.toPrismaEnum<UnidadDesgasteMaquina>(payload.unidadDesgaste),
+      unidadDesgaste: this.toPrismaEnum<UnidadDesgasteMaquina>(
+        payload.unidadDesgaste,
+      ),
       costoReposicion: this.toDecimal(payload.costoReposicion),
       modoProrrateo: payload.modoProrrateo?.trim() || null,
       activo: payload.activo,
@@ -355,7 +560,9 @@ export class MaquinariaService {
     };
   }
 
-  private getDerivedEstadoConfiguracion(payload: UpsertMaquinaDto): EstadoConfiguracionMaquinaDto {
+  private getDerivedEstadoConfiguracion(
+    payload: UpsertMaquinaDto,
+  ): EstadoConfiguracionMaquinaDto {
     if (!this.hasMinimumBaseData(payload)) {
       return EstadoConfiguracionMaquinaDto.borrador;
     }
@@ -374,10 +581,10 @@ export class MaquinariaService {
   private hasMinimumBaseData(payload: UpsertMaquinaDto) {
     return Boolean(
       payload.nombre?.trim() &&
-        payload.plantaId &&
-        payload.plantilla &&
-        payload.estado &&
-        payload.unidadProduccionPrincipal,
+      payload.plantaId &&
+      payload.plantilla &&
+      payload.estado &&
+      payload.unidadProduccionPrincipal,
     );
   }
 
@@ -406,55 +613,49 @@ export class MaquinariaService {
   }
 
   private hasTemplateSpecificData(payload: UpsertMaquinaDto) {
-    const technicalValues = [
-      payload.anchoUtil,
-      payload.largoUtil,
-      payload.altoUtil,
-      payload.espesorMaximo,
-      payload.pesoMaximo,
-    ].filter((value) => value !== undefined && value !== null);
-    const paramKeys = Object.entries(payload.parametrosTecnicos ?? {}).filter(([, value]) => {
-      if (value === null || value === undefined) {
-        return false;
-      }
-      if (typeof value === 'string') {
-        return value.trim().length > 0;
-      }
-      return true;
-    });
-
-    if (payload.plantilla === 'impresora_laser') {
-      const hasLaserSpecific = paramKeys.some(([key]) =>
-        ['gramaje', 'margen', 'resolucion', 'duplex', 'formato'].some((token) =>
-          key.toLowerCase().includes(token),
-        ),
-      );
-
-      return hasLaserSpecific || technicalValues.length >= 2;
+    if (!hasRequiredMachineDataByTemplate(payload)) {
+      return false;
     }
 
-    if (payload.geometriaTrabajo === 'volumen') {
-      return (
-        payload.anchoUtil !== undefined &&
-        payload.largoUtil !== undefined &&
-        payload.altoUtil !== undefined
-      );
-    }
-
-    if (payload.geometriaTrabajo === 'rollo') {
-      const hasRolloSpecific = paramKeys.some(([key]) =>
-        ['bobina', 'diametro', 'ancho', 'material'].some((token) =>
-          key.toLowerCase().includes(token),
-        ),
-      );
-
-      return hasRolloSpecific || technicalValues.length >= 2;
-    }
-
-    return technicalValues.length >= 2 || paramKeys.length >= 2;
+    return true;
   }
 
-  private async validateReferences(auth: CurrentAuth, payload: UpsertMaquinaDto) {
+  private async validateReferences(
+    auth: CurrentAuth,
+    payload: UpsertMaquinaDto,
+  ) {
+    const templateRule = TEMPLATE_CATALOG_RULES[payload.plantilla];
+    if (!templateRule) {
+      throw new BadRequestException(
+        `La plantilla ${payload.plantilla} no existe en el catalogo del sistema.`,
+      );
+    }
+
+    if (payload.geometriaTrabajo !== templateRule.geometry) {
+      throw new BadRequestException(
+        `La geometria ${payload.geometriaTrabajo} no coincide con la plantilla ${payload.plantilla}. Debe ser ${templateRule.geometry}.`,
+      );
+    }
+
+    if (
+      payload.unidadProduccionPrincipal !== templateRule.defaultProductionUnit
+    ) {
+      throw new BadRequestException(
+        `La unidad ${payload.unidadProduccionPrincipal} no coincide con la plantilla ${payload.plantilla}. Debe ser ${templateRule.defaultProductionUnit}.`,
+      );
+    }
+
+    this.validateTechnicalPayload(payload);
+    try {
+      validateMachinePayloadByTemplate(payload);
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error
+          ? error.message
+          : `Maquina invalida para la plantilla ${payload.plantilla}.`,
+      );
+    }
+
     const planta = await this.prisma.planta.findFirst({
       where: {
         id: payload.plantaId,
@@ -480,7 +681,9 @@ export class MaquinariaService {
       });
 
       if (!centro) {
-        throw new BadRequestException('El centro de costo principal no existe.');
+        throw new BadRequestException(
+          'El centro de costo principal no existe.',
+        );
       }
 
       if (centro.plantaId !== payload.plantaId) {
@@ -521,6 +724,75 @@ export class MaquinariaService {
       }
 
       normalizedPerfilNames.add(key);
+    }
+
+    for (const consumible of payload.consumibles) {
+      const consumibleName = consumible.nombre.trim() || 'sin nombre';
+
+      for (const detailKey of Object.keys(consumible.detalle ?? {})) {
+        if (!ALLOWED_CONSUMABLE_DETAIL_KEYS.has(detailKey)) {
+          throw new BadRequestException(
+            `El consumible ${consumibleName} incluye el campo ${detailKey}, que no corresponde a la plantilla ${payload.plantilla}.`,
+          );
+        }
+      }
+    }
+
+    for (const componente of payload.componentesDesgaste) {
+      const componenteName = componente.nombre.trim() || 'sin nombre';
+
+      for (const detailKey of Object.keys(componente.detalle ?? {})) {
+        if (!ALLOWED_WEAR_DETAIL_KEYS.has(detailKey)) {
+          throw new BadRequestException(
+            `El componente de desgaste ${componenteName} incluye el campo ${detailKey}, que no corresponde a la plantilla ${payload.plantilla}.`,
+          );
+        }
+      }
+    }
+  }
+
+  private validateTechnicalPayload(payload: UpsertMaquinaDto) {
+    if (!payload.parametrosTecnicos) {
+      return;
+    }
+
+    for (const [key, value] of Object.entries(payload.parametrosTecnicos)) {
+      if (!TEMPLATE_ALLOWED_TECHNICAL_KEYS.has(key)) {
+        throw new BadRequestException(
+          `El parametro tecnico ${key} no corresponde al catalogo de plantillas.`,
+        );
+      }
+
+      if (value === null || value === undefined) {
+        continue;
+      }
+
+      if (
+        typeof value === 'string' ||
+        typeof value === 'number' ||
+        typeof value === 'boolean'
+      ) {
+        continue;
+      }
+
+      if (Array.isArray(value)) {
+        const isValidArray = value.every(
+          (item) =>
+            typeof item === 'string' ||
+            typeof item === 'number' ||
+            typeof item === 'boolean',
+        );
+        if (!isValidArray) {
+          throw new BadRequestException(
+            `El parametro tecnico ${key} contiene un formato invalido.`,
+          );
+        }
+        continue;
+      }
+
+      throw new BadRequestException(
+        `El parametro tecnico ${key} contiene un formato invalido.`,
+      );
     }
   }
 
@@ -597,13 +869,18 @@ export class MaquinariaService {
       fechaAlta: maquina.fechaAlta?.toISOString().slice(0, 10) ?? '',
       activo: maquina.activo,
       observaciones: maquina.observaciones ?? '',
-      parametrosTecnicos: (maquina.parametrosTecnicosJson as Record<string, unknown> | null) ?? null,
+      parametrosTecnicos:
+        (maquina.parametrosTecnicosJson as Record<string, unknown> | null) ??
+        null,
       capacidadesAvanzadas:
-        (maquina.capacidadesAvanzadasJson as Record<string, unknown> | null) ?? null,
+        (maquina.capacidadesAvanzadasJson as Record<string, unknown> | null) ??
+        null,
       perfilesOperativos: maquina.perfilesOperativos.map((perfil) => ({
         id: perfil.id,
         nombre: perfil.nombre,
-        tipoPerfil: this.toApiEnum(perfil.tipoPerfil) as TipoPerfilOperativoMaquinaDto,
+        tipoPerfil: this.toApiEnum(
+          perfil.tipoPerfil,
+        ) as TipoPerfilOperativoMaquinaDto,
         activo: perfil.activo,
         anchoAplicable: this.toNumber(perfil.anchoAplicable),
         altoAplicable: this.toNumber(perfil.altoAplicable),
@@ -611,7 +888,9 @@ export class MaquinariaService {
         calidad: perfil.calidad ?? '',
         productividad: this.toNumber(perfil.productividad),
         unidadProductividad: perfil.unidadProductividad
-          ? (this.toApiEnum(perfil.unidadProductividad) as UnidadProduccionMaquinaDto)
+          ? (this.toApiEnum(
+              perfil.unidadProductividad,
+            ) as UnidadProduccionMaquinaDto)
           : '',
         tiempoPreparacionMin: this.toNumber(perfil.tiempoPreparacionMin),
         tiempoCargaMin: this.toNumber(perfil.tiempoCargaMin),
@@ -631,7 +910,8 @@ export class MaquinariaService {
         consumoBase: this.toNumber(consumible.consumoBase),
         perfilOperativoNombre: consumible.perfilOperativo?.nombre ?? '',
         activo: consumible.activo,
-        detalle: (consumible.detalleJson as Record<string, unknown> | null) ?? null,
+        detalle:
+          (consumible.detalleJson as Record<string, unknown> | null) ?? null,
         observaciones: consumible.observaciones ?? '',
       })),
       componentesDesgaste: maquina.componentesDesgaste.map((componente) => ({
@@ -641,11 +921,14 @@ export class MaquinariaService {
           componente.tipo,
         ) as TipoComponenteDesgasteMaquinaDto,
         vidaUtilEstimada: this.toNumber(componente.vidaUtilEstimada),
-        unidadDesgaste: this.toApiEnum(componente.unidadDesgaste) as UnidadDesgasteMaquinaDto,
+        unidadDesgaste: this.toApiEnum(
+          componente.unidadDesgaste,
+        ) as UnidadDesgasteMaquinaDto,
         costoReposicion: this.toNumber(componente.costoReposicion),
         modoProrrateo: componente.modoProrrateo ?? '',
         activo: componente.activo,
-        detalle: (componente.detalleJson as Record<string, unknown> | null) ?? null,
+        detalle:
+          (componente.detalleJson as Record<string, unknown> | null) ?? null,
         observaciones: componente.observaciones ?? '',
       })),
       createdAt: maquina.createdAt.toISOString(),
@@ -654,8 +937,37 @@ export class MaquinariaService {
   }
 
   private handleWriteError(error: unknown): never {
-    if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
+    if (
+      error instanceof PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
       throw new ConflictException('Ya existe una maquina con ese codigo.');
+    }
+
+    if (
+      error instanceof PrismaClientKnownRequestError &&
+      error.code === 'P2000'
+    ) {
+      throw new BadRequestException(
+        'Al menos un valor cargado supera el formato permitido.',
+      );
+    }
+
+    if (
+      error instanceof PrismaClientKnownRequestError &&
+      (error.code === 'P2005' ||
+        error.code === 'P2006' ||
+        error.code === 'P2009')
+    ) {
+      throw new BadRequestException(
+        'Hay datos invalidos en la carga. Revisa campos numericos y opciones seleccionadas.',
+      );
+    }
+
+    if (error instanceof PrismaClientUnknownRequestError) {
+      throw new BadRequestException(
+        'Hay un dato incompatible con la base. Revisa unidades, tipos y campos numericos.',
+      );
     }
 
     throw error;
@@ -672,12 +984,24 @@ export class MaquinariaService {
   }
 
   private generateCodigoMaquina() {
-    const randomChunk = randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
+    const randomChunk = randomUUID()
+      .replace(/-/g, '')
+      .slice(0, 8)
+      .toUpperCase();
     return `${MaquinariaService.CODIGO_PREFIX}-${randomChunk}`;
   }
 
   private toDecimal(value?: number | null) {
-    return value === undefined || value === null ? null : new Prisma.Decimal(value);
+    if (value === undefined || value === null) {
+      return null;
+    }
+
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return null;
+    }
+
+    return new Prisma.Decimal(numeric);
   }
 
   private toNumber(value?: Prisma.Decimal | null) {
@@ -722,8 +1046,12 @@ export class MaquinariaService {
       return params;
     }
 
-    const anchoImprimible = Number((anchoMaxHoja - margenIzquierdo - margenDerecho).toFixed(2));
-    const altoImprimible = Number((altoMaxHoja - margenSuperior - margenInferior).toFixed(2));
+    const anchoImprimible = Number(
+      (anchoMaxHoja - margenIzquierdo - margenDerecho).toFixed(2),
+    );
+    const altoImprimible = Number(
+      (altoMaxHoja - margenSuperior - margenInferior).toFixed(2),
+    );
 
     if (anchoImprimible <= 0 || altoImprimible <= 0) {
       return params;
@@ -733,7 +1061,9 @@ export class MaquinariaService {
       ...params,
       anchoImprimibleMaximo: anchoImprimible,
       altoImprimibleMaximo: altoImprimible,
-      areaImprimibleMaxima: Number(((anchoImprimible * altoImprimible) / 10000).toFixed(4)),
+      areaImprimibleMaxima: Number(
+        ((anchoImprimible * altoImprimible) / 10000).toFixed(4),
+      ),
     };
   }
 
@@ -750,7 +1080,10 @@ export class MaquinariaService {
     payload: UpsertMaquinaDto,
     parametrosTecnicos?: Record<string, unknown>,
   ) {
-    if (payload.plantilla !== 'impresora_laser' || !parametrosTecnicos) {
+    if (
+      payload.plantilla !== PlantillaMaquinariaDto.impresora_laser ||
+      !parametrosTecnicos
+    ) {
       return {
         anchoUtil: payload.anchoUtil,
         largoUtil: payload.largoUtil,
