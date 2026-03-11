@@ -8,36 +8,45 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
+import { CurrentSession } from '../auth/current-auth.decorator';
 import { UpsertProveedorDto } from './dto/upsert-proveedor.dto';
 import { ProveedoresService } from './proveedores.service';
+import type { CurrentAuth } from '../auth/auth.types';
 
 @Controller('proveedores')
 export class ProveedoresController {
   constructor(private readonly proveedoresService: ProveedoresService) {}
 
   @Get()
-  findAll() {
-    return this.proveedoresService.findAll();
+  findAll(@CurrentSession() auth: CurrentAuth) {
+    return this.proveedoresService.findAll(auth);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.proveedoresService.findOne(id);
+  findOne(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    return this.proveedoresService.findOne(auth, id);
   }
 
   @Post()
-  create(@Body() payload: UpsertProveedorDto) {
-    return this.proveedoresService.create(payload);
+  create(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: UpsertProveedorDto,
+  ) {
+    return this.proveedoresService.create(auth, payload);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() payload: UpsertProveedorDto) {
-    return this.proveedoresService.update(id, payload);
+  update(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: UpsertProveedorDto,
+  ) {
+    return this.proveedoresService.update(auth, id, payload);
   }
 
   @Delete(':id')
   @HttpCode(204)
-  async remove(@Param('id') id: string) {
-    await this.proveedoresService.remove(id);
+  async remove(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    await this.proveedoresService.remove(auth, id);
   }
 }

@@ -31,66 +31,244 @@ enum TipoComision {
   FIJO
 }
 
+enum TipoCentroCosto {
+  PRODUCTIVO
+  APOYO
+  ADMINISTRATIVO
+  COMERCIAL
+  LOGISTICO
+  TERCERIZADO
+}
+
+enum CategoriaGraficaCentroCosto {
+  PREPRENSA
+  IMPRESION
+  TERMINACION
+  EMPAQUE
+  LOGISTICA
+  CALIDAD
+  MANTENIMIENTO
+  ADMINISTRACION
+  COMERCIAL
+  TERCERIZADO
+}
+
+enum ImputacionPreferidaCentroCosto {
+  DIRECTA
+  INDIRECTA
+  REPARTO
+}
+
+enum UnidadBaseCentroCosto {
+  NINGUNA
+  HORA_MAQUINA
+  HORA_HOMBRE
+  PLIEGO
+  UNIDAD
+  M2
+  KG
+}
+
+enum TipoRecursoCentroCosto {
+  EMPLEADO
+  MAQUINARIA
+  PROVEEDOR
+  GASTO_MANUAL
+}
+
+enum CategoriaComponenteCostoCentro {
+  SUELDOS
+  CARGAS
+  MANTENIMIENTO
+  ENERGIA
+  ALQUILER
+  AMORTIZACION
+  TERCERIZACION
+  INSUMOS_INDIRECTOS
+  OTROS
+}
+
+enum OrigenComponenteCostoCentro {
+  MANUAL
+  SUGERIDO
+}
+
+enum EstadoTarifaCentroCostoPeriodo {
+  BORRADOR
+  PUBLICADA
+}
+
+model Tenant {
+  id                                 String                              @id @default(uuid()) @db.Uuid
+  nombre                             String
+  slug                               String                              @unique
+  activo                             Boolean                             @default(true)
+  createdAt                          DateTime                            @default(now())
+  updatedAt                          DateTime                            @updatedAt
+  memberships                        Membership[]
+  authSessions                       AuthSession[]
+  invitations                        Invitation[]
+  clientes                           Cliente[]
+  proveedores                        Proveedor[]
+  empleados                          Empleado[]
+  plantas                            Planta[]
+  areasCosto                         AreaCosto[]
+  centrosCosto                       CentroCosto[]
+  centroCostoRecursos                CentroCostoRecurso[]
+  centroCostoComponentesCostoPeriodo CentroCostoComponenteCostoPeriodo[]
+  centroCostoCapacidadesPeriodo      CentroCostoCapacidadPeriodo[]
+  centroCostoTarifasPeriodo          CentroCostoTarifaPeriodo[]
+  clienteContactos                   ClienteContacto[]
+  clienteDireccions                  ClienteDireccion[]
+  proveedorContactos                 ProveedorContacto[]
+  proveedorDireccions                ProveedorDireccion[]
+  empleadoDireccions                 EmpleadoDireccion[]
+  empleadoComisions                  EmpleadoComision[]
+}
+
+model User {
+  id             String        @id @default(uuid()) @db.Uuid
+  email          String        @unique
+  passwordHash   String?
+  nombreCompleto String?
+  activo         Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  memberships    Membership[]
+  authSessions   AuthSession[]
+  invitations    Invitation[]
+  empleados      Empleado[]
+}
+
+model Membership {
+  id              String        @id @default(uuid()) @db.Uuid
+  userId          String        @db.Uuid
+  tenantId        String        @db.Uuid
+  rol             RolSistema
+  activa          Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  authSessions    AuthSession[]
+  invitationsSent Invitation[]  @relation("InvitationSender")
+
+  @@unique([userId, tenantId])
+  @@index([tenantId])
+}
+
+model AuthSession {
+  id                  String     @id @default(uuid()) @db.Uuid
+  userId              String     @db.Uuid
+  currentTenantId     String     @db.Uuid
+  currentMembershipId String     @db.Uuid
+  expiresAt           DateTime
+  revokedAt           DateTime?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  user                User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentTenant       Tenant     @relation(fields: [currentTenantId], references: [id], onDelete: Cascade)
+  currentMembership   Membership @relation(fields: [currentMembershipId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([currentTenantId])
+}
+
+model Invitation {
+  id                    String     @id @default(uuid()) @db.Uuid
+  tenantId              String     @db.Uuid
+  userId                String?    @db.Uuid
+  empleadoId            String?    @db.Uuid
+  invitedByMembershipId String     @db.Uuid
+  email                 String
+  rol                   RolSistema
+  tokenHash             String     @unique
+  expiresAt             DateTime
+  acceptedAt            DateTime?
+  revokedAt             DateTime?
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+  tenant                Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user                  User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  empleado              Empleado?  @relation(fields: [empleadoId], references: [id], onDelete: SetNull)
+  invitedByMembership   Membership @relation("InvitationSender", fields: [invitedByMembershipId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, email])
+  @@index([empleadoId])
+}
+
 model Cliente {
   id             String             @id @default(uuid()) @db.Uuid
+  tenantId       String             @db.Uuid
   nombre         String
   razonSocial    String?
   emailPrincipal String
   telefonoCodigo String
   telefonoNumero String
   paisCodigo     String             @db.VarChar(2)
-  contactos      ClienteContacto[]
-  direcciones    ClienteDireccion[]
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
+  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contactos      ClienteContacto[]
+  direcciones    ClienteDireccion[]
 
-  @@index([nombre])
+  @@unique([tenantId, nombre])
+  @@index([tenantId, nombre])
 }
 
 model Proveedor {
-  id             String               @id @default(uuid()) @db.Uuid
-  nombre         String
-  razonSocial    String?
-  emailPrincipal String
-  telefonoCodigo String
-  telefonoNumero String
-  paisCodigo     String               @db.VarChar(2)
-  contactos      ProveedorContacto[]
-  direcciones    ProveedorDireccion[]
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  id                  String               @id @default(uuid()) @db.Uuid
+  tenantId            String               @db.Uuid
+  nombre              String
+  razonSocial         String?
+  emailPrincipal      String
+  telefonoCodigo      String
+  telefonoNumero      String
+  paisCodigo          String               @db.VarChar(2)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contactos           ProveedorContacto[]
+  direcciones         ProveedorDireccion[]
+  centrosCosto        CentroCosto[]
+  recursosCentroCosto CentroCostoRecurso[] @relation("CentroCostoRecursoProveedor")
 
-  @@index([nombre])
+  @@unique([tenantId, nombre])
+  @@index([tenantId, nombre])
 }
 
 model Empleado {
-  id                   String              @id @default(uuid()) @db.Uuid
-  nombreCompleto       String
-  emailPrincipal       String
-  telefonoCodigo       String
-  telefonoNumero       String
-  sector               String
-  ocupacion            String?
-  sexo                 SexoEmpleado?
-  fechaIngreso         DateTime            @db.Date
-  fechaNacimiento      DateTime?           @db.Date
-  usuarioSistema       Boolean             @default(false)
-  emailAcceso          String?
-  rolSistema           RolSistema?
-  comisionesHabilitadas Boolean            @default(false)
-  direcciones          EmpleadoDireccion[]
-  comisiones           EmpleadoComision[]
-  createdAt            DateTime            @default(now())
-  updatedAt            DateTime            @updatedAt
+  id                    String               @id @default(uuid()) @db.Uuid
+  tenantId              String               @db.Uuid
+  userId                String?              @db.Uuid
+  nombreCompleto        String
+  emailPrincipal        String
+  telefonoCodigo        String
+  telefonoNumero        String
+  sector                String
+  ocupacion             String?
+  sexo                  SexoEmpleado?
+  fechaIngreso          DateTime             @db.Date
+  fechaNacimiento       DateTime?            @db.Date
+  comisionesHabilitadas Boolean              @default(false)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  tenant                Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user                  User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  direcciones           EmpleadoDireccion[]
+  comisiones            EmpleadoComision[]
+  centrosACargo         CentroCosto[]        @relation("CentroCostoResponsable")
+  invitations           Invitation[]
+  recursosCentroCosto   CentroCostoRecurso[] @relation("CentroCostoRecursoEmpleado")
 
-  @@index([nombreCompleto])
-  @@index([sector])
+  @@index([tenantId, nombreCompleto])
+  @@index([tenantId, sector])
 }
 
 model ClienteContacto {
   id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @db.Uuid
   clienteId      String   @db.Uuid
-  cliente        Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   nombre         String
   cargo          String?
   email          String?
@@ -99,14 +277,16 @@ model ClienteContacto {
   principal      Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cliente        Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 
-  @@index([clienteId])
+  @@index([tenantId, clienteId])
 }
 
 model ClienteDireccion {
   id           String        @id @default(uuid()) @db.Uuid
+  tenantId     String        @db.Uuid
   clienteId    String        @db.Uuid
-  cliente      Cliente       @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   descripcion  String
   paisCodigo   String        @db.VarChar(2)
   codigoPostal String?
@@ -117,14 +297,16 @@ model ClienteDireccion {
   principal    Boolean       @default(false)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cliente      Cliente       @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 
-  @@index([clienteId])
+  @@index([tenantId, clienteId])
 }
 
 model ProveedorContacto {
   id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @db.Uuid
   proveedorId    String    @db.Uuid
-  proveedor      Proveedor @relation(fields: [proveedorId], references: [id], onDelete: Cascade)
   nombre         String
   cargo          String?
   email          String?
@@ -133,14 +315,16 @@ model ProveedorContacto {
   principal      Boolean   @default(false)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  proveedor      Proveedor @relation(fields: [proveedorId], references: [id], onDelete: Cascade)
 
-  @@index([proveedorId])
+  @@index([tenantId, proveedorId])
 }
 
 model ProveedorDireccion {
   id           String        @id @default(uuid()) @db.Uuid
+  tenantId     String        @db.Uuid
   proveedorId  String        @db.Uuid
-  proveedor    Proveedor     @relation(fields: [proveedorId], references: [id], onDelete: Cascade)
   descripcion  String
   paisCodigo   String        @db.VarChar(2)
   codigoPostal String?
@@ -151,14 +335,16 @@ model ProveedorDireccion {
   principal    Boolean       @default(false)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  proveedor    Proveedor     @relation(fields: [proveedorId], references: [id], onDelete: Cascade)
 
-  @@index([proveedorId])
+  @@index([tenantId, proveedorId])
 }
 
 model EmpleadoDireccion {
   id           String        @id @default(uuid()) @db.Uuid
+  tenantId     String        @db.Uuid
   empleadoId   String        @db.Uuid
-  empleado     Empleado      @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
   descripcion  String
   paisCodigo   String        @db.VarChar(2)
   codigoPostal String?
@@ -169,19 +355,172 @@ model EmpleadoDireccion {
   principal    Boolean       @default(false)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  empleado     Empleado      @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
 
-  @@index([empleadoId])
+  @@index([tenantId, empleadoId])
 }
 
 model EmpleadoComision {
   id          String       @id @default(uuid()) @db.Uuid
+  tenantId    String       @db.Uuid
   empleadoId  String       @db.Uuid
-  empleado    Empleado     @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
   descripcion String
   tipo        TipoComision
   valor       Decimal      @db.Decimal(10, 2)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  empleado    Empleado     @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
 
-  @@index([empleadoId])
+  @@index([tenantId, empleadoId])
+}
+
+model Planta {
+  id           String        @id @default(uuid()) @db.Uuid
+  tenantId     String        @db.Uuid
+  codigo       String
+  nombre       String
+  descripcion  String?
+  activa       Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  areasCosto   AreaCosto[]
+  centrosCosto CentroCosto[]
+
+  @@unique([tenantId, codigo])
+  @@index([tenantId, nombre])
+}
+
+model AreaCosto {
+  id           String        @id @default(uuid()) @db.Uuid
+  tenantId     String        @db.Uuid
+  plantaId     String        @db.Uuid
+  codigo       String
+  nombre       String
+  descripcion  String?
+  activa       Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planta       Planta        @relation(fields: [plantaId], references: [id], onDelete: Cascade)
+  centrosCosto CentroCosto[]
+
+  @@unique([tenantId, plantaId, codigo])
+  @@index([tenantId, plantaId, nombre])
+}
+
+model CentroCosto {
+  id                      String                              @id @default(uuid()) @db.Uuid
+  tenantId                String                              @db.Uuid
+  plantaId                String                              @db.Uuid
+  areaCostoId             String                              @db.Uuid
+  codigo                  String
+  nombre                  String
+  descripcion             String?
+  tipoCentro              TipoCentroCosto
+  categoriaGrafica        CategoriaGraficaCentroCosto
+  imputacionPreferida     ImputacionPreferidaCentroCosto
+  unidadBaseFutura        UnidadBaseCentroCosto               @default(NINGUNA)
+  responsableEmpleadoId   String?                             @db.Uuid
+  proveedorDefaultId      String?                             @db.Uuid
+  activo                  Boolean                             @default(true)
+  createdAt               DateTime                            @default(now())
+  updatedAt               DateTime                            @updatedAt
+  tenant                  Tenant                              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planta                  Planta                              @relation(fields: [plantaId], references: [id], onDelete: Cascade)
+  areaCosto               AreaCosto                           @relation(fields: [areaCostoId], references: [id], onDelete: Cascade)
+  responsableEmpleado     Empleado?                           @relation("CentroCostoResponsable", fields: [responsableEmpleadoId], references: [id], onDelete: SetNull)
+  proveedorDefault        Proveedor?                          @relation(fields: [proveedorDefaultId], references: [id], onDelete: SetNull)
+  recursos                CentroCostoRecurso[]
+  componentesCostoPeriodo CentroCostoComponenteCostoPeriodo[]
+  capacidadesPeriodo      CentroCostoCapacidadPeriodo[]
+  tarifasPeriodo          CentroCostoTarifaPeriodo[]
+
+  @@unique([tenantId, codigo])
+  @@index([tenantId, plantaId, areaCostoId])
+  @@index([tenantId, nombre])
+}
+
+model CentroCostoRecurso {
+  id            String                 @id @default(uuid()) @db.Uuid
+  tenantId      String                 @db.Uuid
+  centroCostoId String                 @db.Uuid
+  periodo       String
+  tipoRecurso   TipoRecursoCentroCosto
+  empleadoId    String?                @db.Uuid
+  proveedorId   String?                @db.Uuid
+  nombreManual  String?
+  descripcion   String?
+  porcentajeAsignacion Decimal?        @db.Decimal(5, 2)
+  activo        Boolean                @default(true)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  tenant        Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  centroCosto   CentroCosto            @relation(fields: [centroCostoId], references: [id], onDelete: Cascade)
+  empleado      Empleado?              @relation("CentroCostoRecursoEmpleado", fields: [empleadoId], references: [id], onDelete: SetNull)
+  proveedor     Proveedor?             @relation("CentroCostoRecursoProveedor", fields: [proveedorId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, centroCostoId, periodo])
+  @@index([tenantId, tipoRecurso, periodo])
+  @@index([tenantId, empleadoId, periodo])
+}
+
+model CentroCostoComponenteCostoPeriodo {
+  id             String                         @id @default(uuid()) @db.Uuid
+  tenantId       String                         @db.Uuid
+  centroCostoId  String                         @db.Uuid
+  periodo        String
+  categoria      CategoriaComponenteCostoCentro
+  nombre         String
+  origen         OrigenComponenteCostoCentro    @default(MANUAL)
+  importeMensual Decimal                        @db.Decimal(12, 2)
+  notas          String?
+  detalleJson    Json?
+  createdAt      DateTime                       @default(now())
+  updatedAt      DateTime                       @updatedAt
+  tenant         Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  centroCosto    CentroCosto                    @relation(fields: [centroCostoId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, centroCostoId, periodo])
+}
+
+model CentroCostoCapacidadPeriodo {
+  id                      String                @id @default(uuid()) @db.Uuid
+  tenantId                String                @db.Uuid
+  centroCostoId           String                @db.Uuid
+  periodo                 String
+  unidadBase              UnidadBaseCentroCosto
+  diasPorMes              Decimal               @db.Decimal(10, 2)
+  horasPorDia             Decimal               @db.Decimal(10, 2)
+  porcentajeNoProductivo  Decimal               @db.Decimal(5, 2)
+  capacidadTeorica        Decimal               @db.Decimal(12, 2)
+  capacidadPractica       Decimal               @db.Decimal(12, 2)
+  overrideManualCapacidad Decimal?              @db.Decimal(12, 2)
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  tenant                  Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  centroCosto             CentroCosto           @relation(fields: [centroCostoId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, centroCostoId, periodo])
+}
+
+model CentroCostoTarifaPeriodo {
+  id                String                         @id @default(uuid()) @db.Uuid
+  tenantId          String                         @db.Uuid
+  centroCostoId     String                         @db.Uuid
+  periodo           String
+  costoMensualTotal Decimal                        @db.Decimal(12, 2)
+  capacidadPractica Decimal                        @db.Decimal(12, 2)
+  tarifaCalculada   Decimal                        @db.Decimal(12, 2)
+  estado            EstadoTarifaCentroCostoPeriodo
+  resumenJson       Json
+  createdAt         DateTime                       @default(now())
+  updatedAt         DateTime                       @updatedAt
+  tenant            Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  centroCosto       CentroCosto                    @relation(fields: [centroCostoId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, centroCostoId, periodo, estado])
+  @@index([tenantId, centroCostoId, periodo])
 }

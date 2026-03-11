@@ -14,6 +14,8 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.EmpleadosController = void 0;
 const common_1 = require("@nestjs/common");
+const current_auth_decorator_1 = require("../auth/current-auth.decorator");
+const invitar_acceso_dto_1 = require("./dto/invitar-acceso.dto");
 const empleados_service_1 = require("./empleados.service");
 const upsert_empleado_dto_1 = require("./dto/upsert-empleado.dto");
 let EmpleadosController = class EmpleadosController {
@@ -21,57 +23,74 @@ let EmpleadosController = class EmpleadosController {
     constructor(empleadosService) {
         this.empleadosService = empleadosService;
     }
-    findAll() {
-        return this.empleadosService.findAll();
+    findAll(auth) {
+        return this.empleadosService.findAll(auth);
     }
-    findOne(id) {
-        return this.empleadosService.findOne(id);
+    findOne(auth, id) {
+        return this.empleadosService.findOne(auth, id);
     }
-    create(payload) {
-        return this.empleadosService.create(payload);
+    create(auth, payload) {
+        return this.empleadosService.create(auth, payload);
     }
-    update(id, payload) {
-        return this.empleadosService.update(id, payload);
+    update(auth, id, payload) {
+        return this.empleadosService.update(auth, id, payload);
     }
-    async remove(id) {
-        await this.empleadosService.remove(id);
+    invitarAcceso(auth, id, payload) {
+        return this.empleadosService.invitarAcceso(auth, id, payload);
+    }
+    async remove(auth, id) {
+        await this.empleadosService.remove(auth, id);
     }
 };
 exports.EmpleadosController = EmpleadosController;
 __decorate([
     (0, common_1.Get)(),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], EmpleadosController.prototype, "findAll", null);
 __decorate([
     (0, common_1.Get)(':id'),
-    __param(0, (0, common_1.Param)('id')),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", void 0)
 ], EmpleadosController.prototype, "findOne", null);
 __decorate([
     (0, common_1.Post)(),
-    __param(0, (0, common_1.Body)()),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [upsert_empleado_dto_1.UpsertEmpleadoDto]),
+    __metadata("design:paramtypes", [Object, upsert_empleado_dto_1.UpsertEmpleadoDto]),
     __metadata("design:returntype", void 0)
 ], EmpleadosController.prototype, "create", null);
 __decorate([
     (0, common_1.Put)(':id'),
-    __param(0, (0, common_1.Param)('id')),
-    __param(1, (0, common_1.Body)()),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, upsert_empleado_dto_1.UpsertEmpleadoDto]),
+    __metadata("design:paramtypes", [Object, String, upsert_empleado_dto_1.UpsertEmpleadoDto]),
     __metadata("design:returntype", void 0)
 ], EmpleadosController.prototype, "update", null);
 __decorate([
+    (0, common_1.Post)(':id/invitar-acceso'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, invitar_acceso_dto_1.InvitarAccesoDto]),
+    __metadata("design:returntype", void 0)
+], EmpleadosController.prototype, "invitarAcceso", null);
+__decorate([
     (0, common_1.Delete)(':id'),
     (0, common_1.HttpCode)(204),
-    __param(0, (0, common_1.Param)('id')),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], EmpleadosController.prototype, "remove", null);
 exports.EmpleadosController = EmpleadosController = __decorate([

@@ -1,9 +1,11 @@
+import { InvitarAccesoDto } from './dto/invitar-acceso.dto';
 import { EmpleadosService } from './empleados.service';
 import { UpsertEmpleadoDto } from './dto/upsert-empleado.dto';
+import type { CurrentAuth } from '../auth/auth.types';
 export declare class EmpleadosController {
     private readonly empleadosService;
     constructor(empleadosService: EmpleadosService);
-    findAll(): Promise<{
+    findAll(auth: CurrentAuth): Promise<{
         id: string;
         nombreCompleto: string;
         email: string;
@@ -37,7 +39,7 @@ export declare class EmpleadosController {
             valor: string;
         }[];
     }[]>;
-    findOne(id: string): Promise<{
+    findOne(auth: CurrentAuth, id: string): Promise<{
         id: string;
         nombreCompleto: string;
         email: string;
@@ -71,7 +73,7 @@ export declare class EmpleadosController {
             valor: string;
         }[];
     }>;
-    create(payload: UpsertEmpleadoDto): Promise<{
+    create(auth: CurrentAuth, payload: UpsertEmpleadoDto): Promise<{
         id: string;
         nombreCompleto: string;
         email: string;
@@ -105,7 +107,7 @@ export declare class EmpleadosController {
             valor: string;
         }[];
     }>;
-    update(id: string, payload: UpsertEmpleadoDto): Promise<{
+    update(auth: CurrentAuth, id: string, payload: UpsertEmpleadoDto): Promise<{
         id: string;
         nombreCompleto: string;
         email: string;
@@ -139,5 +141,12 @@ export declare class EmpleadosController {
             valor: string;
         }[];
     }>;
-    remove(id: string): Promise<void>;
+    invitarAcceso(auth: CurrentAuth, id: string, payload: InvitarAccesoDto): Promise<{
+        invitationState: string;
+        invitationUrl: null;
+    } | {
+        invitationState: string;
+        invitationUrl: string;
+    }>;
+    remove(auth: CurrentAuth, id: string): Promise<void>;
 }

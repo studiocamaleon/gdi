@@ -16,7 +16,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { createEmpleado, updateEmpleado } from "@/lib/empleados-api";
+import {
+  createEmpleado,
+  inviteEmpleadoAccess,
+  updateEmpleado,
+} from "@/lib/empleados-api";
 import {
   comisionTypeItems,
   createEmptyComision,
@@ -205,6 +209,7 @@ function validatePayload(payload: EmpleadoPayload) {
 export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
   const router = useRouter();
   const [isSaving, startSaving] = React.useTransition();
+  const [isInviting, startInviting] = React.useTransition();
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [datosPrincipales, setDatosPrincipales] =
     React.useState<DatosPrincipalesState>({
@@ -348,6 +353,41 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
     if (!checked) {
       setComisiones([]);
     }
+  };
+
+  const handleInviteAccess = () => {
+    if (mode !== "edit" || !empleado.id) {
+      return;
+    }
+
+    if (!datosPrincipales.usuarioSistema || !usuarioSistema.emailAcceso || !usuarioSistema.rolSistema) {
+      setErrorMessage("Completa el email de acceso y el rol antes de enviar la invitacion.");
+      return;
+    }
+
+    const rolSistema = usuarioSistema.rolSistema;
+
+    startInviting(async () => {
+      try {
+        const response = await inviteEmpleadoAccess(empleado.id, {
+          email: usuarioSistema.emailAcceso.trim(),
+          rolSistema,
+        });
+
+        if (response.invitationUrl && navigator.clipboard) {
+          await navigator.clipboard.writeText(response.invitationUrl);
+          toast.success("Invitacion generada. El enlace quedo copiado al portapapeles.");
+        } else {
+          toast.success("Invitacion generada.");
+        }
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo generar la invitacion de acceso.",
+        );
+      }
+    });
   };
 
   const handleSave = () => {
@@ -911,13 +951,33 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
 
       {datosPrincipales.usuarioSistema ? (
         <Card className="rounded-2xl border-border/70 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-bold tracking-tight">
-              Usuario del sistema
-            </CardTitle>
-            <CardDescription>
-              Define el acceso al ERP y el rol que administrara sus permisos.
-            </CardDescription>
+          <CardHeader className="gap-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <CardTitle className="text-lg font-bold tracking-tight">
+                  Usuario del sistema
+                </CardTitle>
+                <CardDescription>
+                  Define el acceso al ERP y el rol que administrara sus permisos.
+                </CardDescription>
+              </div>
+              {mode === "edit" ? (
+                <Button
+                  type="button"
+                  variant="sidebar"
+                  className="w-full sm:w-auto"
+                  disabled={isInviting}
+                  onClick={handleInviteAccess}
+                >
+                  {isInviting ? (
+                    <LoaderCircleIcon className="animate-spin" />
+                  ) : (
+                    <ShieldCheckIcon />
+                  )}
+                  Reenviar invitacion
+                </Button>
+              ) : null}
+            </div>
           </CardHeader>
           <CardContent>
             <FieldGroup className="grid lg:grid-cols-2">

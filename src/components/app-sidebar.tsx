@@ -3,22 +3,39 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
+  ArrowLeftRightIcon,
   Building2Icon,
+  CircleDollarSignIcon,
   ChevronRightIcon,
   CreditCardIcon,
+  FolderTreeIcon,
   IdCardIcon,
   LayoutDashboardIcon,
+  LogOutIcon,
   Settings2Icon,
   UsersIcon,
 } from "lucide-react";
 
+import { logout, switchTenant, type CurrentUser } from "@/lib/auth";
+import { clearSessionToken, setSessionToken } from "@/lib/session";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Card,
@@ -61,18 +78,75 @@ const registros = [
   },
 ];
 
-export function AppSidebar({
-  ...props
-}: React.ComponentProps<typeof Sidebar>) {
+const costos = [
+  {
+    title: "Centros de costo",
+    href: "/costos/centros-de-costo",
+    icon: FolderTreeIcon,
+  },
+];
+
+type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
+  currentUser: CurrentUser;
+};
+
+function matchesRoute(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function buildInitials(email: string) {
+  const [localPart] = email.split("@");
+  return localPart.slice(0, 2).toUpperCase();
+}
+
+export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
+  const router = useRouter();
   const pathname = usePathname();
   const isDashboard = pathname === "/";
-  const isRegistrosRoute = registros.some((item) => item.href === pathname);
-  const [isRegistrosOpen, setIsRegistrosOpen] =
-    React.useState(isRegistrosRoute);
+  const isRegistrosRoute = registros.some((item) =>
+    matchesRoute(pathname, item.href),
+  );
+  const isCostosRoute = costos.some((item) => matchesRoute(pathname, item.href));
+  const [isRegistrosOpen, setIsRegistrosOpen] = React.useState(isRegistrosRoute);
+  const [isCostosOpen, setIsCostosOpen] = React.useState(isCostosRoute);
+  const [isSwitching, startSwitching] = React.useTransition();
+  const [isLoggingOut, startLogout] = React.useTransition();
 
   React.useEffect(() => {
     setIsRegistrosOpen(isRegistrosRoute);
   }, [isRegistrosRoute]);
+
+  React.useEffect(() => {
+    setIsCostosOpen(isCostosRoute);
+  }, [isCostosRoute]);
+
+  const handleTenantSwitch = (tenantId: string) => {
+    if (tenantId === currentUser.tenantActual.id) {
+      return;
+    }
+
+    startSwitching(async () => {
+      const response = await switchTenant(tenantId);
+
+      if (response.accessToken) {
+        setSessionToken(response.accessToken);
+      }
+
+      router.refresh();
+    });
+  };
+
+  const handleLogout = () => {
+    startLogout(async () => {
+      try {
+        await logout();
+      } finally {
+        clearSessionToken();
+        router.replace("/login");
+        router.refresh();
+      }
+    });
+  };
 
   return (
     <Sidebar collapsible="icon" variant="inset" {...props}>
@@ -143,7 +217,47 @@ export function AppSidebar({
                     <SidebarMenuSubItem key={item.title}>
                       <SidebarMenuSubButton
                         render={<Link href={item.href} />}
-                        isActive={pathname === item.href}
+                        isActive={matchesRoute(pathname, item.href)}
+                      >
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  ))}
+                </SidebarMenuSub>
+              </CollapsibleContent>
+            </Collapsible>
+          </SidebarMenuItem>
+        </SidebarMenu>
+
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <Collapsible
+              open={isCostosOpen}
+              onOpenChange={setIsCostosOpen}
+              className="group/collapsible"
+            >
+              <CollapsibleTrigger
+                render={
+                  <SidebarMenuButton
+                    tooltip="Costos"
+                    className="font-medium"
+                    isActive={isCostosRoute}
+                  />
+                }
+              >
+                <CircleDollarSignIcon />
+                <span>Costos</span>
+                <ChevronRightIcon className="ml-auto transition-transform group-data-[state=open]/menu-button:rotate-90" />
+              </CollapsibleTrigger>
+
+              <CollapsibleContent className="mt-1">
+                <SidebarMenuSub>
+                  {costos.map((item) => (
+                    <SidebarMenuSubItem key={item.title}>
+                      <SidebarMenuSubButton
+                        render={<Link href={item.href} />}
+                        isActive={matchesRoute(pathname, item.href)}
                       >
                         <item.icon />
                         <span>{item.title}</span>
@@ -169,46 +283,89 @@ export function AppSidebar({
               </div>
               <div className="min-w-0">
                 <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/45">
-                  Suscripcion
+                  Empresa activa
                 </p>
                 <CardTitle className="mt-1 text-sm font-semibold text-white">
-                  Plan Pro Industria
+                  {currentUser.tenantActual.nombre}
                 </CardTitle>
               </div>
             </div>
             <CardDescription className="text-white/65">
-              24 dias restantes
+              Rol actual: {currentUser.tenantActual.rol}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="brand" size="sm" className="w-full">
-              Administrar
+            <Button variant="brand" size="sm" className="w-full" disabled>
+              <ArrowLeftRightIcon />
+              Selector en el menu
             </Button>
           </CardContent>
         </Card>
 
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-              tooltip="Lucas Gomez"
-              className="h-auto min-h-14 rounded-2xl border border-white/8 bg-white/4 px-2.5 py-2 shadow-none hover:bg-white/7"
-            >
-              <Avatar size="lg">
-                <AvatarFallback className="bg-amber-400/20 font-medium text-amber-100">
-                  LG
-                </AvatarFallback>
-              </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold text-white">
-                  Lucas Gomez
-                </span>
-                <span className="truncate text-xs text-white/55">
-                  Administrador
-                </span>
-              </div>
-              <Settings2Icon className="ml-auto text-white/45" />
-            </SidebarMenuButton>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <SidebarMenuButton
+                    size="lg"
+                    tooltip={currentUser.email}
+                    className="h-auto min-h-14 rounded-2xl border border-white/8 bg-white/4 px-2.5 py-2 shadow-none hover:bg-white/7"
+                  />
+                }
+              >
+                <Avatar size="lg">
+                  <AvatarFallback className="bg-amber-400/20 font-medium text-amber-100">
+                    {buildInitials(currentUser.email)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold text-white">
+                    {currentUser.email}
+                  </span>
+                  <span className="truncate text-xs text-white/55">
+                    {currentUser.tenantActual.nombre}
+                  </span>
+                </div>
+                <Settings2Icon className="ml-auto text-white/45" />
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent align="end" sideOffset={8} className="min-w-72">
+                <DropdownMenuLabel>
+                  {currentUser.email}
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Empresa activa: {currentUser.tenantActual.nombre}
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel inset>Empresas disponibles</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={currentUser.tenantActual.id}
+                    onValueChange={handleTenantSwitch}
+                  >
+                    {currentUser.tenants.map((tenant) => (
+                      <DropdownMenuRadioItem
+                        key={tenant.id}
+                        value={tenant.id}
+                        disabled={isSwitching}
+                      >
+                        <Building2Icon />
+                        {tenant.nombre}
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          {tenant.rol}
+                        </span>
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem disabled={isLoggingOut} onClick={handleLogout}>
+                  <LogOutIcon />
+                  Cerrar sesion
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

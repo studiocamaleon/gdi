@@ -1,10 +1,11 @@
+import { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { TipoDireccionDto } from './dto/direccion.dto';
 import { UpsertClienteDto } from './dto/upsert-cliente.dto';
 export declare class ClientesService {
     private readonly prisma;
     constructor(prisma: PrismaService);
-    findAll(): Promise<{
+    findAll(auth: CurrentAuth): Promise<{
         id: string;
         nombre: string;
         razonSocial: string;
@@ -35,7 +36,7 @@ export declare class ClientesService {
             principal: boolean;
         }[];
     }[]>;
-    findOne(id: string): Promise<{
+    findOne(auth: CurrentAuth, id: string): Promise<{
         id: string;
         nombre: string;
         razonSocial: string;
@@ -66,7 +67,7 @@ export declare class ClientesService {
             principal: boolean;
         }[];
     }>;
-    create(payload: UpsertClienteDto): Promise<{
+    create(auth: CurrentAuth, payload: UpsertClienteDto): Promise<{
         id: string;
         nombre: string;
         razonSocial: string;
@@ -97,7 +98,7 @@ export declare class ClientesService {
             principal: boolean;
         }[];
     }>;
-    update(id: string, payload: UpsertClienteDto): Promise<{
+    update(auth: CurrentAuth, id: string, payload: UpsertClienteDto): Promise<{
         id: string;
         nombre: string;
         razonSocial: string;
@@ -128,7 +129,7 @@ export declare class ClientesService {
             principal: boolean;
         }[];
     }>;
-    remove(id: string): Promise<void>;
+    remove(auth: CurrentAuth, id: string): Promise<void>;
     private findClienteOrThrow;
     private normalizePayload;
     private normalizeContactos;
