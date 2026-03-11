@@ -1,9 +1,10 @@
 import { UpsertProveedorDto } from './dto/upsert-proveedor.dto';
 import { ProveedoresService } from './proveedores.service';
+import type { CurrentAuth } from '../auth/auth.types';
 export declare class ProveedoresController {
     private readonly proveedoresService;
     constructor(proveedoresService: ProveedoresService);
-    findAll(): Promise<{
+    findAll(auth: CurrentAuth): Promise<{
         id: string;
         nombre: string;
         razonSocial: string;
@@ -34,7 +35,7 @@ export declare class ProveedoresController {
             principal: boolean;
         }[];
     }[]>;
-    findOne(id: string): Promise<{
+    findOne(auth: CurrentAuth, id: string): Promise<{
         id: string;
         nombre: string;
         razonSocial: string;
@@ -65,7 +66,7 @@ export declare class ProveedoresController {
             principal: boolean;
         }[];
     }>;
-    create(payload: UpsertProveedorDto): Promise<{
+    create(auth: CurrentAuth, payload: UpsertProveedorDto): Promise<{
         id: string;
         nombre: string;
         razonSocial: string;
@@ -96,7 +97,7 @@ export declare class ProveedoresController {
             principal: boolean;
         }[];
     }>;
-    update(id: string, payload: UpsertProveedorDto): Promise<{
+    update(auth: CurrentAuth, id: string, payload: UpsertProveedorDto): Promise<{
         id: string;
         nombre: string;
         razonSocial: string;
@@ -127,5 +128,5 @@ export declare class ProveedoresController {
             principal: boolean;
         }[];
     }>;
-    remove(id: string): Promise<void>;
+    remove(auth: CurrentAuth, id: string): Promise<void>;
 }

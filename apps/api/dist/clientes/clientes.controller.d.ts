@@ -1,9 +1,10 @@
 import { UpsertClienteDto } from './dto/upsert-cliente.dto';
 import { ClientesService } from './clientes.service';
+import type { CurrentAuth } from '../auth/auth.types';
 export declare class ClientesController {
     private readonly clientesService;
     constructor(clientesService: ClientesService);
-    findAll(): Promise<{
+    findAll(auth: CurrentAuth): Promise<{
         id: string;
         nombre: string;
         razonSocial: string;
@@ -34,7 +35,7 @@ export declare class ClientesController {
             principal: boolean;
         }[];
     }[]>;
-    findOne(id: string): Promise<{
+    findOne(auth: CurrentAuth, id: string): Promise<{
         id: string;
         nombre: string;
         razonSocial: string;
@@ -65,7 +66,7 @@ export declare class ClientesController {
             principal: boolean;
         }[];
     }>;
-    create(payload: UpsertClienteDto): Promise<{
+    create(auth: CurrentAuth, payload: UpsertClienteDto): Promise<{
         id: string;
         nombre: string;
         razonSocial: string;
@@ -96,7 +97,7 @@ export declare class ClientesController {
             principal: boolean;
         }[];
     }>;
-    update(id: string, payload: UpsertClienteDto): Promise<{
+    update(auth: CurrentAuth, id: string, payload: UpsertClienteDto): Promise<{
         id: string;
         nombre: string;
         razonSocial: string;
@@ -127,5 +128,5 @@ export declare class ClientesController {
             principal: boolean;
         }[];
     }>;
-    remove(id: string): Promise<void>;
+    remove(auth: CurrentAuth, id: string): Promise<void>;
 }

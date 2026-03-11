@@ -19,8 +19,11 @@ let ProveedoresService = class ProveedoresService {
     constructor(prisma) {
         this.prisma = prisma;
     }
-    async findAll() {
+    async findAll(auth) {
         const proveedores = await this.prisma.proveedor.findMany({
+            where: {
+                tenantId: auth.tenantId,
+            },
             include: {
                 contactos: {
                     orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
@@ -35,14 +38,15 @@ let ProveedoresService = class ProveedoresService {
         });
         return proveedores.map((proveedor) => this.toResponse(proveedor));
     }
-    async findOne(id) {
-        const proveedor = await this.findProveedorOrThrow(id, this.prisma);
+    async findOne(auth, id) {
+        const proveedor = await this.findProveedorOrThrow(auth, id, this.prisma);
         return this.toResponse(proveedor);
     }
-    async create(payload) {
+    async create(auth, payload) {
         const normalized = this.normalizePayload(payload);
         const proveedor = await this.prisma.proveedor.create({
             data: {
+                tenantId: auth.tenantId,
                 nombre: normalized.nombre,
                 razonSocial: normalized.razonSocial,
                 emailPrincipal: normalized.email,
@@ -51,6 +55,7 @@ let ProveedoresService = class ProveedoresService {
                 paisCodigo: normalized.pais,
                 contactos: {
                     create: normalized.contactos.map((contacto) => ({
+                        tenantId: auth.tenantId,
                         nombre: contacto.nombre,
                         cargo: contacto.cargo,
                         email: contacto.email,
@@ -61,6 +66,7 @@ let ProveedoresService = class ProveedoresService {
                 },
                 direcciones: {
                     create: normalized.direcciones.map((direccion) => ({
+                        tenantId: auth.tenantId,
                         descripcion: direccion.descripcion,
                         paisCodigo: direccion.pais,
                         codigoPostal: direccion.codigoPostal,
@@ -79,10 +85,10 @@ let ProveedoresService = class ProveedoresService {
         });
         return this.toResponse(proveedor);
     }
-    async update(id, payload) {
+    async update(auth, id, payload) {
         const normalized = this.normalizePayload(payload);
         return this.prisma.$transaction(async (tx) => {
-            await this.findProveedorOrThrow(id, tx);
+            await this.findProveedorOrThrow(auth, id, tx);
             await tx.proveedor.update({
                 where: { id },
                 data: {
@@ -95,14 +101,15 @@ let ProveedoresService = class ProveedoresService {
                 },
             });
             await tx.proveedorContacto.deleteMany({
-                where: { proveedorId: id },
+                where: { proveedorId: id, tenantId: auth.tenantId },
             });
             await tx.proveedorDireccion.deleteMany({
-                where: { proveedorId: id },
+                where: { proveedorId: id, tenantId: auth.tenantId },
             });
             if (normalized.contactos.length > 0) {
                 await tx.proveedorContacto.createMany({
                     data: normalized.contactos.map((contacto) => ({
+                        tenantId: auth.tenantId,
                         proveedorId: id,
                         nombre: contacto.nombre,
                         cargo: contacto.cargo,
@@ -116,6 +123,7 @@ let ProveedoresService = class ProveedoresService {
             if (normalized.direcciones.length > 0) {
                 await tx.proveedorDireccion.createMany({
                     data: normalized.direcciones.map((direccion) => ({
+                        tenantId: auth.tenantId,
                         proveedorId: id,
                         descripcion: direccion.descripcion,
                         paisCodigo: direccion.pais,
@@ -128,19 +136,22 @@ let ProveedoresService = class ProveedoresService {
                     })),
                 });
             }
-            const proveedor = await this.findProveedorOrThrow(id, tx);
+            const proveedor = await this.findProveedorOrThrow(auth, id, tx);
             return this.toResponse(proveedor);
         });
     }
-    async remove(id) {
-        await this.findProveedorOrThrow(id, this.prisma);
+    async remove(auth, id) {
+        await this.findProveedorOrThrow(auth, id, this.prisma);
         await this.prisma.proveedor.delete({
             where: { id },
         });
     }
-    async findProveedorOrThrow(id, db) {
-        const proveedor = await db.proveedor.findUnique({
-            where: { id },
+    async findProveedorOrThrow(auth, id, db) {
+        const proveedor = await db.proveedor.findFirst({
+            where: {
+                id,
+                tenantId: auth.tenantId,
+            },
             include: {
                 contactos: {
                     orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
@@ -158,6 +169,7 @@ let ProveedoresService = class ProveedoresService {
     normalizePayload(payload) {
         return {
             ...payload,
+            nombre: payload.nombre.trim(),
             razonSocial: payload.razonSocial?.trim() || null,
             email: payload.email.trim().toLowerCase(),
             pais: payload.pais.trim().toUpperCase(),

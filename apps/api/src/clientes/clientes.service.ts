@@ -6,6 +6,7 @@ import {
   Prisma,
   TipoDireccion,
 } from '@prisma/client';
+import { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ClienteContactoDto } from './dto/contacto.dto';
 import { ClienteDireccionDto, TipoDireccionDto } from './dto/direccion.dto';
@@ -20,8 +21,11 @@ type ClienteCompleto = Cliente & {
 export class ClientesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(auth: CurrentAuth) {
     const clientes = await this.prisma.cliente.findMany({
+      where: {
+        tenantId: auth.tenantId,
+      },
       include: {
         contactos: {
           orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
@@ -38,16 +42,17 @@ export class ClientesService {
     return clientes.map((cliente) => this.toResponse(cliente));
   }
 
-  async findOne(id: string) {
-    const cliente = await this.findClienteOrThrow(id, this.prisma);
+  async findOne(auth: CurrentAuth, id: string) {
+    const cliente = await this.findClienteOrThrow(auth, id, this.prisma);
     return this.toResponse(cliente);
   }
 
-  async create(payload: UpsertClienteDto) {
+  async create(auth: CurrentAuth, payload: UpsertClienteDto) {
     const normalized = this.normalizePayload(payload);
 
     const cliente = await this.prisma.cliente.create({
       data: {
+        tenantId: auth.tenantId,
         nombre: normalized.nombre,
         razonSocial: normalized.razonSocial,
         emailPrincipal: normalized.email,
@@ -56,6 +61,7 @@ export class ClientesService {
         paisCodigo: normalized.pais,
         contactos: {
           create: normalized.contactos.map((contacto) => ({
+            tenantId: auth.tenantId,
             nombre: contacto.nombre,
             cargo: contacto.cargo,
             email: contacto.email,
@@ -66,6 +72,7 @@ export class ClientesService {
         },
         direcciones: {
           create: normalized.direcciones.map((direccion) => ({
+            tenantId: auth.tenantId,
             descripcion: direccion.descripcion,
             paisCodigo: direccion.pais,
             codigoPostal: direccion.codigoPostal,
@@ -86,11 +93,11 @@ export class ClientesService {
     return this.toResponse(cliente);
   }
 
-  async update(id: string, payload: UpsertClienteDto) {
+  async update(auth: CurrentAuth, id: string, payload: UpsertClienteDto) {
     const normalized = this.normalizePayload(payload);
 
     return this.prisma.$transaction(async (tx) => {
-      await this.findClienteOrThrow(id, tx);
+      await this.findClienteOrThrow(auth, id, tx);
 
       await tx.cliente.update({
         where: { id },
@@ -105,16 +112,17 @@ export class ClientesService {
       });
 
       await tx.clienteContacto.deleteMany({
-        where: { clienteId: id },
+        where: { clienteId: id, tenantId: auth.tenantId },
       });
 
       await tx.clienteDireccion.deleteMany({
-        where: { clienteId: id },
+        where: { clienteId: id, tenantId: auth.tenantId },
       });
 
       if (normalized.contactos.length > 0) {
         await tx.clienteContacto.createMany({
           data: normalized.contactos.map((contacto) => ({
+            tenantId: auth.tenantId,
             clienteId: id,
             nombre: contacto.nombre,
             cargo: contacto.cargo,
@@ -129,6 +137,7 @@ export class ClientesService {
       if (normalized.direcciones.length > 0) {
         await tx.clienteDireccion.createMany({
           data: normalized.direcciones.map((direccion) => ({
+            tenantId: auth.tenantId,
             clienteId: id,
             descripcion: direccion.descripcion,
             paisCodigo: direccion.pais,
@@ -142,24 +151,28 @@ export class ClientesService {
         });
       }
 
-      const cliente = await this.findClienteOrThrow(id, tx);
+      const cliente = await this.findClienteOrThrow(auth, id, tx);
       return this.toResponse(cliente);
     });
   }
 
-  async remove(id: string) {
-    await this.findClienteOrThrow(id, this.prisma);
+  async remove(auth: CurrentAuth, id: string) {
+    await this.findClienteOrThrow(auth, id, this.prisma);
     await this.prisma.cliente.delete({
       where: { id },
     });
   }
 
   private async findClienteOrThrow(
+    auth: CurrentAuth,
     id: string,
     db: PrismaService | Prisma.TransactionClient,
   ) {
-    const cliente = await db.cliente.findUnique({
-      where: { id },
+    const cliente = await db.cliente.findFirst({
+      where: {
+        id,
+        tenantId: auth.tenantId,
+      },
       include: {
         contactos: {
           orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
@@ -180,6 +193,7 @@ export class ClientesService {
   private normalizePayload(payload: UpsertClienteDto) {
     return {
       ...payload,
+      nombre: payload.nombre.trim(),
       razonSocial: payload.razonSocial?.trim() || null,
       email: payload.email.trim().toLowerCase(),
       pais: payload.pais.trim().toUpperCase(),

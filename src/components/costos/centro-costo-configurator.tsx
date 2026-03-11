@@ -1,0 +1,2774 @@
+"use client";
+
+import * as React from "react";
+import {
+  CheckIcon,
+  CircleAlertIcon,
+  CalculatorIcon,
+  CopyIcon,
+  InfoIcon,
+  LoaderCircleIcon,
+  PlusIcon,
+  SaveIcon,
+  SparklesIcon,
+  Trash2Icon,
+} from "lucide-react";
+import { toast } from "sonner";
+
+import {
+  calcularTarifaCentroCosto,
+  getCentroCostoConfiguracion,
+  getCentroCostoTarifas,
+  publicarTarifaCentroCosto,
+  replaceCentroCostoComponentes,
+  replaceCentroCostoRecursos,
+  updateCentroCostoConfiguracionBase,
+  upsertCentroCostoCapacidad,
+} from "@/lib/costos-api";
+import {
+  AreaCosto,
+  categoriaComponenteCostoItems,
+  CentroCosto,
+  CentroCostoCapacidadPayload,
+  CentroCostoComponenteCostoPayload,
+  CentroCostoPayload,
+  EmpleadoDisponibilidadCentroCosto,
+  CentroCostoRecursoPayload,
+  getCategoriaComponenteCostoLabel,
+  getCategoriaGraficaLabel,
+  getCurrentPeriodo,
+  getImputacionPreferidaLabel,
+  getSuggestedUnidadBase,
+  getTipoCentroLabel,
+  getTipoRecursoLabel,
+  getUnidadBaseLabel,
+  imputacionPreferidaItems,
+  Planta,
+  tipoRecursoItems,
+  unidadBaseItems,
+} from "@/lib/costos";
+import { EmpleadoDetalle } from "@/lib/empleados";
+import { ProveedorDetalle } from "@/lib/proveedores";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+
+type CentroCostoConfiguratorProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  centro: CentroCosto | null;
+  plantas: Planta[];
+  areas: AreaCosto[];
+  empleados: EmpleadoDetalle[];
+  proveedores: ProveedorDetalle[];
+  onConfigured: () => Promise<void> | void;
+};
+
+type WizardStep = "identidad" | "recursos" | "costos" | "capacidad" | "resultado";
+
+type LocalRecurso = CentroCostoRecursoPayload & { id: string };
+type LocalComponente = CentroCostoComponenteCostoPayload & { id: string };
+const wizardSheetClassName =
+  "w-screen max-w-none overflow-y-auto data-[side=right]:w-[96vw] data-[side=right]:sm:max-w-[96vw] md:data-[side=right]:w-[92vw] md:data-[side=right]:sm:max-w-[92vw] lg:data-[side=right]:w-[1100px] lg:data-[side=right]:sm:max-w-[1100px] xl:data-[side=right]:w-[1280px] xl:data-[side=right]:sm:max-w-[1280px]";
+const systemCurrencyCode = "ARS";
+
+function createLocalId() {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+}
+
+function createResource(
+  tipoRecurso: CentroCostoRecursoPayload["tipoRecurso"] = "empleado",
+): LocalRecurso {
+  return {
+    id: createLocalId(),
+    tipoRecurso,
+    empleadoId: undefined,
+    proveedorId: undefined,
+    nombreManual: "",
+    descripcion: "",
+    porcentajeAsignacion: undefined,
+    activo: true,
+  };
+}
+
+function createComponent(
+  categoria: CentroCostoComponenteCostoPayload["categoria"] = "otros",
+  nombre = "",
+  origen: CentroCostoComponenteCostoPayload["origen"] = "manual",
+): LocalComponente {
+  return {
+    id: createLocalId(),
+    categoria,
+    nombre,
+    origen,
+    importeMensual: 0,
+    notas: "",
+    detalle: undefined,
+  };
+}
+
+function normalizeNumber(value: unknown) {
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : NaN;
+
+  if (!Number.isFinite(numericValue)) {
+    return 0;
+  }
+
+  return numericValue;
+}
+
+function getDetailValue(
+  component: LocalComponente | CentroCostoComponenteCostoPayload,
+  key: string,
+) {
+  return component.detalle && typeof component.detalle === "object"
+    ? component.detalle[key]
+    : undefined;
+}
+
+function getDerivedComponentKey(component: LocalComponente) {
+  const kind = getDetailValue(component, "kind");
+  const sourceKey = getDetailValue(component, "sourceKey");
+  const part = getDetailValue(component, "part");
+
+  if (typeof kind !== "string" || typeof sourceKey !== "string") {
+    return null;
+  }
+
+  return part ? `${kind}:${sourceKey}:${String(part)}` : `${kind}:${sourceKey}`;
+}
+
+function isDerivedComponent(component: LocalComponente) {
+  return getDerivedComponentKey(component) !== null;
+}
+
+function getMachineResourceKey(resource: LocalRecurso) {
+  return (resource.nombreManual ?? "").trim().toLowerCase();
+}
+
+function createManualCostComponent(
+  categoria: LocalComponente["categoria"] = "otros",
+  nombre = "",
+) {
+  return createComponent(categoria, nombre, "manual");
+}
+
+const additionalCostCategories = new Set<LocalComponente["categoria"]>([
+  "energia",
+  "mantenimiento",
+  "alquiler",
+  "insumos_indirectos",
+  "otros",
+]);
+
+const additionalCostCategoryItems = categoriaComponenteCostoItems.filter((item) =>
+  additionalCostCategories.has(item.value),
+);
+
+function createEmployeeDerivedComponent(params: {
+  part: "sueldos" | "cargas";
+  empleadoId: string;
+  empleadoNombre: string;
+  porcentajeAsignacion: number;
+  current?: LocalComponente;
+}) {
+  const sueldoNeto = normalizeNumber(getDetailValue(params.current ?? createComponent(), "sueldoNeto"));
+  const cargasSociales = normalizeNumber(
+    getDetailValue(params.current ?? createComponent(), "cargasSociales"),
+  );
+  const baseMensual = params.part === "sueldos" ? sueldoNeto : cargasSociales;
+  const importeMensual = Number(
+    ((baseMensual * params.porcentajeAsignacion) / 100).toFixed(2),
+  );
+
+  return {
+    id: params.current?.id ?? createLocalId(),
+    categoria: params.part,
+    nombre:
+      params.part === "sueldos"
+        ? `Sueldo neto - ${params.empleadoNombre}`
+        : `Cargas sociales - ${params.empleadoNombre}`,
+    origen: "sugerido" as const,
+    importeMensual,
+    notas: params.current?.notas ?? "",
+    detalle: {
+      kind: "empleado",
+      sourceKey: params.empleadoId,
+      empleadoId: params.empleadoId,
+      empleadoNombre: params.empleadoNombre,
+      part: params.part,
+      sueldoNeto,
+      cargasSociales,
+      porcentajeAsignacion: params.porcentajeAsignacion,
+      moneda: systemCurrencyCode,
+      baseMensual,
+    },
+  } satisfies LocalComponente;
+}
+
+function createMachineDerivedComponent(params: {
+  resourceKey: string;
+  nombreMaquina: string;
+  current?: LocalComponente;
+}) {
+  const valorCompra = normalizeNumber(getDetailValue(params.current ?? createComponent(), "valorCompra"));
+  const valorResidual = normalizeNumber(
+    getDetailValue(params.current ?? createComponent(), "valorResidual"),
+  );
+  const vidaUtilMeses = Math.max(
+    1,
+    normalizeNumber(getDetailValue(params.current ?? createComponent(), "vidaUtilMeses")) || 60,
+  );
+  const importeMensual = Number(
+    (Math.max(0, valorCompra - valorResidual) / vidaUtilMeses).toFixed(2),
+  );
+
+  return {
+    id: params.current?.id ?? createLocalId(),
+    categoria: "amortizacion" as const,
+    nombre: `Amortizacion - ${params.nombreMaquina}`,
+    origen: "sugerido" as const,
+    importeMensual,
+    notas: params.current?.notas ?? "",
+    detalle: {
+      kind: "maquinaria",
+      sourceKey: params.resourceKey,
+      nombreMaquina: params.nombreMaquina,
+      valorCompra,
+      valorResidual,
+      vidaUtilMeses,
+      moneda: systemCurrencyCode,
+    },
+  } satisfies LocalComponente;
+}
+
+function createSupplierDerivedComponent(params: {
+  proveedorId: string;
+  proveedorNombre: string;
+  current?: LocalComponente;
+}) {
+  const importeMensual = normalizeNumber(
+    params.current?.importeMensual ?? getDetailValue(params.current ?? createComponent(), "importeMensual"),
+  );
+
+  return {
+    id: params.current?.id ?? createLocalId(),
+    categoria: "tercerizacion" as const,
+    nombre: `Servicio - ${params.proveedorNombre}`,
+    origen: "sugerido" as const,
+    importeMensual,
+    notas: params.current?.notas ?? "",
+    detalle: {
+      kind: "proveedor",
+      sourceKey: params.proveedorId,
+      proveedorId: params.proveedorId,
+      proveedorNombre: params.proveedorNombre,
+      moneda: systemCurrencyCode,
+    },
+  } satisfies LocalComponente;
+}
+
+function syncDerivedComponents(params: {
+  resources: LocalRecurso[];
+  current: LocalComponente[];
+  empleadoLabelById: Map<string, string>;
+  proveedorLabelById: Map<string, string>;
+}) {
+  const manualComponents = params.current.filter((component) => !isDerivedComponent(component));
+  const existingDerived = new Map(
+    params.current
+      .map((component) => [getDerivedComponentKey(component), component] as const)
+      .filter((entry): entry is [string, LocalComponente] => Boolean(entry[0])),
+  );
+  const derivedComponents: LocalComponente[] = [];
+
+  for (const resource of params.resources) {
+    if (!resource.activo) {
+      continue;
+    }
+
+    if (resource.tipoRecurso === "empleado" && resource.empleadoId) {
+      const empleadoNombre =
+        params.empleadoLabelById.get(resource.empleadoId) ?? "Persona sin nombre";
+      const porcentajeAsignacion = resource.porcentajeAsignacion ?? 0;
+      const sueldoKey = `empleado:${resource.empleadoId}:sueldos`;
+      const cargasKey = `empleado:${resource.empleadoId}:cargas`;
+
+      derivedComponents.push(
+        createEmployeeDerivedComponent({
+          part: "sueldos",
+          empleadoId: resource.empleadoId,
+          empleadoNombre,
+          porcentajeAsignacion,
+          current: existingDerived.get(sueldoKey),
+        }),
+        createEmployeeDerivedComponent({
+          part: "cargas",
+          empleadoId: resource.empleadoId,
+          empleadoNombre,
+          porcentajeAsignacion,
+          current: existingDerived.get(cargasKey),
+        }),
+      );
+      continue;
+    }
+
+    if (resource.tipoRecurso === "maquinaria" && resource.nombreManual?.trim()) {
+      const resourceKey = getMachineResourceKey(resource);
+      const componentKey = `maquinaria:${resourceKey}`;
+      derivedComponents.push(
+        createMachineDerivedComponent({
+          resourceKey,
+          nombreMaquina: resource.nombreManual.trim(),
+          current: existingDerived.get(componentKey),
+        }),
+      );
+      continue;
+    }
+
+    if (resource.tipoRecurso === "proveedor" && resource.proveedorId) {
+      const proveedorNombre =
+        params.proveedorLabelById.get(resource.proveedorId) ?? "Proveedor";
+      const componentKey = `proveedor:${resource.proveedorId}`;
+      derivedComponents.push(
+        createSupplierDerivedComponent({
+          proveedorId: resource.proveedorId,
+          proveedorNombre,
+          current: existingDerived.get(componentKey),
+        }),
+      );
+    }
+  }
+
+  return [...derivedComponents, ...manualComponents];
+}
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: systemCurrencyCode,
+    maximumFractionDigits: 0,
+  }).format(value || 0);
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("es-AR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(value || 0);
+}
+
+function formatPeriodo(periodo: string) {
+  const [year, month] = periodo.split("-");
+
+  if (!year || !month) {
+    return periodo;
+  }
+
+  return `${month}/${year}`;
+}
+
+export function CentroCostoConfigurator({
+  open,
+  onOpenChange,
+  centro,
+  plantas,
+  areas,
+  empleados,
+  proveedores,
+  onConfigured,
+}: CentroCostoConfiguratorProps) {
+  const [periodo, setPeriodo] = React.useState(getCurrentPeriodo());
+  const [activeStep, setActiveStep] = React.useState<WizardStep>("identidad");
+  const [isLoading, startLoading] = React.useTransition();
+  const [isSaving, startSaving] = React.useTransition();
+  const [baseForm, setBaseForm] = React.useState<CentroCostoPayload | null>(null);
+  const [resourcesForm, setResourcesForm] = React.useState<LocalRecurso[]>([]);
+  const [componentsForm, setComponentsForm] = React.useState<LocalComponente[]>([]);
+  const [capacityForm, setCapacityForm] = React.useState<CentroCostoCapacidadPayload>({
+    diasPorMes: 22,
+    horasPorDia: 8,
+    porcentajeNoProductivo: 15,
+    overrideManualCapacidad: undefined,
+  });
+  const [draftTariff, setDraftTariff] = React.useState<number | null>(null);
+  const [publishedTariff, setPublishedTariff] = React.useState<number | null>(null);
+  const [, setWarnings] = React.useState<string[]>([]);
+  const [empleadosDisponibilidad, setEmpleadosDisponibilidad] = React.useState<
+    EmpleadoDisponibilidadCentroCosto[]
+  >([]);
+
+  const plantaLabelById = React.useMemo(
+    () => new Map(plantas.map((planta) => [planta.id, planta.nombre])),
+    [plantas],
+  );
+  const areaLabelById = React.useMemo(
+    () => new Map(areas.map((area) => [area.id, area.nombre])),
+    [areas],
+  );
+  const empleadoLabelById = React.useMemo(
+    () => new Map(empleados.map((empleado) => [empleado.id, empleado.nombreCompleto])),
+    [empleados],
+  );
+  const proveedorLabelById = React.useMemo(
+    () => new Map(proveedores.map((proveedor) => [proveedor.id, proveedor.nombre])),
+    [proveedores],
+  );
+  const disponibilidadEmpleadoById = React.useMemo(
+    () =>
+      new Map(
+        empleadosDisponibilidad.map((disponibilidad) => [
+          disponibilidad.empleadoId,
+          disponibilidad,
+        ]),
+      ),
+    [empleadosDisponibilidad],
+  );
+  const porcentajeAsignadoEnFormularioByEmpleado = React.useMemo(() => {
+    const assigned = new Map<string, number>();
+
+    for (const resource of resourcesForm) {
+      if (
+        resource.tipoRecurso !== "empleado" ||
+        !resource.empleadoId ||
+        !resource.activo
+      ) {
+        continue;
+      }
+
+      assigned.set(
+        resource.empleadoId,
+        (assigned.get(resource.empleadoId) ?? 0) +
+          (resource.porcentajeAsignacion ?? 0),
+      );
+    }
+
+    return assigned;
+  }, [resourcesForm]);
+  const disponibilidadRestanteEmpleadoById = React.useMemo(() => {
+    const availability = new Map<string, number>();
+
+    for (const empleado of empleados) {
+      const disponibilidadBase =
+        disponibilidadEmpleadoById.get(empleado.id)?.porcentajeDisponible ?? 100;
+      const porcentajeAsignado =
+        porcentajeAsignadoEnFormularioByEmpleado.get(empleado.id) ?? 0;
+
+      availability.set(
+        empleado.id,
+        Number(Math.max(0, disponibilidadBase - porcentajeAsignado).toFixed(2)),
+      );
+    }
+
+    return availability;
+  }, [
+    disponibilidadEmpleadoById,
+    empleados,
+    porcentajeAsignadoEnFormularioByEmpleado,
+  ]);
+  const empleadoSeleccionadoEnOtraFila = React.useCallback(
+    (empleadoId: string, resourceId: string) =>
+      resourcesForm.some(
+        (resource) =>
+          resource.id !== resourceId &&
+          resource.tipoRecurso === "empleado" &&
+          resource.empleadoId === empleadoId,
+      ),
+    [resourcesForm],
+  );
+  const updateBaseForm = React.useCallback(
+    (updater: (current: CentroCostoPayload) => CentroCostoPayload) => {
+      setBaseForm((current) => (current ? updater(current) : current));
+    },
+    [],
+  );
+
+  const capacidadTeorica = (capacityForm.diasPorMes || 0) * (capacityForm.horasPorDia || 0);
+  const capacidadPractica =
+    capacityForm.overrideManualCapacidad !== undefined &&
+    Number.isFinite(capacityForm.overrideManualCapacidad)
+      ? capacityForm.overrideManualCapacidad
+      : capacidadTeorica * (1 - (capacityForm.porcentajeNoProductivo || 0) / 100);
+  const costoMensualTotal = componentsForm.reduce(
+    (total, item) => total + (Number(item.importeMensual) || 0),
+    0,
+  );
+  const tarifaProyectada =
+    costoMensualTotal > 0 && capacidadPractica > 0
+      ? costoMensualTotal / capacidadPractica
+      : 0;
+
+  const checklistItems = React.useMemo(() => {
+    if (!baseForm) {
+      return [];
+    }
+
+    const recursosActivos = resourcesForm.filter((resource) => resource.activo);
+    const dedicacionesValidas = resourcesForm
+      .filter((resource) => resource.tipoRecurso === "empleado")
+      .every((resource) => {
+        if (!resource.empleadoId) {
+          return false;
+        }
+
+        const disponibilidadBase =
+          disponibilidadEmpleadoById.get(resource.empleadoId)?.porcentajeDisponible ??
+          100;
+
+        return (
+          Boolean(resource.porcentajeAsignacion) &&
+          (resource.porcentajeAsignacion ?? 0) > 0 &&
+          (resource.porcentajeAsignacion ?? 0) <= disponibilidadBase
+        );
+      });
+    const proveedorListo =
+      baseForm.tipoCentro !== "tercerizado" ||
+      Boolean(baseForm.proveedorDefaultId) ||
+      resourcesForm.some(
+        (resource) =>
+          resource.tipoRecurso === "proveedor" &&
+          Boolean(resource.proveedorId) &&
+          resource.activo,
+      );
+
+    return [
+      {
+        id: "unidad",
+        label: "Unidad de costeo definida",
+        description: "El centro ya sabe si se va a medir por hora, unidad, m2 o kg.",
+        done: baseForm.unidadBaseFutura !== "ninguna",
+      },
+      {
+        id: "recursos",
+        label: "Recursos del sector cargados",
+        description:
+          "Hay al menos una persona, máquina o servicio externo activo para este mes.",
+        done: recursosActivos.length > 0,
+      },
+      {
+        id: "dedicacion",
+        label: "Dedicación de personas validada",
+        description:
+          "Las personas asignadas tienen porcentaje válido y no superan la disponibilidad del mes.",
+        done: dedicacionesValidas,
+      },
+      {
+        id: "costos",
+        label: "Costos mensuales cargados",
+        description:
+          "El costo mensual total del centro es mayor a cero con la información actual.",
+        done: costoMensualTotal > 0,
+      },
+      {
+        id: "capacidad",
+        label: "Capacidad real definida",
+        description:
+          "La capacidad práctica del mes es mayor a cero y permite calcular la tarifa.",
+        done: capacidadPractica > 0,
+      },
+      {
+        id: "proveedor-tercerizado",
+        label: "Servicio externo de referencia",
+        description:
+          "Si el centro es tercerizado, ya tiene un servicio externo asociado como referencia.",
+        done: proveedorListo,
+      },
+    ];
+  }, [
+    baseForm,
+    capacidadPractica,
+    costoMensualTotal,
+    disponibilidadEmpleadoById,
+    resourcesForm,
+  ]);
+  const checklistReady = React.useMemo(
+    () => checklistItems.every((item) => item.done),
+    [checklistItems],
+  );
+
+  const loadConfiguracion = React.useCallback(
+    async (centroId: string, targetPeriodo: string) => {
+      const detail = await getCentroCostoConfiguracion(centroId, targetPeriodo);
+
+      setBaseForm({
+        plantaId: detail.centro.plantaId,
+        areaCostoId: detail.centro.areaCostoId,
+        codigo: detail.centro.codigo,
+        nombre: detail.centro.nombre,
+        descripcion: detail.centro.descripcion,
+        tipoCentro: detail.centro.tipoCentro,
+        categoriaGrafica: detail.centro.categoriaGrafica,
+        imputacionPreferida: detail.centro.imputacionPreferida,
+        unidadBaseFutura: detail.centro.unidadBaseFutura,
+        responsableEmpleadoId: detail.centro.responsableEmpleadoId || undefined,
+        proveedorDefaultId: detail.centro.proveedorDefaultId || undefined,
+        activo: detail.centro.activo,
+      });
+      setResourcesForm(
+        detail.recursos.map((item) => ({
+          id: item.id,
+          tipoRecurso: item.tipoRecurso,
+          empleadoId: item.empleadoId || undefined,
+          proveedorId: item.proveedorId || undefined,
+          nombreManual: item.nombreManual || "",
+          descripcion: item.descripcion || "",
+          porcentajeAsignacion: item.porcentajeAsignacion ?? undefined,
+          activo: item.activo,
+        })),
+      );
+      setComponentsForm(
+        detail.componentesCosto.map((item) => ({
+          id: "id" in item ? item.id : createLocalId(),
+          categoria: item.categoria,
+          nombre: item.nombre,
+          origen: item.origen,
+          importeMensual: item.importeMensual,
+          notas: item.notas ?? "",
+          detalle: item.detalle ?? undefined,
+        })),
+      );
+      setCapacityForm(
+        detail.capacidad
+          ? {
+              diasPorMes: detail.capacidad.diasPorMes,
+              horasPorDia: detail.capacidad.horasPorDia,
+              porcentajeNoProductivo: detail.capacidad.porcentajeNoProductivo,
+              overrideManualCapacidad:
+                detail.capacidad.overrideManualCapacidad ?? undefined,
+            }
+          : {
+              diasPorMes: 22,
+              horasPorDia: 8,
+              porcentajeNoProductivo: 15,
+              overrideManualCapacidad: undefined,
+            },
+      );
+      setDraftTariff(detail.tarifaBorrador?.tarifaCalculada ?? null);
+      setPublishedTariff(detail.tarifaPublicada?.tarifaCalculada ?? null);
+      setWarnings(detail.advertencias);
+      setEmpleadosDisponibilidad(detail.empleadosDisponibilidad);
+    },
+    [],
+  );
+
+  React.useEffect(() => {
+    if (!open || !centro) {
+      return;
+    }
+
+    startLoading(async () => {
+      try {
+        await loadConfiguracion(centro.id, periodo);
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo cargar la configuración del centro.",
+        );
+      }
+    });
+  }, [centro, loadConfiguracion, open, periodo]);
+
+  React.useEffect(() => {
+    if (!open) {
+      setActiveStep("identidad");
+      setPeriodo(getCurrentPeriodo());
+    }
+  }, [open]);
+
+  React.useEffect(() => {
+    if (!baseForm) {
+      return;
+    }
+
+    setComponentsForm((current) => {
+      const next = syncDerivedComponents({
+        resources: resourcesForm,
+        current,
+        empleadoLabelById,
+        proveedorLabelById,
+      });
+
+      if (JSON.stringify(current) === JSON.stringify(next)) {
+        return current;
+      }
+
+      return next;
+    });
+  }, [baseForm, empleadoLabelById, proveedorLabelById, resourcesForm]);
+
+  const handleCopyLastPeriod = () => {
+    if (!centro) {
+      return;
+    }
+
+    startLoading(async () => {
+      try {
+        const history = await getCentroCostoTarifas(centro.id);
+        const referencia = history.find((item) => item.periodo !== periodo);
+
+        if (!referencia) {
+          toast.error("Todavía no hay otro período para copiar.");
+          return;
+        }
+
+        const detail = await getCentroCostoConfiguracion(centro.id, referencia.periodo);
+        setResourcesForm(
+          detail.recursos.map((item) => ({
+            id: createLocalId(),
+            tipoRecurso: item.tipoRecurso,
+            empleadoId: item.empleadoId || undefined,
+            proveedorId: item.proveedorId || undefined,
+            nombreManual: item.nombreManual || "",
+            descripcion: item.descripcion || "",
+            porcentajeAsignacion: item.porcentajeAsignacion ?? undefined,
+            activo: item.activo,
+          })),
+        );
+        setComponentsForm(
+          detail.componentesCosto.map((item) => ({
+            id: createLocalId(),
+            categoria: item.categoria,
+            nombre: item.nombre,
+            origen: item.origen,
+            importeMensual: item.importeMensual,
+            notas: item.notas ?? "",
+            detalle: item.detalle ?? undefined,
+          })),
+        );
+        if (detail.capacidad) {
+          setCapacityForm({
+            diasPorMes: detail.capacidad.diasPorMes,
+            horasPorDia: detail.capacidad.horasPorDia,
+            porcentajeNoProductivo: detail.capacidad.porcentajeNoProductivo,
+            overrideManualCapacidad:
+              detail.capacidad.overrideManualCapacidad ?? undefined,
+          });
+        }
+        toast.success(`Copiamos la configuración de ${formatPeriodo(referencia.periodo)}.`);
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo copiar la configuración anterior.",
+        );
+      }
+    });
+  };
+
+  const persistConfiguration = async () => {
+    if (!centro || !baseForm) {
+      return;
+    }
+
+    await updateCentroCostoConfiguracionBase(centro.id, baseForm);
+    await replaceCentroCostoRecursos(
+      centro.id,
+      periodo,
+      resourcesForm.map((item) => ({
+        tipoRecurso: item.tipoRecurso,
+        empleadoId: item.empleadoId,
+        proveedorId: item.proveedorId,
+        nombreManual: item.nombreManual,
+        descripcion: item.descripcion,
+        porcentajeAsignacion: item.porcentajeAsignacion,
+        activo: item.activo,
+      })),
+    );
+    await replaceCentroCostoComponentes(
+      centro.id,
+      periodo,
+      componentsForm.map((item) => ({
+        categoria: item.categoria,
+        nombre: item.nombre,
+        origen: item.origen,
+        importeMensual: item.importeMensual,
+        notas: item.notas,
+        detalle: item.detalle,
+      })),
+    );
+    await upsertCentroCostoCapacidad(centro.id, periodo, capacityForm);
+  };
+
+  const handleSaveDraft = () => {
+    if (!centro) {
+      return;
+    }
+
+    startSaving(async () => {
+      try {
+        await persistConfiguration();
+        const result = await calcularTarifaCentroCosto(centro.id, periodo);
+        setDraftTariff(result.tarifaBorrador.tarifaCalculada);
+        setWarnings(result.advertencias);
+        await onConfigured();
+        toast.success("Borrador guardado.");
+        await loadConfiguracion(centro.id, periodo);
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "No se pudo guardar el borrador.",
+        );
+      }
+    });
+  };
+
+  const handlePublish = () => {
+    if (!centro) {
+      return;
+    }
+
+    startSaving(async () => {
+      try {
+        await persistConfiguration();
+        const result = await publicarTarifaCentroCosto(centro.id, periodo);
+        setPublishedTariff(result.tarifaCalculada);
+        await onConfigured();
+        toast.success("Tarifa publicada.");
+        await loadConfiguracion(centro.id, periodo);
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "No se pudo publicar la tarifa.",
+        );
+      }
+    });
+  };
+
+  const updateResource = React.useCallback(
+    (resourceId: string, updater: (current: LocalRecurso) => LocalRecurso) => {
+      setResourcesForm((current) =>
+        current.map((item) => (item.id === resourceId ? updater(item) : item)),
+      );
+    },
+    [],
+  );
+
+  const updateComponent = React.useCallback(
+    (componentId: string, updater: (current: LocalComponente) => LocalComponente) => {
+      setComponentsForm((current) =>
+        current.map((item) => (item.id === componentId ? updater(item) : item)),
+      );
+    },
+    [],
+  );
+
+  const employeeCostGroups = React.useMemo(
+    () =>
+      resourcesForm
+        .filter(
+          (resource) =>
+            resource.tipoRecurso === "empleado" && resource.empleadoId && resource.activo,
+        )
+        .map((resource) => {
+          const empleadoId = resource.empleadoId as string;
+          const sueldo = componentsForm.find(
+            (component) =>
+              getDerivedComponentKey(component) === `empleado:${empleadoId}:sueldos`,
+          );
+          const cargas = componentsForm.find(
+            (component) =>
+              getDerivedComponentKey(component) === `empleado:${empleadoId}:cargas`,
+          );
+
+          return {
+            resource,
+            disponibilidad: disponibilidadEmpleadoById.get(empleadoId) ?? null,
+            empleadoNombre: empleadoLabelById.get(empleadoId) ?? "Persona",
+            sueldo,
+            cargas,
+          };
+        }),
+    [componentsForm, disponibilidadEmpleadoById, empleadoLabelById, resourcesForm],
+  );
+
+  const machineCostGroups = React.useMemo(
+    () =>
+      resourcesForm
+        .filter(
+          (resource) =>
+            resource.tipoRecurso === "maquinaria" &&
+            resource.nombreManual?.trim() &&
+            resource.activo,
+        )
+        .map((resource) => {
+          const sourceKey = getMachineResourceKey(resource);
+
+          return {
+            resource,
+            component:
+              componentsForm.find(
+                (component) =>
+                  getDerivedComponentKey(component) === `maquinaria:${sourceKey}`,
+              ) ?? null,
+          };
+        }),
+    [componentsForm, resourcesForm],
+  );
+
+  const supplierCostGroups = React.useMemo(
+    () =>
+      resourcesForm
+        .filter(
+          (resource) =>
+            resource.tipoRecurso === "proveedor" && resource.proveedorId && resource.activo,
+        )
+        .map((resource) => {
+          const proveedorId = resource.proveedorId as string;
+
+          return {
+            resource,
+            proveedorNombre: proveedorLabelById.get(proveedorId) ?? "Proveedor",
+            component:
+              componentsForm.find(
+                (component) =>
+                  getDerivedComponentKey(component) === `proveedor:${proveedorId}`,
+              ) ?? null,
+          };
+        }),
+    [componentsForm, proveedorLabelById, resourcesForm],
+  );
+
+  const manualComponents = React.useMemo(
+    () => componentsForm.filter((component) => !isDerivedComponent(component)),
+    [componentsForm],
+  );
+  const empleadosCosteadosTotal = React.useMemo(
+    () =>
+      employeeCostGroups.reduce(
+        (total, group) =>
+          total + (group.sueldo?.importeMensual ?? 0) + (group.cargas?.importeMensual ?? 0),
+        0,
+      ),
+    [employeeCostGroups],
+  );
+  const maquinariaCosteadaTotal = React.useMemo(
+    () =>
+      machineCostGroups.reduce(
+        (total, group) => total + (group.component?.importeMensual ?? 0),
+        0,
+      ),
+    [machineCostGroups],
+  );
+  const proveedoresCosteadosTotal = React.useMemo(
+    () =>
+      supplierCostGroups.reduce(
+        (total, group) => total + (group.component?.importeMensual ?? 0),
+        0,
+      ),
+    [supplierCostGroups],
+  );
+  const adicionalesCosteadosTotal = React.useMemo(
+    () =>
+      manualComponents.reduce((total, component) => total + (component.importeMensual ?? 0), 0),
+    [manualComponents],
+  );
+
+  if (!centro || !baseForm) {
+    return (
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent className={wizardSheetClassName}>
+          <SheetHeader>
+            <SheetTitle>Configurar costo</SheetTitle>
+            <SheetDescription>Cargando centro de costo...</SheetDescription>
+          </SheetHeader>
+          <div className="flex min-h-40 items-center justify-center">
+            <LoaderCircleIcon className="animate-spin" />
+          </div>
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
+  const renderStepContent = () => {
+    switch (activeStep) {
+      case "identidad":
+        return (
+          <Card className="rounded-2xl border-border/70 shadow-none">
+            <CardHeader>
+              <CardTitle>Ajustes de costeo</CardTitle>
+              <CardDescription>
+                Acá solo ajustás cómo querés usar este centro en el costeo. La
+                identidad del centro ya viene definida desde la pantalla anterior.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-5">
+              <div className="grid gap-3 rounded-2xl border border-border/70 bg-muted/20 p-4 lg:grid-cols-4">
+                <Field>
+                  <p className="text-xs uppercase text-muted-foreground">Centro</p>
+                  <p className="font-medium">{baseForm.codigo}</p>
+                  <p className="text-sm text-muted-foreground">{baseForm.nombre}</p>
+                </Field>
+                <Field>
+                  <p className="text-xs uppercase text-muted-foreground">Ubicación</p>
+                  <p className="font-medium">
+                    {plantaLabelById.get(baseForm.plantaId) ?? centro.plantaNombre}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {areaLabelById.get(baseForm.areaCostoId) ?? centro.areaCostoNombre}
+                  </p>
+                </Field>
+                <Field>
+                  <p className="text-xs uppercase text-muted-foreground">Clasificación</p>
+                  <p className="font-medium">{getTipoCentroLabel(baseForm.tipoCentro)}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {getCategoriaGraficaLabel(baseForm.categoriaGrafica)}
+                  </p>
+                </Field>
+                <div>
+                  <p className="text-xs uppercase text-muted-foreground">Sugerencia</p>
+                  <p className="font-medium">
+                    {getUnidadBaseLabel(
+                      getSuggestedUnidadBase(
+                        baseForm.tipoCentro,
+                        baseForm.categoriaGrafica,
+                      ),
+                    )}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    según el tipo actual del centro
+                  </p>
+                </div>
+              </div>
+
+              <FieldGroup className="grid gap-4 lg:grid-cols-2">
+                <div>
+                  <Field>
+                    <FieldLabel htmlFor="wizard-unidad">Cómo querés medirlo</FieldLabel>
+                    <Select
+                      value={baseForm.unidadBaseFutura}
+                      onValueChange={(value) => {
+                        if (!value) {
+                          return;
+                        }
+
+                        updateBaseForm((current) => ({
+                          ...current,
+                          unidadBaseFutura:
+                            value as CentroCostoPayload["unidadBaseFutura"],
+                        }));
+                      }}
+                    >
+                      <SelectTrigger id="wizard-unidad" className="w-full">
+                        <SelectValue placeholder="Selecciona una unidad">
+                          {(value) =>
+                            typeof value === "string"
+                              ? getUnidadBaseLabel(
+                                  value as CentroCostoPayload["unidadBaseFutura"],
+                                )
+                              : "Selecciona una unidad"
+                          }
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {unidadBaseItems.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    <FieldDescription>
+                      Ejemplo: impresión suele trabajar mejor con hora máquina;
+                      preprensa, con hora hombre.
+                    </FieldDescription>
+                  </Field>
+                </div>
+                <div>
+                  <Field>
+                    <FieldLabel htmlFor="wizard-imputacion">Tipo de costo</FieldLabel>
+                    <Select
+                      value={baseForm.imputacionPreferida}
+                      onValueChange={(value) => {
+                        if (!value) {
+                          return;
+                        }
+
+                        updateBaseForm((current) => ({
+                          ...current,
+                          imputacionPreferida:
+                            value as CentroCostoPayload["imputacionPreferida"],
+                        }));
+                      }}
+                    >
+                      <SelectTrigger id="wizard-imputacion" className="w-full">
+                        <SelectValue placeholder="Selecciona una imputacion">
+                          {(value) =>
+                            typeof value === "string"
+                              ? getImputacionPreferidaLabel(
+                                  value as CentroCostoPayload["imputacionPreferida"],
+                                )
+                              : "Selecciona una imputacion"
+                          }
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {imputacionPreferidaItems.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+              </FieldGroup>
+
+              <FieldGroup className={baseForm.tipoCentro === "tercerizado" ? "grid gap-4 lg:grid-cols-2" : "grid gap-4"}>
+                {baseForm.tipoCentro === "tercerizado" ? (
+                  <Field>
+                    <FieldLabel htmlFor="wizard-proveedor-default">
+                      <span className="inline-flex items-center gap-2">
+                        Servicio externo de referencia
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <button
+                                type="button"
+                                className="inline-flex items-center text-muted-foreground transition-colors hover:text-foreground"
+                                aria-label="Explicación sobre servicio externo de referencia"
+                              >
+                                <InfoIcon className="size-4" />
+                              </button>
+                            }
+                          />
+                          <TooltipContent className="max-w-sm text-pretty" side="left">
+                            Usalo cuando este centro dependa principalmente de un
+                            tercero. Sirve como referencia para procesos hechos
+                            afuera, como barniz UV, troquelado o encuadernación.
+                          </TooltipContent>
+                        </Tooltip>
+                      </span>
+                    </FieldLabel>
+                    <Select
+                      value={baseForm.proveedorDefaultId ?? ""}
+                      onValueChange={(value) => {
+                        if (!value) {
+                          return;
+                        }
+
+                        updateBaseForm((current) => ({
+                          ...current,
+                          proveedorDefaultId: value,
+                        }));
+                      }}
+                    >
+                      <SelectTrigger id="wizard-proveedor-default" className="w-full">
+                        <SelectValue placeholder="Selecciona un servicio externo">
+                          {(value) =>
+                            typeof value === "string"
+                              ? proveedorLabelById.get(value) ?? value
+                              : "Selecciona un servicio externo"
+                          }
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {proveedores.map((proveedor) => (
+                            <SelectItem key={proveedor.id} value={proveedor.id}>
+                              {proveedor.nombre}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    <FieldDescription>
+                      Úsalo como referencia principal si este centro trabaja con un
+                      tercero para resolver parte o todo el proceso.
+                    </FieldDescription>
+                  </Field>
+                ) : null}
+
+                <Field>
+                  <FieldLabel htmlFor="wizard-descripcion">Descripción útil</FieldLabel>
+                  <Textarea
+                    id="wizard-descripcion"
+                    value={baseForm.descripcion ?? ""}
+                    onChange={(event) =>
+                      updateBaseForm((current) => ({
+                        ...current,
+                        descripcion: event.target.value,
+                      }))
+                    }
+                    rows={4}
+                    placeholder="Ejemplo: usar para presupuestos de offset comercial"
+                  />
+                </Field>
+              </FieldGroup>
+            </CardContent>
+          </Card>
+        );
+      case "recursos":
+        return (
+          <Card className="rounded-2xl border-border/70 shadow-none">
+            <CardHeader>
+              <CardTitle>¿Qué usa este sector para trabajar?</CardTitle>
+              <CardDescription>
+                Acá definís los recursos del mes. Las personas llevan porcentaje de
+                dedicación y el sistema después toma eso para pedir su costo del
+                centro sin duplicar asignaciones.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-5">
+              <div className="flex flex-wrap gap-2">
+                {(["empleado", "maquinaria", "proveedor", "gasto_manual"] as const).map(
+                  (tipo) => (
+                    <React.Fragment key={tipo}>
+                      {tipo === "proveedor" ? (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() =>
+                                  setResourcesForm((current) => [
+                                    ...current,
+                                    createResource(tipo),
+                                  ])
+                                }
+                              >
+                                <PlusIcon />
+                                Agregar {getTipoRecursoLabel(tipo)}
+                              </Button>
+                            }
+                          />
+                          <TooltipContent className="max-w-sm text-pretty" side="bottom">
+                            Usá esta opción cuando este centro dependa de un tercero
+                            para producir o completar parte del trabajo. Ejemplos:
+                            barniz UV externo, troquelado, encuadernación o
+                            mantenimiento contratado.
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() =>
+                            setResourcesForm((current) => [...current, createResource(tipo)])
+                          }
+                        >
+                          <PlusIcon />
+                          Agregar {getTipoRecursoLabel(tipo)}
+                        </Button>
+                      )}
+                    </React.Fragment>
+                  ),
+                )}
+              </div>
+
+              {resourcesForm.length === 0 ? (
+                <Empty className="rounded-2xl border border-dashed border-border/70">
+                  <EmptyHeader>
+                    <EmptyTitle>Sin recursos cargados</EmptyTitle>
+                    <EmptyDescription>
+                      Empezá por las personas, la maquinaria o el servicio externo
+                      principal de este sector.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {resourcesForm.map((resource) => (
+                    <Card key={resource.id} className="rounded-2xl border-border/70 shadow-none">
+                      <CardContent className="flex flex-col gap-4 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <Badge variant="outline">
+                            {getTipoRecursoLabel(resource.tipoRecurso)}
+                          </Badge>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setResourcesForm((current) =>
+                                current.filter((item) => item.id !== resource.id),
+                              )
+                            }
+                          >
+                            <Trash2Icon />
+                            Quitar
+                          </Button>
+                        </div>
+
+                        <FieldGroup className="grid gap-4 lg:grid-cols-2">
+                          <Field>
+                            <FieldLabel>Tipo</FieldLabel>
+                            <Select
+                              value={resource.tipoRecurso}
+                              onValueChange={(value) => {
+                                if (!value) {
+                                  return;
+                                }
+
+                                setResourcesForm((current) =>
+                                  current.map((item) =>
+                                    item.id === resource.id
+                                      ? {
+                                          ...item,
+                                          tipoRecurso:
+                                            value as LocalRecurso["tipoRecurso"],
+                                          empleadoId: undefined,
+                                          proveedorId: undefined,
+                                          nombreManual: "",
+                                          porcentajeAsignacion: undefined,
+                                        }
+                                      : item,
+                                  ),
+                                );
+                              }}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Tipo de recurso">
+                                  {(value) =>
+                                    typeof value === "string"
+                                      ? getTipoRecursoLabel(
+                                          value as LocalRecurso["tipoRecurso"],
+                                        )
+                                      : "Tipo de recurso"
+                                  }
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectGroup>
+                                  {tipoRecursoItems.map((item) => (
+                                    <SelectItem key={item.value} value={item.value}>
+                                      {item.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectGroup>
+                              </SelectContent>
+                            </Select>
+                          </Field>
+
+                          {resource.tipoRecurso === "empleado" ? (
+                            <Field>
+                              <FieldLabel>Persona</FieldLabel>
+                              <Select
+                                value={resource.empleadoId ?? ""}
+                                onValueChange={(value) => {
+                                  if (!value) {
+                                    return;
+                                  }
+
+                                  updateResource(resource.id, (current) => ({
+                                    ...current,
+                                    empleadoId: value,
+                                    porcentajeAsignacion:
+                                      current.porcentajeAsignacion !== undefined
+                                        ? Math.min(
+                                            current.porcentajeAsignacion,
+                                            disponibilidadEmpleadoById.get(value)
+                                              ?.porcentajeDisponible ?? 100,
+                                          )
+                                        : undefined,
+                                  }));
+                                }}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Selecciona una persona">
+                                    {(value) =>
+                                      typeof value === "string"
+                                        ? empleadoLabelById.get(value) ?? value
+                                        : "Selecciona una persona"
+                                    }
+                                  </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectGroup>
+                                    {empleados.map((empleado) => (
+                                      <SelectItem
+                                        key={empleado.id}
+                                        value={empleado.id}
+                                        disabled={
+                                          Boolean(
+                                            (disponibilidadEmpleadoById.get(empleado.id) &&
+                                              disponibilidadEmpleadoById.get(empleado.id)!
+                                                .porcentajeDisponible <= 0 &&
+                                              resource.empleadoId !== empleado.id) ||
+                                              empleadoSeleccionadoEnOtraFila(
+                                                empleado.id,
+                                                resource.id,
+                                              ),
+                                          )
+                                        }
+                                      >
+                                        {empleado.nombreCompleto}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectGroup>
+                                </SelectContent>
+                              </Select>
+                              {resource.empleadoId ? (
+                                <FieldDescription>
+                                  Elegí la persona y después definí qué parte de su
+                                  tiempo real se dedica a este centro durante el mes.
+                                </FieldDescription>
+                              ) : null}
+                            </Field>
+                          ) : null}
+
+                          {resource.tipoRecurso === "proveedor" ? (
+                            <Field>
+                              <FieldLabel>Servicio externo del sector</FieldLabel>
+                              <Select
+                                value={resource.proveedorId ?? ""}
+                                onValueChange={(value) => {
+                                  if (!value) {
+                                    return;
+                                  }
+
+                                  setResourcesForm((current) =>
+                                    current.map((item) =>
+                                      item.id === resource.id
+                                        ? { ...item, proveedorId: value }
+                                        : item,
+                                    ),
+                                  );
+                                }}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Selecciona un servicio externo">
+                                    {(value) =>
+                                      typeof value === "string"
+                                        ? proveedorLabelById.get(value) ?? value
+                                        : "Selecciona un servicio externo"
+                                    }
+                                  </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectGroup>
+                                    {proveedores.map((proveedor) => (
+                                      <SelectItem key={proveedor.id} value={proveedor.id}>
+                                        {proveedor.nombre}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectGroup>
+                                </SelectContent>
+                              </Select>
+                              <FieldDescription>
+                                Elegí el tercero que participa en el costo de este
+                                sector durante el mes.
+                              </FieldDescription>
+                            </Field>
+                          ) : null}
+
+                          {(resource.tipoRecurso === "maquinaria" ||
+                            resource.tipoRecurso === "gasto_manual") ? (
+                            <Field>
+                              <FieldLabel>
+                                {resource.tipoRecurso === "maquinaria"
+                                  ? "Nombre de la máquina"
+                                  : "Nombre del apoyo"}
+                              </FieldLabel>
+                              <Input
+                                value={resource.nombreManual ?? ""}
+                                onChange={(event) =>
+                                  setResourcesForm((current) =>
+                                    current.map((item) =>
+                                      item.id === resource.id
+                                        ? { ...item, nombreManual: event.target.value }
+                                        : item,
+                                    ),
+                                  )
+                                }
+                              />
+                            </Field>
+                          ) : null}
+
+                          <Field className="lg:col-span-2">
+                            <FieldLabel>Descripcion</FieldLabel>
+                            <Input
+                              value={resource.descripcion ?? ""}
+                              onChange={(event) =>
+                                setResourcesForm((current) =>
+                                  current.map((item) =>
+                                    item.id === resource.id
+                                      ? { ...item, descripcion: event.target.value }
+                                      : item,
+                                  ),
+                                )
+                              }
+                              placeholder="Ejemplo: operador principal del turno mañana"
+                            />
+                          </Field>
+                        </FieldGroup>
+
+                        {resource.tipoRecurso === "empleado" ? (
+                          <FieldGroup className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                            <Field>
+                              <FieldLabel>% de dedicación al centro</FieldLabel>
+                              <Input
+                                inputMode="decimal"
+                                max={
+                                  resource.empleadoId
+                                    ? (disponibilidadEmpleadoById.get(resource.empleadoId)
+                                        ?.porcentajeDisponible ?? 100)
+                                    : 100
+                                }
+                                placeholder={
+                                  resource.empleadoId
+                                    ? String(
+                                        disponibilidadEmpleadoById.get(resource.empleadoId)
+                                          ?.porcentajeDisponible ?? 100,
+                                      )
+                                    : "100"
+                                }
+                                value={
+                                  resource.porcentajeAsignacion === undefined ||
+                                  resource.porcentajeAsignacion === 0
+                                    ? ""
+                                    : String(resource.porcentajeAsignacion)
+                                }
+                                onChange={(event) =>
+                                  updateResource(resource.id, (current) => {
+                                    if (event.target.value === "") {
+                                      return {
+                                        ...current,
+                                        porcentajeAsignacion: undefined,
+                                      };
+                                    }
+
+                                    const parsedValue = Number(event.target.value);
+                                    const maxAllowed = current.empleadoId
+                                      ? (disponibilidadEmpleadoById.get(current.empleadoId)
+                                          ?.porcentajeDisponible ?? 100)
+                                      : 100;
+
+                                    return {
+                                      ...current,
+                                      porcentajeAsignacion: Number.isFinite(parsedValue)
+                                        ? Math.min(Math.max(parsedValue, 0), maxAllowed)
+                                        : undefined,
+                                    };
+                                  })
+                                }
+                              />
+                              <FieldDescription>
+                                Cargá solo la parte disponible para este mes.
+                                Ejemplo: si trabaja medio tiempo en este sector,
+                                cargá 50.
+                              </FieldDescription>
+                            </Field>
+                            <Field>
+                              <FieldLabel>Disponibilidad del mes</FieldLabel>
+                              <div className="flex min-h-10 items-center gap-2 rounded-xl border border-border/70 px-3 py-2">
+                                {resource.empleadoId ? (
+                                  (() => {
+                                    const disponibilidad = disponibilidadEmpleadoById.get(
+                                      resource.empleadoId,
+                                    );
+                                    const disponibilidadRestante =
+                                      disponibilidadRestanteEmpleadoById.get(
+                                        resource.empleadoId,
+                                      ) ??
+                                      (disponibilidad?.porcentajeDisponible ?? 100);
+
+                                    if (!disponibilidad) {
+                                      return (
+                                        <Badge variant="outline">
+                                          Disponible {formatNumber(disponibilidadRestante)}%
+                                        </Badge>
+                                      );
+                                    }
+
+                                    const colorVariant =
+                                      disponibilidadRestante <= 0
+                                        ? "destructive"
+                                        : disponibilidadRestante <= 30
+                                          ? "secondary"
+                                          : "outline";
+
+                                    return (
+                                      <Tooltip>
+                                        <TooltipTrigger
+                                          render={
+                                            <button
+                                              type="button"
+                                              className="inline-flex items-center"
+                                              aria-label="Ver asignaciones de la persona"
+                                            >
+                                              <Badge variant={colorVariant}>
+                                                Disponible{" "}
+                                                {formatNumber(disponibilidadRestante)}
+                                                %
+                                              </Badge>
+                                            </button>
+                                          }
+                                        />
+                                        <TooltipContent
+                                          className="max-w-sm text-pretty"
+                                          side="left"
+                                        >
+                                          {disponibilidad.asignacionesOtrosCentros.length ===
+                                          0 ? (
+                                            <p>
+                                              Esta persona no tiene otras
+                                              asignaciones activas en{" "}
+                                              {formatPeriodo(periodo)}.
+                                            </p>
+                                          ) : (
+                                            <div className="flex flex-col gap-1">
+                                              <p className="font-medium">
+                                                Usado en otros centros
+                                              </p>
+                                              {disponibilidad.asignacionesOtrosCentros.map(
+                                                (asignacion) => (
+                                                  <p key={asignacion.centroCostoId}>
+                                                    {asignacion.centroCodigo} ·{" "}
+                                                    {asignacion.centroNombre}:{" "}
+                                                    {formatNumber(
+                                                      asignacion.porcentajeAsignacion,
+                                                    )}
+                                                    %
+                                                  </p>
+                                                ),
+                                              )}
+                                              <p className="pt-1 text-xs">
+                                                Restante para este centro en{" "}
+                                                {formatPeriodo(periodo)}:{" "}
+                                                {formatNumber(disponibilidadRestante)}%
+                                              </p>
+                                            </div>
+                                          )}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    );
+                                  })()
+                                ) : (
+                                  <span className="text-sm text-muted-foreground">
+                                    Seleccioná una persona primero
+                                  </span>
+                                )}
+                              </div>
+                            </Field>
+                          </FieldGroup>
+                        ) : null}
+
+                        <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-muted/20 px-4 py-3">
+                          <div>
+                            <p className="text-sm font-medium">Recurso activo</p>
+                            <p className="text-xs text-muted-foreground">
+                              Se tendrá en cuenta al calcular y explicar el centro.
+                            </p>
+                          </div>
+                          <Switch
+                            checked={resource.activo}
+                            onCheckedChange={(checked) =>
+                              setResourcesForm((current) =>
+                                current.map((item) =>
+                                  item.id === resource.id
+                                    ? { ...item, activo: checked }
+                                    : item,
+                                ),
+                              )
+                            }
+                          />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      case "costos":
+        return (
+          <Card className="rounded-2xl border-border/70 shadow-none">
+            <CardHeader>
+              <CardTitle>¿Cuánto te cuesta por mes mantenerlo funcionando?</CardTitle>
+              <CardDescription>
+                El sistema armó esta pantalla según los recursos del paso 2. Los
+                importes se cargan en {systemCurrencyCode} y se recalculan solos
+                cuando cambia la dedicación de las personas o los datos de una
+                máquina.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-5">
+              <div className="rounded-2xl border border-border/70 bg-muted/10 px-4 py-3 text-sm text-muted-foreground">
+                Todos los valores monetarios se cargan en{" "}
+                <span className="font-medium">{systemCurrencyCode}</span>.
+              </div>
+
+              {componentsForm.length === 0 ? (
+                <Empty className="rounded-2xl border border-dashed border-border/70">
+                  <EmptyHeader>
+                    <EmptyTitle>Sin costos cargados</EmptyTitle>
+                    <EmptyDescription>
+                      Empezá por los recursos del paso 2. Después podés sumar
+                      energía, alquiler u otros costos del centro.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {employeeCostGroups.length > 0 ? (
+                    <Card className="rounded-2xl border-border/70 shadow-none">
+                      <CardHeader>
+                        <CardTitle className="text-base">Personas asignadas</CardTitle>
+                        <CardDescription>
+                          Pedimos sueldo neto y cargas sociales por persona. El
+                          sistema prorratea cada monto según el porcentaje del paso
+                          2.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="flex flex-col gap-4">
+                        {employeeCostGroups.map(({ resource, empleadoNombre, sueldo, cargas }) => (
+                          <div
+                            key={resource.id}
+                            className="flex flex-col gap-4 rounded-2xl border border-border/70 p-4"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="font-medium">{empleadoNombre}</p>
+                                <Badge variant="outline">
+                                  {formatNumber(resource.porcentajeAsignacion ?? 0)}%
+                                  imputado al centro
+                                </Badge>
+                              </div>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center text-muted-foreground transition-colors hover:text-foreground"
+                                      aria-label="Ver explicación sobre costo laboral"
+                                    >
+                                      <InfoIcon className="size-4" />
+                                    </button>
+                                  }
+                                />
+                                <TooltipContent className="max-w-sm text-pretty" side="left">
+                                  Cargá el sueldo neto y las cargas sociales del
+                                  mes. El sistema toma solo la parte proporcional
+                                  a este centro según la dedicación configurada.
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+
+                            <FieldGroup className="grid gap-4 lg:grid-cols-2">
+                              <Field>
+                                <FieldLabel>Sueldo neto ({systemCurrencyCode})</FieldLabel>
+                                <Input
+                                  inputMode="decimal"
+                                  placeholder="0"
+                                  value={
+                                    normalizeNumber(
+                                      getDetailValue(sueldo ?? createComponent(), "sueldoNeto"),
+                                    ) === 0
+                                      ? ""
+                                      : String(
+                                          normalizeNumber(
+                                            getDetailValue(
+                                              sueldo ?? createComponent(),
+                                              "sueldoNeto",
+                                            ),
+                                          ),
+                                        )
+                                  }
+                                  onChange={(event) =>
+                                    sueldo
+                                      ? updateComponent(sueldo.id, (current) =>
+                                          createEmployeeDerivedComponent({
+                                            part: "sueldos",
+                                            empleadoId: resource.empleadoId ?? "",
+                                            empleadoNombre,
+                                            porcentajeAsignacion:
+                                              resource.porcentajeAsignacion ?? 0,
+                                            current: {
+                                              ...current,
+                                              detalle: {
+                                                ...(current.detalle ?? {}),
+                                                sueldoNeto:
+                                                  event.target.value === ""
+                                                    ? undefined
+                                                    : Number(event.target.value) || 0,
+                                              },
+                                            },
+                                          }),
+                                        )
+                                      : undefined
+                                  }
+                                />
+                              </Field>
+                              <Field>
+                                <FieldLabel>
+                                  Cargas sociales ({systemCurrencyCode})
+                                </FieldLabel>
+                                <Input
+                                  inputMode="decimal"
+                                  placeholder="0"
+                                  value={
+                                    normalizeNumber(
+                                      getDetailValue(
+                                        cargas ?? createComponent(),
+                                        "cargasSociales",
+                                      ),
+                                    ) === 0
+                                      ? ""
+                                      : String(
+                                          normalizeNumber(
+                                            getDetailValue(
+                                              cargas ?? createComponent(),
+                                              "cargasSociales",
+                                            ),
+                                          ),
+                                        )
+                                  }
+                                  onChange={(event) =>
+                                    cargas
+                                      ? updateComponent(cargas.id, (current) =>
+                                          createEmployeeDerivedComponent({
+                                            part: "cargas",
+                                            empleadoId: resource.empleadoId ?? "",
+                                            empleadoNombre,
+                                            porcentajeAsignacion:
+                                              resource.porcentajeAsignacion ?? 0,
+                                            current: {
+                                              ...current,
+                                              detalle: {
+                                                ...(current.detalle ?? {}),
+                                                cargasSociales:
+                                                  event.target.value === ""
+                                                    ? undefined
+                                                    : Number(event.target.value) || 0,
+                                              },
+                                            },
+                                          }),
+                                        )
+                                      : undefined
+                                  }
+                                />
+                              </Field>
+                            </FieldGroup>
+
+                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted/10 px-4 py-3 text-sm">
+                              <span className="text-muted-foreground">
+                                Base mensual:{" "}
+                                <span className="font-medium text-foreground">
+                                  {formatMoney(
+                                    normalizeNumber(
+                                      getDetailValue(
+                                        sueldo ?? createComponent(),
+                                        "sueldoNeto",
+                                      ),
+                                    ) +
+                                      normalizeNumber(
+                                        getDetailValue(
+                                          cargas ?? createComponent(),
+                                          "cargasSociales",
+                                        ),
+                                      ),
+                                  )}
+                                </span>
+                              </span>
+                              <span className="text-muted-foreground">
+                                Costo imputado:{" "}
+                                <span className="font-medium text-foreground">
+                                  {formatMoney(
+                                    (sueldo?.importeMensual ?? 0) +
+                                      (cargas?.importeMensual ?? 0),
+                                  )}
+                                </span>
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  ) : null}
+
+                  {machineCostGroups.length > 0 ? (
+                    <Card className="rounded-2xl border-border/70 shadow-none">
+                      <CardHeader>
+                        <CardTitle className="text-base">Maquinaria del centro</CardTitle>
+                        <CardDescription>
+                          La amortización se calcula sola a partir del valor de
+                          compra, el residual y la vida útil.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="flex flex-col gap-4">
+                        {machineCostGroups.map(({ resource, component }) =>
+                          component ? (
+                            <div
+                              key={resource.id}
+                              className="flex flex-col gap-4 rounded-2xl border border-border/70 p-4"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="font-medium">{resource.nombreManual}</p>
+                                <Tooltip>
+                                  <TooltipTrigger
+                                    render={
+                                      <button
+                                        type="button"
+                                        className="inline-flex items-center text-muted-foreground transition-colors hover:text-foreground"
+                                        aria-label="Ver explicación sobre amortización"
+                                      >
+                                        <InfoIcon className="size-4" />
+                                      </button>
+                                    }
+                                  />
+                                  <TooltipContent className="max-w-sm text-pretty" side="left">
+                                    Ingresá el valor de compra en{" "}
+                                    {systemCurrencyCode}. El sistema reparte ese
+                                    valor a lo largo de la vida útil para estimar la
+                                    amortización mensual.
+                                  </TooltipContent>
+                                </Tooltip>
+                              </div>
+
+                              <FieldGroup className="grid gap-4 lg:grid-cols-3">
+                                <Field>
+                                  <FieldLabel>Valor de compra ({systemCurrencyCode})</FieldLabel>
+                                  <Input
+                                    inputMode="decimal"
+                                    placeholder="0"
+                                    value={
+                                      normalizeNumber(getDetailValue(component, "valorCompra")) ===
+                                      0
+                                        ? ""
+                                        : String(
+                                            normalizeNumber(
+                                              getDetailValue(component, "valorCompra"),
+                                            ),
+                                          )
+                                    }
+                                    onChange={(event) =>
+                                      updateComponent(component.id, (current) =>
+                                        createMachineDerivedComponent({
+                                          resourceKey: getMachineResourceKey(resource),
+                                          nombreMaquina: resource.nombreManual ?? "Máquina",
+                                          current: {
+                                            ...current,
+                                            detalle: {
+                                              ...(current.detalle ?? {}),
+                                              valorCompra:
+                                                event.target.value === ""
+                                                  ? undefined
+                                                  : Number(event.target.value) || 0,
+                                            },
+                                          },
+                                        }),
+                                      )
+                                    }
+                                  />
+                                </Field>
+                                <Field>
+                                  <FieldLabel>
+                                    Valor residual ({systemCurrencyCode})
+                                  </FieldLabel>
+                                  <Input
+                                    inputMode="decimal"
+                                    placeholder="0"
+                                    value={
+                                      normalizeNumber(
+                                        getDetailValue(component, "valorResidual"),
+                                      ) === 0
+                                        ? ""
+                                        : String(
+                                            normalizeNumber(
+                                              getDetailValue(component, "valorResidual"),
+                                            ),
+                                          )
+                                    }
+                                    onChange={(event) =>
+                                      updateComponent(component.id, (current) =>
+                                        createMachineDerivedComponent({
+                                          resourceKey: getMachineResourceKey(resource),
+                                          nombreMaquina: resource.nombreManual ?? "Máquina",
+                                          current: {
+                                            ...current,
+                                            detalle: {
+                                              ...(current.detalle ?? {}),
+                                              valorResidual:
+                                                event.target.value === ""
+                                                  ? undefined
+                                                  : Number(event.target.value) || 0,
+                                            },
+                                          },
+                                        }),
+                                      )
+                                    }
+                                  />
+                                </Field>
+                                <Field>
+                                  <FieldLabel>Vida útil (meses)</FieldLabel>
+                                  <Input
+                                    inputMode="numeric"
+                                    placeholder="60"
+                                    value={
+                                      normalizeNumber(
+                                        getDetailValue(component, "vidaUtilMeses"),
+                                      ) === 0
+                                        ? ""
+                                        : String(
+                                            normalizeNumber(
+                                              getDetailValue(component, "vidaUtilMeses"),
+                                            ),
+                                          )
+                                    }
+                                    onChange={(event) =>
+                                      updateComponent(component.id, (current) =>
+                                        createMachineDerivedComponent({
+                                          resourceKey: getMachineResourceKey(resource),
+                                          nombreMaquina: resource.nombreManual ?? "Máquina",
+                                          current: {
+                                            ...current,
+                                            detalle: {
+                                              ...(current.detalle ?? {}),
+                                              vidaUtilMeses:
+                                                event.target.value === ""
+                                                  ? undefined
+                                                  : Number(event.target.value) || 1,
+                                            },
+                                          },
+                                        }),
+                                      )
+                                    }
+                                  />
+                                </Field>
+                              </FieldGroup>
+
+                              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted/10 px-4 py-3 text-sm">
+                                <span className="text-muted-foreground">
+                                  Amortización mensual estimada
+                                </span>
+                                <span className="font-medium text-foreground">
+                                  {formatMoney(component.importeMensual)}
+                                </span>
+                              </div>
+                            </div>
+                          ) : null,
+                        )}
+                      </CardContent>
+                    </Card>
+                  ) : null}
+
+                  {supplierCostGroups.length > 0 ? (
+                    <Card className="rounded-2xl border-border/70 shadow-none">
+                      <CardHeader>
+                        <CardTitle className="text-base">Servicios tercerizados</CardTitle>
+                        <CardDescription>
+                          Estos costos vienen de los proveedores asignados al centro.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="flex flex-col gap-4">
+                        {supplierCostGroups.map(({ resource, proveedorNombre, component }) =>
+                          component ? (
+                            <div
+                              key={resource.id}
+                              className="flex flex-col gap-4 rounded-2xl border border-border/70 p-4"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="font-medium">{proveedorNombre}</p>
+                                <Badge variant="outline">Tercerización</Badge>
+                              </div>
+                              <Field>
+                                <FieldLabel>Importe mensual ({systemCurrencyCode})</FieldLabel>
+                                <Input
+                                  inputMode="decimal"
+                                  placeholder="0"
+                                  value={
+                                    component.importeMensual === 0
+                                      ? ""
+                                      : String(component.importeMensual)
+                                  }
+                                  onChange={(event) =>
+                                    updateComponent(component.id, (current) => ({
+                                      ...current,
+                                      importeMensual:
+                                        event.target.value === ""
+                                          ? 0
+                                          : Number(event.target.value) || 0,
+                                      detalle: {
+                                        ...(current.detalle ?? {}),
+                                        importeMensual:
+                                          event.target.value === ""
+                                            ? undefined
+                                            : Number(event.target.value) || 0,
+                                      },
+                                    }))
+                                  }
+                                />
+                                <FieldDescription>
+                                  Si el costo se negocia por m2 o por unidad, acá
+                                  cargá su equivalente mensual de referencia.
+                                </FieldDescription>
+                              </Field>
+                            </div>
+                          ) : null,
+                        )}
+                      </CardContent>
+                    </Card>
+                  ) : null}
+
+                  <Card className="rounded-2xl border-border/70 shadow-none">
+                    <CardHeader>
+                      <CardTitle className="text-base">Otros costos del centro</CardTitle>
+                      <CardDescription>
+                        Acá solo van costos adicionales que no surgen de los
+                        recursos seleccionados en el paso 2.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-4">
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() =>
+                            setComponentsForm((current) => [
+                              ...current,
+                              createManualCostComponent(),
+                            ])
+                          }
+                        >
+                          <PlusIcon />
+                          Agregar costo manual
+                        </Button>
+                      </div>
+
+                      {manualComponents.length === 0 ? (
+                        <Empty className="rounded-2xl border border-dashed border-border/70">
+                          <EmptyHeader>
+                            <EmptyTitle>Sin costos manuales</EmptyTitle>
+                            <EmptyDescription>
+                              Si el centro tiene gastos adicionales, sumalos acá.
+                            </EmptyDescription>
+                          </EmptyHeader>
+                        </Empty>
+                      ) : (
+                        manualComponents.map((component) => (
+                          <Card
+                            key={component.id}
+                            className="rounded-2xl border-border/70 shadow-none"
+                          >
+                            <CardContent className="flex flex-col gap-4 p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <Badge
+                                  variant={
+                                    component.origen === "sugerido"
+                                      ? "secondary"
+                                      : "outline"
+                                  }
+                                >
+                                  {getCategoriaComponenteCostoLabel(component.categoria)}
+                                </Badge>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    setComponentsForm((current) =>
+                                      current.filter((item) => item.id !== component.id),
+                                    )
+                                  }
+                                >
+                                  <Trash2Icon />
+                                  Quitar
+                                </Button>
+                              </div>
+
+                              <FieldGroup className="grid gap-4 lg:grid-cols-3">
+                                <Field>
+                                  <FieldLabel>Categoría</FieldLabel>
+                                  <Select
+                                    value={component.categoria}
+                                    onValueChange={(value) => {
+                                      if (!value) {
+                                        return;
+                                      }
+
+                                      updateComponent(component.id, (current) => ({
+                                        ...current,
+                                        categoria: value as LocalComponente["categoria"],
+                                      }));
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-full">
+                                      <SelectValue placeholder="Categoria">
+                                        {(value) =>
+                                          typeof value === "string"
+                                            ? getCategoriaComponenteCostoLabel(
+                                                value as LocalComponente["categoria"],
+                                              )
+                                            : "Categoria"
+                                        }
+                                      </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectGroup>
+                                        {additionalCostCategoryItems.map((item) => (
+                                          <SelectItem key={item.value} value={item.value}>
+                                            {item.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectGroup>
+                                    </SelectContent>
+                                  </Select>
+                                </Field>
+                                <Field className="lg:col-span-2">
+                                  <FieldLabel>Nombre visible</FieldLabel>
+                                  <Input
+                                    value={component.nombre}
+                                    onChange={(event) =>
+                                      updateComponent(component.id, (current) => ({
+                                        ...current,
+                                        nombre: event.target.value,
+                                      }))
+                                    }
+                                  />
+                                </Field>
+                              </FieldGroup>
+
+                              <FieldGroup className="grid gap-4 lg:grid-cols-3">
+                                <Field>
+                                  <FieldLabel>
+                                    Importe mensual ({systemCurrencyCode})
+                                  </FieldLabel>
+                                  <Input
+                                    inputMode="decimal"
+                                    placeholder="0"
+                                    value={
+                                      component.importeMensual === 0
+                                        ? ""
+                                        : String(component.importeMensual)
+                                    }
+                                    onChange={(event) =>
+                                      updateComponent(component.id, (current) => ({
+                                        ...current,
+                                        importeMensual:
+                                          event.target.value === ""
+                                            ? 0
+                                            : Number(event.target.value) || 0,
+                                      }))
+                                    }
+                                  />
+                                </Field>
+
+                                <Field className="lg:col-span-2">
+                                  <FieldLabel>Notas</FieldLabel>
+                                  <Input
+                                    value={component.notas ?? ""}
+                                    onChange={(event) =>
+                                      updateComponent(component.id, (current) => ({
+                                        ...current,
+                                        notas: event.target.value,
+                                      }))
+                                    }
+                                    placeholder="Opcional"
+                                  />
+                                </Field>
+                              </FieldGroup>
+                            </CardContent>
+                          </Card>
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card className="rounded-2xl border-border/70 shadow-none">
+                    <CardHeader>
+                      <CardTitle className="text-base">Totales del mes</CardTitle>
+                      <CardDescription>
+                        Resumen del costo armado hasta ahora.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-3 lg:grid-cols-2">
+                      <div className="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
+                        <span className="text-sm text-muted-foreground">Empleados</span>
+                        <span className="font-medium">
+                          {formatMoney(empleadosCosteadosTotal)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
+                        <span className="text-sm text-muted-foreground">Maquinaria</span>
+                        <span className="font-medium">
+                          {formatMoney(maquinariaCosteadaTotal)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
+                        <span className="text-sm text-muted-foreground">
+                          Servicios externos
+                        </span>
+                        <span className="font-medium">
+                          {formatMoney(proveedoresCosteadosTotal)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
+                        <span className="text-sm text-muted-foreground">
+                          Otros costos del centro
+                        </span>
+                        <span className="font-medium">
+                          {formatMoney(adicionalesCosteadosTotal)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 lg:col-span-2">
+                        <span className="text-sm font-medium text-muted-foreground">
+                          Total mensual estimado
+                        </span>
+                        <span className="text-lg font-semibold">
+                          {formatMoney(costoMensualTotal)}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      case "capacidad":
+        return (
+          <Card className="rounded-2xl border-border/70 shadow-none">
+            <CardHeader>
+              <CardTitle>¿Cuántas horas reales trabaja al mes?</CardTitle>
+              <CardDescription>
+                No pienses en la capacidad ideal. Cargá la capacidad práctica
+                descontando tiempos muertos, preparación y paradas.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-5">
+              <FieldGroup className="grid gap-4 lg:grid-cols-4">
+                <Field>
+                  <FieldLabel>Días por mes</FieldLabel>
+                  <Input
+                    inputMode="decimal"
+                    value={String(capacityForm.diasPorMes)}
+                    onChange={(event) =>
+                      setCapacityForm((current) => ({
+                        ...current,
+                        diasPorMes: Number(event.target.value) || 0,
+                      }))
+                    }
+                  />
+                  <FieldDescription>Ejemplo: 22</FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel>Horas por día</FieldLabel>
+                  <Input
+                    inputMode="decimal"
+                    value={String(capacityForm.horasPorDia)}
+                    onChange={(event) =>
+                      setCapacityForm((current) => ({
+                        ...current,
+                        horasPorDia: Number(event.target.value) || 0,
+                      }))
+                    }
+                  />
+                  <FieldDescription>Ejemplo: 8</FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel>% no productivo</FieldLabel>
+                  <Input
+                    inputMode="decimal"
+                    value={String(capacityForm.porcentajeNoProductivo)}
+                    onChange={(event) =>
+                      setCapacityForm((current) => ({
+                        ...current,
+                        porcentajeNoProductivo: Number(event.target.value) || 0,
+                      }))
+                    }
+                  />
+                  <FieldDescription>
+                    Incluí preparación, limpieza y paradas.
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel>Capacidad manual</FieldLabel>
+                  <Input
+                    inputMode="decimal"
+                    value={
+                      capacityForm.overrideManualCapacidad === undefined
+                        ? ""
+                        : String(capacityForm.overrideManualCapacidad)
+                    }
+                    onChange={(event) =>
+                      setCapacityForm((current) => ({
+                        ...current,
+                        overrideManualCapacidad:
+                          event.target.value === ""
+                            ? undefined
+                            : Number(event.target.value) || 0,
+                      }))
+                    }
+                  />
+                  <FieldDescription>
+                    Opcional: usala si ya conocés la capacidad real del mes.
+                  </FieldDescription>
+                </Field>
+              </FieldGroup>
+
+              <div className="grid gap-4 lg:grid-cols-3">
+                <Card className="rounded-2xl border-border/70 shadow-none">
+                  <CardHeader>
+                    <CardTitle className="text-base">Horas teóricas</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-semibold">
+                      {formatNumber(capacidadTeorica)}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="rounded-2xl border-border/70 shadow-none">
+                  <CardHeader>
+                    <CardTitle className="text-base">Horas prácticas</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-semibold">
+                      {formatNumber(capacidadPractica)}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="rounded-2xl border-border/70 shadow-none">
+                  <CardHeader>
+                    <CardTitle className="text-base">Unidad elegida</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-semibold">
+                      {getUnidadBaseLabel(baseForm.unidadBaseFutura)}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      case "resultado":
+        return (
+          <div className="flex flex-col gap-5">
+            <Card className="rounded-2xl border-border/70 shadow-none">
+              <CardHeader>
+                <CardTitle>Resultado estimado</CardTitle>
+                <CardDescription>
+                  Este resumen te muestra qué tarifa podría usar el sistema si
+                  publicás este período.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4 lg:grid-cols-3">
+                <div className="rounded-2xl border border-border/70 p-4">
+                  <p className="text-xs uppercase text-muted-foreground">
+                    Costo mensual total
+                  </p>
+                  <p className="text-3xl font-semibold">
+                    {formatMoney(costoMensualTotal)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border/70 p-4">
+                  <p className="text-xs uppercase text-muted-foreground">
+                    Capacidad real
+                  </p>
+                  <p className="text-3xl font-semibold">
+                    {formatNumber(capacidadPractica)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border/70 p-4">
+                  <p className="text-xs uppercase text-muted-foreground">
+                    Tarifa calculada
+                  </p>
+                  <p className="text-3xl font-semibold">
+                    {formatMoney(tarifaProyectada)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    por {getUnidadBaseLabel(baseForm.unidadBaseFutura)}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-2xl border-border/70 shadow-none">
+              <CardHeader>
+                <CardTitle>Checklist</CardTitle>
+                <CardDescription>
+                  Verificación rápida de lo necesario para guardar y publicar este
+                  período.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                {checklistItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-start gap-3 rounded-2xl border border-border/70 px-4 py-3"
+                  >
+                    <div
+                      className={
+                        item.done
+                          ? "flex size-8 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-700"
+                          : "flex size-8 items-center justify-center rounded-full bg-amber-500/10 text-amber-700"
+                      }
+                    >
+                      {item.done ? <CheckIcon /> : <CircleAlertIcon />}
+                    </div>
+                    <div className="flex flex-1 flex-col">
+                      <p className="text-sm font-medium">{item.label}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {item.description}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                <div
+                  className={
+                    checklistReady
+                      ? "rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+                      : "rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+                  }
+                >
+                  {checklistReady
+                    ? "El centro ya tiene lo necesario para guardar un borrador y publicar la tarifa."
+                    : "Todavía faltan algunos puntos para publicar con seguridad este período."}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-2xl border-border/70 shadow-none">
+              <CardHeader>
+                <CardTitle>Historial visible</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-2xl border border-border/70 p-4">
+                  <p className="text-xs uppercase text-muted-foreground">
+                    Último borrador del período
+                  </p>
+                  <p className="text-2xl font-semibold">
+                    {draftTariff === null ? "Sin calcular" : formatMoney(draftTariff)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border/70 p-4">
+                  <p className="text-xs uppercase text-muted-foreground">
+                    Última tarifa publicada
+                  </p>
+                  <p className="text-2xl font-semibold">
+                    {publishedTariff === null
+                      ? "Sin publicar"
+                      : formatMoney(publishedTariff)}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+    }
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className={wizardSheetClassName}>
+        <SheetHeader className="border-b border-border/70">
+          <SheetTitle>Configurar costo de {centro.nombre}</SheetTitle>
+          <SheetDescription>
+            Vamos a ayudarte a estimar el costo del sector {centro.codigo} para un
+            mes de vigencia concreto, sin pedirte que pienses como contador.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="flex flex-col gap-6 p-4">
+          <div className="flex flex-col gap-4 rounded-2xl border border-border/70 bg-muted/10 p-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Mes de vigencia</span>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          className="inline-flex items-center text-muted-foreground transition-colors hover:text-foreground"
+                          aria-label="Explicación sobre el mes de vigencia"
+                        >
+                          <InfoIcon className="size-4" />
+                        </button>
+                      }
+                    />
+                    <TooltipContent className="max-w-sm text-pretty" side="left">
+                      Es una foto mensual de costos. Si después no publicás un mes más
+                      nuevo, el sistema sigue usando la última tarifa publicada como
+                      referencia. Solo necesitás crear otro mes cuando cambian los
+                      costos o querés guardar un histórico distinto.
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    type="month"
+                    className="w-full sm:w-44"
+                    value={periodo}
+                    onChange={(event) => setPeriodo(event.target.value)}
+                    aria-label="Mes de vigencia"
+                  />
+                  <Button type="button" variant="outline" onClick={handleCopyLastPeriod}>
+                    <CopyIcon />
+                    Copiar mes anterior
+                  </Button>
+                </div>
+              </div>
+              <Badge variant="outline">Activo {formatPeriodo(periodo)}</Badge>
+            </div>
+
+            <Tabs value={activeStep} onValueChange={(value) => setActiveStep(value as WizardStep)}>
+              <TabsList className="h-auto w-full flex-wrap justify-start gap-1 rounded-xl border border-sidebar-border/20 bg-sidebar/8 p-1">
+                <TabsTrigger value="identidad">1. Ajustes</TabsTrigger>
+                <TabsTrigger value="recursos">2. Recursos</TabsTrigger>
+                <TabsTrigger value="costos">3. Costos</TabsTrigger>
+                <TabsTrigger value="capacidad">4. Capacidad</TabsTrigger>
+                <TabsTrigger value="resultado">5. Resultado</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
+          {isLoading ? (
+            <div className="flex min-h-56 items-center justify-center">
+              <LoaderCircleIcon className="animate-spin" />
+            </div>
+          ) : (
+            renderStepContent()
+          )}
+        </div>
+
+        <SheetFooter className="border-t border-border/70">
+          <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              {activeStep !== "identidad" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const steps: WizardStep[] = [
+                      "identidad",
+                      "recursos",
+                      "costos",
+                      "capacidad",
+                      "resultado",
+                    ];
+                    const currentIndex = steps.indexOf(activeStep);
+                    setActiveStep(steps[Math.max(currentIndex - 1, 0)]);
+                  }}
+                >
+                  Paso anterior
+                </Button>
+              ) : null}
+              {activeStep !== "resultado" ? (
+                <Button
+                  type="button"
+                  variant="brand"
+                  onClick={() => {
+                    const steps: WizardStep[] = [
+                      "identidad",
+                      "recursos",
+                      "costos",
+                      "capacidad",
+                      "resultado",
+                    ];
+                    const currentIndex = steps.indexOf(activeStep);
+                    setActiveStep(steps[Math.min(currentIndex + 1, steps.length - 1)]);
+                  }}
+                >
+                  Siguiente paso
+                </Button>
+              ) : null}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleSaveDraft}
+                disabled={isSaving}
+              >
+                {isSaving ? <LoaderCircleIcon className="animate-spin" /> : <SaveIcon />}
+                Guardar borrador
+              </Button>
+              <Button
+                type="button"
+                variant="brand"
+                onClick={handlePublish}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <LoaderCircleIcon className="animate-spin" />
+                ) : (
+                  <SparklesIcon />
+                )}
+                Publicar tarifa
+              </Button>
+              <Button
+                type="button"
+                variant="sidebar"
+                onClick={async () => {
+                  if (!centro) {
+                    return;
+                  }
+
+                  startSaving(async () => {
+                    try {
+                      await persistConfiguration();
+                      const result = await calcularTarifaCentroCosto(centro.id, periodo);
+                      setDraftTariff(result.tarifaBorrador.tarifaCalculada);
+                      setWarnings(result.advertencias);
+                      toast.success("Tarifa recalculada.");
+                    } catch (error) {
+                      toast.error(
+                        error instanceof Error
+                          ? error.message
+                          : "No se pudo recalcular la tarifa.",
+                      );
+                    }
+                  });
+                }}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <LoaderCircleIcon className="animate-spin" />
+                ) : (
+                  <CalculatorIcon />
+                )}
+                Recalcular
+              </Button>
+            </div>
+          </div>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+}

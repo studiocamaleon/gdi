@@ -19,8 +19,11 @@ let ClientesService = class ClientesService {
     constructor(prisma) {
         this.prisma = prisma;
     }
-    async findAll() {
+    async findAll(auth) {
         const clientes = await this.prisma.cliente.findMany({
+            where: {
+                tenantId: auth.tenantId,
+            },
             include: {
                 contactos: {
                     orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
@@ -35,14 +38,15 @@ let ClientesService = class ClientesService {
         });
         return clientes.map((cliente) => this.toResponse(cliente));
     }
-    async findOne(id) {
-        const cliente = await this.findClienteOrThrow(id, this.prisma);
+    async findOne(auth, id) {
+        const cliente = await this.findClienteOrThrow(auth, id, this.prisma);
         return this.toResponse(cliente);
     }
-    async create(payload) {
+    async create(auth, payload) {
         const normalized = this.normalizePayload(payload);
         const cliente = await this.prisma.cliente.create({
             data: {
+                tenantId: auth.tenantId,
                 nombre: normalized.nombre,
                 razonSocial: normalized.razonSocial,
                 emailPrincipal: normalized.email,
@@ -51,6 +55,7 @@ let ClientesService = class ClientesService {
                 paisCodigo: normalized.pais,
                 contactos: {
                     create: normalized.contactos.map((contacto) => ({
+                        tenantId: auth.tenantId,
                         nombre: contacto.nombre,
                         cargo: contacto.cargo,
                         email: contacto.email,
@@ -61,6 +66,7 @@ let ClientesService = class ClientesService {
                 },
                 direcciones: {
                     create: normalized.direcciones.map((direccion) => ({
+                        tenantId: auth.tenantId,
                         descripcion: direccion.descripcion,
                         paisCodigo: direccion.pais,
                         codigoPostal: direccion.codigoPostal,
@@ -79,10 +85,10 @@ let ClientesService = class ClientesService {
         });
         return this.toResponse(cliente);
     }
-    async update(id, payload) {
+    async update(auth, id, payload) {
         const normalized = this.normalizePayload(payload);
         return this.prisma.$transaction(async (tx) => {
-            await this.findClienteOrThrow(id, tx);
+            await this.findClienteOrThrow(auth, id, tx);
             await tx.cliente.update({
                 where: { id },
                 data: {
@@ -95,14 +101,15 @@ let ClientesService = class ClientesService {
                 },
             });
             await tx.clienteContacto.deleteMany({
-                where: { clienteId: id },
+                where: { clienteId: id, tenantId: auth.tenantId },
             });
             await tx.clienteDireccion.deleteMany({
-                where: { clienteId: id },
+                where: { clienteId: id, tenantId: auth.tenantId },
             });
             if (normalized.contactos.length > 0) {
                 await tx.clienteContacto.createMany({
                     data: normalized.contactos.map((contacto) => ({
+                        tenantId: auth.tenantId,
                         clienteId: id,
                         nombre: contacto.nombre,
                         cargo: contacto.cargo,
@@ -116,6 +123,7 @@ let ClientesService = class ClientesService {
             if (normalized.direcciones.length > 0) {
                 await tx.clienteDireccion.createMany({
                     data: normalized.direcciones.map((direccion) => ({
+                        tenantId: auth.tenantId,
                         clienteId: id,
                         descripcion: direccion.descripcion,
                         paisCodigo: direccion.pais,
@@ -128,19 +136,22 @@ let ClientesService = class ClientesService {
                     })),
                 });
             }
-            const cliente = await this.findClienteOrThrow(id, tx);
+            const cliente = await this.findClienteOrThrow(auth, id, tx);
             return this.toResponse(cliente);
         });
     }
-    async remove(id) {
-        await this.findClienteOrThrow(id, this.prisma);
+    async remove(auth, id) {
+        await this.findClienteOrThrow(auth, id, this.prisma);
         await this.prisma.cliente.delete({
             where: { id },
         });
     }
-    async findClienteOrThrow(id, db) {
-        const cliente = await db.cliente.findUnique({
-            where: { id },
+    async findClienteOrThrow(auth, id, db) {
+        const cliente = await db.cliente.findFirst({
+            where: {
+                id,
+                tenantId: auth.tenantId,
+            },
             include: {
                 contactos: {
                     orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
@@ -158,6 +169,7 @@ let ClientesService = class ClientesService {
     normalizePayload(payload) {
         return {
             ...payload,
+            nombre: payload.nombre.trim(),
             razonSocial: payload.razonSocial?.trim() || null,
             email: payload.email.trim().toLowerCase(),
             pais: payload.pais.trim().toUpperCase(),

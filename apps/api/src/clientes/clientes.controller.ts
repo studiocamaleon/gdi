@@ -8,36 +8,45 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
+import { CurrentSession } from '../auth/current-auth.decorator';
 import { UpsertClienteDto } from './dto/upsert-cliente.dto';
 import { ClientesService } from './clientes.service';
+import type { CurrentAuth } from '../auth/auth.types';
 
 @Controller('clientes')
 export class ClientesController {
   constructor(private readonly clientesService: ClientesService) {}
 
   @Get()
-  findAll() {
-    return this.clientesService.findAll();
+  findAll(@CurrentSession() auth: CurrentAuth) {
+    return this.clientesService.findAll(auth);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.clientesService.findOne(id);
+  findOne(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    return this.clientesService.findOne(auth, id);
   }
 
   @Post()
-  create(@Body() payload: UpsertClienteDto) {
-    return this.clientesService.create(payload);
+  create(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: UpsertClienteDto,
+  ) {
+    return this.clientesService.create(auth, payload);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() payload: UpsertClienteDto) {
-    return this.clientesService.update(id, payload);
+  update(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: UpsertClienteDto,
+  ) {
+    return this.clientesService.update(auth, id, payload);
   }
 
   @Delete(':id')
   @HttpCode(204)
-  async remove(@Param('id') id: string) {
-    await this.clientesService.remove(id);
+  async remove(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    await this.clientesService.remove(auth, id);
   }
 }

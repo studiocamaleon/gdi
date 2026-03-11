@@ -12,23 +12,38 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.EmpleadosService = void 0;
 const common_1 = require("@nestjs/common");
 const client_1 = require("@prisma/client");
+const auth_service_1 = require("../auth/auth.service");
 const prisma_service_1 = require("../prisma/prisma.service");
 const comision_dto_1 = require("./dto/comision.dto");
 const direccion_dto_1 = require("./dto/direccion.dto");
 const upsert_empleado_dto_1 = require("./dto/upsert-empleado.dto");
 let EmpleadosService = class EmpleadosService {
     prisma;
-    constructor(prisma) {
+    authService;
+    constructor(prisma, authService) {
         this.prisma = prisma;
+        this.authService = authService;
     }
-    async findAll() {
+    async findAll(auth) {
         const empleados = await this.prisma.empleado.findMany({
+            where: {
+                tenantId: auth.tenantId,
+            },
             include: {
                 direcciones: {
                     orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
                 },
                 comisiones: {
                     orderBy: { createdAt: 'asc' },
+                },
+                user: {
+                    include: {
+                        memberships: {
+                            where: {
+                                tenantId: auth.tenantId,
+                            },
+                        },
+                    },
                 },
             },
             orderBy: {
@@ -37,14 +52,15 @@ let EmpleadosService = class EmpleadosService {
         });
         return empleados.map((empleado) => this.toResponse(empleado));
     }
-    async findOne(id) {
-        const empleado = await this.findEmpleadoOrThrow(id, this.prisma);
+    async findOne(auth, id) {
+        const empleado = await this.findEmpleadoOrThrow(auth, id, this.prisma);
         return this.toResponse(empleado);
     }
-    async create(payload) {
+    async create(auth, payload) {
         const normalized = this.normalizePayload(payload);
         const empleado = await this.prisma.empleado.create({
             data: {
+                tenantId: auth.tenantId,
                 nombreCompleto: normalized.nombreCompleto,
                 emailPrincipal: normalized.email,
                 telefonoCodigo: normalized.telefonoCodigo,
@@ -54,12 +70,10 @@ let EmpleadosService = class EmpleadosService {
                 sexo: normalized.sexo,
                 fechaIngreso: normalized.fechaIngreso,
                 fechaNacimiento: normalized.fechaNacimiento,
-                usuarioSistema: normalized.usuarioSistema,
-                emailAcceso: normalized.emailAcceso,
-                rolSistema: normalized.rolSistema,
                 comisionesHabilitadas: normalized.comisionesHabilitadas,
                 direcciones: {
                     create: normalized.direcciones.map((direccion) => ({
+                        tenantId: auth.tenantId,
                         descripcion: direccion.descripcion,
                         paisCodigo: direccion.pais,
                         codigoPostal: direccion.codigoPostal,
@@ -72,6 +86,7 @@ let EmpleadosService = class EmpleadosService {
                 },
                 comisiones: {
                     create: normalized.comisiones.map((comision) => ({
+                        tenantId: auth.tenantId,
                         descripcion: comision.descripcion,
                         tipo: this.toPrismaTipoComision(comision.tipo),
                         valor: new client_1.Prisma.Decimal(comision.valor),
@@ -81,14 +96,23 @@ let EmpleadosService = class EmpleadosService {
             include: {
                 direcciones: true,
                 comisiones: true,
+                user: {
+                    include: {
+                        memberships: {
+                            where: { tenantId: auth.tenantId },
+                        },
+                    },
+                },
             },
         });
-        return this.toResponse(empleado);
+        await this.syncAccess(auth, empleado.id, normalized);
+        const fresh = await this.findEmpleadoOrThrow(auth, empleado.id, this.prisma);
+        return this.toResponse(fresh);
     }
-    async update(id, payload) {
+    async update(auth, id, payload) {
         const normalized = this.normalizePayload(payload);
-        return this.prisma.$transaction(async (tx) => {
-            await this.findEmpleadoOrThrow(id, tx);
+        await this.prisma.$transaction(async (tx) => {
+            await this.findEmpleadoOrThrow(auth, id, tx);
             await tx.empleado.update({
                 where: { id },
                 data: {
@@ -101,21 +125,19 @@ let EmpleadosService = class EmpleadosService {
                     sexo: normalized.sexo,
                     fechaIngreso: normalized.fechaIngreso,
                     fechaNacimiento: normalized.fechaNacimiento,
-                    usuarioSistema: normalized.usuarioSistema,
-                    emailAcceso: normalized.emailAcceso,
-                    rolSistema: normalized.rolSistema,
                     comisionesHabilitadas: normalized.comisionesHabilitadas,
                 },
             });
             await tx.empleadoDireccion.deleteMany({
-                where: { empleadoId: id },
+                where: { empleadoId: id, tenantId: auth.tenantId },
             });
             await tx.empleadoComision.deleteMany({
-                where: { empleadoId: id },
+                where: { empleadoId: id, tenantId: auth.tenantId },
             });
             if (normalized.direcciones.length > 0) {
                 await tx.empleadoDireccion.createMany({
                     data: normalized.direcciones.map((direccion) => ({
+                        tenantId: auth.tenantId,
                         empleadoId: id,
                         descripcion: direccion.descripcion,
                         paisCodigo: direccion.pais,
@@ -131,6 +153,7 @@ let EmpleadosService = class EmpleadosService {
             if (normalized.comisiones.length > 0) {
                 await tx.empleadoComision.createMany({
                     data: normalized.comisiones.map((comision) => ({
+                        tenantId: auth.tenantId,
                         empleadoId: id,
                         descripcion: comision.descripcion,
                         tipo: this.toPrismaTipoComision(comision.tipo),
@@ -138,25 +161,50 @@ let EmpleadosService = class EmpleadosService {
                     })),
                 });
             }
-            const empleado = await this.findEmpleadoOrThrow(id, tx);
-            return this.toResponse(empleado);
         });
+        await this.syncAccess(auth, id, normalized);
+        const empleado = await this.findEmpleadoOrThrow(auth, id, this.prisma);
+        return this.toResponse(empleado);
     }
-    async remove(id) {
-        await this.findEmpleadoOrThrow(id, this.prisma);
+    async invitarAcceso(auth, id, payload) {
+        await this.findEmpleadoOrThrow(auth, id, this.prisma);
+        return this.authService.provisionEmployeeAccess(auth, id, payload.email, this.toPrismaRol(payload.rolSistema));
+    }
+    async remove(auth, id) {
+        await this.findEmpleadoOrThrow(auth, id, this.prisma);
+        await this.authService.revokeEmployeeAccess(auth, id);
         await this.prisma.empleado.delete({
             where: { id },
         });
     }
-    async findEmpleadoOrThrow(id, db) {
-        const empleado = await db.empleado.findUnique({
-            where: { id },
+    async syncAccess(auth, empleadoId, normalized) {
+        if (!normalized.usuarioSistema ||
+            !normalized.emailAcceso ||
+            !normalized.rolSistema) {
+            await this.authService.revokeEmployeeAccess(auth, empleadoId);
+            return;
+        }
+        await this.authService.provisionEmployeeAccess(auth, empleadoId, normalized.emailAcceso, normalized.rolSistema);
+    }
+    async findEmpleadoOrThrow(auth, id, db) {
+        const empleado = await db.empleado.findFirst({
+            where: {
+                id,
+                tenantId: auth.tenantId,
+            },
             include: {
                 direcciones: {
                     orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
                 },
                 comisiones: {
                     orderBy: { createdAt: 'asc' },
+                },
+                user: {
+                    include: {
+                        memberships: {
+                            where: { tenantId: auth.tenantId },
+                        },
+                    },
                 },
             },
         });
@@ -179,6 +227,7 @@ let EmpleadosService = class EmpleadosService {
             fechaNacimiento: payload.fechaNacimiento
                 ? new Date(payload.fechaNacimiento)
                 : null,
+            usuarioSistema: payload.usuarioSistema,
             emailAcceso: payload.usuarioSistema
                 ? payload.emailAcceso?.trim().toLowerCase() || null
                 : null,
@@ -221,6 +270,7 @@ let EmpleadosService = class EmpleadosService {
     }
     toResponse(empleado) {
         const direccionPrincipal = empleado.direcciones.find((direccion) => direccion.principal) ?? null;
+        const membership = empleado.user?.memberships[0] ?? null;
         return {
             id: empleado.id,
             nombreCompleto: empleado.nombreCompleto,
@@ -234,11 +284,9 @@ let EmpleadosService = class EmpleadosService {
             fechaNacimiento: empleado.fechaNacimiento
                 ? this.toDateInput(empleado.fechaNacimiento)
                 : '',
-            usuarioSistema: empleado.usuarioSistema,
-            emailAcceso: empleado.emailAcceso ?? '',
-            rolSistema: empleado.rolSistema
-                ? this.fromPrismaRol(empleado.rolSistema)
-                : '',
+            usuarioSistema: Boolean(empleado.user && membership?.activa),
+            emailAcceso: empleado.user?.email ?? '',
+            rolSistema: membership ? this.fromPrismaRol(membership.rol) : '',
             comisionesHabilitadas: empleado.comisionesHabilitadas,
             ciudad: direccionPrincipal?.ciudad ?? '',
             direcciones: empleado.direcciones.map((direccion) => ({
@@ -331,6 +379,7 @@ let EmpleadosService = class EmpleadosService {
 exports.EmpleadosService = EmpleadosService;
 exports.EmpleadosService = EmpleadosService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        auth_service_1.AuthService])
 ], EmpleadosService);
 //# sourceMappingURL=empleados.service.js.map

@@ -1,10 +1,11 @@
+import { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { TipoDireccionDto } from './dto/direccion.dto';
 import { UpsertProveedorDto } from './dto/upsert-proveedor.dto';
 export declare class ProveedoresService {
     private readonly prisma;
     constructor(prisma: PrismaService);
-    findAll(): Promise<{
+    findAll(auth: CurrentAuth): Promise<{
         id: string;
         nombre: string;
         razonSocial: string;
@@ -35,7 +36,7 @@ export declare class ProveedoresService {
             principal: boolean;
         }[];
     }[]>;
-    findOne(id: string): Promise<{
+    findOne(auth: CurrentAuth, id: string): Promise<{
         id: string;
         nombre: string;
         razonSocial: string;
@@ -66,7 +67,7 @@ export declare class ProveedoresService {
             principal: boolean;
         }[];
     }>;
-    create(payload: UpsertProveedorDto): Promise<{
+    create(auth: CurrentAuth, payload: UpsertProveedorDto): Promise<{
         id: string;
         nombre: string;
         razonSocial: string;
@@ -97,7 +98,7 @@ export declare class ProveedoresService {
             principal: boolean;
         }[];
     }>;
-    update(id: string, payload: UpsertProveedorDto): Promise<{
+    update(auth: CurrentAuth, id: string, payload: UpsertProveedorDto): Promise<{
         id: string;
         nombre: string;
         razonSocial: string;
@@ -128,7 +129,7 @@ export declare class ProveedoresService {
             principal: boolean;
         }[];
     }>;
-    remove(id: string): Promise<void>;
+    remove(auth: CurrentAuth, id: string): Promise<void>;
     private findProveedorOrThrow;
     private normalizePayload;
     private normalizeContactos;

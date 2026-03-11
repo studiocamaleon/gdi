@@ -1,11 +1,15 @@
+import { AuthService } from '../auth/auth.service';
+import { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { TipoComisionDto } from './dto/comision.dto';
 import { TipoDireccionDto } from './dto/direccion.dto';
+import { InvitarAccesoDto } from './dto/invitar-acceso.dto';
 import { UpsertEmpleadoDto } from './dto/upsert-empleado.dto';
 export declare class EmpleadosService {
     private readonly prisma;
-    constructor(prisma: PrismaService);
-    findAll(): Promise<{
+    private readonly authService;
+    constructor(prisma: PrismaService, authService: AuthService);
+    findAll(auth: CurrentAuth): Promise<{
         id: string;
         nombreCompleto: string;
         email: string;
@@ -39,7 +43,7 @@ export declare class EmpleadosService {
             valor: string;
         }[];
     }[]>;
-    findOne(id: string): Promise<{
+    findOne(auth: CurrentAuth, id: string): Promise<{
         id: string;
         nombreCompleto: string;
         email: string;
@@ -73,7 +77,7 @@ export declare class EmpleadosService {
             valor: string;
         }[];
     }>;
-    create(payload: UpsertEmpleadoDto): Promise<{
+    create(auth: CurrentAuth, payload: UpsertEmpleadoDto): Promise<{
         id: string;
         nombreCompleto: string;
         email: string;
@@ -107,7 +111,7 @@ export declare class EmpleadosService {
             valor: string;
         }[];
     }>;
-    update(id: string, payload: UpsertEmpleadoDto): Promise<{
+    update(auth: CurrentAuth, id: string, payload: UpsertEmpleadoDto): Promise<{
         id: string;
         nombreCompleto: string;
         email: string;
@@ -141,7 +145,15 @@ export declare class EmpleadosService {
             valor: string;
         }[];
     }>;
-    remove(id: string): Promise<void>;
+    invitarAcceso(auth: CurrentAuth, id: string, payload: InvitarAccesoDto): Promise<{
+        invitationState: string;
+        invitationUrl: null;
+    } | {
+        invitationState: string;
+        invitationUrl: string;
+    }>;
+    remove(auth: CurrentAuth, id: string): Promise<void>;
+    private syncAccess;
     private findEmpleadoOrThrow;
     private normalizePayload;
     private normalizeDirecciones;
