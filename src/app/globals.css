@@ -126,4 +126,202 @@
   html {
     @apply font-sans;
   }
+
+  .login-input {
+    appearance: none;
+    background-clip: padding-box;
+  }
+
+  .login-input:-webkit-autofill,
+  .login-input:-webkit-autofill:hover,
+  .login-input:-webkit-autofill:focus,
+  .login-input:-webkit-autofill:active,
+  [data-slot="input"]:-webkit-autofill,
+  [data-slot="input"]:-webkit-autofill:hover,
+  [data-slot="input"]:-webkit-autofill:focus,
+  [data-slot="input"]:-webkit-autofill:active {
+    -webkit-text-fill-color: oklch(0.24 0.028 260);
+    -webkit-box-shadow:
+      inset 0 0 0 1000px oklch(0.995 0.004 85),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),
+      0 1px 2px rgba(15, 23, 42, 0.04);
+    box-shadow:
+      inset 0 0 0 1000px oklch(0.995 0.004 85),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),
+      0 1px 2px rgba(15, 23, 42, 0.04);
+    border-color: oklch(0.88 0.012 80);
+    caret-color: oklch(0.24 0.028 260);
+    transition: background-color 9999s ease-out 0s;
+  }
+
+  .login-input:-moz-autofill,
+  [data-slot="input"]:-moz-autofill {
+    box-shadow:
+      inset 0 0 0 1000px oklch(0.995 0.004 85),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),
+      0 1px 2px rgba(15, 23, 42, 0.04);
+    border-color: oklch(0.88 0.012 80);
+  }
+}
+
+@keyframes cmyk-sweep-cyan {
+  0% {
+    transform: translate3d(-115%, 0, 0) skewX(-14deg);
+  }
+  100% {
+    transform: translate3d(118%, 0, 0) skewX(-14deg);
+  }
+}
+
+@keyframes cmyk-sweep-magenta {
+  0% {
+    transform: translate3d(115%, 0, 0) skewX(14deg);
+  }
+  100% {
+    transform: translate3d(-118%, 0, 0) skewX(14deg);
+  }
+}
+
+@keyframes cmyk-sweep-yellow {
+  0% {
+    transform: translate3d(0, 115%, 0) skewY(-10deg);
+  }
+  100% {
+    transform: translate3d(0, -118%, 0) skewY(-10deg);
+  }
+}
+
+@keyframes cmyk-sweep-black {
+  0% {
+    transform: translate3d(0, -115%, 0) skewY(10deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translate3d(0, 118%, 0) skewY(10deg);
+    opacity: 0.82;
+  }
+}
+
+@keyframes cmyk-register-pulse {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(0.92);
+    opacity: 0.78;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes cmyk-register-rotate {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(180deg);
+  }
+}
+
+@layer utilities {
+  .cmyk-sweep {
+    position: absolute;
+    top: -20%;
+    left: 50%;
+    width: 72vw;
+    height: 150vh;
+    mix-blend-mode: multiply;
+    opacity: 0.92;
+    will-change: transform;
+    transform: translateX(-50%);
+  }
+
+  .cmyk-sweep-cyan {
+    background:
+      linear-gradient(90deg, transparent 0%, rgba(31, 190, 247, 0.94) 22%, rgba(31, 190, 247, 0.78) 58%, transparent 100%);
+    animation: cmyk-sweep-cyan 1050ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .cmyk-sweep-magenta {
+    background:
+      linear-gradient(90deg, transparent 0%, rgba(255, 0, 144, 0.94) 22%, rgba(255, 0, 144, 0.78) 58%, transparent 100%);
+    animation: cmyk-sweep-magenta 1050ms cubic-bezier(0.16, 1, 0.3, 1) 70ms forwards;
+  }
+
+  .cmyk-sweep-yellow {
+    background:
+      linear-gradient(180deg, transparent 0%, rgba(255, 228, 15, 0.76) 24%, rgba(255, 228, 15, 0.58) 58%, transparent 100%);
+    animation: cmyk-sweep-yellow 1120ms cubic-bezier(0.16, 1, 0.3, 1) 110ms forwards;
+  }
+
+  .cmyk-sweep-black {
+    background:
+      linear-gradient(180deg, transparent 0%, rgba(6, 8, 16, 0.92) 22%, rgba(6, 8, 16, 0.74) 58%, transparent 100%);
+    mix-blend-mode: multiply;
+    animation: cmyk-sweep-black 1180ms cubic-bezier(0.16, 1, 0.3, 1) 140ms forwards;
+  }
+
+  .cmyk-register-mark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 12rem;
+    height: 12rem;
+    transform: translate(-50%, -50%);
+    animation: cmyk-register-pulse 1.4s ease-in-out infinite;
+  }
+
+  .cmyk-register-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    border: 1.5px solid rgba(255, 255, 255, 0.82);
+    border-radius: 9999px;
+  }
+
+  .cmyk-register-ring-lg {
+    width: 9rem;
+    height: 9rem;
+    animation: cmyk-register-rotate 3.4s linear infinite;
+  }
+
+  .cmyk-register-ring-sm {
+    width: 3.75rem;
+    height: 3.75rem;
+    border-color: rgba(255, 255, 255, 0.48);
+    animation: cmyk-register-rotate 2.4s linear infinite reverse;
+  }
+
+  .cmyk-register-cross {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    background: rgba(255, 255, 255, 0.72);
+    transform: translate(-50%, -50%);
+  }
+
+  .cmyk-register-cross-h {
+    width: 7rem;
+    height: 1.5px;
+  }
+
+  .cmyk-register-cross-v {
+    width: 1.5px;
+    height: 7rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cmyk-sweep-cyan,
+  .cmyk-sweep-magenta,
+  .cmyk-sweep-yellow,
+  .cmyk-sweep-black {
+    animation-duration: 10ms;
+  }
+
+  .cmyk-register-mark,
+  .cmyk-register-ring-lg,
+  .cmyk-register-ring-sm {
+    animation: none;
+  }
 }
