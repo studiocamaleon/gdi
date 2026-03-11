@@ -29,7 +29,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -160,7 +159,7 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
               className="h-auto min-h-32 justify-center bg-transparent px-0 py-0 hover:bg-transparent"
             >
               <Image
-                src="/brand/logo-saas.png"
+                src="/brand/logo-saas.svg"
                 alt="Logo del SaaS"
                 width={640}
                 height={168}
@@ -359,13 +358,38 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
                     ))}
                   </DropdownMenuRadioGroup>
                 </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem disabled={isLoggingOut} onClick={handleLogout}>
-                  <LogOutIcon />
-                  Cerrar sesion
-                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+          </SidebarMenuItem>
+        </SidebarMenu>
+
+        <Button
+          type="button"
+          variant="link"
+          size="sm"
+          disabled={isLoggingOut}
+          onClick={handleLogout}
+          className="h-auto justify-start self-start px-2 text-primary group-data-[collapsible=icon]:hidden"
+        >
+          <LogOutIcon data-icon="inline-start" />
+          {isLoggingOut ? "Cerrando sesion..." : "Cerrar sesion"}
+        </Button>
+
+        <SidebarMenu className="hidden group-data-[collapsible=icon]:flex">
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              type="button"
+              size="default"
+              tooltip={isLoggingOut ? "Cerrando sesion..." : "Cerrar sesion"}
+              disabled={isLoggingOut}
+              onClick={handleLogout}
+              className="text-primary hover:text-primary"
+            >
+              <LogOutIcon />
+              <span className="sr-only">
+                {isLoggingOut ? "Cerrando sesion..." : "Cerrar sesion"}
+              </span>
+            </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
