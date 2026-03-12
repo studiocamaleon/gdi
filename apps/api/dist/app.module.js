@@ -19,6 +19,7 @@ const costos_module_1 = require("./costos/costos.module");
 const empleados_module_1 = require("./empleados/empleados.module");
 const maquinaria_module_1 = require("./maquinaria/maquinaria.module");
 const prisma_module_1 = require("./prisma/prisma.module");
+const procesos_module_1 = require("./procesos/procesos.module");
 const proveedores_module_1 = require("./proveedores/proveedores.module");
 const tenants_module_1 = require("./tenants/tenants.module");
 let AppModule = class AppModule {
@@ -36,6 +37,7 @@ exports.AppModule = AppModule = __decorate([
             proveedores_module_1.ProveedoresModule,
             costos_module_1.CostosModule,
             maquinaria_module_1.MaquinariaModule,
+            procesos_module_1.ProcesosModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [
