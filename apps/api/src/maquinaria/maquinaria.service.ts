@@ -234,6 +234,19 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
 
 const ALLOWED_CONSUMABLE_DETAIL_KEYS = new Set(['dependePerfilOperativo']);
 const ALLOWED_WEAR_DETAIL_KEYS = new Set<string>();
+const PRINTER_TEMPLATES_WITH_INK_CONSUMPTION = new Set<PlantillaMaquinariaDto>([
+  PlantillaMaquinariaDto.impresora_dtf,
+  PlantillaMaquinariaDto.impresora_dtf_uv,
+  PlantillaMaquinariaDto.impresora_uv_mesa_extensora,
+  PlantillaMaquinariaDto.impresora_uv_cilindrica,
+  PlantillaMaquinariaDto.impresora_uv_flatbed,
+  PlantillaMaquinariaDto.impresora_uv_rollo,
+  PlantillaMaquinariaDto.impresora_solvente,
+  PlantillaMaquinariaDto.impresora_inyeccion_tinta,
+  PlantillaMaquinariaDto.impresora_latex,
+  PlantillaMaquinariaDto.impresora_sublimacion_gran_formato,
+  PlantillaMaquinariaDto.impresora_laser,
+]);
 
 @Injectable()
 export class MaquinariaService {
@@ -660,6 +673,9 @@ export class MaquinariaService {
         perfil.productividad !== undefined &&
         Boolean(perfil.unidadProductividad),
     );
+    const requireConsumibles = PRINTER_TEMPLATES_WITH_INK_CONSUMPTION.has(
+      payload.plantilla,
+    );
     const hasConsumibleValido = payload.consumibles.some(
       (consumible) =>
         Boolean(consumible.nombre?.trim()) &&
@@ -674,7 +690,11 @@ export class MaquinariaService {
         componente.vidaUtilEstimada !== undefined,
     );
 
-    return hasPerfilValido && hasConsumibleValido && hasDesgasteValido;
+    return (
+      hasPerfilValido &&
+      (!requireConsumibles || hasConsumibleValido) &&
+      hasDesgasteValido
+    );
   }
 
   private hasTemplateSpecificData(payload: UpsertMaquinaDto) {

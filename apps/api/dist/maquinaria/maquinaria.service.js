@@ -170,6 +170,19 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
 ]);
 const ALLOWED_CONSUMABLE_DETAIL_KEYS = new Set(['dependePerfilOperativo']);
 const ALLOWED_WEAR_DETAIL_KEYS = new Set();
+const PRINTER_TEMPLATES_WITH_INK_CONSUMPTION = new Set([
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_dtf,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_dtf_uv,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_uv_mesa_extensora,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_uv_cilindrica,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_uv_flatbed,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_uv_rollo,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_solvente,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_inyeccion_tinta,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_latex,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_sublimacion_gran_formato,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_laser,
+]);
 let MaquinariaService = class MaquinariaService {
     static { MaquinariaService_1 = this; }
     prisma;
@@ -486,6 +499,7 @@ let MaquinariaService = class MaquinariaService {
         const hasPerfilValido = payload.perfilesOperativos.some((perfil) => Boolean(perfil.nombre?.trim()) &&
             perfil.productividad !== undefined &&
             Boolean(perfil.unidadProductividad));
+        const requireConsumibles = PRINTER_TEMPLATES_WITH_INK_CONSUMPTION.has(payload.plantilla);
         const hasConsumibleValido = payload.consumibles.some((consumible) => Boolean(consumible.nombre?.trim()) &&
             Boolean(consumible.tipo) &&
             Boolean(consumible.unidad));
@@ -493,7 +507,9 @@ let MaquinariaService = class MaquinariaService {
             Boolean(componente.tipo) &&
             Boolean(componente.unidadDesgaste) &&
             componente.vidaUtilEstimada !== undefined);
-        return hasPerfilValido && hasConsumibleValido && hasDesgasteValido;
+        return (hasPerfilValido &&
+            (!requireConsumibles || hasConsumibleValido) &&
+            hasDesgasteValido);
     }
     hasTemplateSpecificData(payload) {
         if (!(0, maquinaria_template_machine_rules_1.hasRequiredMachineDataByTemplate)(payload)) {

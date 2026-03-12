@@ -35,6 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
   Sheet,
   SheetContent,
@@ -116,6 +117,7 @@ function buildCodigoBase(nombre: string) {
 export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPanelProps) {
   const router = useRouter();
   const [materiasPrimas, setMateriasPrimas] = React.useState(initialMateriasPrimas);
+  const [mostrarOcultas, setMostrarOcultas] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [nombreNuevo, setNombreNuevo] = React.useState("");
@@ -123,6 +125,13 @@ export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPan
   const selectedTemplate = React.useMemo(
     () => materiaPrimaTemplatesV1.find((template) => template.id === templateNuevo) ?? null,
     [templateNuevo],
+  );
+  const materiasPrimasVisibles = React.useMemo(
+    () =>
+      mostrarOcultas
+        ? materiasPrimas
+        : materiasPrimas.filter((materiaPrima) => materiaPrima.activo),
+    [materiasPrimas, mostrarOcultas],
   );
 
   const handleCreate = async () => {
@@ -189,7 +198,11 @@ export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPan
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <CardTitle>Catálogo de materias primas</CardTitle>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 rounded-md border px-3 py-1.5">
+                <span className="text-xs text-muted-foreground">Mostrar ocultas</span>
+                <Switch checked={mostrarOcultas} onCheckedChange={setMostrarOcultas} />
+              </div>
               <Button onClick={() => setIsCreateOpen(true)}>
                 <CirclePlusIcon className="size-4" />
                 Nueva materia prima
@@ -210,14 +223,16 @@ export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPan
               </TableRow>
             </TableHeader>
             <TableBody>
-              {materiasPrimas.length === 0 ? (
+              {materiasPrimasVisibles.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-muted-foreground">
-                    Todavía no hay materias primas cargadas.
+                    {materiasPrimas.length === 0
+                      ? "Todavía no hay materias primas cargadas."
+                      : "No hay materias primas activas para mostrar."}
                   </TableCell>
                 </TableRow>
               ) : (
-                materiasPrimas.map((item) => (
+                materiasPrimasVisibles.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>{item.nombre}</TableCell>
                     <TableCell>
@@ -232,16 +247,22 @@ export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPan
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-2 whitespace-nowrap">
                         <Button
                           variant="sidebar"
                           size="sm"
+                          className="min-w-[110px] justify-center"
                           onClick={() => router.push(`/inventario/materias-primas/${item.id}`)}
                         >
                           <PencilIcon className="size-4" />
                           Abrir ficha
                         </Button>
-                        <Button variant="sidebar" size="sm" onClick={() => toggle(item)}>
+                        <Button
+                          variant="sidebar"
+                          size="sm"
+                          className="min-w-[120px] justify-center"
+                          onClick={() => toggle(item)}
+                        >
                           <ToggleLeftIcon className="size-4" />
                           {item.activo ? "Desactivar" : "Activar"}
                         </Button>
