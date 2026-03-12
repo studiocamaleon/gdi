@@ -17,6 +17,7 @@ import {
   PrinterIcon,
   Settings2Icon,
   UsersIcon,
+  WorkflowIcon,
 } from "lucide-react";
 
 import { logout, switchTenant, type CurrentUser } from "@/lib/auth";
@@ -88,6 +89,11 @@ const costos = [
     title: "Maquinaria",
     href: "/costos/maquinaria",
     icon: PrinterIcon,
+  },
+  {
+    title: "Rutas de produccion",
+    href: "/costos/procesos",
+    icon: WorkflowIcon,
   },
 ];
 

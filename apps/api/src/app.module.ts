@@ -10,6 +10,7 @@ import { CostosModule } from './costos/costos.module';
 import { EmpleadosModule } from './empleados/empleados.module';
 import { MaquinariaModule } from './maquinaria/maquinaria.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { ProcesosModule } from './procesos/procesos.module';
 import { ProveedoresModule } from './proveedores/proveedores.module';
 import { TenantsModule } from './tenants/tenants.module';
 
@@ -24,6 +25,7 @@ import { TenantsModule } from './tenants/tenants.module';
     ProveedoresModule,
     CostosModule,
     MaquinariaModule,
+    ProcesosModule,
   ],
   controllers: [AppController],
   providers: [
