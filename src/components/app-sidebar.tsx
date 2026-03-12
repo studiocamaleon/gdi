@@ -104,6 +104,16 @@ const inventario = [
     href: "/inventario/materias-primas",
     icon: BoxesIcon,
   },
+  {
+    title: "Centro de stock",
+    href: "/inventario/centro-stock",
+    icon: CreditCardIcon,
+  },
+  {
+    title: "Historial",
+    href: "/inventario/movimientos-kardex",
+    icon: ArrowLeftRightIcon,
+  },
 ];
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {

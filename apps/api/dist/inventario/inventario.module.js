@@ -9,13 +9,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.InventarioModule = void 0;
 const common_1 = require("@nestjs/common");
 const inventario_controller_1 = require("./inventario.controller");
+const inventario_stock_controller_1 = require("./inventario-stock.controller");
 const inventario_service_1 = require("./inventario.service");
 let InventarioModule = class InventarioModule {
 };
 exports.InventarioModule = InventarioModule;
 exports.InventarioModule = InventarioModule = __decorate([
     (0, common_1.Module)({
-        controllers: [inventario_controller_1.InventarioController],
+        controllers: [inventario_controller_1.InventarioController, inventario_stock_controller_1.InventarioStockController],
         providers: [inventario_service_1.InventarioService],
     })
 ], InventarioModule);

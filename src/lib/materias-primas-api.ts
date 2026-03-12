@@ -1,5 +1,9 @@
 import { apiRequest, ApiError } from "@/lib/api";
-import type { MateriaPrima, MateriaPrimaPayload } from "@/lib/materias-primas";
+import type {
+  MateriaPrima,
+  MateriaPrimaPayload,
+  UpdateVariantePrecioReferenciaPayload,
+} from "@/lib/materias-primas";
 
 export async function getMateriasPrimas() {
   return apiRequest<MateriaPrima[]>("/inventario/materias-primas");
@@ -33,5 +37,20 @@ export async function updateMateriaPrima(id: string, payload: MateriaPrimaPayloa
 export async function toggleMateriaPrima(id: string) {
   return apiRequest<MateriaPrima>(`/inventario/materias-primas/${id}/toggle`, {
     method: "PATCH",
+  });
+}
+
+export async function updateVariantePrecioReferencia(
+  varianteId: string,
+  payload: UpdateVariantePrecioReferenciaPayload,
+) {
+  return apiRequest<{
+    varianteId: string;
+    precioReferencia: number;
+    moneda: string;
+    updatedAt: string;
+  }>(`/inventario/materias-primas/variantes/${varianteId}/precio-referencia`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
   });
 }

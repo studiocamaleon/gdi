@@ -197,6 +197,11 @@ export type MateriaPrimaPayload = {
   }>;
 };
 
+export type UpdateVariantePrecioReferenciaPayload = {
+  precioReferencia: number;
+  moneda?: string;
+};
+
 export const familiaMateriaPrimaItems: Array<{
   value: FamiliaMateriaPrima;
   label: string;
