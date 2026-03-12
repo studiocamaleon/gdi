@@ -170,6 +170,19 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
 ]);
 const ALLOWED_CONSUMABLE_DETAIL_KEYS = new Set(['dependePerfilOperativo']);
 const ALLOWED_WEAR_DETAIL_KEYS = new Set();
+const PRINTER_TEMPLATES_WITH_INK_CONSUMPTION = new Set([
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_dtf,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_dtf_uv,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_uv_mesa_extensora,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_uv_cilindrica,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_uv_flatbed,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_uv_rollo,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_solvente,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_inyeccion_tinta,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_latex,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_sublimacion_gran_formato,
+    upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_laser,
+]);
 let MaquinariaService = class MaquinariaService {
     static { MaquinariaService_1 = this; }
     prisma;
@@ -193,9 +206,22 @@ let MaquinariaService = class MaquinariaService {
                 consumibles: {
                     include: {
                         perfilOperativo: true,
+                        materiaPrimaVariante: {
+                            include: {
+                                materiaPrima: true,
+                            },
+                        },
                     },
                 },
-                componentesDesgaste: true,
+                componentesDesgaste: {
+                    include: {
+                        materiaPrimaVariante: {
+                            include: {
+                                materiaPrima: true,
+                            },
+                        },
+                    },
+                },
             },
             orderBy: [{ nombre: 'asc' }],
         });
@@ -224,9 +250,22 @@ let MaquinariaService = class MaquinariaService {
                             consumibles: {
                                 include: {
                                     perfilOperativo: true,
+                                    materiaPrimaVariante: {
+                                        include: {
+                                            materiaPrima: true,
+                                        },
+                                    },
                                 },
                             },
-                            componentesDesgaste: true,
+                            componentesDesgaste: {
+                                include: {
+                                    materiaPrimaVariante: {
+                                        include: {
+                                            materiaPrima: true,
+                                        },
+                                    },
+                                },
+                            },
                         },
                     });
                 });
@@ -263,9 +302,22 @@ let MaquinariaService = class MaquinariaService {
                         consumibles: {
                             include: {
                                 perfilOperativo: true,
+                                materiaPrimaVariante: {
+                                    include: {
+                                        materiaPrima: true,
+                                    },
+                                },
                             },
                         },
-                        componentesDesgaste: true,
+                        componentesDesgaste: {
+                            include: {
+                                materiaPrimaVariante: {
+                                    include: {
+                                        materiaPrima: true,
+                                    },
+                                },
+                            },
+                        },
                     },
                 });
             });
@@ -289,9 +341,22 @@ let MaquinariaService = class MaquinariaService {
                 consumibles: {
                     include: {
                         perfilOperativo: true,
+                        materiaPrimaVariante: {
+                            include: {
+                                materiaPrima: true,
+                            },
+                        },
                     },
                 },
-                componentesDesgaste: true,
+                componentesDesgaste: {
+                    include: {
+                        materiaPrimaVariante: {
+                            include: {
+                                materiaPrima: true,
+                            },
+                        },
+                    },
+                },
             },
         });
         return this.toMaquinaResponse(updated);
@@ -385,10 +450,10 @@ let MaquinariaService = class MaquinariaService {
             tenantId,
             maquinaId,
             perfilOperativoId: perfilOperativoId ?? null,
+            materiaPrimaVarianteId: payload.materiaPrimaVarianteId,
             nombre: payload.nombre.trim(),
             tipo: this.toPrismaEnum(payload.tipo),
             unidad: this.toPrismaEnum(payload.unidad),
-            costoReferencia: this.toDecimal(payload.costoReferencia),
             rendimientoEstimado: this.toDecimal(payload.rendimientoEstimado),
             consumoBase: this.toDecimal(payload.consumoBase),
             activo: payload.activo,
@@ -400,11 +465,11 @@ let MaquinariaService = class MaquinariaService {
         return {
             tenantId,
             maquinaId,
+            materiaPrimaVarianteId: payload.materiaPrimaVarianteId,
             nombre: payload.nombre.trim(),
             tipo: this.toPrismaEnum(payload.tipo),
             vidaUtilEstimada: this.toDecimal(payload.vidaUtilEstimada),
             unidadDesgaste: this.toPrismaEnum(payload.unidadDesgaste),
-            costoReposicion: this.toDecimal(payload.costoReposicion),
             modoProrrateo: payload.modoProrrateo?.trim() || null,
             activo: payload.activo,
             detalleJson: this.toNullableJson(payload.detalle),
@@ -434,6 +499,7 @@ let MaquinariaService = class MaquinariaService {
         const hasPerfilValido = payload.perfilesOperativos.some((perfil) => Boolean(perfil.nombre?.trim()) &&
             perfil.productividad !== undefined &&
             Boolean(perfil.unidadProductividad));
+        const requireConsumibles = PRINTER_TEMPLATES_WITH_INK_CONSUMPTION.has(payload.plantilla);
         const hasConsumibleValido = payload.consumibles.some((consumible) => Boolean(consumible.nombre?.trim()) &&
             Boolean(consumible.tipo) &&
             Boolean(consumible.unidad));
@@ -441,7 +507,9 @@ let MaquinariaService = class MaquinariaService {
             Boolean(componente.tipo) &&
             Boolean(componente.unidadDesgaste) &&
             componente.vidaUtilEstimada !== undefined);
-        return hasPerfilValido && hasConsumibleValido && hasDesgasteValido;
+        return (hasPerfilValido &&
+            (!requireConsumibles || hasConsumibleValido) &&
+            hasDesgasteValido);
     }
     hasTemplateSpecificData(payload) {
         if (!(0, maquinaria_template_machine_rules_1.hasRequiredMachineDataByTemplate)(payload)) {
@@ -517,8 +585,40 @@ let MaquinariaService = class MaquinariaService {
             }
             normalizedPerfilNames.add(key);
         }
+        const varianteIds = Array.from(new Set([
+            ...payload.consumibles.map((item) => item.materiaPrimaVarianteId),
+            ...payload.componentesDesgaste.map((item) => item.materiaPrimaVarianteId),
+        ]));
+        const variantesMateriaPrima = await this.prisma.materiaPrimaVariante.findMany({
+            where: {
+                tenantId: auth.tenantId,
+                id: { in: varianteIds },
+            },
+            include: {
+                materiaPrima: {
+                    select: {
+                        id: true,
+                        nombre: true,
+                        activo: true,
+                        esConsumible: true,
+                        esRepuesto: true,
+                    },
+                },
+            },
+        });
+        const varianteById = new Map(variantesMateriaPrima.map((variante) => [variante.id, variante]));
         for (const consumible of payload.consumibles) {
             const consumibleName = consumible.nombre.trim() || 'sin nombre';
+            const variante = varianteById.get(consumible.materiaPrimaVarianteId);
+            if (!variante) {
+                throw new common_1.BadRequestException(`El consumible ${consumibleName} referencia una variante de materia prima inexistente.`);
+            }
+            if (!variante.activo || !variante.materiaPrima.activo) {
+                throw new common_1.BadRequestException(`El consumible ${consumibleName} referencia una variante/materia prima inactiva.`);
+            }
+            if (!variante.materiaPrima.esConsumible) {
+                throw new common_1.BadRequestException(`La materia prima ${variante.materiaPrima.nombre} no esta habilitada como consumible.`);
+            }
             for (const detailKey of Object.keys(consumible.detalle ?? {})) {
                 if (!ALLOWED_CONSUMABLE_DETAIL_KEYS.has(detailKey)) {
                     throw new common_1.BadRequestException(`El consumible ${consumibleName} incluye el campo ${detailKey}, que no corresponde a la plantilla ${payload.plantilla}.`);
@@ -527,6 +627,16 @@ let MaquinariaService = class MaquinariaService {
         }
         for (const componente of payload.componentesDesgaste) {
             const componenteName = componente.nombre.trim() || 'sin nombre';
+            const variante = varianteById.get(componente.materiaPrimaVarianteId);
+            if (!variante) {
+                throw new common_1.BadRequestException(`El componente ${componenteName} referencia una variante de materia prima inexistente.`);
+            }
+            if (!variante.activo || !variante.materiaPrima.activo) {
+                throw new common_1.BadRequestException(`El componente ${componenteName} referencia una variante/materia prima inactiva.`);
+            }
+            if (!variante.materiaPrima.esRepuesto) {
+                throw new common_1.BadRequestException(`La materia prima ${variante.materiaPrima.nombre} no esta habilitada como repuesto.`);
+            }
             for (const detailKey of Object.keys(componente.detalle ?? {})) {
                 if (!ALLOWED_WEAR_DETAIL_KEYS.has(detailKey)) {
                     throw new common_1.BadRequestException(`El componente de desgaste ${componenteName} incluye el campo ${detailKey}, que no corresponde a la plantilla ${payload.plantilla}.`);
@@ -575,9 +685,22 @@ let MaquinariaService = class MaquinariaService {
                 consumibles: {
                     include: {
                         perfilOperativo: true,
+                        materiaPrimaVariante: {
+                            include: {
+                                materiaPrima: true,
+                            },
+                        },
                     },
                 },
-                componentesDesgaste: true,
+                componentesDesgaste: {
+                    include: {
+                        materiaPrimaVariante: {
+                            include: {
+                                materiaPrima: true,
+                            },
+                        },
+                    },
+                },
             },
         });
         if (!maquina) {
@@ -650,10 +773,14 @@ let MaquinariaService = class MaquinariaService {
             })),
             consumibles: maquina.consumibles.map((consumible) => ({
                 id: consumible.id,
+                materiaPrimaVarianteId: consumible.materiaPrimaVarianteId,
+                materiaPrimaVarianteSku: consumible.materiaPrimaVariante.sku,
+                materiaPrimaVarianteNombre: consumible.materiaPrimaVariante.nombreVariante ?? '',
+                materiaPrimaNombre: consumible.materiaPrimaVariante.materiaPrima.nombre,
+                materiaPrimaPrecioReferencia: this.toNumber(consumible.materiaPrimaVariante.precioReferencia),
                 nombre: consumible.nombre,
                 tipo: this.toApiEnum(consumible.tipo),
                 unidad: this.toApiEnum(consumible.unidad),
-                costoReferencia: this.toNumber(consumible.costoReferencia),
                 rendimientoEstimado: this.toNumber(consumible.rendimientoEstimado),
                 consumoBase: this.toNumber(consumible.consumoBase),
                 perfilOperativoNombre: consumible.perfilOperativo?.nombre ?? '',
@@ -663,11 +790,15 @@ let MaquinariaService = class MaquinariaService {
             })),
             componentesDesgaste: maquina.componentesDesgaste.map((componente) => ({
                 id: componente.id,
+                materiaPrimaVarianteId: componente.materiaPrimaVarianteId,
+                materiaPrimaVarianteSku: componente.materiaPrimaVariante.sku,
+                materiaPrimaVarianteNombre: componente.materiaPrimaVariante.nombreVariante ?? '',
+                materiaPrimaNombre: componente.materiaPrimaVariante.materiaPrima.nombre,
+                materiaPrimaPrecioReferencia: this.toNumber(componente.materiaPrimaVariante.precioReferencia),
                 nombre: componente.nombre,
                 tipo: this.toApiEnum(componente.tipo),
                 vidaUtilEstimada: this.toNumber(componente.vidaUtilEstimada),
                 unidadDesgaste: this.toApiEnum(componente.unidadDesgaste),
-                costoReposicion: this.toNumber(componente.costoReposicion),
                 modoProrrateo: componente.modoProrrateo ?? '',
                 activo: componente.activo,
                 detalle: componente.detalleJson ?? null,

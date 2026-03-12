@@ -230,10 +230,10 @@ __decorate([
     __metadata("design:type", Object)
 ], MaquinaPerfilOperativoItemDto.prototype, "detalle", void 0);
 class MaquinaConsumibleItemDto {
+    materiaPrimaVarianteId;
     nombre;
     tipo;
     unidad;
-    costoReferencia;
     rendimientoEstimado;
     consumoBase;
     perfilOperativoNombre;
@@ -242,6 +242,10 @@ class MaquinaConsumibleItemDto {
     observaciones;
 }
 exports.MaquinaConsumibleItemDto = MaquinaConsumibleItemDto;
+__decorate([
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], MaquinaConsumibleItemDto.prototype, "materiaPrimaVarianteId", void 0);
 __decorate([
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.MinLength)(1),
@@ -255,12 +259,6 @@ __decorate([
     (0, class_validator_1.IsEnum)(UnidadConsumoMaquinaDto),
     __metadata("design:type", String)
 ], MaquinaConsumibleItemDto.prototype, "unidad", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_transformer_1.Type)(() => Number),
-    (0, class_validator_1.IsNumber)(),
-    __metadata("design:type", Number)
-], MaquinaConsumibleItemDto.prototype, "costoReferencia", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_transformer_1.Type)(() => Number),
@@ -293,17 +291,21 @@ __decorate([
     __metadata("design:type", String)
 ], MaquinaConsumibleItemDto.prototype, "observaciones", void 0);
 class MaquinaComponenteDesgasteItemDto {
+    materiaPrimaVarianteId;
     nombre;
     tipo;
     vidaUtilEstimada;
     unidadDesgaste;
-    costoReposicion;
     modoProrrateo;
     activo;
     detalle;
     observaciones;
 }
 exports.MaquinaComponenteDesgasteItemDto = MaquinaComponenteDesgasteItemDto;
+__decorate([
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], MaquinaComponenteDesgasteItemDto.prototype, "materiaPrimaVarianteId", void 0);
 __decorate([
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.MinLength)(1),
@@ -323,12 +325,6 @@ __decorate([
     (0, class_validator_1.IsEnum)(UnidadDesgasteMaquinaDto),
     __metadata("design:type", String)
 ], MaquinaComponenteDesgasteItemDto.prototype, "unidadDesgaste", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_transformer_1.Type)(() => Number),
-    (0, class_validator_1.IsNumber)(),
-    __metadata("design:type", Number)
-], MaquinaComponenteDesgasteItemDto.prototype, "costoReposicion", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),

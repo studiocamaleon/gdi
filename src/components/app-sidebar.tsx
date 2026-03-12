@@ -10,6 +10,7 @@ import {
   CircleDollarSignIcon,
   ChevronRightIcon,
   CreditCardIcon,
+  BoxesIcon,
   FolderTreeIcon,
   IdCardIcon,
   LayoutDashboardIcon,
@@ -97,6 +98,14 @@ const costos = [
   },
 ];
 
+const inventario = [
+  {
+    title: "Materias primas",
+    href: "/inventario/materias-primas",
+    icon: BoxesIcon,
+  },
+];
+
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   currentUser: CurrentUser;
 };
@@ -118,8 +127,12 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
     matchesRoute(pathname, item.href),
   );
   const isCostosRoute = costos.some((item) => matchesRoute(pathname, item.href));
+  const isInventarioRoute = inventario.some((item) =>
+    matchesRoute(pathname, item.href),
+  );
   const [isRegistrosOpen, setIsRegistrosOpen] = React.useState(isRegistrosRoute);
   const [isCostosOpen, setIsCostosOpen] = React.useState(isCostosRoute);
+  const [isInventarioOpen, setIsInventarioOpen] = React.useState(isInventarioRoute);
   const [isSwitching, startSwitching] = React.useTransition();
   const [isLoggingOut, startLogout] = React.useTransition();
 
@@ -130,6 +143,10 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
   React.useEffect(() => {
     setIsCostosOpen(isCostosRoute);
   }, [isCostosRoute]);
+
+  React.useEffect(() => {
+    setIsInventarioOpen(isInventarioRoute);
+  }, [isInventarioRoute]);
 
   const handleTenantSwitch = (tenantId: string) => {
     if (tenantId === currentUser.tenantActual.id) {
@@ -265,6 +282,46 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
               <CollapsibleContent className="mt-1">
                 <SidebarMenuSub>
                   {costos.map((item) => (
+                    <SidebarMenuSubItem key={item.title}>
+                      <SidebarMenuSubButton
+                        render={<Link href={item.href} />}
+                        isActive={matchesRoute(pathname, item.href)}
+                      >
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  ))}
+                </SidebarMenuSub>
+              </CollapsibleContent>
+            </Collapsible>
+          </SidebarMenuItem>
+        </SidebarMenu>
+
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <Collapsible
+              open={isInventarioOpen}
+              onOpenChange={setIsInventarioOpen}
+              className="group/collapsible"
+            >
+              <CollapsibleTrigger
+                render={
+                  <SidebarMenuButton
+                    tooltip="Inventario"
+                    className="font-medium"
+                    isActive={isInventarioRoute}
+                  />
+                }
+              >
+                <BoxesIcon />
+                <span>Inventario</span>
+                <ChevronRightIcon className="ml-auto transition-transform group-data-[state=open]/menu-button:rotate-90" />
+              </CollapsibleTrigger>
+
+              <CollapsibleContent className="mt-1">
+                <SidebarMenuSub>
+                  {inventario.map((item) => (
                     <SidebarMenuSubItem key={item.title}>
                       <SidebarMenuSubButton
                         render={<Link href={item.href} />}

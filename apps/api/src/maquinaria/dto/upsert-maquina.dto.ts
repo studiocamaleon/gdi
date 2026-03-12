@@ -198,6 +198,9 @@ export class MaquinaPerfilOperativoItemDto {
 }
 
 export class MaquinaConsumibleItemDto {
+  @IsUUID()
+  materiaPrimaVarianteId: string;
+
   @IsString()
   @MinLength(1)
   nombre: string;
@@ -207,11 +210,6 @@ export class MaquinaConsumibleItemDto {
 
   @IsEnum(UnidadConsumoMaquinaDto)
   unidad: UnidadConsumoMaquinaDto;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  costoReferencia?: number;
 
   @IsOptional()
   @Type(() => Number)
@@ -240,6 +238,9 @@ export class MaquinaConsumibleItemDto {
 }
 
 export class MaquinaComponenteDesgasteItemDto {
+  @IsUUID()
+  materiaPrimaVarianteId: string;
+
   @IsString()
   @MinLength(1)
   nombre: string;
@@ -254,11 +255,6 @@ export class MaquinaComponenteDesgasteItemDto {
 
   @IsEnum(UnidadDesgasteMaquinaDto)
   unidadDesgaste: UnidadDesgasteMaquinaDto;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  costoReposicion?: number;
 
   @IsOptional()
   @IsString()
