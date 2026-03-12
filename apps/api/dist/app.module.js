@@ -22,6 +22,7 @@ const prisma_module_1 = require("./prisma/prisma.module");
 const procesos_module_1 = require("./procesos/procesos.module");
 const proveedores_module_1 = require("./proveedores/proveedores.module");
 const tenants_module_1 = require("./tenants/tenants.module");
+const inventario_module_1 = require("./inventario/inventario.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -38,6 +39,7 @@ exports.AppModule = AppModule = __decorate([
             costos_module_1.CostosModule,
             maquinaria_module_1.MaquinariaModule,
             procesos_module_1.ProcesosModule,
+            inventario_module_1.InventarioModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [

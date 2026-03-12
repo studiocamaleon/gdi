@@ -378,10 +378,14 @@ export type MaquinaPerfilOperativo = {
 
 export type MaquinaConsumible = {
   id: string;
+  materiaPrimaVarianteId: string;
+  materiaPrimaVarianteSku: string;
+  materiaPrimaVarianteNombre: string;
+  materiaPrimaNombre: string;
+  materiaPrimaPrecioReferencia: number | null;
   nombre: string;
   tipo: TipoConsumibleMaquina;
   unidad: UnidadConsumoMaquina;
-  costoReferencia: number | null;
   rendimientoEstimado: number | null;
   consumoBase: number | null;
   perfilOperativoNombre: string;
@@ -392,11 +396,15 @@ export type MaquinaConsumible = {
 
 export type MaquinaComponenteDesgaste = {
   id: string;
+  materiaPrimaVarianteId: string;
+  materiaPrimaVarianteSku: string;
+  materiaPrimaVarianteNombre: string;
+  materiaPrimaNombre: string;
+  materiaPrimaPrecioReferencia: number | null;
   nombre: string;
   tipo: TipoComponenteDesgasteMaquina;
   vidaUtilEstimada: number | null;
   unidadDesgaste: UnidadDesgasteMaquina;
-  costoReposicion: number | null;
   modoProrrateo: string;
   activo: boolean;
   detalle: Record<string, unknown> | null;
@@ -480,10 +488,10 @@ export type MaquinaPayload = {
     detalle?: Record<string, unknown>;
   }>;
   consumibles: Array<{
+    materiaPrimaVarianteId: string;
     nombre: string;
     tipo: TipoConsumibleMaquina;
     unidad: UnidadConsumoMaquina;
-    costoReferencia?: number;
     rendimientoEstimado?: number;
     consumoBase?: number;
     perfilOperativoNombre?: string;
@@ -492,11 +500,11 @@ export type MaquinaPayload = {
     observaciones?: string;
   }>;
   componentesDesgaste: Array<{
+    materiaPrimaVarianteId: string;
     nombre: string;
     tipo: TipoComponenteDesgasteMaquina;
     vidaUtilEstimada?: number;
     unidadDesgaste: UnidadDesgasteMaquina;
-    costoReposicion?: number;
     modoProrrateo?: string;
     activo: boolean;
     detalle?: Record<string, unknown>;

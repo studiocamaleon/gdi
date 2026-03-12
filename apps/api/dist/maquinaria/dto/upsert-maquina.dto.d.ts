@@ -119,10 +119,10 @@ export declare class MaquinaPerfilOperativoItemDto {
     detalle?: Record<string, unknown>;
 }
 export declare class MaquinaConsumibleItemDto {
+    materiaPrimaVarianteId: string;
     nombre: string;
     tipo: TipoConsumibleMaquinaDto;
     unidad: UnidadConsumoMaquinaDto;
-    costoReferencia?: number;
     rendimientoEstimado?: number;
     consumoBase?: number;
     perfilOperativoNombre?: string;
@@ -131,11 +131,11 @@ export declare class MaquinaConsumibleItemDto {
     observaciones?: string;
 }
 export declare class MaquinaComponenteDesgasteItemDto {
+    materiaPrimaVarianteId: string;
     nombre: string;
     tipo: TipoComponenteDesgasteMaquinaDto;
     vidaUtilEstimada?: number;
     unidadDesgaste: UnidadDesgasteMaquinaDto;
-    costoReposicion?: number;
     modoProrrateo?: string;
     activo: boolean;
     detalle?: Record<string, unknown>;

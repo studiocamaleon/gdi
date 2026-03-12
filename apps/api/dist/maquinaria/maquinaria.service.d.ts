@@ -55,10 +55,14 @@ export declare class MaquinariaService {
         }[];
         consumibles: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: TipoConsumibleMaquinaDto;
             unidad: UnidadConsumoMaquinaDto;
-            costoReferencia: number | null;
             rendimientoEstimado: number | null;
             consumoBase: number | null;
             perfilOperativoNombre: string;
@@ -68,11 +72,15 @@ export declare class MaquinariaService {
         }[];
         componentesDesgaste: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: TipoComponenteDesgasteMaquinaDto;
             vidaUtilEstimada: number | null;
             unidadDesgaste: UnidadDesgasteMaquinaDto;
-            costoReposicion: number | null;
             modoProrrateo: string;
             activo: boolean;
             detalle: Record<string, unknown> | null;
@@ -129,10 +137,14 @@ export declare class MaquinariaService {
         }[];
         consumibles: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: TipoConsumibleMaquinaDto;
             unidad: UnidadConsumoMaquinaDto;
-            costoReferencia: number | null;
             rendimientoEstimado: number | null;
             consumoBase: number | null;
             perfilOperativoNombre: string;
@@ -142,11 +154,15 @@ export declare class MaquinariaService {
         }[];
         componentesDesgaste: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: TipoComponenteDesgasteMaquinaDto;
             vidaUtilEstimada: number | null;
             unidadDesgaste: UnidadDesgasteMaquinaDto;
-            costoReposicion: number | null;
             modoProrrateo: string;
             activo: boolean;
             detalle: Record<string, unknown> | null;
@@ -203,10 +219,14 @@ export declare class MaquinariaService {
         }[];
         consumibles: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: TipoConsumibleMaquinaDto;
             unidad: UnidadConsumoMaquinaDto;
-            costoReferencia: number | null;
             rendimientoEstimado: number | null;
             consumoBase: number | null;
             perfilOperativoNombre: string;
@@ -216,11 +236,15 @@ export declare class MaquinariaService {
         }[];
         componentesDesgaste: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: TipoComponenteDesgasteMaquinaDto;
             vidaUtilEstimada: number | null;
             unidadDesgaste: UnidadDesgasteMaquinaDto;
-            costoReposicion: number | null;
             modoProrrateo: string;
             activo: boolean;
             detalle: Record<string, unknown> | null;
@@ -277,10 +301,14 @@ export declare class MaquinariaService {
         }[];
         consumibles: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: TipoConsumibleMaquinaDto;
             unidad: UnidadConsumoMaquinaDto;
-            costoReferencia: number | null;
             rendimientoEstimado: number | null;
             consumoBase: number | null;
             perfilOperativoNombre: string;
@@ -290,11 +318,15 @@ export declare class MaquinariaService {
         }[];
         componentesDesgaste: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: TipoComponenteDesgasteMaquinaDto;
             vidaUtilEstimada: number | null;
             unidadDesgaste: UnidadDesgasteMaquinaDto;
-            costoReposicion: number | null;
             modoProrrateo: string;
             activo: boolean;
             detalle: Record<string, unknown> | null;
@@ -351,10 +383,14 @@ export declare class MaquinariaService {
         }[];
         consumibles: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: TipoConsumibleMaquinaDto;
             unidad: UnidadConsumoMaquinaDto;
-            costoReferencia: number | null;
             rendimientoEstimado: number | null;
             consumoBase: number | null;
             perfilOperativoNombre: string;
@@ -364,11 +400,15 @@ export declare class MaquinariaService {
         }[];
         componentesDesgaste: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: TipoComponenteDesgasteMaquinaDto;
             vidaUtilEstimada: number | null;
             unidadDesgaste: UnidadDesgasteMaquinaDto;
-            costoReposicion: number | null;
             modoProrrateo: string;
             activo: boolean;
             detalle: Record<string, unknown> | null;

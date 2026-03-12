@@ -21,6 +21,7 @@ import {
   toggleMaquina,
   updateMaquina,
 } from "@/lib/maquinaria-api";
+import { getMateriasPrimas } from "@/lib/materias-primas-api";
 import {
   EstadoConfiguracionMaquina,
   estadoConfiguracionMaquinaItems,
@@ -44,6 +45,7 @@ import {
 } from "@/lib/maquinaria-templates";
 import { getCatalogoFabricantesPorPlantilla } from "@/lib/maquinaria-catalogos";
 import { getTechnicalPresetForMachine } from "@/lib/maquinaria-tech-presets";
+import { unidadMateriaPrimaItems, type MateriaPrima } from "@/lib/materias-primas";
 import { CentroCosto, Planta } from "@/lib/costos";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -116,10 +118,10 @@ const PERFIL_DIRECT_FIELD_KEYS = new Set([
 ]);
 const PERFIL_MODE_SOURCE_KEYS = new Set(["modoTrabajo", "modoImpresion", "tipoOperacion"]);
 const CONSUMIBLE_DIRECT_FIELD_KEYS = new Set([
+  "materiaPrimaVarianteId",
   "nombre",
   "tipo",
   "unidad",
-  "costoReferencia",
   "rendimientoEstimado",
   "consumoBase",
   "perfilOperativoNombre",
@@ -127,11 +129,11 @@ const CONSUMIBLE_DIRECT_FIELD_KEYS = new Set([
   "observaciones",
 ]);
 const DESGASTE_DIRECT_FIELD_KEYS = new Set([
+  "materiaPrimaVarianteId",
   "nombre",
   "tipo",
   "vidaUtilEstimada",
   "unidadDesgaste",
-  "costoReposicion",
   "modoProrrateo",
   "activo",
   "observaciones",
@@ -184,6 +186,29 @@ function getUnitLabel(unit?: string) {
   }
 
   return UNIT_LABELS[unit] ?? formatTechnicalValue(unit);
+}
+
+function getUnidadMateriaPrimaLabel(value?: string | null) {
+  if (!value) {
+    return "";
+  }
+  return unidadMateriaPrimaItems.find((item) => item.value === value)?.label ?? formatTechnicalValue(value);
+}
+
+function mapUnidadMateriaPrimaToConsumo(value?: string | null): LocalConsumible["unidad"] | null {
+  if (!value) {
+    return null;
+  }
+  const direct: Record<string, LocalConsumible["unidad"]> = {
+    unidad: "unidad",
+    ml: "ml",
+    litro: "litro",
+    gramo: "gramo",
+    kg: "kg",
+    m2: "m2",
+    metro_lineal: "metro_lineal",
+  };
+  return direct[value] ?? null;
 }
 
 function getTemplateFieldGroup(entry: TemplateFieldEntry): {
@@ -537,14 +562,14 @@ function getConsumibleValueByTemplateField(
   fieldItem: MaquinariaTemplateField,
 ) {
   switch (fieldItem.key) {
+    case "materiaPrimaVarianteId":
+      return consumible.materiaPrimaVarianteId;
     case "nombre":
       return consumible.nombre;
     case "tipo":
       return consumible.tipo;
     case "unidad":
       return consumible.unidad;
-    case "costoReferencia":
-      return consumible.costoReferencia ?? "";
     case "rendimientoEstimado":
       return consumible.rendimientoEstimado ?? "";
     case "consumoBase":
@@ -577,6 +602,8 @@ function getDesgasteValueByTemplateField(
   fieldItem: MaquinariaTemplateField,
 ) {
   switch (fieldItem.key) {
+    case "materiaPrimaVarianteId":
+      return desgaste.materiaPrimaVarianteId;
     case "nombre":
       return desgaste.nombre;
     case "tipo":
@@ -585,8 +612,6 @@ function getDesgasteValueByTemplateField(
       return desgaste.vidaUtilEstimada ?? "";
     case "unidadDesgaste":
       return desgaste.unidadDesgaste;
-    case "costoReposicion":
-      return desgaste.costoReposicion ?? "";
     case "modoProrrateo":
       return desgaste.modoProrrateo ?? "";
     case "activo":
@@ -633,11 +658,11 @@ function createConsumible(consumibleTemplateFields: MaquinariaTemplateField[] = 
 
   return {
     id: createLocalId(),
+    materiaPrimaVarianteId: "",
     nombre: "",
     tipo: pickDefaultSelectValue(tipoField, "otro") as LocalConsumible["tipo"],
     unidad: pickDefaultSelectValue(unidadField, "unidad") as LocalConsumible["unidad"],
     activo: true,
-    costoReferencia: undefined,
     rendimientoEstimado: undefined,
     consumoBase: undefined,
     observaciones: "",
@@ -650,12 +675,12 @@ function createDesgaste(desgasteTemplateFields: MaquinariaTemplateField[] = []):
 
   return {
     id: createLocalId(),
+    materiaPrimaVarianteId: "",
     nombre: "",
     tipo: pickDefaultSelectValue(tipoField, "otro") as LocalDesgaste["tipo"],
     unidadDesgaste: pickDefaultSelectValue(unidadField, "horas") as LocalDesgaste["unidadDesgaste"],
     activo: true,
     vidaUtilEstimada: undefined,
-    costoReposicion: undefined,
     modoProrrateo: "",
     observaciones: "",
   };
@@ -788,10 +813,10 @@ function fromMaquina(maquina: Maquina): {
     })),
     consumibles: maquina.consumibles.map((item) => ({
       id: item.id,
+      materiaPrimaVarianteId: item.materiaPrimaVarianteId,
       nombre: item.nombre,
       tipo: item.tipo,
       unidad: item.unidad,
-      costoReferencia: item.costoReferencia ?? undefined,
       rendimientoEstimado: item.rendimientoEstimado ?? undefined,
       consumoBase: item.consumoBase ?? undefined,
       perfilOperativoNombre: item.perfilOperativoNombre || undefined,
@@ -801,11 +826,11 @@ function fromMaquina(maquina: Maquina): {
     })),
     desgastes: maquina.componentesDesgaste.map((item) => ({
       id: item.id,
+      materiaPrimaVarianteId: item.materiaPrimaVarianteId,
       nombre: item.nombre,
       tipo: item.tipo,
       unidadDesgaste: item.unidadDesgaste,
       vidaUtilEstimada: item.vidaUtilEstimada ?? undefined,
-      costoReposicion: item.costoReposicion ?? undefined,
       modoProrrateo: item.modoProrrateo || undefined,
       activo: item.activo,
       detalle: item.detalle ?? undefined,
@@ -841,6 +866,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
   const [modeloSearch, setModeloSearch] = React.useState("");
   const [isFabricanteOtro, setIsFabricanteOtro] = React.useState(false);
   const [isModeloOtro, setIsModeloOtro] = React.useState(false);
+  const [materiasPrimas, setMateriasPrimas] = React.useState<MateriaPrima[]>([]);
 
   const templateInfo = React.useMemo(() => getMaquinariaTemplate(form.plantilla), [form.plantilla]);
   const templateMachineFields = React.useMemo(() => {
@@ -947,6 +973,52 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
   const desgasteExtraTemplateFields = React.useMemo(
     () => desgasteTemplateFields.filter((fieldItem) => !DESGASTE_DIRECT_FIELD_KEYS.has(fieldItem.key)),
     [desgasteTemplateFields],
+  );
+  const variantesConsumibleDisponibles = React.useMemo(
+    () =>
+      materiasPrimas
+        .filter((materiaPrima) => materiaPrima.activo && materiaPrima.esConsumible)
+        .flatMap((materiaPrima) =>
+          materiaPrima.variantes
+            .filter((variante) => variante.activo)
+            .map((variante) => ({
+              value: variante.id,
+              label: `${materiaPrima.nombre} - ${variante.nombreVariante || variante.sku}`,
+              sku: variante.sku,
+              precioReferencia: variante.precioReferencia,
+              unidadStock: materiaPrima.unidadStock,
+              nombre: materiaPrima.nombre,
+            })),
+        )
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [materiasPrimas],
+  );
+  const variantesRepuestoDisponibles = React.useMemo(
+    () =>
+      materiasPrimas
+        .filter((materiaPrima) => materiaPrima.activo && materiaPrima.esRepuesto)
+        .flatMap((materiaPrima) =>
+          materiaPrima.variantes
+            .filter((variante) => variante.activo)
+            .map((variante) => ({
+              value: variante.id,
+              label: `${materiaPrima.nombre} - ${variante.nombreVariante || variante.sku}`,
+              sku: variante.sku,
+              precioReferencia: variante.precioReferencia,
+              unidadStock: materiaPrima.unidadStock,
+              nombre: materiaPrima.nombre,
+            })),
+        )
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [materiasPrimas],
+  );
+  const varianteConsumibleById = React.useMemo(
+    () => new Map(variantesConsumibleDisponibles.map((item) => [item.value, item])),
+    [variantesConsumibleDisponibles],
+  );
+  const varianteRepuestoById = React.useMemo(
+    () => new Map(variantesRepuestoDisponibles.map((item) => [item.value, item])),
+    [variantesRepuestoDisponibles],
   );
   const perfilTemplateProductividadField = React.useMemo(
     () => perfilTemplateFields.find((fieldItem) => fieldItem.key === "productividad"),
@@ -1081,6 +1153,30 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
         toast.error(error instanceof Error ? error.message : "No se pudo actualizar maquinaria.");
       }
     });
+  }, []);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    void (async () => {
+      try {
+        const data = await getMateriasPrimas();
+        if (isMounted) {
+          setMateriasPrimas(data);
+        }
+      } catch (error) {
+        if (isMounted) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "No se pudo cargar el catalogo de materias primas.",
+          );
+        }
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   React.useEffect(() => {
@@ -1987,14 +2083,23 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
           const detail = { ...(item.detalle ?? {}) };
           const isDirectField = CONSUMIBLE_DIRECT_FIELD_KEYS.has(fieldItem.key);
 
-          if (fieldItem.key === "nombre") {
+          if (fieldItem.key === "materiaPrimaVarianteId") {
+            const nextId = String(value || "").trim();
+            next.materiaPrimaVarianteId = nextId;
+            const selected = varianteConsumibleById.get(nextId);
+            if (selected) {
+              next.nombre = selected.nombre;
+              const mappedUnit = mapUnidadMateriaPrimaToConsumo(selected.unidadStock);
+              if (mappedUnit) {
+                next.unidad = mappedUnit;
+              }
+            }
+          } else if (fieldItem.key === "nombre") {
             next.nombre = String(value || "");
           } else if (fieldItem.key === "tipo") {
             next.tipo = String(value || "").trim() as LocalConsumible["tipo"];
           } else if (fieldItem.key === "unidad") {
             next.unidad = String(value || "").trim() as LocalConsumible["unidad"];
-          } else if (fieldItem.key === "costoReferencia") {
-            next.costoReferencia = toFiniteNumberOrUndefined(String(value || ""));
           } else if (fieldItem.key === "rendimientoEstimado") {
             next.rendimientoEstimado = toFiniteNumberOrUndefined(String(value || ""));
           } else if (fieldItem.key === "consumoBase") {
@@ -2042,7 +2147,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
         }),
       );
     },
-    [],
+    [varianteConsumibleById],
   );
 
   const setDesgasteTemplateFieldValue = React.useCallback(
@@ -2061,7 +2166,14 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
           const detail = { ...(item.detalle ?? {}) };
           const isDirectField = DESGASTE_DIRECT_FIELD_KEYS.has(fieldItem.key);
 
-          if (fieldItem.key === "nombre") {
+          if (fieldItem.key === "materiaPrimaVarianteId") {
+            const nextId = String(value || "").trim();
+            next.materiaPrimaVarianteId = nextId;
+            const selected = varianteRepuestoById.get(nextId);
+            if (selected) {
+              next.nombre = selected.nombre;
+            }
+          } else if (fieldItem.key === "nombre") {
             next.nombre = String(value || "");
           } else if (fieldItem.key === "tipo") {
             next.tipo = String(value || "").trim() as LocalDesgaste["tipo"];
@@ -2069,8 +2181,6 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
             next.vidaUtilEstimada = toFiniteNumberOrUndefined(String(value || ""));
           } else if (fieldItem.key === "unidadDesgaste") {
             next.unidadDesgaste = String(value || "").trim() as LocalDesgaste["unidadDesgaste"];
-          } else if (fieldItem.key === "costoReposicion") {
-            next.costoReposicion = toFiniteNumberOrUndefined(String(value || ""));
           } else if (fieldItem.key === "modoProrrateo") {
             next.modoProrrateo = String(value || "");
           } else if (fieldItem.key === "activo") {
@@ -2114,7 +2224,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
         }),
       );
     },
-    [],
+    [varianteRepuestoById],
   );
 
   return (
@@ -3891,33 +4001,55 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             </SelectContent>
                           </Select>
                         </Field>
-                        <Field className="md:col-span-3">
+                        <Field className="md:col-span-6">
                           <div className="flex min-h-10 items-start gap-1">
                             <FieldLabel>
-                              {consumibleTemplateFieldByKey.get("costoReferencia")?.label ?? "Costo referencia"} ($)
+                              {consumibleTemplateFieldByKey.get("materiaPrimaVarianteId")?.label ??
+                                "Variante de materia prima"}
                               {renderRequiredAsterisk(
-                                consumibleTemplateFieldByKey.get("costoReferencia")?.required,
+                                consumibleTemplateFieldByKey.get("materiaPrimaVarianteId")?.required ?? true,
                               )}
                             </FieldLabel>
-                            {renderTooltipIcon(consumibleTemplateFieldByKey.get("costoReferencia")?.description)}
                           </div>
-                          <Input
-                            type="number"
-                            value={consumible.costoReferencia ?? ""}
-                            onChange={(event) =>
+                          <Select
+                            value={consumible.materiaPrimaVarianteId || EMPTY_SELECT_VALUE}
+                            onValueChange={(value) =>
                               setConsumibleTemplateFieldValue(
                                 consumible.id,
-                                consumibleTemplateFieldByKey.get("costoReferencia") ?? {
-                                  key: "costoReferencia",
-                                  label: "Costo referencia",
+                                consumibleTemplateFieldByKey.get("materiaPrimaVarianteId") ?? {
+                                  key: "materiaPrimaVarianteId",
+                                  label: "Variante de materia prima",
                                   scope: "consumible",
-                                  kind: "number",
+                                  kind: "select",
                                   description: "",
                                 },
-                                event.target.value,
+                                value === EMPTY_SELECT_VALUE ? "" : value,
                               )
                             }
-                          />
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar variante" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectGroup>
+                                <SelectItem value={EMPTY_SELECT_VALUE}>Sin seleccionar</SelectItem>
+                                {variantesConsumibleDisponibles.map((item) => (
+                                  <SelectItem key={item.value} value={item.value}>
+                                    {item.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                          {consumible.materiaPrimaVarianteId ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Costo ref.: $
+                              {Number(
+                                varianteConsumibleById.get(consumible.materiaPrimaVarianteId)?.precioReferencia ?? 0,
+                              ).toFixed(2)}{" "}
+                              por {getUnidadMateriaPrimaLabel(varianteConsumibleById.get(consumible.materiaPrimaVarianteId)?.unidadStock)}
+                            </p>
+                          ) : null}
                         </Field>
                         <Field className="md:col-span-3">
                           <div className="flex min-h-10 items-start gap-1">
@@ -4275,33 +4407,55 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             }
                           />
                         </Field>
-                        <Field className="md:col-span-3">
+                        <Field className="md:col-span-6">
                           <div className="flex min-h-10 items-start gap-1">
                             <FieldLabel>
-                              {desgasteTemplateFieldByKey.get("costoReposicion")?.label ?? "Costo reposicion"} ($)
+                              {desgasteTemplateFieldByKey.get("materiaPrimaVarianteId")?.label ??
+                                "Variante de materia prima"}
                               {renderRequiredAsterisk(
-                                desgasteTemplateFieldByKey.get("costoReposicion")?.required,
+                                desgasteTemplateFieldByKey.get("materiaPrimaVarianteId")?.required ?? true,
                               )}
                             </FieldLabel>
-                            {renderTooltipIcon(desgasteTemplateFieldByKey.get("costoReposicion")?.description)}
                           </div>
-                          <Input
-                            type="number"
-                            value={desgaste.costoReposicion ?? ""}
-                            onChange={(event) =>
+                          <Select
+                            value={desgaste.materiaPrimaVarianteId || EMPTY_SELECT_VALUE}
+                            onValueChange={(value) =>
                               setDesgasteTemplateFieldValue(
                                 desgaste.id,
-                                desgasteTemplateFieldByKey.get("costoReposicion") ?? {
-                                  key: "costoReposicion",
-                                  label: "Costo reposicion",
+                                desgasteTemplateFieldByKey.get("materiaPrimaVarianteId") ?? {
+                                  key: "materiaPrimaVarianteId",
+                                  label: "Variante de materia prima",
                                   scope: "desgaste",
-                                  kind: "number",
+                                  kind: "select",
                                   description: "",
                                 },
-                                event.target.value,
+                                value === EMPTY_SELECT_VALUE ? "" : value,
                               )
                             }
-                          />
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar variante" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectGroup>
+                                <SelectItem value={EMPTY_SELECT_VALUE}>Sin seleccionar</SelectItem>
+                                {variantesRepuestoDisponibles.map((item) => (
+                                  <SelectItem key={item.value} value={item.value}>
+                                    {item.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                          {desgaste.materiaPrimaVarianteId ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Costo ref.: $
+                              {Number(
+                                varianteRepuestoById.get(desgaste.materiaPrimaVarianteId)?.precioReferencia ?? 0,
+                              ).toFixed(2)}{" "}
+                              por {getUnidadMateriaPrimaLabel(varianteRepuestoById.get(desgaste.materiaPrimaVarianteId)?.unidadStock)}
+                            </p>
+                          ) : null}
                         </Field>
                         {desgasteExtraTemplateFields.map((fieldItem) => {
                           const rawValue = getDesgasteValueByTemplateField(desgaste, fieldItem);

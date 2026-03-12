@@ -198,13 +198,12 @@ const genericConsumableFields = [
     ],
   }),
   field({
-    key: "costoReferencia",
-    label: "Costo referencia",
+    key: "materiaPrimaVarianteId",
+    label: "Variante de materia prima",
     scope: "consumible",
-    kind: "number",
-    description: "Costo base del consumible para futuras valorizaciones.",
-    tooltip: "No reemplaza compras reales; funciona como referencia tecnica.",
-    placeholder: "0",
+    kind: "select",
+    required: true,
+    description: "Variante stockeable desde Inventario habilitada como consumible.",
   }),
   field({
     key: "rendimientoEstimado",
@@ -280,12 +279,12 @@ const genericWearFields = [
     ],
   }),
   field({
-    key: "costoReposicion",
-    label: "Costo reposicion",
+    key: "materiaPrimaVarianteId",
+    label: "Variante de materia prima",
     scope: "desgaste",
-    kind: "number",
-    description: "Costo de reemplazo del componente.",
-    placeholder: "0",
+    kind: "select",
+    required: true,
+    description: "Variante stockeable desde Inventario habilitada como repuesto.",
   }),
 ];
 

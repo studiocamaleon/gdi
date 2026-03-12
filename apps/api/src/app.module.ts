@@ -13,6 +13,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ProcesosModule } from './procesos/procesos.module';
 import { ProveedoresModule } from './proveedores/proveedores.module';
 import { TenantsModule } from './tenants/tenants.module';
+import { InventarioModule } from './inventario/inventario.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { TenantsModule } from './tenants/tenants.module';
     CostosModule,
     MaquinariaModule,
     ProcesosModule,
+    InventarioModule,
   ],
   controllers: [AppController],
   providers: [

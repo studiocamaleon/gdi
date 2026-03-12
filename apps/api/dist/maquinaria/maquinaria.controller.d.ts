@@ -52,10 +52,14 @@ export declare class MaquinariaController {
         }[];
         consumibles: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: import("./dto/upsert-maquina.dto").TipoConsumibleMaquinaDto;
             unidad: import("./dto/upsert-maquina.dto").UnidadConsumoMaquinaDto;
-            costoReferencia: number | null;
             rendimientoEstimado: number | null;
             consumoBase: number | null;
             perfilOperativoNombre: string;
@@ -65,11 +69,15 @@ export declare class MaquinariaController {
         }[];
         componentesDesgaste: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: import("./dto/upsert-maquina.dto").TipoComponenteDesgasteMaquinaDto;
             vidaUtilEstimada: number | null;
             unidadDesgaste: import("./dto/upsert-maquina.dto").UnidadDesgasteMaquinaDto;
-            costoReposicion: number | null;
             modoProrrateo: string;
             activo: boolean;
             detalle: Record<string, unknown> | null;
@@ -126,10 +134,14 @@ export declare class MaquinariaController {
         }[];
         consumibles: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: import("./dto/upsert-maquina.dto").TipoConsumibleMaquinaDto;
             unidad: import("./dto/upsert-maquina.dto").UnidadConsumoMaquinaDto;
-            costoReferencia: number | null;
             rendimientoEstimado: number | null;
             consumoBase: number | null;
             perfilOperativoNombre: string;
@@ -139,11 +151,15 @@ export declare class MaquinariaController {
         }[];
         componentesDesgaste: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: import("./dto/upsert-maquina.dto").TipoComponenteDesgasteMaquinaDto;
             vidaUtilEstimada: number | null;
             unidadDesgaste: import("./dto/upsert-maquina.dto").UnidadDesgasteMaquinaDto;
-            costoReposicion: number | null;
             modoProrrateo: string;
             activo: boolean;
             detalle: Record<string, unknown> | null;
@@ -200,10 +216,14 @@ export declare class MaquinariaController {
         }[];
         consumibles: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: import("./dto/upsert-maquina.dto").TipoConsumibleMaquinaDto;
             unidad: import("./dto/upsert-maquina.dto").UnidadConsumoMaquinaDto;
-            costoReferencia: number | null;
             rendimientoEstimado: number | null;
             consumoBase: number | null;
             perfilOperativoNombre: string;
@@ -213,11 +233,15 @@ export declare class MaquinariaController {
         }[];
         componentesDesgaste: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: import("./dto/upsert-maquina.dto").TipoComponenteDesgasteMaquinaDto;
             vidaUtilEstimada: number | null;
             unidadDesgaste: import("./dto/upsert-maquina.dto").UnidadDesgasteMaquinaDto;
-            costoReposicion: number | null;
             modoProrrateo: string;
             activo: boolean;
             detalle: Record<string, unknown> | null;
@@ -274,10 +298,14 @@ export declare class MaquinariaController {
         }[];
         consumibles: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: import("./dto/upsert-maquina.dto").TipoConsumibleMaquinaDto;
             unidad: import("./dto/upsert-maquina.dto").UnidadConsumoMaquinaDto;
-            costoReferencia: number | null;
             rendimientoEstimado: number | null;
             consumoBase: number | null;
             perfilOperativoNombre: string;
@@ -287,11 +315,15 @@ export declare class MaquinariaController {
         }[];
         componentesDesgaste: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: import("./dto/upsert-maquina.dto").TipoComponenteDesgasteMaquinaDto;
             vidaUtilEstimada: number | null;
             unidadDesgaste: import("./dto/upsert-maquina.dto").UnidadDesgasteMaquinaDto;
-            costoReposicion: number | null;
             modoProrrateo: string;
             activo: boolean;
             detalle: Record<string, unknown> | null;
@@ -348,10 +380,14 @@ export declare class MaquinariaController {
         }[];
         consumibles: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: import("./dto/upsert-maquina.dto").TipoConsumibleMaquinaDto;
             unidad: import("./dto/upsert-maquina.dto").UnidadConsumoMaquinaDto;
-            costoReferencia: number | null;
             rendimientoEstimado: number | null;
             consumoBase: number | null;
             perfilOperativoNombre: string;
@@ -361,11 +397,15 @@ export declare class MaquinariaController {
         }[];
         componentesDesgaste: {
             id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaVarianteSku: string;
+            materiaPrimaVarianteNombre: string;
+            materiaPrimaNombre: string;
+            materiaPrimaPrecioReferencia: number | null;
             nombre: string;
             tipo: import("./dto/upsert-maquina.dto").TipoComponenteDesgasteMaquinaDto;
             vidaUtilEstimada: number | null;
             unidadDesgaste: import("./dto/upsert-maquina.dto").UnidadDesgasteMaquinaDto;
-            costoReposicion: number | null;
             modoProrrateo: string;
             activo: boolean;
             detalle: Record<string, unknown> | null;
