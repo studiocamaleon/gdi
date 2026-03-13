@@ -198,7 +198,9 @@ export class MaquinaPerfilOperativoItemDto {
 }
 
 export class MaquinaConsumibleItemDto {
-  @IsUUID()
+  @IsUUID(undefined, {
+    message: 'Selecciona una variante valida para el consumible.',
+  })
   materiaPrimaVarianteId: string;
 
   @IsString()
@@ -238,7 +240,9 @@ export class MaquinaConsumibleItemDto {
 }
 
 export class MaquinaComponenteDesgasteItemDto {
-  @IsUUID()
+  @IsUUID(undefined, {
+    message: 'Selecciona una variante valida para el componente de desgaste.',
+  })
   materiaPrimaVarianteId: string;
 
   @IsString()

@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.InventarioController = void 0;
 const common_1 = require("@nestjs/common");
 const current_auth_decorator_1 = require("../auth/current-auth.decorator");
+const update_variante_precio_referencia_dto_1 = require("./dto/update-variante-precio-referencia.dto");
 const upsert_materia_prima_dto_1 = require("./dto/upsert-materia-prima.dto");
 const inventario_service_1 = require("./inventario.service");
 let InventarioController = class InventarioController {
@@ -36,6 +37,9 @@ let InventarioController = class InventarioController {
     }
     toggle(auth, id) {
         return this.inventarioService.toggleMateriaPrima(auth, id);
+    }
+    updateVariantePrecioReferencia(auth, varianteId, payload) {
+        return this.inventarioService.updateVariantePrecioReferencia(auth, varianteId, payload);
     }
 };
 exports.InventarioController = InventarioController;
@@ -79,6 +83,15 @@ __decorate([
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", void 0)
 ], InventarioController.prototype, "toggle", null);
+__decorate([
+    (0, common_1.Patch)('variantes/:varianteId/precio-referencia'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('varianteId')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, update_variante_precio_referencia_dto_1.UpdateVariantePrecioReferenciaDto]),
+    __metadata("design:returntype", void 0)
+], InventarioController.prototype, "updateVariantePrecioReferencia", null);
 exports.InventarioController = InventarioController = __decorate([
     (0, common_1.Controller)('inventario/materias-primas'),
     __metadata("design:paramtypes", [inventario_service_1.InventarioService])

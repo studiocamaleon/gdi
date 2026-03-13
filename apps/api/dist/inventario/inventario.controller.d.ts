@@ -1,4 +1,5 @@
 import type { CurrentAuth } from '../auth/auth.types';
+import { UpdateVariantePrecioReferenciaDto } from './dto/update-variante-precio-referencia.dto';
 import { UpsertMateriaPrimaDto } from './dto/upsert-materia-prima.dto';
 import { InventarioService } from './inventario.service';
 export declare class InventarioController {
@@ -227,6 +228,12 @@ export declare class InventarioController {
             activo: boolean;
         }[];
         createdAt: string;
+        updatedAt: string;
+    }>;
+    updateVariantePrecioReferencia(auth: CurrentAuth, varianteId: string, payload: UpdateVariantePrecioReferenciaDto): Promise<{
+        varianteId: string;
+        precioReferencia: number;
+        moneda: string;
         updatedAt: string;
     }>;
 }

@@ -232,7 +232,7 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
   'altoImprimibleMaximo',
 ]);
 
-const ALLOWED_CONSUMABLE_DETAIL_KEYS = new Set(['dependePerfilOperativo']);
+const ALLOWED_CONSUMABLE_DETAIL_KEYS = new Set(['dependePerfilOperativo', 'color']);
 const ALLOWED_WEAR_DETAIL_KEYS = new Set<string>();
 const PRINTER_TEMPLATES_WITH_INK_CONSUMPTION = new Set<PlantillaMaquinariaDto>([
   PlantillaMaquinariaDto.impresora_dtf,
@@ -363,7 +363,7 @@ export class MaquinariaService {
 
   async update(auth: CurrentAuth, id: string, payload: UpsertMaquinaDto) {
     await this.findMaquinaOrThrow(auth, id);
-    await this.validateReferences(auth, payload);
+    await this.validateReferences(auth, payload, id);
     if (!payload.codigo?.trim()) {
       throw new BadRequestException(
         'El codigo de la maquina es obligatorio para actualizar.',
@@ -708,6 +708,7 @@ export class MaquinariaService {
   private async validateReferences(
     auth: CurrentAuth,
     payload: UpsertMaquinaDto,
+    maquinaId?: string,
   ) {
     const templateRule = TEMPLATE_CATALOG_RULES[payload.plantilla];
     if (!templateRule) {
@@ -833,6 +834,13 @@ export class MaquinariaService {
             activo: true,
             esConsumible: true,
             esRepuesto: true,
+            compatibilidades: {
+              select: {
+                varianteId: true,
+                maquinaId: true,
+                activo: true,
+              },
+            },
           },
         },
       },
@@ -840,6 +848,12 @@ export class MaquinariaService {
     const varianteById = new Map(
       variantesMateriaPrima.map((variante) => [variante.id, variante]),
     );
+
+    if (!maquinaId && (payload.consumibles.length > 0 || payload.componentesDesgaste.length > 0)) {
+      throw new BadRequestException(
+        'Guarda la maquina primero para asignar consumibles o repuestos compatibles.',
+      );
+    }
 
     for (const consumible of payload.consumibles) {
       const consumibleName = consumible.nombre.trim() || 'sin nombre';
@@ -857,6 +871,17 @@ export class MaquinariaService {
       if (!variante.materiaPrima.esConsumible) {
         throw new BadRequestException(
           `La materia prima ${variante.materiaPrima.nombre} no esta habilitada como consumible.`,
+        );
+      }
+      if (
+        !this.isMateriaPrimaCompatibleWithMachine(
+          variante.materiaPrima.compatibilidades,
+          variante.id,
+          maquinaId ?? null,
+        )
+      ) {
+        throw new BadRequestException(
+          `La materia prima ${variante.materiaPrima.nombre} no es compatible con esta maquina.`,
         );
       }
 
@@ -885,6 +910,17 @@ export class MaquinariaService {
       if (!variante.materiaPrima.esRepuesto) {
         throw new BadRequestException(
           `La materia prima ${variante.materiaPrima.nombre} no esta habilitada como repuesto.`,
+        );
+      }
+      if (
+        !this.isMateriaPrimaCompatibleWithMachine(
+          variante.materiaPrima.compatibilidades,
+          variante.id,
+          maquinaId ?? null,
+        )
+      ) {
+        throw new BadRequestException(
+          `La materia prima ${variante.materiaPrima.nombre} no es compatible con esta maquina.`,
         );
       }
 
@@ -941,6 +977,40 @@ export class MaquinariaService {
         `El parametro tecnico ${key} contiene un formato invalido.`,
       );
     }
+  }
+
+  private isMateriaPrimaCompatibleWithMachine(
+    compatibilidades: Array<{
+      varianteId: string | null;
+      maquinaId: string | null;
+      activo: boolean;
+    }>,
+    varianteId: string,
+    maquinaId: string | null,
+  ) {
+    if (!maquinaId) {
+      return false;
+    }
+
+    const compatibilidadesActivas = compatibilidades.filter(
+      (compatibilidad) => compatibilidad.activo,
+    );
+    if (compatibilidadesActivas.length === 0) {
+      return false;
+    }
+
+    const compatibilidadesMaquina = compatibilidadesActivas.filter(
+      (compatibilidad) => compatibilidad.maquinaId === maquinaId,
+    );
+    if (compatibilidadesMaquina.length === 0) {
+      return false;
+    }
+
+    return compatibilidadesMaquina.some(
+      (compatibilidad) =>
+        compatibilidad.varianteId === null ||
+        compatibilidad.varianteId === varianteId,
+    );
   }
 
   private async findMaquinaOrThrow(auth: CurrentAuth, id: string) {

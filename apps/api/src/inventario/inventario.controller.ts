@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
 import type { CurrentAuth } from '../auth/auth.types';
 import { CurrentSession } from '../auth/current-auth.decorator';
+import { UpdateVariantePrecioReferenciaDto } from './dto/update-variante-precio-referencia.dto';
 import { UpsertMateriaPrimaDto } from './dto/upsert-materia-prima.dto';
 import { InventarioService } from './inventario.service';
 
@@ -38,5 +39,14 @@ export class InventarioController {
   @Patch(':id/toggle')
   toggle(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.inventarioService.toggleMateriaPrima(auth, id);
+  }
+
+  @Patch('variantes/:varianteId/precio-referencia')
+  updateVariantePrecioReferencia(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('varianteId') varianteId: string,
+    @Body() payload: UpdateVariantePrecioReferenciaDto,
+  ) {
+    return this.inventarioService.updateVariantePrecioReferencia(auth, varianteId, payload);
   }
 }
