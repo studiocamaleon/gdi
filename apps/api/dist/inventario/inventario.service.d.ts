@@ -401,6 +401,8 @@ export declare class InventarioService {
     getKardex(auth: CurrentAuth, query: GetKardexQueryDto): Promise<{
         items: {
             ubicacionNombre: string;
+            varianteSku: string;
+            materiaPrimaNombre: string;
             movimientoId: string;
             varianteId: string;
             ubicacionId: string;
@@ -428,6 +430,7 @@ export declare class InventarioService {
     private findVarianteOrThrow;
     private findStockRow;
     private toDecimal;
+    private roundToScale;
     private toMovimientoResponse;
     private findMateriaPrimaOrThrow;
     private normalizePayload;

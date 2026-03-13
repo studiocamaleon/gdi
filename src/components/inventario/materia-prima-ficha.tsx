@@ -2,26 +2,32 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
   CirclePlusIcon,
+  HistoryIcon,
+  PackageIcon,
   SaveIcon,
   TrashIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { updateMateriaPrima } from "@/lib/materias-primas-api";
+import { getKardex, getStockActual } from "@/lib/inventario-stock-api";
+import type { MovimientoStockMateriaPrima, StockMateriaPrimaItem } from "@/lib/inventario-stock";
+import { getMaquinas } from "@/lib/maquinaria-api";
+import type { Maquina } from "@/lib/maquinaria";
 import {
   familiaMateriaPrimaItems,
   unidadMateriaPrimaItems,
   type FamiliaMateriaPrima,
   type MateriaPrima,
   type MateriaPrimaPayload,
-  type ModoUsoCompatibilidadMateriaPrima,
-  type PlantillaMaquinaria,
   type SubfamiliaMateriaPrima,
   type UnidadMateriaPrima,
 } from "@/lib/materias-primas";
+import { getMateriaPrimaVarianteLabel } from "@/lib/materias-primas-variantes-display";
 import {
   SUSTRATO_HOJA_FORMATOS_PRESET,
   getMateriaPrimaTemplate,
@@ -50,6 +56,11 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+
+const number2Formatter = new Intl.NumberFormat("es-AR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 const subfamiliaMateriaPrimaItems: Array<{ value: SubfamiliaMateriaPrima; label: string }> = [
   { value: "sustrato_hoja", label: "Sustrato hoja" },
@@ -96,36 +107,6 @@ const subfamiliaMateriaPrimaItems: Array<{ value: SubfamiliaMateriaPrima; label:
   { value: "consumible_instalacion", label: "Consumible instalación" },
 ];
 
-const plantillasMaquinariaItems: Array<{ value: PlantillaMaquinaria; label: string }> = [
-  { value: "router_cnc", label: "Router CNC" },
-  { value: "corte_laser", label: "Corte láser" },
-  { value: "impresora_3d", label: "Impresora 3D" },
-  { value: "impresora_dtf", label: "Impresora DTF" },
-  { value: "impresora_dtf_uv", label: "Impresora DTF UV" },
-  { value: "impresora_uv_mesa_extensora", label: "UV mesa extensora" },
-  { value: "impresora_uv_cilindrica", label: "UV cilíndrica" },
-  { value: "impresora_uv_flatbed", label: "UV flatbed" },
-  { value: "impresora_uv_rollo", label: "UV rollo" },
-  { value: "impresora_solvente", label: "Impresora solvente" },
-  { value: "impresora_inyeccion_tinta", label: "Inyección tinta" },
-  { value: "impresora_latex", label: "Impresora latex" },
-  { value: "impresora_sublimacion_gran_formato", label: "Sublimación gran formato" },
-  { value: "impresora_laser", label: "Impresora láser" },
-  { value: "plotter_cad", label: "Plotter CAD" },
-  { value: "mesa_de_corte", label: "Mesa de corte" },
-  { value: "plotter_de_corte", label: "Plotter de corte" },
-];
-
-const modoUsoItems: Array<{ value: ModoUsoCompatibilidadMateriaPrima; label: string }> = [
-  { value: "sustrato_directo", label: "Sustrato directo" },
-  { value: "tinta", label: "Tinta" },
-  { value: "transferencia", label: "Transferencia" },
-  { value: "laminacion", label: "Laminación" },
-  { value: "auxiliar", label: "Auxiliar" },
-  { value: "montaje", label: "Montaje" },
-  { value: "embalaje", label: "Embalaje" },
-];
-
 function getLabel<T extends string>(
   items: Array<{ value: T; label: string }>,
   value: T | null | undefined,
@@ -152,11 +133,7 @@ type LocalVariante = {
 type LocalCompatibilidad = {
   id: string;
   varianteSku?: string;
-  plantillaMaquinaria?: PlantillaMaquinaria;
-  modoUso: ModoUsoCompatibilidadMateriaPrima;
-  consumoBase?: number;
-  unidadConsumo?: UnidadMateriaPrima;
-  mermaBasePct?: number;
+  maquinaId?: string;
   activo: boolean;
 };
 
@@ -181,6 +158,16 @@ type FormState = {
 type MateriaPrimaFichaProps = {
   materiaPrima: MateriaPrima;
   proveedores: ProveedorDetalle[];
+};
+
+type InventarioVarianteResumen = {
+  varianteId: string;
+  varianteLabel: string;
+  stockTotal: number;
+  costoPromedio: number;
+  valorStock: number;
+  almacenesConStock: number;
+  ultimoMovimiento: MovimientoStockMateriaPrima | null;
 };
 
 function parseJsonField(text: string, fallback: Record<string, unknown>) {
@@ -275,11 +262,7 @@ function createEmptyCompatibilidad(): LocalCompatibilidad {
   return {
     id: crypto.randomUUID(),
     varianteSku: undefined,
-    plantillaMaquinaria: undefined,
-    modoUso: "sustrato_directo",
-    consumoBase: undefined,
-    unidadConsumo: undefined,
-    mermaBasePct: undefined,
+    maquinaId: undefined,
     activo: true,
   };
 }
@@ -323,11 +306,7 @@ function mapMateriaPrimaToForm(materiaPrima: MateriaPrima): FormState {
             varianteSku:
               materiaPrima.variantes.find((variante) => variante.id === compatibilidad.varianteId)?.sku ??
               undefined,
-            plantillaMaquinaria: compatibilidad.plantillaMaquinaria ?? undefined,
-            modoUso: compatibilidad.modoUso,
-            consumoBase: compatibilidad.consumoBase ?? undefined,
-            unidadConsumo: compatibilidad.unidadConsumo ?? undefined,
-            mermaBasePct: compatibilidad.mermaBasePct ?? undefined,
+            maquinaId: compatibilidad.maquinaId ?? undefined,
             activo: compatibilidad.activo,
           }))
         : [],
@@ -338,6 +317,7 @@ function buildPayload(
   form: FormState,
   templateDimensiones: string[],
   templateFields: Array<{ key: string; type: "text" | "number" | "boolean" }>,
+  maquinas: Maquina[] = [],
 ): MateriaPrimaPayload {
   const numberFieldKeys = new Set(
     templateFields.filter((field) => field.type === "number").map((field) => field.key),
@@ -356,6 +336,8 @@ function buildPayload(
     }
     return normalized;
   };
+
+  const maquinaById = new Map(maquinas.map((maquina) => [maquina.id, maquina]));
 
   return {
     codigo: form.codigo,
@@ -396,16 +378,20 @@ function buildPayload(
       })
       .filter((item): item is NonNullable<typeof item> => item !== null),
     compatibilidades: form.compatibilidades
-      .filter((compatibilidad) => compatibilidad.plantillaMaquinaria)
-      .map((compatibilidad) => ({
-        varianteSku: compatibilidad.varianteSku,
-        plantillaMaquinaria: compatibilidad.plantillaMaquinaria,
-        modoUso: compatibilidad.modoUso,
-        consumoBase: compatibilidad.consumoBase,
-        unidadConsumo: compatibilidad.unidadConsumo,
-        mermaBasePct: compatibilidad.mermaBasePct,
-        activo: compatibilidad.activo,
-      })),
+      .filter(
+        (compatibilidad) =>
+          compatibilidad.varianteSku?.trim() && compatibilidad.maquinaId?.trim(),
+      )
+      .map((compatibilidad) => {
+        const maquina = maquinaById.get(compatibilidad.maquinaId ?? "");
+        return {
+          varianteSku: compatibilidad.varianteSku,
+          maquinaId: compatibilidad.maquinaId,
+          plantillaMaquinaria: maquina?.plantilla,
+          modoUso: "auxiliar",
+          activo: compatibilidad.activo,
+        };
+      }),
   };
 }
 
@@ -422,13 +408,40 @@ function formatFieldLabel(key: string) {
     .replace(/^./, (char) => char.toUpperCase());
 }
 
+function formatFechaCorta(value: string) {
+  return new Date(value).toLocaleString();
+}
+
+function getMovimientoTipoLabel(tipo: string) {
+  switch (tipo) {
+    case "ingreso":
+      return "Ingreso";
+    case "egreso":
+      return "Egreso";
+    case "ajuste_entrada":
+      return "Ajuste +";
+    case "ajuste_salida":
+      return "Ajuste -";
+    case "transferencia_entrada":
+      return "Transferencia +";
+    case "transferencia_salida":
+      return "Transferencia -";
+    default:
+      return tipo;
+  }
+}
+
 export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFichaProps) {
+  const router = useRouter();
   const [form, setForm] = React.useState<FormState>(() => mapMateriaPrimaToForm(materiaPrima));
   const [savedSnapshot, setSavedSnapshot] = React.useState(() =>
     createFormSnapshot(mapMateriaPrimaToForm(materiaPrima)),
   );
+  const [maquinas, setMaquinas] = React.useState<Maquina[]>([]);
   const [activeTab, setActiveTab] = React.useState("datos-base");
   const [isSaving, setIsSaving] = React.useState(false);
+  const [inventarioResumen, setInventarioResumen] = React.useState<InventarioVarianteResumen[]>([]);
+  const [inventarioLoading, setInventarioLoading] = React.useState(false);
   const [customFormatoModeByVariante, setCustomFormatoModeByVariante] = React.useState<Record<string, boolean>>({});
 
   const template = React.useMemo(() => getMateriaPrimaTemplate(form.templateId), [form.templateId]);
@@ -445,6 +458,7 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
     () => new Map(proveedores.map((proveedor) => [proveedor.id, proveedor.nombre])),
     [proveedores],
   );
+  const showCompatibilidadesTab = form.esConsumible || form.esRepuesto;
 
   const varianteColumns = React.useMemo(() => {
     if (template?.dimensionesVariante?.length) {
@@ -464,6 +478,105 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
     setForm(nextForm);
     setSavedSnapshot(createFormSnapshot(nextForm));
     setCustomFormatoModeByVariante({});
+  }, [materiaPrima]);
+
+  React.useEffect(() => {
+    if (!showCompatibilidadesTab && activeTab === "compatibilidades") {
+      setActiveTab("datos-base");
+    }
+  }, [activeTab, showCompatibilidadesTab]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    const loadMaquinas = async () => {
+      try {
+        const data = await getMaquinas();
+        if (!cancelled) {
+          setMaquinas(data);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          toast.error(
+            error instanceof Error ? error.message : "No se pudo cargar el catálogo de máquinas.",
+          );
+        }
+      }
+    };
+
+    if (showCompatibilidadesTab) {
+      void loadMaquinas();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showCompatibilidadesTab]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    const loadInventario = async () => {
+      setInventarioLoading(true);
+      try {
+        const stockRows = await getStockActual({ materiaPrimaId: materiaPrima.id });
+        const byVariante = new Map<string, StockMateriaPrimaItem[]>();
+
+        for (const row of stockRows) {
+          const current = byVariante.get(row.varianteId) ?? [];
+          current.push(row);
+          byVariante.set(row.varianteId, current);
+        }
+
+        const ultimoMovimientoByVariante = new Map<string, MovimientoStockMateriaPrima | null>();
+        await Promise.all(
+          materiaPrima.variantes.map(async (variante) => {
+            try {
+              const result = await getKardex({
+                varianteId: variante.id,
+                page: 1,
+                pageSize: 1,
+              });
+              ultimoMovimientoByVariante.set(variante.id, result.items[0] ?? null);
+            } catch {
+              ultimoMovimientoByVariante.set(variante.id, null);
+            }
+          }),
+        );
+
+        const rows: InventarioVarianteResumen[] = materiaPrima.variantes.map((variante) => {
+          const stockItems = byVariante.get(variante.id) ?? [];
+          const stockTotal = stockItems.reduce((acc, item) => acc + item.cantidadDisponible, 0);
+          const valorStock = stockItems.reduce((acc, item) => acc + item.valorStock, 0);
+          const costoPromedio =
+            stockTotal > 0 ? valorStock / stockTotal : (variante.precioReferencia ?? 0);
+
+          return {
+            varianteId: variante.id,
+            varianteLabel: getMateriaPrimaVarianteLabel(materiaPrima, variante, { maxDimensiones: 5 }),
+            stockTotal,
+            costoPromedio,
+            valorStock,
+            almacenesConStock: stockItems.length,
+            ultimoMovimiento: ultimoMovimientoByVariante.get(variante.id) ?? null,
+          };
+        });
+
+        if (!cancelled) {
+          setInventarioResumen(rows);
+        }
+      } finally {
+        if (!cancelled) {
+          setInventarioLoading(false);
+        }
+      }
+    };
+
+    void loadInventario();
+
+    return () => {
+      cancelled = true;
+    };
   }, [materiaPrima]);
 
   const setVariante = (id: string, patch: Partial<LocalVariante>) => {
@@ -512,11 +625,29 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
   );
   const varianteLabelBySku = React.useMemo(() => {
     const map = new Map<string, string>();
-    form.variantes.forEach((variante, index) => {
-      map.set(variante.sku, `Variante ${index + 1}`);
+    const templateDimensiones = template?.dimensionesVariante ?? [];
+    form.variantes.forEach((variante) => {
+      const attrs = getVarianteAtributos(variante);
+      const values = templateDimensiones
+        .map((key) => attrs[key])
+        .filter((value) => value !== undefined && value !== null && String(value).trim().length > 0)
+        .slice(0, 5)
+        .map((value) => String(value));
+      const label = values.length > 0 ? `${form.nombre} - ${values.join(" - ")}` : variante.sku;
+      map.set(variante.sku, label);
     });
     return map;
-  }, [form.variantes]);
+  }, [form.nombre, form.variantes, template]);
+  const maquinaLabelById = React.useMemo(
+    () =>
+      new Map(
+        maquinas.map((maquina) => [
+          maquina.id,
+          `${maquina.nombre} (${maquina.codigo})`,
+        ]),
+      ),
+    [maquinas],
+  );
 
   const setVarianteAtributo = (varianteId: string, key: string, value: string) => {
     const variante = form.variantes.find((item) => item.id === varianteId);
@@ -616,6 +747,7 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
         form,
         template?.dimensionesVariante ?? [],
         template?.camposTecnicos ?? [],
+        maquinas,
       );
       const updated = await updateMateriaPrima(materiaPrima.id, payload);
       const updatedForm = mapMateriaPrimaToForm(updated);
@@ -686,17 +818,19 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
                 >
                   Precios
                 </TabsTrigger>
-                <TabsTrigger
-                  className="shrink-0 cursor-pointer rounded-none px-4 py-3 text-sm font-medium transition-colors hover:text-foreground data-active:text-foreground after:!bottom-[1px] after:!h-1 after:!bg-primary after:opacity-0 hover:after:!opacity-70 data-active:after:!opacity-100"
-                  value="compatibilidades"
-                >
-                  Compatibilidades
-                </TabsTrigger>
+                {showCompatibilidadesTab ? (
+                  <TabsTrigger
+                    className="shrink-0 cursor-pointer rounded-none px-4 py-3 text-sm font-medium transition-colors hover:text-foreground data-active:text-foreground after:!bottom-[1px] after:!h-1 after:!bg-primary after:opacity-0 hover:after:!opacity-70 data-active:after:!opacity-100"
+                    value="compatibilidades"
+                  >
+                    Compatibilidades
+                  </TabsTrigger>
+                ) : null}
                 <TabsTrigger
                   className="shrink-0 cursor-pointer rounded-none px-4 py-3 text-sm font-medium transition-colors hover:text-foreground data-active:text-foreground after:!bottom-[1px] after:!h-1 after:!bg-primary after:opacity-0 hover:after:!opacity-70 data-active:after:!opacity-100"
                   value="inventario"
                 >
-                  Inventario y lotes
+                  Inventario
                 </TabsTrigger>
                 <TabsTrigger
                   className="shrink-0 cursor-pointer rounded-none px-4 py-3 text-sm font-medium transition-colors hover:text-foreground data-active:text-foreground after:!bottom-[1px] after:!h-1 after:!bg-primary after:opacity-0 hover:after:!opacity-70 data-active:after:!opacity-100"
@@ -1040,30 +1174,35 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
               </div>
             </TabsContent>
 
-            <TabsContent value="compatibilidades" className="m-0 p-4 md:p-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold">Compatibilidad con maquinaria</h4>
-                  <Button type="button" variant="sidebar" size="sm" onClick={addCompatibilidad}>
-                    <CirclePlusIcon className="size-4" />
-                    Agregar compatibilidad
-                  </Button>
-                </div>
+            {showCompatibilidadesTab ? (
+              <TabsContent value="compatibilidades" className="m-0 p-4 md:p-6">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold">Compatibilidad con maquinaria</h4>
+                    <Button type="button" variant="sidebar" size="sm" onClick={addCompatibilidad}>
+                      <CirclePlusIcon className="size-4" />
+                      Agregar compatibilidad
+                    </Button>
+                  </div>
 
-                {form.compatibilidades.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    Sin compatibilidades cargadas. Definilas para habilitar selección por plantilla/máquina.
+                    Define únicamente qué variante puede usarse en qué máquina.
                   </p>
-                ) : (
-                  <div className="space-y-3">
-                    {form.compatibilidades.map((compatibilidad) => (
-                      <div key={compatibilidad.id} className="space-y-3 rounded-md border p-3">
-                        <div className="grid gap-3 md:grid-cols-3">
+
+                  {form.compatibilidades.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Sin compatibilidades cargadas. Agrega una relación variante-máquina para habilitarla en Maquinaria.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {form.compatibilidades.map((compatibilidad) => (
+                        <div key={compatibilidad.id} className="rounded-md border p-3">
+                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
                           <Field>
                             <FieldLabel>Variante</FieldLabel>
                             <Select
                               value={compatibilidad.varianteSku ?? "__none__"}
-                            onValueChange={(value) => {
+                              onValueChange={(value) => {
                                 const nextValue = value ?? "__none__";
                                 setCompatibilidad(compatibilidad.id, {
                                   varianteSku: nextValue === "__none__" ? undefined : nextValue,
@@ -1074,11 +1213,11 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
                                 <SelectValue>
                                   {compatibilidad.varianteSku
                                     ? varianteLabelBySku.get(compatibilidad.varianteSku) ?? "Variante"
-                                    : "Todas las variantes"}
+                                    : "Seleccionar variante"}
                                 </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="__none__">Todas las variantes</SelectItem>
+                                <SelectItem value="__none__">Seleccionar variante</SelectItem>
                                 {form.variantes
                                   .filter((variante) => variante.sku.trim().length > 0)
                                   .map((variante) => (
@@ -1091,152 +1230,53 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
                           </Field>
 
                           <Field>
-                            <FieldLabel>Plantilla de maquinaria</FieldLabel>
+                            <FieldLabel>Máquina</FieldLabel>
                             <Select
-                              value={compatibilidad.plantillaMaquinaria ?? "__none__"}
+                              value={compatibilidad.maquinaId ?? "__none__"}
                               onValueChange={(value) =>
                                 setCompatibilidad(compatibilidad.id, {
-                                  plantillaMaquinaria:
-                                    value === "__none__" ? undefined : (value as PlantillaMaquinaria),
+                                  maquinaId:
+                                    value && value !== "__none__" ? String(value) : undefined,
                                 })
                               }
                             >
                               <SelectTrigger>
                                 <SelectValue>
-                                  {compatibilidad.plantillaMaquinaria
-                                    ? getLabel(
-                                        plantillasMaquinariaItems,
-                                        compatibilidad.plantillaMaquinaria,
-                                      )
-                                    : "Sin plantilla"}
+                                  {compatibilidad.maquinaId
+                                    ? maquinaLabelById.get(compatibilidad.maquinaId) ?? "Máquina"
+                                    : "Seleccionar máquina"}
                                 </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="__none__">Sin plantilla</SelectItem>
-                                {plantillasMaquinariaItems.map((item) => (
-                                  <SelectItem key={item.value} value={item.value}>
-                                    {item.label}
+                                <SelectItem value="__none__">Seleccionar máquina</SelectItem>
+                                {maquinas
+                                  .filter((maquina) => maquina.activo)
+                                  .map((maquina) => (
+                                  <SelectItem key={maquina.id} value={maquina.id}>
+                                    {maquinaLabelById.get(maquina.id) ?? maquina.nombre}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
                           </Field>
 
-                          <Field>
-                            <FieldLabel>Modo de uso</FieldLabel>
-                            <Select
-                              value={compatibilidad.modoUso}
-                              onValueChange={(value) =>
-                                setCompatibilidad(compatibilidad.id, {
-                                  modoUso: value as ModoUsoCompatibilidadMateriaPrima,
-                                })
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue>
-                                  {getLabel(modoUsoItems, compatibilidad.modoUso)}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                {modoUsoItems.map((item) => (
-                                  <SelectItem key={item.value} value={item.value}>
-                                    {item.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </Field>
-                        </div>
-
-                        <div className="grid gap-3 md:grid-cols-4">
-                          <Field>
-                            <FieldLabel>Consumo base</FieldLabel>
-                            <Input
-                              type="number"
-                              min={0}
-                              step="0.000001"
-                              value={compatibilidad.consumoBase ?? ""}
-                              onChange={(event) =>
-                                setCompatibilidad(compatibilidad.id, {
-                                  consumoBase: event.target.value
-                                    ? Number(event.target.value)
-                                    : undefined,
-                                })
-                              }
-                            />
-                          </Field>
-                          <Field>
-                            <FieldLabel>Unidad consumo</FieldLabel>
-                            <Select
-                              value={compatibilidad.unidadConsumo ?? "__none__"}
-                              onValueChange={(value) =>
-                                setCompatibilidad(compatibilidad.id, {
-                                  unidadConsumo:
-                                    value === "__none__" ? undefined : (value as UnidadMateriaPrima),
-                                })
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue>
-                                  {compatibilidad.unidadConsumo
-                                    ? getLabel(unidadMateriaPrimaItems, compatibilidad.unidadConsumo)
-                                    : "Sin unidad"}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="__none__">Sin unidad</SelectItem>
-                                {unidadMateriaPrimaItems.map((item) => (
-                                  <SelectItem key={item.value} value={item.value}>
-                                    {item.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </Field>
-                          <Field>
-                            <FieldLabel>Merma base (%)</FieldLabel>
-                            <Input
-                              type="number"
-                              min={0}
-                              step="0.0001"
-                              value={compatibilidad.mermaBasePct ?? ""}
-                              onChange={(event) =>
-                                setCompatibilidad(compatibilidad.id, {
-                                  mermaBasePct: event.target.value
-                                    ? Number(event.target.value)
-                                    : undefined,
-                                })
-                              }
-                            />
-                          </Field>
-                          <Field className="flex flex-row items-center justify-between rounded-lg border p-3">
-                            <FieldLabel>Activa</FieldLabel>
-                            <Switch
-                              checked={compatibilidad.activo}
-                              onCheckedChange={(checked) =>
-                                setCompatibilidad(compatibilidad.id, { activo: checked })
-                              }
-                            />
-                          </Field>
-                        </div>
-
-                        <div className="flex justify-end">
                           <Button
                             type="button"
                             variant="outline"
-                            size="sm"
+                            className="md:self-end"
                             onClick={() => removeCompatibilidad(compatibilidad.id)}
                           >
                             <TrashIcon className="size-4" />
-                            Quitar compatibilidad
+                            Quitar
                           </Button>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </TabsContent>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+            ) : null}
 
             <TabsContent value="precios" className="m-0 p-4 md:p-6">
               <div className="space-y-3">
@@ -1340,9 +1380,112 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
             </TabsContent>
 
             <TabsContent value="inventario" className="m-0 p-4 md:p-6">
-              <p className="text-sm text-muted-foreground">
-                Este tab queda listo para integrar en Fase 4: stock por lote/ubicación, movimientos y kardex.
-              </p>
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Stock total</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-2xl font-semibold">
+                      {number2Formatter.format(
+                        inventarioResumen.reduce((acc, item) => acc + item.stockTotal, 0),
+                      )}
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Valor stock</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-2xl font-semibold">
+                      $ {number2Formatter.format(
+                        inventarioResumen.reduce((acc, item) => acc + item.valorStock, 0),
+                      )}
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Variantes con stock</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-2xl font-semibold">
+                      {inventarioResumen.filter((item) => item.stockTotal > 0).length}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Variante</TableHead>
+                        <TableHead className="text-right">Stock total</TableHead>
+                        <TableHead className="text-right">Costo promedio</TableHead>
+                        <TableHead className="text-right">Valor stock</TableHead>
+                        <TableHead className="text-right">Almacenes</TableHead>
+                        <TableHead>Último movimiento</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {inventarioLoading ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-muted-foreground">
+                            Cargando inventario...
+                          </TableCell>
+                        </TableRow>
+                      ) : inventarioResumen.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-muted-foreground">
+                            Esta materia prima no tiene variantes definidas para inventario.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        inventarioResumen.map((item) => (
+                          <TableRow key={item.varianteId}>
+                            <TableCell>{item.varianteLabel}</TableCell>
+                            <TableCell className="text-right">
+                              {number2Formatter.format(item.stockTotal)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              $ {number2Formatter.format(item.costoPromedio)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              $ {number2Formatter.format(item.valorStock)}
+                            </TableCell>
+                            <TableCell className="text-right">{item.almacenesConStock}</TableCell>
+                            <TableCell>
+                              {item.ultimoMovimiento
+                                ? `${getMovimientoTipoLabel(item.ultimoMovimiento.tipo)} · ${formatFechaCorta(
+                                    item.ultimoMovimiento.createdAt,
+                                  )}`
+                                : "Sin movimientos"}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => router.push("/inventario/centro-stock")}
+                                >
+                                  <PackageIcon className="size-4" />
+                                  Centro stock
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => router.push("/inventario/movimientos-kardex")}
+                                >
+                                  <HistoryIcon className="size-4" />
+                                  Historial
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
             </TabsContent>
 
             <TabsContent value="historial" className="m-0 p-4 md:p-6">

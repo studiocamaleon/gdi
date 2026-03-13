@@ -9,8 +9,9 @@ import {
 } from 'class-validator';
 
 export class GetKardexQueryDto {
+  @IsOptional()
   @IsUUID()
-  varianteId: string;
+  varianteId?: string;
 
   @IsOptional()
   @IsUUID()

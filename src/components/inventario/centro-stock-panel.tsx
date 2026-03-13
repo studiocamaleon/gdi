@@ -518,7 +518,7 @@ export function CentroStockPanel({
                         {number2Formatter.format(resumen?.cantidadTotal ?? 0)}
                       </TableCell>
                       <TableCell className="text-right">
-                        {number2Formatter.format(resumen?.valorTotal ?? 0)}
+                        $ {number2Formatter.format(resumen?.valorTotal ?? 0)}
                       </TableCell>
                     </TableRow>
                   );
@@ -530,8 +530,11 @@ export function CentroStockPanel({
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>Detalle de stock actual</CardTitle>
+          <Button size="sm" onClick={openIngresoInicial}>
+            Ingresar stock
+          </Button>
         </CardHeader>
         <CardContent>
           <Table>
@@ -566,7 +569,7 @@ export function CentroStockPanel({
                     <TableCell>{row.varianteSku}</TableCell>
                     <TableCell className="text-right">{number2Formatter.format(row.cantidadDisponible)}</TableCell>
                     <TableCell className="text-right">{number2Formatter.format(row.costoPromedio)}</TableCell>
-                    <TableCell className="text-right">{number2Formatter.format(row.valorStock)}</TableCell>
+                    <TableCell className="text-right">$ {number2Formatter.format(row.valorStock)}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-2">
                         <Button size="sm" onClick={() => openIngreso(row)}>

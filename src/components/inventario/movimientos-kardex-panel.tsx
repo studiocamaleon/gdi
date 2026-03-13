@@ -16,29 +16,121 @@ type HistorialPanelProps = {
 };
 
 const AUTO_REFRESH_MS = 15000;
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const number2Formatter = new Intl.NumberFormat("es-AR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const tipoLabels: Record<string, string> = {
+  ingreso: "Ingreso",
+  egreso: "Egreso",
+  ajuste_entrada: "Ajuste +",
+  ajuste_salida: "Ajuste -",
+  transferencia_salida: "Transferencia salida",
+  transferencia_entrada: "Transferencia entrada",
+};
+
+const origenLabels: Record<string, string> = {
+  compra: "Compra",
+  consumo_produccion: "Consumo producción",
+  ajuste_manual: "Ajuste manual",
+  transferencia: "Transferencia",
+  devolucion: "Devolución",
+  otro: "Otro",
+};
+
+const tipoIndicators: Record<string, { symbol: string; className: string }> = {
+  ingreso: { symbol: "+", className: "text-emerald-600" },
+  ajuste_entrada: { symbol: "+", className: "text-emerald-600" },
+  transferencia_entrada: { symbol: "+", className: "text-emerald-600" },
+  egreso: { symbol: "-", className: "text-red-600" },
+  ajuste_salida: { symbol: "-", className: "text-red-600" },
+  transferencia_salida: { symbol: "-", className: "text-red-600" },
+};
+
+function isUuid(value: string) {
+  return UUID_REGEX.test(value);
+}
+
+function normalizeVarianteFilter(value: string) {
+  if (!value || value === "__all__") return "__all__";
+  return isUuid(value) ? value : "__all__";
+}
 
 export function MovimientosKardexPanel({ materiasPrimas }: HistorialPanelProps) {
   const variantes = React.useMemo(
     () =>
       materiasPrimas.flatMap((materiaPrima) =>
-        materiaPrima.variantes.map((variante) => ({
-          id: variante.id,
-          label: getMateriaPrimaVarianteLabel(materiaPrima, variante, { maxDimensiones: 5 }),
-        })),
+        materiaPrima.variantes
+          .filter((variante) => isUuid(variante.id))
+          .map((variante) => ({
+            id: variante.id,
+            label: getMateriaPrimaVarianteLabel(materiaPrima, variante, { maxDimensiones: 5 }),
+          })),
+      ),
+    [materiasPrimas],
+  );
+  const opcionesFiltro = React.useMemo(
+    () => [
+      { id: "__all__", label: "Todos", searchText: "todos historial movimientos" },
+      ...variantes.map((item) => ({
+        ...item,
+        searchText: item.label.toLowerCase(),
+      })),
+    ],
+    [variantes],
+  );
+  const varianteLabelById = React.useMemo(
+    () =>
+      new Map(
+        materiasPrimas.flatMap((materiaPrima) =>
+          materiaPrima.variantes.map((variante) => [
+            variante.id,
+            getMateriaPrimaVarianteLabel(materiaPrima, variante, { maxDimensiones: 5 }),
+          ]),
+        ),
       ),
     [materiasPrimas],
   );
 
-  const [varianteId, setVarianteId] = React.useState(variantes[0]?.id ?? "");
+  const [varianteId, setVarianteId] = React.useState("__all__");
+  const [varianteQuery, setVarianteQuery] = React.useState("Todos");
+  const [varianteOpen, setVarianteOpen] = React.useState(false);
   const [kardex, setKardex] = React.useState<KardexResponse | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const isRequestInFlightRef = React.useRef(false);
+  const varianteRef = React.useRef<HTMLDivElement | null>(null);
+
+  const opcionesFiltroFiltradas = React.useMemo(() => {
+    const needle = varianteQuery.trim().toLowerCase();
+    if (!needle) return opcionesFiltro;
+    return opcionesFiltro.filter(
+      (item) => item.label.toLowerCase().includes(needle) || item.searchText.includes(needle),
+    );
+  }, [opcionesFiltro, varianteQuery]);
+
+  React.useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (varianteRef.current && !varianteRef.current.contains(target)) {
+        setVarianteOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, []);
 
   const fetchKardex = React.useCallback(async (options?: { silent?: boolean; showError?: boolean }) => {
     const silent = options?.silent ?? false;
     const showError = options?.showError ?? true;
 
-    if (!varianteId) {
+    const normalizedVarianteId = normalizeVarianteFilter(varianteId);
+    const shouldFilterByVariante = normalizedVarianteId !== "__all__";
+
+    if (shouldFilterByVariante && !isUuid(normalizedVarianteId)) {
       if (showError) {
         toast.error("Selecciona una variante.");
       }
@@ -52,7 +144,11 @@ export function MovimientosKardexPanel({ materiasPrimas }: HistorialPanelProps) 
     }
 
     try {
-      const result = await getKardex({ varianteId, page: 1, pageSize: 200 });
+      const result = await getKardex({
+        varianteId: shouldFilterByVariante ? normalizedVarianteId : undefined,
+        page: 1,
+        pageSize: 200,
+      });
       setKardex(result);
     } catch (error) {
       if (showError) {
@@ -71,15 +167,18 @@ export function MovimientosKardexPanel({ materiasPrimas }: HistorialPanelProps) 
   }, [fetchKardex]);
 
   React.useEffect(() => {
-    if (!varianteId) {
-      setKardex(null);
+    const normalizedVarianteId = normalizeVarianteFilter(varianteId);
+    if (normalizedVarianteId !== varianteId) {
+      setVarianteId(normalizedVarianteId);
+      setVarianteQuery(normalizedVarianteId === "__all__" ? "Todos" : "");
       return;
     }
     void fetchKardex({ silent: false, showError: true });
   }, [fetchKardex, varianteId]);
 
   React.useEffect(() => {
-    if (!varianteId) return;
+    const normalizedVarianteId = normalizeVarianteFilter(varianteId);
+    if (normalizedVarianteId !== "__all__" && !isUuid(normalizedVarianteId)) return;
 
     const refreshSilencioso = () => {
       void fetchKardex({ silent: true, showError: false });
@@ -120,19 +219,51 @@ export function MovimientosKardexPanel({ materiasPrimas }: HistorialPanelProps) 
           </p>
         </div>
         <div className="flex w-full max-w-md items-center gap-2">
-          <select
-            className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
-            value={varianteId}
-            onChange={(e) => setVarianteId(e.target.value)}
+          <div ref={varianteRef} className="relative w-full">
+            <input
+              className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
+              value={varianteQuery}
+              onFocus={() => setVarianteOpen(true)}
+              onChange={(e) => {
+                const nextValue = e.target.value;
+                setVarianteQuery(nextValue);
+                setVarianteId(nextValue.trim().length === 0 ? "__all__" : "");
+                setVarianteOpen(true);
+              }}
+              placeholder="Buscar variante o elegir Todos"
+            />
+            {varianteOpen ? (
+              <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-md border bg-background p-1 shadow-md">
+                {opcionesFiltroFiltradas.length === 0 ? (
+                  <p className="px-2 py-1 text-sm text-muted-foreground">Sin resultados</p>
+                ) : (
+                  opcionesFiltroFiltradas.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+                      onClick={() => {
+                        setVarianteId(item.id);
+                        setVarianteQuery(item.label);
+                        setVarianteOpen(false);
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : null}
+          </div>
+          <Button
+            variant="outline"
+            onClick={handleConsultar}
+            disabled={
+              isLoading ||
+              (normalizeVarianteFilter(varianteId) !== "__all__" &&
+                !isUuid(normalizeVarianteFilter(varianteId)))
+            }
           >
-            <option value="">Seleccionar variante</option>
-            {variantes.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-          <Button variant="outline" onClick={handleConsultar} disabled={isLoading || !varianteId}>
             {isLoading ? "Consultando..." : "Consultar"}
           </Button>
         </div>
@@ -142,9 +273,9 @@ export function MovimientosKardexPanel({ materiasPrimas }: HistorialPanelProps) 
           <TableHeader>
             <TableRow>
               <TableHead>Fecha</TableHead>
+              <TableHead>Materia prima / variante</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead>Origen</TableHead>
-              <TableHead>Ubicación interna</TableHead>
               <TableHead className="text-right">Cantidad</TableHead>
               <TableHead className="text-right">Saldo</TableHead>
               <TableHead className="text-right">Costo prom.</TableHead>
@@ -162,12 +293,24 @@ export function MovimientosKardexPanel({ materiasPrimas }: HistorialPanelProps) 
               kardex.items.map((item) => (
                 <TableRow key={item.movimientoId}>
                   <TableCell>{new Date(item.createdAt).toLocaleString()}</TableCell>
-                  <TableCell>{item.tipo}</TableCell>
-                  <TableCell>{item.origen}</TableCell>
-                  <TableCell>{item.ubicacionNombre ?? item.ubicacionId}</TableCell>
-                  <TableCell className="text-right">{item.cantidad.toFixed(4)}</TableCell>
-                  <TableCell className="text-right">{item.saldoPosterior.toFixed(4)}</TableCell>
-                  <TableCell className="text-right">{item.costoPromedioPost.toFixed(6)}</TableCell>
+                  <TableCell>
+                    {varianteLabelById.get(item.varianteId) ??
+                      (item.materiaPrimaNombre
+                        ? `${item.materiaPrimaNombre} - ${item.varianteSku ?? item.varianteId}`
+                        : item.varianteSku ?? item.varianteId)}
+                  </TableCell>
+                  <TableCell>
+                    <span className="inline-flex items-center gap-2">
+                      <span className={tipoIndicators[item.tipo]?.className ?? "text-muted-foreground"}>
+                        {tipoIndicators[item.tipo]?.symbol ?? "•"}
+                      </span>
+                      <span>{tipoLabels[item.tipo] ?? item.tipo}</span>
+                    </span>
+                  </TableCell>
+                  <TableCell>{origenLabels[item.origen] ?? item.origen}</TableCell>
+                  <TableCell className="text-right">{number2Formatter.format(item.cantidad)}</TableCell>
+                  <TableCell className="text-right">$ {number2Formatter.format(item.saldoPosterior)}</TableCell>
+                  <TableCell className="text-right">{number2Formatter.format(item.costoPromedioPost)}</TableCell>
                   <TableCell>{item.referenciaId ?? "-"}</TableCell>
                 </TableRow>
               ))

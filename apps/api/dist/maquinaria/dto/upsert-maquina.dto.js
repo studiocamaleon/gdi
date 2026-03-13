@@ -243,7 +243,9 @@ class MaquinaConsumibleItemDto {
 }
 exports.MaquinaConsumibleItemDto = MaquinaConsumibleItemDto;
 __decorate([
-    (0, class_validator_1.IsUUID)(),
+    (0, class_validator_1.IsUUID)(undefined, {
+        message: 'Selecciona una variante valida para el consumible.',
+    }),
     __metadata("design:type", String)
 ], MaquinaConsumibleItemDto.prototype, "materiaPrimaVarianteId", void 0);
 __decorate([
@@ -303,7 +305,9 @@ class MaquinaComponenteDesgasteItemDto {
 }
 exports.MaquinaComponenteDesgasteItemDto = MaquinaComponenteDesgasteItemDto;
 __decorate([
-    (0, class_validator_1.IsUUID)(),
+    (0, class_validator_1.IsUUID)(undefined, {
+        message: 'Selecciona una variante valida para el componente de desgaste.',
+    }),
     __metadata("design:type", String)
 ], MaquinaComponenteDesgasteItemDto.prototype, "materiaPrimaVarianteId", void 0);
 __decorate([

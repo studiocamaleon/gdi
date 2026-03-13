@@ -81,6 +81,8 @@ export type RegistrarTransferenciaStockPayload = {
 export type MovimientoStockMateriaPrima = {
   movimientoId: string;
   varianteId: string;
+  varianteSku?: string;
+  materiaPrimaNombre?: string;
   ubicacionId: string;
   ubicacionNombre?: string;
   tipo: TipoMovimientoStockMateriaPrima;

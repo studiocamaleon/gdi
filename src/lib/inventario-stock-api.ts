@@ -67,7 +67,7 @@ export async function getStockActual(params?: {
 }
 
 export async function getKardex(params: {
-  varianteId: string;
+  varianteId?: string;
   ubicacionId?: string;
   fechaDesde?: string;
   fechaHasta?: string;
@@ -75,7 +75,7 @@ export async function getKardex(params: {
   pageSize?: number;
 }) {
   const query = new URLSearchParams();
-  query.set("varianteId", params.varianteId);
+  if (params.varianteId) query.set("varianteId", params.varianteId);
   if (params.ubicacionId) query.set("ubicacionId", params.ubicacionId);
   if (params.fechaDesde) query.set("fechaDesde", params.fechaDesde);
   if (params.fechaHasta) query.set("fechaHasta", params.fechaHasta);

@@ -428,6 +428,7 @@ export declare class MaquinariaService {
     private hasTemplateSpecificData;
     private validateReferences;
     private validateTechnicalPayload;
+    private isMateriaPrimaCompatibleWithMachine;
     private findMaquinaOrThrow;
     private findMaquinaBaseOrThrow;
     private toMaquinaResponse;

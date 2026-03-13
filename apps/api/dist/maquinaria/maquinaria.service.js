@@ -168,7 +168,7 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
     'anchoImprimibleMaximo',
     'altoImprimibleMaximo',
 ]);
-const ALLOWED_CONSUMABLE_DETAIL_KEYS = new Set(['dependePerfilOperativo']);
+const ALLOWED_CONSUMABLE_DETAIL_KEYS = new Set(['dependePerfilOperativo', 'color']);
 const ALLOWED_WEAR_DETAIL_KEYS = new Set();
 const PRINTER_TEMPLATES_WITH_INK_CONSUMPTION = new Set([
     upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_dtf,
@@ -282,7 +282,7 @@ let MaquinariaService = class MaquinariaService {
     }
     async update(auth, id, payload) {
         await this.findMaquinaOrThrow(auth, id);
-        await this.validateReferences(auth, payload);
+        await this.validateReferences(auth, payload, id);
         if (!payload.codigo?.trim()) {
             throw new common_1.BadRequestException('El codigo de la maquina es obligatorio para actualizar.');
         }
@@ -517,7 +517,7 @@ let MaquinariaService = class MaquinariaService {
         }
         return true;
     }
-    async validateReferences(auth, payload) {
+    async validateReferences(auth, payload, maquinaId) {
         const templateRule = TEMPLATE_CATALOG_RULES[payload.plantilla];
         if (!templateRule) {
             throw new common_1.BadRequestException(`La plantilla ${payload.plantilla} no existe en el catalogo del sistema.`);
@@ -602,11 +602,21 @@ let MaquinariaService = class MaquinariaService {
                         activo: true,
                         esConsumible: true,
                         esRepuesto: true,
+                        compatibilidades: {
+                            select: {
+                                varianteId: true,
+                                maquinaId: true,
+                                activo: true,
+                            },
+                        },
                     },
                 },
             },
         });
         const varianteById = new Map(variantesMateriaPrima.map((variante) => [variante.id, variante]));
+        if (!maquinaId && (payload.consumibles.length > 0 || payload.componentesDesgaste.length > 0)) {
+            throw new common_1.BadRequestException('Guarda la maquina primero para asignar consumibles o repuestos compatibles.');
+        }
         for (const consumible of payload.consumibles) {
             const consumibleName = consumible.nombre.trim() || 'sin nombre';
             const variante = varianteById.get(consumible.materiaPrimaVarianteId);
@@ -618,6 +628,9 @@ let MaquinariaService = class MaquinariaService {
             }
             if (!variante.materiaPrima.esConsumible) {
                 throw new common_1.BadRequestException(`La materia prima ${variante.materiaPrima.nombre} no esta habilitada como consumible.`);
+            }
+            if (!this.isMateriaPrimaCompatibleWithMachine(variante.materiaPrima.compatibilidades, variante.id, maquinaId ?? null)) {
+                throw new common_1.BadRequestException(`La materia prima ${variante.materiaPrima.nombre} no es compatible con esta maquina.`);
             }
             for (const detailKey of Object.keys(consumible.detalle ?? {})) {
                 if (!ALLOWED_CONSUMABLE_DETAIL_KEYS.has(detailKey)) {
@@ -636,6 +649,9 @@ let MaquinariaService = class MaquinariaService {
             }
             if (!variante.materiaPrima.esRepuesto) {
                 throw new common_1.BadRequestException(`La materia prima ${variante.materiaPrima.nombre} no esta habilitada como repuesto.`);
+            }
+            if (!this.isMateriaPrimaCompatibleWithMachine(variante.materiaPrima.compatibilidades, variante.id, maquinaId ?? null)) {
+                throw new common_1.BadRequestException(`La materia prima ${variante.materiaPrima.nombre} no es compatible con esta maquina.`);
             }
             for (const detailKey of Object.keys(componente.detalle ?? {})) {
                 if (!ALLOWED_WEAR_DETAIL_KEYS.has(detailKey)) {
@@ -671,6 +687,21 @@ let MaquinariaService = class MaquinariaService {
             }
             throw new common_1.BadRequestException(`El parametro tecnico ${key} contiene un formato invalido.`);
         }
+    }
+    isMateriaPrimaCompatibleWithMachine(compatibilidades, varianteId, maquinaId) {
+        if (!maquinaId) {
+            return false;
+        }
+        const compatibilidadesActivas = compatibilidades.filter((compatibilidad) => compatibilidad.activo);
+        if (compatibilidadesActivas.length === 0) {
+            return false;
+        }
+        const compatibilidadesMaquina = compatibilidadesActivas.filter((compatibilidad) => compatibilidad.maquinaId === maquinaId);
+        if (compatibilidadesMaquina.length === 0) {
+            return false;
+        }
+        return compatibilidadesMaquina.some((compatibilidad) => compatibilidad.varianteId === null ||
+            compatibilidad.varianteId === varianteId);
     }
     async findMaquinaOrThrow(auth, id) {
         const maquina = await this.prisma.maquina.findFirst({

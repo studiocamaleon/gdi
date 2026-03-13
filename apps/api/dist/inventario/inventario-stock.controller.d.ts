@@ -167,6 +167,8 @@ export declare class InventarioStockController {
     getKardex(auth: CurrentAuth, query: GetKardexQueryDto): Promise<{
         items: {
             ubicacionNombre: string;
+            varianteSku: string;
+            materiaPrimaNombre: string;
             movimientoId: string;
             varianteId: string;
             ubicacionId: string;

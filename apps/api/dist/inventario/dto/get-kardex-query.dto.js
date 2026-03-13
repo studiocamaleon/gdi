@@ -22,6 +22,7 @@ class GetKardexQueryDto {
 }
 exports.GetKardexQueryDto = GetKardexQueryDto;
 __decorate([
+    (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsUUID)(),
     __metadata("design:type", String)
 ], GetKardexQueryDto.prototype, "varianteId", void 0);

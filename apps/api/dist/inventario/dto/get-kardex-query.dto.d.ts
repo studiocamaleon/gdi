@@ -1,5 +1,5 @@
 export declare class GetKardexQueryDto {
-    varianteId: string;
+    varianteId?: string;
     ubicacionId?: string;
     fechaDesde?: string;
     fechaHasta?: string;

@@ -370,7 +370,7 @@ export class InventarioService {
       const updated = await this.prisma.materiaPrimaVariante.update({
         where: { id: varianteId },
         data: {
-          precioReferencia: this.toDecimal(payload.precioReferencia),
+          precioReferencia: this.toDecimal(this.roundToScale(payload.precioReferencia)),
           ...(payload.moneda?.trim()
             ? { moneda: payload.moneda.trim().toUpperCase() }
             : {}),
@@ -578,7 +578,8 @@ export class InventarioService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const cantidad = this.toDecimal(payload.cantidad);
+      const cantidadNumber = this.roundToScale(payload.cantidad);
+      const cantidad = this.toDecimal(cantidadNumber);
       const variante = await this.findVarianteOrThrow(auth, payload.varianteId, tx);
       const ubicacion = await this.findUbicacionOrThrow(auth, payload.ubicacionId, tx);
       const stockActual = await this.findStockRow(auth, payload.varianteId, payload.ubicacionId, tx);
@@ -592,7 +593,9 @@ export class InventarioService {
 
       const tipo = this.toPrismaEnum<TipoMovimientoStockMateriaPrima>(payload.tipo);
       const origen = this.toPrismaEnum<OrigenMovimientoStockMateriaPrima>(payload.origen);
-      const unitCost = payload.costoUnitario ?? null;
+      const unitCost = payload.costoUnitario === undefined || payload.costoUnitario === null
+        ? null
+        : this.roundToScale(payload.costoUnitario);
       const stockPrevio = stockActual ? this.decimalToNumber(stockActual.cantidadDisponible) : 0;
       const costoPromedioPrevio = stockActual ? this.decimalToNumber(stockActual.costoPromedio) : 0;
 
@@ -600,24 +603,24 @@ export class InventarioService {
         tipo === TipoMovimientoStockMateriaPrima.INGRESO ||
         tipo === TipoMovimientoStockMateriaPrima.AJUSTE_ENTRADA
       ) {
-        const nextQty = stockPrevio + this.decimalToNumber(cantidad);
+        const nextQty = stockPrevio + cantidadNumber;
         const costIn = unitCost ?? costoPromedioPrevio ?? 0;
         const newAvg = nextQty > 0
-          ? ((stockPrevio * costoPromedioPrevio) + (this.decimalToNumber(cantidad) * costIn)) / nextQty
+          ? ((stockPrevio * costoPromedioPrevio) + (cantidadNumber * costIn)) / nextQty
           : 0;
 
-        saldoPosterior = Number(nextQty.toFixed(4));
-        costoPromedioPosterior = Number(newAvg.toFixed(6));
+        saldoPosterior = this.roundToScale(nextQty);
+        costoPromedioPosterior = this.roundToScale(newAvg);
       } else {
-        const nextQty = stockPrevio - this.decimalToNumber(cantidad);
+        const nextQty = stockPrevio - cantidadNumber;
         if (nextQty < 0) {
           throw new BadRequestException(
             `Stock insuficiente para ${variante.sku} en ${ubicacion.nombre}.`,
           );
         }
 
-        saldoPosterior = Number(nextQty.toFixed(4));
-        costoPromedioPosterior = Number(costoPromedioPrevio.toFixed(6));
+        saldoPosterior = this.roundToScale(nextQty);
+        costoPromedioPosterior = this.roundToScale(costoPromedioPrevio);
       }
 
       const upsertedStock = await tx.stockMateriaPrimaVariante.upsert({
@@ -649,7 +652,7 @@ export class InventarioService {
           tipo,
           origen,
           cantidad,
-          costoUnitario: unitCost === null ? null : new Prisma.Decimal(unitCost),
+          costoUnitario: unitCost === null ? null : this.toDecimal(unitCost),
           saldoPosterior: upsertedStock.cantidadDisponible,
           costoPromedioPost: upsertedStock.costoPromedio,
           referenciaTipo: payload.referenciaTipo?.trim() || null,
@@ -671,7 +674,8 @@ export class InventarioService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const cantidad = this.toDecimal(payload.cantidad);
+      const qtyTransfer = this.roundToScale(payload.cantidad);
+      const cantidad = this.toDecimal(qtyTransfer);
       const transferenciaId = randomUUID();
       const variante = await this.findVarianteOrThrow(auth, payload.varianteId, tx);
       await this.findUbicacionOrThrow(auth, payload.ubicacionOrigenId, tx);
@@ -687,7 +691,6 @@ export class InventarioService {
         ? this.decimalToNumber(stockOrigen.cantidadDisponible)
         : 0;
 
-      const qtyTransfer = this.decimalToNumber(cantidad);
       if (qtyOrigen < qtyTransfer) {
         throw new BadRequestException(
           `Stock insuficiente para transferir ${variante.sku}.`,
@@ -697,7 +700,7 @@ export class InventarioService {
       const costPromOrigen = stockOrigen
         ? this.decimalToNumber(stockOrigen.costoPromedio)
         : 0;
-      const saldoOrigenPost = Number((qtyOrigen - qtyTransfer).toFixed(4));
+      const saldoOrigenPost = this.roundToScale(qtyOrigen - qtyTransfer);
 
       const stockOrigenPost = await tx.stockMateriaPrimaVariante.upsert({
         where: {
@@ -728,7 +731,7 @@ export class InventarioService {
           tipo: TipoMovimientoStockMateriaPrima.TRANSFERENCIA_SALIDA,
           origen: OrigenMovimientoStockMateriaPrima.TRANSFERENCIA,
           cantidad,
-          costoUnitario: new Prisma.Decimal(costPromOrigen),
+          costoUnitario: this.toDecimal(this.roundToScale(costPromOrigen)),
           saldoPosterior: stockOrigenPost.cantidadDisponible,
           costoPromedioPost: stockOrigenPost.costoPromedio,
           referenciaTipo: payload.referenciaTipo?.trim() || 'transferencia',
@@ -751,14 +754,12 @@ export class InventarioService {
       const costPromDestino = stockDestino
         ? this.decimalToNumber(stockDestino.costoPromedio)
         : 0;
-      const saldoDestinoPost = Number((qtyDestino + qtyTransfer).toFixed(4));
+      const saldoDestinoPost = this.roundToScale(qtyDestino + qtyTransfer);
       const costPromDestinoPost =
         saldoDestinoPost > 0
-          ? Number(
-              (
-                (qtyDestino * costPromDestino + qtyTransfer * costPromOrigen) /
-                saldoDestinoPost
-              ).toFixed(6),
+          ? this.roundToScale(
+              (qtyDestino * costPromDestino + qtyTransfer * costPromOrigen) /
+                saldoDestinoPost,
             )
           : 0;
 
@@ -791,7 +792,7 @@ export class InventarioService {
           tipo: TipoMovimientoStockMateriaPrima.TRANSFERENCIA_ENTRADA,
           origen: OrigenMovimientoStockMateriaPrima.TRANSFERENCIA,
           cantidad,
-          costoUnitario: new Prisma.Decimal(costPromOrigen),
+          costoUnitario: this.toDecimal(this.roundToScale(costPromOrigen)),
           saldoPosterior: stockDestinoPost.cantidadDisponible,
           costoPromedioPost: stockDestinoPost.costoPromedio,
           referenciaTipo: payload.referenciaTipo?.trim() || 'transferencia',
@@ -854,7 +855,7 @@ export class InventarioService {
         almacenNombre: row.ubicacion.almacen.nombre,
         cantidadDisponible: cantidad,
         costoPromedio: costo,
-        valorStock: Number((cantidad * costo).toFixed(4)),
+        valorStock: this.roundToScale(cantidad * costo),
         updatedAt: row.updatedAt.toISOString(),
       };
     });
@@ -880,6 +881,11 @@ export class InventarioService {
         where,
         include: {
           ubicacion: true,
+          variante: {
+            include: {
+              materiaPrima: true,
+            },
+          },
         },
         orderBy: [{ createdAt: 'desc' }],
         skip,
@@ -892,6 +898,8 @@ export class InventarioService {
       items: items.map((item) => ({
         ...this.toMovimientoResponse(item),
         ubicacionNombre: item.ubicacion.nombre,
+        varianteSku: item.variante.sku,
+        materiaPrimaNombre: item.variante.materiaPrima.nombre,
       })),
       total,
       page,
@@ -1006,6 +1014,10 @@ export class InventarioService {
     return new Prisma.Decimal(value);
   }
 
+  private roundToScale(value: number, scale = 2) {
+    return Number(value.toFixed(scale));
+  }
+
   private toMovimientoResponse(item: {
     id: string;
     varianteId: string;
@@ -1028,12 +1040,12 @@ export class InventarioService {
       ubicacionId: item.ubicacionId,
       tipo: this.toApiEnum(item.tipo),
       origen: this.toApiEnum(item.origen),
-      cantidad: this.decimalToNumber(item.cantidad),
+      cantidad: this.roundToScale(this.decimalToNumber(item.cantidad)),
       costoUnitario: item.costoUnitario
-        ? this.decimalToNumber(item.costoUnitario)
+        ? this.roundToScale(this.decimalToNumber(item.costoUnitario))
         : null,
-      saldoPosterior: this.decimalToNumber(item.saldoPosterior),
-      costoPromedioPost: this.decimalToNumber(item.costoPromedioPost),
+      saldoPosterior: this.roundToScale(this.decimalToNumber(item.saldoPosterior)),
+      costoPromedioPost: this.roundToScale(this.decimalToNumber(item.costoPromedioPost)),
       referenciaTipo: item.referenciaTipo,
       referenciaId: item.referenciaId,
       transferenciaId: item.transferenciaId,
