@@ -15,6 +15,7 @@ import {
   Planta,
   Prisma,
   TipoCentroCosto,
+  TipoGastoGeneralCentroCosto,
   TipoRecursoCentroCosto,
   UnidadBaseCentroCosto,
 } from '@prisma/client';
@@ -33,6 +34,7 @@ import { UpsertPlantaDto } from './dto/upsert-planta.dto';
 import { UpsertCentroConfiguracionBaseDto } from './dto/upsert-centro-configuracion-base.dto';
 import {
   ReplaceCentroRecursosDto,
+  TipoGastoGeneralCentroCostoDto,
   TipoRecursoCentroCostoDto,
 } from './dto/replace-centro-recursos.dto';
 import {
@@ -49,7 +51,7 @@ type CentroCompleto = Prisma.CentroCostoGetPayload<{
     planta: true;
     areaCosto: true;
     responsableEmpleado: true;
-    proveedorDefault: true;
+    capacidadesPeriodo: true;
     tarifasPeriodo: true;
   };
 }>;
@@ -58,11 +60,9 @@ type CentroConfiguracionCompleta = Prisma.CentroCostoGetPayload<{
     planta: true;
     areaCosto: true;
     responsableEmpleado: true;
-    proveedorDefault: true;
     recursos: {
       include: {
         empleado: true;
-        proveedor: true;
         maquina: true;
         maquinariaPeriodo: true;
       };
@@ -82,6 +82,18 @@ type TarifaSnapshot = {
   advertencias: string[];
   validaParaPublicar: boolean;
   resumenJson: Prisma.JsonObject;
+};
+
+type RepartoAbsorbidoItem = {
+  desdeCentroCostoId: string;
+  desdeCentroCodigo: string;
+  desdeCentroNombre: string;
+  monto: number;
+};
+
+type RepartoPeriodo = {
+  absorbidoByCentroId: Map<string, Prisma.Decimal>;
+  desgloseByCentroId: Map<string, RepartoAbsorbidoItem[]>;
 };
 
 const DEFAULT_PERIOD_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -221,7 +233,10 @@ export class CostosService {
         planta: true,
         areaCosto: true,
         responsableEmpleado: true,
-        proveedorDefault: true,
+        capacidadesPeriodo: {
+          orderBy: [{ periodo: 'desc' }, { createdAt: 'desc' }],
+          take: 1,
+        },
         tarifasPeriodo: {
           orderBy: [{ periodo: 'desc' }, { createdAt: 'desc' }],
           take: 8,
@@ -245,7 +260,7 @@ export class CostosService {
           planta: true,
           areaCosto: true,
           responsableEmpleado: true,
-          proveedorDefault: true,
+          capacidadesPeriodo: true,
           tarifasPeriodo: true,
         },
       });
@@ -274,7 +289,7 @@ export class CostosService {
           planta: true,
           areaCosto: true,
           responsableEmpleado: true,
-          proveedorDefault: true,
+          capacidadesPeriodo: true,
           tarifasPeriodo: true,
         },
       });
@@ -380,17 +395,42 @@ export class CostosService {
               recurso.tipoRecurso === TipoRecursoCentroCostoDto.empleado
                 ? (recurso.empleadoId ?? null)
                 : null,
-            proveedorId:
-              recurso.tipoRecurso === TipoRecursoCentroCostoDto.proveedor
-                ? (recurso.proveedorId ?? null)
-                : null,
             maquinaId:
               recurso.tipoRecurso === TipoRecursoCentroCostoDto.maquinaria
                 ? (recurso.maquinaId ?? null)
                 : null,
-            nombreManual:
-              recurso.tipoRecurso === TipoRecursoCentroCostoDto.gasto_manual
-                ? recurso.nombreManual?.trim() || null
+            nombreRecurso:
+              recurso.tipoRecurso === TipoRecursoCentroCostoDto.gasto_general ||
+              recurso.tipoRecurso === TipoRecursoCentroCostoDto.activo_fijo
+                ? recurso.nombreRecurso?.trim() || null
+                : null,
+            tipoGastoGeneral:
+              recurso.tipoRecurso === TipoRecursoCentroCostoDto.gasto_general
+                ? this.toPrismaTipoGastoGeneral(recurso.tipoGastoGeneral!)
+                : null,
+            valorMensual:
+              recurso.tipoRecurso === TipoRecursoCentroCostoDto.gasto_general
+                ? new Prisma.Decimal(recurso.valorMensual!)
+                : null,
+            vidaUtilRestanteMeses:
+              recurso.tipoRecurso === TipoRecursoCentroCostoDto.activo_fijo
+                ? recurso.vidaUtilRestanteMeses!
+                : null,
+            valorActual:
+              recurso.tipoRecurso === TipoRecursoCentroCostoDto.activo_fijo
+                ? new Prisma.Decimal(recurso.valorActual!)
+                : null,
+            valorFinalVida:
+              recurso.tipoRecurso === TipoRecursoCentroCostoDto.activo_fijo
+                ? new Prisma.Decimal(recurso.valorFinalVida!)
+                : null,
+            depreciacionMensualCalc:
+              recurso.tipoRecurso === TipoRecursoCentroCostoDto.activo_fijo
+                ? this.computeDepreciacionMensual(
+                    recurso.valorActual!,
+                    recurso.valorFinalVida!,
+                    recurso.vidaUtilRestanteMeses!,
+                  )
                 : null,
             descripcion: recurso.descripcion?.trim() || null,
             porcentajeAsignacion:
@@ -411,7 +451,6 @@ export class CostosService {
         },
         include: {
           empleado: true,
-          proveedor: true,
           maquina: true,
           maquinariaPeriodo: true,
         },
@@ -635,7 +674,26 @@ export class CostosService {
   ) {
     const normalizedPeriodo = this.normalizePeriodo(periodo);
     const centro = await this.findCentroOrThrow(auth, id);
-    const capacidad = this.computeCapacidad(payload);
+    const recursos = await this.prisma.centroCostoRecurso.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        centroCostoId: id,
+        periodo: normalizedPeriodo,
+        activo: true,
+      },
+      include: {
+        maquinariaPeriodo: {
+          where: { periodo: normalizedPeriodo },
+          orderBy: [{ createdAt: 'desc' }],
+          take: 1,
+        },
+      },
+    });
+    const capacidad = this.computeCapacidad(
+      payload,
+      centro.unidadBaseFutura,
+      recursos,
+    );
 
     const result = await this.prisma.centroCostoCapacidadPeriodo.upsert({
       where: {
@@ -652,7 +710,7 @@ export class CostosService {
         unidadBase: centro.unidadBaseFutura,
         diasPorMes: capacidad.diasPorMes,
         horasPorDia: capacidad.horasPorDia,
-        porcentajeNoProductivo: capacidad.porcentajeNoProductivo,
+        porcentajeNoProductivo: new Prisma.Decimal(0),
         capacidadTeorica: capacidad.capacidadTeorica,
         capacidadPractica: capacidad.capacidadPractica,
         overrideManualCapacidad: capacidad.overrideManualCapacidad,
@@ -661,7 +719,7 @@ export class CostosService {
         unidadBase: centro.unidadBaseFutura,
         diasPorMes: capacidad.diasPorMes,
         horasPorDia: capacidad.horasPorDia,
-        porcentajeNoProductivo: capacidad.porcentajeNoProductivo,
+        porcentajeNoProductivo: new Prisma.Decimal(0),
         capacidadTeorica: capacidad.capacidadTeorica,
         capacidadPractica: capacidad.capacidadPractica,
         overrideManualCapacidad: capacidad.overrideManualCapacidad,
@@ -778,7 +836,90 @@ export class CostosService {
       },
     });
 
+    if (
+      snapshot.centro.imputacionPreferida ===
+      ImputacionPreferidaCentroCosto.REPARTO
+    ) {
+      await this.republishTarifasCentrosProductivos(auth, normalizedPeriodo);
+    }
+
     return this.toTarifaResponse(publicada);
+  }
+
+  private async republishTarifasCentrosProductivos(
+    auth: CurrentAuth,
+    periodo: string,
+  ) {
+    const centrosProductivos = await this.prisma.centroCosto.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        activo: true,
+        tipoCentro: TipoCentroCosto.PRODUCTIVO,
+      },
+      select: { id: true },
+    });
+
+    for (const centro of centrosProductivos) {
+      const snapshot = await this.buildTarifaSnapshot(auth, centro.id, periodo);
+
+      if (!snapshot.validaParaPublicar) {
+        continue;
+      }
+
+      await this.prisma.centroCostoTarifaPeriodo.upsert({
+        where: {
+          tenantId_centroCostoId_periodo_estado: {
+            tenantId: auth.tenantId,
+            centroCostoId: centro.id,
+            periodo,
+            estado: EstadoTarifaCentroCostoPeriodo.BORRADOR,
+          },
+        },
+        create: {
+          tenantId: auth.tenantId,
+          centroCostoId: centro.id,
+          periodo,
+          costoMensualTotal: snapshot.costoMensualTotal,
+          capacidadPractica: snapshot.capacidadPractica,
+          tarifaCalculada: snapshot.tarifaCalculada,
+          estado: EstadoTarifaCentroCostoPeriodo.BORRADOR,
+          resumenJson: snapshot.resumenJson,
+        },
+        update: {
+          costoMensualTotal: snapshot.costoMensualTotal,
+          capacidadPractica: snapshot.capacidadPractica,
+          tarifaCalculada: snapshot.tarifaCalculada,
+          resumenJson: snapshot.resumenJson,
+        },
+      });
+
+      await this.prisma.centroCostoTarifaPeriodo.upsert({
+        where: {
+          tenantId_centroCostoId_periodo_estado: {
+            tenantId: auth.tenantId,
+            centroCostoId: centro.id,
+            periodo,
+            estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
+          },
+        },
+        create: {
+          tenantId: auth.tenantId,
+          centroCostoId: centro.id,
+          periodo,
+          costoMensualTotal: snapshot.costoMensualTotal,
+          capacidadPractica: snapshot.capacidadPractica,
+          tarifaCalculada: snapshot.tarifaCalculada,
+          estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
+          resumenJson: snapshot.resumenJson,
+        },
+        update: {
+          costoMensualTotal: snapshot.costoMensualTotal,
+          capacidadPractica: snapshot.capacidadPractica,
+          tarifaCalculada: snapshot.tarifaCalculada,
+          resumenJson: snapshot.resumenJson,
+        },
+      });
+    }
   }
 
   async getCentroTarifas(auth: CurrentAuth, id: string) {
@@ -800,6 +941,7 @@ export class CostosService {
     centroCostoId: string,
     periodo: string,
   ): Promise<TarifaSnapshot> {
+    const repartoPeriodo = await this.computeRepartoPeriodo(auth, periodo);
     const centro = await this.getCentroConfiguracionEntity(
       auth,
       centroCostoId,
@@ -820,28 +962,53 @@ export class CostosService {
           acc.plus(recurso.maquinariaPeriodo[0]?.costoMensualTotalCalc ?? 0),
         new Prisma.Decimal(0),
       );
-    const costoMensualTotal = costoMensualBase.plus(costoMensualMaquinaria);
+    const costoMensualGastosGenerales = centro.recursos
+      .filter(
+        (recurso) =>
+          recurso.activo &&
+          recurso.tipoRecurso === TipoRecursoCentroCosto.GASTO_GENERAL,
+      )
+      .reduce(
+        (acc, recurso) => acc.plus(recurso.valorMensual ?? 0),
+        new Prisma.Decimal(0),
+      );
+    const costoMensualActivosFijos = centro.recursos
+      .filter(
+        (recurso) =>
+          recurso.activo && recurso.tipoRecurso === TipoRecursoCentroCosto.ACTIVO_FIJO,
+      )
+      .reduce(
+        (acc, recurso) => acc.plus(recurso.depreciacionMensualCalc ?? 0),
+        new Prisma.Decimal(0),
+      );
+    const costoMensualTotal = costoMensualBase
+      .plus(costoMensualMaquinaria)
+      .plus(costoMensualGastosGenerales)
+      .plus(costoMensualActivosFijos);
+    const costoMensualAbsorbidoReparto =
+      repartoPeriodo.absorbidoByCentroId.get(centroCostoId) ??
+      new Prisma.Decimal(0);
+    const desgloseRepartoAbsorbido =
+      repartoPeriodo.desgloseByCentroId.get(centroCostoId) ?? [];
+    const costoMensualTotalConReparto = costoMensualTotal.plus(
+      costoMensualAbsorbidoReparto,
+    );
     const capacidadPractica =
       centro.capacidadesPeriodo[0]?.capacidadPractica ?? new Prisma.Decimal(0);
     const tarifaCalculada =
+      costoMensualTotalConReparto.gt(0) && capacidadPractica.gt(0)
+        ? costoMensualTotalConReparto.div(capacidadPractica)
+        : new Prisma.Decimal(0);
+    const tarifaDirectaSinReparto =
       costoMensualTotal.gt(0) && capacidadPractica.gt(0)
         ? costoMensualTotal.div(capacidadPractica)
         : new Prisma.Decimal(0);
-    const tieneProveedorVigente =
-      Boolean(centro.proveedorDefaultId) ||
-      centro.recursos.some(
-        (recurso) =>
-          recurso.tipoRecurso === TipoRecursoCentroCosto.PROVEEDOR &&
-          Boolean(recurso.proveedorId) &&
-          recurso.activo,
-      );
+    const tarifaAbsorbidaReparto =
+      costoMensualAbsorbidoReparto.gt(0) && capacidadPractica.gt(0)
+        ? costoMensualAbsorbidoReparto.div(capacidadPractica)
+        : new Prisma.Decimal(0);
     const validaParaPublicar =
-      costoMensualTotal.gt(0) &&
-      capacidadPractica.gt(0) &&
-      !(
-        centro.tipoCentro === TipoCentroCosto.TERCERIZADO &&
-        !tieneProveedorVigente
-      );
+      costoMensualTotalConReparto.gt(0) && capacidadPractica.gt(0);
 
     return {
       centro,
@@ -858,12 +1025,195 @@ export class CostosService {
         unidadBase: this.fromPrismaUnidadBase(centro.unidadBaseFutura),
         costoMensualBase: this.decimalToNumber(costoMensualBase),
         costoMensualMaquinaria: this.decimalToNumber(costoMensualMaquinaria),
-        costoMensualTotal: this.decimalToNumber(costoMensualTotal),
+        costoMensualGastosGenerales: this.decimalToNumber(
+          costoMensualGastosGenerales,
+        ),
+        costoMensualActivosFijos: this.decimalToNumber(costoMensualActivosFijos),
+        costoMensualSinReparto: this.decimalToNumber(costoMensualTotal),
+        costoMensualAbsorbidoReparto: this.decimalToNumber(
+          costoMensualAbsorbidoReparto,
+        ),
+        desgloseRepartoAbsorbido,
+        costoMensualTotal: this.decimalToNumber(costoMensualTotalConReparto),
+        tarifaDirectaSinReparto: this.decimalToNumber(tarifaDirectaSinReparto),
+        tarifaAbsorbidaReparto: this.decimalToNumber(tarifaAbsorbidaReparto),
         capacidadPractica: this.decimalToNumber(capacidadPractica),
         tarifaCalculada: this.decimalToNumber(tarifaCalculada),
         advertencias,
       },
     };
+  }
+
+  private async computeRepartoPeriodo(
+    auth: CurrentAuth,
+    periodo: string,
+  ): Promise<RepartoPeriodo> {
+    const centros = await this.prisma.centroCosto.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        activo: true,
+      },
+      include: {
+        recursos: {
+          where: { periodo, activo: true },
+          include: {
+            maquinariaPeriodo: {
+              where: { periodo },
+              orderBy: [{ createdAt: 'desc' }],
+              take: 1,
+            },
+          },
+        },
+        componentesCostoPeriodo: {
+          where: { periodo },
+        },
+        capacidadesPeriodo: {
+          where: { periodo },
+          take: 1,
+        },
+      },
+    });
+
+    const centrosObjetivo = centros.filter(
+      (item) => item.tipoCentro === TipoCentroCosto.PRODUCTIVO,
+    );
+    if (centrosObjetivo.length === 0) {
+      return {
+        absorbidoByCentroId: new Map(),
+        desgloseByCentroId: new Map(),
+      };
+    }
+
+    const fuentes = centros
+      .filter(
+        (item) =>
+          item.imputacionPreferida === ImputacionPreferidaCentroCosto.REPARTO,
+      )
+      .map((item) => ({
+        ...item,
+        costoMensualDirecto: this.computeCostoMensualDirectoCentro(item),
+      }))
+      .filter((item) => item.costoMensualDirecto.gt(0));
+
+    if (fuentes.length === 0) {
+      return {
+        absorbidoByCentroId: new Map(),
+        desgloseByCentroId: new Map(),
+      };
+    }
+
+    const baseByTarget = new Map<string, Prisma.Decimal>();
+    for (const target of centrosObjetivo) {
+      const capacidad = target.capacidadesPeriodo[0]?.capacidadPractica;
+      baseByTarget.set(
+        target.id,
+        capacidad && capacidad.gt(0) ? capacidad : new Prisma.Decimal(0),
+      );
+    }
+
+    const totalBase = Array.from(baseByTarget.values()).reduce(
+      (acc, value) => acc.plus(value),
+      new Prisma.Decimal(0),
+    );
+    const useEqualWeights = !totalBase.gt(0);
+
+    const absorbidoByCentroId = new Map<string, Prisma.Decimal>();
+    const desgloseByCentroId = new Map<string, RepartoAbsorbidoItem[]>();
+
+    for (const fuente of fuentes) {
+      const divisor = useEqualWeights
+        ? new Prisma.Decimal(centrosObjetivo.length)
+        : totalBase;
+      if (!divisor.gt(0)) {
+        continue;
+      }
+
+      let asignadoAcumulado = new Prisma.Decimal(0);
+
+      for (let index = 0; index < centrosObjetivo.length; index += 1) {
+        const target = centrosObjetivo[index];
+        const esUltimo = index === centrosObjetivo.length - 1;
+        const peso = useEqualWeights
+          ? new Prisma.Decimal(1)
+          : baseByTarget.get(target.id) ?? new Prisma.Decimal(0);
+
+        let monto = esUltimo
+          ? fuente.costoMensualDirecto.minus(asignadoAcumulado)
+          : fuente.costoMensualDirecto.mul(peso).div(divisor);
+        if (monto.lt(0)) {
+          monto = new Prisma.Decimal(0);
+        }
+
+        asignadoAcumulado = asignadoAcumulado.plus(monto);
+        absorbidoByCentroId.set(
+          target.id,
+          (absorbidoByCentroId.get(target.id) ?? new Prisma.Decimal(0)).plus(
+            monto,
+          ),
+        );
+        const desgloseActual = desgloseByCentroId.get(target.id) ?? [];
+        desgloseActual.push({
+          desdeCentroCostoId: fuente.id,
+          desdeCentroCodigo: fuente.codigo,
+          desdeCentroNombre: fuente.nombre,
+          monto: this.decimalToNumber(monto),
+        });
+        desgloseByCentroId.set(target.id, desgloseActual);
+      }
+    }
+
+    return {
+      absorbidoByCentroId,
+      desgloseByCentroId,
+    };
+  }
+
+  private computeCostoMensualDirectoCentro(
+    centro: Prisma.CentroCostoGetPayload<{
+      include: {
+        recursos: {
+          include: { maquinariaPeriodo: true };
+        };
+        componentesCostoPeriodo: true;
+      };
+    }>,
+  ) {
+    const costoMensualBase = centro.componentesCostoPeriodo.reduce(
+      (acc, item) => acc.plus(item.importeMensual),
+      new Prisma.Decimal(0),
+    );
+    const costoMensualMaquinaria = centro.recursos
+      .filter(
+        (recurso) => recurso.tipoRecurso === TipoRecursoCentroCosto.MAQUINARIA,
+      )
+      .reduce(
+        (acc, recurso) =>
+          acc.plus(recurso.maquinariaPeriodo[0]?.costoMensualTotalCalc ?? 0),
+        new Prisma.Decimal(0),
+      );
+    const costoMensualGastosGenerales = centro.recursos
+      .filter(
+        (recurso) =>
+          recurso.tipoRecurso === TipoRecursoCentroCosto.GASTO_GENERAL,
+      )
+      .reduce(
+        (acc, recurso) => acc.plus(recurso.valorMensual ?? 0),
+        new Prisma.Decimal(0),
+      );
+    const costoMensualActivosFijos = centro.recursos
+      .filter(
+        (recurso) =>
+          recurso.tipoRecurso === TipoRecursoCentroCosto.ACTIVO_FIJO,
+      )
+      .reduce(
+        (acc, recurso) => acc.plus(recurso.depreciacionMensualCalc ?? 0),
+        new Prisma.Decimal(0),
+      );
+
+    return costoMensualBase
+      .plus(costoMensualMaquinaria)
+      .plus(costoMensualGastosGenerales)
+      .plus(costoMensualActivosFijos);
   }
 
   private async getCentroConfiguracionEntity(
@@ -880,12 +1230,10 @@ export class CostosService {
         planta: true,
         areaCosto: true,
         responsableEmpleado: true,
-        proveedorDefault: true,
         recursos: {
           where: { periodo },
           include: {
             empleado: true,
-            proveedor: true,
             maquina: true,
             maquinariaPeriodo: {
               where: { periodo },
@@ -922,23 +1270,12 @@ export class CostosService {
   ) {
     const advertencias: string[] = [];
     const recursosActivos = centro.recursos.filter((recurso) => recurso.activo);
-    const costoMensualTotal = centro.componentesCostoPeriodo.reduce(
-      (acc, item) => acc.plus(item.importeMensual),
-      new Prisma.Decimal(0),
-    );
+    const costoMensualTotal = this.computeCostoMensualDirectoCentro(centro);
     const capacidad = centro.capacidadesPeriodo[0] ?? null;
     const recursosMaquinariaActivos = centro.recursos.filter(
       (recurso) =>
         recurso.activo && recurso.tipoRecurso === TipoRecursoCentroCosto.MAQUINARIA,
     );
-    const tieneProveedorVigente =
-      Boolean(centro.proveedorDefaultId) ||
-      centro.recursos.some(
-        (recurso) =>
-          recurso.tipoRecurso === TipoRecursoCentroCosto.PROVEEDOR &&
-          Boolean(recurso.proveedorId) &&
-          recurso.activo,
-      );
 
     if (centro.unidadBaseFutura === UnidadBaseCentroCosto.NINGUNA) {
       advertencias.push(
@@ -948,7 +1285,7 @@ export class CostosService {
 
     if (recursosActivos.length === 0) {
       advertencias.push(
-        'Todavia no cargaste que personas, maquinas o apoyos usa este sector para trabajar.',
+        'Todavia no cargaste que personas, maquinas, gastos generales o activos fijos usa este sector para trabajar.',
       );
     }
 
@@ -981,15 +1318,6 @@ export class CostosService {
     } else if (!capacidad.capacidadPractica.gt(0)) {
       advertencias.push(
         'La capacidad practica debe ser mayor a 0 para poder publicar una tarifa.',
-      );
-    }
-
-    if (
-      centro.tipoCentro === TipoCentroCosto.TERCERIZADO &&
-      !tieneProveedorVigente
-    ) {
-      advertencias.push(
-        'Los centros tercerizados necesitan un proveedor asignado como referencia o recurso activo.',
       );
     }
 
@@ -1086,33 +1414,68 @@ export class CostosService {
     });
   }
 
-  private computeCapacidad(payload: UpsertCentroCapacidadDto) {
+  private computeCapacidad(
+    payload: UpsertCentroCapacidadDto,
+    unidadBase: UnidadBaseCentroCosto,
+    recursos: Array<
+      Prisma.CentroCostoRecursoGetPayload<{
+        include: { maquinariaPeriodo: true };
+      }>
+    >,
+  ) {
     const diasPorMes = new Prisma.Decimal(payload.diasPorMes);
     const horasPorDia = new Prisma.Decimal(payload.horasPorDia);
-    const porcentajeNoProductivo = new Prisma.Decimal(
-      payload.porcentajeNoProductivo,
-    );
-    const capacidadTeorica = diasPorMes.mul(horasPorDia);
+    const horasBaseMes = diasPorMes.mul(horasPorDia);
+    const capacidadTeorica = horasBaseMes;
+    const capacidadHoraMaquina = recursos
+      .filter((recurso) => recurso.tipoRecurso === TipoRecursoCentroCosto.MAQUINARIA)
+      .reduce((acc, recurso) => {
+        const item = recurso.maquinariaPeriodo[0];
+        if (!item) {
+          return acc;
+        }
+        const horasProductivas = item.horasProgramadasMes
+          .mul(item.disponibilidadPct)
+          .mul(item.eficienciaPct)
+          .div(new Prisma.Decimal(10000));
+        return acc.plus(horasProductivas);
+      }, new Prisma.Decimal(0));
+    const capacidadHoraHombre = recursos
+      .filter((recurso) => recurso.tipoRecurso === TipoRecursoCentroCosto.EMPLEADO)
+      .reduce((acc, recurso) => {
+        const porcentaje = recurso.porcentajeAsignacion ?? new Prisma.Decimal(0);
+        return acc.plus(horasBaseMes.mul(porcentaje).div(new Prisma.Decimal(100)));
+      }, new Prisma.Decimal(0));
+    const capacidadAuto =
+      unidadBase === UnidadBaseCentroCosto.HORA_MAQUINA
+        ? capacidadHoraMaquina
+        : unidadBase === UnidadBaseCentroCosto.HORA_HOMBRE
+          ? capacidadHoraHombre
+          : capacidadTeorica;
     const overrideManualCapacidad =
       payload.overrideManualCapacidad === undefined
         ? null
         : new Prisma.Decimal(payload.overrideManualCapacidad);
-    const capacidadPractica =
-      overrideManualCapacidad ??
-      capacidadTeorica.mul(
-        new Prisma.Decimal(1).minus(
-          porcentajeNoProductivo.div(new Prisma.Decimal(100)),
-        ),
-      );
+    const capacidadPractica = overrideManualCapacidad ?? capacidadAuto;
 
     return {
       diasPorMes,
       horasPorDia,
-      porcentajeNoProductivo,
       capacidadTeorica,
       capacidadPractica,
       overrideManualCapacidad,
     };
+  }
+
+  private computeDepreciacionMensual(
+    valorActual: number,
+    valorFinalVida: number,
+    vidaUtilRestanteMeses: number,
+  ) {
+    const depreciable = Math.max(0, valorActual - valorFinalVida);
+    return new Prisma.Decimal(
+      (depreciable / Math.max(1, vidaUtilRestanteMeses)).toFixed(2),
+    );
   }
 
   private buildCreateCentroData(
@@ -1131,7 +1494,6 @@ export class CostosService {
       imputacionPreferida: this.toPrismaImputacion(payload.imputacionPreferida),
       unidadBaseFutura: this.toPrismaUnidadBase(payload.unidadBaseFutura),
       responsableEmpleadoId: payload.responsableEmpleadoId ?? null,
-      proveedorDefaultId: payload.proveedorDefaultId ?? null,
       activo: payload.activo,
     };
   }
@@ -1150,7 +1512,6 @@ export class CostosService {
       imputacionPreferida: this.toPrismaImputacion(payload.imputacionPreferida),
       unidadBaseFutura: this.toPrismaUnidadBase(payload.unidadBaseFutura),
       responsableEmpleadoId: payload.responsableEmpleadoId ?? null,
-      proveedorDefaultId: payload.proveedorDefaultId ?? null,
       activo: payload.activo,
     };
   }
@@ -1195,27 +1556,6 @@ export class CostosService {
       }
     }
 
-    if (payload.proveedorDefaultId) {
-      const proveedor = await this.prisma.proveedor.findFirst({
-        where: {
-          id: payload.proveedorDefaultId,
-          tenantId: auth.tenantId,
-        },
-      });
-
-      if (!proveedor) {
-        throw new NotFoundException('El proveedor seleccionado no existe.');
-      }
-    }
-
-    if (
-      payload.tipoCentro !== TipoCentroCostoDto.tercerizado &&
-      payload.proveedorDefaultId
-    ) {
-      throw new BadRequestException(
-        'Solo los centros tercerizados pueden tener proveedor por defecto.',
-      );
-    }
   }
 
   private async validateRecursos(
@@ -1235,7 +1575,6 @@ export class CostosService {
     const recursosActivos = recursos.filter((recurso) => recurso.activo);
     const employeeAssignments = new Map<string, number>();
     const employeeIds = new Set<string>();
-    const providerIds = new Set<string>();
     const machineIds = new Set<string>();
     const machineAssignments = new Set<string>();
 
@@ -1246,24 +1585,6 @@ export class CostosService {
       ) {
         throw new BadRequestException(
           'Los recursos de tipo empleado necesitan un empleado asociado.',
-        );
-      }
-
-      if (
-        recurso.tipoRecurso === TipoRecursoCentroCostoDto.proveedor &&
-        !recurso.proveedorId
-      ) {
-        throw new BadRequestException(
-          'Los recursos de tipo proveedor necesitan un proveedor asociado.',
-        );
-      }
-
-      if (
-        recurso.tipoRecurso === TipoRecursoCentroCostoDto.gasto_manual &&
-        !recurso.nombreManual?.trim()
-      ) {
-        throw new BadRequestException(
-          'Los gastos manuales necesitan un nombre descriptivo.',
         );
       }
 
@@ -1324,8 +1645,60 @@ export class CostosService {
         );
       }
 
-      if (recurso.proveedorId) {
-        providerIds.add(recurso.proveedorId);
+      if (
+        recurso.tipoRecurso === TipoRecursoCentroCostoDto.gasto_general
+      ) {
+        if (!recurso.nombreRecurso?.trim()) {
+          throw new BadRequestException(
+            'Los gastos generales necesitan un nombre descriptivo.',
+          );
+        }
+        if (!recurso.tipoGastoGeneral) {
+          throw new BadRequestException(
+            'Los gastos generales necesitan un tipo de gasto.',
+          );
+        }
+        if (
+          recurso.valorMensual === undefined ||
+          recurso.valorMensual < 0
+        ) {
+          throw new BadRequestException(
+            'Los gastos generales necesitan un valor mensual mayor o igual a 0.',
+          );
+        }
+      }
+
+      if (
+        recurso.tipoRecurso === TipoRecursoCentroCostoDto.activo_fijo
+      ) {
+        if (!recurso.nombreRecurso?.trim()) {
+          throw new BadRequestException(
+            'Los activos fijos necesitan un nombre descriptivo.',
+          );
+        }
+        if (
+          recurso.vidaUtilRestanteMeses === undefined ||
+          recurso.vidaUtilRestanteMeses < 1
+        ) {
+          throw new BadRequestException(
+            'Los activos fijos necesitan vida util restante en meses (minimo 1).',
+          );
+        }
+        if (
+          recurso.valorActual === undefined ||
+          recurso.valorActual < 0 ||
+          recurso.valorFinalVida === undefined ||
+          recurso.valorFinalVida < 0
+        ) {
+          throw new BadRequestException(
+            'Los activos fijos necesitan valor actual y valor final de vida validos.',
+          );
+        }
+        if (recurso.valorFinalVida > recurso.valorActual) {
+          throw new BadRequestException(
+            'En activos fijos, el valor final de vida no puede ser mayor al valor actual.',
+          );
+        }
       }
 
       if (
@@ -1388,27 +1761,6 @@ export class CostosService {
         if (porcentajeEnOtrosCentros + porcentajeActual > 100) {
           throw new BadRequestException(
             `La persona seleccionada supera el 100% de dedicacion para ${periodo}.`,
-          );
-        }
-      }
-    }
-
-    if (providerIds.size > 0) {
-      const existingProviders = await this.prisma.proveedor.findMany({
-        where: {
-          tenantId: auth.tenantId,
-          id: { in: Array.from(providerIds) },
-        },
-        select: { id: true },
-      });
-      const existingProviderIds = new Set(
-        existingProviders.map((item) => item.id),
-      );
-
-      for (const proveedorId of providerIds) {
-        if (!existingProviderIds.has(proveedorId)) {
-          throw new NotFoundException(
-            'Uno de los proveedores asignados no existe en la empresa actual.',
           );
         }
       }
@@ -1506,7 +1858,7 @@ export class CostosService {
         planta: true,
         areaCosto: true,
         responsableEmpleado: true,
-        proveedorDefault: true,
+        capacidadesPeriodo: true,
         tarifasPeriodo: true,
       },
     });
@@ -1555,6 +1907,30 @@ export class CostosService {
         : 'sin_configurar';
     const ultimoPeriodoConfigurado =
       ultimaTarifaPublicada?.periodo ?? ultimaTarifaBorrador?.periodo ?? '';
+    const tarifaReferencia = ultimaTarifaPublicada ?? ultimaTarifaBorrador;
+    const resumen =
+      (tarifaReferencia?.resumenJson as Record<string, unknown> | null) ?? null;
+    const tarifaDirectaSinReparto =
+      typeof resumen?.tarifaDirectaSinReparto === 'number'
+        ? resumen.tarifaDirectaSinReparto
+        : null;
+    const tarifaAbsorbidaReparto =
+      typeof resumen?.tarifaAbsorbidaReparto === 'number'
+        ? resumen.tarifaAbsorbidaReparto
+        : null;
+    const tarifaTotalCalculada =
+      typeof resumen?.tarifaCalculada === 'number'
+        ? resumen.tarifaCalculada
+        : ultimaTarifaPublicada
+          ? this.decimalToNumber(ultimaTarifaPublicada.tarifaCalculada)
+          : null;
+    const capacidadPracticaResumen =
+      typeof resumen?.capacidadPractica === 'number'
+        ? resumen.capacidadPractica
+        : null;
+    const capacidadPracticaPersistida = centro.capacidadesPeriodo[0]
+      ? this.decimalToNumber(centro.capacidadesPeriodo[0].capacidadPractica)
+      : null;
 
     return {
       id: centro.id,
@@ -1574,8 +1950,6 @@ export class CostosService {
       responsableEmpleadoId: centro.responsableEmpleadoId ?? '',
       responsableEmpleadoNombre:
         centro.responsableEmpleado?.nombreCompleto ?? '',
-      proveedorDefaultId: centro.proveedorDefaultId ?? '',
-      proveedorDefaultNombre: centro.proveedorDefault?.nombre ?? '',
       activo: centro.activo,
       estadoConfiguracion,
       ultimoPeriodoConfigurado,
@@ -1585,12 +1959,17 @@ export class CostosService {
       unidadTarifaPublicada: ultimaTarifaPublicada
         ? this.fromPrismaUnidadBase(centro.unidadBaseFutura)
         : '',
+      ultimaTarifaBase: tarifaDirectaSinReparto,
+      ultimaTarifaAbsorbida: tarifaAbsorbidaReparto,
+      ultimaTarifaTotal: tarifaTotalCalculada,
+      ultimaCapacidadPractica:
+        capacidadPracticaResumen ?? capacidadPracticaPersistida,
     };
   }
 
   private toRecursoResponse(
     recurso: Prisma.CentroCostoRecursoGetPayload<{
-      include: { empleado: true; proveedor: true; maquina: true };
+      include: { empleado: true; maquina: true };
     }>,
   ) {
     return {
@@ -1599,11 +1978,25 @@ export class CostosService {
       tipoRecurso: this.fromPrismaTipoRecurso(recurso.tipoRecurso),
       empleadoId: recurso.empleadoId ?? '',
       empleadoNombre: recurso.empleado?.nombreCompleto ?? '',
-      proveedorId: recurso.proveedorId ?? '',
-      proveedorNombre: recurso.proveedor?.nombre ?? '',
       maquinaId: recurso.maquinaId ?? '',
       maquinaNombre: recurso.maquina?.nombre ?? '',
-      nombreManual: recurso.nombreManual ?? '',
+      nombreRecurso: recurso.nombreRecurso ?? '',
+      tipoGastoGeneral: recurso.tipoGastoGeneral
+        ? this.fromPrismaTipoGastoGeneral(recurso.tipoGastoGeneral)
+        : '',
+      valorMensual: recurso.valorMensual
+        ? this.decimalToNumber(recurso.valorMensual)
+        : null,
+      vidaUtilRestanteMeses: recurso.vidaUtilRestanteMeses ?? null,
+      valorActual: recurso.valorActual
+        ? this.decimalToNumber(recurso.valorActual)
+        : null,
+      valorFinalVida: recurso.valorFinalVida
+        ? this.decimalToNumber(recurso.valorFinalVida)
+        : null,
+      depreciacionMensualCalc: recurso.depreciacionMensualCalc
+        ? this.decimalToNumber(recurso.depreciacionMensualCalc)
+        : null,
       descripcion: recurso.descripcion ?? '',
       porcentajeAsignacion: recurso.porcentajeAsignacion
         ? this.decimalToNumber(recurso.porcentajeAsignacion)
@@ -1637,9 +2030,6 @@ export class CostosService {
       unidadBase: this.fromPrismaUnidadBase(capacidad.unidadBase),
       diasPorMes: this.decimalToNumber(capacidad.diasPorMes),
       horasPorDia: this.decimalToNumber(capacidad.horasPorDia),
-      porcentajeNoProductivo: this.decimalToNumber(
-        capacidad.porcentajeNoProductivo,
-      ),
       capacidadTeorica: this.decimalToNumber(capacidad.capacidadTeorica),
       capacidadPractica: this.decimalToNumber(capacidad.capacidadPractica),
       overrideManualCapacidad: capacidad.overrideManualCapacidad
@@ -1947,9 +2337,10 @@ export class CostosService {
     const mapping: Record<TipoRecursoCentroCostoDto, TipoRecursoCentroCosto> = {
       [TipoRecursoCentroCostoDto.empleado]: TipoRecursoCentroCosto.EMPLEADO,
       [TipoRecursoCentroCostoDto.maquinaria]: TipoRecursoCentroCosto.MAQUINARIA,
-      [TipoRecursoCentroCostoDto.proveedor]: TipoRecursoCentroCosto.PROVEEDOR,
-      [TipoRecursoCentroCostoDto.gasto_manual]:
-        TipoRecursoCentroCosto.GASTO_MANUAL,
+      [TipoRecursoCentroCostoDto.gasto_general]:
+        TipoRecursoCentroCosto.GASTO_GENERAL,
+      [TipoRecursoCentroCostoDto.activo_fijo]:
+        TipoRecursoCentroCosto.ACTIVO_FIJO,
     };
 
     return mapping[tipo];
@@ -1959,9 +2350,53 @@ export class CostosService {
     const mapping: Record<TipoRecursoCentroCosto, TipoRecursoCentroCostoDto> = {
       [TipoRecursoCentroCosto.EMPLEADO]: TipoRecursoCentroCostoDto.empleado,
       [TipoRecursoCentroCosto.MAQUINARIA]: TipoRecursoCentroCostoDto.maquinaria,
-      [TipoRecursoCentroCosto.PROVEEDOR]: TipoRecursoCentroCostoDto.proveedor,
-      [TipoRecursoCentroCosto.GASTO_MANUAL]:
-        TipoRecursoCentroCostoDto.gasto_manual,
+      [TipoRecursoCentroCosto.GASTO_GENERAL]:
+        TipoRecursoCentroCostoDto.gasto_general,
+      [TipoRecursoCentroCosto.ACTIVO_FIJO]:
+        TipoRecursoCentroCostoDto.activo_fijo,
+    };
+
+    return mapping[tipo];
+  }
+
+  private toPrismaTipoGastoGeneral(
+    tipo: TipoGastoGeneralCentroCostoDto,
+  ): TipoGastoGeneralCentroCosto {
+    const mapping: Record<
+      TipoGastoGeneralCentroCostoDto,
+      TipoGastoGeneralCentroCosto
+    > = {
+      [TipoGastoGeneralCentroCostoDto.limpieza]:
+        TipoGastoGeneralCentroCosto.LIMPIEZA,
+      [TipoGastoGeneralCentroCostoDto.mantenimiento]:
+        TipoGastoGeneralCentroCosto.MANTENIMIENTO,
+      [TipoGastoGeneralCentroCostoDto.servicios]:
+        TipoGastoGeneralCentroCosto.SERVICIOS,
+      [TipoGastoGeneralCentroCostoDto.alquiler]:
+        TipoGastoGeneralCentroCosto.ALQUILER,
+      [TipoGastoGeneralCentroCostoDto.otro]: TipoGastoGeneralCentroCosto.OTRO,
+    };
+
+    return mapping[tipo];
+  }
+
+  private fromPrismaTipoGastoGeneral(
+    tipo: TipoGastoGeneralCentroCosto,
+  ): TipoGastoGeneralCentroCostoDto {
+    const mapping: Record<
+      TipoGastoGeneralCentroCosto,
+      TipoGastoGeneralCentroCostoDto
+    > = {
+      [TipoGastoGeneralCentroCosto.LIMPIEZA]:
+        TipoGastoGeneralCentroCostoDto.limpieza,
+      [TipoGastoGeneralCentroCosto.MANTENIMIENTO]:
+        TipoGastoGeneralCentroCostoDto.mantenimiento,
+      [TipoGastoGeneralCentroCosto.SERVICIOS]:
+        TipoGastoGeneralCentroCostoDto.servicios,
+      [TipoGastoGeneralCentroCosto.ALQUILER]:
+        TipoGastoGeneralCentroCostoDto.alquiler,
+      [TipoGastoGeneralCentroCosto.OTRO]:
+        TipoGastoGeneralCentroCostoDto.otro,
     };
 
     return mapping[tipo];

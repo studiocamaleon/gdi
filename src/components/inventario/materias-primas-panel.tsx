@@ -20,6 +20,7 @@ import {
   type SubfamiliaMateriaPrima,
 } from "@/lib/materias-primas";
 import {
+  getMateriaPrimaTemplateAvailability,
   getMateriaPrimaTemplate,
   materiaPrimaTemplatesV1,
 } from "@/lib/materia-prima-templates";
@@ -157,8 +158,8 @@ export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPan
       templateId: template.id,
       unidadStock: template.unidadStock,
       unidadCompra: template.unidadCompra,
-      esConsumible: false,
-      esRepuesto: false,
+      esConsumible: getMateriaPrimaTemplateAvailability(template.id).esConsumible,
+      esRepuesto: getMateriaPrimaTemplateAvailability(template.id).esRepuesto,
       activo: true,
       atributosTecnicos: { ...template.atributosIniciales },
       variantes: [],

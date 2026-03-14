@@ -43,7 +43,6 @@ import {
   type PlantaPayload,
 } from "@/lib/costos";
 import { EmpleadoDetalle } from "@/lib/empleados";
-import { ProveedorDetalle } from "@/lib/proveedores";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CentroCostoConfigurator } from "@/components/costos/centro-costo-configurator";
@@ -80,7 +79,6 @@ type CostosPanelProps = {
   initialAreas: AreaCosto[];
   initialCentros: CentroCosto[];
   empleados: EmpleadoDetalle[];
-  proveedores: ProveedorDetalle[];
 };
 
 function createEmptyPlanta(): PlantaPayload {
@@ -112,12 +110,23 @@ function createEmptyCentro(plantaId = "", areaCostoId = ""): CentroCostoPayload 
     imputacionPreferida: "directa",
     unidadBaseFutura: "ninguna",
     responsableEmpleadoId: undefined,
-    proveedorDefaultId: undefined,
     activo: true,
   };
 }
 
 const EMPTY_SELECT_VALUE = "__none__";
+
+function formatMoneyOrDash(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
 
 function getNextCentroCodigo(areaCodigo: string, centros: CentroCosto[]) {
   const prefix = `${areaCodigo.toUpperCase()}-`;
@@ -143,7 +152,6 @@ export function CostosPanel({
   initialAreas,
   initialCentros,
   empleados,
-  proveedores,
 }: CostosPanelProps) {
   const [plantas, setPlantas] = React.useState(initialPlantas);
   const [areas, setAreas] = React.useState(initialAreas);
@@ -177,11 +185,6 @@ export function CostosPanel({
   const empleadoLabelById = React.useMemo(
     () => new Map(empleados.map((empleado) => [empleado.id, empleado.nombreCompleto])),
     [empleados],
-  );
-
-  const proveedorLabelById = React.useMemo(
-    () => new Map(proveedores.map((proveedor) => [proveedor.id, proveedor.nombre])),
-    [proveedores],
   );
 
   const areaOptions = React.useMemo(
@@ -706,7 +709,7 @@ export function CostosPanel({
                   <CardTitle className="text-lg">Centros de costo</CardTitle>
                   <CardDescription>
                     Define el punto real de imputacion con clasificacion grafica,
-                    responsables y relacion opcional con proveedor tercerizado.
+                    responsables y reglas operativas del centro.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -844,10 +847,6 @@ export function CostosPanel({
                             setCentroForm((current) => ({
                               ...current,
                               tipoCentro: value as CentroCostoPayload["tipoCentro"],
-                              proveedorDefaultId:
-                                value === "tercerizado"
-                                  ? current.proveedorDefaultId
-                                  : undefined,
                             }));
                           }}
                         >
@@ -1033,50 +1032,7 @@ export function CostosPanel({
                           </SelectContent>
                         </Select>
                       </Field>
-                      <Field>
-                        <FieldLabel htmlFor="centro-proveedor">Proveedor default</FieldLabel>
-                        <Select
-                          value={centroForm.proveedorDefaultId ?? EMPTY_SELECT_VALUE}
-                          onValueChange={(value) => {
-                            if (!value) {
-                              return;
-                            }
-
-                            setCentroForm((current) => ({
-                              ...current,
-                              proveedorDefaultId:
-                                value === EMPTY_SELECT_VALUE ? undefined : value,
-                            }));
-                          }}
-                        >
-                          <SelectTrigger id="centro-proveedor" className="w-full">
-                            <SelectValue placeholder="Selecciona un proveedor">
-                              {(value) => {
-                                if (value === EMPTY_SELECT_VALUE) {
-                                  return "Sin proveedor";
-                                }
-
-                                return typeof value === "string"
-                                  ? proveedorLabelById.get(value) ?? value
-                                  : "Selecciona un proveedor";
-                              }}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              <SelectItem value={EMPTY_SELECT_VALUE}>
-                                Sin proveedor
-                              </SelectItem>
-                              {proveedores.map((proveedor) => (
-                                <SelectItem key={proveedor.id} value={proveedor.id}>
-                                  {proveedor.nombre}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      </Field>
-                      <Field className="lg:col-span-2">
+                      <Field className="lg:col-span-3">
                         <FieldLabel htmlFor="centro-descripcion">Descripcion</FieldLabel>
                         <Input
                           id="centro-descripcion"
@@ -1139,13 +1095,15 @@ export function CostosPanel({
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="px-4">Codigo</TableHead>
                         <TableHead>Centro</TableHead>
                         <TableHead>Area</TableHead>
                         <TableHead>Tipo</TableHead>
                         <TableHead>Estado costeo</TableHead>
                         <TableHead>Periodo</TableHead>
+                        <TableHead>Horas productivas</TableHead>
                         <TableHead>Tarifa publicada</TableHead>
+                        <TableHead>Absorbido</TableHead>
+                        <TableHead>Tarifa total</TableHead>
                         <TableHead>Estado</TableHead>
                         <TableHead className="w-56">Acciones</TableHead>
                       </TableRow>
@@ -1153,7 +1111,6 @@ export function CostosPanel({
                     <TableBody>
                       {centros.map((centro) => (
                         <TableRow key={centro.id}>
-                          <TableCell className="px-4 font-medium">{centro.codigo}</TableCell>
                           <TableCell>
                             <div className="flex flex-col">
                               <span>{centro.nombre}</span>
@@ -1187,23 +1144,55 @@ export function CostosPanel({
                             {centro.ultimoPeriodoConfigurado || "Sin período"}
                           </TableCell>
                           <TableCell>
-                            {centro.ultimaTarifaPublicada === null ? (
+                            {typeof centro.ultimaCapacidadPractica === "number" &&
+                            Number.isFinite(centro.ultimaCapacidadPractica) ? (
+                              <span className="font-medium">
+                                {new Intl.NumberFormat("es-AR", {
+                                  minimumFractionDigits: 0,
+                                  maximumFractionDigits: 2,
+                                }).format(centro.ultimaCapacidadPractica)}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {formatMoneyOrDash(
+                              centro.ultimaTarifaBase ?? centro.ultimaTarifaPublicada,
+                            ) === null ? (
                               <span className="text-sm text-muted-foreground">
                                 Sin publicar
                               </span>
                             ) : (
                               <div className="flex flex-col">
                                 <span className="font-medium">
-                                  {new Intl.NumberFormat("es-AR", {
-                                    style: "currency",
-                                    currency: "ARS",
-                                    maximumFractionDigits: 0,
-                                  }).format(centro.ultimaTarifaPublicada)}
-                                </span>
-                                <span className="text-xs text-muted-foreground">
-                                  por {getUnidadBaseLabel(centro.unidadTarifaPublicada)}
+                                  {formatMoneyOrDash(
+                                    centro.ultimaTarifaBase ?? centro.ultimaTarifaPublicada,
+                                  )}
                                 </span>
                               </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {formatMoneyOrDash(centro.ultimaTarifaAbsorbida) ? (
+                              <span className="font-medium">
+                                {formatMoneyOrDash(centro.ultimaTarifaAbsorbida)}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {formatMoneyOrDash(
+                              centro.ultimaTarifaTotal ?? centro.ultimaTarifaPublicada,
+                            ) ? (
+                              <span className="font-medium">
+                                {formatMoneyOrDash(
+                                  centro.ultimaTarifaTotal ?? centro.ultimaTarifaPublicada,
+                                )}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">-</span>
                             )}
                           </TableCell>
                           <TableCell>
@@ -1241,8 +1230,6 @@ export function CostosPanel({
                                     unidadBaseFutura: centro.unidadBaseFutura,
                                     responsableEmpleadoId:
                                       centro.responsableEmpleadoId || undefined,
-                                    proveedorDefaultId:
-                                      centro.proveedorDefaultId || undefined,
                                     activo: centro.activo,
                                   });
                                   setActiveTab("centros");
@@ -1315,7 +1302,6 @@ export function CostosPanel({
         plantas={plantas}
         areas={areas}
         empleados={empleados}
-        proveedores={proveedores}
         onConfigured={async () => {
           reloadAll();
         }}

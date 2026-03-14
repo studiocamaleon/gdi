@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { MateriaPrimaFicha } from "@/components/inventario/materia-prima-ficha";
+import { getMaquinas } from "@/lib/maquinaria-api";
 import { getMateriaPrimaById } from "@/lib/materias-primas-api";
 import { getProveedores } from "@/lib/proveedores-api";
 
@@ -13,14 +14,21 @@ export default async function MateriaPrimaDetallePage({
 }) {
   const { materiaPrimaId } = await params;
 
-  const [materiaPrima, proveedores] = await Promise.all([
+  const [materiaPrima, proveedores, maquinas] = await Promise.all([
     getMateriaPrimaById(materiaPrimaId),
     getProveedores(),
+    getMaquinas(),
   ]);
 
   if (!materiaPrima) {
     notFound();
   }
 
-  return <MateriaPrimaFicha materiaPrima={materiaPrima} proveedores={proveedores} />;
+  return (
+    <MateriaPrimaFicha
+      materiaPrima={materiaPrima}
+      proveedores={proveedores}
+      maquinas={maquinas}
+    />
+  );
 }

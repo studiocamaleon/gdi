@@ -69,7 +69,7 @@ async function main() {
     },
   });
 
-  const proveedores = await Promise.all([
+  await Promise.all([
     prisma.proveedor.create({
       data: {
         tenantId: tenant.id,
@@ -423,7 +423,6 @@ async function main() {
         categoriaGrafica: CategoriaGraficaCentroCosto.TERCERIZADO,
         imputacionPreferida: ImputacionPreferidaCentroCosto.REPARTO,
         unidadBaseFutura: UnidadBaseCentroCosto.UNIDAD,
-        proveedorDefaultId: proveedores[1].id,
         activo: true,
       },
     }),

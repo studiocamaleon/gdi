@@ -9,22 +9,34 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ReplaceCentroRecursosDto = exports.CentroCostoRecursoItemDto = exports.TipoRecursoCentroCostoDto = void 0;
+exports.ReplaceCentroRecursosDto = exports.CentroCostoRecursoItemDto = exports.TipoGastoGeneralCentroCostoDto = exports.TipoRecursoCentroCostoDto = void 0;
 const class_transformer_1 = require("class-transformer");
 const class_validator_1 = require("class-validator");
 var TipoRecursoCentroCostoDto;
 (function (TipoRecursoCentroCostoDto) {
     TipoRecursoCentroCostoDto["empleado"] = "empleado";
     TipoRecursoCentroCostoDto["maquinaria"] = "maquinaria";
-    TipoRecursoCentroCostoDto["proveedor"] = "proveedor";
-    TipoRecursoCentroCostoDto["gasto_manual"] = "gasto_manual";
+    TipoRecursoCentroCostoDto["gasto_general"] = "gasto_general";
+    TipoRecursoCentroCostoDto["activo_fijo"] = "activo_fijo";
 })(TipoRecursoCentroCostoDto || (exports.TipoRecursoCentroCostoDto = TipoRecursoCentroCostoDto = {}));
+var TipoGastoGeneralCentroCostoDto;
+(function (TipoGastoGeneralCentroCostoDto) {
+    TipoGastoGeneralCentroCostoDto["limpieza"] = "limpieza";
+    TipoGastoGeneralCentroCostoDto["mantenimiento"] = "mantenimiento";
+    TipoGastoGeneralCentroCostoDto["servicios"] = "servicios";
+    TipoGastoGeneralCentroCostoDto["alquiler"] = "alquiler";
+    TipoGastoGeneralCentroCostoDto["otro"] = "otro";
+})(TipoGastoGeneralCentroCostoDto || (exports.TipoGastoGeneralCentroCostoDto = TipoGastoGeneralCentroCostoDto = {}));
 class CentroCostoRecursoItemDto {
     tipoRecurso;
     empleadoId;
-    proveedorId;
     maquinaId;
-    nombreManual;
+    nombreRecurso;
+    tipoGastoGeneral;
+    valorMensual;
+    vidaUtilRestanteMeses;
+    valorActual;
+    valorFinalVida;
     descripcion;
     porcentajeAsignacion;
     activo;
@@ -43,17 +55,45 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsUUID)(),
     __metadata("design:type", String)
-], CentroCostoRecursoItemDto.prototype, "proveedorId", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsUUID)(),
-    __metadata("design:type", String)
 ], CentroCostoRecursoItemDto.prototype, "maquinaId", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
-], CentroCostoRecursoItemDto.prototype, "nombreManual", void 0);
+], CentroCostoRecursoItemDto.prototype, "nombreRecurso", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(TipoGastoGeneralCentroCostoDto),
+    __metadata("design:type", String)
+], CentroCostoRecursoItemDto.prototype, "tipoGastoGeneral", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)({ maxDecimalPlaces: 2 }),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], CentroCostoRecursoItemDto.prototype, "valorMensual", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)({ maxDecimalPlaces: 0 }),
+    (0, class_validator_1.Min)(1),
+    __metadata("design:type", Number)
+], CentroCostoRecursoItemDto.prototype, "vidaUtilRestanteMeses", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)({ maxDecimalPlaces: 2 }),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], CentroCostoRecursoItemDto.prototype, "valorActual", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)({ maxDecimalPlaces: 2 }),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], CentroCostoRecursoItemDto.prototype, "valorFinalVida", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),

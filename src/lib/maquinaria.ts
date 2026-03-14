@@ -83,8 +83,20 @@ export type UnidadConsumoMaquina =
 export type TipoComponenteDesgasteMaquina =
   | "fusor"
   | "drum"
+  | "drum_opc"
   | "developer"
+  | "developer_unit"
+  | "charge_unit"
+  | "drum_cleaning_blade"
   | "correa_transferencia"
+  | "transfer_belt_itb"
+  | "transfer_roller"
+  | "fuser_belt"
+  | "pressure_roller"
+  | "fuser_cleaning_web"
+  | "wax_lubricant_bar"
+  | "fuser_stripper_finger"
+  | "waste_toner_subsystem"
   | "cabezal"
   | "lampara_uv"
   | "fresa"
@@ -298,9 +310,21 @@ export const tipoComponenteDesgasteMaquinaItems: Array<{
   value: TipoComponenteDesgasteMaquina;
 }> = [
   { label: "Fusor", value: "fusor" },
-  { label: "Drum", value: "drum" },
-  { label: "Developer", value: "developer" },
+  { label: "Tambor (drum) genérico", value: "drum" },
+  { label: "Tambor OPC", value: "drum_opc" },
+  { label: "Revelador", value: "developer" },
+  { label: "Unidad reveladora (developer unit)", value: "developer_unit" },
+  { label: "Unidad de carga (PCR/corona)", value: "charge_unit" },
+  { label: "Cuchilla de limpieza de tambor", value: "drum_cleaning_blade" },
   { label: "Correa transferencia", value: "correa_transferencia" },
+  { label: "Banda/correa de transferencia ITB", value: "transfer_belt_itb" },
+  { label: "Rodillo de transferencia", value: "transfer_roller" },
+  { label: "Banda de fusor", value: "fuser_belt" },
+  { label: "Rodillo de presión", value: "pressure_roller" },
+  { label: "Web de limpieza del fusor", value: "fuser_cleaning_web" },
+  { label: "Barra de cera/lubricación", value: "wax_lubricant_bar" },
+  { label: "Uña separadora del fusor", value: "fuser_stripper_finger" },
+  { label: "Subsistema de residual de tóner", value: "waste_toner_subsystem" },
   { label: "Cabezal", value: "cabezal" },
   { label: "Lampara UV", value: "lampara_uv" },
   { label: "Fresa", value: "fresa" },

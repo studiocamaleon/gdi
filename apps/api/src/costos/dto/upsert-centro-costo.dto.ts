@@ -80,10 +80,6 @@ export class UpsertCentroCostoDto {
   @IsUUID()
   responsableEmpleadoId?: string;
 
-  @IsOptional()
-  @IsUUID()
-  proveedorDefaultId?: string;
-
   @IsBoolean()
   activo: boolean;
 }

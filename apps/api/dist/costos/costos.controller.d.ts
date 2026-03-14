@@ -95,13 +95,15 @@ export declare class CostosController {
         unidadBaseFutura: import("./dto/upsert-centro-costo.dto").UnidadBaseCentroCostoDto;
         responsableEmpleadoId: string;
         responsableEmpleadoNombre: string;
-        proveedorDefaultId: string;
-        proveedorDefaultNombre: string;
         activo: boolean;
         estadoConfiguracion: string;
         ultimoPeriodoConfigurado: string;
         ultimaTarifaPublicada: number | null;
         unidadTarifaPublicada: string;
+        ultimaTarifaBase: number | null;
+        ultimaTarifaAbsorbida: number | null;
+        ultimaTarifaTotal: number | null;
+        ultimaCapacidadPractica: number | null;
     }[]>;
     createCentro(auth: CurrentAuth, payload: UpsertCentroCostoDto): Promise<{
         id: string;
@@ -118,13 +120,15 @@ export declare class CostosController {
         unidadBaseFutura: import("./dto/upsert-centro-costo.dto").UnidadBaseCentroCostoDto;
         responsableEmpleadoId: string;
         responsableEmpleadoNombre: string;
-        proveedorDefaultId: string;
-        proveedorDefaultNombre: string;
         activo: boolean;
         estadoConfiguracion: string;
         ultimoPeriodoConfigurado: string;
         ultimaTarifaPublicada: number | null;
         unidadTarifaPublicada: string;
+        ultimaTarifaBase: number | null;
+        ultimaTarifaAbsorbida: number | null;
+        ultimaTarifaTotal: number | null;
+        ultimaCapacidadPractica: number | null;
     }>;
     updateCentro(auth: CurrentAuth, id: string, payload: UpsertCentroCostoDto): Promise<{
         id: string;
@@ -141,13 +145,15 @@ export declare class CostosController {
         unidadBaseFutura: import("./dto/upsert-centro-costo.dto").UnidadBaseCentroCostoDto;
         responsableEmpleadoId: string;
         responsableEmpleadoNombre: string;
-        proveedorDefaultId: string;
-        proveedorDefaultNombre: string;
         activo: boolean;
         estadoConfiguracion: string;
         ultimoPeriodoConfigurado: string;
         ultimaTarifaPublicada: number | null;
         unidadTarifaPublicada: string;
+        ultimaTarifaBase: number | null;
+        ultimaTarifaAbsorbida: number | null;
+        ultimaTarifaTotal: number | null;
+        ultimaCapacidadPractica: number | null;
     }>;
     toggleCentro(auth: CurrentAuth, id: string): Promise<{
         id: string;
@@ -165,7 +171,6 @@ export declare class CostosController {
         imputacionPreferida: import("@prisma/client").$Enums.ImputacionPreferidaCentroCosto;
         unidadBaseFutura: import("@prisma/client").$Enums.UnidadBaseCentroCosto;
         responsableEmpleadoId: string | null;
-        proveedorDefaultId: string | null;
     }>;
     getCentroConfiguracion(auth: CurrentAuth, id: string, periodo: string): Promise<{
         periodo: string;
@@ -184,13 +189,15 @@ export declare class CostosController {
             unidadBaseFutura: import("./dto/upsert-centro-costo.dto").UnidadBaseCentroCostoDto;
             responsableEmpleadoId: string;
             responsableEmpleadoNombre: string;
-            proveedorDefaultId: string;
-            proveedorDefaultNombre: string;
             activo: boolean;
             estadoConfiguracion: string;
             ultimoPeriodoConfigurado: string;
             ultimaTarifaPublicada: number | null;
             unidadTarifaPublicada: string;
+            ultimaTarifaBase: number | null;
+            ultimaTarifaAbsorbida: number | null;
+            ultimaTarifaTotal: number | null;
+            ultimaCapacidadPractica: number | null;
         };
         recursos: {
             id: string;
@@ -198,11 +205,15 @@ export declare class CostosController {
             tipoRecurso: import("./dto/replace-centro-recursos.dto").TipoRecursoCentroCostoDto;
             empleadoId: string;
             empleadoNombre: string;
-            proveedorId: string;
-            proveedorNombre: string;
             maquinaId: string;
             maquinaNombre: string;
-            nombreManual: string;
+            nombreRecurso: string;
+            tipoGastoGeneral: string;
+            valorMensual: number | null;
+            vidaUtilRestanteMeses: number | null;
+            valorActual: number | null;
+            valorFinalVida: number | null;
+            depreciacionMensualCalc: number | null;
             descripcion: string;
             porcentajeAsignacion: number | null;
             activo: boolean;
@@ -249,7 +260,6 @@ export declare class CostosController {
             unidadBase: import("./dto/upsert-centro-costo.dto").UnidadBaseCentroCostoDto;
             diasPorMes: number;
             horasPorDia: number;
-            porcentajeNoProductivo: number;
             capacidadTeorica: number;
             capacidadPractica: number;
             overrideManualCapacidad: number | null;
@@ -306,13 +316,15 @@ export declare class CostosController {
         unidadBaseFutura: import("./dto/upsert-centro-costo.dto").UnidadBaseCentroCostoDto;
         responsableEmpleadoId: string;
         responsableEmpleadoNombre: string;
-        proveedorDefaultId: string;
-        proveedorDefaultNombre: string;
         activo: boolean;
         estadoConfiguracion: string;
         ultimoPeriodoConfigurado: string;
         ultimaTarifaPublicada: number | null;
         unidadTarifaPublicada: string;
+        ultimaTarifaBase: number | null;
+        ultimaTarifaAbsorbida: number | null;
+        ultimaTarifaTotal: number | null;
+        ultimaCapacidadPractica: number | null;
     }>;
     replaceCentroRecursos(auth: CurrentAuth, id: string, periodo: string, payload: ReplaceCentroRecursosDto): Promise<{
         id: string;
@@ -320,11 +332,15 @@ export declare class CostosController {
         tipoRecurso: import("./dto/replace-centro-recursos.dto").TipoRecursoCentroCostoDto;
         empleadoId: string;
         empleadoNombre: string;
-        proveedorId: string;
-        proveedorNombre: string;
         maquinaId: string;
         maquinaNombre: string;
-        nombreManual: string;
+        nombreRecurso: string;
+        tipoGastoGeneral: string;
+        valorMensual: number | null;
+        vidaUtilRestanteMeses: number | null;
+        valorActual: number | null;
+        valorFinalVida: number | null;
+        depreciacionMensualCalc: number | null;
         descripcion: string;
         porcentajeAsignacion: number | null;
         activo: boolean;
@@ -345,7 +361,6 @@ export declare class CostosController {
         unidadBase: import("./dto/upsert-centro-costo.dto").UnidadBaseCentroCostoDto;
         diasPorMes: number;
         horasPorDia: number;
-        porcentajeNoProductivo: number;
         capacidadTeorica: number;
         capacidadPractica: number;
         overrideManualCapacidad: number | null;

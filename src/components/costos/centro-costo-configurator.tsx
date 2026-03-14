@@ -42,18 +42,19 @@ import {
   getCurrentPeriodo,
   getImputacionPreferidaLabel,
   getSuggestedUnidadBase,
+  getTipoGastoGeneralLabel,
   getTipoCentroLabel,
   getTipoRecursoLabel,
   getUnidadBaseLabel,
   imputacionPreferidaItems,
   Planta,
+  tipoGastoGeneralItems,
   tipoRecursoItems,
   unidadBaseItems,
 } from "@/lib/costos";
 import { EmpleadoDetalle } from "@/lib/empleados";
 import { getMaquinas } from "@/lib/maquinaria-api";
 import { Maquina } from "@/lib/maquinaria";
-import { ProveedorDetalle } from "@/lib/proveedores";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -99,11 +100,17 @@ type CentroCostoConfiguratorProps = {
   plantas: Planta[];
   areas: AreaCosto[];
   empleados: EmpleadoDetalle[];
-  proveedores: ProveedorDetalle[];
   onConfigured: () => Promise<void> | void;
 };
 
 type WizardStep = "identidad" | "recursos" | "costos" | "capacidad" | "resultado";
+
+type RepartoAbsorbidoItem = {
+  desdeCentroCostoId: string;
+  desdeCentroCodigo: string;
+  desdeCentroNombre: string;
+  monto: number;
+};
 
 type LocalRecurso = CentroCostoRecursoPayload & { id: string };
 type LocalComponente = CentroCostoComponenteCostoPayload & { id: string };
@@ -122,8 +129,12 @@ function createResource(
     id: createLocalId(),
     tipoRecurso,
     empleadoId: undefined,
-    proveedorId: undefined,
-    nombreManual: "",
+    nombreRecurso: "",
+    tipoGastoGeneral: undefined,
+    valorMensual: undefined,
+    vidaUtilRestanteMeses: undefined,
+    valorActual: undefined,
+    valorFinalVida: undefined,
     descripcion: "",
     porcentajeAsignacion: undefined,
     activo: true,
@@ -324,37 +335,10 @@ function createMachineCostDefault(
   };
 }
 
-function createSupplierDerivedComponent(params: {
-  proveedorId: string;
-  proveedorNombre: string;
-  current?: LocalComponente;
-}) {
-  const importeMensual = normalizeNumber(
-    params.current?.importeMensual ?? getDetailValue(params.current ?? createComponent(), "importeMensual"),
-  );
-
-  return {
-    id: params.current?.id ?? createLocalId(),
-    categoria: "tercerizacion" as const,
-    nombre: `Servicio - ${params.proveedorNombre}`,
-    origen: "sugerido" as const,
-    importeMensual,
-    notas: params.current?.notas ?? "",
-    detalle: {
-      kind: "proveedor",
-      sourceKey: params.proveedorId,
-      proveedorId: params.proveedorId,
-      proveedorNombre: params.proveedorNombre,
-      moneda: systemCurrencyCode,
-    },
-  } satisfies LocalComponente;
-}
-
 function syncDerivedComponents(params: {
   resources: LocalRecurso[];
   current: LocalComponente[];
   empleadoLabelById: Map<string, string>;
-  proveedorLabelById: Map<string, string>;
 }) {
   const manualComponents = params.current.filter((component) => !isDerivedComponent(component));
   const existingDerived = new Map(
@@ -395,18 +379,6 @@ function syncDerivedComponents(params: {
       continue;
     }
 
-    if (resource.tipoRecurso === "proveedor" && resource.proveedorId) {
-      const proveedorNombre =
-        params.proveedorLabelById.get(resource.proveedorId) ?? "Proveedor";
-      const componentKey = `proveedor:${resource.proveedorId}`;
-      derivedComponents.push(
-        createSupplierDerivedComponent({
-          proveedorId: resource.proveedorId,
-          proveedorNombre,
-          current: existingDerived.get(componentKey),
-        }),
-      );
-    }
   }
 
   return [...derivedComponents, ...manualComponents];
@@ -435,6 +407,43 @@ function formatPeriodo(periodo: string) {
   }
 
   return `${month}/${year}`;
+}
+
+function extractRepartoAbsorbido(resumen: Record<string, unknown> | null | undefined) {
+  const total =
+    typeof resumen?.costoMensualAbsorbidoReparto === "number"
+      ? resumen.costoMensualAbsorbidoReparto
+      : 0;
+  const itemsRaw = Array.isArray(resumen?.desgloseRepartoAbsorbido)
+    ? resumen.desgloseRepartoAbsorbido
+    : [];
+  const desglose = itemsRaw
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+      const data = item as Record<string, unknown>;
+      if (
+        typeof data.desdeCentroCostoId !== "string" ||
+        typeof data.desdeCentroCodigo !== "string" ||
+        typeof data.desdeCentroNombre !== "string" ||
+        typeof data.monto !== "number"
+      ) {
+        return null;
+      }
+      return {
+        desdeCentroCostoId: data.desdeCentroCostoId,
+        desdeCentroCodigo: data.desdeCentroCodigo,
+        desdeCentroNombre: data.desdeCentroNombre,
+        monto: data.monto,
+      } satisfies RepartoAbsorbidoItem;
+    })
+    .filter((item): item is RepartoAbsorbidoItem => Boolean(item));
+
+  return {
+    total,
+    desglose,
+  };
 }
 
 function FieldLabelWithTooltip({ label, help }: { label: string; help: string }) {
@@ -468,7 +477,6 @@ export function CentroCostoConfigurator({
   plantas,
   areas,
   empleados,
-  proveedores,
   onConfigured,
 }: CentroCostoConfiguratorProps) {
   const [periodo, setPeriodo] = React.useState(getCurrentPeriodo());
@@ -484,11 +492,14 @@ export function CentroCostoConfigurator({
   const [capacityForm, setCapacityForm] = React.useState<CentroCostoCapacidadPayload>({
     diasPorMes: 22,
     horasPorDia: 8,
-    porcentajeNoProductivo: 15,
     overrideManualCapacidad: undefined,
   });
   const [draftTariff, setDraftTariff] = React.useState<number | null>(null);
   const [publishedTariff, setPublishedTariff] = React.useState<number | null>(null);
+  const [repartoAbsorbidoTotal, setRepartoAbsorbidoTotal] = React.useState(0);
+  const [repartoAbsorbidoDesglose, setRepartoAbsorbidoDesglose] = React.useState<
+    RepartoAbsorbidoItem[]
+  >([]);
   const [, setWarnings] = React.useState<string[]>([]);
   const [empleadosDisponibilidad, setEmpleadosDisponibilidad] = React.useState<
     EmpleadoDisponibilidadCentroCosto[]
@@ -506,10 +517,6 @@ export function CentroCostoConfigurator({
   const empleadoLabelById = React.useMemo(
     () => new Map(empleados.map((empleado) => [empleado.id, empleado.nombreCompleto])),
     [empleados],
-  );
-  const proveedorLabelById = React.useMemo(
-    () => new Map(proveedores.map((proveedor) => [proveedor.id, proveedor.nombre])),
-    [proveedores],
   );
   const maquinaById = React.useMemo(
     () => new Map(maquinas.map((maquina) => [maquina.id, maquina])),
@@ -593,11 +600,41 @@ export function CentroCostoConfigurator({
   );
 
   const capacidadTeorica = (capacityForm.diasPorMes || 0) * (capacityForm.horasPorDia || 0);
+  const capacidadAutoHoraMaquina = resourcesForm
+    .filter((resource) => resource.activo && resource.tipoRecurso === "maquinaria")
+    .reduce((total, resource) => {
+      const item =
+        machineCostsForm.find((current) => current.centroCostoRecursoId === resource.id) ??
+        machineCostsForm.find((current) => current.maquinaId === resource.maquinaId);
+      if (!item) {
+        return total;
+      }
+      return (
+        total +
+        item.horasProgramadasMes *
+          (item.disponibilidadPct / 100) *
+          (item.eficienciaPct / 100)
+      );
+    }, 0);
+  const capacidadAutoHoraHombre = resourcesForm
+    .filter((resource) => resource.activo && resource.tipoRecurso === "empleado")
+    .reduce(
+      (total, resource) =>
+        total + capacidadTeorica * ((resource.porcentajeAsignacion ?? 0) / 100),
+      0,
+    );
+  const capacidadAutomatica =
+    baseForm?.unidadBaseFutura === "hora_maquina"
+      ? capacidadAutoHoraMaquina
+      : baseForm?.unidadBaseFutura === "hora_hombre"
+        ? capacidadAutoHoraHombre
+        : capacidadTeorica;
+  const usaCapacidadMaquinaria = baseForm?.unidadBaseFutura === "hora_maquina";
   const capacidadPractica =
     capacityForm.overrideManualCapacidad !== undefined &&
     Number.isFinite(capacityForm.overrideManualCapacidad)
       ? capacityForm.overrideManualCapacidad
-      : capacidadTeorica * (1 - (capacityForm.porcentajeNoProductivo || 0) / 100);
+      : capacidadAutomatica;
   const costoMensualComponentes = componentsForm.reduce(
     (total, item) => total + (Number(item.importeMensual) || 0),
     0,
@@ -606,7 +643,24 @@ export function CentroCostoConfigurator({
     (total, item) => total + (Number(item.costoMensualTotal) || 0),
     0,
   );
-  const costoMensualTotal = costoMensualComponentes + costoMensualMaquinaria;
+  const costoMensualGastosGenerales = resourcesForm
+    .filter((item) => item.activo && item.tipoRecurso === "gasto_general")
+    .reduce((total, item) => total + (Number(item.valorMensual) || 0), 0);
+  const costoMensualActivosFijos = resourcesForm
+    .filter((item) => item.activo && item.tipoRecurso === "activo_fijo")
+    .reduce((total, item) => {
+      const valorActual = Number(item.valorActual) || 0;
+      const valorFinalVida = Number(item.valorFinalVida) || 0;
+      const vidaUtil = Math.max(1, Number(item.vidaUtilRestanteMeses) || 1);
+      const depreciacion = Math.max(0, valorActual - valorFinalVida) / vidaUtil;
+      return total + depreciacion;
+    }, 0);
+  const costoMensualDirecto =
+    costoMensualComponentes +
+    costoMensualMaquinaria +
+    costoMensualGastosGenerales +
+    costoMensualActivosFijos;
+  const costoMensualTotal = costoMensualDirecto + repartoAbsorbidoTotal;
   const tarifaProyectada =
     costoMensualTotal > 0 && capacidadPractica > 0
       ? costoMensualTotal / capacidadPractica
@@ -635,15 +689,6 @@ export function CentroCostoConfigurator({
           (resource.porcentajeAsignacion ?? 0) <= disponibilidadBase
         );
       });
-    const proveedorListo =
-      baseForm.tipoCentro !== "tercerizado" ||
-      Boolean(baseForm.proveedorDefaultId) ||
-      resourcesForm.some(
-        (resource) =>
-          resource.tipoRecurso === "proveedor" &&
-          Boolean(resource.proveedorId) &&
-          resource.activo,
-      );
     const maquinariaLista = resourcesForm
       .filter((resource) => resource.tipoRecurso === "maquinaria" && resource.activo)
       .every(
@@ -663,7 +708,7 @@ export function CentroCostoConfigurator({
         id: "recursos",
         label: "Recursos del sector cargados",
         description:
-          "Hay al menos una persona, máquina o servicio externo activo para este mes.",
+          "Hay al menos una persona, máquina, gasto general o activo fijo activo para este mes.",
         done: recursosActivos.length > 0,
       },
       {
@@ -694,13 +739,6 @@ export function CentroCostoConfigurator({
           "La capacidad práctica del mes es mayor a cero y permite calcular la tarifa.",
         done: capacidadPractica > 0,
       },
-      {
-        id: "proveedor-tercerizado",
-        label: "Servicio externo de referencia",
-        description:
-          "Si el centro es tercerizado, ya tiene un servicio externo asociado como referencia.",
-        done: proveedorListo,
-      },
     ];
   }, [
     baseForm,
@@ -730,7 +768,6 @@ export function CentroCostoConfigurator({
         imputacionPreferida: detail.centro.imputacionPreferida,
         unidadBaseFutura: detail.centro.unidadBaseFutura,
         responsableEmpleadoId: detail.centro.responsableEmpleadoId || undefined,
-        proveedorDefaultId: detail.centro.proveedorDefaultId || undefined,
         activo: detail.centro.activo,
       });
       setResourcesForm(
@@ -738,9 +775,13 @@ export function CentroCostoConfigurator({
           id: item.id,
           tipoRecurso: item.tipoRecurso,
           empleadoId: item.empleadoId || undefined,
-          proveedorId: item.proveedorId || undefined,
           maquinaId: item.maquinaId || undefined,
-          nombreManual: item.nombreManual || item.maquinaNombre || "",
+          nombreRecurso: item.nombreRecurso || item.maquinaNombre || "",
+          tipoGastoGeneral: item.tipoGastoGeneral || undefined,
+          valorMensual: item.valorMensual ?? undefined,
+          vidaUtilRestanteMeses: item.vidaUtilRestanteMeses ?? undefined,
+          valorActual: item.valorActual ?? undefined,
+          valorFinalVida: item.valorFinalVida ?? undefined,
           descripcion: item.descripcion || "",
           porcentajeAsignacion: item.porcentajeAsignacion ?? undefined,
           activo: item.activo,
@@ -763,19 +804,23 @@ export function CentroCostoConfigurator({
           ? {
               diasPorMes: detail.capacidad.diasPorMes,
               horasPorDia: detail.capacidad.horasPorDia,
-              porcentajeNoProductivo: detail.capacidad.porcentajeNoProductivo,
               overrideManualCapacidad:
                 detail.capacidad.overrideManualCapacidad ?? undefined,
             }
           : {
               diasPorMes: 22,
               horasPorDia: 8,
-              porcentajeNoProductivo: 15,
               overrideManualCapacidad: undefined,
             },
       );
       setDraftTariff(detail.tarifaBorrador?.tarifaCalculada ?? null);
       setPublishedTariff(detail.tarifaPublicada?.tarifaCalculada ?? null);
+      const reparto = extractRepartoAbsorbido(
+        (detail.tarifaBorrador?.resumen as Record<string, unknown> | null | undefined) ??
+          (detail.tarifaPublicada?.resumen as Record<string, unknown> | null | undefined),
+      );
+      setRepartoAbsorbidoTotal(reparto.total);
+      setRepartoAbsorbidoDesglose(reparto.desglose);
       setWarnings(detail.advertencias);
       setEmpleadosDisponibilidad(detail.empleadosDisponibilidad);
     },
@@ -846,7 +891,6 @@ export function CentroCostoConfigurator({
         resources: resourcesForm,
         current,
         empleadoLabelById,
-        proveedorLabelById,
       });
 
       if (JSON.stringify(current) === JSON.stringify(next)) {
@@ -855,7 +899,7 @@ export function CentroCostoConfigurator({
 
       return next;
     });
-  }, [baseForm, empleadoLabelById, proveedorLabelById, resourcesForm]);
+  }, [baseForm, empleadoLabelById, resourcesForm]);
 
   React.useEffect(() => {
     if (!baseForm) {
@@ -884,11 +928,11 @@ export function CentroCostoConfigurator({
                 centroCostoRecursoId: resource.id,
                 maquinaId: resource.maquinaId ?? currentItem.maquinaId,
                 maquinaNombre:
-                  maquina?.nombre ?? currentItem.maquinaNombre ?? resource.nombreManual ?? "",
+                  maquina?.nombre ?? currentItem.maquinaNombre ?? resource.nombreRecurso ?? "",
               }
             : createMachineCostDefault(
                 resource,
-                maquina?.nombre ?? resource.nombreManual ?? "Máquina",
+                maquina?.nombre ?? resource.nombreRecurso ?? "Máquina",
               );
           const preview = calculateMachineCostPreview(nextBase);
           return {
@@ -926,9 +970,13 @@ export function CentroCostoConfigurator({
           id: createLocalId(),
           tipoRecurso: item.tipoRecurso,
           empleadoId: item.empleadoId || undefined,
-          proveedorId: item.proveedorId || undefined,
           maquinaId: item.maquinaId || undefined,
-          nombreManual: item.nombreManual || item.maquinaNombre || "",
+          nombreRecurso: item.nombreRecurso || item.maquinaNombre || "",
+          tipoGastoGeneral: item.tipoGastoGeneral || undefined,
+          valorMensual: item.valorMensual ?? undefined,
+          vidaUtilRestanteMeses: item.vidaUtilRestanteMeses ?? undefined,
+          valorActual: item.valorActual ?? undefined,
+          valorFinalVida: item.valorFinalVida ?? undefined,
           descripcion: item.descripcion || "",
           porcentajeAsignacion: item.porcentajeAsignacion ?? undefined,
           activo: item.activo,
@@ -972,7 +1020,6 @@ export function CentroCostoConfigurator({
           setCapacityForm({
             diasPorMes: detail.capacidad.diasPorMes,
             horasPorDia: detail.capacidad.horasPorDia,
-            porcentajeNoProductivo: detail.capacidad.porcentajeNoProductivo,
             overrideManualCapacidad:
               detail.capacidad.overrideManualCapacidad ?? undefined,
           });
@@ -1000,9 +1047,13 @@ export function CentroCostoConfigurator({
       resourcesForm.map((item) => ({
         tipoRecurso: item.tipoRecurso,
         empleadoId: item.empleadoId,
-        proveedorId: item.proveedorId,
         maquinaId: item.maquinaId,
-        nombreManual: item.nombreManual,
+        nombreRecurso: item.nombreRecurso,
+        tipoGastoGeneral: item.tipoGastoGeneral,
+        valorMensual: item.valorMensual,
+        vidaUtilRestanteMeses: item.vidaUtilRestanteMeses,
+        valorActual: item.valorActual,
+        valorFinalVida: item.valorFinalVida,
         descripcion: item.descripcion,
         porcentajeAsignacion: item.porcentajeAsignacion,
         activo: item.activo,
@@ -1023,7 +1074,7 @@ export function CentroCostoConfigurator({
           machineCostsForm.find(
             (item) => item.maquinaId === resource.maquinaId,
           );
-        const maquinaNombre = resource.maquinaNombre || resource.nombreManual || "Máquina";
+        const maquinaNombre = resource.maquinaNombre || resource.nombreRecurso || "Máquina";
         const merged = currentItem
           ? {
               ...currentItem,
@@ -1036,7 +1087,7 @@ export function CentroCostoConfigurator({
                 id: resource.id,
                 tipoRecurso: resource.tipoRecurso,
                 maquinaId: resource.maquinaId || undefined,
-                nombreManual: maquinaNombre,
+                nombreRecurso: maquinaNombre,
                 descripcion: resource.descripcion,
                 activo: resource.activo,
               },
@@ -1085,6 +1136,11 @@ export function CentroCostoConfigurator({
         await persistConfiguration();
         const result = await calcularTarifaCentroCosto(centro.id, periodo);
         setDraftTariff(result.tarifaBorrador.tarifaCalculada);
+        const reparto = extractRepartoAbsorbido(
+          result.tarifaBorrador.resumen as Record<string, unknown> | null | undefined,
+        );
+        setRepartoAbsorbidoTotal(reparto.total);
+        setRepartoAbsorbidoDesglose(reparto.desglose);
         setWarnings(result.advertencias);
         await onConfigured();
         toast.success("Borrador guardado.");
@@ -1107,6 +1163,11 @@ export function CentroCostoConfigurator({
         await persistConfiguration();
         const result = await publicarTarifaCentroCosto(centro.id, periodo);
         setPublishedTariff(result.tarifaCalculada);
+        const reparto = extractRepartoAbsorbido(
+          result.resumen as Record<string, unknown> | null | undefined,
+        );
+        setRepartoAbsorbidoTotal(reparto.total);
+        setRepartoAbsorbidoDesglose(reparto.desglose);
         await onConfigured();
         toast.success("Tarifa publicada.");
         onOpenChange(false);
@@ -1186,11 +1247,11 @@ export function CentroCostoConfigurator({
                 ...costItem,
                 maquinaId: resource.maquinaId ?? costItem.maquinaId,
                 maquinaNombre:
-                  maquina?.nombre ?? costItem.maquinaNombre ?? resource.nombreManual ?? "",
+                  maquina?.nombre ?? costItem.maquinaNombre ?? resource.nombreRecurso ?? "",
               }
             : createMachineCostDefault(
                 resource,
-                maquina?.nombre ?? resource.nombreManual ?? "Máquina",
+                maquina?.nombre ?? resource.nombreRecurso ?? "Máquina",
               );
           const preview = calculateMachineCostPreview(merged);
 
@@ -1205,32 +1266,22 @@ export function CentroCostoConfigurator({
     [machineCostsForm, maquinaById, resourcesForm],
   );
 
-  const supplierCostGroups = React.useMemo(
-    () =>
-      resourcesForm
-        .filter(
-          (resource) =>
-            resource.tipoRecurso === "proveedor" && resource.proveedorId && resource.activo,
-        )
-        .map((resource) => {
-          const proveedorId = resource.proveedorId as string;
-
-          return {
-            resource,
-            proveedorNombre: proveedorLabelById.get(proveedorId) ?? "Proveedor",
-            component:
-              componentsForm.find(
-                (component) =>
-                  getDerivedComponentKey(component) === `proveedor:${proveedorId}`,
-              ) ?? null,
-          };
-        }),
-    [componentsForm, proveedorLabelById, resourcesForm],
-  );
-
   const manualComponents = React.useMemo(
     () => componentsForm.filter((component) => !isDerivedComponent(component)),
     [componentsForm],
+  );
+  const hasCostSources = React.useMemo(
+    () =>
+      employeeCostGroups.length > 0 ||
+      machineCostGroups.length > 0 ||
+      manualComponents.length > 0 ||
+      resourcesForm.some(
+        (resource) =>
+          resource.activo &&
+          (resource.tipoRecurso === "gasto_general" ||
+            resource.tipoRecurso === "activo_fijo"),
+      ),
+    [employeeCostGroups, machineCostGroups, manualComponents, resourcesForm],
   );
   const empleadosCosteadosTotal = React.useMemo(
     () =>
@@ -1249,13 +1300,24 @@ export function CentroCostoConfigurator({
       ),
     [machineCostGroups],
   );
-  const proveedoresCosteadosTotal = React.useMemo(
+  const gastosGeneralesTotales = React.useMemo(
     () =>
-      supplierCostGroups.reduce(
-        (total, group) => total + (group.component?.importeMensual ?? 0),
-        0,
-      ),
-    [supplierCostGroups],
+      resourcesForm
+        .filter((resource) => resource.tipoRecurso === "gasto_general" && resource.activo)
+        .reduce((total, resource) => total + (resource.valorMensual ?? 0), 0),
+    [resourcesForm],
+  );
+  const activosFijosTotales = React.useMemo(
+    () =>
+      resourcesForm
+        .filter((resource) => resource.tipoRecurso === "activo_fijo" && resource.activo)
+        .reduce((total, resource) => {
+          const valorActual = resource.valorActual ?? 0;
+          const valorFinalVida = resource.valorFinalVida ?? 0;
+          const vidaUtil = Math.max(1, resource.vidaUtilRestanteMeses ?? 1);
+          return total + Math.max(0, valorActual - valorFinalVida) / vidaUtil;
+        }, 0),
+    [resourcesForm],
   );
   const adicionalesCosteadosTotal = React.useMemo(
     () =>
@@ -1417,71 +1479,7 @@ export function CentroCostoConfigurator({
                 </div>
               </FieldGroup>
 
-              <FieldGroup className={baseForm.tipoCentro === "tercerizado" ? "grid gap-4 lg:grid-cols-2" : "grid gap-4"}>
-                {baseForm.tipoCentro === "tercerizado" ? (
-                  <Field>
-                    <FieldLabel htmlFor="wizard-proveedor-default">
-                      <span className="inline-flex items-center gap-2">
-                        Servicio externo de referencia
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <button
-                                type="button"
-                                className="inline-flex items-center text-muted-foreground transition-colors hover:text-foreground"
-                                aria-label="Explicación sobre servicio externo de referencia"
-                              >
-                                <InfoIcon className="size-4" />
-                              </button>
-                            }
-                          />
-                          <TooltipContent className="max-w-sm text-pretty" side="left">
-                            Usalo cuando este centro dependa principalmente de un
-                            tercero. Sirve como referencia para procesos hechos
-                            afuera, como barniz UV, troquelado o encuadernación.
-                          </TooltipContent>
-                        </Tooltip>
-                      </span>
-                    </FieldLabel>
-                    <Select
-                      value={baseForm.proveedorDefaultId ?? ""}
-                      onValueChange={(value) => {
-                        if (!value) {
-                          return;
-                        }
-
-                        updateBaseForm((current) => ({
-                          ...current,
-                          proveedorDefaultId: value,
-                        }));
-                      }}
-                    >
-                      <SelectTrigger id="wizard-proveedor-default" className="w-full">
-                        <SelectValue placeholder="Selecciona un servicio externo">
-                          {(value) =>
-                            typeof value === "string"
-                              ? proveedorLabelById.get(value) ?? value
-                              : "Selecciona un servicio externo"
-                          }
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          {proveedores.map((proveedor) => (
-                            <SelectItem key={proveedor.id} value={proveedor.id}>
-                              {proveedor.nombre}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                    <FieldDescription>
-                      Úsalo como referencia principal si este centro trabaja con un
-                      tercero para resolver parte o todo el proceso.
-                    </FieldDescription>
-                  </Field>
-                ) : null}
-
+              <FieldGroup className="grid gap-4">
                 <Field>
                   <FieldLabel htmlFor="wizard-descripcion">Descripción útil</FieldLabel>
                   <Textarea
@@ -1514,48 +1512,19 @@ export function CentroCostoConfigurator({
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
               <div className="flex flex-wrap gap-2">
-                {(["empleado", "maquinaria", "proveedor", "gasto_manual"] as const).map(
+                {(["empleado", "maquinaria", "gasto_general", "activo_fijo"] as const).map(
                   (tipo) => (
-                    <React.Fragment key={tipo}>
-                      {tipo === "proveedor" ? (
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() =>
-                                  setResourcesForm((current) => [
-                                    ...current,
-                                    createResource(tipo),
-                                  ])
-                                }
-                              >
-                                <PlusIcon />
-                                Agregar {getTipoRecursoLabel(tipo)}
-                              </Button>
-                            }
-                          />
-                          <TooltipContent className="max-w-sm text-pretty" side="bottom">
-                            Usá esta opción cuando este centro dependa de un tercero
-                            para producir o completar parte del trabajo. Ejemplos:
-                            barniz UV externo, troquelado, encuadernación o
-                            mantenimiento contratado.
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() =>
-                            setResourcesForm((current) => [...current, createResource(tipo)])
-                          }
-                        >
-                          <PlusIcon />
-                          Agregar {getTipoRecursoLabel(tipo)}
-                        </Button>
-                      )}
-                    </React.Fragment>
+                    <Button
+                      key={tipo}
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        setResourcesForm((current) => [...current, createResource(tipo)])
+                      }
+                    >
+                      <PlusIcon />
+                      Agregar {getTipoRecursoLabel(tipo)}
+                    </Button>
                   ),
                 )}
               </div>
@@ -1565,8 +1534,7 @@ export function CentroCostoConfigurator({
                   <EmptyHeader>
                     <EmptyTitle>Sin recursos cargados</EmptyTitle>
                     <EmptyDescription>
-                      Empezá por las personas, la maquinaria o el servicio externo
-                      principal de este sector.
+                      Empezá por las personas, maquinaria, gastos generales o activos fijos.
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>
@@ -1612,9 +1580,13 @@ export function CentroCostoConfigurator({
                                           tipoRecurso:
                                             value as LocalRecurso["tipoRecurso"],
                                           empleadoId: undefined,
-                                          proveedorId: undefined,
                                           maquinaId: undefined,
-                                          nombreManual: "",
+                                          nombreRecurso: "",
+                                          tipoGastoGeneral: undefined,
+                                          valorMensual: undefined,
+                                          vidaUtilRestanteMeses: undefined,
+                                          valorActual: undefined,
+                                          valorFinalVida: undefined,
                                           porcentajeAsignacion: undefined,
                                         }
                                       : item,
@@ -1712,51 +1684,6 @@ export function CentroCostoConfigurator({
                             </Field>
                           ) : null}
 
-                          {resource.tipoRecurso === "proveedor" ? (
-                            <Field>
-                              <FieldLabel>Servicio externo del sector</FieldLabel>
-                              <Select
-                                value={resource.proveedorId ?? ""}
-                                onValueChange={(value) => {
-                                  if (!value) {
-                                    return;
-                                  }
-
-                                  setResourcesForm((current) =>
-                                    current.map((item) =>
-                                      item.id === resource.id
-                                        ? { ...item, proveedorId: value }
-                                        : item,
-                                    ),
-                                  );
-                                }}
-                              >
-                                <SelectTrigger className="w-full">
-                                  <SelectValue placeholder="Selecciona un servicio externo">
-                                    {(value) =>
-                                      typeof value === "string"
-                                        ? proveedorLabelById.get(value) ?? value
-                                        : "Selecciona un servicio externo"
-                                    }
-                                  </SelectValue>
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectGroup>
-                                    {proveedores.map((proveedor) => (
-                                      <SelectItem key={proveedor.id} value={proveedor.id}>
-                                        {proveedor.nombre}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectGroup>
-                                </SelectContent>
-                              </Select>
-                              <FieldDescription>
-                                Elegí el tercero que participa en el costo de este
-                                sector durante el mes.
-                              </FieldDescription>
-                            </Field>
-                          ) : null}
-
                           {resource.tipoRecurso === "maquinaria" ? (
                             <Field>
                               <FieldLabel>Máquina</FieldLabel>
@@ -1775,7 +1702,7 @@ export function CentroCostoConfigurator({
                                         ? {
                                             ...item,
                                             maquinaId: value,
-                                            nombreManual: maquina?.nombre ?? "",
+                                            nombreRecurso: maquina?.nombre ?? "",
                                           }
                                         : item,
                                     ),
@@ -1809,42 +1736,189 @@ export function CentroCostoConfigurator({
                             </Field>
                           ) : null}
 
-                          {resource.tipoRecurso === "gasto_manual" ? (
-                            <Field>
-                              <FieldLabel>
-                                Nombre del apoyo
-                              </FieldLabel>
-                              <Input
-                                value={resource.nombreManual ?? ""}
-                                onChange={(event) =>
-                                  setResourcesForm((current) =>
-                                    current.map((item) =>
-                                      item.id === resource.id
-                                        ? { ...item, nombreManual: event.target.value }
-                                        : item,
-                                    ),
-                                  )
-                                }
-                              />
-                            </Field>
+                          {resource.tipoRecurso === "gasto_general" ? (
+                            <>
+                              <Field>
+                                <FieldLabel>Nombre del gasto</FieldLabel>
+                                <Input
+                                  value={resource.nombreRecurso ?? ""}
+                                  onChange={(event) =>
+                                    updateResource(resource.id, (current) => ({
+                                      ...current,
+                                      nombreRecurso: event.target.value,
+                                    }))
+                                  }
+                                />
+                              </Field>
+                              <Field>
+                                <FieldLabel>Tipo de gasto</FieldLabel>
+                                <Select
+                                  value={resource.tipoGastoGeneral ?? ""}
+                                  onValueChange={(value) => {
+                                    if (!value) {
+                                      return;
+                                    }
+                                    updateResource(resource.id, (current) => ({
+                                      ...current,
+                                      tipoGastoGeneral:
+                                        value as LocalRecurso["tipoGastoGeneral"],
+                                    }));
+                                  }}
+                                >
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Selecciona el tipo">
+                                      {(value) =>
+                                        typeof value === "string"
+                                          ? getTipoGastoGeneralLabel(
+                                              value as NonNullable<
+                                                LocalRecurso["tipoGastoGeneral"]
+                                              >,
+                                            )
+                                          : "Selecciona el tipo"
+                                      }
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectGroup>
+                                      {tipoGastoGeneralItems.map((item) => (
+                                        <SelectItem key={item.value} value={item.value}>
+                                          {item.label}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectGroup>
+                                  </SelectContent>
+                                </Select>
+                              </Field>
+                              <Field>
+                                <FieldLabel>Valor mensual ({systemCurrencyCode})</FieldLabel>
+                                <Input
+                                  inputMode="decimal"
+                                  value={
+                                    resource.valorMensual === undefined ||
+                                    resource.valorMensual === 0
+                                      ? ""
+                                      : String(resource.valorMensual)
+                                  }
+                                  onChange={(event) =>
+                                    updateResource(resource.id, (current) => ({
+                                      ...current,
+                                      valorMensual:
+                                        event.target.value === ""
+                                          ? undefined
+                                          : Number(event.target.value) || 0,
+                                    }))
+                                  }
+                                />
+                              </Field>
+                            </>
                           ) : null}
 
-                          <Field className="lg:col-span-2">
-                            <FieldLabel>Descripcion</FieldLabel>
-                            <Input
-                              value={resource.descripcion ?? ""}
-                              onChange={(event) =>
-                                setResourcesForm((current) =>
-                                  current.map((item) =>
-                                    item.id === resource.id
-                                      ? { ...item, descripcion: event.target.value }
-                                      : item,
-                                  ),
-                                )
-                              }
-                              placeholder="Ejemplo: operador principal del turno mañana"
-                            />
-                          </Field>
+                          {resource.tipoRecurso === "activo_fijo" ? (
+                            <>
+                              <Field>
+                                <FieldLabel>Nombre del activo</FieldLabel>
+                                <Input
+                                  value={resource.nombreRecurso ?? ""}
+                                  onChange={(event) =>
+                                    updateResource(resource.id, (current) => ({
+                                      ...current,
+                                      nombreRecurso: event.target.value,
+                                    }))
+                                  }
+                                />
+                              </Field>
+                              <Field className="lg:col-span-2">
+                                <FieldLabel>Detalle de depreciación mensual</FieldLabel>
+                                <div className="grid gap-3 rounded-xl border border-border/70 bg-muted/10 p-3 lg:grid-cols-4">
+                                  <div className="flex flex-col gap-1.5">
+                                    <span className="text-xs text-muted-foreground">Vida útil restante</span>
+                                    <div className="relative">
+                                      <Input
+                                        className="pr-16"
+                                        inputMode="numeric"
+                                        value={
+                                          resource.vidaUtilRestanteMeses === undefined
+                                            ? ""
+                                            : String(resource.vidaUtilRestanteMeses)
+                                        }
+                                        onChange={(event) =>
+                                          updateResource(resource.id, (current) => ({
+                                            ...current,
+                                            vidaUtilRestanteMeses:
+                                              event.target.value === ""
+                                                ? undefined
+                                                : Number(event.target.value) || 1,
+                                          }))
+                                        }
+                                      />
+                                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                                        Meses
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-col gap-1.5">
+                                    <span className="text-xs text-muted-foreground">
+                                      Valor actual ({systemCurrencyCode})
+                                    </span>
+                                    <Input
+                                      inputMode="decimal"
+                                      value={
+                                        resource.valorActual === undefined || resource.valorActual === 0
+                                          ? ""
+                                          : String(resource.valorActual)
+                                      }
+                                      onChange={(event) =>
+                                        updateResource(resource.id, (current) => ({
+                                          ...current,
+                                          valorActual:
+                                            event.target.value === ""
+                                              ? undefined
+                                              : Number(event.target.value) || 0,
+                                        }))
+                                      }
+                                    />
+                                  </div>
+                                  <div className="flex flex-col gap-1.5">
+                                    <span className="text-xs text-muted-foreground">
+                                      Valor final de vida ({systemCurrencyCode})
+                                    </span>
+                                    <Input
+                                      inputMode="decimal"
+                                      value={
+                                        resource.valorFinalVida === undefined ||
+                                        resource.valorFinalVida === 0
+                                          ? ""
+                                          : String(resource.valorFinalVida)
+                                      }
+                                      onChange={(event) =>
+                                        updateResource(resource.id, (current) => ({
+                                          ...current,
+                                          valorFinalVida:
+                                            event.target.value === ""
+                                              ? undefined
+                                              : Number(event.target.value) || 0,
+                                        }))
+                                      }
+                                    />
+                                  </div>
+                                  <div className="flex flex-col gap-1.5">
+                                    <span className="text-xs text-muted-foreground">
+                                      Depreciación mensual ({systemCurrencyCode})
+                                    </span>
+                                    <div className="flex h-10 items-center rounded-md border border-border bg-background px-3 text-sm font-medium">
+                                      {formatMoney(
+                                        Math.max(
+                                          0,
+                                          (resource.valorActual ?? 0) -
+                                            (resource.valorFinalVida ?? 0),
+                                        ) / Math.max(1, resource.vidaUtilRestanteMeses ?? 1),
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </Field>
+                            </>
+                          ) : null}
                         </FieldGroup>
 
                         {resource.tipoRecurso === "empleado" ? (
@@ -2044,10 +2118,7 @@ export function CentroCostoConfigurator({
                 <span className="font-medium">{systemCurrencyCode}</span>.
               </div>
 
-              {componentsForm.length === 0 &&
-              machineCostGroups.length === 0 &&
-              supplierCostGroups.length === 0 &&
-              employeeCostGroups.length === 0 ? (
+              {!hasCostSources ? (
                 <Empty className="rounded-2xl border border-dashed border-border/70">
                   <EmptyHeader>
                     <EmptyTitle>Sin costos cargados</EmptyTitle>
@@ -2253,7 +2324,7 @@ export function CentroCostoConfigurator({
                             >
                               <div className="flex items-center justify-between gap-2">
                                 <p className="text-sm font-semibold">
-                                  {item.maquinaNombre || resource.nombreManual || "Máquina"}
+                                  {item.maquinaNombre || resource.nombreRecurso || "Máquina"}
                                 </p>
                                 <span className="rounded-md border border-border/70 bg-muted/20 px-2 py-1 text-[11px] text-muted-foreground">
                                   Carga guiada por secciones
@@ -2643,64 +2714,6 @@ export function CentroCostoConfigurator({
                     </Card>
                   ) : null}
 
-                  {supplierCostGroups.length > 0 ? (
-                    <Card className="rounded-2xl border-border/70 shadow-none">
-                      <CardHeader>
-                        <CardTitle className="text-base">Servicios tercerizados</CardTitle>
-                        <CardDescription>
-                          Estos costos vienen de los proveedores asignados al centro.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="flex flex-col gap-4">
-                        {supplierCostGroups.map(({ resource, proveedorNombre, component }) =>
-                          component ? (
-                            <div
-                              key={resource.id}
-                              className="flex flex-col gap-4 rounded-2xl border border-border/70 p-4"
-                            >
-                              <div className="flex items-center justify-between gap-3">
-                                <p className="font-medium">{proveedorNombre}</p>
-                                <Badge variant="outline">Tercerización</Badge>
-                              </div>
-                              <Field>
-                                <FieldLabel>Importe mensual ({systemCurrencyCode})</FieldLabel>
-                                <Input
-                                  inputMode="decimal"
-                                  placeholder="0"
-                                  value={
-                                    component.importeMensual === 0
-                                      ? ""
-                                      : String(component.importeMensual)
-                                  }
-                                  onChange={(event) =>
-                                    updateComponent(component.id, (current) => ({
-                                      ...current,
-                                      importeMensual:
-                                        event.target.value === ""
-                                          ? 0
-                                          : Number(event.target.value) || 0,
-                                      detalle: {
-                                        ...(current.detalle ?? {}),
-                                        importeMensual:
-                                          event.target.value === ""
-                                            ? undefined
-                                            : Number(event.target.value) || 0,
-                                      },
-                                    }))
-                                  }
-                                />
-                                <FieldDescription>
-                                  Si el costo se negocia por m2 o por unidad, acá
-                                  cargá su equivalente mensual de referencia.
-                                </FieldDescription>
-                              </Field>
-                            </div>
-                          ) : null,
-                        )}
-                      </CardContent>
-                    </Card>
-                  ) : null}
-
                   <Card className="rounded-2xl border-border/70 shadow-none">
                     <CardHeader>
                       <CardTitle className="text-base">Otros costos del centro</CardTitle>
@@ -2887,10 +2900,18 @@ export function CentroCostoConfigurator({
                       </div>
                       <div className="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
                         <span className="text-sm text-muted-foreground">
-                          Servicios externos
+                          Gastos generales
                         </span>
                         <span className="font-medium">
-                          {formatMoney(proveedoresCosteadosTotal)}
+                          {formatMoney(gastosGeneralesTotales)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
+                        <span className="text-sm text-muted-foreground">
+                          Activos fijos (depreciación)
+                        </span>
+                        <span className="font-medium">
+                          {formatMoney(activosFijosTotales)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
@@ -2922,17 +2943,19 @@ export function CentroCostoConfigurator({
             <CardHeader>
               <CardTitle>¿Cuántas horas reales trabaja al mes?</CardTitle>
               <CardDescription>
-                No pienses en la capacidad ideal. Cargá la capacidad práctica
-                descontando tiempos muertos, preparación y paradas.
+                La capacidad práctica se calcula automáticamente según los recursos
+                del paso 2. Podés ajustar días/horas base o usar una capacidad manual.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
-              <FieldGroup className="grid gap-4 lg:grid-cols-4">
+              <FieldGroup className="grid gap-4 lg:grid-cols-3">
                 <Field>
                   <FieldLabel>Días por mes</FieldLabel>
                   <Input
                     inputMode="decimal"
                     value={String(capacityForm.diasPorMes)}
+                    readOnly={usaCapacidadMaquinaria}
+                    disabled={usaCapacidadMaquinaria}
                     onChange={(event) =>
                       setCapacityForm((current) => ({
                         ...current,
@@ -2940,13 +2963,19 @@ export function CentroCostoConfigurator({
                       }))
                     }
                   />
-                  <FieldDescription>Ejemplo: 22</FieldDescription>
+                  <FieldDescription>
+                    {usaCapacidadMaquinaria
+                      ? "Se usa capacidad de maquinaria del paso 2."
+                      : "Ejemplo: 22"}
+                  </FieldDescription>
                 </Field>
                 <Field>
                   <FieldLabel>Horas por día</FieldLabel>
                   <Input
                     inputMode="decimal"
                     value={String(capacityForm.horasPorDia)}
+                    readOnly={usaCapacidadMaquinaria}
+                    disabled={usaCapacidadMaquinaria}
                     onChange={(event) =>
                       setCapacityForm((current) => ({
                         ...current,
@@ -2954,22 +2983,10 @@ export function CentroCostoConfigurator({
                       }))
                     }
                   />
-                  <FieldDescription>Ejemplo: 8</FieldDescription>
-                </Field>
-                <Field>
-                  <FieldLabel>% no productivo</FieldLabel>
-                  <Input
-                    inputMode="decimal"
-                    value={String(capacityForm.porcentajeNoProductivo)}
-                    onChange={(event) =>
-                      setCapacityForm((current) => ({
-                        ...current,
-                        porcentajeNoProductivo: Number(event.target.value) || 0,
-                      }))
-                    }
-                  />
                   <FieldDescription>
-                    Incluí preparación, limpieza y paradas.
+                    {usaCapacidadMaquinaria
+                      ? "Se usa capacidad de maquinaria del paso 2."
+                      : "Ejemplo: 8"}
                   </FieldDescription>
                 </Field>
                 <Field>
@@ -3010,6 +3027,16 @@ export function CentroCostoConfigurator({
                 </Card>
                 <Card className="rounded-2xl border-border/70 shadow-none">
                   <CardHeader>
+                    <CardTitle className="text-base">Capacidad automática</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-semibold">
+                      {formatNumber(capacidadAutomatica)}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="rounded-2xl border-border/70 shadow-none">
+                  <CardHeader>
                     <CardTitle className="text-base">Horas prácticas</CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -3043,7 +3070,23 @@ export function CentroCostoConfigurator({
                   publicás este período.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-4 lg:grid-cols-3">
+              <CardContent className="grid gap-4 lg:grid-cols-4">
+                <div className="rounded-2xl border border-border/70 p-4">
+                  <p className="text-xs uppercase text-muted-foreground">
+                    Costo mensual directo
+                  </p>
+                  <p className="text-3xl font-semibold">
+                    {formatMoney(costoMensualDirecto)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border/70 p-4">
+                  <p className="text-xs uppercase text-muted-foreground">
+                    Absorbido por reparto
+                  </p>
+                  <p className="text-3xl font-semibold">
+                    {formatMoney(repartoAbsorbidoTotal)}
+                  </p>
+                </div>
                 <div className="rounded-2xl border border-border/70 p-4">
                   <p className="text-xs uppercase text-muted-foreground">
                     Costo mensual total
@@ -3071,6 +3114,39 @@ export function CentroCostoConfigurator({
                     por {getUnidadBaseLabel(baseForm.unidadBaseFutura)}
                   </p>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-2xl border-border/70 shadow-none">
+              <CardHeader>
+                <CardTitle>Desglose de reparto absorbido</CardTitle>
+                <CardDescription>
+                  Costos trasladados desde centros con imputación por reparto al centro actual.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                {repartoAbsorbidoDesglose.length === 0 ? (
+                  <span className="text-sm text-muted-foreground">
+                    Este centro no absorbió reparto en el período seleccionado.
+                  </span>
+                ) : (
+                  repartoAbsorbidoDesglose.map((item) => (
+                    <div
+                      key={`${item.desdeCentroCostoId}-${item.desdeCentroCodigo}`}
+                      className="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3"
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-medium">
+                          {item.desdeCentroCodigo} · {item.desdeCentroNombre}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          Centro origen del reparto
+                        </span>
+                      </div>
+                      <span className="font-medium">{formatMoney(item.monto)}</span>
+                    </div>
+                  ))
+                )}
               </CardContent>
             </Card>
 
@@ -3302,6 +3378,14 @@ export function CentroCostoConfigurator({
                       await persistConfiguration();
                       const result = await calcularTarifaCentroCosto(centro.id, periodo);
                       setDraftTariff(result.tarifaBorrador.tarifaCalculada);
+                      const reparto = extractRepartoAbsorbido(
+                        result.tarifaBorrador.resumen as
+                          | Record<string, unknown>
+                          | null
+                          | undefined,
+                      );
+                      setRepartoAbsorbidoTotal(reparto.total);
+                      setRepartoAbsorbidoDesglose(reparto.desglose);
                       setWarnings(result.advertencias);
                       toast.success("Tarifa recalculada.");
                     } catch (error) {

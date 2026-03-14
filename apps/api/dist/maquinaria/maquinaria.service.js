@@ -634,6 +634,19 @@ let MaquinariaService = class MaquinariaService {
             if (!variante.materiaPrima.esRepuesto) {
                 throw new common_1.BadRequestException(`La materia prima ${variante.materiaPrima.nombre} no esta habilitada como repuesto.`);
             }
+            const atributosVariante = variante.atributosVarianteJson ?? null;
+            const tipoComponenteVariante = this.normalizeString(atributosVariante?.tipoComponenteDesgaste);
+            const tipoComponenteSeleccionado = this.normalizeString(componente.tipo);
+            if (tipoComponenteVariante &&
+                tipoComponenteVariante !== tipoComponenteSeleccionado) {
+                throw new common_1.BadRequestException(`El componente ${componenteName} no coincide con el tipo de repuesto configurado en la variante seleccionada.`);
+            }
+            const plantillasCompatibles = this.normalizeStringList(atributosVariante?.plantillasCompatibles ??
+                atributosVariante?.plantillaCompatible);
+            if (plantillasCompatibles.length > 0 &&
+                !plantillasCompatibles.includes(this.normalizeString(payload.plantilla))) {
+                throw new common_1.BadRequestException(`El componente ${componenteName} no es compatible con la plantilla ${payload.plantilla}.`);
+            }
             for (const detailKey of Object.keys(componente.detalle ?? {})) {
                 if (!ALLOWED_WEAR_DETAIL_KEYS.has(detailKey)) {
                     throw new common_1.BadRequestException(`El componente de desgaste ${componenteName} incluye el campo ${detailKey}, que no corresponde a la plantilla ${payload.plantilla}.`);
@@ -882,6 +895,27 @@ let MaquinariaService = class MaquinariaService {
             return null;
         }
         return Number(partes.reduce((acc, item) => acc + item, 0).toFixed(4));
+    }
+    normalizeString(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value.trim().toLowerCase();
+    }
+    normalizeStringList(value) {
+        if (Array.isArray(value)) {
+            return value
+                .filter((item) => typeof item === 'string')
+                .map((item) => item.trim().toLowerCase())
+                .filter(Boolean);
+        }
+        if (typeof value === 'string') {
+            return value
+                .split(',')
+                .map((item) => item.trim().toLowerCase())
+                .filter(Boolean);
+        }
+        return [];
     }
     toNullableJson(value) {
         if (!value) {

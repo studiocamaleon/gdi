@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
+  ChevronDownIcon,
   CirclePlusIcon,
   HistoryIcon,
+  InfoIcon,
   PackageIcon,
   SaveIcon,
   TrashIcon,
@@ -25,15 +27,26 @@ import {
   type SubfamiliaMateriaPrima,
   type UnidadMateriaPrima,
 } from "@/lib/materias-primas";
+import type { Maquina } from "@/lib/maquinaria";
 import { getMateriaPrimaVarianteLabel } from "@/lib/materias-primas-variantes-display";
 import {
   SUSTRATO_HOJA_FORMATOS_PRESET,
+  getMateriaPrimaTemplateAvailability,
   getMateriaPrimaTemplate,
+  getReplacementComponentLabel,
+  getReplacementComponentOptionsForTemplates,
 } from "@/lib/materia-prima-templates";
+import { getPlantillaMaquinariaLabel } from "@/lib/maquinaria-templates";
 import { getUnitDefinition } from "@/lib/unidades";
 import type { ProveedorDetalle } from "@/lib/proveedores";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -54,6 +67,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const number2Formatter = new Intl.NumberFormat("es-AR", {
   minimumFractionDigits: 2,
@@ -148,6 +162,7 @@ type FormState = {
 type MateriaPrimaFichaProps = {
   materiaPrima: MateriaPrima;
   proveedores: ProveedorDetalle[];
+  maquinas: Maquina[];
 };
 
 type InventarioVarianteResumen = {
@@ -360,6 +375,40 @@ function formatFieldLabel(key: string) {
     .replace(/^./, (char) => char.toUpperCase());
 }
 
+const unidadVidaUtilLabelMap: Record<string, string> = {
+  copias_a4_equiv: "Copias A4 equivalentes",
+  m2: "Metros cuadrados",
+  metros_lineales: "Metros lineales",
+  horas: "Horas",
+  ciclos: "Ciclos",
+  piezas: "Piezas",
+};
+
+function getTemplateOptionLabel(fieldKey: string, value: string) {
+  if (!value) {
+    return "";
+  }
+
+  if (fieldKey === "tipoComponenteDesgaste") {
+    return getReplacementComponentLabel(value) ?? formatFieldLabel(value);
+  }
+  if (fieldKey === "unidadVidaUtil") {
+    return unidadVidaUtilLabelMap[value] ?? formatFieldLabel(value);
+  }
+  if (fieldKey === "plantillasCompatibles" || fieldKey === "plantillaCompatible") {
+    return getPlantillaMaquinariaLabel(value as Parameters<typeof getPlantillaMaquinariaLabel>[0]);
+  }
+
+  return value;
+}
+
+const COMPONENTES_UNIDAD_IMAGEN_LASER = new Set<string>([
+  "drum_opc",
+  "developer_unit",
+  "charge_unit",
+  "drum_cleaning_blade",
+]);
+
 function formatFechaCorta(value: string) {
   return new Date(value).toLocaleString();
 }
@@ -383,7 +432,7 @@ function getMovimientoTipoLabel(tipo: string) {
   }
 }
 
-export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFichaProps) {
+export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: MateriaPrimaFichaProps) {
   const router = useRouter();
   const [form, setForm] = React.useState<FormState>(() => mapMateriaPrimaToForm(materiaPrima));
   const [savedSnapshot, setSavedSnapshot] = React.useState(() =>
@@ -396,6 +445,10 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
   const [customFormatoModeByVariante, setCustomFormatoModeByVariante] = React.useState<Record<string, boolean>>({});
 
   const template = React.useMemo(() => getMateriaPrimaTemplate(form.templateId), [form.templateId]);
+  const templateAvailability = React.useMemo(
+    () => getMateriaPrimaTemplateAvailability(form.templateId),
+    [form.templateId],
+  );
   const templateFields = template?.camposTecnicos ?? [];
   const templateFieldByKey = React.useMemo(
     () => new Map(templateFields.map((field) => [field.key, field])),
@@ -408,6 +461,16 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
   const proveedorLabelById = React.useMemo(
     () => new Map(proveedores.map((proveedor) => [proveedor.id, proveedor.nombre])),
     [proveedores],
+  );
+  const maquinaLabelById = React.useMemo(
+    () =>
+      new Map(
+        maquinas.map((maquina) => [
+          maquina.id,
+          `${maquina.nombre}${maquina.codigo ? ` (${maquina.codigo})` : ""}`,
+        ]),
+      ),
+    [maquinas],
   );
 
   const varianteColumns = React.useMemo(() => {
@@ -429,6 +492,32 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
     setSavedSnapshot(createFormSnapshot(nextForm));
     setCustomFormatoModeByVariante({});
   }, [materiaPrima]);
+
+  React.useEffect(() => {
+    setForm((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
+      if (templateAvailability.lockEsRepuesto && prev.esRepuesto !== templateAvailability.esRepuesto) {
+        next.esRepuesto = templateAvailability.esRepuesto;
+        changed = true;
+      }
+      if (
+        templateAvailability.lockEsConsumible &&
+        prev.esConsumible !== templateAvailability.esConsumible
+      ) {
+        next.esConsumible = templateAvailability.esConsumible;
+        changed = true;
+      }
+
+      return changed ? next : prev;
+    });
+  }, [
+    templateAvailability.esConsumible,
+    templateAvailability.esRepuesto,
+    templateAvailability.lockEsConsumible,
+    templateAvailability.lockEsRepuesto,
+  ]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -510,8 +599,35 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
 
   const getVarianteAtributo = (variante: LocalVariante, key: string) => {
     const attrs = getVarianteAtributos(variante);
-    const value = attrs[key];
+    const value =
+      key === "maquinasCompatibles" && attrs[key] === undefined
+        ? attrs.marcaModeloCompatibilidad
+        : attrs[key];
+    if (Array.isArray(value)) {
+      return value.join(", ");
+    }
     return value === undefined || value === null ? "" : String(value);
+  };
+
+  const getVarianteAtributoLista = (variante: LocalVariante, key: string) => {
+    const attrs = getVarianteAtributos(variante);
+    const value =
+      key === "maquinasCompatibles" && attrs[key] === undefined
+        ? attrs.marcaModeloCompatibilidad
+        : attrs[key];
+    if (Array.isArray(value)) {
+      return value
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+    if (typeof value === "string") {
+      return value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+    return [];
   };
 
   const hasVarianteDimensionValue = React.useCallback(
@@ -519,6 +635,7 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
       const attrs = getVarianteAtributos(variante);
       return varianteColumns.some((key) => {
         const value = attrs[key];
+        if (Array.isArray(value)) return value.length > 0;
         if (typeof value === "number") return Number.isFinite(value);
         if (typeof value === "boolean") return true;
         return String(value ?? "").trim().length > 0;
@@ -531,6 +648,28 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
     () => form.variantes.filter((variante) => hasVarianteDimensionValue(variante)),
     [form.variantes, hasVarianteDimensionValue],
   );
+  const showLaserWearRecommendation = React.useMemo(() => {
+    if (template?.id !== "repuesto_impresion_v1") {
+      return false;
+    }
+    return form.variantes.some((variante) => {
+      const plantillas = getVarianteAtributoLista(variante, "plantillasCompatibles");
+      return plantillas.includes("impresora_laser");
+    });
+  }, [form.variantes, template?.id]);
+  const hasLaserImageUnitComponents = React.useMemo(() => {
+    if (template?.id !== "repuesto_impresion_v1") {
+      return false;
+    }
+    return form.variantes.some((variante) => {
+      const plantillas = getVarianteAtributoLista(variante, "plantillasCompatibles");
+      if (!plantillas.includes("impresora_laser")) {
+        return false;
+      }
+      const tipo = getVarianteAtributo(variante, "tipoComponenteDesgaste").trim().toLowerCase();
+      return COMPONENTES_UNIDAD_IMAGEN_LASER.has(tipo);
+    });
+  }, [form.variantes, template?.id]);
   const setVarianteAtributo = (varianteId: string, key: string, value: string) => {
     const variante = form.variantes.find((item) => item.id === varianteId);
     if (!variante) return;
@@ -540,6 +679,19 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
       attrs[key] = value;
     } else {
       attrs[key] = value;
+    }
+    setVariante(varianteId, {
+      atributosVarianteTexto: JSON.stringify(attrs),
+    });
+  };
+
+  const setVarianteAtributoLista = (varianteId: string, key: string, values: string[]) => {
+    const variante = form.variantes.find((item) => item.id === varianteId);
+    if (!variante) return;
+    const attrs = getVarianteAtributos(variante);
+    attrs[key] = values;
+    if (key === "maquinasCompatibles") {
+      delete attrs.marcaModeloCompatibilidad;
     }
     setVariante(varianteId, {
       atributosVarianteTexto: JSON.stringify(attrs),
@@ -821,6 +973,7 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
                     <div className="flex h-10 items-center justify-end rounded-md border px-3">
                       <Switch
                         checked={form.esConsumible}
+                        disabled={templateAvailability.lockEsConsumible}
                         onCheckedChange={(checked) =>
                           setForm((prev) => ({ ...prev, esConsumible: checked }))
                         }
@@ -832,6 +985,7 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
                     <div className="flex h-10 items-center justify-end rounded-md border px-3">
                       <Switch
                         checked={form.esRepuesto}
+                        disabled={templateAvailability.lockEsRepuesto}
                         onCheckedChange={(checked) =>
                           setForm((prev) => ({ ...prev, esRepuesto: checked }))
                         }
@@ -845,6 +999,28 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
             <TabsContent value="opciones-variantes" className="m-0 p-4 md:p-6">
               <div className="space-y-4">
                 <h4 className="text-sm font-semibold">{form.nombre || "Variantes"}</h4>
+                {showLaserWearRecommendation ? (
+                  <div className="rounded-md border border-amber-300/70 bg-amber-50 p-3 text-sm">
+                    <div className="flex items-start gap-2">
+                      <InfoIcon className="mt-0.5 size-4 text-amber-700" />
+                      <div className="space-y-1 text-amber-900">
+                        <p className="font-medium">Recomendación para impresión láser</p>
+                        <p>
+                          En repuestos de unidad de imagen
+                          {hasLaserImageUnitComponents
+                            ? " (tambor OPC, unidad reveladora, unidad de carga y cuchilla de limpieza)"
+                            : ""}{" "}
+                          la vida útil real puede caer hasta un 50% respecto del rendimiento estimado por el
+                          fabricante cuando se trabaja con papeles de alto gramaje.
+                        </p>
+                        <p>
+                          Sugerencia: si el fabricante declara 100.000 copias, evaluar cargar 50.000 como
+                          referencia base para costeo conservador.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="rounded-md border">
                   <Table>
@@ -858,7 +1034,25 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
                                 field?.unit as unknown as Parameters<typeof getUnitDefinition>[0],
                               );
                               const label = field?.label ?? formatFieldLabel(key);
-                              return unit ? `${label} (${unit.symbol})` : label;
+                              const tooltipText =
+                                key === "vidaUtilReferencia"
+                                  ? "Vida útil esperada del repuesto en la unidad seleccionada."
+                                  : key === "cantidadPorRecambio"
+                                    ? "Cantidad de unidades que se reemplazan en cada cambio."
+                                    : "";
+                              return (
+                                <div className="inline-flex items-center gap-1">
+                                  <span>{unit ? `${label} (${unit.symbol})` : label}</span>
+                                  {tooltipText ? (
+                                    <Tooltip>
+                                      <TooltipTrigger>
+                                        <InfoIcon className="size-3.5 text-muted-foreground" />
+                                      </TooltipTrigger>
+                                      <TooltipContent>{tooltipText}</TooltipContent>
+                                    </Tooltip>
+                                  ) : null}
+                                </div>
+                              );
                             })()}
                           </TableHead>
                         ))}
@@ -953,31 +1147,143 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
                                     </Select>
                                   );
                                 })()
+                              ) : key === "maquinasCompatibles" ? (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger className="flex h-9 w-full items-center justify-between rounded-md border px-3 text-left text-sm">
+                                    <span>
+                                      {(() => {
+                                        const count = getVarianteAtributoLista(variante, key).length;
+                                        return count > 0
+                                          ? `${count} maquina${count > 1 ? "s" : ""} seleccionada${count > 1 ? "s" : ""}`
+                                          : "Seleccionar maquinas";
+                                      })()}
+                                    </span>
+                                    <ChevronDownIcon className="size-4 text-muted-foreground" />
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent className="w-[360px]">
+                                    {maquinas.map((maquina) => {
+                                      const selectedValues = getVarianteAtributoLista(variante, key);
+                                      const isChecked = selectedValues.includes(maquina.id);
+                                      return (
+                                        <DropdownMenuCheckboxItem
+                                          key={`${key}-${maquina.id}`}
+                                          checked={isChecked}
+                                          onCheckedChange={(checked) => {
+                                            const nextValues = checked
+                                              ? [...selectedValues, maquina.id]
+                                              : selectedValues.filter((item) => item !== maquina.id);
+                                            setVarianteAtributoLista(variante.id, key, nextValues);
+                                          }}
+                                        >
+                                          {maquina.nombre}
+                                          {maquina.codigo ? ` (${maquina.codigo})` : ""}
+                                        </DropdownMenuCheckboxItem>
+                                      );
+                                    })}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               ) : templateFieldByKey.get(key)?.options?.length ? (
-                                <Select
-                                  value={getVarianteAtributo(variante, key) || "__none__"}
-                                  onValueChange={(value) =>
-                                    setVarianteAtributo(
-                                      variante.id,
-                                      key,
-                                      value === "__none__" ? "" : (value ?? ""),
-                                    )
-                                  }
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue>
-                                      {getVarianteAtributo(variante, key) || "Seleccionar"}
-                                    </SelectValue>
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="__none__">Seleccionar</SelectItem>
-                                    {templateFieldByKey.get(key)?.options?.map((option) => (
-                                      <SelectItem key={`${key}-${option}`} value={option}>
-                                        {option}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                key === "plantillasCompatibles" ? (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger className="flex h-9 w-full items-center justify-between rounded-md border px-3 text-left text-sm">
+                                      <span>
+                                        {(() => {
+                                          const count = getVarianteAtributoLista(variante, key).length;
+                                          return count > 0
+                                            ? `${count} plantilla${count > 1 ? "s" : ""} seleccionada${count > 1 ? "s" : ""}`
+                                            : "Seleccionar plantillas";
+                                        })()}
+                                      </span>
+                                      <ChevronDownIcon className="size-4 text-muted-foreground" />
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent className="scrollbar-visible max-h-[260px] w-[320px] overflow-y-scroll">
+                                      {(templateFieldByKey.get(key)?.options ?? []).map((option) => {
+                                        const selectedValues = getVarianteAtributoLista(variante, key);
+                                        const isChecked = selectedValues.includes(option);
+                                        return (
+                                          <DropdownMenuCheckboxItem
+                                            key={`${key}-${option}`}
+                                            checked={isChecked}
+                                          onCheckedChange={(checked) => {
+                                            const nextValues = checked
+                                              ? [...selectedValues, option]
+                                              : selectedValues.filter((item) => item !== option);
+                                            setVarianteAtributoLista(variante.id, key, nextValues);
+                                            if (key === "plantillasCompatibles") {
+                                              const currentTipo = getVarianteAtributo(
+                                                variante,
+                                                "tipoComponenteDesgaste",
+                                              )
+                                                .trim()
+                                                .toLowerCase();
+                                              if (currentTipo.length === 0) {
+                                                return;
+                                              }
+                                              const availableTipos =
+                                                getReplacementComponentOptionsForTemplates(nextValues);
+                                              if (!availableTipos.some((item) => item === currentTipo)) {
+                                                setVarianteAtributo(
+                                                  variante.id,
+                                                  "tipoComponenteDesgaste",
+                                                  "",
+                                                );
+                                              }
+                                            }
+                                          }}
+                                        >
+                                          {getTemplateOptionLabel(key, option)}
+                                          </DropdownMenuCheckboxItem>
+                                        );
+                                      })}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                ) : (
+                                  (() => {
+                                    const dynamicOptions =
+                                      key === "tipoComponenteDesgaste"
+                                        ? getReplacementComponentOptionsForTemplates(
+                                            getVarianteAtributoLista(
+                                              variante,
+                                              "plantillasCompatibles",
+                                            ),
+                                          )
+                                        : (templateFieldByKey.get(key)?.options ?? []);
+                                    return (
+                                  <Select
+                                    value={getVarianteAtributo(variante, key) || "__none__"}
+                                    onValueChange={(value) =>
+                                      setVarianteAtributo(
+                                        variante.id,
+                                        key,
+                                        value === "__none__" ? "" : (value ?? ""),
+                                      )
+                                    }
+                                  >
+                                    <SelectTrigger>
+                                      {(() => {
+                                        const currentValue = getVarianteAtributo(variante, key);
+                                        const currentLabel = currentValue
+                                          ? getTemplateOptionLabel(key, currentValue)
+                                          : "Seleccionar";
+                                        return <SelectValue>{currentLabel}</SelectValue>;
+                                      })()}
+                                    </SelectTrigger>
+                                    <SelectContent
+                                      className={
+                                        key === "tipoComponenteDesgaste" ? "min-w-[360px]" : undefined
+                                      }
+                                    >
+                                      <SelectItem value="__none__">Seleccionar</SelectItem>
+                                      {dynamicOptions.map((option) => (
+                                        <SelectItem key={`${key}-${option}`} value={option}>
+                                          {getTemplateOptionLabel(key, option)}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                    );
+                                  })()
+                                )
                               ) : (
                                 <Input
                                   type="text"
@@ -1062,7 +1368,28 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
                                     className="rounded border px-2 py-0.5 text-xs"
                                   >
                                     {(templateFieldByKey.get(key)?.label ?? formatFieldLabel(key))}:{" "}
-                                    {getVarianteAtributo(variante, key) || "-"}
+                                    {(() => {
+                                      const rawValue = getVarianteAtributo(variante, key);
+                                      if (key === "plantillasCompatibles") {
+                                        const values = getVarianteAtributoLista(variante, key);
+                                        return values.length > 0
+                                          ? values
+                                              .map((value) => getTemplateOptionLabel(key, value))
+                                              .join(", ")
+                                          : "-";
+                                      }
+                                      if (key === "maquinasCompatibles") {
+                                        const values = getVarianteAtributoLista(variante, key);
+                                        return values.length > 0
+                                          ? values
+                                              .map((value) => maquinaLabelById.get(value) ?? value)
+                                              .join(", ")
+                                          : "-";
+                                      }
+                                      return rawValue
+                                        ? getTemplateOptionLabel(key, rawValue)
+                                        : "-";
+                                    })()}
                                   </span>
                                 ))}
                               </div>

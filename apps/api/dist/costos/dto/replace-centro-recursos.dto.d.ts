@@ -1,15 +1,26 @@
 export declare enum TipoRecursoCentroCostoDto {
     empleado = "empleado",
     maquinaria = "maquinaria",
-    proveedor = "proveedor",
-    gasto_manual = "gasto_manual"
+    gasto_general = "gasto_general",
+    activo_fijo = "activo_fijo"
+}
+export declare enum TipoGastoGeneralCentroCostoDto {
+    limpieza = "limpieza",
+    mantenimiento = "mantenimiento",
+    servicios = "servicios",
+    alquiler = "alquiler",
+    otro = "otro"
 }
 export declare class CentroCostoRecursoItemDto {
     tipoRecurso: TipoRecursoCentroCostoDto;
     empleadoId?: string;
-    proveedorId?: string;
     maquinaId?: string;
-    nombreManual?: string;
+    nombreRecurso?: string;
+    tipoGastoGeneral?: TipoGastoGeneralCentroCostoDto;
+    valorMensual?: number;
+    vidaUtilRestanteMeses?: number;
+    valorActual?: number;
+    valorFinalVida?: number;
     descripcion?: string;
     porcentajeAsignacion?: number;
     activo: boolean;

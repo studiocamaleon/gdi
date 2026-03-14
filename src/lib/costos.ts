@@ -40,8 +40,15 @@ export type EstadoConfiguracionCentroCosto =
 export type TipoRecursoCentroCosto =
   | "empleado"
   | "maquinaria"
-  | "proveedor"
-  | "gasto_manual";
+  | "gasto_general"
+  | "activo_fijo";
+
+export type TipoGastoGeneralCentroCosto =
+  | "limpieza"
+  | "mantenimiento"
+  | "servicios"
+  | "alquiler"
+  | "otro";
 
 export type CategoriaComponenteCostoCentro =
   | "sueldos"
@@ -92,13 +99,15 @@ export type CentroCosto = {
   unidadBaseFutura: UnidadBaseCentroCosto;
   responsableEmpleadoId: string;
   responsableEmpleadoNombre: string;
-  proveedorDefaultId: string;
-  proveedorDefaultNombre: string;
   activo: boolean;
   estadoConfiguracion: EstadoConfiguracionCentroCosto;
   ultimoPeriodoConfigurado: string;
   ultimaTarifaPublicada: number | null;
   unidadTarifaPublicada: UnidadBaseCentroCosto | "";
+  ultimaTarifaBase: number | null;
+  ultimaTarifaAbsorbida: number | null;
+  ultimaTarifaTotal: number | null;
+  ultimaCapacidadPractica: number | null;
 };
 
 export type CentroCostoRecurso = {
@@ -107,11 +116,15 @@ export type CentroCostoRecurso = {
   tipoRecurso: TipoRecursoCentroCosto;
   empleadoId: string;
   empleadoNombre: string;
-  proveedorId: string;
-  proveedorNombre: string;
   maquinaId: string;
   maquinaNombre: string;
-  nombreManual: string;
+  nombreRecurso: string;
+  tipoGastoGeneral: TipoGastoGeneralCentroCosto | "";
+  valorMensual: number | null;
+  vidaUtilRestanteMeses: number | null;
+  valorActual: number | null;
+  valorFinalVida: number | null;
+  depreciacionMensualCalc: number | null;
   descripcion: string;
   porcentajeAsignacion: number | null;
   activo: boolean;
@@ -161,7 +174,6 @@ export type CentroCostoCapacidad = {
   unidadBase: UnidadBaseCentroCosto;
   diasPorMes: number;
   horasPorDia: number;
-  porcentajeNoProductivo: number;
   capacidadTeorica: number;
   capacidadPractica: number;
   overrideManualCapacidad: number | null;
@@ -232,16 +244,19 @@ export type CentroCostoPayload = {
   imputacionPreferida: ImputacionPreferidaCentroCosto;
   unidadBaseFutura: UnidadBaseCentroCosto;
   responsableEmpleadoId?: string;
-  proveedorDefaultId?: string;
   activo: boolean;
 };
 
 export type CentroCostoRecursoPayload = {
   tipoRecurso: TipoRecursoCentroCosto;
   empleadoId?: string;
-  proveedorId?: string;
   maquinaId?: string;
-  nombreManual?: string;
+  nombreRecurso?: string;
+  tipoGastoGeneral?: TipoGastoGeneralCentroCosto;
+  valorMensual?: number;
+  vidaUtilRestanteMeses?: number;
+  valorActual?: number;
+  valorFinalVida?: number;
   descripcion?: string;
   porcentajeAsignacion?: number;
   activo: boolean;
@@ -276,7 +291,6 @@ export type CentroCostoComponenteCostoPayload = {
 export type CentroCostoCapacidadPayload = {
   diasPorMes: number;
   horasPorDia: number;
-  porcentajeNoProductivo: number;
   overrideManualCapacidad?: number;
 };
 
@@ -330,8 +344,19 @@ export const tipoRecursoItems: Array<{
 }> = [
   { label: "Persona", value: "empleado" },
   { label: "Maquinaria", value: "maquinaria" },
-  { label: "Servicio externo", value: "proveedor" },
-  { label: "Otro apoyo", value: "gasto_manual" },
+  { label: "Gasto general", value: "gasto_general" },
+  { label: "Activo fijo", value: "activo_fijo" },
+];
+
+export const tipoGastoGeneralItems: Array<{
+  label: string;
+  value: TipoGastoGeneralCentroCosto;
+}> = [
+  { label: "Limpieza", value: "limpieza" },
+  { label: "Mantenimiento", value: "mantenimiento" },
+  { label: "Servicios", value: "servicios" },
+  { label: "Alquiler", value: "alquiler" },
+  { label: "Otro", value: "otro" },
 ];
 
 export const categoriaComponenteCostoItems: Array<{
@@ -386,6 +411,10 @@ const tipoRecursoLabels = new Map(
   tipoRecursoItems.map((item) => [item.value, item.label] as const),
 );
 
+const tipoGastoGeneralLabels = new Map(
+  tipoGastoGeneralItems.map((item) => [item.value, item.label] as const),
+);
+
 const categoriaComponenteCostoLabels = new Map(
   categoriaComponenteCostoItems.map((item) => [item.value, item.label] as const),
 );
@@ -418,6 +447,14 @@ export function getUnidadBaseLabel(value: UnidadBaseCentroCosto | "") {
 
 export function getTipoRecursoLabel(value: TipoRecursoCentroCosto) {
   return tipoRecursoLabels.get(value) ?? value;
+}
+
+export function getTipoGastoGeneralLabel(value: TipoGastoGeneralCentroCosto | "") {
+  if (!value) {
+    return "";
+  }
+
+  return tipoGastoGeneralLabels.get(value) ?? value;
 }
 
 export function getCategoriaComponenteCostoLabel(

@@ -883,6 +883,33 @@ export class MaquinariaService {
           `La materia prima ${variante.materiaPrima.nombre} no esta habilitada como repuesto.`,
         );
       }
+      const atributosVariante =
+        (variante.atributosVarianteJson as Record<string, unknown> | null) ?? null;
+      const tipoComponenteVariante = this.normalizeString(
+        atributosVariante?.tipoComponenteDesgaste,
+      );
+      const tipoComponenteSeleccionado = this.normalizeString(componente.tipo);
+      if (
+        tipoComponenteVariante &&
+        tipoComponenteVariante !== tipoComponenteSeleccionado
+      ) {
+        throw new BadRequestException(
+          `El componente ${componenteName} no coincide con el tipo de repuesto configurado en la variante seleccionada.`,
+        );
+      }
+
+      const plantillasCompatibles = this.normalizeStringList(
+        atributosVariante?.plantillasCompatibles ??
+          atributosVariante?.plantillaCompatible,
+      );
+      if (
+        plantillasCompatibles.length > 0 &&
+        !plantillasCompatibles.includes(this.normalizeString(payload.plantilla))
+      ) {
+        throw new BadRequestException(
+          `El componente ${componenteName} no es compatible con la plantilla ${payload.plantilla}.`,
+        );
+      }
       for (const detailKey of Object.keys(componente.detalle ?? {})) {
         if (!ALLOWED_WEAR_DETAIL_KEYS.has(detailKey)) {
           throw new BadRequestException(
@@ -1222,6 +1249,29 @@ export class MaquinariaService {
     }
 
     return Number(partes.reduce((acc, item) => acc + item, 0).toFixed(4));
+  }
+
+  private normalizeString(value: unknown) {
+    if (typeof value !== 'string') {
+      return '';
+    }
+    return value.trim().toLowerCase();
+  }
+
+  private normalizeStringList(value: unknown) {
+    if (Array.isArray(value)) {
+      return value
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean);
+    }
+    if (typeof value === 'string') {
+      return value
+        .split(',')
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean);
+    }
+    return [];
   }
 
   private toNullableJson(value?: Record<string, unknown>) {

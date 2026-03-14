@@ -60,7 +60,6 @@ class UpsertCentroCostoDto {
     imputacionPreferida;
     unidadBaseFutura;
     responsableEmpleadoId;
-    proveedorDefaultId;
     activo;
 }
 exports.UpsertCentroCostoDto = UpsertCentroCostoDto;
@@ -108,11 +107,6 @@ __decorate([
     (0, class_validator_1.IsUUID)(),
     __metadata("design:type", String)
 ], UpsertCentroCostoDto.prototype, "responsableEmpleadoId", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsUUID)(),
-    __metadata("design:type", String)
-], UpsertCentroCostoDto.prototype, "proveedorDefaultId", void 0);
 __decorate([
     (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)

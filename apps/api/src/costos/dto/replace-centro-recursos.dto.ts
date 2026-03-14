@@ -15,8 +15,16 @@ import {
 export enum TipoRecursoCentroCostoDto {
   empleado = 'empleado',
   maquinaria = 'maquinaria',
-  proveedor = 'proveedor',
-  gasto_manual = 'gasto_manual',
+  gasto_general = 'gasto_general',
+  activo_fijo = 'activo_fijo',
+}
+
+export enum TipoGastoGeneralCentroCostoDto {
+  limpieza = 'limpieza',
+  mantenimiento = 'mantenimiento',
+  servicios = 'servicios',
+  alquiler = 'alquiler',
+  otro = 'otro',
 }
 
 export class CentroCostoRecursoItemDto {
@@ -29,15 +37,39 @@ export class CentroCostoRecursoItemDto {
 
   @IsOptional()
   @IsUUID()
-  proveedorId?: string;
-
-  @IsOptional()
-  @IsUUID()
   maquinaId?: string;
 
   @IsOptional()
   @IsString()
-  nombreManual?: string;
+  nombreRecurso?: string;
+
+  @IsOptional()
+  @IsEnum(TipoGastoGeneralCentroCostoDto)
+  tipoGastoGeneral?: TipoGastoGeneralCentroCostoDto;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  valorMensual?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 0 })
+  @Min(1)
+  vidaUtilRestanteMeses?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  valorActual?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  valorFinalVida?: number;
 
   @IsOptional()
   @IsString()

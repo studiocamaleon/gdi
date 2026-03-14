@@ -176,6 +176,29 @@ const UNIT_LABELS: Record<string, string> = {
   micrones: "micrones",
 };
 
+function toNormalizedString(value: unknown) {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value.trim().toLowerCase();
+}
+
+function toStringList(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+  }
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+  }
+  return [];
+}
+
 function getPerfilFieldPlaceholder(fieldItem: MaquinariaTemplateField) {
   if (PERFIL_TIME_FIELD_KEYS.has(fieldItem.key)) {
     return undefined;
@@ -1263,6 +1286,13 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
           materiaPrima.variantes
             .filter((variante) => variante.activo)
             .map((variante) => ({
+              tipoComponenteDesgaste: toNormalizedString(
+                variante.atributosVariante?.tipoComponenteDesgaste,
+              ),
+              plantillasCompatibles: toStringList(
+                variante.atributosVariante?.plantillasCompatibles ??
+                  variante.atributosVariante?.plantillaCompatible,
+              ),
               value: variante.id,
               label: `${materiaPrima.nombre} - ${variante.nombreVariante || variante.sku}`,
               sku: variante.sku,
@@ -1930,6 +1960,27 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
       if (!varianteRepuestoById.has(desgaste.materiaPrimaVarianteId)) {
         toast.error(
           `El componente ${desgasteLabel} referencia una variante inexistente o inactiva.`,
+        );
+        return;
+      }
+      const varianteRepuesto = varianteRepuestoById.get(desgaste.materiaPrimaVarianteId);
+      const tipoDesgaste = desgaste.tipo.trim().toLowerCase();
+      const plantillaMaquina = form.plantilla.trim().toLowerCase();
+      if (
+        varianteRepuesto?.tipoComponenteDesgaste &&
+        varianteRepuesto.tipoComponenteDesgaste !== tipoDesgaste
+      ) {
+        toast.error(
+          `La variante seleccionada en ${desgasteLabel} no coincide con el tipo ${desgaste.tipo}.`,
+        );
+        return;
+      }
+      if (
+        varianteRepuesto?.plantillasCompatibles.length &&
+        !varianteRepuesto.plantillasCompatibles.includes(plantillaMaquina)
+      ) {
+        toast.error(
+          `La variante seleccionada en ${desgasteLabel} no es compatible con ${getPlantillaMaquinariaLabel(form.plantilla)}.`,
         );
         return;
       }
@@ -4901,7 +4952,20 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                       Sin componentes de desgaste. Recomendado: registrar al menos fusor/cabezales/fresas segun plantilla.
                     </p>
                   ) : null}
-                  {desgastes.map((desgaste) => (
+                  {desgastes.map((desgaste) => {
+                    const tipoDesgaste = desgaste.tipo.trim().toLowerCase();
+                    const plantillaMaquina = form.plantilla.trim().toLowerCase();
+                    const variantesRepuestoFiltradas = variantesRepuestoDisponibles.filter((item) => {
+                      const matchesTipo =
+                        !item.tipoComponenteDesgaste ||
+                        item.tipoComponenteDesgaste === tipoDesgaste;
+                      const matchesPlantilla =
+                        item.plantillasCompatibles.length === 0 ||
+                        item.plantillasCompatibles.includes(plantillaMaquina);
+                      return matchesTipo && matchesPlantilla;
+                    });
+
+                    return (
                     <div key={desgaste.id} className="rounded-lg border p-4">
                       <div className="mb-3 flex items-center justify-between">
                         <p className="text-sm font-medium">Componente de desgaste</p>
@@ -5092,7 +5156,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             <SelectContent>
                               <SelectGroup>
                                 <SelectItem value={EMPTY_SELECT_VALUE}>Sin seleccionar</SelectItem>
-                                {variantesRepuestoDisponibles.map((item) => (
+                                {variantesRepuestoFiltradas.map((item) => (
                                   <SelectItem key={item.value} value={item.value}>
                                     {item.label}
                                   </SelectItem>
@@ -5100,6 +5164,12 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                               </SelectGroup>
                             </SelectContent>
                           </Select>
+                          {variantesRepuestoFiltradas.length === 0 ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              No hay repuestos compatibles para {desgaste.tipo || "este tipo"} en{" "}
+                              {getPlantillaMaquinariaLabel(form.plantilla)}.
+                            </p>
+                          ) : null}
                           {desgaste.materiaPrimaVarianteId ? (
                             <p className="mt-1 text-xs text-muted-foreground">
                               Costo ref.: $
@@ -5257,7 +5327,8 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                         </Field>
                       </FieldGroup>
                     </div>
-                  ))}
+                    );
+                  })}
                 </CardContent>
               </Card>
             </TabsContent>

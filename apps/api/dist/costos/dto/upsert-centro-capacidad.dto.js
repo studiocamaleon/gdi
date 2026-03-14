@@ -15,7 +15,6 @@ const class_validator_1 = require("class-validator");
 class UpsertCentroCapacidadDto {
     diasPorMes;
     horasPorDia;
-    porcentajeNoProductivo;
     overrideManualCapacidad;
 }
 exports.UpsertCentroCapacidadDto = UpsertCentroCapacidadDto;
@@ -31,13 +30,6 @@ __decorate([
     (0, class_validator_1.Min)(0),
     __metadata("design:type", Number)
 ], UpsertCentroCapacidadDto.prototype, "horasPorDia", void 0);
-__decorate([
-    (0, class_transformer_1.Type)(() => Number),
-    (0, class_validator_1.IsNumber)({ maxDecimalPlaces: 2 }),
-    (0, class_validator_1.Min)(0),
-    (0, class_validator_1.Max)(100),
-    __metadata("design:type", Number)
-], UpsertCentroCapacidadDto.prototype, "porcentajeNoProductivo", void 0);
 __decorate([
     (0, class_transformer_1.Type)(() => Number),
     (0, class_validator_1.IsOptional)(),

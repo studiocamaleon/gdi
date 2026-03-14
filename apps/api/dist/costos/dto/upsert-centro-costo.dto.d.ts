@@ -43,6 +43,5 @@ export declare class UpsertCentroCostoDto {
     imputacionPreferida: ImputacionPreferidaCentroCostoDto;
     unidadBaseFutura: UnidadBaseCentroCostoDto;
     responsableEmpleadoId?: string;
-    proveedorDefaultId?: string;
     activo: boolean;
 }

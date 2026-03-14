@@ -3,6 +3,7 @@ import type {
   SubfamiliaMateriaPrima,
   UnidadMateriaPrima,
 } from "@/lib/materias-primas";
+import type { PlantillaMaquinaria } from "@/lib/maquinaria";
 import {
   assertAnchoAntesDeAlto,
   assertCanonicalTemplateKeys,
@@ -32,6 +33,12 @@ export type MateriaPrimaTemplateDef = {
   dimensionesVariante: string[];
   requiredAtributos: string[];
   atributosIniciales: Record<string, unknown>;
+  defaults?: {
+    esConsumible?: boolean;
+    esRepuesto?: boolean;
+    lockEsConsumible?: boolean;
+    lockEsRepuesto?: boolean;
+  };
 };
 
 export const SUSTRATO_HOJA_FORMATOS_PRESET = [
@@ -64,6 +71,127 @@ if (duplicatedSustratoHojaNameList.length > 0) {
     `SUSTRATO_HOJA_FORMATOS_PRESET tiene nombres duplicados: ${duplicatedSustratoHojaNameList.join(", ")}`,
   );
 }
+
+const REPLACEMENT_COMPONENT_OPTIONS = [
+  "fusor",
+  "drum",
+  "drum_opc",
+  "developer",
+  "developer_unit",
+  "charge_unit",
+  "drum_cleaning_blade",
+  "correa_transferencia",
+  "transfer_belt_itb",
+  "transfer_roller",
+  "fuser_belt",
+  "pressure_roller",
+  "fuser_cleaning_web",
+  "wax_lubricant_bar",
+  "fuser_stripper_finger",
+  "waste_toner_subsystem",
+  "cabezal",
+  "lampara_uv",
+  "fresa",
+  "cuchilla",
+  "filtro",
+  "kit_mantenimiento",
+  "otro",
+] as const;
+
+const MAQUINARIA_TEMPLATE_OPTIONS = [
+  "router_cnc",
+  "corte_laser",
+  "impresora_3d",
+  "impresora_dtf",
+  "impresora_dtf_uv",
+  "impresora_uv_mesa_extensora",
+  "impresora_uv_cilindrica",
+  "impresora_uv_flatbed",
+  "impresora_uv_rollo",
+  "impresora_solvente",
+  "impresora_inyeccion_tinta",
+  "impresora_latex",
+  "impresora_sublimacion_gran_formato",
+  "impresora_laser",
+  "plotter_cad",
+  "mesa_de_corte",
+  "plotter_de_corte",
+];
+
+const REPLACEMENT_WEAR_UNIT_OPTIONS = [
+  "copias_a4_equiv",
+  "m2",
+  "metros_lineales",
+  "horas",
+  "ciclos",
+  "piezas",
+];
+
+export const REPLACEMENT_COMPONENT_LABELS: Record<string, string> = {
+  fusor: "Fusor",
+  drum: "Tambor (drum) genérico",
+  drum_opc: "Tambor OPC",
+  developer: "Revelador",
+  developer_unit: "Unidad reveladora (developer unit)",
+  charge_unit: "Unidad de carga (PCR/corona)",
+  drum_cleaning_blade: "Cuchilla de limpieza de tambor",
+  correa_transferencia: "Correa de transferencia",
+  transfer_belt_itb: "Banda/correa de transferencia ITB",
+  transfer_roller: "Rodillo de transferencia",
+  fuser_belt: "Banda de fusor",
+  pressure_roller: "Rodillo de presión",
+  fuser_cleaning_web: "Web de limpieza del fusor",
+  wax_lubricant_bar: "Barra de cera/lubricación",
+  fuser_stripper_finger: "Uña separadora del fusor",
+  waste_toner_subsystem: "Subsistema de residual de tóner",
+  cabezal: "Cabezal",
+  lampara_uv: "Lampara UV",
+  fresa: "Fresa",
+  cuchilla: "Cuchilla",
+  filtro: "Filtro",
+  kit_mantenimiento: "Kit de mantenimiento",
+  otro: "Otro",
+};
+
+const REPLACEMENT_COMPONENT_OPTIONS_BY_TEMPLATE: Record<PlantillaMaquinaria, string[]> = {
+  impresora_laser: [
+    "fusor",
+    "drum",
+    "drum_opc",
+    "developer",
+    "developer_unit",
+    "charge_unit",
+    "drum_cleaning_blade",
+    "correa_transferencia",
+    "transfer_belt_itb",
+    "transfer_roller",
+    "fuser_belt",
+    "pressure_roller",
+    "fuser_cleaning_web",
+    "wax_lubricant_bar",
+    "fuser_stripper_finger",
+    "waste_toner_subsystem",
+    "filtro",
+    "kit_mantenimiento",
+    "otro",
+  ],
+  impresora_inyeccion_tinta: ["cabezal", "filtro", "kit_mantenimiento", "otro"],
+  impresora_latex: ["cabezal", "filtro", "kit_mantenimiento", "otro"],
+  impresora_solvente: ["cabezal", "filtro", "kit_mantenimiento", "otro"],
+  impresora_sublimacion_gran_formato: ["cabezal", "filtro", "kit_mantenimiento", "otro"],
+  impresora_dtf: ["cabezal", "filtro", "kit_mantenimiento", "otro"],
+  impresora_dtf_uv: ["cabezal", "lampara_uv", "filtro", "kit_mantenimiento", "otro"],
+  impresora_uv_flatbed: ["cabezal", "lampara_uv", "filtro", "kit_mantenimiento", "otro"],
+  impresora_uv_rollo: ["cabezal", "lampara_uv", "filtro", "kit_mantenimiento", "otro"],
+  impresora_uv_cilindrica: ["cabezal", "lampara_uv", "filtro", "kit_mantenimiento", "otro"],
+  impresora_uv_mesa_extensora: ["cabezal", "lampara_uv", "filtro", "kit_mantenimiento", "otro"],
+  router_cnc: ["fresa", "cuchilla", "filtro", "kit_mantenimiento", "otro"],
+  corte_laser: ["filtro", "cuchilla", "kit_mantenimiento", "otro"],
+  mesa_de_corte: ["cuchilla", "filtro", "kit_mantenimiento", "otro"],
+  plotter_de_corte: ["cuchilla", "filtro", "kit_mantenimiento", "otro"],
+  plotter_cad: ["cabezal", "filtro", "kit_mantenimiento", "otro"],
+  impresora_3d: ["cabezal", "filtro", "kit_mantenimiento", "otro"],
+};
 
 export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
   {
@@ -576,6 +704,90 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
       materialEstructura: "aluminio",
     },
   },
+  {
+    id: "repuesto_impresion_v1",
+    nombre: "Repuesto técnico impresión",
+    descripcion: "Repuestos para equipos de impresión (láser, UV, DTF, solvente, latex, sublimación).",
+    familia: "quimico_auxiliar",
+    subfamilia: "auxiliar_proceso",
+    tipoTecnico: "repuesto_impresion",
+    unidadStock: "unidad",
+    unidadCompra: "unidad",
+    camposTecnicos: [
+      { key: "tipoComponenteDesgaste", label: "Tipo de componente", type: "text", options: [...REPLACEMENT_COMPONENT_OPTIONS], required: true },
+      { key: "plantillasCompatibles", label: "Plantillas compatibles", type: "text", options: MAQUINARIA_TEMPLATE_OPTIONS, required: true },
+      { key: "unidadVidaUtil", label: "Unidad de vida útil", type: "text", options: REPLACEMENT_WEAR_UNIT_OPTIONS, required: true },
+      { key: "vidaUtilReferencia", label: "Vida útil de referencia", type: "number", required: true },
+      { key: "cantidadPorRecambio", label: "Cantidad por recambio", type: "number", optional: true },
+      { key: "maquinasCompatibles", label: "Maquinas compatibles", type: "text", optional: true },
+    ],
+    dimensionesVariante: [
+      "tipoComponenteDesgaste",
+      "plantillasCompatibles",
+      "vidaUtilReferencia",
+      "unidadVidaUtil",
+      "cantidadPorRecambio",
+      "maquinasCompatibles",
+    ],
+    requiredAtributos: [
+      "tipoComponenteDesgaste",
+      "plantillasCompatibles",
+      "unidadVidaUtil",
+      "vidaUtilReferencia",
+    ],
+    atributosIniciales: {
+      categoriaRepuesto: "desgaste",
+      clasificacion: "tecnico_maquinaria",
+    },
+    defaults: {
+      esConsumible: false,
+      esRepuesto: true,
+      lockEsConsumible: false,
+      lockEsRepuesto: true,
+    },
+  },
+  {
+    id: "repuesto_corte_mecanizado_v1",
+    nombre: "Repuesto técnico corte/mecanizado",
+    descripcion: "Repuestos para CNC, láser de corte, mesa de corte y plotter de corte.",
+    familia: "quimico_auxiliar",
+    subfamilia: "auxiliar_proceso",
+    tipoTecnico: "repuesto_corte_mecanizado",
+    unidadStock: "unidad",
+    unidadCompra: "unidad",
+    camposTecnicos: [
+      { key: "tipoComponenteDesgaste", label: "Tipo de componente", type: "text", options: [...REPLACEMENT_COMPONENT_OPTIONS], required: true },
+      { key: "plantillasCompatibles", label: "Plantillas compatibles", type: "text", options: MAQUINARIA_TEMPLATE_OPTIONS, required: true },
+      { key: "unidadVidaUtil", label: "Unidad de vida útil", type: "text", options: REPLACEMENT_WEAR_UNIT_OPTIONS, required: true },
+      { key: "vidaUtilReferencia", label: "Vida útil de referencia", type: "number", required: true },
+      { key: "cantidadPorRecambio", label: "Cantidad por recambio", type: "number", optional: true },
+      { key: "materialTrabajo", label: "Material de trabajo dominante", type: "text", optional: true },
+    ],
+    dimensionesVariante: [
+      "tipoComponenteDesgaste",
+      "plantillasCompatibles",
+      "vidaUtilReferencia",
+      "unidadVidaUtil",
+      "cantidadPorRecambio",
+      "materialTrabajo",
+    ],
+    requiredAtributos: [
+      "tipoComponenteDesgaste",
+      "plantillasCompatibles",
+      "unidadVidaUtil",
+      "vidaUtilReferencia",
+    ],
+    atributosIniciales: {
+      categoriaRepuesto: "desgaste",
+      clasificacion: "tecnico_maquinaria",
+    },
+    defaults: {
+      esConsumible: false,
+      esRepuesto: true,
+      lockEsConsumible: false,
+      lockEsRepuesto: true,
+    },
+  },
 ];
 
 export const materiaPrimaTemplatesMap = new Map(
@@ -590,4 +802,34 @@ for (const template of materiaPrimaTemplatesV1) {
 
 export function getMateriaPrimaTemplate(templateId: string) {
   return materiaPrimaTemplatesMap.get(templateId) ?? null;
+}
+
+export function getReplacementComponentLabel(value: string) {
+  return REPLACEMENT_COMPONENT_LABELS[value] ?? value;
+}
+
+export function getReplacementComponentOptionsForTemplates(templateIds: string[]) {
+  const normalizedTemplateIds = templateIds
+    .map((item) => item.trim())
+    .filter((item): item is PlantillaMaquinaria => item in REPLACEMENT_COMPONENT_OPTIONS_BY_TEMPLATE);
+  if (normalizedTemplateIds.length === 0) {
+    return [...REPLACEMENT_COMPONENT_OPTIONS];
+  }
+  const allowed = new Set<string>();
+  for (const templateId of normalizedTemplateIds) {
+    for (const componentType of REPLACEMENT_COMPONENT_OPTIONS_BY_TEMPLATE[templateId]) {
+      allowed.add(componentType);
+    }
+  }
+  return REPLACEMENT_COMPONENT_OPTIONS.filter((item) => allowed.has(item));
+}
+
+export function getMateriaPrimaTemplateAvailability(templateId: string) {
+  const template = getMateriaPrimaTemplate(templateId);
+  return {
+    esConsumible: template?.defaults?.esConsumible ?? false,
+    esRepuesto: template?.defaults?.esRepuesto ?? false,
+    lockEsConsumible: template?.defaults?.lockEsConsumible ?? false,
+    lockEsRepuesto: template?.defaults?.lockEsRepuesto ?? false,
+  };
 }
