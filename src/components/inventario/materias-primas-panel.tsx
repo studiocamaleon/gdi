@@ -162,7 +162,6 @@ export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPan
       activo: true,
       atributosTecnicos: { ...template.atributosIniciales },
       variantes: [],
-      compatibilidades: [],
     };
 
     setIsSaving(true);

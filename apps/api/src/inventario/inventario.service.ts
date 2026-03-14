@@ -7,8 +7,6 @@ import {
 import {
   FamiliaMateriaPrima,
   OrigenMovimientoStockMateriaPrima,
-  ModoUsoCompatibilidadMateriaPrima,
-  PlantillaMaquinaria,
   Prisma,
   SubfamiliaMateriaPrima,
   TipoMovimientoStockMateriaPrima,
@@ -44,15 +42,6 @@ type MateriaPrimaEntity = Prisma.MateriaPrimaGetPayload<{
         createdAt: 'asc';
       };
     };
-    compatibilidades: {
-      include: {
-        maquina: true;
-        perfilOperativo: true;
-      };
-      orderBy: {
-        createdAt: 'asc';
-      };
-    };
   };
 }>;
 
@@ -69,13 +58,6 @@ export class InventarioService {
         variantes: {
           include: {
             proveedorReferencia: true,
-          },
-          orderBy: [{ createdAt: 'asc' }],
-        },
-        compatibilidades: {
-          include: {
-            maquina: true,
-            perfilOperativo: true,
           },
           orderBy: [{ createdAt: 'asc' }],
         },
@@ -148,58 +130,6 @@ export class InventarioService {
           );
         }
 
-        if (normalized.compatibilidades.length > 0) {
-          const variantesGuardadas = await tx.materiaPrimaVariante.findMany({
-            where: {
-              tenantId: auth.tenantId,
-              materiaPrimaId: materiaPrima.id,
-            },
-            select: {
-              id: true,
-              sku: true,
-            },
-          });
-          const skuToVarianteId = new Map(
-            variantesGuardadas.map((variante) => [variante.sku, variante.id]),
-          );
-
-          await Promise.all(
-            normalized.compatibilidades.map((compatibilidad) => {
-              const varianteId = compatibilidad.varianteSku
-                ? skuToVarianteId.get(compatibilidad.varianteSku) ?? null
-                : compatibilidad.varianteId ?? null;
-
-              return (
-              tx.materiaPrimaCompatibilidadMaquina.create({
-                data: {
-                  tenantId: auth.tenantId,
-                  materiaPrimaId: materiaPrima.id,
-                  varianteId,
-                  plantillaMaquinaria: compatibilidad.plantillaMaquinaria
-                    ? this.toPrismaEnum<PlantillaMaquinaria>(
-                        compatibilidad.plantillaMaquinaria,
-                      )
-                    : null,
-                  maquinaId: compatibilidad.maquinaId,
-                  perfilOperativoId: compatibilidad.perfilOperativoId,
-                  modoUso: this.toPrismaEnum<ModoUsoCompatibilidadMateriaPrima>(
-                    compatibilidad.modoUso,
-                  ),
-                  consumoBase: compatibilidad.consumoBase,
-                  unidadConsumo: compatibilidad.unidadConsumo
-                    ? this.toPrismaEnum<UnidadMateriaPrima>(
-                        compatibilidad.unidadConsumo,
-                      )
-                    : null,
-                  mermaBasePct: compatibilidad.mermaBasePct,
-                  activo: compatibilidad.activo,
-                },
-              })
-              );
-            }),
-          );
-        }
-
         return materiaPrima.id;
       });
 
@@ -245,13 +175,6 @@ export class InventarioService {
           },
         });
 
-        await tx.materiaPrimaCompatibilidadMaquina.deleteMany({
-          where: {
-            tenantId: auth.tenantId,
-            materiaPrimaId: id,
-          },
-        });
-
         await tx.materiaPrimaVariante.deleteMany({
           where: {
             tenantId: auth.tenantId,
@@ -285,57 +208,6 @@ export class InventarioService {
           );
         }
 
-        if (normalized.compatibilidades.length > 0) {
-          const skuToVarianteId = new Map<string, string>();
-          const variantesGuardadas = await tx.materiaPrimaVariante.findMany({
-            where: {
-              tenantId: auth.tenantId,
-              materiaPrimaId: id,
-            },
-            select: {
-              id: true,
-              sku: true,
-            },
-          });
-
-          for (const variante of variantesGuardadas) {
-            skuToVarianteId.set(variante.sku, variante.id);
-          }
-
-          await Promise.all(
-            normalized.compatibilidades.map((compatibilidad) => {
-              const varianteId = compatibilidad.varianteSku
-                ? skuToVarianteId.get(compatibilidad.varianteSku) ?? null
-                : compatibilidad.varianteId ?? null;
-
-              return tx.materiaPrimaCompatibilidadMaquina.create({
-                data: {
-                  tenantId: auth.tenantId,
-                  materiaPrimaId: id,
-                  varianteId,
-                  plantillaMaquinaria: compatibilidad.plantillaMaquinaria
-                    ? this.toPrismaEnum<PlantillaMaquinaria>(
-                        compatibilidad.plantillaMaquinaria,
-                      )
-                    : null,
-                  maquinaId: compatibilidad.maquinaId,
-                  perfilOperativoId: compatibilidad.perfilOperativoId,
-                  modoUso: this.toPrismaEnum<ModoUsoCompatibilidadMateriaPrima>(
-                    compatibilidad.modoUso,
-                  ),
-                  consumoBase: compatibilidad.consumoBase,
-                  unidadConsumo: compatibilidad.unidadConsumo
-                    ? this.toPrismaEnum<UnidadMateriaPrima>(
-                        compatibilidad.unidadConsumo,
-                      )
-                    : null,
-                  mermaBasePct: compatibilidad.mermaBasePct,
-                  activo: compatibilidad.activo,
-                },
-              });
-            }),
-          );
-        }
       });
 
       const item = await this.findMateriaPrimaOrThrow(auth, id, this.prisma);
@@ -1071,13 +943,6 @@ export class InventarioService {
           },
           orderBy: [{ createdAt: 'asc' }],
         },
-        compatibilidades: {
-          include: {
-            maquina: true,
-            perfilOperativo: true,
-          },
-          orderBy: [{ createdAt: 'asc' }],
-        },
       },
     });
 
@@ -1102,11 +967,6 @@ export class InventarioService {
       moneda: variante.moneda?.trim().toUpperCase() || null,
     }));
 
-    const compatibilidades = payload.compatibilidades.map((compatibilidad) => ({
-      ...compatibilidad,
-      varianteSku: compatibilidad.varianteSku?.trim() || null,
-    }));
-
     return {
       codigo: payload.codigo.trim(),
       nombre: payload.nombre.trim(),
@@ -1122,7 +982,6 @@ export class InventarioService {
       activo: payload.activo,
       atributosTecnicos: payload.atributosTecnicos,
       variantes,
-      compatibilidades,
     };
   }
 
@@ -1160,28 +1019,6 @@ export class InventarioService {
         moneda: variante.moneda ?? '',
         proveedorReferenciaId: variante.proveedorReferenciaId,
         proveedorReferenciaNombre: variante.proveedorReferencia?.nombre ?? '',
-      })),
-      compatibilidades: item.compatibilidades.map((compatibilidad) => ({
-        id: compatibilidad.id,
-        varianteId: compatibilidad.varianteId,
-        plantillaMaquinaria: compatibilidad.plantillaMaquinaria
-          ? this.toApiEnum(compatibilidad.plantillaMaquinaria)
-          : null,
-        maquinaId: compatibilidad.maquinaId,
-        maquinaNombre: compatibilidad.maquina?.nombre ?? '',
-        perfilOperativoId: compatibilidad.perfilOperativoId,
-        perfilOperativoNombre: compatibilidad.perfilOperativo?.nombre ?? '',
-        modoUso: this.toApiEnum(compatibilidad.modoUso),
-        consumoBase: compatibilidad.consumoBase
-          ? this.decimalToNumber(compatibilidad.consumoBase)
-          : null,
-        unidadConsumo: compatibilidad.unidadConsumo
-          ? this.toApiEnum(compatibilidad.unidadConsumo)
-          : null,
-        mermaBasePct: compatibilidad.mermaBasePct
-          ? this.decimalToNumber(compatibilidad.mermaBasePct)
-          : null,
-        activo: compatibilidad.activo,
       })),
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),

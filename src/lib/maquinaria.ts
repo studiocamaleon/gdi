@@ -364,13 +364,11 @@ export type MaquinaPerfilOperativo = {
   anchoAplicable: number | null;
   altoAplicable: number | null;
   modoTrabajo: string;
-  calidad: string;
   productividad: number | null;
   unidadProductividad: UnidadProduccionMaquina | "";
   tiempoPreparacionMin: number | null;
-  tiempoCargaMin: number | null;
-  tiempoDescargaMin: number | null;
   tiempoRipMin: number | null;
+  setupEstimadoMin: number | null;
   cantidadPasadas: number | null;
   dobleFaz: boolean;
   detalle: Record<string, unknown> | null;
@@ -476,12 +474,9 @@ export type MaquinaPayload = {
     anchoAplicable?: number;
     altoAplicable?: number;
     modoTrabajo?: string;
-    calidad?: string;
     productividad?: number;
     unidadProductividad?: UnidadProduccionMaquina;
     tiempoPreparacionMin?: number;
-    tiempoCargaMin?: number;
-    tiempoDescargaMin?: number;
     tiempoRipMin?: number;
     cantidadPasadas?: number;
     dobleFaz?: boolean;

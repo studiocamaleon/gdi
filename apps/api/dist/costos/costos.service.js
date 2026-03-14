@@ -206,6 +206,11 @@ let CostosService = class CostosService {
             periodo: normalizedPeriodo,
             centro: this.toCentroResponse(centro),
             recursos: centro.recursos.map((recurso) => this.toRecursoResponse(recurso)),
+            recursosMaquinaria: centro.recursos
+                .filter((recurso) => recurso.tipoRecurso === client_1.TipoRecursoCentroCosto.MAQUINARIA &&
+                Boolean(recurso.maquinaId))
+                .map((recurso) => this.toRecursoMaquinariaResponse(recurso.maquinariaPeriodo[0], recurso))
+                .filter((item) => Boolean(item)),
             componentesCosto: centro.componentesCostoPeriodo.map((componente) => this.toComponenteCostoResponse(componente)),
             capacidad: centro.capacidadesPeriodo[0]
                 ? this.toCapacidadResponse(centro.capacidadesPeriodo[0])
@@ -248,8 +253,10 @@ let CostosService = class CostosService {
                         proveedorId: recurso.tipoRecurso === replace_centro_recursos_dto_1.TipoRecursoCentroCostoDto.proveedor
                             ? (recurso.proveedorId ?? null)
                             : null,
-                        nombreManual: recurso.tipoRecurso === replace_centro_recursos_dto_1.TipoRecursoCentroCostoDto.maquinaria ||
-                            recurso.tipoRecurso === replace_centro_recursos_dto_1.TipoRecursoCentroCostoDto.gasto_manual
+                        maquinaId: recurso.tipoRecurso === replace_centro_recursos_dto_1.TipoRecursoCentroCostoDto.maquinaria
+                            ? (recurso.maquinaId ?? null)
+                            : null,
+                        nombreManual: recurso.tipoRecurso === replace_centro_recursos_dto_1.TipoRecursoCentroCostoDto.gasto_manual
                             ? recurso.nombreManual?.trim() || null
                             : null,
                         descripcion: recurso.descripcion?.trim() || null,
@@ -270,11 +277,135 @@ let CostosService = class CostosService {
                 include: {
                     empleado: true,
                     proveedor: true,
+                    maquina: true,
+                    maquinariaPeriodo: true,
                 },
                 orderBy: [{ createdAt: 'asc' }],
             });
         });
         return recursos.map((recurso) => this.toRecursoResponse(recurso));
+    }
+    async getCentroRecursosMaquinaria(auth, id, periodo) {
+        const normalizedPeriodo = this.normalizePeriodo(periodo);
+        await this.findCentroOrThrow(auth, id);
+        const recursos = await this.prisma.centroCostoRecurso.findMany({
+            where: {
+                tenantId: auth.tenantId,
+                centroCostoId: id,
+                periodo: normalizedPeriodo,
+                tipoRecurso: client_1.TipoRecursoCentroCosto.MAQUINARIA,
+                maquinaId: { not: null },
+            },
+            include: {
+                maquina: true,
+                maquinariaPeriodo: {
+                    where: { periodo: normalizedPeriodo },
+                    orderBy: [{ createdAt: 'desc' }],
+                    take: 1,
+                },
+            },
+            orderBy: [{ createdAt: 'asc' }],
+        });
+        return recursos
+            .map((recurso) => this.toRecursoMaquinariaResponse(recurso.maquinariaPeriodo[0], recurso))
+            .filter((item) => Boolean(item));
+    }
+    async upsertCentroRecursosMaquinaria(auth, id, periodo, payload) {
+        const normalizedPeriodo = this.normalizePeriodo(periodo);
+        await this.findCentroOrThrow(auth, id);
+        const recursos = await this.prisma.centroCostoRecurso.findMany({
+            where: {
+                tenantId: auth.tenantId,
+                centroCostoId: id,
+                periodo: normalizedPeriodo,
+                tipoRecurso: client_1.TipoRecursoCentroCosto.MAQUINARIA,
+            },
+            include: {
+                maquina: true,
+            },
+        });
+        const recursoById = new Map(recursos.map((item) => [item.id, item]));
+        for (const item of payload.recursos) {
+            const recurso = recursoById.get(item.centroCostoRecursoId);
+            if (!recurso) {
+                throw new common_1.BadRequestException('Uno de los recursos de maquinaria no pertenece al centro/período seleccionado.');
+            }
+            if (!recurso.maquinaId) {
+                throw new common_1.BadRequestException('El recurso de maquinaria debe tener una máquina vinculada antes de cargar costeo.');
+            }
+        }
+        await this.prisma.$transaction(async (tx) => {
+            const payloadResourceIds = payload.recursos.map((item) => item.centroCostoRecursoId);
+            await tx.centroCostoRecursoMaquinaPeriodo.deleteMany({
+                where: {
+                    tenantId: auth.tenantId,
+                    periodo: normalizedPeriodo,
+                    centroCostoRecursoId: {
+                        in: Array.from(recursoById.keys()),
+                        ...(payloadResourceIds.length > 0
+                            ? { notIn: payloadResourceIds }
+                            : {}),
+                    },
+                },
+            });
+            for (const item of payload.recursos) {
+                const recurso = recursoById.get(item.centroCostoRecursoId);
+                const calculado = this.computeMaquinariaCosteo(item);
+                await tx.centroCostoRecursoMaquinaPeriodo.upsert({
+                    where: {
+                        tenantId_centroCostoRecursoId_periodo: {
+                            tenantId: auth.tenantId,
+                            centroCostoRecursoId: recurso.id,
+                            periodo: normalizedPeriodo,
+                        },
+                    },
+                    create: {
+                        tenantId: auth.tenantId,
+                        centroCostoRecursoId: recurso.id,
+                        maquinaId: recurso.maquinaId,
+                        periodo: normalizedPeriodo,
+                        metodoDepreciacion: this.toPrismaMetodoDepreciacionMaquina(item.metodoDepreciacion),
+                        valorCompra: calculado.valorCompra,
+                        valorResidual: calculado.valorResidual,
+                        vidaUtilMeses: calculado.vidaUtilMeses,
+                        potenciaNominalKw: calculado.potenciaNominalKw,
+                        factorCargaPct: calculado.factorCargaPct,
+                        tarifaEnergiaKwh: calculado.tarifaEnergiaKwh,
+                        horasProgramadasMes: calculado.horasProgramadasMes,
+                        disponibilidadPct: calculado.disponibilidadPct,
+                        eficienciaPct: calculado.eficienciaPct,
+                        mantenimientoMensual: calculado.mantenimientoMensual,
+                        segurosMensual: calculado.segurosMensual,
+                        otrosFijosMensual: calculado.otrosFijosMensual,
+                        amortizacionMensualCalc: calculado.amortizacionMensual,
+                        energiaMensualCalc: calculado.energiaMensual,
+                        costoMensualTotalCalc: calculado.costoMensualTotal,
+                        tarifaHoraCalc: calculado.tarifaHora,
+                    },
+                    update: {
+                        maquinaId: recurso.maquinaId,
+                        metodoDepreciacion: this.toPrismaMetodoDepreciacionMaquina(item.metodoDepreciacion),
+                        valorCompra: calculado.valorCompra,
+                        valorResidual: calculado.valorResidual,
+                        vidaUtilMeses: calculado.vidaUtilMeses,
+                        potenciaNominalKw: calculado.potenciaNominalKw,
+                        factorCargaPct: calculado.factorCargaPct,
+                        tarifaEnergiaKwh: calculado.tarifaEnergiaKwh,
+                        horasProgramadasMes: calculado.horasProgramadasMes,
+                        disponibilidadPct: calculado.disponibilidadPct,
+                        eficienciaPct: calculado.eficienciaPct,
+                        mantenimientoMensual: calculado.mantenimientoMensual,
+                        segurosMensual: calculado.segurosMensual,
+                        otrosFijosMensual: calculado.otrosFijosMensual,
+                        amortizacionMensualCalc: calculado.amortizacionMensual,
+                        energiaMensualCalc: calculado.energiaMensual,
+                        costoMensualTotalCalc: calculado.costoMensualTotal,
+                        tarifaHoraCalc: calculado.tarifaHora,
+                    },
+                });
+            }
+        });
+        return this.getCentroRecursosMaquinaria(auth, id, normalizedPeriodo);
     }
     async replaceCentroComponentesCosto(auth, id, periodo, payload) {
         const normalizedPeriodo = this.normalizePeriodo(periodo);
@@ -459,7 +590,11 @@ let CostosService = class CostosService {
     async buildTarifaSnapshot(auth, centroCostoId, periodo) {
         const centro = await this.getCentroConfiguracionEntity(auth, centroCostoId, periodo);
         const advertencias = this.buildAdvertencias(centro, periodo);
-        const costoMensualTotal = centro.componentesCostoPeriodo.reduce((acc, item) => acc.plus(item.importeMensual), new client_1.Prisma.Decimal(0));
+        const costoMensualBase = centro.componentesCostoPeriodo.reduce((acc, item) => acc.plus(item.importeMensual), new client_1.Prisma.Decimal(0));
+        const costoMensualMaquinaria = centro.recursos
+            .filter((recurso) => recurso.activo && recurso.tipoRecurso === client_1.TipoRecursoCentroCosto.MAQUINARIA)
+            .reduce((acc, recurso) => acc.plus(recurso.maquinariaPeriodo[0]?.costoMensualTotalCalc ?? 0), new client_1.Prisma.Decimal(0));
+        const costoMensualTotal = costoMensualBase.plus(costoMensualMaquinaria);
         const capacidadPractica = centro.capacidadesPeriodo[0]?.capacidadPractica ?? new client_1.Prisma.Decimal(0);
         const tarifaCalculada = costoMensualTotal.gt(0) && capacidadPractica.gt(0)
             ? costoMensualTotal.div(capacidadPractica)
@@ -485,6 +620,8 @@ let CostosService = class CostosService {
                 centroCodigo: centro.codigo,
                 centroNombre: centro.nombre,
                 unidadBase: this.fromPrismaUnidadBase(centro.unidadBaseFutura),
+                costoMensualBase: this.decimalToNumber(costoMensualBase),
+                costoMensualMaquinaria: this.decimalToNumber(costoMensualMaquinaria),
                 costoMensualTotal: this.decimalToNumber(costoMensualTotal),
                 capacidadPractica: this.decimalToNumber(capacidadPractica),
                 tarifaCalculada: this.decimalToNumber(tarifaCalculada),
@@ -508,6 +645,12 @@ let CostosService = class CostosService {
                     include: {
                         empleado: true,
                         proveedor: true,
+                        maquina: true,
+                        maquinariaPeriodo: {
+                            where: { periodo },
+                            orderBy: [{ createdAt: 'desc' }],
+                            take: 1,
+                        },
                     },
                     orderBy: [{ createdAt: 'asc' }],
                 },
@@ -534,6 +677,7 @@ let CostosService = class CostosService {
         const recursosActivos = centro.recursos.filter((recurso) => recurso.activo);
         const costoMensualTotal = centro.componentesCostoPeriodo.reduce((acc, item) => acc.plus(item.importeMensual), new client_1.Prisma.Decimal(0));
         const capacidad = centro.capacidadesPeriodo[0] ?? null;
+        const recursosMaquinariaActivos = centro.recursos.filter((recurso) => recurso.activo && recurso.tipoRecurso === client_1.TipoRecursoCentroCosto.MAQUINARIA);
         const tieneProveedorVigente = Boolean(centro.proveedorDefaultId) ||
             centro.recursos.some((recurso) => recurso.tipoRecurso === client_1.TipoRecursoCentroCosto.PROVEEDOR &&
                 Boolean(recurso.proveedorId) &&
@@ -546,6 +690,9 @@ let CostosService = class CostosService {
         }
         if (centro.componentesCostoPeriodo.length === 0) {
             advertencias.push(`Todavia no cargaste costos mensuales para ${periodo}.`);
+        }
+        if (recursosMaquinariaActivos.some((recurso) => !recurso.maquinariaPeriodo[0])) {
+            advertencias.push('Hay maquinaria activa en recursos sin parámetros de amortización/energía para este período.');
         }
         if (!costoMensualTotal.gt(0)) {
             advertencias.push('El costo mensual total debe ser mayor a 0 para calcular una tarifa util.');
@@ -720,10 +867,19 @@ let CostosService = class CostosService {
         }
     }
     async validateRecursos(auth, centroCostoId, periodo, recursos) {
+        const centro = await this.prisma.centroCosto.findFirst({
+            where: { id: centroCostoId, tenantId: auth.tenantId },
+            select: { id: true, plantaId: true },
+        });
+        if (!centro) {
+            throw new common_1.NotFoundException(`No existe el centro de costo ${centroCostoId}`);
+        }
         const recursosActivos = recursos.filter((recurso) => recurso.activo);
         const employeeAssignments = new Map();
         const employeeIds = new Set();
         const providerIds = new Set();
+        const machineIds = new Set();
+        const machineAssignments = new Set();
         for (const recurso of recursos) {
             if (recurso.tipoRecurso === replace_centro_recursos_dto_1.TipoRecursoCentroCostoDto.empleado &&
                 !recurso.empleadoId) {
@@ -733,10 +889,17 @@ let CostosService = class CostosService {
                 !recurso.proveedorId) {
                 throw new common_1.BadRequestException('Los recursos de tipo proveedor necesitan un proveedor asociado.');
             }
-            if ((recurso.tipoRecurso === replace_centro_recursos_dto_1.TipoRecursoCentroCostoDto.maquinaria ||
-                recurso.tipoRecurso === replace_centro_recursos_dto_1.TipoRecursoCentroCostoDto.gasto_manual) &&
+            if (recurso.tipoRecurso === replace_centro_recursos_dto_1.TipoRecursoCentroCostoDto.gasto_manual &&
                 !recurso.nombreManual?.trim()) {
-                throw new common_1.BadRequestException('Las maquinas y gastos manuales necesitan un nombre descriptivo.');
+                throw new common_1.BadRequestException('Los gastos manuales necesitan un nombre descriptivo.');
+            }
+            if (recurso.tipoRecurso === replace_centro_recursos_dto_1.TipoRecursoCentroCostoDto.maquinaria &&
+                !recurso.maquinaId) {
+                throw new common_1.BadRequestException('Los recursos de tipo maquinaria necesitan una máquina asociada.');
+            }
+            if (recurso.tipoRecurso !== replace_centro_recursos_dto_1.TipoRecursoCentroCostoDto.maquinaria &&
+                recurso.maquinaId) {
+                throw new common_1.BadRequestException('Solo los recursos de tipo maquinaria pueden referenciar una máquina.');
             }
             if (recurso.tipoRecurso === replace_centro_recursos_dto_1.TipoRecursoCentroCostoDto.empleado) {
                 if (recurso.porcentajeAsignacion === undefined) {
@@ -760,6 +923,14 @@ let CostosService = class CostosService {
             }
             if (recurso.proveedorId) {
                 providerIds.add(recurso.proveedorId);
+            }
+            if (recurso.tipoRecurso === replace_centro_recursos_dto_1.TipoRecursoCentroCostoDto.maquinaria &&
+                recurso.maquinaId) {
+                if (machineAssignments.has(recurso.maquinaId)) {
+                    throw new common_1.BadRequestException('No puedes asignar la misma máquina dos veces en el mismo centro y mes.');
+                }
+                machineAssignments.add(recurso.maquinaId);
+                machineIds.add(recurso.maquinaId);
             }
         }
         if (employeeIds.size > 0) {
@@ -813,6 +984,25 @@ let CostosService = class CostosService {
             for (const proveedorId of providerIds) {
                 if (!existingProviderIds.has(proveedorId)) {
                     throw new common_1.NotFoundException('Uno de los proveedores asignados no existe en la empresa actual.');
+                }
+            }
+        }
+        if (machineIds.size > 0) {
+            const machines = await this.prisma.maquina.findMany({
+                where: {
+                    tenantId: auth.tenantId,
+                    id: { in: Array.from(machineIds) },
+                },
+                select: { id: true, plantaId: true },
+            });
+            const machinesById = new Map(machines.map((item) => [item.id, item]));
+            for (const maquinaId of machineIds) {
+                const machine = machinesById.get(maquinaId);
+                if (!machine) {
+                    throw new common_1.NotFoundException('Una de las máquinas asignadas no existe en la empresa actual.');
+                }
+                if (machine.plantaId !== centro.plantaId) {
+                    throw new common_1.BadRequestException('La máquina asignada al centro debe pertenecer a la misma planta.');
                 }
             }
         }
@@ -939,6 +1129,8 @@ let CostosService = class CostosService {
             empleadoNombre: recurso.empleado?.nombreCompleto ?? '',
             proveedorId: recurso.proveedorId ?? '',
             proveedorNombre: recurso.proveedor?.nombre ?? '',
+            maquinaId: recurso.maquinaId ?? '',
+            maquinaNombre: recurso.maquina?.nombre ?? '',
             nombreManual: recurso.nombreManual ?? '',
             descripcion: recurso.descripcion ?? '',
             porcentajeAsignacion: recurso.porcentajeAsignacion
@@ -985,6 +1177,110 @@ let CostosService = class CostosService {
             resumen: tarifa.resumenJson,
             createdAt: tarifa.createdAt.toISOString(),
             updatedAt: tarifa.updatedAt.toISOString(),
+        };
+    }
+    toRecursoMaquinariaResponse(item, recurso) {
+        const metodoDepreciacion = item
+            ? this.fromPrismaMetodoDepreciacionMaquina(item.metodoDepreciacion)
+            : 'lineal';
+        const valorCompra = item ? this.decimalToNumber(item.valorCompra) : 0;
+        const valorResidual = item ? this.decimalToNumber(item.valorResidual) : 0;
+        const vidaUtilMeses = item?.vidaUtilMeses ?? 60;
+        const potenciaNominalKw = item ? Number(item.potenciaNominalKw.toFixed(4)) : 0;
+        const factorCargaPct = item ? this.decimalToNumber(item.factorCargaPct) : 100;
+        const tarifaEnergiaKwh = item ? Number(item.tarifaEnergiaKwh.toFixed(4)) : 0;
+        const horasProgramadasMes = item
+            ? this.decimalToNumber(item.horasProgramadasMes)
+            : 160;
+        const disponibilidadPct = item ? this.decimalToNumber(item.disponibilidadPct) : 85;
+        const eficienciaPct = item ? this.decimalToNumber(item.eficienciaPct) : 85;
+        const mantenimientoMensual = item
+            ? this.decimalToNumber(item.mantenimientoMensual)
+            : 0;
+        const segurosMensual = item ? this.decimalToNumber(item.segurosMensual) : 0;
+        const otrosFijosMensual = item ? this.decimalToNumber(item.otrosFijosMensual) : 0;
+        const horasProductivas = Number((horasProgramadasMes *
+            (disponibilidadPct / 100) *
+            (eficienciaPct / 100)).toFixed(2));
+        return {
+            id: item?.id ?? '',
+            centroCostoRecursoId: recurso.id,
+            periodo: recurso.periodo,
+            maquinaId: recurso.maquinaId ?? '',
+            maquinaNombre: recurso.maquina?.nombre ?? '',
+            metodoDepreciacion,
+            valorCompra,
+            valorResidual,
+            vidaUtilMeses,
+            potenciaNominalKw,
+            factorCargaPct,
+            tarifaEnergiaKwh,
+            horasProgramadasMes,
+            disponibilidadPct,
+            eficienciaPct,
+            horasProductivas,
+            mantenimientoMensual,
+            segurosMensual,
+            otrosFijosMensual,
+            amortizacionMensual: item
+                ? this.decimalToNumber(item.amortizacionMensualCalc)
+                : Number((Math.max(0, valorCompra - valorResidual) / Math.max(1, vidaUtilMeses)).toFixed(2)),
+            energiaMensual: item ? this.decimalToNumber(item.energiaMensualCalc) : 0,
+            costoMensualTotal: item ? this.decimalToNumber(item.costoMensualTotalCalc) : 0,
+            tarifaHora: item ? Number(item.tarifaHoraCalc.toFixed(4)) : 0,
+            updatedAt: item?.updatedAt.toISOString() ?? '',
+        };
+    }
+    computeMaquinariaCosteo(item) {
+        const valorCompra = new client_1.Prisma.Decimal(item.valorCompra);
+        const valorResidual = new client_1.Prisma.Decimal(item.valorResidual);
+        const vidaUtilMeses = Math.max(1, Math.round(item.vidaUtilMeses));
+        const potenciaNominalKw = new client_1.Prisma.Decimal(item.potenciaNominalKw);
+        const factorCargaPct = new client_1.Prisma.Decimal(item.factorCargaPct);
+        const tarifaEnergiaKwh = new client_1.Prisma.Decimal(item.tarifaEnergiaKwh);
+        const horasProgramadasMes = new client_1.Prisma.Decimal(item.horasProgramadasMes);
+        const disponibilidadPct = new client_1.Prisma.Decimal(item.disponibilidadPct);
+        const eficienciaPct = new client_1.Prisma.Decimal(item.eficienciaPct);
+        const mantenimientoMensual = new client_1.Prisma.Decimal(item.mantenimientoMensual);
+        const segurosMensual = new client_1.Prisma.Decimal(item.segurosMensual);
+        const otrosFijosMensual = new client_1.Prisma.Decimal(item.otrosFijosMensual);
+        const rawBaseDepreciable = valorCompra.minus(valorResidual);
+        const baseDepreciable = rawBaseDepreciable.gt(0)
+            ? rawBaseDepreciable
+            : new client_1.Prisma.Decimal(0);
+        const amortizacionMensual = baseDepreciable.div(new client_1.Prisma.Decimal(vidaUtilMeses));
+        const horasProductivas = horasProgramadasMes
+            .mul(disponibilidadPct.div(new client_1.Prisma.Decimal(100)))
+            .mul(eficienciaPct.div(new client_1.Prisma.Decimal(100)));
+        const energiaMensual = potenciaNominalKw
+            .mul(factorCargaPct.div(new client_1.Prisma.Decimal(100)))
+            .mul(horasProductivas)
+            .mul(tarifaEnergiaKwh);
+        const costoMensualTotal = amortizacionMensual
+            .plus(energiaMensual)
+            .plus(mantenimientoMensual)
+            .plus(segurosMensual)
+            .plus(otrosFijosMensual);
+        const tarifaHora = horasProductivas.gt(0)
+            ? costoMensualTotal.div(horasProductivas)
+            : new client_1.Prisma.Decimal(0);
+        return {
+            valorCompra,
+            valorResidual,
+            vidaUtilMeses,
+            potenciaNominalKw,
+            factorCargaPct,
+            tarifaEnergiaKwh,
+            horasProgramadasMes,
+            disponibilidadPct,
+            eficienciaPct,
+            mantenimientoMensual,
+            segurosMensual,
+            otrosFijosMensual,
+            amortizacionMensual,
+            energiaMensual,
+            costoMensualTotal,
+            tarifaHora,
         };
     }
     decimalToNumber(value) {
@@ -1134,6 +1430,18 @@ let CostosService = class CostosService {
             [replace_centro_componentes_costo_dto_1.OrigenComponenteCostoCentroDto.sugerido]: client_1.OrigenComponenteCostoCentro.SUGERIDO,
         };
         return mapping[origen];
+    }
+    toPrismaMetodoDepreciacionMaquina(metodo) {
+        const mapping = {
+            lineal: client_1.MetodoDepreciacionMaquina.LINEAL,
+        };
+        return mapping[metodo];
+    }
+    fromPrismaMetodoDepreciacionMaquina(metodo) {
+        const mapping = {
+            [client_1.MetodoDepreciacionMaquina.LINEAL]: 'lineal',
+        };
+        return mapping[metodo];
     }
     fromPrismaOrigenComponente(origen) {
         const mapping = {

@@ -131,12 +131,9 @@ class MaquinaPerfilOperativoItemDto {
     anchoAplicable;
     altoAplicable;
     modoTrabajo;
-    calidad;
     productividad;
     unidadProductividad;
     tiempoPreparacionMin;
-    tiempoCargaMin;
-    tiempoDescargaMin;
     tiempoRipMin;
     cantidadPasadas;
     dobleFaz;
@@ -175,11 +172,6 @@ __decorate([
 ], MaquinaPerfilOperativoItemDto.prototype, "modoTrabajo", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], MaquinaPerfilOperativoItemDto.prototype, "calidad", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
     (0, class_transformer_1.Type)(() => Number),
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
@@ -195,18 +187,6 @@ __decorate([
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
 ], MaquinaPerfilOperativoItemDto.prototype, "tiempoPreparacionMin", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_transformer_1.Type)(() => Number),
-    (0, class_validator_1.IsNumber)(),
-    __metadata("design:type", Number)
-], MaquinaPerfilOperativoItemDto.prototype, "tiempoCargaMin", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_transformer_1.Type)(() => Number),
-    (0, class_validator_1.IsNumber)(),
-    __metadata("design:type", Number)
-], MaquinaPerfilOperativoItemDto.prototype, "tiempoDescargaMin", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_transformer_1.Type)(() => Number),

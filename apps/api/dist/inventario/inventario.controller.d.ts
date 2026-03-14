@@ -33,20 +33,6 @@ export declare class InventarioController {
             proveedorReferenciaId: string | null;
             proveedorReferenciaNombre: string;
         }[];
-        compatibilidades: {
-            id: string;
-            varianteId: string | null;
-            plantillaMaquinaria: string | null;
-            maquinaId: string | null;
-            maquinaNombre: string;
-            perfilOperativoId: string | null;
-            perfilOperativoNombre: string;
-            modoUso: string;
-            consumoBase: number | null;
-            unidadConsumo: string | null;
-            mermaBasePct: number | null;
-            activo: boolean;
-        }[];
         createdAt: string;
         updatedAt: string;
     }[]>;
@@ -77,20 +63,6 @@ export declare class InventarioController {
             moneda: string;
             proveedorReferenciaId: string | null;
             proveedorReferenciaNombre: string;
-        }[];
-        compatibilidades: {
-            id: string;
-            varianteId: string | null;
-            plantillaMaquinaria: string | null;
-            maquinaId: string | null;
-            maquinaNombre: string;
-            perfilOperativoId: string | null;
-            perfilOperativoNombre: string;
-            modoUso: string;
-            consumoBase: number | null;
-            unidadConsumo: string | null;
-            mermaBasePct: number | null;
-            activo: boolean;
         }[];
         createdAt: string;
         updatedAt: string;
@@ -123,20 +95,6 @@ export declare class InventarioController {
             proveedorReferenciaId: string | null;
             proveedorReferenciaNombre: string;
         }[];
-        compatibilidades: {
-            id: string;
-            varianteId: string | null;
-            plantillaMaquinaria: string | null;
-            maquinaId: string | null;
-            maquinaNombre: string;
-            perfilOperativoId: string | null;
-            perfilOperativoNombre: string;
-            modoUso: string;
-            consumoBase: number | null;
-            unidadConsumo: string | null;
-            mermaBasePct: number | null;
-            activo: boolean;
-        }[];
         createdAt: string;
         updatedAt: string;
     }>;
@@ -168,20 +126,6 @@ export declare class InventarioController {
             proveedorReferenciaId: string | null;
             proveedorReferenciaNombre: string;
         }[];
-        compatibilidades: {
-            id: string;
-            varianteId: string | null;
-            plantillaMaquinaria: string | null;
-            maquinaId: string | null;
-            maquinaNombre: string;
-            perfilOperativoId: string | null;
-            perfilOperativoNombre: string;
-            modoUso: string;
-            consumoBase: number | null;
-            unidadConsumo: string | null;
-            mermaBasePct: number | null;
-            activo: boolean;
-        }[];
         createdAt: string;
         updatedAt: string;
     }>;
@@ -212,20 +156,6 @@ export declare class InventarioController {
             moneda: string;
             proveedorReferenciaId: string | null;
             proveedorReferenciaNombre: string;
-        }[];
-        compatibilidades: {
-            id: string;
-            varianteId: string | null;
-            plantillaMaquinaria: string | null;
-            maquinaId: string | null;
-            maquinaNombre: string;
-            perfilOperativoId: string | null;
-            perfilOperativoNombre: string;
-            modoUso: string;
-            consumoBase: number | null;
-            unidadConsumo: string | null;
-            mermaBasePct: number | null;
-            activo: boolean;
         }[];
         createdAt: string;
         updatedAt: string;

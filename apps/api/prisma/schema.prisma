@@ -93,6 +93,10 @@ enum OrigenComponenteCostoCentro {
   SUGERIDO
 }
 
+enum MetodoDepreciacionMaquina {
+  LINEAL
+}
+
 enum EstadoTarifaCentroCostoPeriodo {
   BORRADOR
   PUBLICADA
@@ -348,16 +352,6 @@ enum UnidadMateriaPrima {
   PAR
 }
 
-enum ModoUsoCompatibilidadMateriaPrima {
-  SUSTRATO_DIRECTO
-  TINTA
-  TRANSFERENCIA
-  LAMINACION
-  AUXILIAR
-  MONTAJE
-  EMBALAJE
-}
-
 enum TipoMovimientoStockMateriaPrima {
   INGRESO
   EGRESO
@@ -393,6 +387,7 @@ model Tenant {
   areasCosto                         AreaCosto[]
   centrosCosto                       CentroCosto[]
   centroCostoRecursos                CentroCostoRecurso[]
+  centroCostoRecursosMaquinaria      CentroCostoRecursoMaquinaPeriodo[]
   centroCostoComponentesCostoPeriodo CentroCostoComponenteCostoPeriodo[]
   centroCostoCapacidadesPeriodo      CentroCostoCapacidadPeriodo[]
   centroCostoTarifasPeriodo          CentroCostoTarifaPeriodo[]
@@ -406,7 +401,6 @@ model Tenant {
   procesosVersion                    ProcesoVersion[]
   materiasPrimas                     MateriaPrima[]
   materiaPrimaVariantes              MateriaPrimaVariante[]
-  materiaPrimaCompatibilidades       MateriaPrimaCompatibilidadMaquina[]
   almacenesMateriaPrima              AlmacenMateriaPrima[]
   almacenesMateriaPrimaUbicaciones   AlmacenMateriaPrimaUbicacion[]
   stockMateriaPrimaVariantes         StockMateriaPrimaVariante[]
@@ -749,6 +743,7 @@ model CentroCostoRecurso {
   tipoRecurso          TipoRecursoCentroCosto
   empleadoId           String?                @db.Uuid
   proveedorId          String?                @db.Uuid
+  maquinaId            String?                @db.Uuid
   nombreManual         String?
   descripcion          String?
   porcentajeAsignacion Decimal?               @db.Decimal(5, 2)
@@ -759,10 +754,46 @@ model CentroCostoRecurso {
   centroCosto          CentroCosto            @relation(fields: [centroCostoId], references: [id], onDelete: Cascade)
   empleado             Empleado?              @relation("CentroCostoRecursoEmpleado", fields: [empleadoId], references: [id], onDelete: SetNull)
   proveedor            Proveedor?             @relation("CentroCostoRecursoProveedor", fields: [proveedorId], references: [id], onDelete: SetNull)
+  maquina              Maquina?               @relation("CentroCostoRecursoMaquina", fields: [maquinaId], references: [id], onDelete: SetNull)
+  maquinariaPeriodo    CentroCostoRecursoMaquinaPeriodo[]
 
   @@index([tenantId, centroCostoId, periodo])
   @@index([tenantId, tipoRecurso, periodo])
   @@index([tenantId, empleadoId, periodo])
+  @@index([tenantId, maquinaId, periodo])
+}
+
+model CentroCostoRecursoMaquinaPeriodo {
+  id                     String                   @id @default(uuid()) @db.Uuid
+  tenantId               String                   @db.Uuid
+  centroCostoRecursoId   String                   @db.Uuid
+  maquinaId              String                   @db.Uuid
+  periodo                String
+  metodoDepreciacion     MetodoDepreciacionMaquina @default(LINEAL)
+  valorCompra            Decimal                  @db.Decimal(14, 2)
+  valorResidual          Decimal                  @db.Decimal(14, 2)
+  vidaUtilMeses          Int
+  potenciaNominalKw      Decimal                  @db.Decimal(10, 4)
+  factorCargaPct         Decimal                  @db.Decimal(5, 2)
+  tarifaEnergiaKwh       Decimal                  @db.Decimal(12, 4)
+  horasProgramadasMes    Decimal                  @db.Decimal(10, 2)
+  disponibilidadPct      Decimal                  @db.Decimal(5, 2)
+  eficienciaPct          Decimal                  @db.Decimal(5, 2)
+  mantenimientoMensual   Decimal                  @db.Decimal(14, 2)
+  segurosMensual         Decimal                  @db.Decimal(14, 2)
+  otrosFijosMensual      Decimal                  @db.Decimal(14, 2)
+  amortizacionMensualCalc Decimal                 @db.Decimal(14, 2)
+  energiaMensualCalc     Decimal                  @db.Decimal(14, 2)
+  costoMensualTotalCalc  Decimal                  @db.Decimal(14, 2)
+  tarifaHoraCalc         Decimal                  @db.Decimal(14, 4)
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  tenant                 Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  centroCostoRecurso     CentroCostoRecurso       @relation(fields: [centroCostoRecursoId], references: [id], onDelete: Cascade)
+  maquina                Maquina                  @relation(fields: [maquinaId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, centroCostoRecursoId, periodo])
+  @@index([tenantId, maquinaId, periodo])
 }
 
 model CentroCostoComponenteCostoPeriodo {
@@ -857,9 +888,10 @@ model Maquina {
   perfilesOperativos           MaquinaPerfilOperativo[]
   consumibles                  MaquinaConsumible[]
   componentesDesgaste          MaquinaComponenteDesgaste[]
+  recursosCentroCosto          CentroCostoRecurso[]                   @relation("CentroCostoRecursoMaquina")
+  costosCentroCostoPeriodo     CentroCostoRecursoMaquinaPeriodo[]
   procesosOperacion            ProcesoOperacion[]                  @relation("ProcesoOperacionMaquina")
   procesosOperacionPlantilla   ProcesoOperacionPlantilla[]         @relation("ProcesoOperacionPlantillaMaquina")
-  materiaPrimaCompatibilidades MateriaPrimaCompatibilidadMaquina[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, plantilla, activo])
@@ -878,12 +910,9 @@ model MaquinaPerfilOperativo {
   anchoAplicable               Decimal?                            @db.Decimal(12, 2)
   altoAplicable                Decimal?                            @db.Decimal(12, 2)
   modoTrabajo                  String?
-  calidad                      String?
   productividad                Decimal?                            @db.Decimal(12, 2)
   unidadProductividad          UnidadProduccionMaquina?
   tiempoPreparacionMin         Decimal?                            @db.Decimal(12, 2)
-  tiempoCargaMin               Decimal?                            @db.Decimal(12, 2)
-  tiempoDescargaMin            Decimal?                            @db.Decimal(12, 2)
   tiempoRipMin                 Decimal?                            @db.Decimal(12, 2)
   cantidadPasadas              Int?
   dobleFaz                     Boolean                             @default(false)
@@ -895,7 +924,6 @@ model MaquinaPerfilOperativo {
   consumibles                  MaquinaConsumible[]
   procesosOperacion            ProcesoOperacion[]                  @relation("ProcesoOperacionPerfil")
   procesosOperacionPlantilla   ProcesoOperacionPlantilla[]         @relation("ProcesoOperacionPlantillaPerfil")
-  materiaPrimaCompatibilidades MateriaPrimaCompatibilidadMaquina[]
 
   @@unique([tenantId, maquinaId, nombre])
   @@index([tenantId, maquinaId, activo])
@@ -1087,7 +1115,6 @@ model MateriaPrima {
   updatedAt              DateTime                            @updatedAt
   tenant                 Tenant                              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   variantes              MateriaPrimaVariante[]
-  compatibilidades       MateriaPrimaCompatibilidadMaquina[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, familia, subfamilia, activo])
@@ -1112,7 +1139,6 @@ model MateriaPrimaVariante {
   tenant                 Tenant                              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   materiaPrima           MateriaPrima                        @relation(fields: [materiaPrimaId], references: [id], onDelete: Cascade)
   proveedorReferencia    Proveedor?                          @relation("MateriaPrimaVarianteProveedorReferencia", fields: [proveedorReferenciaId], references: [id], onDelete: SetNull)
-  compatibilidades       MateriaPrimaCompatibilidadMaquina[]
   stocks                 StockMateriaPrimaVariante[]
   movimientosStock       MovimientoStockMateriaPrima[]
   maquinaConsumibles     MaquinaConsumible[]                 @relation("MaquinaConsumibleMateriaPrimaVariante")
@@ -1121,33 +1147,6 @@ model MateriaPrimaVariante {
   @@unique([tenantId, sku])
   @@index([tenantId, materiaPrimaId, activo])
   @@index([tenantId, proveedorReferenciaId, activo])
-}
-
-model MateriaPrimaCompatibilidadMaquina {
-  id                  String                            @id @default(uuid()) @db.Uuid
-  tenantId            String                            @db.Uuid
-  materiaPrimaId      String                            @db.Uuid
-  varianteId          String?                           @db.Uuid
-  plantillaMaquinaria PlantillaMaquinaria?
-  maquinaId           String?                           @db.Uuid
-  perfilOperativoId   String?                           @db.Uuid
-  modoUso             ModoUsoCompatibilidadMateriaPrima
-  consumoBase         Decimal?                          @db.Decimal(14, 6)
-  unidadConsumo       UnidadMateriaPrima?
-  mermaBasePct        Decimal?                          @db.Decimal(8, 4)
-  activo              Boolean                           @default(true)
-  createdAt           DateTime                          @default(now())
-  updatedAt           DateTime                          @updatedAt
-  tenant              Tenant                            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  materiaPrima        MateriaPrima                      @relation(fields: [materiaPrimaId], references: [id], onDelete: Cascade)
-  variante            MateriaPrimaVariante?             @relation(fields: [varianteId], references: [id], onDelete: SetNull)
-  maquina             Maquina?                          @relation(fields: [maquinaId], references: [id], onDelete: SetNull)
-  perfilOperativo     MaquinaPerfilOperativo?           @relation(fields: [perfilOperativoId], references: [id], onDelete: SetNull)
-
-  @@index([tenantId, materiaPrimaId, activo])
-  @@index([tenantId, varianteId, activo])
-  @@index([tenantId, plantillaMaquinaria, activo])
-  @@index([tenantId, maquinaId, perfilOperativoId, activo])
 }
 
 model AlmacenMateriaPrima {

@@ -23,6 +23,7 @@ const upsert_centro_configuracion_base_dto_1 = require("./dto/upsert-centro-conf
 const replace_centro_recursos_dto_1 = require("./dto/replace-centro-recursos.dto");
 const replace_centro_componentes_costo_dto_1 = require("./dto/replace-centro-componentes-costo.dto");
 const upsert_centro_capacidad_dto_1 = require("./dto/upsert-centro-capacidad.dto");
+const upsert_centro_recursos_maquinaria_dto_1 = require("./dto/upsert-centro-recursos-maquinaria.dto");
 let CostosController = class CostosController {
     costosService;
     constructor(costosService) {
@@ -78,6 +79,12 @@ let CostosController = class CostosController {
     }
     upsertCentroCapacidad(auth, id, periodo, payload) {
         return this.costosService.upsertCentroCapacidad(auth, id, periodo, payload);
+    }
+    getCentroRecursosMaquinaria(auth, id, periodo) {
+        return this.costosService.getCentroRecursosMaquinaria(auth, id, periodo);
+    }
+    upsertCentroRecursosMaquinaria(auth, id, periodo, payload) {
+        return this.costosService.upsertCentroRecursosMaquinaria(auth, id, periodo, payload);
     }
     calcularTarifaCentro(auth, id, periodo) {
         return this.costosService.calcularTarifaCentro(auth, id, periodo);
@@ -234,6 +241,25 @@ __decorate([
     __metadata("design:paramtypes", [Object, String, String, upsert_centro_capacidad_dto_1.UpsertCentroCapacidadDto]),
     __metadata("design:returntype", void 0)
 ], CostosController.prototype, "upsertCentroCapacidad", null);
+__decorate([
+    (0, common_1.Get)('centros-costo/:id/recursos-maquinaria'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Query)('periodo')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:returntype", void 0)
+], CostosController.prototype, "getCentroRecursosMaquinaria", null);
+__decorate([
+    (0, common_1.Put)('centros-costo/:id/recursos-maquinaria'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Query)('periodo')),
+    __param(3, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String, upsert_centro_recursos_maquinaria_dto_1.UpsertCentroRecursosMaquinariaDto]),
+    __metadata("design:returntype", void 0)
+], CostosController.prototype, "upsertCentroRecursosMaquinaria", null);
 __decorate([
     (0, common_1.Post)('centros-costo/:id/calcular-tarifa'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),

@@ -282,7 +282,7 @@ let MaquinariaService = class MaquinariaService {
     }
     async update(auth, id, payload) {
         await this.findMaquinaOrThrow(auth, id);
-        await this.validateReferences(auth, payload, id);
+        await this.validateReferences(auth, payload);
         if (!payload.codigo?.trim()) {
             throw new common_1.BadRequestException('El codigo de la maquina es obligatorio para actualizar.');
         }
@@ -429,14 +429,11 @@ let MaquinariaService = class MaquinariaService {
             anchoAplicable: this.toDecimal(payload.anchoAplicable),
             altoAplicable: this.toDecimal(payload.altoAplicable),
             modoTrabajo: payload.modoTrabajo?.trim() || null,
-            calidad: payload.calidad?.trim() || null,
             productividad: this.toDecimal(payload.productividad),
             unidadProductividad: payload.unidadProductividad
                 ? this.toPrismaEnum(payload.unidadProductividad)
                 : null,
             tiempoPreparacionMin: this.toDecimal(payload.tiempoPreparacionMin),
-            tiempoCargaMin: this.toDecimal(payload.tiempoCargaMin),
-            tiempoDescargaMin: this.toDecimal(payload.tiempoDescargaMin),
             tiempoRipMin: this.toDecimal(payload.tiempoRipMin),
             cantidadPasadas: payload.cantidadPasadas !== undefined
                 ? Math.round(payload.cantidadPasadas)
@@ -517,7 +514,7 @@ let MaquinariaService = class MaquinariaService {
         }
         return true;
     }
-    async validateReferences(auth, payload, maquinaId) {
+    async validateReferences(auth, payload) {
         const templateRule = TEMPLATE_CATALOG_RULES[payload.plantilla];
         if (!templateRule) {
             throw new common_1.BadRequestException(`La plantilla ${payload.plantilla} no existe en el catalogo del sistema.`);
@@ -602,21 +599,11 @@ let MaquinariaService = class MaquinariaService {
                         activo: true,
                         esConsumible: true,
                         esRepuesto: true,
-                        compatibilidades: {
-                            select: {
-                                varianteId: true,
-                                maquinaId: true,
-                                activo: true,
-                            },
-                        },
                     },
                 },
             },
         });
         const varianteById = new Map(variantesMateriaPrima.map((variante) => [variante.id, variante]));
-        if (!maquinaId && (payload.consumibles.length > 0 || payload.componentesDesgaste.length > 0)) {
-            throw new common_1.BadRequestException('Guarda la maquina primero para asignar consumibles o repuestos compatibles.');
-        }
         for (const consumible of payload.consumibles) {
             const consumibleName = consumible.nombre.trim() || 'sin nombre';
             const variante = varianteById.get(consumible.materiaPrimaVarianteId);
@@ -628,9 +615,6 @@ let MaquinariaService = class MaquinariaService {
             }
             if (!variante.materiaPrima.esConsumible) {
                 throw new common_1.BadRequestException(`La materia prima ${variante.materiaPrima.nombre} no esta habilitada como consumible.`);
-            }
-            if (!this.isMateriaPrimaCompatibleWithMachine(variante.materiaPrima.compatibilidades, variante.id, maquinaId ?? null)) {
-                throw new common_1.BadRequestException(`La materia prima ${variante.materiaPrima.nombre} no es compatible con esta maquina.`);
             }
             for (const detailKey of Object.keys(consumible.detalle ?? {})) {
                 if (!ALLOWED_CONSUMABLE_DETAIL_KEYS.has(detailKey)) {
@@ -649,9 +633,6 @@ let MaquinariaService = class MaquinariaService {
             }
             if (!variante.materiaPrima.esRepuesto) {
                 throw new common_1.BadRequestException(`La materia prima ${variante.materiaPrima.nombre} no esta habilitada como repuesto.`);
-            }
-            if (!this.isMateriaPrimaCompatibleWithMachine(variante.materiaPrima.compatibilidades, variante.id, maquinaId ?? null)) {
-                throw new common_1.BadRequestException(`La materia prima ${variante.materiaPrima.nombre} no es compatible con esta maquina.`);
             }
             for (const detailKey of Object.keys(componente.detalle ?? {})) {
                 if (!ALLOWED_WEAR_DETAIL_KEYS.has(detailKey)) {
@@ -687,21 +668,6 @@ let MaquinariaService = class MaquinariaService {
             }
             throw new common_1.BadRequestException(`El parametro tecnico ${key} contiene un formato invalido.`);
         }
-    }
-    isMateriaPrimaCompatibleWithMachine(compatibilidades, varianteId, maquinaId) {
-        if (!maquinaId) {
-            return false;
-        }
-        const compatibilidadesActivas = compatibilidades.filter((compatibilidad) => compatibilidad.activo);
-        if (compatibilidadesActivas.length === 0) {
-            return false;
-        }
-        const compatibilidadesMaquina = compatibilidadesActivas.filter((compatibilidad) => compatibilidad.maquinaId === maquinaId);
-        if (compatibilidadesMaquina.length === 0) {
-            return false;
-        }
-        return compatibilidadesMaquina.some((compatibilidad) => compatibilidad.varianteId === null ||
-            compatibilidad.varianteId === varianteId);
     }
     async findMaquinaOrThrow(auth, id) {
         const maquina = await this.prisma.maquina.findFirst({
@@ -789,15 +755,13 @@ let MaquinariaService = class MaquinariaService {
                 anchoAplicable: this.toNumber(perfil.anchoAplicable),
                 altoAplicable: this.toNumber(perfil.altoAplicable),
                 modoTrabajo: perfil.modoTrabajo ?? '',
-                calidad: perfil.calidad ?? '',
                 productividad: this.toNumber(perfil.productividad),
                 unidadProductividad: perfil.unidadProductividad
                     ? this.toApiEnum(perfil.unidadProductividad)
                     : '',
                 tiempoPreparacionMin: this.toNumber(perfil.tiempoPreparacionMin),
-                tiempoCargaMin: this.toNumber(perfil.tiempoCargaMin),
-                tiempoDescargaMin: this.toNumber(perfil.tiempoDescargaMin),
                 tiempoRipMin: this.toNumber(perfil.tiempoRipMin),
+                setupEstimadoMin: this.computeSetupEstimadoPerfil(perfil),
                 cantidadPasadas: perfil.cantidadPasadas ?? null,
                 dobleFaz: perfil.dobleFaz,
                 detalle: perfil.detalleJson ?? null,
@@ -885,6 +849,39 @@ let MaquinariaService = class MaquinariaService {
     }
     toNumber(value) {
         return value === null || value === undefined ? null : Number(value);
+    }
+    parseFiniteNumber(value) {
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return value;
+        }
+        if (typeof value === 'string' && value.trim().length > 0) {
+            const numeric = Number(value);
+            return Number.isFinite(numeric) ? numeric : null;
+        }
+        return null;
+    }
+    computeSetupEstimadoPerfil(perfil) {
+        const detalle = perfil.detalleJson &&
+            typeof perfil.detalleJson === 'object' &&
+            !Array.isArray(perfil.detalleJson)
+            ? perfil.detalleJson
+            : {};
+        const setupDirecto = this.toNumber(perfil.tiempoPreparacionMin) ??
+            this.parseFiniteNumber(detalle.tiempoPreparacionMin) ??
+            this.parseFiniteNumber(detalle.tiempoSetupMin) ??
+            this.parseFiniteNumber(detalle.setupMin) ??
+            this.parseFiniteNumber(detalle.setup);
+        if (setupDirecto !== null) {
+            return setupDirecto;
+        }
+        const partes = [
+            this.toNumber(perfil.tiempoRipMin) ??
+                this.parseFiniteNumber(detalle.tiempoRipMin),
+        ].filter((value) => value !== null);
+        if (!partes.length) {
+            return null;
+        }
+        return Number(partes.reduce((acc, item) => acc + item, 0).toFixed(4));
     }
     toNullableJson(value) {
         if (!value) {

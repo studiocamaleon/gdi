@@ -39,8 +39,6 @@ type ReferenceShape = {
       productividad: Prisma.Decimal | null;
       unidadProductividad: UnidadProduccionMaquina | null;
       tiempoPreparacionMin: Prisma.Decimal | null;
-      tiempoCargaMin?: Prisma.Decimal | null;
-      tiempoDescargaMin?: Prisma.Decimal | null;
       tiempoRipMin?: Prisma.Decimal | null;
     }
   >;
@@ -270,7 +268,7 @@ describe('ProcesosService business rules', () => {
     ).not.toThrow();
   });
 
-  it('deriva setup desde RIP+carga+descarga cuando el perfil no tiene tiempoPreparacionMin', () => {
+  it('deriva setup desde RIP cuando el perfil no tiene tiempoPreparacionMin', () => {
     const references: ReferenceShape = {
       centrosById: new Map(),
       maquinasById: new Map([
@@ -296,8 +294,6 @@ describe('ProcesosService business rules', () => {
             unidadProductividad: UnidadProduccionMaquina.PPM,
             tiempoPreparacionMin: null,
             tiempoRipMin: new Prisma.Decimal(3),
-            tiempoCargaMin: new Prisma.Decimal(2),
-            tiempoDescargaMin: new Prisma.Decimal(1),
           },
         ],
       ]),
@@ -318,7 +314,7 @@ describe('ProcesosService business rules', () => {
       references,
     );
 
-    expect(Number(derived.setupMin)).toBe(6);
+    expect(Number(derived.setupMin)).toBe(3);
   });
 
   it('fuerza modo fija cuando hay perfil operativo aunque el payload pida formula', () => {

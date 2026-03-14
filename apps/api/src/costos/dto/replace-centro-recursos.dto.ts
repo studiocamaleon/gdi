@@ -32,6 +32,10 @@ export class CentroCostoRecursoItemDto {
   proveedorId?: string;
 
   @IsOptional()
+  @IsUUID()
+  maquinaId?: string;
+
+  @IsOptional()
   @IsString()
   nombreManual?: string;
 

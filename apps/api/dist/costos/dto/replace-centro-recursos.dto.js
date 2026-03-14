@@ -23,6 +23,7 @@ class CentroCostoRecursoItemDto {
     tipoRecurso;
     empleadoId;
     proveedorId;
+    maquinaId;
     nombreManual;
     descripcion;
     porcentajeAsignacion;
@@ -43,6 +44,11 @@ __decorate([
     (0, class_validator_1.IsUUID)(),
     __metadata("design:type", String)
 ], CentroCostoRecursoItemDto.prototype, "proveedorId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], CentroCostoRecursoItemDto.prototype, "maquinaId", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),

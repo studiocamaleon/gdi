@@ -57,6 +57,7 @@ export type CategoriaComponenteCostoCentro =
 export type OrigenComponenteCostoCentro = "manual" | "sugerido";
 
 export type EstadoTarifaCentroCosto = "borrador" | "publicada";
+export type MetodoDepreciacionMaquina = "lineal";
 
 export type Planta = {
   id: string;
@@ -108,10 +109,39 @@ export type CentroCostoRecurso = {
   empleadoNombre: string;
   proveedorId: string;
   proveedorNombre: string;
+  maquinaId: string;
+  maquinaNombre: string;
   nombreManual: string;
   descripcion: string;
   porcentajeAsignacion: number | null;
   activo: boolean;
+};
+
+export type CentroCostoRecursoMaquinariaPeriodo = {
+  id: string;
+  centroCostoRecursoId: string;
+  periodo: string;
+  maquinaId: string;
+  maquinaNombre: string;
+  metodoDepreciacion: MetodoDepreciacionMaquina;
+  valorCompra: number;
+  valorResidual: number;
+  vidaUtilMeses: number;
+  potenciaNominalKw: number;
+  factorCargaPct: number;
+  tarifaEnergiaKwh: number;
+  horasProgramadasMes: number;
+  disponibilidadPct: number;
+  eficienciaPct: number;
+  horasProductivas: number;
+  mantenimientoMensual: number;
+  segurosMensual: number;
+  otrosFijosMensual: number;
+  amortizacionMensual: number;
+  energiaMensual: number;
+  costoMensualTotal: number;
+  tarifaHora: number;
+  updatedAt: string;
 };
 
 export type CentroCostoComponenteCosto = {
@@ -153,6 +183,7 @@ export type CentroCostoConfiguracionDetalle = {
   periodo: string;
   centro: CentroCosto;
   recursos: CentroCostoRecurso[];
+  recursosMaquinaria: CentroCostoRecursoMaquinariaPeriodo[];
   componentesCosto: CentroCostoComponenteCosto[];
   capacidad: CentroCostoCapacidad | null;
   tarifaBorrador: CentroCostoTarifaPeriodo | null;
@@ -209,10 +240,28 @@ export type CentroCostoRecursoPayload = {
   tipoRecurso: TipoRecursoCentroCosto;
   empleadoId?: string;
   proveedorId?: string;
+  maquinaId?: string;
   nombreManual?: string;
   descripcion?: string;
   porcentajeAsignacion?: number;
   activo: boolean;
+};
+
+export type CentroCostoRecursoMaquinariaPayload = {
+  centroCostoRecursoId: string;
+  metodoDepreciacion: MetodoDepreciacionMaquina;
+  valorCompra: number;
+  valorResidual: number;
+  vidaUtilMeses: number;
+  potenciaNominalKw: number;
+  factorCargaPct: number;
+  tarifaEnergiaKwh: number;
+  horasProgramadasMes: number;
+  disponibilidadPct: number;
+  eficienciaPct: number;
+  mantenimientoMensual: number;
+  segurosMensual: number;
+  otrosFijosMensual: number;
 };
 
 export type CentroCostoComponenteCostoPayload = {

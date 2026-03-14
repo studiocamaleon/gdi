@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UpsertMateriaPrimaDto = exports.MateriaPrimaCompatibilidadItemDto = exports.MateriaPrimaVarianteItemDto = exports.ModoUsoCompatibilidadMateriaPrimaDto = exports.PlantillaMaquinariaDto = exports.UnidadMateriaPrimaDto = exports.SubfamiliaMateriaPrimaDto = exports.FamiliaMateriaPrimaDto = void 0;
+exports.UpsertMateriaPrimaDto = exports.MateriaPrimaVarianteItemDto = exports.UnidadMateriaPrimaDto = exports.SubfamiliaMateriaPrimaDto = exports.FamiliaMateriaPrimaDto = void 0;
 const class_transformer_1 = require("class-transformer");
 const class_validator_1 = require("class-validator");
 var FamiliaMateriaPrimaDto;
@@ -97,36 +97,6 @@ var UnidadMateriaPrimaDto;
     UnidadMateriaPrimaDto["pieza"] = "pieza";
     UnidadMateriaPrimaDto["par"] = "par";
 })(UnidadMateriaPrimaDto || (exports.UnidadMateriaPrimaDto = UnidadMateriaPrimaDto = {}));
-var PlantillaMaquinariaDto;
-(function (PlantillaMaquinariaDto) {
-    PlantillaMaquinariaDto["router_cnc"] = "router_cnc";
-    PlantillaMaquinariaDto["corte_laser"] = "corte_laser";
-    PlantillaMaquinariaDto["impresora_3d"] = "impresora_3d";
-    PlantillaMaquinariaDto["impresora_dtf"] = "impresora_dtf";
-    PlantillaMaquinariaDto["impresora_dtf_uv"] = "impresora_dtf_uv";
-    PlantillaMaquinariaDto["impresora_uv_mesa_extensora"] = "impresora_uv_mesa_extensora";
-    PlantillaMaquinariaDto["impresora_uv_cilindrica"] = "impresora_uv_cilindrica";
-    PlantillaMaquinariaDto["impresora_uv_flatbed"] = "impresora_uv_flatbed";
-    PlantillaMaquinariaDto["impresora_uv_rollo"] = "impresora_uv_rollo";
-    PlantillaMaquinariaDto["impresora_solvente"] = "impresora_solvente";
-    PlantillaMaquinariaDto["impresora_inyeccion_tinta"] = "impresora_inyeccion_tinta";
-    PlantillaMaquinariaDto["impresora_latex"] = "impresora_latex";
-    PlantillaMaquinariaDto["impresora_sublimacion_gran_formato"] = "impresora_sublimacion_gran_formato";
-    PlantillaMaquinariaDto["impresora_laser"] = "impresora_laser";
-    PlantillaMaquinariaDto["plotter_cad"] = "plotter_cad";
-    PlantillaMaquinariaDto["mesa_de_corte"] = "mesa_de_corte";
-    PlantillaMaquinariaDto["plotter_de_corte"] = "plotter_de_corte";
-})(PlantillaMaquinariaDto || (exports.PlantillaMaquinariaDto = PlantillaMaquinariaDto = {}));
-var ModoUsoCompatibilidadMateriaPrimaDto;
-(function (ModoUsoCompatibilidadMateriaPrimaDto) {
-    ModoUsoCompatibilidadMateriaPrimaDto["sustrato_directo"] = "sustrato_directo";
-    ModoUsoCompatibilidadMateriaPrimaDto["tinta"] = "tinta";
-    ModoUsoCompatibilidadMateriaPrimaDto["transferencia"] = "transferencia";
-    ModoUsoCompatibilidadMateriaPrimaDto["laminacion"] = "laminacion";
-    ModoUsoCompatibilidadMateriaPrimaDto["auxiliar"] = "auxiliar";
-    ModoUsoCompatibilidadMateriaPrimaDto["montaje"] = "montaje";
-    ModoUsoCompatibilidadMateriaPrimaDto["embalaje"] = "embalaje";
-})(ModoUsoCompatibilidadMateriaPrimaDto || (exports.ModoUsoCompatibilidadMateriaPrimaDto = ModoUsoCompatibilidadMateriaPrimaDto = {}));
 class MateriaPrimaVarianteItemDto {
     sku;
     nombreVariante;
@@ -184,71 +154,6 @@ __decorate([
     (0, class_validator_1.IsUUID)(),
     __metadata("design:type", String)
 ], MateriaPrimaVarianteItemDto.prototype, "proveedorReferenciaId", void 0);
-class MateriaPrimaCompatibilidadItemDto {
-    varianteId;
-    varianteSku;
-    plantillaMaquinaria;
-    maquinaId;
-    perfilOperativoId;
-    modoUso;
-    consumoBase;
-    unidadConsumo;
-    mermaBasePct;
-    activo;
-}
-exports.MateriaPrimaCompatibilidadItemDto = MateriaPrimaCompatibilidadItemDto;
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsUUID)(),
-    __metadata("design:type", String)
-], MateriaPrimaCompatibilidadItemDto.prototype, "varianteId", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], MateriaPrimaCompatibilidadItemDto.prototype, "varianteSku", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsEnum)(PlantillaMaquinariaDto),
-    __metadata("design:type", String)
-], MateriaPrimaCompatibilidadItemDto.prototype, "plantillaMaquinaria", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsUUID)(),
-    __metadata("design:type", String)
-], MateriaPrimaCompatibilidadItemDto.prototype, "maquinaId", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsUUID)(),
-    __metadata("design:type", String)
-], MateriaPrimaCompatibilidadItemDto.prototype, "perfilOperativoId", void 0);
-__decorate([
-    (0, class_validator_1.IsEnum)(ModoUsoCompatibilidadMateriaPrimaDto),
-    __metadata("design:type", String)
-], MateriaPrimaCompatibilidadItemDto.prototype, "modoUso", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_transformer_1.Type)(() => Number),
-    (0, class_validator_1.IsNumber)(),
-    (0, class_validator_1.Min)(0),
-    __metadata("design:type", Number)
-], MateriaPrimaCompatibilidadItemDto.prototype, "consumoBase", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsEnum)(UnidadMateriaPrimaDto),
-    __metadata("design:type", String)
-], MateriaPrimaCompatibilidadItemDto.prototype, "unidadConsumo", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_transformer_1.Type)(() => Number),
-    (0, class_validator_1.IsNumber)(),
-    (0, class_validator_1.Min)(0),
-    __metadata("design:type", Number)
-], MateriaPrimaCompatibilidadItemDto.prototype, "mermaBasePct", void 0);
-__decorate([
-    (0, class_validator_1.IsBoolean)(),
-    __metadata("design:type", Boolean)
-], MateriaPrimaCompatibilidadItemDto.prototype, "activo", void 0);
 class UpsertMateriaPrimaDto {
     codigo;
     nombre;
@@ -264,7 +169,6 @@ class UpsertMateriaPrimaDto {
     activo;
     atributosTecnicos;
     variantes;
-    compatibilidades;
 }
 exports.UpsertMateriaPrimaDto = UpsertMateriaPrimaDto;
 __decorate([
@@ -330,10 +234,4 @@ __decorate([
     (0, class_transformer_1.Type)(() => MateriaPrimaVarianteItemDto),
     __metadata("design:type", Array)
 ], UpsertMateriaPrimaDto.prototype, "variantes", void 0);
-__decorate([
-    (0, class_validator_1.IsArray)(),
-    (0, class_validator_1.ValidateNested)({ each: true }),
-    (0, class_transformer_1.Type)(() => MateriaPrimaCompatibilidadItemDto),
-    __metadata("design:type", Array)
-], UpsertMateriaPrimaDto.prototype, "compatibilidades", void 0);
 //# sourceMappingURL=upsert-materia-prima.dto.js.map

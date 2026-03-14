@@ -555,15 +555,34 @@ function getSetupFromPerfil(
     return undefined;
   }
 
-  if (perfil.tiempoPreparacionMin !== null && perfil.tiempoPreparacionMin !== undefined) {
-    return perfil.tiempoPreparacionMin;
+  const parseFiniteNumber = (value: unknown) => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === "string" && value.trim().length > 0) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    }
+
+    return undefined;
+  };
+
+  const detalle = perfil.detalle ?? {};
+  const setupFromPreparacion =
+    parseFiniteNumber(perfil.setupEstimadoMin) ??
+    parseFiniteNumber(perfil.tiempoPreparacionMin) ??
+    parseFiniteNumber(detalle.tiempoPreparacionMin) ??
+    parseFiniteNumber(detalle.tiempoSetupMin) ??
+    parseFiniteNumber(detalle.setupMin) ??
+    parseFiniteNumber(detalle.setup);
+  if (setupFromPreparacion !== undefined) {
+    return setupFromPreparacion;
   }
 
   const setupParts = [
-    perfil.tiempoRipMin,
-    perfil.tiempoCargaMin,
-    perfil.tiempoDescargaMin,
-  ].filter((value): value is number => value !== null && value !== undefined);
+    parseFiniteNumber(perfil.tiempoRipMin) ?? parseFiniteNumber(detalle.tiempoRipMin),
+  ].filter((value): value is number => value !== undefined);
 
   if (!setupParts.length) {
     return undefined;
@@ -608,6 +627,7 @@ export function ProcesosPanel({
   );
   const [bibliotecaSearchTerm, setBibliotecaSearchTerm] = React.useState("");
   const [showInactiveBiblioteca, setShowInactiveBiblioteca] = React.useState(false);
+  const [showInactiveRutas, setShowInactiveRutas] = React.useState(false);
   const [bibliotecaSheetOpen, setBibliotecaSheetOpen] = React.useState(false);
   const [editingBibliotecaId, setEditingBibliotecaId] = React.useState<string | null>(
     null,
@@ -640,8 +660,11 @@ export function ProcesosPanel({
 
   const procesosFiltrados = React.useMemo(() => {
     const normalizedTerm = searchTerm.trim().toLowerCase();
+    const visibles = showInactiveRutas
+      ? procesos
+      : procesos.filter((proceso) => proceso.activo);
 
-    return procesos.filter((proceso) => {
+    return visibles.filter((proceso) => {
       if (!normalizedTerm) {
         return true;
       }
@@ -656,7 +679,7 @@ export function ProcesosPanel({
         tipoProcesoLabel.toLowerCase().includes(normalizedTerm)
       );
     });
-  }, [procesos, searchTerm]);
+  }, [procesos, searchTerm, showInactiveRutas]);
 
   const resumen = React.useMemo(() => {
     const activos = procesos.filter((item) => item.activo).length;
@@ -743,6 +766,10 @@ export function ProcesosPanel({
     return bibliotecaOperaciones.filter((item) => {
       if (!item.activo) {
         return false;
+      }
+
+      if (form.tipoProceso === "mixto") {
+        return true;
       }
 
       return item.tipoProceso === form.tipoProceso;
@@ -843,14 +870,19 @@ export function ProcesosPanel({
       (bibliotecaForm.unidadTiempo === "minuto" && shouldSetUnitSalida);
 
     setBibliotecaForm((prev) => {
+      const setupFromPerfil = getSetupFromPerfil(bibliotecaPerfilSeleccionado);
       const next = {
         ...prev,
         centroCostoId:
           bibliotecaMaquinaSeleccionada.centroCostoPrincipalId ?? prev.centroCostoId,
-        setupMin: prev.setupMin ?? getSetupFromPerfil(bibliotecaPerfilSeleccionado),
+        setupMin:
+          prev.perfilOperativoId && bibliotecaPerfilSeleccionado
+            ? setupFromPerfil
+            : prev.setupMin,
         productividadBase:
-          prev.productividadBase ??
-          (bibliotecaPerfilSeleccionado?.productividad ?? undefined),
+          prev.perfilOperativoId && bibliotecaPerfilSeleccionado
+            ? (bibliotecaPerfilSeleccionado.productividad ?? prev.productividadBase)
+            : prev.productividadBase,
         modoProductividad:
           prev.perfilOperativoId ? "fija" : prev.modoProductividad,
         unidadSalida:
@@ -1711,182 +1743,204 @@ export function ProcesosPanel({
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <div>
-            <CardTitle className="text-base">Biblioteca de pasos</CardTitle>
-            <FieldDescription>
-              Crea plantillas reutilizables para armar rutas mas rapido y con criterios
-              estandar.
-            </FieldDescription>
-          </div>
-          <Button variant="brand" size="sm" onClick={openCreateBibliotecaSheet}>
-            <PlusIcon />
-            Nueva plantilla
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <Input
-              value={bibliotecaSearchTerm}
-              onChange={(event) => setBibliotecaSearchTerm(event.target.value)}
-              placeholder="Buscar por nombre, tipo, ruta, maquina o perfil"
-              className="max-w-sm"
-            />
-            <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-              <Switch
-                checked={showInactiveBiblioteca}
-                onCheckedChange={setShowInactiveBiblioteca}
-              />
-              Mostrar inactivas
-            </label>
-          </div>
+      <Tabs defaultValue="rutas" className="gap-3">
+        <TabsList
+          variant="line"
+          className="w-fit max-w-full justify-start overflow-x-auto px-0"
+        >
+          <TabsTrigger value="rutas">Listado de rutas</TabsTrigger>
+          <TabsTrigger value="biblioteca">Biblioteca de pasos</TabsTrigger>
+        </TabsList>
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Tipo ruta</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Centro costo</TableHead>
-                <TableHead>Maquina/Perfil</TableHead>
-                <TableHead>Modo prod.</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="w-[260px] text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {bibliotecaFiltrada.length ? (
-                bibliotecaFiltrada.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">{item.nombre}</TableCell>
-                    <TableCell>{getTipoProcesoLabel(item.tipoProceso)}</TableCell>
-                    <TableCell>{getTipoOperacionLabel(item.tipoOperacion)}</TableCell>
-                    <TableCell>{item.centroCostoNombre || "Sin centro"}</TableCell>
-                    <TableCell>
-                      {item.maquinaId
-                        ? `${item.maquinaNombre}${item.perfilOperativoId ? ` / ${item.perfilOperativoNombre}` : ""}`
-                        : "Sin maquina"}
-                    </TableCell>
-                    <TableCell>
-                      {modoProductividadProcesoItems.find(
-                        (mode) => mode.value === item.modoProductividad,
-                      )?.label ?? item.modoProductividad}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={item.activo ? "default" : "outline"}>
-                        {item.activo ? "Activa" : "Inactiva"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="align-middle text-right">
-                      <div className="flex justify-end gap-2 whitespace-nowrap">
-                        <Button
-                          variant="sidebar"
-                          size="sm"
-                          className="min-w-[92px] justify-center"
-                          onClick={() => openEditBibliotecaSheet(item)}
-                        >
-                          <PencilIcon />
-                          Editar
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="min-w-[112px] justify-center"
-                          onClick={() => handleToggleBiblioteca(item.id)}
-                        >
-                          <ToggleLeftIcon />
-                          {item.activo ? "Desactivar" : "Activar"}
-                        </Button>
-                      </div>
-                    </TableCell>
+        <TabsContent value="rutas" className="m-0">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Listado de Rutas de Produccion</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <Input
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Buscar por codigo, nombre, tipo o plantilla"
+                  className="max-w-sm"
+                />
+                <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                  <Switch
+                    checked={showInactiveRutas}
+                    onCheckedChange={setShowInactiveRutas}
+                  />
+                  Mostrar inactivas
+                </label>
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Codigo</TableHead>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Plantilla</TableHead>
+                    <TableHead>Pasos</TableHead>
+                    <TableHead>Configuracion</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={8}
-                    className="text-center text-sm text-muted-foreground"
-                  >
-                    No hay plantillas que coincidan con la busqueda.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                </TableHeader>
+                <TableBody>
+                  {procesosFiltrados.map((proceso) => (
+                    <TableRow key={proceso.id}>
+                      <TableCell className="font-medium">{proceso.codigo}</TableCell>
+                      <TableCell>{proceso.nombre}</TableCell>
+                      <TableCell>{getTipoProcesoLabel(proceso.tipoProceso)}</TableCell>
+                      <TableCell>{getPlantillaProcesoLabel(proceso.plantillaMaquinaria)}</TableCell>
+                      <TableCell>{proceso.operaciones.length}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {getEstadoConfiguracionProcesoLabel(proceso.estadoConfiguracion)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={proceso.activo ? "default" : "outline"}>
+                          {proceso.activo ? "Activo" : "Inactivo"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="sidebar"
+                            size="sm"
+                            onClick={() => openEditSheet(proceso)}
+                          >
+                            <PencilIcon />
+                            Editar
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleToggle(proceso.id)}
+                          >
+                            <ToggleLeftIcon />
+                            {proceso.activo ? "Desactivar" : "Activar"}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Listado de Rutas de Produccion</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="max-w-sm">
-            <Input
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Buscar por codigo, nombre, tipo o plantilla"
-            />
-          </div>
+        <TabsContent value="biblioteca" className="m-0">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="text-base">Biblioteca de pasos</CardTitle>
+                <FieldDescription>
+                  Crea plantillas reutilizables para armar rutas mas rapido y con criterios
+                  estandar.
+                </FieldDescription>
+              </div>
+              <Button variant="brand" size="sm" onClick={openCreateBibliotecaSheet}>
+                <PlusIcon />
+                Nueva plantilla
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <Input
+                  value={bibliotecaSearchTerm}
+                  onChange={(event) => setBibliotecaSearchTerm(event.target.value)}
+                  placeholder="Buscar por nombre, tipo, ruta, maquina o perfil"
+                  className="max-w-sm"
+                />
+                <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                  <Switch
+                    checked={showInactiveBiblioteca}
+                    onCheckedChange={setShowInactiveBiblioteca}
+                  />
+                  Mostrar inactivas
+                </label>
+              </div>
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Codigo</TableHead>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Plantilla</TableHead>
-                <TableHead>Pasos</TableHead>
-                <TableHead>Configuracion</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {procesosFiltrados.map((proceso) => (
-                <TableRow key={proceso.id}>
-                  <TableCell className="font-medium">{proceso.codigo}</TableCell>
-                  <TableCell>{proceso.nombre}</TableCell>
-                  <TableCell>{getTipoProcesoLabel(proceso.tipoProceso)}</TableCell>
-                  <TableCell>{getPlantillaProcesoLabel(proceso.plantillaMaquinaria)}</TableCell>
-                  <TableCell>{proceso.operaciones.length}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">
-                      {getEstadoConfiguracionProcesoLabel(proceso.estadoConfiguracion)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={proceso.activo ? "default" : "outline"}>
-                      {proceso.activo ? "Activo" : "Inactivo"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="sidebar"
-                        size="sm"
-                        onClick={() => openEditSheet(proceso)}
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead>Tipo ruta</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Centro costo</TableHead>
+                    <TableHead>Maquina/Perfil</TableHead>
+                    <TableHead>Modo prod.</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead className="w-[260px] text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {bibliotecaFiltrada.length ? (
+                    bibliotecaFiltrada.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-medium">{item.nombre}</TableCell>
+                        <TableCell>{getTipoProcesoLabel(item.tipoProceso)}</TableCell>
+                        <TableCell>{getTipoOperacionLabel(item.tipoOperacion)}</TableCell>
+                        <TableCell>{item.centroCostoNombre || "Sin centro"}</TableCell>
+                        <TableCell>
+                          {item.maquinaId
+                            ? `${item.maquinaNombre}${item.perfilOperativoId ? ` / ${item.perfilOperativoNombre}` : ""}`
+                            : "Sin maquina"}
+                        </TableCell>
+                        <TableCell>
+                          {modoProductividadProcesoItems.find(
+                            (mode) => mode.value === item.modoProductividad,
+                          )?.label ?? item.modoProductividad}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={item.activo ? "default" : "outline"}>
+                            {item.activo ? "Activa" : "Inactiva"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="align-middle text-right">
+                          <div className="flex justify-end gap-2 whitespace-nowrap">
+                            <Button
+                              variant="sidebar"
+                              size="sm"
+                              className="min-w-[92px] justify-center"
+                              onClick={() => openEditBibliotecaSheet(item)}
+                            >
+                              <PencilIcon />
+                              Editar
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="min-w-[112px] justify-center"
+                              onClick={() => handleToggleBiblioteca(item.id)}
+                            >
+                              <ToggleLeftIcon />
+                              {item.activo ? "Desactivar" : "Activar"}
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={8}
+                        className="text-center text-sm text-muted-foreground"
                       >
-                        <PencilIcon />
-                        Editar
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleToggle(proceso.id)}
-                      >
-                        <ToggleLeftIcon />
-                        {proceso.activo ? "Desactivar" : "Activar"}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                        No hay plantillas que coincidan con la busqueda.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent className="flex w-screen max-w-none flex-col overflow-hidden data-[side=right]:w-[94vw] data-[side=right]:sm:max-w-[94vw] xl:data-[side=right]:w-[1120px] xl:data-[side=right]:sm:max-w-[1120px]">
@@ -2322,6 +2376,10 @@ export function ProcesosPanel({
                                       nextMachineId
                                         ? (nextMachine?.centroCostoPrincipalId ?? "")
                                         : prev.centroCostoId,
+                                    setupMin:
+                                      nextMachineId && nextMachineId !== prev.maquinaId
+                                        ? undefined
+                                        : prev.setupMin,
                                     unidadSalida:
                                       shouldSetUnitSalida && mappedUnit
                                         ? mappedUnit.unidadSalida
@@ -2408,12 +2466,24 @@ export function ProcesosPanel({
                             <FieldLabel>Perfil operativo</FieldLabel>
                             <Select
                               value={operacion.perfilOperativoId || EMPTY_SELECT_VALUE}
-                              onValueChange={(value) =>
+                              onValueChange={(value) => {
+                                const nextPerfilId =
+                                  !value || value === EMPTY_SELECT_VALUE
+                                    ? undefined
+                                    : value;
+                                const perfilSeleccionado = nextPerfilId
+                                  ? maquinaSeleccionada?.perfilesOperativos.find(
+                                      (item) => item.id === nextPerfilId,
+                                    ) ?? null
+                                  : null;
+                                const setupFromPerfil = getSetupFromPerfil(perfilSeleccionado);
+                                if (nextPerfilId && setupFromPerfil === undefined) {
+                                  toast.warning(
+                                    `El perfil ${perfilSeleccionado?.nombre ?? ""} no tiene setup configurado.`,
+                                  );
+                                }
+
                                 updateOperacion(operacion.id, (prev) => {
-                                  const nextPerfilId =
-                                    !value || value === EMPTY_SELECT_VALUE
-                                      ? undefined
-                                      : value;
                                   const perfil = getPerfilOperativo(prev.maquinaId, nextPerfilId);
                                   const mappedUnit = mapMachineUnitToProceso(
                                     perfil?.unidadProductividad ||
@@ -2431,10 +2501,10 @@ export function ProcesosPanel({
                                     perfilOperativoId: nextPerfilId,
                                     modoProductividad: nextPerfilId ? "fija" : prev.modoProductividad,
                                     productividadBase:
-                                      prev.productividadBase ??
-                                      (perfil?.productividad ?? undefined),
-                                    setupMin:
-                                      prev.setupMin ?? getSetupFromPerfil(perfil),
+                                      nextPerfilId
+                                        ? (perfil?.productividad ?? prev.productividadBase)
+                                        : prev.productividadBase,
+                                    setupMin: nextPerfilId ? setupFromPerfil : prev.setupMin,
                                     unidadSalida:
                                       shouldSetUnitSalida && mappedUnit
                                         ? mappedUnit.unidadSalida
@@ -2444,8 +2514,8 @@ export function ProcesosPanel({
                                         ? mappedUnit.unidadTiempo
                                         : prev.unidadTiempo,
                                   };
-                                })
-                              }
+                                });
+                              }}
                               disabled={form.tipoProceso === "manual" || !maquinaSeleccionada}
                             >
                               <SelectTrigger>
@@ -2564,7 +2634,12 @@ export function ProcesosPanel({
                               </p>
                               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                                 <Field>
-                                  <FieldLabel>Modo productividad</FieldLabel>
+                                  <FieldLabel className="inline-flex items-center gap-1">
+                                    Modo productividad
+                                    {renderTooltipIcon(
+                                      "Como se calcula la velocidad del paso: fija (valor unico), formula (segun variables) o tabla (por tramos/condiciones).",
+                                    )}
+                                  </FieldLabel>
                                   <Select
                                     value={operacion.modoProductividad || "fija"}
                                     onValueChange={(value) =>
@@ -2617,7 +2692,12 @@ export function ProcesosPanel({
                                 </Field>
 
                                 <Field>
-                                  <FieldLabel>Unidad entrada</FieldLabel>
+                                  <FieldLabel className="inline-flex items-center gap-1">
+                                    Unidad entrada
+                                    {renderTooltipIcon(
+                                      "Unidad del insumo que consume este paso (ej.: hoja, m2, pieza). Puede quedar en No aplica si no interviene en el calculo.",
+                                    )}
+                                  </FieldLabel>
                                   <Select
                                     value={operacion.unidadEntrada || "ninguna"}
                                     onValueChange={(value) =>
@@ -2648,7 +2728,12 @@ export function ProcesosPanel({
                                 </Field>
 
                                 <Field>
-                                  <FieldLabel>Unidad salida</FieldLabel>
+                                  <FieldLabel className="inline-flex items-center gap-1">
+                                    Unidad salida
+                                    {renderTooltipIcon(
+                                      "Unidad de producto resultante del paso (ej.: copia, m2, pieza).",
+                                    )}
+                                  </FieldLabel>
                                   <Select
                                     value={operacion.unidadSalida || "ninguna"}
                                     onValueChange={(value) =>
@@ -2679,7 +2764,12 @@ export function ProcesosPanel({
                                 </Field>
 
                                 <Field>
-                                  <FieldLabel>Unidad tiempo</FieldLabel>
+                                  <FieldLabel className="inline-flex items-center gap-1">
+                                    Unidad tiempo
+                                    {renderTooltipIcon(
+                                      "Base temporal de la productividad. Ejemplo: minuto u hora.",
+                                    )}
+                                  </FieldLabel>
                                   <Select
                                     value={operacion.unidadTiempo || "minuto"}
                                     onValueChange={(value) =>
@@ -3221,6 +3311,10 @@ export function ProcesosPanel({
                               nextMaquinaId && nextMaquina?.centroCostoPrincipalId
                                 ? nextMaquina.centroCostoPrincipalId
                                 : prev.centroCostoId,
+                            setupMin:
+                              nextMaquinaId && nextMaquinaId !== prev.maquinaId
+                                ? undefined
+                                : prev.setupMin,
                           }));
                         }}
                       >
@@ -3328,9 +3422,25 @@ export function ProcesosPanel({
                         onValueChange={(value) => {
                           const nextPerfilId =
                             value && value !== EMPTY_SELECT_VALUE ? value : "";
+                          const perfil = nextPerfilId
+                            ? bibliotecaMaquinaSeleccionada?.perfilesOperativos.find(
+                                (item) => item.id === nextPerfilId,
+                              ) ?? null
+                            : null;
+                          const setupFromPerfil = getSetupFromPerfil(perfil);
+                          if (nextPerfilId && setupFromPerfil === undefined) {
+                            toast.warning(
+                              `El perfil ${perfil?.nombre ?? ""} no tiene setup configurado.`,
+                            );
+                          }
                           setBibliotecaForm((prev) => ({
                             ...prev,
                             perfilOperativoId: nextPerfilId,
+                            setupMin: nextPerfilId ? setupFromPerfil : prev.setupMin,
+                            productividadBase: nextPerfilId
+                              ? (perfil?.productividad ?? prev.productividadBase)
+                              : prev.productividadBase,
+                            modoProductividad: nextPerfilId ? "fija" : prev.modoProductividad,
                           }));
                         }}
                         disabled={!bibliotecaMaquinaSeleccionada}
@@ -3357,7 +3467,12 @@ export function ProcesosPanel({
                   ) : null}
 
                   <Field>
-                    <FieldLabel>Setup (min)</FieldLabel>
+                    <FieldLabel className="inline-flex items-center gap-1">
+                      Setup (min)
+                      {renderTooltipIcon(
+                        "Tiempo de preparacion del paso. Si eliges perfil operativo, se autocompleta desde ese perfil de maquina.",
+                      )}
+                    </FieldLabel>
                     <Input
                       type="number"
                       min={0}
@@ -3389,7 +3504,12 @@ export function ProcesosPanel({
                   </Field>
 
                   <Field>
-                    <FieldLabel>Modo productividad</FieldLabel>
+                    <FieldLabel className="inline-flex items-center gap-1">
+                      Modo productividad
+                      {renderTooltipIcon(
+                        "Como se calcula la velocidad del paso: fija (valor unico), formula (segun variables) o tabla (por tramos/condiciones).",
+                      )}
+                    </FieldLabel>
                     <Select
                       value={bibliotecaForm.modoProductividad}
                       onValueChange={(value) =>
@@ -3399,6 +3519,7 @@ export function ProcesosPanel({
                             value as ProcesoOperacionPayload["modoProductividad"],
                         }))
                       }
+                      disabled={Boolean(bibliotecaForm.perfilOperativoId)}
                     >
                       <SelectTrigger>
                         <SelectValue>
@@ -3434,7 +3555,12 @@ export function ProcesosPanel({
                   </Field>
 
                   <Field>
-                    <FieldLabel>Unidad tiempo</FieldLabel>
+                    <FieldLabel className="inline-flex items-center gap-1">
+                      Unidad tiempo
+                      {renderTooltipIcon(
+                        "Base temporal de la productividad. Ejemplo: minuto u hora.",
+                      )}
+                    </FieldLabel>
                     <Select
                       value={bibliotecaForm.unidadTiempo}
                       onValueChange={(value) =>
@@ -3460,7 +3586,12 @@ export function ProcesosPanel({
                   </Field>
 
                   <Field>
-                    <FieldLabel>Unidad entrada</FieldLabel>
+                    <FieldLabel className="inline-flex items-center gap-1">
+                      Unidad entrada
+                      {renderTooltipIcon(
+                        "Unidad del insumo que consume este paso (ej.: hoja, m2, pieza). Puede quedar en No aplica si no interviene en el calculo.",
+                      )}
+                    </FieldLabel>
                     <Select
                       value={bibliotecaForm.unidadEntrada}
                       onValueChange={(value) =>
@@ -3486,7 +3617,12 @@ export function ProcesosPanel({
                   </Field>
 
                   <Field>
-                    <FieldLabel>Unidad salida</FieldLabel>
+                    <FieldLabel className="inline-flex items-center gap-1">
+                      Unidad salida
+                      {renderTooltipIcon(
+                        "Unidad de producto resultante del paso (ej.: copia, m2, pieza).",
+                      )}
+                    </FieldLabel>
                     <Select
                       value={bibliotecaForm.unidadSalida}
                       onValueChange={(value) =>
@@ -3512,7 +3648,12 @@ export function ProcesosPanel({
                   </Field>
 
                   <Field>
-                    <FieldLabel>Merma (%)</FieldLabel>
+                    <FieldLabel className="inline-flex items-center gap-1">
+                      Merma (%)
+                      {renderTooltipIcon(
+                        "Porcentaje esperado de desperdicio del paso sobre la corrida.",
+                      )}
+                    </FieldLabel>
                     <Input
                       type="number"
                       min={0}

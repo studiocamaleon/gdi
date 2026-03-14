@@ -363,7 +363,7 @@ export class MaquinariaService {
 
   async update(auth: CurrentAuth, id: string, payload: UpsertMaquinaDto) {
     await this.findMaquinaOrThrow(auth, id);
-    await this.validateReferences(auth, payload, id);
+    await this.validateReferences(auth, payload);
     if (!payload.codigo?.trim()) {
       throw new BadRequestException(
         'El codigo de la maquina es obligatorio para actualizar.',
@@ -574,7 +574,6 @@ export class MaquinariaService {
       anchoAplicable: this.toDecimal(payload.anchoAplicable),
       altoAplicable: this.toDecimal(payload.altoAplicable),
       modoTrabajo: payload.modoTrabajo?.trim() || null,
-      calidad: payload.calidad?.trim() || null,
       productividad: this.toDecimal(payload.productividad),
       unidadProductividad: payload.unidadProductividad
         ? this.toPrismaEnum<UnidadProduccionMaquina>(
@@ -582,8 +581,6 @@ export class MaquinariaService {
           )
         : null,
       tiempoPreparacionMin: this.toDecimal(payload.tiempoPreparacionMin),
-      tiempoCargaMin: this.toDecimal(payload.tiempoCargaMin),
-      tiempoDescargaMin: this.toDecimal(payload.tiempoDescargaMin),
       tiempoRipMin: this.toDecimal(payload.tiempoRipMin),
       cantidadPasadas:
         payload.cantidadPasadas !== undefined
@@ -708,7 +705,6 @@ export class MaquinariaService {
   private async validateReferences(
     auth: CurrentAuth,
     payload: UpsertMaquinaDto,
-    maquinaId?: string,
   ) {
     const templateRule = TEMPLATE_CATALOG_RULES[payload.plantilla];
     if (!templateRule) {
@@ -834,13 +830,6 @@ export class MaquinariaService {
             activo: true,
             esConsumible: true,
             esRepuesto: true,
-            compatibilidades: {
-              select: {
-                varianteId: true,
-                maquinaId: true,
-                activo: true,
-              },
-            },
           },
         },
       },
@@ -848,12 +837,6 @@ export class MaquinariaService {
     const varianteById = new Map(
       variantesMateriaPrima.map((variante) => [variante.id, variante]),
     );
-
-    if (!maquinaId && (payload.consumibles.length > 0 || payload.componentesDesgaste.length > 0)) {
-      throw new BadRequestException(
-        'Guarda la maquina primero para asignar consumibles o repuestos compatibles.',
-      );
-    }
 
     for (const consumible of payload.consumibles) {
       const consumibleName = consumible.nombre.trim() || 'sin nombre';
@@ -873,18 +856,6 @@ export class MaquinariaService {
           `La materia prima ${variante.materiaPrima.nombre} no esta habilitada como consumible.`,
         );
       }
-      if (
-        !this.isMateriaPrimaCompatibleWithMachine(
-          variante.materiaPrima.compatibilidades,
-          variante.id,
-          maquinaId ?? null,
-        )
-      ) {
-        throw new BadRequestException(
-          `La materia prima ${variante.materiaPrima.nombre} no es compatible con esta maquina.`,
-        );
-      }
-
       for (const detailKey of Object.keys(consumible.detalle ?? {})) {
         if (!ALLOWED_CONSUMABLE_DETAIL_KEYS.has(detailKey)) {
           throw new BadRequestException(
@@ -912,18 +883,6 @@ export class MaquinariaService {
           `La materia prima ${variante.materiaPrima.nombre} no esta habilitada como repuesto.`,
         );
       }
-      if (
-        !this.isMateriaPrimaCompatibleWithMachine(
-          variante.materiaPrima.compatibilidades,
-          variante.id,
-          maquinaId ?? null,
-        )
-      ) {
-        throw new BadRequestException(
-          `La materia prima ${variante.materiaPrima.nombre} no es compatible con esta maquina.`,
-        );
-      }
-
       for (const detailKey of Object.keys(componente.detalle ?? {})) {
         if (!ALLOWED_WEAR_DETAIL_KEYS.has(detailKey)) {
           throw new BadRequestException(
@@ -977,40 +936,6 @@ export class MaquinariaService {
         `El parametro tecnico ${key} contiene un formato invalido.`,
       );
     }
-  }
-
-  private isMateriaPrimaCompatibleWithMachine(
-    compatibilidades: Array<{
-      varianteId: string | null;
-      maquinaId: string | null;
-      activo: boolean;
-    }>,
-    varianteId: string,
-    maquinaId: string | null,
-  ) {
-    if (!maquinaId) {
-      return false;
-    }
-
-    const compatibilidadesActivas = compatibilidades.filter(
-      (compatibilidad) => compatibilidad.activo,
-    );
-    if (compatibilidadesActivas.length === 0) {
-      return false;
-    }
-
-    const compatibilidadesMaquina = compatibilidadesActivas.filter(
-      (compatibilidad) => compatibilidad.maquinaId === maquinaId,
-    );
-    if (compatibilidadesMaquina.length === 0) {
-      return false;
-    }
-
-    return compatibilidadesMaquina.some(
-      (compatibilidad) =>
-        compatibilidad.varianteId === null ||
-        compatibilidad.varianteId === varianteId,
-    );
   }
 
   private async findMaquinaOrThrow(auth: CurrentAuth, id: string) {
@@ -1115,7 +1040,6 @@ export class MaquinariaService {
         anchoAplicable: this.toNumber(perfil.anchoAplicable),
         altoAplicable: this.toNumber(perfil.altoAplicable),
         modoTrabajo: perfil.modoTrabajo ?? '',
-        calidad: perfil.calidad ?? '',
         productividad: this.toNumber(perfil.productividad),
         unidadProductividad: perfil.unidadProductividad
           ? (this.toApiEnum(
@@ -1123,9 +1047,8 @@ export class MaquinariaService {
             ) as UnidadProduccionMaquinaDto)
           : '',
         tiempoPreparacionMin: this.toNumber(perfil.tiempoPreparacionMin),
-        tiempoCargaMin: this.toNumber(perfil.tiempoCargaMin),
-        tiempoDescargaMin: this.toNumber(perfil.tiempoDescargaMin),
         tiempoRipMin: this.toNumber(perfil.tiempoRipMin),
+        setupEstimadoMin: this.computeSetupEstimadoPerfil(perfil),
         cantidadPasadas: perfil.cantidadPasadas ?? null,
         dobleFaz: perfil.dobleFaz,
         detalle: (perfil.detalleJson as Record<string, unknown> | null) ?? null,
@@ -1250,6 +1173,55 @@ export class MaquinariaService {
 
   private toNumber(value?: Prisma.Decimal | null) {
     return value === null || value === undefined ? null : Number(value);
+  }
+
+  private parseFiniteNumber(value: unknown) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === 'string' && value.trim().length > 0) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : null;
+    }
+
+    return null;
+  }
+
+  private computeSetupEstimadoPerfil(
+    perfil: {
+      tiempoPreparacionMin: Prisma.Decimal | null;
+      tiempoRipMin: Prisma.Decimal | null;
+      detalleJson: Prisma.JsonValue | null;
+    },
+  ) {
+    const detalle =
+      perfil.detalleJson &&
+      typeof perfil.detalleJson === 'object' &&
+      !Array.isArray(perfil.detalleJson)
+        ? (perfil.detalleJson as Record<string, unknown>)
+        : {};
+
+    const setupDirecto =
+      this.toNumber(perfil.tiempoPreparacionMin) ??
+      this.parseFiniteNumber(detalle.tiempoPreparacionMin) ??
+      this.parseFiniteNumber(detalle.tiempoSetupMin) ??
+      this.parseFiniteNumber(detalle.setupMin) ??
+      this.parseFiniteNumber(detalle.setup);
+    if (setupDirecto !== null) {
+      return setupDirecto;
+    }
+
+    const partes = [
+      this.toNumber(perfil.tiempoRipMin) ??
+        this.parseFiniteNumber(detalle.tiempoRipMin),
+    ].filter((value): value is number => value !== null);
+
+    if (!partes.length) {
+      return null;
+    }
+
+    return Number(partes.reduce((acc, item) => acc + item, 0).toFixed(4));
   }
 
   private toNullableJson(value?: Record<string, unknown>) {

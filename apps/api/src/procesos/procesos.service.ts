@@ -83,8 +83,6 @@ type PerfilRef = {
   productividad: Prisma.Decimal | null;
   unidadProductividad: UnidadProduccionMaquina | null;
   tiempoPreparacionMin: Prisma.Decimal | null;
-  tiempoCargaMin: Prisma.Decimal | null;
-  tiempoDescargaMin: Prisma.Decimal | null;
   tiempoRipMin: Prisma.Decimal | null;
 };
 
@@ -953,8 +951,6 @@ export class ProcesosService {
 
     const timeParts = [
       perfil.tiempoRipMin,
-      perfil.tiempoCargaMin,
-      perfil.tiempoDescargaMin,
     ].filter(
       (value): value is Prisma.Decimal => value !== null && value !== undefined,
     );
@@ -985,8 +981,6 @@ export class ProcesosService {
 
     const timeParts = [
       perfil.tiempoRipMin,
-      perfil.tiempoCargaMin,
-      perfil.tiempoDescargaMin,
     ].filter(
       (value): value is Prisma.Decimal => value !== null && value !== undefined,
     );
@@ -1332,8 +1326,6 @@ export class ProcesosService {
               productividad: true,
               unidadProductividad: true,
               tiempoPreparacionMin: true,
-              tiempoCargaMin: true,
-              tiempoDescargaMin: true,
               tiempoRipMin: true,
             },
           })

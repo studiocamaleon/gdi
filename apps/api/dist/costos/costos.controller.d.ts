@@ -7,6 +7,7 @@ import { UpsertCentroConfiguracionBaseDto } from './dto/upsert-centro-configurac
 import { ReplaceCentroRecursosDto } from './dto/replace-centro-recursos.dto';
 import { ReplaceCentroComponentesCostoDto } from './dto/replace-centro-componentes-costo.dto';
 import { UpsertCentroCapacidadDto } from './dto/upsert-centro-capacidad.dto';
+import { UpsertCentroRecursosMaquinariaDto } from './dto/upsert-centro-recursos-maquinaria.dto';
 export declare class CostosController {
     private readonly costosService;
     constructor(costosService: CostosService);
@@ -199,10 +200,38 @@ export declare class CostosController {
             empleadoNombre: string;
             proveedorId: string;
             proveedorNombre: string;
+            maquinaId: string;
+            maquinaNombre: string;
             nombreManual: string;
             descripcion: string;
             porcentajeAsignacion: number | null;
             activo: boolean;
+        }[];
+        recursosMaquinaria: {
+            id: string;
+            centroCostoRecursoId: string;
+            periodo: string;
+            maquinaId: string;
+            maquinaNombre: string;
+            metodoDepreciacion: string;
+            valorCompra: number;
+            valorResidual: number;
+            vidaUtilMeses: number;
+            potenciaNominalKw: number;
+            factorCargaPct: number;
+            tarifaEnergiaKwh: number;
+            horasProgramadasMes: number;
+            disponibilidadPct: number;
+            eficienciaPct: number;
+            horasProductivas: number;
+            mantenimientoMensual: number;
+            segurosMensual: number;
+            otrosFijosMensual: number;
+            amortizacionMensual: number;
+            energiaMensual: number;
+            costoMensualTotal: number;
+            tarifaHora: number;
+            updatedAt: string;
         }[];
         componentesCosto: {
             id: string;
@@ -293,6 +322,8 @@ export declare class CostosController {
         empleadoNombre: string;
         proveedorId: string;
         proveedorNombre: string;
+        maquinaId: string;
+        maquinaNombre: string;
         nombreManual: string;
         descripcion: string;
         porcentajeAsignacion: number | null;
@@ -319,6 +350,58 @@ export declare class CostosController {
         capacidadPractica: number;
         overrideManualCapacidad: number | null;
     }>;
+    getCentroRecursosMaquinaria(auth: CurrentAuth, id: string, periodo: string): Promise<{
+        id: string;
+        centroCostoRecursoId: string;
+        periodo: string;
+        maquinaId: string;
+        maquinaNombre: string;
+        metodoDepreciacion: string;
+        valorCompra: number;
+        valorResidual: number;
+        vidaUtilMeses: number;
+        potenciaNominalKw: number;
+        factorCargaPct: number;
+        tarifaEnergiaKwh: number;
+        horasProgramadasMes: number;
+        disponibilidadPct: number;
+        eficienciaPct: number;
+        horasProductivas: number;
+        mantenimientoMensual: number;
+        segurosMensual: number;
+        otrosFijosMensual: number;
+        amortizacionMensual: number;
+        energiaMensual: number;
+        costoMensualTotal: number;
+        tarifaHora: number;
+        updatedAt: string;
+    }[]>;
+    upsertCentroRecursosMaquinaria(auth: CurrentAuth, id: string, periodo: string, payload: UpsertCentroRecursosMaquinariaDto): Promise<{
+        id: string;
+        centroCostoRecursoId: string;
+        periodo: string;
+        maquinaId: string;
+        maquinaNombre: string;
+        metodoDepreciacion: string;
+        valorCompra: number;
+        valorResidual: number;
+        vidaUtilMeses: number;
+        potenciaNominalKw: number;
+        factorCargaPct: number;
+        tarifaEnergiaKwh: number;
+        horasProgramadasMes: number;
+        disponibilidadPct: number;
+        eficienciaPct: number;
+        horasProductivas: number;
+        mantenimientoMensual: number;
+        segurosMensual: number;
+        otrosFijosMensual: number;
+        amortizacionMensual: number;
+        energiaMensual: number;
+        costoMensualTotal: number;
+        tarifaHora: number;
+        updatedAt: string;
+    }[]>;
     calcularTarifaCentro(auth: CurrentAuth, id: string, periodo: string): Promise<{
         tarifaBorrador: {
             id: string;

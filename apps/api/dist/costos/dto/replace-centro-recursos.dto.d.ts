@@ -8,6 +8,7 @@ export declare class CentroCostoRecursoItemDto {
     tipoRecurso: TipoRecursoCentroCostoDto;
     empleadoId?: string;
     proveedorId?: string;
+    maquinaId?: string;
     nombreManual?: string;
     descripcion?: string;
     porcentajeAsignacion?: number;

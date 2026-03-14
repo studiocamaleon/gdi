@@ -80,15 +80,6 @@ export type UnidadMateriaPrima =
   | "pieza"
   | "par";
 
-export type ModoUsoCompatibilidadMateriaPrima =
-  | "sustrato_directo"
-  | "tinta"
-  | "transferencia"
-  | "laminacion"
-  | "auxiliar"
-  | "montaje"
-  | "embalaje";
-
 export type PlantillaMaquinaria =
   | "router_cnc"
   | "corte_laser"
@@ -122,21 +113,6 @@ export type MateriaPrimaVariante = {
   proveedorReferenciaNombre: string;
 };
 
-export type MateriaPrimaCompatibilidad = {
-  id: string;
-  varianteId: string | null;
-  plantillaMaquinaria: PlantillaMaquinaria | null;
-  maquinaId: string | null;
-  maquinaNombre: string;
-  perfilOperativoId: string | null;
-  perfilOperativoNombre: string;
-  modoUso: ModoUsoCompatibilidadMateriaPrima;
-  consumoBase: number | null;
-  unidadConsumo: UnidadMateriaPrima | null;
-  mermaBasePct: number | null;
-  activo: boolean;
-};
-
 export type MateriaPrima = {
   id: string;
   codigo: string;
@@ -153,7 +129,6 @@ export type MateriaPrima = {
   activo: boolean;
   atributosTecnicos: Record<string, unknown>;
   variantes: MateriaPrimaVariante[];
-  compatibilidades: MateriaPrimaCompatibilidad[];
   createdAt: string;
   updatedAt: string;
 };
@@ -182,18 +157,6 @@ export type MateriaPrimaPayload = {
     precioReferencia?: number;
     moneda?: string;
     proveedorReferenciaId?: string;
-  }>;
-  compatibilidades: Array<{
-    varianteId?: string;
-    varianteSku?: string;
-    plantillaMaquinaria?: PlantillaMaquinaria;
-    maquinaId?: string;
-    perfilOperativoId?: string;
-    modoUso: ModoUsoCompatibilidadMateriaPrima;
-    consumoBase?: number;
-    unidadConsumo?: UnidadMateriaPrima;
-    mermaBasePct?: number;
-    activo: boolean;
   }>;
 };
 

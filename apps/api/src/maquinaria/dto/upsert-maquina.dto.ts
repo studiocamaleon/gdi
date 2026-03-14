@@ -151,10 +151,6 @@ export class MaquinaPerfilOperativoItemDto {
   modoTrabajo?: string;
 
   @IsOptional()
-  @IsString()
-  calidad?: string;
-
-  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   productividad?: number;
@@ -167,16 +163,6 @@ export class MaquinaPerfilOperativoItemDto {
   @Type(() => Number)
   @IsNumber()
   tiempoPreparacionMin?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  tiempoCargaMin?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  tiempoDescargaMin?: number;
 
   @IsOptional()
   @Type(() => Number)

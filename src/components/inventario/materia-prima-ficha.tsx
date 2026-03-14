@@ -16,8 +16,6 @@ import { toast } from "sonner";
 import { updateMateriaPrima } from "@/lib/materias-primas-api";
 import { getKardex, getStockActual } from "@/lib/inventario-stock-api";
 import type { MovimientoStockMateriaPrima, StockMateriaPrimaItem } from "@/lib/inventario-stock";
-import { getMaquinas } from "@/lib/maquinaria-api";
-import type { Maquina } from "@/lib/maquinaria";
 import {
   familiaMateriaPrimaItems,
   unidadMateriaPrimaItems,
@@ -130,13 +128,6 @@ type LocalVariante = {
   proveedorReferenciaId?: string;
 };
 
-type LocalCompatibilidad = {
-  id: string;
-  varianteSku?: string;
-  maquinaId?: string;
-  activo: boolean;
-};
-
 type FormState = {
   codigo: string;
   nombre: string;
@@ -152,7 +143,6 @@ type FormState = {
   activo: boolean;
   atributosTecnicosTexto: string;
   variantes: LocalVariante[];
-  compatibilidades: LocalCompatibilidad[];
 };
 
 type MateriaPrimaFichaProps = {
@@ -258,15 +248,6 @@ function createEmptyVariante(): LocalVariante {
   };
 }
 
-function createEmptyCompatibilidad(): LocalCompatibilidad {
-  return {
-    id: crypto.randomUUID(),
-    varianteSku: undefined,
-    maquinaId: undefined,
-    activo: true,
-  };
-}
-
 function mapMateriaPrimaToForm(materiaPrima: MateriaPrima): FormState {
   return {
     codigo: materiaPrima.codigo,
@@ -299,17 +280,6 @@ function mapMateriaPrimaToForm(materiaPrima: MateriaPrima): FormState {
             proveedorReferenciaId: variante.proveedorReferenciaId ?? undefined,
           }))
         : [createEmptyVariante()],
-    compatibilidades:
-      materiaPrima.compatibilidades.length > 0
-        ? materiaPrima.compatibilidades.map((compatibilidad) => ({
-            id: compatibilidad.id,
-            varianteSku:
-              materiaPrima.variantes.find((variante) => variante.id === compatibilidad.varianteId)?.sku ??
-              undefined,
-            maquinaId: compatibilidad.maquinaId ?? undefined,
-            activo: compatibilidad.activo,
-          }))
-        : [],
   };
 }
 
@@ -317,7 +287,6 @@ function buildPayload(
   form: FormState,
   templateDimensiones: string[],
   templateFields: Array<{ key: string; type: "text" | "number" | "boolean" }>,
-  maquinas: Maquina[] = [],
 ): MateriaPrimaPayload {
   const numberFieldKeys = new Set(
     templateFields.filter((field) => field.type === "number").map((field) => field.key),
@@ -336,8 +305,6 @@ function buildPayload(
     }
     return normalized;
   };
-
-  const maquinaById = new Map(maquinas.map((maquina) => [maquina.id, maquina]));
 
   return {
     codigo: form.codigo,
@@ -377,21 +344,6 @@ function buildPayload(
         };
       })
       .filter((item): item is NonNullable<typeof item> => item !== null),
-    compatibilidades: form.compatibilidades
-      .filter(
-        (compatibilidad) =>
-          compatibilidad.varianteSku?.trim() && compatibilidad.maquinaId?.trim(),
-      )
-      .map((compatibilidad) => {
-        const maquina = maquinaById.get(compatibilidad.maquinaId ?? "");
-        return {
-          varianteSku: compatibilidad.varianteSku,
-          maquinaId: compatibilidad.maquinaId,
-          plantillaMaquinaria: maquina?.plantilla,
-          modoUso: "auxiliar",
-          activo: compatibilidad.activo,
-        };
-      }),
   };
 }
 
@@ -437,7 +389,6 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
   const [savedSnapshot, setSavedSnapshot] = React.useState(() =>
     createFormSnapshot(mapMateriaPrimaToForm(materiaPrima)),
   );
-  const [maquinas, setMaquinas] = React.useState<Maquina[]>([]);
   const [activeTab, setActiveTab] = React.useState("datos-base");
   const [isSaving, setIsSaving] = React.useState(false);
   const [inventarioResumen, setInventarioResumen] = React.useState<InventarioVarianteResumen[]>([]);
@@ -458,7 +409,6 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
     () => new Map(proveedores.map((proveedor) => [proveedor.id, proveedor.nombre])),
     [proveedores],
   );
-  const showCompatibilidadesTab = form.esConsumible || form.esRepuesto;
 
   const varianteColumns = React.useMemo(() => {
     if (template?.dimensionesVariante?.length) {
@@ -479,39 +429,6 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
     setSavedSnapshot(createFormSnapshot(nextForm));
     setCustomFormatoModeByVariante({});
   }, [materiaPrima]);
-
-  React.useEffect(() => {
-    if (!showCompatibilidadesTab && activeTab === "compatibilidades") {
-      setActiveTab("datos-base");
-    }
-  }, [activeTab, showCompatibilidadesTab]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-
-    const loadMaquinas = async () => {
-      try {
-        const data = await getMaquinas();
-        if (!cancelled) {
-          setMaquinas(data);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          toast.error(
-            error instanceof Error ? error.message : "No se pudo cargar el catálogo de máquinas.",
-          );
-        }
-      }
-    };
-
-    if (showCompatibilidadesTab) {
-      void loadMaquinas();
-    }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [showCompatibilidadesTab]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -588,15 +505,6 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
     }));
   };
 
-  const setCompatibilidad = (id: string, patch: Partial<LocalCompatibilidad>) => {
-    setForm((prev) => ({
-      ...prev,
-      compatibilidades: prev.compatibilidades.map((item) =>
-        item.id === id ? { ...item, ...patch } : item,
-      ),
-    }));
-  };
-
   const getVarianteAtributos = (variante: LocalVariante) =>
     parseJsonField(variante.atributosVarianteTexto, {});
 
@@ -623,32 +531,6 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
     () => form.variantes.filter((variante) => hasVarianteDimensionValue(variante)),
     [form.variantes, hasVarianteDimensionValue],
   );
-  const varianteLabelBySku = React.useMemo(() => {
-    const map = new Map<string, string>();
-    const templateDimensiones = template?.dimensionesVariante ?? [];
-    form.variantes.forEach((variante) => {
-      const attrs = getVarianteAtributos(variante);
-      const values = templateDimensiones
-        .map((key) => attrs[key])
-        .filter((value) => value !== undefined && value !== null && String(value).trim().length > 0)
-        .slice(0, 5)
-        .map((value) => String(value));
-      const label = values.length > 0 ? `${form.nombre} - ${values.join(" - ")}` : variante.sku;
-      map.set(variante.sku, label);
-    });
-    return map;
-  }, [form.nombre, form.variantes, template]);
-  const maquinaLabelById = React.useMemo(
-    () =>
-      new Map(
-        maquinas.map((maquina) => [
-          maquina.id,
-          `${maquina.nombre} (${maquina.codigo})`,
-        ]),
-      ),
-    [maquinas],
-  );
-
   const setVarianteAtributo = (varianteId: string, key: string, value: string) => {
     const variante = form.variantes.find((item) => item.id === varianteId);
     if (!variante) return;
@@ -709,26 +591,6 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
         prev.variantes.length === 1
           ? prev.variantes
           : prev.variantes.filter((variante) => variante.id !== id),
-      compatibilidades: prev.compatibilidades.map((compatibilidad) => {
-        if (compatibilidad.varianteSku) {
-          const removed = prev.variantes.find((variante) => variante.id === id);
-          if (removed?.sku === compatibilidad.varianteSku) {
-            return { ...compatibilidad, varianteSku: undefined };
-          }
-        }
-        return compatibilidad;
-      }),
-    }));
-  };
-
-  const addCompatibilidad = () => {
-    setForm((prev) => ({ ...prev, compatibilidades: [...prev.compatibilidades, createEmptyCompatibilidad()] }));
-  };
-
-  const removeCompatibilidad = (id: string) => {
-    setForm((prev) => ({
-      ...prev,
-      compatibilidades: prev.compatibilidades.filter((item) => item.id !== id),
     }));
   };
 
@@ -747,7 +609,6 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
         form,
         template?.dimensionesVariante ?? [],
         template?.camposTecnicos ?? [],
-        maquinas,
       );
       const updated = await updateMateriaPrima(materiaPrima.id, payload);
       const updatedForm = mapMateriaPrimaToForm(updated);
@@ -818,14 +679,6 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
                 >
                   Precios
                 </TabsTrigger>
-                {showCompatibilidadesTab ? (
-                  <TabsTrigger
-                    className="shrink-0 cursor-pointer rounded-none px-4 py-3 text-sm font-medium transition-colors hover:text-foreground data-active:text-foreground after:!bottom-[1px] after:!h-1 after:!bg-primary after:opacity-0 hover:after:!opacity-70 data-active:after:!opacity-100"
-                    value="compatibilidades"
-                  >
-                    Compatibilidades
-                  </TabsTrigger>
-                ) : null}
                 <TabsTrigger
                   className="shrink-0 cursor-pointer rounded-none px-4 py-3 text-sm font-medium transition-colors hover:text-foreground data-active:text-foreground after:!bottom-[1px] after:!h-1 after:!bg-primary after:opacity-0 hover:after:!opacity-70 data-active:after:!opacity-100"
                   value="inventario"
@@ -1173,110 +1026,6 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores }: MateriaPrimaFic
                 </div>
               </div>
             </TabsContent>
-
-            {showCompatibilidadesTab ? (
-              <TabsContent value="compatibilidades" className="m-0 p-4 md:p-6">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-semibold">Compatibilidad con maquinaria</h4>
-                    <Button type="button" variant="sidebar" size="sm" onClick={addCompatibilidad}>
-                      <CirclePlusIcon className="size-4" />
-                      Agregar compatibilidad
-                    </Button>
-                  </div>
-
-                  <p className="text-sm text-muted-foreground">
-                    Define únicamente qué variante puede usarse en qué máquina.
-                  </p>
-
-                  {form.compatibilidades.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      Sin compatibilidades cargadas. Agrega una relación variante-máquina para habilitarla en Maquinaria.
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      {form.compatibilidades.map((compatibilidad) => (
-                        <div key={compatibilidad.id} className="rounded-md border p-3">
-                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
-                          <Field>
-                            <FieldLabel>Variante</FieldLabel>
-                            <Select
-                              value={compatibilidad.varianteSku ?? "__none__"}
-                              onValueChange={(value) => {
-                                const nextValue = value ?? "__none__";
-                                setCompatibilidad(compatibilidad.id, {
-                                  varianteSku: nextValue === "__none__" ? undefined : nextValue,
-                                });
-                              }}
-                            >
-                              <SelectTrigger>
-                                <SelectValue>
-                                  {compatibilidad.varianteSku
-                                    ? varianteLabelBySku.get(compatibilidad.varianteSku) ?? "Variante"
-                                    : "Seleccionar variante"}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="__none__">Seleccionar variante</SelectItem>
-                                {form.variantes
-                                  .filter((variante) => variante.sku.trim().length > 0)
-                                  .map((variante) => (
-                                    <SelectItem key={variante.id} value={variante.sku}>
-                                      {varianteLabelBySku.get(variante.sku) ?? "Variante"}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                          </Field>
-
-                          <Field>
-                            <FieldLabel>Máquina</FieldLabel>
-                            <Select
-                              value={compatibilidad.maquinaId ?? "__none__"}
-                              onValueChange={(value) =>
-                                setCompatibilidad(compatibilidad.id, {
-                                  maquinaId:
-                                    value && value !== "__none__" ? String(value) : undefined,
-                                })
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue>
-                                  {compatibilidad.maquinaId
-                                    ? maquinaLabelById.get(compatibilidad.maquinaId) ?? "Máquina"
-                                    : "Seleccionar máquina"}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="__none__">Seleccionar máquina</SelectItem>
-                                {maquinas
-                                  .filter((maquina) => maquina.activo)
-                                  .map((maquina) => (
-                                  <SelectItem key={maquina.id} value={maquina.id}>
-                                    {maquinaLabelById.get(maquina.id) ?? maquina.nombre}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </Field>
-
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="md:self-end"
-                            onClick={() => removeCompatibilidad(compatibilidad.id)}
-                          >
-                            <TrashIcon className="size-4" />
-                            Quitar
-                          </Button>
-                        </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-            ) : null}
 
             <TabsContent value="precios" className="m-0 p-4 md:p-6">
               <div className="space-y-3">

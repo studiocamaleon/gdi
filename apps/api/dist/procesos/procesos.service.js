@@ -604,8 +604,6 @@ let ProcesosService = class ProcesosService {
         }
         const timeParts = [
             perfil.tiempoRipMin,
-            perfil.tiempoCargaMin,
-            perfil.tiempoDescargaMin,
         ].filter((value) => value !== null && value !== undefined);
         if (!timeParts.length) {
             return null;
@@ -622,8 +620,6 @@ let ProcesosService = class ProcesosService {
         }
         const timeParts = [
             perfil.tiempoRipMin,
-            perfil.tiempoCargaMin,
-            perfil.tiempoDescargaMin,
         ].filter((value) => value !== null && value !== undefined);
         if (!timeParts.length) {
             return null;
@@ -833,8 +829,6 @@ let ProcesosService = class ProcesosService {
                         productividad: true,
                         unidadProductividad: true,
                         tiempoPreparacionMin: true,
-                        tiempoCargaMin: true,
-                        tiempoDescargaMin: true,
                         tiempoRipMin: true,
                     },
                 })

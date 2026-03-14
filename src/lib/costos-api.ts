@@ -10,6 +10,8 @@ import {
   CentroCostoConfiguracionDetalle,
   CentroCostoPayload,
   CentroCostoRecurso,
+  CentroCostoRecursoMaquinariaPayload,
+  CentroCostoRecursoMaquinariaPeriodo,
   CentroCostoRecursoPayload,
   CentroCostoTarifaPeriodo,
   Planta,
@@ -142,6 +144,26 @@ export async function upsertCentroCostoCapacidad(
     {
       method: "PUT",
       body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function getCentroCostoRecursosMaquinaria(id: string, periodo: string) {
+  return apiRequest<CentroCostoRecursoMaquinariaPeriodo[]>(
+    `/costos/centros-costo/${id}/recursos-maquinaria?periodo=${encodeURIComponent(periodo)}`,
+  );
+}
+
+export async function upsertCentroCostoRecursosMaquinaria(
+  id: string,
+  periodo: string,
+  recursos: CentroCostoRecursoMaquinariaPayload[],
+) {
+  return apiRequest<CentroCostoRecursoMaquinariaPeriodo[]>(
+    `/costos/centros-costo/${id}/recursos-maquinaria?periodo=${encodeURIComponent(periodo)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ recursos }),
     },
   );
 }

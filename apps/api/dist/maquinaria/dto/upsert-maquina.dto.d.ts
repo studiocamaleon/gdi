@@ -107,12 +107,9 @@ export declare class MaquinaPerfilOperativoItemDto {
     anchoAplicable?: number;
     altoAplicable?: number;
     modoTrabajo?: string;
-    calidad?: string;
     productividad?: number;
     unidadProductividad?: UnidadProduccionMaquinaDto;
     tiempoPreparacionMin?: number;
-    tiempoCargaMin?: number;
-    tiempoDescargaMin?: number;
     tiempoRipMin?: number;
     cantidadPasadas?: number;
     dobleFaz?: boolean;

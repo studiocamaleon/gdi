@@ -98,36 +98,6 @@ export enum UnidadMateriaPrimaDto {
   par = 'par',
 }
 
-export enum PlantillaMaquinariaDto {
-  router_cnc = 'router_cnc',
-  corte_laser = 'corte_laser',
-  impresora_3d = 'impresora_3d',
-  impresora_dtf = 'impresora_dtf',
-  impresora_dtf_uv = 'impresora_dtf_uv',
-  impresora_uv_mesa_extensora = 'impresora_uv_mesa_extensora',
-  impresora_uv_cilindrica = 'impresora_uv_cilindrica',
-  impresora_uv_flatbed = 'impresora_uv_flatbed',
-  impresora_uv_rollo = 'impresora_uv_rollo',
-  impresora_solvente = 'impresora_solvente',
-  impresora_inyeccion_tinta = 'impresora_inyeccion_tinta',
-  impresora_latex = 'impresora_latex',
-  impresora_sublimacion_gran_formato = 'impresora_sublimacion_gran_formato',
-  impresora_laser = 'impresora_laser',
-  plotter_cad = 'plotter_cad',
-  mesa_de_corte = 'mesa_de_corte',
-  plotter_de_corte = 'plotter_de_corte',
-}
-
-export enum ModoUsoCompatibilidadMateriaPrimaDto {
-  sustrato_directo = 'sustrato_directo',
-  tinta = 'tinta',
-  transferencia = 'transferencia',
-  laminacion = 'laminacion',
-  auxiliar = 'auxiliar',
-  montaje = 'montaje',
-  embalaje = 'embalaje',
-}
-
 export class MateriaPrimaVarianteItemDto {
   @IsString()
   @MinLength(1)
@@ -164,50 +134,6 @@ export class MateriaPrimaVarianteItemDto {
   @IsOptional()
   @IsUUID()
   proveedorReferenciaId?: string;
-}
-
-export class MateriaPrimaCompatibilidadItemDto {
-  @IsOptional()
-  @IsUUID()
-  varianteId?: string;
-
-  @IsOptional()
-  @IsString()
-  varianteSku?: string;
-
-  @IsOptional()
-  @IsEnum(PlantillaMaquinariaDto)
-  plantillaMaquinaria?: PlantillaMaquinariaDto;
-
-  @IsOptional()
-  @IsUUID()
-  maquinaId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  perfilOperativoId?: string;
-
-  @IsEnum(ModoUsoCompatibilidadMateriaPrimaDto)
-  modoUso: ModoUsoCompatibilidadMateriaPrimaDto;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  consumoBase?: number;
-
-  @IsOptional()
-  @IsEnum(UnidadMateriaPrimaDto)
-  unidadConsumo?: UnidadMateriaPrimaDto;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  mermaBasePct?: number;
-
-  @IsBoolean()
-  activo: boolean;
 }
 
 export class UpsertMateriaPrimaDto {
@@ -259,9 +185,4 @@ export class UpsertMateriaPrimaDto {
   @ValidateNested({ each: true })
   @Type(() => MateriaPrimaVarianteItemDto)
   variantes: MateriaPrimaVarianteItemDto[];
-
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => MateriaPrimaCompatibilidadItemDto)
-  compatibilidades: MateriaPrimaCompatibilidadItemDto[];
 }

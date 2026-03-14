@@ -80,34 +80,6 @@ export declare enum UnidadMateriaPrimaDto {
     pieza = "pieza",
     par = "par"
 }
-export declare enum PlantillaMaquinariaDto {
-    router_cnc = "router_cnc",
-    corte_laser = "corte_laser",
-    impresora_3d = "impresora_3d",
-    impresora_dtf = "impresora_dtf",
-    impresora_dtf_uv = "impresora_dtf_uv",
-    impresora_uv_mesa_extensora = "impresora_uv_mesa_extensora",
-    impresora_uv_cilindrica = "impresora_uv_cilindrica",
-    impresora_uv_flatbed = "impresora_uv_flatbed",
-    impresora_uv_rollo = "impresora_uv_rollo",
-    impresora_solvente = "impresora_solvente",
-    impresora_inyeccion_tinta = "impresora_inyeccion_tinta",
-    impresora_latex = "impresora_latex",
-    impresora_sublimacion_gran_formato = "impresora_sublimacion_gran_formato",
-    impresora_laser = "impresora_laser",
-    plotter_cad = "plotter_cad",
-    mesa_de_corte = "mesa_de_corte",
-    plotter_de_corte = "plotter_de_corte"
-}
-export declare enum ModoUsoCompatibilidadMateriaPrimaDto {
-    sustrato_directo = "sustrato_directo",
-    tinta = "tinta",
-    transferencia = "transferencia",
-    laminacion = "laminacion",
-    auxiliar = "auxiliar",
-    montaje = "montaje",
-    embalaje = "embalaje"
-}
 export declare class MateriaPrimaVarianteItemDto {
     sku: string;
     nombreVariante?: string;
@@ -118,18 +90,6 @@ export declare class MateriaPrimaVarianteItemDto {
     precioReferencia?: number;
     moneda?: string;
     proveedorReferenciaId?: string;
-}
-export declare class MateriaPrimaCompatibilidadItemDto {
-    varianteId?: string;
-    varianteSku?: string;
-    plantillaMaquinaria?: PlantillaMaquinariaDto;
-    maquinaId?: string;
-    perfilOperativoId?: string;
-    modoUso: ModoUsoCompatibilidadMateriaPrimaDto;
-    consumoBase?: number;
-    unidadConsumo?: UnidadMateriaPrimaDto;
-    mermaBasePct?: number;
-    activo: boolean;
 }
 export declare class UpsertMateriaPrimaDto {
     codigo: string;
@@ -146,5 +106,4 @@ export declare class UpsertMateriaPrimaDto {
     activo: boolean;
     atributosTecnicos: Record<string, unknown>;
     variantes: MateriaPrimaVarianteItemDto[];
-    compatibilidades: MateriaPrimaCompatibilidadItemDto[];
 }
