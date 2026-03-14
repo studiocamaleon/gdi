@@ -11,7 +11,6 @@ export declare class ProcesosController {
         codigo: string;
         nombre: string;
         descripcion: string;
-        tipoProceso: import("./dto/upsert-proceso.dto").TipoProcesoDto;
         plantillaMaquinaria: import("./dto/upsert-proceso.dto").PlantillaMaquinariaDto | null;
         currentVersion: number;
         estadoConfiguracion: import("./dto/upsert-proceso.dto").EstadoConfiguracionProcesoDto;
@@ -53,7 +52,6 @@ export declare class ProcesosController {
     findAllBiblioteca(auth: CurrentAuth): Promise<{
         id: string;
         nombre: string;
-        tipoProceso: import("./dto/upsert-proceso.dto").TipoProcesoDto;
         tipoOperacion: import("./dto/upsert-proceso.dto").TipoOperacionProcesoDto;
         centroCostoId: string | null;
         centroCostoNombre: string;
@@ -79,7 +77,6 @@ export declare class ProcesosController {
     createBiblioteca(auth: CurrentAuth, payload: UpsertProcesoOperacionPlantillaDto): Promise<{
         id: string;
         nombre: string;
-        tipoProceso: import("./dto/upsert-proceso.dto").TipoProcesoDto;
         tipoOperacion: import("./dto/upsert-proceso.dto").TipoOperacionProcesoDto;
         centroCostoId: string | null;
         centroCostoNombre: string;
@@ -105,7 +102,6 @@ export declare class ProcesosController {
     updateBiblioteca(auth: CurrentAuth, id: string, payload: UpsertProcesoOperacionPlantillaDto): Promise<{
         id: string;
         nombre: string;
-        tipoProceso: import("./dto/upsert-proceso.dto").TipoProcesoDto;
         tipoOperacion: import("./dto/upsert-proceso.dto").TipoOperacionProcesoDto;
         centroCostoId: string | null;
         centroCostoNombre: string;
@@ -131,7 +127,6 @@ export declare class ProcesosController {
     toggleBiblioteca(auth: CurrentAuth, id: string): Promise<{
         id: string;
         nombre: string;
-        tipoProceso: import("./dto/upsert-proceso.dto").TipoProcesoDto;
         tipoOperacion: import("./dto/upsert-proceso.dto").TipoOperacionProcesoDto;
         centroCostoId: string | null;
         centroCostoNombre: string;
@@ -159,7 +154,6 @@ export declare class ProcesosController {
         codigo: string;
         nombre: string;
         descripcion: string;
-        tipoProceso: import("./dto/upsert-proceso.dto").TipoProcesoDto;
         plantillaMaquinaria: import("./dto/upsert-proceso.dto").PlantillaMaquinariaDto | null;
         currentVersion: number;
         estadoConfiguracion: import("./dto/upsert-proceso.dto").EstadoConfiguracionProcesoDto;
@@ -209,7 +203,6 @@ export declare class ProcesosController {
         codigo: string;
         nombre: string;
         descripcion: string;
-        tipoProceso: import("./dto/upsert-proceso.dto").TipoProcesoDto;
         plantillaMaquinaria: import("./dto/upsert-proceso.dto").PlantillaMaquinariaDto | null;
         currentVersion: number;
         estadoConfiguracion: import("./dto/upsert-proceso.dto").EstadoConfiguracionProcesoDto;
@@ -253,7 +246,6 @@ export declare class ProcesosController {
         codigo: string;
         nombre: string;
         descripcion: string;
-        tipoProceso: import("./dto/upsert-proceso.dto").TipoProcesoDto;
         plantillaMaquinaria: import("./dto/upsert-proceso.dto").PlantillaMaquinariaDto | null;
         currentVersion: number;
         estadoConfiguracion: import("./dto/upsert-proceso.dto").EstadoConfiguracionProcesoDto;
@@ -297,7 +289,6 @@ export declare class ProcesosController {
         codigo: string;
         nombre: string;
         descripcion: string;
-        tipoProceso: import("./dto/upsert-proceso.dto").TipoProcesoDto;
         plantillaMaquinaria: import("./dto/upsert-proceso.dto").PlantillaMaquinariaDto | null;
         currentVersion: number;
         estadoConfiguracion: import("./dto/upsert-proceso.dto").EstadoConfiguracionProcesoDto;

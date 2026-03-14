@@ -51,9 +51,7 @@ import {
   type ProcesoOperacionPayload,
   type ProcesoPayload,
   tipoOperacionProcesoItems,
-  tipoProcesoItems,
   unidadProcesoItems,
-  type TipoProceso,
 } from "@/lib/procesos";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -112,7 +110,6 @@ type FormState = {
   codigo: string;
   nombre: string;
   descripcion: string;
-  tipoProceso: TipoProceso;
   plantillaMaquinaria: PlantillaMaquinaria | "";
   activo: boolean;
   observaciones: string;
@@ -121,7 +118,6 @@ type FormState = {
 
 type BibliotecaFormState = {
   nombre: string;
-  tipoProceso: TipoProceso;
   tipoOperacion: ProcesoOperacionPayload["tipoOperacion"];
   centroCostoId: string;
   maquinaId: string;
@@ -238,12 +234,10 @@ function buildOperacionFromBiblioteca(
 }
 
 function createEmptyForm(
-  tipoProceso: TipoProceso = "maquinaria",
   plantilla: PlantillaMaquinaria = DEFAULT_PLANTILLA,
 ): FormState {
-  const plantillaMaquinaria = tipoProceso === "manual" ? "" : plantilla;
-  const template =
-    plantillaMaquinaria !== "" ? getProcesoTemplateBase(plantillaMaquinaria) : null;
+  const plantillaMaquinaria = plantilla;
+  const template = getProcesoTemplateBase(plantillaMaquinaria);
   const operaciones =
     template?.operations.map((operation, index) =>
       buildOperacionFromTemplate(operation, index),
@@ -253,7 +247,6 @@ function createEmptyForm(
     codigo: "",
     nombre: "",
     descripcion: "",
-    tipoProceso,
     plantillaMaquinaria,
     activo: true,
     observaciones: "",
@@ -264,7 +257,6 @@ function createEmptyForm(
 function createEmptyBibliotecaForm(): BibliotecaFormState {
   return {
     nombre: "",
-    tipoProceso: "maquinaria",
     tipoOperacion: "impresion",
     centroCostoId: "",
     maquinaId: "",
@@ -293,10 +285,6 @@ function getPlantillaProcesoLabel(plantilla: PlantillaMaquinaria | null) {
   }
 
   return getPlantillaMaquinariaLabel(plantilla);
-}
-
-function getTipoProcesoLabel(tipoProceso: TipoProceso) {
-  return tipoProcesoItems.find((item) => item.value === tipoProceso)?.label ?? tipoProceso;
 }
 
 function getTipoOperacionLabel(tipoOperacion: ProcesoOperacionPayload["tipoOperacion"]) {
@@ -670,13 +658,11 @@ export function ProcesosPanel({
       }
 
       const plantillaLabel = getPlantillaProcesoLabel(proceso.plantillaMaquinaria);
-      const tipoProcesoLabel = getTipoProcesoLabel(proceso.tipoProceso);
 
       return (
         proceso.codigo.toLowerCase().includes(normalizedTerm) ||
         proceso.nombre.toLowerCase().includes(normalizedTerm) ||
-        plantillaLabel.toLowerCase().includes(normalizedTerm) ||
-        tipoProcesoLabel.toLowerCase().includes(normalizedTerm)
+        plantillaLabel.toLowerCase().includes(normalizedTerm)
       );
     });
   }, [procesos, searchTerm, showInactiveRutas]);
@@ -705,14 +691,12 @@ export function ProcesosPanel({
 
     return visibles.filter((item) => {
       const tipoLabel = getTipoOperacionLabel(item.tipoOperacion).toLowerCase();
-      const tipoProcesoLabel = getTipoProcesoLabel(item.tipoProceso).toLowerCase();
       const centroLabel = item.centroCostoNombre.toLowerCase();
       const maquinaLabel = item.maquinaNombre.toLowerCase();
       const perfilLabel = item.perfilOperativoNombre.toLowerCase();
       return (
         item.nombre.toLowerCase().includes(normalized) ||
         tipoLabel.includes(normalized) ||
-        tipoProcesoLabel.includes(normalized) ||
         centroLabel.includes(normalized) ||
         maquinaLabel.includes(normalized) ||
         perfilLabel.includes(normalized)
@@ -721,22 +705,16 @@ export function ProcesosPanel({
   }, [bibliotecaOperaciones, bibliotecaSearchTerm, showInactiveBiblioteca]);
 
   const maquinasCompatibles = React.useMemo(() => {
-    if (form.tipoProceso !== "maquinaria" || !form.plantillaMaquinaria) {
+    if (!form.plantillaMaquinaria) {
       return allMaquinas;
     }
 
     return allMaquinas.filter(
       (maquina) => maquina.plantilla === form.plantillaMaquinaria,
     );
-  }, [allMaquinas, form.plantillaMaquinaria, form.tipoProceso]);
+  }, [allMaquinas, form.plantillaMaquinaria]);
 
-  const bibliotecaMaquinas = React.useMemo(() => {
-    if (bibliotecaForm.tipoProceso !== "maquinaria") {
-      return [];
-    }
-
-    return allMaquinas;
-  }, [allMaquinas, bibliotecaForm.tipoProceso]);
+  const bibliotecaMaquinas = React.useMemo(() => allMaquinas, [allMaquinas]);
 
   const bibliotecaMaquinaSeleccionada = React.useMemo(() => {
     if (!bibliotecaForm.maquinaId) {
@@ -762,19 +740,10 @@ export function ProcesosPanel({
     bibliotecaForm.maquinaId && bibliotecaMaquinaSeleccionada?.centroCostoPrincipalId,
   );
 
-  const operationTemplateItems = React.useMemo(() => {
-    return bibliotecaOperaciones.filter((item) => {
-      if (!item.activo) {
-        return false;
-      }
-
-      if (form.tipoProceso === "mixto") {
-        return true;
-      }
-
-      return item.tipoProceso === form.tipoProceso;
-    });
-  }, [bibliotecaOperaciones, form.tipoProceso]);
+  const operationTemplateItems = React.useMemo(
+    () => bibliotecaOperaciones.filter((item) => item.activo),
+    [bibliotecaOperaciones],
+  );
 
   const filteredOperationTemplateItems = React.useMemo(() => {
     const normalized = operacionTemplateSearch.trim().toLowerCase();
@@ -784,14 +753,12 @@ export function ProcesosPanel({
 
     return operationTemplateItems.filter((item) => {
       const tipoLabel = getTipoOperacionLabel(item.tipoOperacion).toLowerCase();
-      const tipoProcesoLabel = getTipoProcesoLabel(item.tipoProceso).toLowerCase();
       const centroLabel = item.centroCostoNombre.toLowerCase();
       const maquinaLabel = item.maquinaNombre.toLowerCase();
       const perfilLabel = item.perfilOperativoNombre.toLowerCase();
       return (
         item.nombre.toLowerCase().includes(normalized) ||
         tipoLabel.includes(normalized) ||
-        tipoProcesoLabel.includes(normalized) ||
         centroLabel.includes(normalized) ||
         maquinaLabel.includes(normalized) ||
         perfilLabel.includes(normalized)
@@ -820,17 +787,6 @@ export function ProcesosPanel({
   }, [operationTemplateItems, selectedOperacionTemplateId]);
 
   React.useEffect(() => {
-    if (bibliotecaForm.tipoProceso !== "maquinaria") {
-      if (bibliotecaForm.maquinaId || bibliotecaForm.perfilOperativoId) {
-        setBibliotecaForm((prev) => ({
-          ...prev,
-          maquinaId: "",
-          perfilOperativoId: "",
-        }));
-      }
-      return;
-    }
-
     if (
       bibliotecaForm.perfilOperativoId &&
       !bibliotecaMaquinaSeleccionada?.perfilesOperativos.some(
@@ -845,15 +801,10 @@ export function ProcesosPanel({
   }, [
     bibliotecaForm.maquinaId,
     bibliotecaForm.perfilOperativoId,
-    bibliotecaForm.tipoProceso,
     bibliotecaMaquinaSeleccionada,
   ]);
 
   React.useEffect(() => {
-    if (bibliotecaForm.tipoProceso !== "maquinaria") {
-      return;
-    }
-
     if (!bibliotecaMaquinaSeleccionada) {
       return;
     }
@@ -905,7 +856,6 @@ export function ProcesosPanel({
       return next;
     });
   }, [
-    bibliotecaForm.tipoProceso,
     bibliotecaForm.unidadSalida,
     bibliotecaForm.unidadTiempo,
     bibliotecaMaquinaSeleccionada,
@@ -962,7 +912,7 @@ export function ProcesosPanel({
 
   const openCreateSheet = React.useCallback(() => {
     setEditingProcesoId(null);
-    const nextForm = createEmptyForm("maquinaria", DEFAULT_PLANTILLA);
+    const nextForm = createEmptyForm(DEFAULT_PLANTILLA);
     setForm(nextForm);
     setExpandedOperacionId(nextForm.operaciones[0]?.id ?? null);
     setActiveTab("general");
@@ -980,7 +930,6 @@ export function ProcesosPanel({
         codigo: proceso.codigo,
         nombre: proceso.nombre,
         descripcion: proceso.descripcion,
-        tipoProceso: proceso.tipoProceso,
         plantillaMaquinaria: proceso.plantillaMaquinaria ?? "",
         activo: proceso.activo,
         observaciones: proceso.observaciones,
@@ -1136,11 +1085,6 @@ export function ProcesosPanel({
   }, []);
 
   const applyTemplateOperations = React.useCallback(() => {
-    if (form.tipoProceso === "manual") {
-      toast.error("Una ruta manual no usa plantilla de maquinaria.");
-      return;
-    }
-
     if (!form.plantillaMaquinaria) {
       toast.error("Selecciona una plantilla para cargar pasos base.");
       return;
@@ -1162,7 +1106,7 @@ export function ProcesosPanel({
         operaciones: nextOperaciones,
       };
     });
-  }, [form.plantillaMaquinaria, form.tipoProceso]);
+  }, [form.plantillaMaquinaria]);
 
   const clearTemplateOperations = React.useCallback(() => {
     setForm((prev) => {
@@ -1174,31 +1118,6 @@ export function ProcesosPanel({
     });
   }, []);
 
-  const handleTipoProcesoChange = React.useCallback((nextTipoProceso: TipoProceso) => {
-    setForm((prev) => {
-      const isManual = nextTipoProceso === "manual";
-      const nextPlantilla =
-        isManual
-          ? ""
-          : nextTipoProceso === "maquinaria"
-            ? prev.plantillaMaquinaria || DEFAULT_PLANTILLA
-            : prev.plantillaMaquinaria;
-
-      const nextOperaciones = prev.operaciones.map((operacion) => ({
-        ...operacion,
-        maquinaId: isManual ? undefined : operacion.maquinaId,
-        perfilOperativoId: isManual ? undefined : operacion.perfilOperativoId,
-      }));
-
-      return {
-        ...prev,
-        tipoProceso: nextTipoProceso,
-        plantillaMaquinaria: nextPlantilla,
-        operaciones: nextOperaciones,
-      };
-    });
-  }, []);
-
   const handlePlantillaChange = React.useCallback(
     (value: string | null) => {
       const nextPlantilla =
@@ -1206,7 +1125,7 @@ export function ProcesosPanel({
 
       setForm((prev) => {
         const nextOperaciones = prev.operaciones.map((operacion) => {
-          if (!operacion.maquinaId || !nextPlantilla || prev.tipoProceso !== "maquinaria") {
+          if (!operacion.maquinaId || !nextPlantilla) {
             return operacion;
           }
 
@@ -1235,11 +1154,6 @@ export function ProcesosPanel({
   const buildPayload = React.useCallback((): ProcesoPayload | null => {
     if (!form.nombre.trim()) {
       toast.error("El nombre de la ruta es obligatorio.");
-      return null;
-    }
-
-    if (form.tipoProceso === "maquinaria" && !form.plantillaMaquinaria) {
-      toast.error("Las rutas de maquinaria requieren plantilla de maquinaria.");
       return null;
     }
 
@@ -1328,14 +1242,9 @@ export function ProcesosPanel({
       }
 
       if (
-        form.tipoProceso === "manual" &&
-        (operacion.maquinaId || operacion.perfilOperativoId)
+        operacion.cleanupMin !== undefined &&
+        operacion.cleanupMin < 0
       ) {
-        toast.error("Una ruta manual no puede guardar maquina ni perfil operativo.");
-        return null;
-      }
-
-      if (operacion.cleanupMin !== undefined && operacion.cleanupMin < 0) {
         toast.error("Cleanup no puede ser negativo.");
         return null;
       }
@@ -1453,7 +1362,6 @@ export function ProcesosPanel({
     return {
       nombre: form.nombre.trim(),
       descripcion: form.descripcion.trim() || undefined,
-      tipoProceso: form.tipoProceso,
       plantillaMaquinaria: form.plantillaMaquinaria || undefined,
       activo: form.activo,
       observaciones: form.observaciones.trim() || undefined,
@@ -1551,7 +1459,6 @@ export function ProcesosPanel({
       setEditingBibliotecaId(item.id);
       setBibliotecaForm({
         nombre: item.nombre,
-        tipoProceso: item.tipoProceso,
         tipoOperacion: item.tipoOperacion,
         centroCostoId: item.centroCostoId ?? "",
         maquinaId: item.maquinaId ?? "",
@@ -1605,18 +1512,6 @@ export function ProcesosPanel({
         return null;
       }
 
-      if (bibliotecaForm.tipoProceso !== "maquinaria") {
-        if (bibliotecaForm.maquinaId || bibliotecaForm.perfilOperativoId) {
-          toast.error("Solo una plantilla de maquinaria puede definir maquina/perfil.");
-          return null;
-        }
-      }
-
-      if (bibliotecaForm.tipoProceso === "maquinaria" && !bibliotecaForm.maquinaId) {
-        toast.error("En tipo de ruta Maquinaria, la maquina es obligatoria.");
-        return null;
-      }
-
       if (!bibliotecaForm.maquinaId && bibliotecaForm.perfilOperativoId) {
         toast.error("No se puede definir perfil sin maquina.");
         return null;
@@ -1629,7 +1524,6 @@ export function ProcesosPanel({
 
       return {
         nombre: bibliotecaForm.nombre.trim(),
-        tipoProceso: bibliotecaForm.tipoProceso,
         tipoOperacion: bibliotecaForm.tipoOperacion,
         centroCostoId: bibliotecaForm.centroCostoId || undefined,
         maquinaId: bibliotecaForm.maquinaId || undefined,
@@ -1701,7 +1595,7 @@ export function ProcesosPanel({
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Rutas de produccion</h1>
           <p className="text-sm text-muted-foreground">
-            Define rutas productivas por tipo de ruta para costos y cotizacion futura.
+            Define rutas productivas compuestas por pasos para costos y cotizacion futura.
           </p>
         </div>
         <div className="flex gap-2">
@@ -1779,7 +1673,6 @@ export function ProcesosPanel({
                   <TableRow>
                     <TableHead>Codigo</TableHead>
                     <TableHead>Nombre</TableHead>
-                    <TableHead>Tipo</TableHead>
                     <TableHead>Plantilla</TableHead>
                     <TableHead>Pasos</TableHead>
                     <TableHead>Configuracion</TableHead>
@@ -1792,7 +1685,6 @@ export function ProcesosPanel({
                     <TableRow key={proceso.id}>
                       <TableCell className="font-medium">{proceso.codigo}</TableCell>
                       <TableCell>{proceso.nombre}</TableCell>
-                      <TableCell>{getTipoProcesoLabel(proceso.tipoProceso)}</TableCell>
                       <TableCell>{getPlantillaProcesoLabel(proceso.plantillaMaquinaria)}</TableCell>
                       <TableCell>{proceso.operaciones.length}</TableCell>
                       <TableCell>
@@ -1869,7 +1761,6 @@ export function ProcesosPanel({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nombre</TableHead>
-                    <TableHead>Tipo ruta</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Centro costo</TableHead>
                     <TableHead>Maquina/Perfil</TableHead>
@@ -1883,7 +1774,6 @@ export function ProcesosPanel({
                     bibliotecaFiltrada.map((item) => (
                       <TableRow key={item.id}>
                         <TableCell className="font-medium">{item.nombre}</TableCell>
-                        <TableCell>{getTipoProcesoLabel(item.tipoProceso)}</TableCell>
                         <TableCell>{getTipoOperacionLabel(item.tipoOperacion)}</TableCell>
                         <TableCell>{item.centroCostoNombre || "Sin centro"}</TableCell>
                         <TableCell>
@@ -1928,7 +1818,7 @@ export function ProcesosPanel({
                   ) : (
                     <TableRow>
                       <TableCell
-                        colSpan={8}
+                        colSpan={7}
                         className="text-center text-sm text-muted-foreground"
                       >
                         No hay plantillas que coincidan con la busqueda.
@@ -1997,35 +1887,10 @@ export function ProcesosPanel({
                       </Field>
 
                       <Field>
-                        <FieldLabel>Tipo de ruta</FieldLabel>
-                        <Select
-                          value={form.tipoProceso}
-                          onValueChange={(value) =>
-                            handleTipoProcesoChange(value as TipoProceso)
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue>
-                              {tipoProcesoItems.find((item) => item.value === form.tipoProceso)
-                                ?.label ?? form.tipoProceso}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            {tipoProcesoItems.map((item) => (
-                              <SelectItem key={item.value} value={item.value}>
-                                {item.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </Field>
-
-                      <Field>
                         <FieldLabel>Plantilla de maquinaria</FieldLabel>
                         <Select
                           value={form.plantillaMaquinaria || EMPTY_SELECT_VALUE}
                           onValueChange={handlePlantillaChange}
-                          disabled={form.tipoProceso === "manual"}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Selecciona plantilla">
@@ -2116,7 +1981,7 @@ export function ProcesosPanel({
                               )
                             }
                             className="pl-9"
-                            placeholder="Buscar en biblioteca (nombre, tipo, ruta, centro, maquina)"
+                            placeholder="Buscar en biblioteca (nombre, tipo, centro, maquina)"
                           />
                           {shouldShowOperacionTemplateResults ? (
                             <div className="absolute top-full z-50 mt-1 w-full rounded-md border bg-popover shadow-sm">
@@ -2140,7 +2005,6 @@ export function ProcesosPanel({
                                       <p className="font-medium">{item.nombre}</p>
                                       <p className="text-xs text-muted-foreground">
                                         {getTipoOperacionLabel(item.tipoOperacion)} ·{" "}
-                                        {getTipoProcesoLabel(item.tipoProceso)} ·{" "}
                                         {item.centroCostoNombre || "Sin centro"} ·{" "}
                                         {item.maquinaId ? item.maquinaNombre : "Sin maquina"}
                                       </p>
@@ -2346,7 +2210,7 @@ export function ProcesosPanel({
                             </Select>
                           </Field>
 
-                          <Field data-disabled={form.tipoProceso === "manual"}>
+                          <Field>
                             <FieldLabel>Maquina</FieldLabel>
                             <Select
                               value={operacion.maquinaId || EMPTY_SELECT_VALUE}
@@ -2391,7 +2255,6 @@ export function ProcesosPanel({
                                   };
                                 })
                               }
-                              disabled={form.tipoProceso === "manual"}
                             >
                               <SelectTrigger>
                                 <SelectValue placeholder="Selecciona maquina">
@@ -2404,9 +2267,7 @@ export function ProcesosPanel({
                                           ? `${maquina.codigo} - ${maquina.nombre}`
                                           : "Maquina no disponible";
                                       })()
-                                    : form.tipoProceso === "manual"
-                                      ? "No aplica"
-                                      : "Selecciona maquina"}
+                                    : "Selecciona maquina"}
                                 </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
@@ -2458,11 +2319,7 @@ export function ProcesosPanel({
                             </Select>
                           </Field>
 
-                          <Field
-                            data-disabled={
-                              form.tipoProceso === "manual" || !maquinaSeleccionada
-                            }
-                          >
+                          <Field data-disabled={!maquinaSeleccionada}>
                             <FieldLabel>Perfil operativo</FieldLabel>
                             <Select
                               value={operacion.perfilOperativoId || EMPTY_SELECT_VALUE}
@@ -2516,7 +2373,7 @@ export function ProcesosPanel({
                                   };
                                 });
                               }}
-                              disabled={form.tipoProceso === "manual" || !maquinaSeleccionada}
+                              disabled={!maquinaSeleccionada}
                             >
                               <SelectTrigger>
                                 <SelectValue placeholder="Selecciona perfil">
@@ -2527,9 +2384,7 @@ export function ProcesosPanel({
                                         );
                                         return perfil?.nombre ?? "Perfil no disponible";
                                       })()
-                                    : form.tipoProceso === "manual"
-                                      ? "No aplica"
-                                      : "Selecciona perfil"}
+                                    : "Selecciona perfil"}
                                 </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
@@ -3267,204 +3122,135 @@ export function ProcesosPanel({
                   </Field>
 
                   <Field>
-                    <FieldLabel>Tipo de ruta</FieldLabel>
+                    <FieldLabel>Maquina</FieldLabel>
                     <Select
-                      value={bibliotecaForm.tipoProceso}
-                      onValueChange={(value) =>
+                      value={bibliotecaForm.maquinaId || EMPTY_SELECT_VALUE}
+                      onValueChange={(value) => {
+                        const nextMaquinaId =
+                          value && value !== EMPTY_SELECT_VALUE ? value : "";
+                        const nextMaquina = nextMaquinaId
+                          ? allMaquinas.find((item) => item.id === nextMaquinaId)
+                          : null;
                         setBibliotecaForm((prev) => ({
                           ...prev,
-                          tipoProceso: value as TipoProceso,
-                        }))
-                      }
+                          maquinaId: nextMaquinaId,
+                          perfilOperativoId: "",
+                          centroCostoId:
+                            nextMaquinaId && nextMaquina?.centroCostoPrincipalId
+                              ? nextMaquina.centroCostoPrincipalId
+                              : prev.centroCostoId,
+                          setupMin:
+                            nextMaquinaId && nextMaquinaId !== prev.maquinaId
+                              ? undefined
+                              : prev.setupMin,
+                        }));
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue>
-                          {getTipoProcesoLabel(bibliotecaForm.tipoProceso)}
+                          {bibliotecaForm.maquinaId
+                            ? `${bibliotecaMaquinaSeleccionada?.codigo ?? "MAQ"} - ${bibliotecaMaquinaSeleccionada?.nombre ?? "Maquina no disponible"}`
+                            : "Selecciona maquina"}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        {tipoProcesoItems.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
+                        <SelectItem value={EMPTY_SELECT_VALUE}>Selecciona maquina</SelectItem>
+                        {bibliotecaMaquinas.map((maquina) => (
+                          <SelectItem key={maquina.id} value={maquina.id}>
+                            {maquina.codigo} - {maquina.nombre}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </Field>
 
-                  {bibliotecaForm.tipoProceso === "maquinaria" ? (
-                    <Field>
-                      <FieldLabel>Maquina</FieldLabel>
-                      <Select
-                        value={bibliotecaForm.maquinaId || EMPTY_SELECT_VALUE}
-                        onValueChange={(value) => {
-                          const nextMaquinaId =
-                            value && value !== EMPTY_SELECT_VALUE ? value : "";
-                          const nextMaquina = nextMaquinaId
-                            ? allMaquinas.find((item) => item.id === nextMaquinaId)
-                            : null;
-                          setBibliotecaForm((prev) => ({
-                            ...prev,
-                            maquinaId: nextMaquinaId,
-                            perfilOperativoId: "",
-                            centroCostoId:
-                              nextMaquinaId && nextMaquina?.centroCostoPrincipalId
-                                ? nextMaquina.centroCostoPrincipalId
-                                : prev.centroCostoId,
-                            setupMin:
-                              nextMaquinaId && nextMaquinaId !== prev.maquinaId
-                                ? undefined
-                                : prev.setupMin,
-                          }));
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue>
-                            {bibliotecaForm.maquinaId
-                              ? `${bibliotecaMaquinaSeleccionada?.codigo ?? "MAQ"} - ${bibliotecaMaquinaSeleccionada?.nombre ?? "Maquina no disponible"}`
-                              : "Selecciona maquina"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={EMPTY_SELECT_VALUE}>Selecciona maquina</SelectItem>
-                          {bibliotecaMaquinas.map((maquina) => (
-                            <SelectItem key={maquina.id} value={maquina.id}>
-                              {maquina.codigo} - {maquina.nombre}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  ) : null}
+                  <Field data-disabled={bibliotecaCentroBloqueado}>
+                    <FieldLabel>Centro de costo</FieldLabel>
+                    <Select
+                      value={bibliotecaForm.centroCostoId || EMPTY_SELECT_VALUE}
+                      onValueChange={(value) =>
+                        setBibliotecaForm((prev) => ({
+                          ...prev,
+                          centroCostoId:
+                            !value || value === EMPTY_SELECT_VALUE ? "" : value,
+                        }))
+                      }
+                      disabled={bibliotecaCentroBloqueado}
+                    >
+                      <SelectTrigger>
+                        <SelectValue>
+                          {bibliotecaForm.centroCostoId
+                            ? (() => {
+                                const centro = allCentrosCosto.find(
+                                  (item) => item.id === bibliotecaForm.centroCostoId,
+                                );
+                                return centro
+                                  ? `${centro.codigo} - ${centro.nombre}`
+                                  : "Centro no disponible";
+                              })()
+                            : "Selecciona centro"}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={EMPTY_SELECT_VALUE}>Sin seleccionar</SelectItem>
+                        {allCentrosCosto.map((centro) => (
+                          <SelectItem key={centro.id} value={centro.id}>
+                            {centro.codigo} - {centro.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
 
-                  {bibliotecaForm.tipoProceso === "maquinaria" ? (
-                    <Field data-disabled={bibliotecaCentroBloqueado}>
-                      <FieldLabel>Centro de costo</FieldLabel>
-                      <Select
-                        value={bibliotecaForm.centroCostoId || EMPTY_SELECT_VALUE}
-                        onValueChange={(value) =>
-                          setBibliotecaForm((prev) => ({
-                            ...prev,
-                            centroCostoId:
-                              !value || value === EMPTY_SELECT_VALUE ? "" : value,
-                          }))
+                  <Field data-disabled={!bibliotecaMaquinaSeleccionada}>
+                    <FieldLabel>Perfil operativo (opcional)</FieldLabel>
+                    <Select
+                      value={bibliotecaForm.perfilOperativoId || EMPTY_SELECT_VALUE}
+                      onValueChange={(value) => {
+                        const nextPerfilId =
+                          value && value !== EMPTY_SELECT_VALUE ? value : "";
+                        const perfil = nextPerfilId
+                          ? bibliotecaMaquinaSeleccionada?.perfilesOperativos.find(
+                              (item) => item.id === nextPerfilId,
+                            ) ?? null
+                          : null;
+                        const setupFromPerfil = getSetupFromPerfil(perfil);
+                        if (nextPerfilId && setupFromPerfil === undefined) {
+                          toast.warning(
+                            `El perfil ${perfil?.nombre ?? ""} no tiene setup configurado.`,
+                          );
                         }
-                        disabled={bibliotecaCentroBloqueado}
-                      >
-                        <SelectTrigger>
-                          <SelectValue>
-                            {bibliotecaForm.centroCostoId
-                              ? (() => {
-                                  const centro = allCentrosCosto.find(
-                                    (item) => item.id === bibliotecaForm.centroCostoId,
-                                  );
-                                  return centro
-                                    ? `${centro.codigo} - ${centro.nombre}`
-                                    : "Centro no disponible";
-                                })()
-                              : "Selecciona centro"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={EMPTY_SELECT_VALUE}>Sin seleccionar</SelectItem>
-                          {allCentrosCosto.map((centro) => (
-                            <SelectItem key={centro.id} value={centro.id}>
-                              {centro.codigo} - {centro.nombre}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  ) : (
-                    <Field>
-                      <FieldLabel>Centro de costo</FieldLabel>
-                      <Select
-                        value={bibliotecaForm.centroCostoId || EMPTY_SELECT_VALUE}
-                        onValueChange={(value) =>
-                          setBibliotecaForm((prev) => ({
-                            ...prev,
-                            centroCostoId:
-                              !value || value === EMPTY_SELECT_VALUE ? "" : value,
-                          }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue>
-                            {bibliotecaForm.centroCostoId
-                              ? (() => {
-                                  const centro = allCentrosCosto.find(
-                                    (item) => item.id === bibliotecaForm.centroCostoId,
-                                  );
-                                  return centro
-                                    ? `${centro.codigo} - ${centro.nombre}`
-                                    : "Centro no disponible";
-                                })()
-                              : "Selecciona centro"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={EMPTY_SELECT_VALUE}>Sin seleccionar</SelectItem>
-                          {allCentrosCosto.map((centro) => (
-                            <SelectItem key={centro.id} value={centro.id}>
-                              {centro.codigo} - {centro.nombre}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  )}
-
-                  {bibliotecaForm.tipoProceso === "maquinaria" ? (
-                    <Field data-disabled={!bibliotecaMaquinaSeleccionada}>
-                      <FieldLabel>Perfil operativo (opcional)</FieldLabel>
-                      <Select
-                        value={bibliotecaForm.perfilOperativoId || EMPTY_SELECT_VALUE}
-                        onValueChange={(value) => {
-                          const nextPerfilId =
-                            value && value !== EMPTY_SELECT_VALUE ? value : "";
-                          const perfil = nextPerfilId
+                        setBibliotecaForm((prev) => ({
+                          ...prev,
+                          perfilOperativoId: nextPerfilId,
+                          setupMin: nextPerfilId ? setupFromPerfil : prev.setupMin,
+                          productividadBase: nextPerfilId
+                            ? (perfil?.productividad ?? prev.productividadBase)
+                            : prev.productividadBase,
+                          modoProductividad: nextPerfilId ? "fija" : prev.modoProductividad,
+                        }));
+                      }}
+                      disabled={!bibliotecaMaquinaSeleccionada}
+                    >
+                      <SelectTrigger>
+                        <SelectValue>
+                          {bibliotecaForm.perfilOperativoId
                             ? bibliotecaMaquinaSeleccionada?.perfilesOperativos.find(
-                                (item) => item.id === nextPerfilId,
-                              ) ?? null
-                            : null;
-                          const setupFromPerfil = getSetupFromPerfil(perfil);
-                          if (nextPerfilId && setupFromPerfil === undefined) {
-                            toast.warning(
-                              `El perfil ${perfil?.nombre ?? ""} no tiene setup configurado.`,
-                            );
-                          }
-                          setBibliotecaForm((prev) => ({
-                            ...prev,
-                            perfilOperativoId: nextPerfilId,
-                            setupMin: nextPerfilId ? setupFromPerfil : prev.setupMin,
-                            productividadBase: nextPerfilId
-                              ? (perfil?.productividad ?? prev.productividadBase)
-                              : prev.productividadBase,
-                            modoProductividad: nextPerfilId ? "fija" : prev.modoProductividad,
-                          }));
-                        }}
-                        disabled={!bibliotecaMaquinaSeleccionada}
-                      >
-                        <SelectTrigger>
-                          <SelectValue>
-                            {bibliotecaForm.perfilOperativoId
-                              ? bibliotecaMaquinaSeleccionada?.perfilesOperativos.find(
-                                  (item) => item.id === bibliotecaForm.perfilOperativoId,
-                                )?.nombre ?? "Perfil no disponible"
-                              : "Sin perfil"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={EMPTY_SELECT_VALUE}>Sin perfil</SelectItem>
-                          {bibliotecaMaquinaSeleccionada?.perfilesOperativos.map((perfil) => (
-                            <SelectItem key={perfil.id} value={perfil.id}>
-                              {perfil.nombre}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  ) : null}
+                                (item) => item.id === bibliotecaForm.perfilOperativoId,
+                              )?.nombre ?? "Perfil no disponible"
+                            : "Sin perfil"}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={EMPTY_SELECT_VALUE}>Sin perfil</SelectItem>
+                        {bibliotecaMaquinaSeleccionada?.perfilesOperativos.map((perfil) => (
+                          <SelectItem key={perfil.id} value={perfil.id}>
+                            {perfil.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
 
                   <Field>
                     <FieldLabel className="inline-flex items-center gap-1">

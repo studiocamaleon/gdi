@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
-import { EstadoConfiguracionProcesoDto, ModoProductividadProcesoDto, type PlantillaMaquinariaDto, TipoOperacionProcesoDto, TipoProcesoDto, UnidadProcesoDto, UpsertProcesoDto } from './dto/upsert-proceso.dto';
+import { EstadoConfiguracionProcesoDto, ModoProductividadProcesoDto, type PlantillaMaquinariaDto, TipoOperacionProcesoDto, UnidadProcesoDto, UpsertProcesoDto } from './dto/upsert-proceso.dto';
 import { UpsertProcesoOperacionPlantillaDto } from './dto/upsert-proceso-operacion-plantilla.dto';
 import { EvaluarProcesoCostoDto } from './dto/evaluar-proceso-costo.dto';
 export declare class ProcesosService {
@@ -14,7 +14,6 @@ export declare class ProcesosService {
         codigo: string;
         nombre: string;
         descripcion: string;
-        tipoProceso: TipoProcesoDto;
         plantillaMaquinaria: PlantillaMaquinariaDto | null;
         currentVersion: number;
         estadoConfiguracion: EstadoConfiguracionProcesoDto;
@@ -56,7 +55,6 @@ export declare class ProcesosService {
     findAllBibliotecaOperaciones(auth: CurrentAuth): Promise<{
         id: string;
         nombre: string;
-        tipoProceso: TipoProcesoDto;
         tipoOperacion: TipoOperacionProcesoDto;
         centroCostoId: string | null;
         centroCostoNombre: string;
@@ -82,7 +80,6 @@ export declare class ProcesosService {
     createBibliotecaOperacion(auth: CurrentAuth, payload: UpsertProcesoOperacionPlantillaDto): Promise<{
         id: string;
         nombre: string;
-        tipoProceso: TipoProcesoDto;
         tipoOperacion: TipoOperacionProcesoDto;
         centroCostoId: string | null;
         centroCostoNombre: string;
@@ -108,7 +105,6 @@ export declare class ProcesosService {
     updateBibliotecaOperacion(auth: CurrentAuth, id: string, payload: UpsertProcesoOperacionPlantillaDto): Promise<{
         id: string;
         nombre: string;
-        tipoProceso: TipoProcesoDto;
         tipoOperacion: TipoOperacionProcesoDto;
         centroCostoId: string | null;
         centroCostoNombre: string;
@@ -134,7 +130,6 @@ export declare class ProcesosService {
     toggleBibliotecaOperacion(auth: CurrentAuth, id: string): Promise<{
         id: string;
         nombre: string;
-        tipoProceso: TipoProcesoDto;
         tipoOperacion: TipoOperacionProcesoDto;
         centroCostoId: string | null;
         centroCostoNombre: string;
@@ -162,7 +157,6 @@ export declare class ProcesosService {
         codigo: string;
         nombre: string;
         descripcion: string;
-        tipoProceso: TipoProcesoDto;
         plantillaMaquinaria: PlantillaMaquinariaDto | null;
         currentVersion: number;
         estadoConfiguracion: EstadoConfiguracionProcesoDto;
@@ -285,7 +279,6 @@ export declare class ProcesosService {
         codigo: string;
         nombre: string;
         descripcion: string;
-        tipoProceso: TipoProcesoDto;
         plantillaMaquinaria: PlantillaMaquinariaDto | null;
         currentVersion: number;
         estadoConfiguracion: EstadoConfiguracionProcesoDto;
@@ -329,7 +322,6 @@ export declare class ProcesosService {
         codigo: string;
         nombre: string;
         descripcion: string;
-        tipoProceso: TipoProcesoDto;
         plantillaMaquinaria: PlantillaMaquinariaDto | null;
         currentVersion: number;
         estadoConfiguracion: EstadoConfiguracionProcesoDto;
@@ -373,7 +365,6 @@ export declare class ProcesosService {
         codigo: string;
         nombre: string;
         descripcion: string;
-        tipoProceso: TipoProcesoDto;
         plantillaMaquinaria: PlantillaMaquinariaDto | null;
         currentVersion: number;
         estadoConfiguracion: EstadoConfiguracionProcesoDto;
@@ -424,7 +415,6 @@ export declare class ProcesosService {
     private mapProfileProductivityUnitToProceso;
     private getSetupFromPerfilReference;
     private getSetupFromPerfilPersisted;
-    private getTipoProceso;
     private getPlantillaFromPayload;
     private getDerivedEstadoConfiguracion;
     private resolveCentroCostoIdForOperation;

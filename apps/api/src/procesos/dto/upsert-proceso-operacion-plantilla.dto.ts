@@ -11,7 +11,6 @@ import {
 } from 'class-validator';
 import {
   ModoProductividadProcesoDto,
-  TipoProcesoDto,
   TipoOperacionProcesoDto,
   UnidadProcesoDto,
 } from './upsert-proceso.dto';
@@ -20,9 +19,6 @@ export class UpsertProcesoOperacionPlantillaDto {
   @IsString()
   @MinLength(1)
   nombre: string;
-
-  @IsEnum(TipoProcesoDto)
-  tipoProceso: TipoProcesoDto;
 
   @IsEnum(TipoOperacionProcesoDto)
   tipoOperacion: TipoOperacionProcesoDto;

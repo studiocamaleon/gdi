@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UpsertProcesoDto = exports.ProcesoOperacionItemDto = exports.UnidadProcesoDto = exports.TipoProcesoDto = exports.ModoProductividadProcesoDto = exports.TipoOperacionProcesoDto = exports.EstadoConfiguracionProcesoDto = exports.PlantillaMaquinariaDto = void 0;
+exports.UpsertProcesoDto = exports.ProcesoOperacionItemDto = exports.UnidadProcesoDto = exports.ModoProductividadProcesoDto = exports.TipoOperacionProcesoDto = exports.EstadoConfiguracionProcesoDto = exports.PlantillaMaquinariaDto = void 0;
 const class_transformer_1 = require("class-transformer");
 const class_validator_1 = require("class-validator");
 var PlantillaMaquinariaDto;
@@ -62,12 +62,6 @@ var ModoProductividadProcesoDto;
     ModoProductividadProcesoDto["formula"] = "formula";
     ModoProductividadProcesoDto["tabla"] = "tabla";
 })(ModoProductividadProcesoDto || (exports.ModoProductividadProcesoDto = ModoProductividadProcesoDto = {}));
-var TipoProcesoDto;
-(function (TipoProcesoDto) {
-    TipoProcesoDto["maquinaria"] = "maquinaria";
-    TipoProcesoDto["manual"] = "manual";
-    TipoProcesoDto["mixto"] = "mixto";
-})(TipoProcesoDto || (exports.TipoProcesoDto = TipoProcesoDto = {}));
 var UnidadProcesoDto;
 (function (UnidadProcesoDto) {
     UnidadProcesoDto["ninguna"] = "ninguna";
@@ -231,7 +225,6 @@ class UpsertProcesoDto {
     codigo;
     nombre;
     descripcion;
-    tipoProceso;
     plantillaMaquinaria;
     estadoConfiguracion;
     activo;
@@ -255,11 +248,6 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpsertProcesoDto.prototype, "descripcion", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsEnum)(TipoProcesoDto),
-    __metadata("design:type", String)
-], UpsertProcesoDto.prototype, "tipoProceso", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEnum)(PlantillaMaquinariaDto),

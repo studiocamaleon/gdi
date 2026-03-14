@@ -1,7 +1,6 @@
-import { ModoProductividadProcesoDto, TipoProcesoDto, TipoOperacionProcesoDto, UnidadProcesoDto } from './upsert-proceso.dto';
+import { ModoProductividadProcesoDto, TipoOperacionProcesoDto, UnidadProcesoDto } from './upsert-proceso.dto';
 export declare class UpsertProcesoOperacionPlantillaDto {
     nombre: string;
-    tipoProceso: TipoProcesoDto;
     tipoOperacion: TipoOperacionProcesoDto;
     centroCostoId?: string;
     maquinaId?: string;

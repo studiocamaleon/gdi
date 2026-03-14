@@ -44,11 +44,6 @@ export declare enum ModoProductividadProcesoDto {
     formula = "formula",
     tabla = "tabla"
 }
-export declare enum TipoProcesoDto {
-    maquinaria = "maquinaria",
-    manual = "manual",
-    mixto = "mixto"
-}
 export declare enum UnidadProcesoDto {
     ninguna = "ninguna",
     hora = "hora",
@@ -93,7 +88,6 @@ export declare class UpsertProcesoDto {
     codigo?: string;
     nombre: string;
     descripcion?: string;
-    tipoProceso?: TipoProcesoDto;
     plantillaMaquinaria?: PlantillaMaquinariaDto;
     estadoConfiguracion?: EstadoConfiguracionProcesoDto;
     activo: boolean;

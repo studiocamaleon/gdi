@@ -387,15 +387,13 @@ let ProcesosService = class ProcesosService {
         })));
     }
     buildProcesoWriteData(auth, payload, references, forcedCodigo, forcedVersion) {
-        const tipoProceso = this.getTipoProceso(payload);
-        const plantillaMaquinaria = this.getPlantillaFromPayload(payload, tipoProceso);
-        const estadoConfiguracion = this.getDerivedEstadoConfiguracion(payload, references, tipoProceso);
+        const plantillaMaquinaria = this.getPlantillaFromPayload(payload);
+        const estadoConfiguracion = this.getDerivedEstadoConfiguracion(payload, references);
         return {
             tenantId: auth.tenantId,
             codigo: forcedCodigo,
             nombre: payload.nombre.trim(),
             descripcion: payload.descripcion?.trim() || null,
-            tipoProceso: this.toPrismaEnum(tipoProceso),
             plantillaMaquinaria: plantillaMaquinaria
                 ? this.toPrismaEnum(plantillaMaquinaria)
                 : null,
@@ -440,7 +438,6 @@ let ProcesosService = class ProcesosService {
         return {
             tenantId,
             nombre: payload.nombre.trim(),
-            tipoProceso: this.toPrismaEnum(payload.tipoProceso),
             tipoOperacion: this.toPrismaEnum(payload.tipoOperacion),
             centroCostoId: refs.centroCostoId,
             maquinaId: refs.maquinaId,
@@ -477,16 +474,8 @@ let ProcesosService = class ProcesosService {
             (payload.mermaRunPct < 0 || payload.mermaRunPct > 100)) {
             throw new common_1.BadRequestException('Merma debe estar entre 0 y 100.');
         }
-        if (payload.tipoProceso !== upsert_proceso_dto_1.TipoProcesoDto.maquinaria) {
-            if (payload.maquinaId || payload.perfilOperativoId) {
-                throw new common_1.BadRequestException('Solo las plantillas de tipo maquinaria pueden definir maquina o perfil.');
-            }
-        }
         if (!payload.maquinaId && payload.perfilOperativoId) {
             throw new common_1.BadRequestException('No se puede definir perfil operativo sin maquina.');
-        }
-        if (payload.tipoProceso === upsert_proceso_dto_1.TipoProcesoDto.maquinaria && !payload.maquinaId) {
-            throw new common_1.BadRequestException('En una plantilla de tipo maquinaria, la maquina es obligatoria.');
         }
         if (!payload.maquinaId && !payload.centroCostoId) {
             throw new common_1.BadRequestException('Define un centro de costo cuando la plantilla no tiene maquina.');
@@ -626,24 +615,14 @@ let ProcesosService = class ProcesosService {
         }
         return timeParts.reduce((acc, value) => acc.add(value), new client_1.Prisma.Decimal(0));
     }
-    getTipoProceso(payload) {
-        return payload.tipoProceso ?? upsert_proceso_dto_1.TipoProcesoDto.maquinaria;
-    }
-    getPlantillaFromPayload(payload, tipoProceso) {
-        if (tipoProceso === upsert_proceso_dto_1.TipoProcesoDto.manual) {
-            return null;
-        }
+    getPlantillaFromPayload(payload) {
         return payload.plantillaMaquinaria ?? null;
     }
-    getDerivedEstadoConfiguracion(payload, references, tipoProceso) {
+    getDerivedEstadoConfiguracion(payload, references) {
         if (!payload.nombre?.trim()) {
             return upsert_proceso_dto_1.EstadoConfiguracionProcesoDto.borrador;
         }
         if (!payload.operaciones.length) {
-            return upsert_proceso_dto_1.EstadoConfiguracionProcesoDto.incompleta;
-        }
-        if (tipoProceso === upsert_proceso_dto_1.TipoProcesoDto.maquinaria &&
-            !payload.plantillaMaquinaria) {
             return upsert_proceso_dto_1.EstadoConfiguracionProcesoDto.incompleta;
         }
         const hasAllCenters = payload.operaciones.every((operacion) => {
@@ -685,7 +664,6 @@ let ProcesosService = class ProcesosService {
         return maquina.centroCostoPrincipalId;
     }
     validateBusinessRules(payload, references) {
-        const tipoProceso = this.getTipoProceso(payload);
         const operaciones = payload.operaciones ?? [];
         const operationOrders = new Set();
         for (const [index, operacion] of operaciones.entries()) {
@@ -697,18 +675,6 @@ let ProcesosService = class ProcesosService {
                 throw new common_1.BadRequestException(`El orden ${orden} esta repetido dentro del proceso.`);
             }
             operationOrders.add(orden);
-        }
-        if (tipoProceso === upsert_proceso_dto_1.TipoProcesoDto.manual) {
-            if (payload.plantillaMaquinaria) {
-                throw new common_1.BadRequestException('Los procesos manuales no deben seleccionar plantilla de maquinaria.');
-            }
-            if (operaciones.some((operacion) => operacion.maquinaId || operacion.perfilOperativoId)) {
-                throw new common_1.BadRequestException('Un proceso manual no puede tener maquina ni perfil operativo asociados.');
-            }
-        }
-        if (tipoProceso === upsert_proceso_dto_1.TipoProcesoDto.maquinaria &&
-            !payload.plantillaMaquinaria) {
-            throw new common_1.BadRequestException('Los procesos de maquinaria requieren seleccionar plantilla de maquinaria.');
         }
         for (const operacion of operaciones) {
             if (!operacion.perfilOperativoId) {
@@ -734,9 +700,8 @@ let ProcesosService = class ProcesosService {
                 if (!maquina) {
                     continue;
                 }
-                if (tipoProceso === upsert_proceso_dto_1.TipoProcesoDto.maquinaria &&
-                    maquina.plantilla !==
-                        this.toPrismaEnum(payload.plantillaMaquinaria)) {
+                if (maquina.plantilla !==
+                    this.toPrismaEnum(payload.plantillaMaquinaria)) {
                     throw new common_1.BadRequestException(`La maquina ${maquina.nombre} no coincide con la plantilla seleccionada del proceso.`);
                 }
             }
@@ -902,16 +867,13 @@ let ProcesosService = class ProcesosService {
             }
             return centro.id;
         };
-        if (payload.tipoProceso !== upsert_proceso_dto_1.TipoProcesoDto.maquinaria) {
+        if (!payload.maquinaId) {
             const centroCostoId = await resolveCentro(payload.centroCostoId);
             return {
                 centroCostoId,
                 maquinaId: null,
                 perfilOperativoId: null,
             };
-        }
-        if (!payload.maquinaId) {
-            throw new common_1.BadRequestException('En una plantilla de tipo maquinaria, la maquina es obligatoria.');
         }
         const maquina = await this.prisma.maquina.findFirst({
             where: {
@@ -1003,7 +965,6 @@ let ProcesosService = class ProcesosService {
             codigo: proceso.codigo,
             nombre: proceso.nombre,
             descripcion: proceso.descripcion ?? '',
-            tipoProceso: this.toApiEnum(proceso.tipoProceso),
             plantillaMaquinaria: proceso.plantillaMaquinaria
                 ? this.toApiEnum(proceso.plantillaMaquinaria)
                 : null,
@@ -1050,7 +1011,6 @@ let ProcesosService = class ProcesosService {
         return {
             id: item.id,
             nombre: item.nombre,
-            tipoProceso: this.toApiEnum(item.tipoProceso),
             tipoOperacion: this.toApiEnum(item.tipoOperacion),
             centroCostoId: item.centroCostoId ?? null,
             centroCostoNombre: item.centroCosto?.nombre ?? '',
@@ -1167,7 +1127,6 @@ let ProcesosService = class ProcesosService {
                 codigo: proceso.codigo,
                 nombre: proceso.nombre,
                 descripcion: proceso.descripcion,
-                tipoProceso: proceso.tipoProceso,
                 plantillaMaquinaria: proceso.plantillaMaquinaria,
                 currentVersion: proceso.currentVersion,
                 estadoConfiguracion: proceso.estadoConfiguracion,

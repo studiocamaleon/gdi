@@ -1,7 +1,6 @@
 import type { PlantillaMaquinaria } from '@/lib/maquinaria';
 
 export type EstadoConfiguracionProceso = 'borrador' | 'incompleta' | 'lista';
-export type TipoProceso = 'maquinaria' | 'manual' | 'mixto';
 export type UnidadProceso =
   | 'ninguna'
   | 'hora'
@@ -72,7 +71,6 @@ export type Proceso = {
   codigo: string;
   nombre: string;
   descripcion: string;
-  tipoProceso: TipoProceso;
   plantillaMaquinaria: PlantillaMaquinaria | null;
   currentVersion: number;
   estadoConfiguracion: EstadoConfiguracionProceso;
@@ -113,7 +111,6 @@ export type ProcesoPayload = {
   codigo?: string;
   nombre: string;
   descripcion?: string;
-  tipoProceso?: TipoProceso;
   plantillaMaquinaria?: PlantillaMaquinaria | null;
   estadoConfiguracion?: EstadoConfiguracionProceso;
   activo: boolean;
@@ -124,7 +121,6 @@ export type ProcesoPayload = {
 export type ProcesoOperacionPlantilla = {
   id: string;
   nombre: string;
-  tipoProceso: TipoProceso;
   tipoOperacion: TipoOperacionProceso;
   centroCostoId: string | null;
   centroCostoNombre: string;
@@ -150,7 +146,6 @@ export type ProcesoOperacionPlantilla = {
 
 export type ProcesoOperacionPlantillaPayload = {
   nombre: string;
-  tipoProceso: TipoProceso;
   tipoOperacion: TipoOperacionProceso;
   centroCostoId?: string;
   maquinaId?: string;
@@ -206,12 +201,6 @@ export const modoProductividadProcesoItems: Array<{
   { label: 'Fija', value: 'fija' },
   { label: 'Formula', value: 'formula' },
   { label: 'Tabla', value: 'tabla' },
-];
-
-export const tipoProcesoItems: Array<{ label: string; value: TipoProceso }> = [
-  { label: 'Maquinaria', value: 'maquinaria' },
-  { label: 'Manual', value: 'manual' },
-  { label: 'Mixto', value: 'mixto' },
 ];
 
 export const unidadProcesoItems: Array<{ label: string; value: UnidadProceso }> = [

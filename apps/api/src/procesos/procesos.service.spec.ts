@@ -6,7 +6,6 @@ import {
   ModoProductividadProcesoDto,
   PlantillaMaquinariaDto,
   TipoOperacionProcesoDto,
-  TipoProcesoDto,
   UnidadProcesoDto,
   type UpsertProcesoDto,
 } from './dto/upsert-proceso.dto';
@@ -75,7 +74,6 @@ describe('ProcesosService business rules', () => {
   it('rechaza modo formula sin regla de velocidad', () => {
     const payload: UpsertProcesoDto = {
       nombre: 'Proceso prueba',
-      tipoProceso: TipoProcesoDto.maquinaria,
       plantillaMaquinaria: PlantillaMaquinariaDto.impresora_laser,
       activo: true,
       operaciones: [
@@ -115,7 +113,6 @@ describe('ProcesosService business rules', () => {
   it('rechaza incompatibilidad unidad centro-operacion', () => {
     const payload: UpsertProcesoDto = {
       nombre: 'Proceso prueba',
-      tipoProceso: TipoProcesoDto.maquinaria,
       plantillaMaquinaria: PlantillaMaquinariaDto.impresora_laser,
       activo: true,
       operaciones: [
@@ -155,7 +152,6 @@ describe('ProcesosService business rules', () => {
   it('acepta modo fija sin productividad manual cuando el perfil aporta productividad', () => {
     const payload: UpsertProcesoDto = {
       nombre: 'Proceso perfil',
-      tipoProceso: TipoProcesoDto.maquinaria,
       plantillaMaquinaria: PlantillaMaquinariaDto.impresora_laser,
       activo: true,
       operaciones: [
@@ -219,7 +215,6 @@ describe('ProcesosService business rules', () => {
   it('acepta unidades derivadas desde unidad principal de maquina cuando no hay perfil', () => {
     const payload: UpsertProcesoDto = {
       nombre: 'Proceso con maquina sin perfil',
-      tipoProceso: TipoProcesoDto.maquinaria,
       plantillaMaquinaria: PlantillaMaquinariaDto.impresora_laser,
       activo: true,
       operaciones: [
@@ -320,7 +315,6 @@ describe('ProcesosService business rules', () => {
   it('fuerza modo fija cuando hay perfil operativo aunque el payload pida formula', () => {
     const payload: UpsertProcesoDto = {
       nombre: 'Proceso con perfil forzado',
-      tipoProceso: TipoProcesoDto.maquinaria,
       plantillaMaquinaria: PlantillaMaquinariaDto.impresora_laser,
       activo: true,
       operaciones: [

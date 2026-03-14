@@ -244,12 +244,6 @@ enum ModoProductividadProceso {
   TABLA
 }
 
-enum TipoProceso {
-  MAQUINARIA
-  MANUAL
-  MIXTO
-}
-
 enum UnidadProceso {
   NINGUNA
   HORA
@@ -984,7 +978,6 @@ model ProcesoDefinicion {
   codigo              String
   nombre              String
   descripcion         String?
-  tipoProceso         TipoProceso                @default(MAQUINARIA)
   plantillaMaquinaria PlantillaMaquinaria?
   currentVersion      Int                        @default(1)
   estadoConfiguracion EstadoConfiguracionProceso @default(BORRADOR)
@@ -1006,7 +999,6 @@ model ProcesoOperacionPlantilla {
   id                 String                   @id @default(uuid()) @db.Uuid
   tenantId           String                   @db.Uuid
   nombre             String
-  tipoProceso        TipoProceso              @default(MAQUINARIA)
   tipoOperacion      TipoOperacionProceso
   centroCostoId      String?                  @db.Uuid
   maquinaId          String?                  @db.Uuid
@@ -1031,7 +1023,6 @@ model ProcesoOperacionPlantilla {
   perfilOperativo    MaquinaPerfilOperativo?  @relation("ProcesoOperacionPlantillaPerfil", fields: [perfilOperativoId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, activo])
-  @@index([tenantId, tipoProceso])
   @@index([tenantId, tipoOperacion])
   @@index([tenantId, centroCostoId])
   @@index([tenantId, maquinaId])

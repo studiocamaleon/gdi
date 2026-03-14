@@ -15,7 +15,6 @@ const class_validator_1 = require("class-validator");
 const upsert_proceso_dto_1 = require("./upsert-proceso.dto");
 class UpsertProcesoOperacionPlantillaDto {
     nombre;
-    tipoProceso;
     tipoOperacion;
     centroCostoId;
     maquinaId;
@@ -39,10 +38,6 @@ __decorate([
     (0, class_validator_1.MinLength)(1),
     __metadata("design:type", String)
 ], UpsertProcesoOperacionPlantillaDto.prototype, "nombre", void 0);
-__decorate([
-    (0, class_validator_1.IsEnum)(upsert_proceso_dto_1.TipoProcesoDto),
-    __metadata("design:type", String)
-], UpsertProcesoOperacionPlantillaDto.prototype, "tipoProceso", void 0);
 __decorate([
     (0, class_validator_1.IsEnum)(upsert_proceso_dto_1.TipoOperacionProcesoDto),
     __metadata("design:type", String)

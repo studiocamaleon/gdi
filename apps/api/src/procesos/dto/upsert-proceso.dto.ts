@@ -62,12 +62,6 @@ export enum ModoProductividadProcesoDto {
   tabla = 'tabla',
 }
 
-export enum TipoProcesoDto {
-  maquinaria = 'maquinaria',
-  manual = 'manual',
-  mixto = 'mixto',
-}
-
 export enum UnidadProcesoDto {
   ninguna = 'ninguna',
   hora = 'hora',
@@ -195,10 +189,6 @@ export class UpsertProcesoDto {
   @IsOptional()
   @IsString()
   descripcion?: string;
-
-  @IsOptional()
-  @IsEnum(TipoProcesoDto)
-  tipoProceso?: TipoProcesoDto;
 
   @IsOptional()
   @IsEnum(PlantillaMaquinariaDto)

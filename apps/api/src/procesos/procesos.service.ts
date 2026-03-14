@@ -12,7 +12,6 @@ import {
   PlantillaMaquinaria,
   Prisma,
   TipoOperacionProceso,
-  TipoProceso,
   UnidadBaseCentroCosto,
   UnidadProduccionMaquina,
   UnidadProceso,
@@ -26,7 +25,6 @@ import {
   type PlantillaMaquinariaDto,
   type ProcesoOperacionItemDto,
   TipoOperacionProcesoDto,
-  TipoProcesoDto,
   UnidadProcesoDto,
   UpsertProcesoDto,
 } from './dto/upsert-proceso.dto';
@@ -597,15 +595,10 @@ export class ProcesosService {
     forcedCodigo: string,
     forcedVersion: number,
   ) {
-    const tipoProceso = this.getTipoProceso(payload);
-    const plantillaMaquinaria = this.getPlantillaFromPayload(
-      payload,
-      tipoProceso,
-    );
+    const plantillaMaquinaria = this.getPlantillaFromPayload(payload);
     const estadoConfiguracion = this.getDerivedEstadoConfiguracion(
       payload,
       references,
-      tipoProceso,
     );
 
     return {
@@ -613,7 +606,6 @@ export class ProcesosService {
       codigo: forcedCodigo,
       nombre: payload.nombre.trim(),
       descripcion: payload.descripcion?.trim() || null,
-      tipoProceso: this.toPrismaEnum<TipoProceso>(tipoProceso),
       plantillaMaquinaria: plantillaMaquinaria
         ? this.toPrismaEnum<PlantillaMaquinaria>(plantillaMaquinaria)
         : null,
@@ -686,7 +678,6 @@ export class ProcesosService {
     return {
       tenantId,
       nombre: payload.nombre.trim(),
-      tipoProceso: this.toPrismaEnum<TipoProceso>(payload.tipoProceso),
       tipoOperacion: this.toPrismaEnum<TipoOperacionProceso>(
         payload.tipoOperacion,
       ),
@@ -749,23 +740,9 @@ export class ProcesosService {
       throw new BadRequestException('Merma debe estar entre 0 y 100.');
     }
 
-    if (payload.tipoProceso !== TipoProcesoDto.maquinaria) {
-      if (payload.maquinaId || payload.perfilOperativoId) {
-        throw new BadRequestException(
-          'Solo las plantillas de tipo maquinaria pueden definir maquina o perfil.',
-        );
-      }
-    }
-
     if (!payload.maquinaId && payload.perfilOperativoId) {
       throw new BadRequestException(
         'No se puede definir perfil operativo sin maquina.',
-      );
-    }
-
-    if (payload.tipoProceso === TipoProcesoDto.maquinaria && !payload.maquinaId) {
-      throw new BadRequestException(
-        'En una plantilla de tipo maquinaria, la maquina es obligatoria.',
       );
     }
 
@@ -995,38 +972,19 @@ export class ProcesosService {
     );
   }
 
-  private getTipoProceso(payload: UpsertProcesoDto): TipoProcesoDto {
-    return payload.tipoProceso ?? TipoProcesoDto.maquinaria;
-  }
-
-  private getPlantillaFromPayload(
-    payload: UpsertProcesoDto,
-    tipoProceso: TipoProcesoDto,
-  ) {
-    if (tipoProceso === TipoProcesoDto.manual) {
-      return null;
-    }
-
+  private getPlantillaFromPayload(payload: UpsertProcesoDto) {
     return payload.plantillaMaquinaria ?? null;
   }
 
   private getDerivedEstadoConfiguracion(
     payload: UpsertProcesoDto,
     references: ReferenceContext,
-    tipoProceso: TipoProcesoDto,
   ): EstadoConfiguracionProcesoDto {
     if (!payload.nombre?.trim()) {
       return EstadoConfiguracionProcesoDto.borrador;
     }
 
     if (!payload.operaciones.length) {
-      return EstadoConfiguracionProcesoDto.incompleta;
-    }
-
-    if (
-      tipoProceso === TipoProcesoDto.maquinaria &&
-      !payload.plantillaMaquinaria
-    ) {
       return EstadoConfiguracionProcesoDto.incompleta;
     }
 
@@ -1097,7 +1055,6 @@ export class ProcesosService {
     payload: UpsertProcesoDto,
     references: ReferenceContext,
   ) {
-    const tipoProceso = this.getTipoProceso(payload);
     const operaciones = payload.operaciones ?? [];
 
     const operationOrders = new Set<number>();
@@ -1115,33 +1072,6 @@ export class ProcesosService {
         );
       }
       operationOrders.add(orden);
-    }
-
-    if (tipoProceso === TipoProcesoDto.manual) {
-      if (payload.plantillaMaquinaria) {
-        throw new BadRequestException(
-          'Los procesos manuales no deben seleccionar plantilla de maquinaria.',
-        );
-      }
-
-      if (
-        operaciones.some(
-          (operacion) => operacion.maquinaId || operacion.perfilOperativoId,
-        )
-      ) {
-        throw new BadRequestException(
-          'Un proceso manual no puede tener maquina ni perfil operativo asociados.',
-        );
-      }
-    }
-
-    if (
-      tipoProceso === TipoProcesoDto.maquinaria &&
-      !payload.plantillaMaquinaria
-    ) {
-      throw new BadRequestException(
-        'Los procesos de maquinaria requieren seleccionar plantilla de maquinaria.',
-      );
     }
 
     for (const operacion of operaciones) {
@@ -1181,7 +1111,6 @@ export class ProcesosService {
         }
 
         if (
-          tipoProceso === TipoProcesoDto.maquinaria &&
           maquina.plantilla !==
             this.toPrismaEnum<PlantillaMaquinaria>(payload.plantillaMaquinaria)
         ) {
@@ -1434,19 +1363,13 @@ export class ProcesosService {
       return centro.id;
     };
 
-    if (payload.tipoProceso !== TipoProcesoDto.maquinaria) {
+    if (!payload.maquinaId) {
       const centroCostoId = await resolveCentro(payload.centroCostoId);
       return {
         centroCostoId,
         maquinaId: null,
         perfilOperativoId: null,
       };
-    }
-
-    if (!payload.maquinaId) {
-      throw new BadRequestException(
-        'En una plantilla de tipo maquinaria, la maquina es obligatoria.',
-      );
     }
 
     const maquina = await this.prisma.maquina.findFirst({
@@ -1556,7 +1479,6 @@ export class ProcesosService {
       codigo: proceso.codigo,
       nombre: proceso.nombre,
       descripcion: proceso.descripcion ?? '',
-      tipoProceso: this.toApiEnum(proceso.tipoProceso) as TipoProcesoDto,
       plantillaMaquinaria: proceso.plantillaMaquinaria
         ? (this.toApiEnum(
             proceso.plantillaMaquinaria,
@@ -1623,7 +1545,6 @@ export class ProcesosService {
     return {
       id: item.id,
       nombre: item.nombre,
-      tipoProceso: this.toApiEnum(item.tipoProceso) as TipoProcesoDto,
       tipoOperacion: this.toApiEnum(
         item.tipoOperacion,
       ) as TipoOperacionProcesoDto,
@@ -1794,7 +1715,6 @@ export class ProcesosService {
         codigo: proceso.codigo,
         nombre: proceso.nombre,
         descripcion: proceso.descripcion,
-        tipoProceso: proceso.tipoProceso,
         plantillaMaquinaria: proceso.plantillaMaquinaria,
         currentVersion: proceso.currentVersion,
         estadoConfiguracion: proceso.estadoConfiguracion,
