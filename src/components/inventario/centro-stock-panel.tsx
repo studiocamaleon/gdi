@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDownIcon, ArrowUpIcon, CirclePlusIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpIcon, BoxIcon, CirclePlusIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -53,6 +53,11 @@ function getDefaultUbicacionId(almacen: AlmacenMateriaPrima | undefined) {
   return almacen.ubicaciones.find((item) => item.activo)?.id ?? almacen.ubicaciones[0]?.id ?? "";
 }
 
+function generateAutoAlmacenCodigo() {
+  const base36 = Date.now().toString(36).toUpperCase();
+  return `ALM-${base36.slice(-6)}`;
+}
+
 export function CentroStockPanel({
   initialAlmacenes,
   initialStock,
@@ -62,7 +67,6 @@ export function CentroStockPanel({
 
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
-  const [almacenCodigo, setAlmacenCodigo] = React.useState("");
   const [almacenNombre, setAlmacenNombre] = React.useState("");
   const [almacenDescripcion, setAlmacenDescripcion] = React.useState("");
 
@@ -242,6 +246,33 @@ export function CentroStockPanel({
     [varianteMetaById],
   );
 
+  const resolveIngresoCostWithReference = React.useCallback(
+    (
+      varianteId: string,
+      rawCost: string,
+    ): { cost: number | undefined; usedReferencia: boolean; missingReferenciaForZero: boolean } => {
+      const trimmed = rawCost.trim();
+      if (!trimmed.length) {
+        return { cost: undefined, usedReferencia: false, missingReferenciaForZero: false };
+      }
+      const parsed = Number(trimmed);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        return { cost: Number.NaN, usedReferencia: false, missingReferenciaForZero: false };
+      }
+      if (parsed !== 0) {
+        return { cost: parsed, usedReferencia: false, missingReferenciaForZero: false };
+      }
+
+      const precioReferencia = varianteMetaById.get(varianteId)?.precioReferencia ?? null;
+      if (typeof precioReferencia === "number" && Number.isFinite(precioReferencia) && precioReferencia > 0) {
+        return { cost: precioReferencia, usedReferencia: true, missingReferenciaForZero: false };
+      }
+
+      return { cost: 0, usedReferencia: false, missingReferenciaForZero: true };
+    },
+    [varianteMetaById],
+  );
+
   const resolveConfirmPrecio = React.useCallback((value: boolean) => {
     setConfirmPrecioOpen(false);
     setConfirmPrecioData(null);
@@ -252,21 +283,21 @@ export function CentroStockPanel({
   }, []);
 
   const handleCreateAlmacen = async () => {
-    if (!almacenCodigo.trim() || !almacenNombre.trim()) {
-      toast.error("Completa código y nombre del almacén.");
+    if (!almacenNombre.trim()) {
+      toast.error("Completa el nombre del almacén.");
       return;
     }
+    const generatedCodigo = generateAutoAlmacenCodigo();
 
     setIsSaving(true);
     try {
       await createAlmacen({
-        codigo: almacenCodigo.trim(),
+        codigo: generatedCodigo,
         nombre: almacenNombre.trim(),
         descripcion: almacenDescripcion.trim() || undefined,
         activo: true,
       });
       toast.success("Almacén creado. Se generó una ubicación interna principal automáticamente.");
-      setAlmacenCodigo("");
       setAlmacenNombre("");
       setAlmacenDescripcion("");
       setIsCreateOpen(false);
@@ -281,17 +312,6 @@ export function CentroStockPanel({
   const openMovimiento = (row: StockMateriaPrimaItem) => {
     setRowSelected(row);
     setMovimientoModo("libre");
-    setTipo("ingreso");
-    setOrigen("compra");
-    setCantidad("1");
-    setCostoUnitario("");
-    setReferenciaId("");
-    setMovOpen(true);
-  };
-
-  const openIngreso = (row: StockMateriaPrimaItem) => {
-    setRowSelected(row);
-    setMovimientoModo("ingreso");
     setTipo("ingreso");
     setOrigen("compra");
     setCantidad("1");
@@ -345,9 +365,26 @@ export function CentroStockPanel({
       return;
     }
 
-    const cost = costoUnitario.trim().length ? Number(costoUnitario) : undefined;
+    const {
+      cost,
+      usedReferencia,
+      missingReferenciaForZero,
+    } = tipo === "ingreso"
+      ? resolveIngresoCostWithReference(rowSelected.varianteId, costoUnitario)
+      : {
+          cost: costoUnitario.trim().length ? Number(costoUnitario) : undefined,
+          usedReferencia: false,
+          missingReferenciaForZero: false,
+        };
+
     if (cost !== undefined && (!Number.isFinite(cost) || cost < 0)) {
       toast.error("Costo unitario inválido.");
+      return;
+    }
+    if (missingReferenciaForZero) {
+      toast.error(
+        "No se puede ingresar costo 0: la variante no tiene precio de referencia cargado.",
+      );
       return;
     }
 
@@ -364,6 +401,9 @@ export function CentroStockPanel({
         referenciaId: referenciaId.trim() || undefined,
       });
       if (tipo === "ingreso") {
+        if (usedReferencia) {
+          toast.message("Se aplicó automáticamente el precio de referencia de la materia prima.");
+        }
         await maybeActualizarPrecioReferencia(rowSelected.varianteId, cost);
       }
       toast.success("Movimiento registrado.");
@@ -436,11 +476,19 @@ export function CentroStockPanel({
       return;
     }
 
-    const cost = ingresoInicialCostoUnitario.trim().length
-      ? Number(ingresoInicialCostoUnitario)
-      : undefined;
+    const {
+      cost,
+      usedReferencia,
+      missingReferenciaForZero,
+    } = resolveIngresoCostWithReference(ingresoInicialVarianteId, ingresoInicialCostoUnitario);
     if (cost !== undefined && (!Number.isFinite(cost) || cost < 0)) {
       toast.error("Costo unitario inválido.");
+      return;
+    }
+    if (missingReferenciaForZero) {
+      toast.error(
+        "No se puede ingresar costo 0: la variante no tiene precio de referencia cargado.",
+      );
       return;
     }
 
@@ -456,6 +504,9 @@ export function CentroStockPanel({
         referenciaTipo: "manual",
         referenciaId: ingresoInicialReferenciaId.trim() || undefined,
       });
+      if (usedReferencia) {
+        toast.message("Se aplicó automáticamente el precio de referencia de la materia prima.");
+      }
       await maybeActualizarPrecioReferencia(ingresoInicialVarianteId, cost);
       toast.success("Ingreso registrado.");
       setIngresoInicialOpen(false);
@@ -532,7 +583,8 @@ export function CentroStockPanel({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>Detalle de stock actual</CardTitle>
-          <Button size="sm" onClick={openIngresoInicial}>
+          <Button onClick={openIngresoInicial}>
+            <BoxIcon className="size-4" />
             Ingresar stock
           </Button>
         </CardHeader>
@@ -542,6 +594,7 @@ export function CentroStockPanel({
               <TableRow>
                 <TableHead>Almacén</TableHead>
                 <TableHead>Materia prima</TableHead>
+                <TableHead>Variante</TableHead>
                 <TableHead>SKU</TableHead>
                 <TableHead className="text-right">Cantidad</TableHead>
                 <TableHead className="text-right">Costo promedio</TableHead>
@@ -552,13 +605,8 @@ export function CentroStockPanel({
             <TableBody>
               {initialStock.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-muted-foreground">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <span>Sin stock cargado todavía. Registra un ingreso para iniciar historial.</span>
-                      <Button size="sm" onClick={openIngresoInicial}>
-                        Ingresar stock
-                      </Button>
-                    </div>
+                  <TableCell colSpan={8} className="text-muted-foreground">
+                    <span>Sin stock cargado todavía. Registra un ingreso para iniciar historial.</span>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -566,21 +614,23 @@ export function CentroStockPanel({
                   <TableRow key={row.id}>
                     <TableCell>{row.almacenNombre}</TableCell>
                     <TableCell>{row.materiaPrimaNombre}</TableCell>
+                    <TableCell>
+                      {varianteMetaById.get(row.varianteId)?.varianteNombre ?? row.varianteSku}
+                    </TableCell>
                     <TableCell>{row.varianteSku}</TableCell>
                     <TableCell className="text-right">{number2Formatter.format(row.cantidadDisponible)}</TableCell>
                     <TableCell className="text-right">{number2Formatter.format(row.costoPromedio)}</TableCell>
                     <TableCell className="text-right">$ {number2Formatter.format(row.valorStock)}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-2">
-                        <Button size="sm" onClick={() => openIngreso(row)}>
-                          Ingresar stock
-                        </Button>
                         <Button variant="outline" size="sm" onClick={() => openMovimiento(row)}>
                           Movimiento
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => openTransferencia(row)}>
-                          Transferir
-                        </Button>
+                        {initialAlmacenes.length > 1 ? (
+                          <Button variant="outline" size="sm" onClick={() => openTransferencia(row)}>
+                            Transferir
+                          </Button>
+                        ) : null}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -597,10 +647,9 @@ export function CentroStockPanel({
             <SheetTitle>Nuevo almacén</SheetTitle>
           </SheetHeader>
           <div className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
-            <Field>
-              <FieldLabel>Código</FieldLabel>
-              <Input value={almacenCodigo} onChange={(e) => setAlmacenCodigo(e.target.value)} />
-            </Field>
+            <p className="text-sm text-muted-foreground">
+              El código se genera automáticamente al crear el almacén.
+            </p>
             <Field>
               <FieldLabel>Nombre</FieldLabel>
               <Input value={almacenNombre} onChange={(e) => setAlmacenNombre(e.target.value)} />

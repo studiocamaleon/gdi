@@ -465,7 +465,7 @@ export class InventarioService {
 
       const tipo = this.toPrismaEnum<TipoMovimientoStockMateriaPrima>(payload.tipo);
       const origen = this.toPrismaEnum<OrigenMovimientoStockMateriaPrima>(payload.origen);
-      const unitCost = payload.costoUnitario === undefined || payload.costoUnitario === null
+      let unitCost = payload.costoUnitario === undefined || payload.costoUnitario === null
         ? null
         : this.roundToScale(payload.costoUnitario);
       const stockPrevio = stockActual ? this.decimalToNumber(stockActual.cantidadDisponible) : 0;
@@ -475,6 +475,13 @@ export class InventarioService {
         tipo === TipoMovimientoStockMateriaPrima.INGRESO ||
         tipo === TipoMovimientoStockMateriaPrima.AJUSTE_ENTRADA
       ) {
+        const precioReferenciaVariante = variante.precioReferencia
+          ? this.roundToScale(this.decimalToNumber(variante.precioReferencia))
+          : null;
+        if ((unitCost === null || unitCost <= 0) && precioReferenciaVariante && precioReferenciaVariante > 0) {
+          unitCost = precioReferenciaVariante;
+        }
+
         const nextQty = stockPrevio + cantidadNumber;
         const costIn = unitCost ?? costoPromedioPrevio ?? 0;
         const newAvg = nextQty > 0
@@ -857,6 +864,7 @@ export class InventarioService {
       select: {
         id: true,
         sku: true,
+        precioReferencia: true,
       },
     });
 

@@ -277,7 +277,7 @@ export function MovimientosKardexPanel({ materiasPrimas }: HistorialPanelProps) 
               <TableHead>Tipo</TableHead>
               <TableHead>Origen</TableHead>
               <TableHead className="text-right">Cantidad</TableHead>
-              <TableHead className="text-right">Saldo</TableHead>
+              <TableHead className="text-right">Saldo (cantidad)</TableHead>
               <TableHead className="text-right">Costo prom.</TableHead>
               <TableHead>Ref.</TableHead>
             </TableRow>
@@ -309,7 +309,7 @@ export function MovimientosKardexPanel({ materiasPrimas }: HistorialPanelProps) 
                   </TableCell>
                   <TableCell>{origenLabels[item.origen] ?? item.origen}</TableCell>
                   <TableCell className="text-right">{number2Formatter.format(item.cantidad)}</TableCell>
-                  <TableCell className="text-right">$ {number2Formatter.format(item.saldoPosterior)}</TableCell>
+                  <TableCell className="text-right">{number2Formatter.format(item.saldoPosterior)}</TableCell>
                   <TableCell className="text-right">{number2Formatter.format(item.costoPromedioPost)}</TableCell>
                   <TableCell>{item.referenciaId ?? "-"}</TableCell>
                 </TableRow>

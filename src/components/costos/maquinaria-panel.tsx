@@ -23,6 +23,7 @@ import {
   updateMaquina,
 } from "@/lib/maquinaria-api";
 import { getMateriasPrimas } from "@/lib/materias-primas-api";
+import { getMateriaPrimaVarianteLabel } from "@/lib/materias-primas-variantes-display";
 import {
   EstadoConfiguracionMaquina,
   estadoConfiguracionMaquinaItems,
@@ -854,15 +855,12 @@ function createConsumible(consumibleTemplateFields: MaquinariaTemplateField[] = 
 }
 
 function createDesgaste(desgasteTemplateFields: MaquinariaTemplateField[] = []): LocalDesgaste {
-  const tipoField = desgasteTemplateFields.find((fieldItem) => fieldItem.key === "tipo");
-  const unidadField = desgasteTemplateFields.find((fieldItem) => fieldItem.key === "unidadDesgaste");
-
   return {
     id: createLocalId(),
     materiaPrimaVarianteId: "",
     nombre: "",
-    tipo: pickDefaultSelectValue(tipoField, "otro") as LocalDesgaste["tipo"],
-    unidadDesgaste: pickDefaultSelectValue(unidadField, "horas") as LocalDesgaste["unidadDesgaste"],
+    tipo: "" as LocalDesgaste["tipo"],
+    unidadDesgaste: "" as LocalDesgaste["unidadDesgaste"],
     activo: true,
     vidaUtilEstimada: undefined,
     modoProrrateo: "",
@@ -1289,12 +1287,16 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
               tipoComponenteDesgaste: toNormalizedString(
                 variante.atributosVariante?.tipoComponenteDesgaste,
               ),
+              unidadVidaUtil: toNormalizedString(variante.atributosVariante?.unidadVidaUtil),
+              vidaUtilReferencia: toFiniteNumberOrUndefined(
+                String(variante.atributosVariante?.vidaUtilReferencia ?? ""),
+              ),
               plantillasCompatibles: toStringList(
                 variante.atributosVariante?.plantillasCompatibles ??
                   variante.atributosVariante?.plantillaCompatible,
               ),
               value: variante.id,
-              label: `${materiaPrima.nombre} - ${variante.nombreVariante || variante.sku}`,
+              label: getMateriaPrimaVarianteLabel(materiaPrima, variante, { maxDimensiones: 5 }),
               sku: variante.sku,
               precioReferencia: variante.precioReferencia,
               unidadStock: materiaPrima.unidadStock,
@@ -2676,6 +2678,15 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
             const selected = varianteRepuestoById.get(nextId);
             if (selected) {
               next.nombre = selected.nombre;
+              if (selected.tipoComponenteDesgaste) {
+                next.tipo = selected.tipoComponenteDesgaste as LocalDesgaste["tipo"];
+              }
+              if (selected.unidadVidaUtil) {
+                next.unidadDesgaste = selected.unidadVidaUtil as LocalDesgaste["unidadDesgaste"];
+              }
+              if (selected.vidaUtilReferencia !== undefined) {
+                next.vidaUtilEstimada = selected.vidaUtilReferencia;
+              }
             }
           } else if (fieldItem.key === "nombre") {
             next.nombre = String(value || "");
@@ -4953,17 +4964,27 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                     </p>
                   ) : null}
                   {desgastes.map((desgaste) => {
-                    const tipoDesgaste = desgaste.tipo.trim().toLowerCase();
                     const plantillaMaquina = form.plantilla.trim().toLowerCase();
+                    const repuestosSeleccionadosEnOtros = new Set(
+                      desgastes
+                        .filter(
+                          (item) =>
+                            item.id !== desgaste.id && Boolean(item.materiaPrimaVarianteId?.trim()),
+                        )
+                        .map((item) => item.materiaPrimaVarianteId.trim()),
+                    );
                     const variantesRepuestoFiltradas = variantesRepuestoDisponibles.filter((item) => {
-                      const matchesTipo =
-                        !item.tipoComponenteDesgaste ||
-                        item.tipoComponenteDesgaste === tipoDesgaste;
                       const matchesPlantilla =
                         item.plantillasCompatibles.length === 0 ||
                         item.plantillasCompatibles.includes(plantillaMaquina);
-                      return matchesTipo && matchesPlantilla;
+                      const alreadySelectedInAnother =
+                        repuestosSeleccionadosEnOtros.has(item.value) &&
+                        item.value !== desgaste.materiaPrimaVarianteId;
+                      return matchesPlantilla && !alreadySelectedInAnother;
                     });
+                    const repuestoSeleccionado = desgaste.materiaPrimaVarianteId
+                      ? varianteRepuestoById.get(desgaste.materiaPrimaVarianteId)
+                      : undefined;
 
                     return (
                     <div key={desgaste.id} className="rounded-lg border p-4">
@@ -4981,158 +5002,9 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                         </Button>
                       </div>
                       <FieldGroup className="grid gap-3 md:grid-cols-12">
-                        <Field className="md:col-span-6">
+                        <Field className="md:col-span-12">
                           <div className="flex min-h-10 items-start gap-1">
-                            <FieldLabel>
-                              {desgasteTemplateFieldByKey.get("nombre")?.label ?? "Nombre"}
-                              {renderRequiredAsterisk(desgasteTemplateFieldByKey.get("nombre")?.required)}
-                            </FieldLabel>
-                            {renderTooltipIcon(desgasteTemplateFieldByKey.get("nombre")?.description)}
-                          </div>
-                          <Input
-                            value={desgaste.nombre}
-                            onChange={(event) =>
-                              setDesgasteTemplateFieldValue(
-                                desgaste.id,
-                                desgasteTemplateFieldByKey.get("nombre") ?? {
-                                  key: "nombre",
-                                  label: "Nombre",
-                                  scope: "desgaste",
-                                  kind: "text",
-                                  description: "",
-                                },
-                                event.target.value,
-                              )
-                            }
-                          />
-                        </Field>
-                        <Field className="md:col-span-3">
-                          <div className="flex min-h-10 items-start gap-1">
-                            <FieldLabel>
-                              {desgasteTemplateFieldByKey.get("tipo")?.label ?? "Tipo"}
-                              {renderRequiredAsterisk(desgasteTemplateFieldByKey.get("tipo")?.required)}
-                            </FieldLabel>
-                            {renderTooltipIcon(desgasteTemplateFieldByKey.get("tipo")?.description)}
-                          </div>
-                          <Select
-                            value={desgaste.tipo}
-                            onValueChange={(value) => {
-                              const fieldItem = desgasteTemplateFieldByKey.get("tipo");
-                              if (!fieldItem) {
-                                setDesgastes((current) =>
-                                  current.map((item) =>
-                                    item.id === desgaste.id
-                                      ? { ...item, tipo: value as LocalDesgaste["tipo"] }
-                                      : item,
-                                  ),
-                                );
-                                return;
-                              }
-                              setDesgasteTemplateFieldValue(desgaste.id, fieldItem, value);
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue>
-                                {desgasteTipoOptions.find((item) => item.value === desgaste.tipo)?.label ??
-                                  formatTechnicalValue(desgaste.tipo)}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectGroup>
-                                {desgasteTipoOptions.map((item) => (
-                                  <SelectItem key={item.value} value={item.value}>
-                                    {item.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            </SelectContent>
-                          </Select>
-                        </Field>
-                        <Field className="md:col-span-3">
-                          <div className="flex min-h-10 items-start gap-1">
-                            <FieldLabel>
-                              {desgasteTemplateFieldByKey.get("unidadDesgaste")?.label ?? "Unidad desgaste"}
-                              {renderRequiredAsterisk(
-                                desgasteTemplateFieldByKey.get("unidadDesgaste")?.required,
-                              )}
-                            </FieldLabel>
-                            {renderTooltipIcon(desgasteTemplateFieldByKey.get("unidadDesgaste")?.description)}
-                          </div>
-                          <Select
-                            value={desgaste.unidadDesgaste}
-                            onValueChange={(value) => {
-                              const fieldItem = desgasteTemplateFieldByKey.get("unidadDesgaste");
-                              if (!fieldItem) {
-                                setDesgastes((current) =>
-                                  current.map((item) =>
-                                    item.id === desgaste.id
-                                      ? {
-                                          ...item,
-                                          unidadDesgaste: value as LocalDesgaste["unidadDesgaste"],
-                                        }
-                                      : item,
-                                  ),
-                                );
-                                return;
-                              }
-                              setDesgasteTemplateFieldValue(desgaste.id, fieldItem, value);
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue>
-                                {desgasteUnidadOptions.find((item) => item.value === desgaste.unidadDesgaste)
-                                  ?.label ?? formatTechnicalValue(desgaste.unidadDesgaste)}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectGroup>
-                                {desgasteUnidadOptions.map((item) => (
-                                  <SelectItem key={item.value} value={item.value}>
-                                    {item.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            </SelectContent>
-                          </Select>
-                        </Field>
-                        <Field className="md:col-span-3">
-                          <div className="flex min-h-10 items-start gap-1">
-                            <FieldLabel>
-                              {desgasteTemplateFieldByKey.get("vidaUtilEstimada")?.label ?? "Vida util estimada"}{" "}
-                              (segun unidad)
-                              {renderRequiredAsterisk(
-                                desgasteTemplateFieldByKey.get("vidaUtilEstimada")?.required,
-                              )}
-                            </FieldLabel>
-                            {renderTooltipIcon(desgasteTemplateFieldByKey.get("vidaUtilEstimada")?.description)}
-                          </div>
-                          <Input
-                            type="number"
-                            value={desgaste.vidaUtilEstimada ?? ""}
-                            onChange={(event) =>
-                              setDesgasteTemplateFieldValue(
-                                desgaste.id,
-                                desgasteTemplateFieldByKey.get("vidaUtilEstimada") ?? {
-                                  key: "vidaUtilEstimada",
-                                  label: "Vida util estimada",
-                                  scope: "desgaste",
-                                  kind: "number",
-                                  description: "",
-                                },
-                                event.target.value,
-                              )
-                            }
-                          />
-                        </Field>
-                        <Field className="md:col-span-6">
-                          <div className="flex min-h-10 items-start gap-1">
-                            <FieldLabel>
-                              {desgasteTemplateFieldByKey.get("materiaPrimaVarianteId")?.label ??
-                                "Variante de materia prima"}
-                              {renderRequiredAsterisk(
-                                desgasteTemplateFieldByKey.get("materiaPrimaVarianteId")?.required ?? true,
-                              )}
-                            </FieldLabel>
+                            <FieldLabel>Repuesto</FieldLabel>
                           </div>
                           <Select
                             value={desgaste.materiaPrimaVarianteId || EMPTY_SELECT_VALUE}
@@ -5151,7 +5023,9 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             }
                           >
                             <SelectTrigger>
-                              <SelectValue placeholder="Seleccionar variante" />
+                              <SelectValue placeholder="Seleccionar repuesto compatible">
+                                {repuestoSeleccionado?.label ?? "Seleccionar repuesto compatible"}
+                              </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               <SelectGroup>
@@ -5166,8 +5040,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                           </Select>
                           {variantesRepuestoFiltradas.length === 0 ? (
                             <p className="mt-1 text-xs text-muted-foreground">
-                              No hay repuestos compatibles para {desgaste.tipo || "este tipo"} en{" "}
-                              {getPlantillaMaquinariaLabel(form.plantilla)}.
+                              No hay repuestos compatibles para {getPlantillaMaquinariaLabel(form.plantilla)}.
                             </p>
                           ) : null}
                           {desgaste.materiaPrimaVarianteId ? (
@@ -5179,151 +5052,6 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                               por {getUnidadMateriaPrimaLabel(varianteRepuestoById.get(desgaste.materiaPrimaVarianteId)?.unidadStock)}
                             </p>
                           ) : null}
-                        </Field>
-                        {desgasteExtraTemplateFields.map((fieldItem) => {
-                          const rawValue = getDesgasteValueByTemplateField(desgaste, fieldItem);
-                          const key = `${desgaste.id}-${fieldItem.key}`;
-
-                          if (fieldItem.kind === "boolean") {
-                            return (
-                              <Field key={key} className="md:col-span-3">
-                                <div className="flex min-h-10 items-start gap-1">
-                                  <FieldLabel>
-                                    {fieldItem.label}
-                                    {renderRequiredAsterisk(fieldItem.required)}
-                                  </FieldLabel>
-                                  {renderTooltipIcon(fieldItem.description)}
-                                </div>
-                                <div className="flex h-10 items-center justify-end rounded-md border px-3">
-                                  <Switch
-                                    checked={Boolean(rawValue)}
-                                    onCheckedChange={(checked) =>
-                                      setDesgasteTemplateFieldValue(desgaste.id, fieldItem, checked)
-                                    }
-                                  />
-                                </div>
-                              </Field>
-                            );
-                          }
-
-                          if (fieldItem.kind === "select") {
-                            const currentSelectValue =
-                              typeof rawValue === "string" && rawValue.trim().length > 0
-                                ? rawValue
-                                : EMPTY_SELECT_VALUE;
-                            return (
-                              <Field key={key} className="md:col-span-3">
-                                <div className="flex min-h-10 items-start gap-1">
-                                  <FieldLabel>
-                                    {fieldItem.label}
-                                    {renderRequiredAsterisk(fieldItem.required)}
-                                  </FieldLabel>
-                                  {renderTooltipIcon(fieldItem.description)}
-                                </div>
-                                <Select
-                                  value={currentSelectValue}
-                                  onValueChange={(value) =>
-                                    setDesgasteTemplateFieldValue(
-                                      desgaste.id,
-                                      fieldItem,
-                                      value === EMPTY_SELECT_VALUE ? "" : value,
-                                    )
-                                  }
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder={fieldItem.placeholder || "Seleccionar"}>
-                                      {fieldItem.options?.find((option) => option.value === currentSelectValue)
-                                        ?.label ??
-                                        (currentSelectValue !== EMPTY_SELECT_VALUE
-                                          ? formatTechnicalValue(currentSelectValue)
-                                          : fieldItem.placeholder || "Seleccionar")}
-                                    </SelectValue>
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectGroup>
-                                      <SelectItem value={EMPTY_SELECT_VALUE}>Sin seleccionar</SelectItem>
-                                      {(fieldItem.options ?? []).map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                          {option.label}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectGroup>
-                                  </SelectContent>
-                                </Select>
-                              </Field>
-                            );
-                          }
-
-                          const inputType = fieldItem.kind === "number" ? "number" : "text";
-                          return (
-                            <Field key={key} className="md:col-span-3">
-                              <div className="flex min-h-10 items-start gap-1">
-                                <FieldLabel>
-                                  {fieldItem.label}
-                                  {renderRequiredAsterisk(fieldItem.required)}
-                                </FieldLabel>
-                                {renderTooltipIcon(fieldItem.description)}
-                              </div>
-                              <Input
-                                type={inputType}
-                                value={String(rawValue ?? "")}
-                                onChange={(event) =>
-                                  setDesgasteTemplateFieldValue(desgaste.id, fieldItem, event.target.value)
-                                }
-                                placeholder={fieldItem.placeholder}
-                              />
-                            </Field>
-                          );
-                        })}
-                        <Field className="md:col-span-6">
-                          <div className="flex min-h-10 items-start gap-1">
-                            <FieldLabel>
-                              Modo prorrateo
-                              {renderRequiredAsterisk(
-                                desgasteTemplateFieldByKey.get("modoProrrateo")?.required,
-                              )}
-                            </FieldLabel>
-                          </div>
-                          <Input
-                            value={desgaste.modoProrrateo || ""}
-                            onChange={(event) =>
-                              setDesgasteTemplateFieldValue(
-                                desgaste.id,
-                                {
-                                  key: "modoProrrateo",
-                                  label: "Modo prorrateo",
-                                  scope: "desgaste",
-                                  kind: "text",
-                                  description: "",
-                                },
-                                event.target.value,
-                              )
-                            }
-                            placeholder="Ejemplo: lineal por horas"
-                          />
-                        </Field>
-                        <Field className="md:col-span-3">
-                          <div className="flex min-h-10 items-start gap-1">
-                            <FieldLabel>Activo</FieldLabel>
-                          </div>
-                          <div className="flex h-10 items-center justify-end rounded-md border px-3">
-                            <Switch
-                              checked={desgaste.activo}
-                              onCheckedChange={(checked) =>
-                                setDesgasteTemplateFieldValue(
-                                  desgaste.id,
-                                  {
-                                    key: "activo",
-                                    label: "Activo",
-                                    scope: "desgaste",
-                                    kind: "boolean",
-                                    description: "",
-                                  },
-                                  checked,
-                                )
-                              }
-                            />
-                          </div>
                         </Field>
                       </FieldGroup>
                     </div>

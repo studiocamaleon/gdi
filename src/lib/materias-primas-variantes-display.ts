@@ -1,4 +1,6 @@
 import { getMateriaPrimaTemplate } from "@/lib/materia-prima-templates";
+import { getReplacementComponentLabel } from "@/lib/materia-prima-templates";
+import { getPlantillaMaquinariaLabel } from "@/lib/maquinaria-templates";
 import type { MateriaPrima, MateriaPrimaVariante } from "@/lib/materias-primas";
 import type { UnitCode } from "@/lib/unidades";
 import { getUnitDefinition } from "@/lib/unidades";
@@ -24,7 +26,38 @@ function asText(value: unknown) {
   return "";
 }
 
-function formatFieldValue(value: unknown, type: "text" | "number" | "boolean", unit?: UnitCode) {
+const unidadVidaUtilLabelMap: Record<string, string> = {
+  copias_a4_equiv: "Copias A4 equivalentes",
+  m2: "Metros cuadrados",
+  metros_lineales: "Metros lineales",
+  horas: "Horas",
+  ciclos: "Ciclos",
+  piezas: "Piezas",
+};
+
+function formatTemplateTextValue(fieldKey: string, value: string) {
+  const normalized = value.trim();
+  if (!normalized) return "";
+  if (fieldKey === "tipoComponenteDesgaste") {
+    return getReplacementComponentLabel(normalized);
+  }
+  if (fieldKey === "unidadVidaUtil") {
+    return unidadVidaUtilLabelMap[normalized] ?? normalized;
+  }
+  if (fieldKey === "plantillasCompatibles" || fieldKey === "plantillaCompatible") {
+    return getPlantillaMaquinariaLabel(
+      normalized as Parameters<typeof getPlantillaMaquinariaLabel>[0],
+    );
+  }
+  return normalized;
+}
+
+function formatFieldValue(
+  fieldKey: string,
+  value: unknown,
+  type: "text" | "number" | "boolean",
+  unit?: UnitCode,
+) {
   if (type === "number") {
     const num = asFiniteNumber(value);
     if (num === null) return "";
@@ -32,12 +65,19 @@ function formatFieldValue(value: unknown, type: "text" | "number" | "boolean", u
     return `${numberFormatter.format(num)}${suffix}`;
   }
 
+  if (type === "text" && Array.isArray(value)) {
+    const values = value
+      .map((item) => formatTemplateTextValue(fieldKey, asText(item)))
+      .filter((item) => item.length > 0);
+    return values.join(", ");
+  }
+
   if (type === "boolean") {
     if (typeof value === "boolean") return value ? "Sí" : "No";
     return "";
   }
 
-  return asText(value);
+  return formatTemplateTextValue(fieldKey, asText(value));
 }
 
 export function getVarianteDisplayName(
@@ -60,7 +100,7 @@ export function getVarianteDisplayName(
     const rawValue = attrs[key];
     const field = fieldByKey.get(key);
     const value = field
-      ? formatFieldValue(rawValue, field.type, field.unit)
+      ? formatFieldValue(key, rawValue, field.type, field.unit)
       : asText(rawValue);
 
     if (!value) continue;
