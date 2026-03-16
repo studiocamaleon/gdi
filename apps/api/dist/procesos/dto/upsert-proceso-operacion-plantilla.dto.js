@@ -21,6 +21,7 @@ class UpsertProcesoOperacionPlantillaDto {
     perfilOperativoId;
     setupMin;
     cleanupMin;
+    tiempoFijoMin;
     modoProductividad;
     productividadBase;
     unidadEntrada;
@@ -69,6 +70,12 @@ __decorate([
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
 ], UpsertProcesoOperacionPlantillaDto.prototype, "cleanupMin", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Number)
+], UpsertProcesoOperacionPlantillaDto.prototype, "tiempoFijoMin", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEnum)(upsert_proceso_dto_1.ModoProductividadProcesoDto),

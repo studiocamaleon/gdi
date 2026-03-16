@@ -10,6 +10,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UpdateVariantePrecioReferenciaDto = void 0;
+const class_transformer_1 = require("class-transformer");
 const class_validator_1 = require("class-validator");
 class UpdateVariantePrecioReferenciaDto {
     precioReferencia;
@@ -17,6 +18,16 @@ class UpdateVariantePrecioReferenciaDto {
 }
 exports.UpdateVariantePrecioReferenciaDto = UpdateVariantePrecioReferenciaDto;
 __decorate([
+    (0, class_transformer_1.Transform)(({ value }) => {
+        if (typeof value === 'string') {
+            const normalized = value.replace(',', '.').trim();
+            if (!normalized) {
+                return Number.NaN;
+            }
+            return Number(normalized);
+        }
+        return value;
+    }),
     (0, class_validator_1.IsNumber)(),
     (0, class_validator_1.Min)(0),
     __metadata("design:type", Number)

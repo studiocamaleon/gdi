@@ -428,6 +428,7 @@ export declare class MaquinariaService {
     private toNumber;
     private parseFiniteNumber;
     private computeSetupEstimadoPerfil;
+    private collectExtraSetupMin;
     private normalizeString;
     private normalizeStringList;
     private toNullableJson;

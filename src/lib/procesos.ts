@@ -34,7 +34,7 @@ export type TipoOperacionProceso =
   | 'tercerizado'
   | 'otro';
 
-export type ModoProductividadProceso = 'fija' | 'formula' | 'tabla';
+export type ModoProductividadProceso = 'fija' | 'variable';
 
 export type ProcesoOperacion = {
   id: string;
@@ -130,6 +130,7 @@ export type ProcesoOperacionPlantilla = {
   perfilOperativoNombre: string;
   setupMin: number | null;
   cleanupMin: number | null;
+  tiempoFijoMin: number | null;
   modoProductividad: ModoProductividadProceso;
   productividadBase: number | null;
   unidadEntrada: UnidadProceso;
@@ -152,6 +153,7 @@ export type ProcesoOperacionPlantillaPayload = {
   perfilOperativoId?: string;
   setupMin?: number;
   cleanupMin?: number;
+  tiempoFijoMin?: number;
   modoProductividad?: ModoProductividadProceso;
   productividadBase?: number;
   unidadEntrada?: UnidadProceso;
@@ -199,8 +201,7 @@ export const modoProductividadProcesoItems: Array<{
   value: ModoProductividadProceso;
 }> = [
   { label: 'Fija', value: 'fija' },
-  { label: 'Formula', value: 'formula' },
-  { label: 'Tabla', value: 'tabla' },
+  { label: 'Variable', value: 'variable' },
 ];
 
 export const unidadProcesoItems: Array<{ label: string; value: UnidadProceso }> = [

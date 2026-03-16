@@ -384,6 +384,31 @@ enum OrigenMovimientoStockMateriaPrima {
   OTRO
 }
 
+enum TipoProductoServicio {
+  PRODUCTO
+  SERVICIO
+}
+
+enum EstadoProductoServicio {
+  ACTIVO
+  INACTIVO
+}
+
+enum TipoImpresionProductoVariante {
+  BN
+  CMYK
+}
+
+enum CarasProductoVariante {
+  SIMPLE_FAZ
+  DOBLE_FAZ
+}
+
+enum EstadoAlgoritmoCosto {
+  ACTIVO
+  INACTIVO
+}
+
 model Tenant {
   id                                 String                              @id @default(uuid()) @db.Uuid
   nombre                             String
@@ -425,6 +450,15 @@ model Tenant {
   proveedorDireccions                ProveedorDireccion[]
   empleadoDireccions                 EmpleadoDireccion[]
   empleadoComisions                  EmpleadoComision[]
+  familiasProducto                   FamiliaProducto[]
+  subfamiliasProducto                SubfamiliaProducto[]
+  productosServicio                  ProductoServicio[]
+  productosVariantes                 ProductoVariante[]
+  algoritmosCosto                    AlgoritmoCosto[]
+  productosVariantesAlgoritmoConfig  ProductoVarianteAlgoritmoConfig[]
+  productoMotorConfigs               ProductoMotorConfig[]
+  productoVarianteMotorOverrides     ProductoVarianteMotorOverride[]
+  cotizacionesProductoSnapshot       CotizacionProductoSnapshot[]
 }
 
 model User {
@@ -1008,6 +1042,8 @@ model ProcesoDefinicion {
   tenant              Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   operaciones         ProcesoOperacion[]
   versiones           ProcesoVersion[]
+  productosVariantes  ProductoVariante[]
+  productosDefaultRuta ProductoServicio[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, plantillaMaquinaria, activo])
@@ -1025,6 +1061,7 @@ model ProcesoOperacionPlantilla {
   perfilOperativoId  String?                  @db.Uuid
   setupMin           Decimal?                 @db.Decimal(12, 2)
   cleanupMin         Decimal?                 @db.Decimal(12, 2)
+  tiempoFijoMin      Decimal?                 @db.Decimal(12, 2)
   modoProductividad  ModoProductividadProceso @default(FIJA)
   productividadBase  Decimal?                 @db.Decimal(12, 4)
   unidadEntrada      UnidadProceso            @default(NINGUNA)
@@ -1154,6 +1191,7 @@ model MateriaPrimaVariante {
   movimientosStock      MovimientoStockMateriaPrima[]
   maquinaConsumibles    MaquinaConsumible[]           @relation("MaquinaConsumibleMateriaPrimaVariante")
   maquinaDesgastes      MaquinaComponenteDesgaste[]   @relation("MaquinaDesgasteMateriaPrimaVariante")
+  productosVariantes    ProductoVariante[]
 
   @@unique([tenantId, sku])
   @@index([tenantId, materiaPrimaId, activo])
@@ -1238,4 +1276,185 @@ model MovimientoStockMateriaPrima {
   @@index([tenantId, tipo, createdAt])
   @@index([tenantId, referenciaTipo, referenciaId])
   @@index([tenantId, transferenciaId])
+}
+
+model FamiliaProducto {
+  id          String            @id @default(uuid()) @db.Uuid
+  tenantId    String            @db.Uuid
+  codigo      String
+  nombre      String
+  activo      Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subfamilias SubfamiliaProducto[]
+  productos   ProductoServicio[]
+
+  @@unique([tenantId, codigo])
+  @@index([tenantId, nombre, activo])
+}
+
+model SubfamiliaProducto {
+  id                String            @id @default(uuid()) @db.Uuid
+  tenantId          String            @db.Uuid
+  familiaProductoId String            @db.Uuid
+  codigo            String
+  nombre            String
+  unidadComercial   String?
+  activo            Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  familiaProducto   FamiliaProducto   @relation(fields: [familiaProductoId], references: [id], onDelete: Cascade)
+  productos         ProductoServicio[]
+
+  @@unique([tenantId, familiaProductoId, codigo])
+  @@index([tenantId, familiaProductoId, nombre, activo])
+}
+
+model ProductoServicio {
+  id                   String                 @id @default(uuid()) @db.Uuid
+  tenantId             String                 @db.Uuid
+  tipo                 TipoProductoServicio
+  codigo               String
+  nombre               String
+  descripcion          String?
+  motorCodigo          String                 @default("impresion_digital_laser")
+  motorVersion         Int                    @default(1)
+  usarRutaComunVariantes Boolean              @default(true)
+  procesoDefinicionDefaultId String?          @db.Uuid
+  familiaProductoId    String                 @db.Uuid
+  subfamiliaProductoId String?                @db.Uuid
+  estado               EstadoProductoServicio @default(ACTIVO)
+  activo               Boolean                @default(true)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  tenant               Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  familiaProducto      FamiliaProducto        @relation(fields: [familiaProductoId], references: [id], onDelete: Restrict)
+  subfamiliaProducto   SubfamiliaProducto?    @relation(fields: [subfamiliaProductoId], references: [id], onDelete: SetNull)
+  procesoDefinicionDefault ProcesoDefinicion? @relation(fields: [procesoDefinicionDefaultId], references: [id], onDelete: SetNull)
+  variantes            ProductoVariante[]
+  motorConfigs         ProductoMotorConfig[]
+
+  @@unique([tenantId, codigo])
+  @@index([tenantId, nombre, activo])
+  @@index([tenantId, familiaProductoId, subfamiliaProductoId])
+  @@index([tenantId, procesoDefinicionDefaultId])
+}
+
+model ProductoVariante {
+  id                 String                       @id @default(uuid()) @db.Uuid
+  tenantId           String                       @db.Uuid
+  productoServicioId String                       @db.Uuid
+  nombre             String
+  anchoMm            Decimal                      @db.Decimal(12, 2)
+  altoMm             Decimal                      @db.Decimal(12, 2)
+  papelVarianteId    String?                      @db.Uuid
+  tipoImpresion      TipoImpresionProductoVariante
+  caras              CarasProductoVariante
+  procesoDefinicionId String?                     @db.Uuid
+  activo             Boolean                      @default(true)
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
+  tenant             Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productoServicio   ProductoServicio             @relation(fields: [productoServicioId], references: [id], onDelete: Cascade)
+  papelVariante      MateriaPrimaVariante?        @relation(fields: [papelVarianteId], references: [id], onDelete: SetNull)
+  procesoDefinicion  ProcesoDefinicion?           @relation(fields: [procesoDefinicionId], references: [id], onDelete: SetNull)
+  algoritmoConfigs   ProductoVarianteAlgoritmoConfig[]
+  motorOverrides     ProductoVarianteMotorOverride[]
+  cotizaciones       CotizacionProductoSnapshot[]
+
+  @@unique([tenantId, productoServicioId, nombre])
+  @@index([tenantId, productoServicioId, activo])
+  @@index([tenantId, procesoDefinicionId])
+}
+
+model ProductoMotorConfig {
+  id                String           @id @default(uuid()) @db.Uuid
+  tenantId          String           @db.Uuid
+  productoServicioId String          @db.Uuid
+  motorCodigo       String
+  motorVersion      Int
+  parametrosJson    Json
+  versionConfig     Int              @default(1)
+  activo            Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productoServicio  ProductoServicio @relation(fields: [productoServicioId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, productoServicioId, motorCodigo, motorVersion, versionConfig])
+  @@index([tenantId, productoServicioId, activo])
+}
+
+model ProductoVarianteMotorOverride {
+  id                String           @id @default(uuid()) @db.Uuid
+  tenantId          String           @db.Uuid
+  productoVarianteId String          @db.Uuid
+  motorCodigo       String
+  motorVersion      Int
+  parametrosJson    Json
+  versionConfig     Int              @default(1)
+  activo            Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productoVariante  ProductoVariante @relation(fields: [productoVarianteId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, productoVarianteId, motorCodigo, motorVersion, versionConfig])
+  @@index([tenantId, productoVarianteId, activo])
+}
+
+model AlgoritmoCosto {
+  id          String               @id @default(uuid()) @db.Uuid
+  tenantId    String               @db.Uuid
+  codigo      String
+  version     Int
+  estado      EstadoAlgoritmoCosto @default(ACTIVO)
+  schemaJson  Json
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  configs     ProductoVarianteAlgoritmoConfig[]
+  @@unique([tenantId, codigo, version])
+  @@index([tenantId, codigo, estado])
+}
+
+model ProductoVarianteAlgoritmoConfig {
+  id                String           @id @default(uuid()) @db.Uuid
+  tenantId          String           @db.Uuid
+  productoVarianteId String          @db.Uuid
+  algoritmoCostoId  String           @db.Uuid
+  parametrosJson    Json
+  versionConfig     Int              @default(1)
+  activo            Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productoVariante  ProductoVariante @relation(fields: [productoVarianteId], references: [id], onDelete: Cascade)
+  algoritmoCosto    AlgoritmoCosto   @relation(fields: [algoritmoCostoId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, productoVarianteId, algoritmoCostoId, versionConfig])
+  @@index([tenantId, productoVarianteId, activo])
+}
+
+model CotizacionProductoSnapshot {
+  id                String           @id @default(uuid()) @db.Uuid
+  tenantId          String           @db.Uuid
+  productoVarianteId String          @db.Uuid
+  motorCodigo       String
+  motorVersion      Int
+  configVersionBase Int?
+  configVersionOverride Int?
+  cantidad          Int
+  periodoTarifa     String
+  inputJson         Json
+  resultadoJson     Json
+  total             Decimal          @db.Decimal(14, 6)
+  createdAt         DateTime         @default(now())
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productoVariante  ProductoVariante @relation(fields: [productoVarianteId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, productoVarianteId, createdAt])
+  @@index([tenantId, motorCodigo, motorVersion, createdAt])
 }

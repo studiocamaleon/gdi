@@ -59,8 +59,7 @@ var TipoOperacionProcesoDto;
 var ModoProductividadProcesoDto;
 (function (ModoProductividadProcesoDto) {
     ModoProductividadProcesoDto["fija"] = "fija";
-    ModoProductividadProcesoDto["formula"] = "formula";
-    ModoProductividadProcesoDto["tabla"] = "tabla";
+    ModoProductividadProcesoDto["variable"] = "variable";
 })(ModoProductividadProcesoDto || (exports.ModoProductividadProcesoDto = ModoProductividadProcesoDto = {}));
 var UnidadProcesoDto;
 (function (UnidadProcesoDto) {

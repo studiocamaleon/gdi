@@ -23,6 +23,7 @@ const procesos_module_1 = require("./procesos/procesos.module");
 const proveedores_module_1 = require("./proveedores/proveedores.module");
 const tenants_module_1 = require("./tenants/tenants.module");
 const inventario_module_1 = require("./inventario/inventario.module");
+const productos_servicios_module_1 = require("./productos-servicios/productos-servicios.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -40,6 +41,7 @@ exports.AppModule = AppModule = __decorate([
             maquinaria_module_1.MaquinariaModule,
             procesos_module_1.ProcesosModule,
             inventario_module_1.InventarioModule,
+            productos_servicios_module_1.ProductosServiciosModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [

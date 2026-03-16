@@ -34,7 +34,6 @@ import {
 } from './dto/evaluar-proceso-costo.dto';
 import {
   evaluateProductividad,
-  validateProductividadRulesByMode,
 } from './proceso-productividad.engine';
 
 type ProcesoCompleto = Prisma.ProcesoDefinicionGetPayload<{
@@ -82,6 +81,7 @@ type PerfilRef = {
   unidadProductividad: UnidadProduccionMaquina | null;
   tiempoPreparacionMin: Prisma.Decimal | null;
   tiempoRipMin: Prisma.Decimal | null;
+  detalleJson: Prisma.JsonValue | null;
 };
 
 type ReferenceContext = {
@@ -294,21 +294,35 @@ export class ProcesosService {
       const tiempoFijoMin = this.decimalToNumber(operacion.tiempoFijoMin);
       const tarifa = tarifaByCentroId.get(operacion.centroCostoId);
       const tarifaNumero = tarifa ? Number(tarifa) : null;
-
-      const productividad = evaluateProductividad({
-        modoProductividad: operacion.modoProductividad,
-        productividadBase: derived.productividadBase,
-        reglaVelocidadJson: operacion.reglaVelocidadJson,
-        reglaMermaJson: operacion.reglaMermaJson,
-        runMin: operacion.runMin,
-        unidadTiempo: derived.unidadTiempo,
-        mermaRunPct: operacion.mermaRunPct,
-        mermaSetup: operacion.mermaSetup,
-        cantidadObjetivoSalida: cantidadObjetivo,
-        contexto,
-      });
-
-      const runMin = productividad.runMin;
+      const usarTiempoFijoManual =
+        operacion.modoProductividad === ModoProductividadProceso.FIJA &&
+        tiempoFijoMin > 0;
+      let runMin = this.decimalToNumber(operacion.runMin);
+      const productividadWarnings: string[] = [];
+      let productividadAplicada: number | null = null;
+      let cantidadRun = 0;
+      let mermaSetupAplicada = this.decimalToNumber(operacion.mermaSetup);
+      let mermaRunPctAplicada = this.decimalToNumber(operacion.mermaRunPct);
+      if (!usarTiempoFijoManual) {
+        const productividad = evaluateProductividad({
+          modoProductividad: ModoProductividadProceso.FIJA,
+          productividadBase: derived.productividadBase,
+          reglaVelocidadJson: null,
+          reglaMermaJson: operacion.reglaMermaJson,
+          runMin: operacion.runMin,
+          unidadTiempo: derived.unidadTiempo,
+          mermaRunPct: operacion.mermaRunPct,
+          mermaSetup: operacion.mermaSetup,
+          cantidadObjetivoSalida: cantidadObjetivo,
+          contexto,
+        });
+        runMin = productividad.runMin;
+        productividadAplicada = productividad.productividadAplicada;
+        cantidadRun = productividad.cantidadRun;
+        mermaSetupAplicada = productividad.mermaSetupAplicada;
+        mermaRunPctAplicada = productividad.mermaRunPctAplicada;
+        productividadWarnings.push(...productividad.warnings);
+      }
       const totalMin = setupMin + runMin + cleanupMin + tiempoFijoMin;
       const horasEfectivas = totalMin / 60;
       const costoTiempo = tarifa
@@ -316,7 +330,7 @@ export class ProcesosService {
         : 0;
 
       const warnings: string[] = [
-        ...productividad.warnings,
+        ...productividadWarnings,
         ...derived.warnings,
       ];
       if (!tarifa) {
@@ -356,11 +370,13 @@ export class ProcesosService {
         horasEfectivas: Number(horasEfectivas.toFixed(4)),
         tarifaCentro: tarifaNumero,
         costoTiempo,
-        productividadAplicada: productividad.productividadAplicada,
-        cantidadRun: productividad.cantidadRun,
-        mermaSetupAplicada: productividad.mermaSetupAplicada,
-        mermaRunPctAplicada: productividad.mermaRunPctAplicada,
-        modoProductividad: this.toApiEnum(operacion.modoProductividad),
+        productividadAplicada,
+        cantidadRun,
+        mermaSetupAplicada,
+        mermaRunPctAplicada,
+        modoProductividad: this.toApiModoProductividad(
+          operacion.modoProductividad,
+        ),
         warnings: Array.from(new Set(warnings)),
       };
     });
@@ -659,7 +675,7 @@ export class ProcesosService {
       unidadTiempo: derived.unidadTiempo,
       mermaSetup: this.toDecimal(payload.mermaSetup),
       mermaRunPct: this.toDecimal(payload.mermaRunPct),
-      reglaVelocidadJson: this.toNullableJson(payload.reglaVelocidad),
+      reglaVelocidadJson: undefined,
       reglaMermaJson: this.toNullableJson(payload.reglaMerma),
       detalleJson: this.toNullableJson(payload.detalle),
       activo: payload.activo,
@@ -686,8 +702,9 @@ export class ProcesosService {
       perfilOperativoId: refs.perfilOperativoId,
       setupMin: this.toDecimal(payload.setupMin),
       cleanupMin: this.toDecimal(payload.cleanupMin),
-      modoProductividad: this.toPrismaEnum<ModoProductividadProceso>(
-        payload.modoProductividad ?? ModoProductividadProcesoDto.fija,
+      tiempoFijoMin: this.toDecimal(payload.tiempoFijoMin),
+      modoProductividad: this.resolveModoProductividadFromBibliotecaPayload(
+        payload,
       ),
       productividadBase: this.toDecimal(payload.productividadBase),
       unidadEntrada: this.toPrismaEnum<UnidadProceso>(
@@ -700,7 +717,7 @@ export class ProcesosService {
         payload.unidadTiempo ?? UnidadProcesoDto.minuto,
       ),
       mermaRunPct: this.toDecimal(payload.mermaRunPct),
-      reglaVelocidadJson: this.toNullableJson(payload.reglaVelocidad),
+      reglaVelocidadJson: undefined,
       reglaMermaJson: this.toNullableJson(payload.reglaMerma),
       observaciones: payload.observaciones?.trim() || null,
       activo: payload.activo,
@@ -722,6 +739,10 @@ export class ProcesosService {
 
     if (payload.cleanupMin !== undefined && payload.cleanupMin < 0) {
       throw new BadRequestException('Cleanup no puede ser negativo.');
+    }
+
+    if (payload.tiempoFijoMin !== undefined && payload.tiempoFijoMin < 0) {
+      throw new BadRequestException('Tiempo fijo no puede ser negativo.');
     }
 
     if (
@@ -756,13 +777,19 @@ export class ProcesosService {
   private resolveModoProductividadFromPayload(
     payload: ProcesoOperacionItemDto,
   ): ModoProductividadProceso {
-    if (payload.perfilOperativoId) {
+    if (payload.modoProductividad === ModoProductividadProcesoDto.fija) {
       return ModoProductividadProceso.FIJA;
     }
+    return ModoProductividadProceso.FORMULA;
+  }
 
-    return this.toPrismaEnum<ModoProductividadProceso>(
-      payload.modoProductividad ?? ModoProductividadProcesoDto.fija,
-    );
+  private resolveModoProductividadFromBibliotecaPayload(
+    payload: UpsertProcesoOperacionPlantillaDto,
+  ): ModoProductividadProceso {
+    if (payload.modoProductividad === ModoProductividadProcesoDto.fija) {
+      return ModoProductividadProceso.FIJA;
+    }
+    return ModoProductividadProceso.FORMULA;
   }
 
   private deriveOperationDefaultsFromPayload(
@@ -919,14 +946,9 @@ export class ProcesosService {
       return null;
     }
 
-    if (
-      perfil.tiempoPreparacionMin !== null &&
-      perfil.tiempoPreparacionMin !== undefined
-    ) {
-      return perfil.tiempoPreparacionMin;
-    }
-
     const timeParts = [
+      ...this.collectSetupDetailParts(perfil.detalleJson),
+      perfil.tiempoPreparacionMin,
       perfil.tiempoRipMin,
     ].filter(
       (value): value is Prisma.Decimal => value !== null && value !== undefined,
@@ -949,14 +971,9 @@ export class ProcesosService {
       return null;
     }
 
-    if (
-      perfil.tiempoPreparacionMin !== null &&
-      perfil.tiempoPreparacionMin !== undefined
-    ) {
-      return perfil.tiempoPreparacionMin;
-    }
-
     const timeParts = [
+      ...this.collectSetupDetailParts(perfil.detalleJson),
+      perfil.tiempoPreparacionMin,
       perfil.tiempoRipMin,
     ].filter(
       (value): value is Prisma.Decimal => value !== null && value !== undefined,
@@ -970,6 +987,51 @@ export class ProcesosService {
       (acc, value) => acc.add(value),
       new Prisma.Decimal(0),
     );
+  }
+
+  private collectSetupDetailParts(detalleJson: Prisma.JsonValue | null) {
+    if (!detalleJson || typeof detalleJson !== 'object' || Array.isArray(detalleJson)) {
+      return [] as Prisma.Decimal[];
+    }
+
+    const detalle = detalleJson as Record<string, unknown>;
+    const values: number[] = [];
+    const pushIfFinite = (value: unknown) => {
+      const parsed = this.parseFiniteNumber(value);
+      if (parsed !== null && parsed > 0) {
+        values.push(parsed);
+      }
+    };
+
+    pushIfFinite(detalle.tiempoSetupMin);
+    pushIfFinite(detalle.setupMin);
+    pushIfFinite(detalle.setup);
+
+    const objectCandidates = [
+      detalle.setupComponentesMin,
+      detalle.setupExtraComponentesMin,
+      detalle.tiemposSetupExtraMin,
+    ];
+    for (const candidate of objectCandidates) {
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+        continue;
+      }
+      for (const value of Object.values(candidate as Record<string, unknown>)) {
+        pushIfFinite(value);
+      }
+    }
+
+    const arrayCandidates = [detalle.setupExtrasMin, detalle.tiemposExtraSetupMin];
+    for (const candidate of arrayCandidates) {
+      if (!Array.isArray(candidate)) {
+        continue;
+      }
+      for (const value of candidate) {
+        pushIfFinite(value);
+      }
+    }
+
+    return values.map((item) => new Prisma.Decimal(item));
   }
 
   private getPlantillaFromPayload(payload: UpsertProcesoDto) {
@@ -1140,24 +1202,28 @@ export class ProcesosService {
         );
       }
 
-      const modoProductividad =
-        this.resolveModoProductividadFromPayload(operacion);
+      const modoProductividad = this.resolveModoProductividadFromPayload(
+        operacion,
+      );
       const derived = this.deriveOperationDefaultsFromPayload(
         operacion,
         references,
       );
-      const productividadErrors = validateProductividadRulesByMode({
-        modoProductividad,
-        productividadBase: derived.productividadBase,
-        reglaVelocidadJson:
-          (operacion.reglaVelocidad as Prisma.JsonValue) ?? null,
-        reglaMermaJson: (operacion.reglaMerma as Prisma.JsonValue) ?? null,
-      });
-      if (productividadErrors.length) {
+      if (
+        modoProductividad === ModoProductividadProceso.FIJA &&
+        (!operacion.tiempoFijoMin || operacion.tiempoFijoMin <= 0)
+      ) {
         throw new BadRequestException(
-          `La operacion ${operacion.nombre.trim()} tiene configuracion de productividad invalida: ${productividadErrors
-            .map((item) => item.message)
-            .join(' ')}`,
+          `La operacion ${operacion.nombre.trim()} en modo fija requiere Tiempo fijo (min) mayor a 0.`,
+        );
+      }
+
+      if (
+        modoProductividad === ModoProductividadProceso.FORMULA &&
+        (!derived.productividadBase || Number(derived.productividadBase) <= 0)
+      ) {
+        throw new BadRequestException(
+          `La operacion ${operacion.nombre.trim()} en modo variable requiere Productividad base mayor a 0 (manual o desde perfil).`,
         );
       }
 
@@ -1256,6 +1322,7 @@ export class ProcesosService {
               unidadProductividad: true,
               tiempoPreparacionMin: true,
               tiempoRipMin: true,
+              detalleJson: true,
             },
           })
         : Promise.resolve([] as PerfilRef[]),
@@ -1509,9 +1576,9 @@ export class ProcesosService {
         runMin: this.decimalToNumberOrNull(operacion.runMin),
         cleanupMin: this.decimalToNumberOrNull(operacion.cleanupMin),
         tiempoFijoMin: this.decimalToNumberOrNull(operacion.tiempoFijoMin),
-        modoProductividad: this.toApiEnum(
+        modoProductividad: this.toApiModoProductividad(
           operacion.modoProductividad,
-        ) as ModoProductividadProcesoDto,
+        ),
         productividadBase: this.decimalToNumberOrNull(
           operacion.productividadBase,
         ),
@@ -1556,9 +1623,8 @@ export class ProcesosService {
       perfilOperativoNombre: item.perfilOperativo?.nombre ?? '',
       setupMin: this.decimalToNumberOrNull(item.setupMin),
       cleanupMin: this.decimalToNumberOrNull(item.cleanupMin),
-      modoProductividad: this.toApiEnum(
-        item.modoProductividad,
-      ) as ModoProductividadProcesoDto,
+      tiempoFijoMin: this.decimalToNumberOrNull(item.tiempoFijoMin),
+      modoProductividad: this.toApiModoProductividad(item.modoProductividad),
       productividadBase: this.decimalToNumberOrNull(item.productividadBase),
       unidadEntrada: this.toApiEnum(item.unidadEntrada) as UnidadProcesoDto,
       unidadSalida: this.toApiEnum(item.unidadSalida) as UnidadProcesoDto,
@@ -1861,5 +1927,25 @@ export class ProcesosService {
 
   private toApiEnum(value: string) {
     return value.toLowerCase();
+  }
+
+  private toApiModoProductividad(
+    value: ModoProductividadProceso,
+  ): ModoProductividadProcesoDto {
+    if (value === ModoProductividadProceso.FIJA) {
+      return ModoProductividadProcesoDto.fija;
+    }
+    return ModoProductividadProcesoDto.variable;
+  }
+
+  private parseFiniteNumber(value: unknown) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === 'string' && value.trim().length > 0) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
   }
 }

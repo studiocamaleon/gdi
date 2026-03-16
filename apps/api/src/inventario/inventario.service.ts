@@ -174,38 +174,67 @@ export class InventarioService {
             atributosTecnicosJson: this.toInputJson(normalized.atributosTecnicos),
           },
         });
-
-        await tx.materiaPrimaVariante.deleteMany({
+        const existentes = await tx.materiaPrimaVariante.findMany({
           where: {
             tenantId: auth.tenantId,
             materiaPrimaId: id,
           },
+          select: {
+            id: true,
+            sku: true,
+          },
         });
+
+        const existenteBySku = new Map(
+          existentes.map((variante) => [variante.sku, variante]),
+        );
+        const incomingSkus = new Set(normalized.variantes.map((item) => item.sku));
 
         if (normalized.variantes.length > 0) {
           await Promise.all(
-            normalized.variantes.map((variante) =>
-              tx.materiaPrimaVariante.create({
-                data: {
-                  tenantId: auth.tenantId,
-                  materiaPrimaId: id,
-                  sku: variante.sku,
-                  nombreVariante: variante.nombreVariante,
-                  activo: variante.activo,
-                  atributosVarianteJson: this.toInputJson(variante.atributosVariante),
-                  unidadStock: variante.unidadStock
-                    ? this.toPrismaEnum<UnidadMateriaPrima>(variante.unidadStock)
-                    : null,
-                  unidadCompra: variante.unidadCompra
-                    ? this.toPrismaEnum<UnidadMateriaPrima>(variante.unidadCompra)
-                    : null,
-                  precioReferencia: variante.precioReferencia,
-                  moneda: variante.moneda,
-                  proveedorReferenciaId: variante.proveedorReferenciaId,
-                },
-              }),
-            ),
+            normalized.variantes.map((variante) => {
+              const data = {
+                tenantId: auth.tenantId,
+                materiaPrimaId: id,
+                sku: variante.sku,
+                nombreVariante: variante.nombreVariante,
+                activo: variante.activo,
+                atributosVarianteJson: this.toInputJson(variante.atributosVariante),
+                unidadStock: variante.unidadStock
+                  ? this.toPrismaEnum<UnidadMateriaPrima>(variante.unidadStock)
+                  : null,
+                unidadCompra: variante.unidadCompra
+                  ? this.toPrismaEnum<UnidadMateriaPrima>(variante.unidadCompra)
+                  : null,
+                precioReferencia: variante.precioReferencia,
+                moneda: variante.moneda,
+                proveedorReferenciaId: variante.proveedorReferenciaId,
+              };
+              const existente = existenteBySku.get(variante.sku);
+              if (existente) {
+                return tx.materiaPrimaVariante.update({
+                  where: { id: existente.id },
+                  data,
+                });
+              }
+              return tx.materiaPrimaVariante.create({ data });
+            }),
           );
+        }
+
+        const deleteIds = existentes
+          .filter((variante) => !incomingSkus.has(variante.sku))
+          .map((variante) => variante.id);
+        if (deleteIds.length > 0) {
+          await tx.materiaPrimaVariante.deleteMany({
+            where: {
+              tenantId: auth.tenantId,
+              materiaPrimaId: id,
+              id: {
+                in: deleteIds,
+              },
+            },
+          });
         }
 
       });
@@ -972,7 +1001,12 @@ export class InventarioService {
       ...variante,
       sku: variante.sku.trim(),
       nombreVariante: variante.nombreVariante?.trim() || null,
+      precioReferencia:
+        variante.precioReferencia === undefined || variante.precioReferencia === null
+          ? null
+          : this.toDecimal(this.roundToScale(variante.precioReferencia, 6)),
       moneda: variante.moneda?.trim().toUpperCase() || null,
+      proveedorReferenciaId: variante.proveedorReferenciaId || null,
     }));
 
     return {
@@ -1054,6 +1088,11 @@ export class InventarioService {
       if (error.code === 'P2002') {
         throw new ConflictException(
           'Ya existe un registro con uno de los identificadores unicos cargados.',
+        );
+      }
+      if (error.code === 'P2003') {
+        throw new BadRequestException(
+          'No se puede eliminar una variante que está vinculada a maquinaria, stock o productos.',
         );
       }
     }

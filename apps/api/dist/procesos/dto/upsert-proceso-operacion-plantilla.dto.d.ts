@@ -7,6 +7,7 @@ export declare class UpsertProcesoOperacionPlantillaDto {
     perfilOperativoId?: string;
     setupMin?: number;
     cleanupMin?: number;
+    tiempoFijoMin?: number;
     modoProductividad?: ModoProductividadProcesoDto;
     productividadBase?: number;
     unidadEntrada?: UnidadProcesoDto;

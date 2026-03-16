@@ -64,6 +64,7 @@ export declare class ProcesosService {
         perfilOperativoNombre: string;
         setupMin: number | null;
         cleanupMin: number | null;
+        tiempoFijoMin: number | null;
         modoProductividad: ModoProductividadProcesoDto;
         productividadBase: number | null;
         unidadEntrada: UnidadProcesoDto;
@@ -89,6 +90,7 @@ export declare class ProcesosService {
         perfilOperativoNombre: string;
         setupMin: number | null;
         cleanupMin: number | null;
+        tiempoFijoMin: number | null;
         modoProductividad: ModoProductividadProcesoDto;
         productividadBase: number | null;
         unidadEntrada: UnidadProcesoDto;
@@ -114,6 +116,7 @@ export declare class ProcesosService {
         perfilOperativoNombre: string;
         setupMin: number | null;
         cleanupMin: number | null;
+        tiempoFijoMin: number | null;
         modoProductividad: ModoProductividadProcesoDto;
         productividadBase: number | null;
         unidadEntrada: UnidadProcesoDto;
@@ -139,6 +142,7 @@ export declare class ProcesosService {
         perfilOperativoNombre: string;
         setupMin: number | null;
         cleanupMin: number | null;
+        tiempoFijoMin: number | null;
         modoProductividad: ModoProductividadProcesoDto;
         productividadBase: number | null;
         unidadEntrada: UnidadProcesoDto;
@@ -231,7 +235,7 @@ export declare class ProcesosService {
             cantidadRun: number;
             mermaSetupAplicada: number;
             mermaRunPctAplicada: number;
-            modoProductividad: string;
+            modoProductividad: ModoProductividadProcesoDto;
             warnings: string[];
         }[];
         advertencias: string[];
@@ -267,7 +271,7 @@ export declare class ProcesosService {
             cantidadRun: number;
             mermaSetupAplicada: number;
             mermaRunPctAplicada: number;
-            modoProductividad: string;
+            modoProductividad: ModoProductividadProcesoDto;
             warnings: string[];
         }[];
         advertencias: string[];
@@ -410,11 +414,13 @@ export declare class ProcesosService {
     private buildBibliotecaOperacionData;
     private validateBibliotecaOperacionPayload;
     private resolveModoProductividadFromPayload;
+    private resolveModoProductividadFromBibliotecaPayload;
     private deriveOperationDefaultsFromPayload;
     private deriveOperationDefaultsFromPersisted;
     private mapProfileProductivityUnitToProceso;
     private getSetupFromPerfilReference;
     private getSetupFromPerfilPersisted;
+    private collectSetupDetailParts;
     private getPlantillaFromPayload;
     private getDerivedEstadoConfiguracion;
     private resolveCentroCostoIdForOperation;
@@ -445,4 +451,6 @@ export declare class ProcesosService {
     private toNullableJson;
     private toPrismaEnum;
     private toApiEnum;
+    private toApiModoProductividad;
+    private parseFiniteNumber;
 }

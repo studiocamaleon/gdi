@@ -41,8 +41,7 @@ export declare enum TipoOperacionProcesoDto {
 }
 export declare enum ModoProductividadProcesoDto {
     fija = "fija",
-    formula = "formula",
-    tabla = "tabla"
+    variable = "variable"
 }
 export declare enum UnidadProcesoDto {
     ninguna = "ninguna",

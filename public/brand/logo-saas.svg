@@ -20,6 +20,31 @@
       <feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="#000000" flood-opacity="0.18"/>
     </filter>
   </defs>
+  <style>
+    .core-bubbles {
+      transform-origin: 200px 144px;
+      transition: transform 320ms ease;
+    }
+    .core-bubble {
+      transform-origin: center;
+      transition: transform 320ms ease, opacity 320ms ease;
+    }
+    svg:hover .core-bubbles {
+      animation: core-orbit 2.8s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    }
+    svg:hover .core-bubble {
+      animation: core-pulse 2.8s ease-in-out infinite;
+    }
+    @keyframes core-orbit {
+      0% { transform: rotate(0deg); }
+      45% { transform: rotate(8deg); }
+      100% { transform: rotate(0deg); }
+    }
+    @keyframes core-pulse {
+      0%, 100% { opacity: 0.9; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.06); }
+    }
+  </style>
 
   <g filter="url(#soft-shadow)">
     <circle cx="152.5" cy="96.5" r="49.5" fill="url(#gdi-cyan)"/>
@@ -27,11 +52,13 @@
     <circle cx="152.5" cy="191.5" r="49.5" fill="url(#gdi-yellow)"/>
     <circle cx="247.5" cy="191.5" r="49.5" fill="url(#gdi-black)"/>
 
-    <circle cx="200" cy="96.5" r="16" fill="#5F5F78" fill-opacity="0.26"/>
-    <circle cx="200" cy="191.5" r="16" fill="#5F5F78" fill-opacity="0.26"/>
-    <circle cx="152.5" cy="144" r="16" fill="#5F5F78" fill-opacity="0.18"/>
-    <circle cx="247.5" cy="144" r="16" fill="#5F5F78" fill-opacity="0.18"/>
-    <circle cx="200" cy="144" r="20" fill="#4A4A57" fill-opacity="0.18"/>
+    <g class="core-bubbles">
+      <circle class="core-bubble" cx="200" cy="96.5" r="16" fill="#5F5F78" fill-opacity="0.26"/>
+      <circle class="core-bubble" cx="200" cy="191.5" r="16" fill="#5F5F78" fill-opacity="0.26"/>
+      <circle class="core-bubble" cx="152.5" cy="144" r="16" fill="#5F5F78" fill-opacity="0.18"/>
+      <circle class="core-bubble" cx="247.5" cy="144" r="16" fill="#5F5F78" fill-opacity="0.18"/>
+      <circle class="core-bubble" cx="200" cy="144" r="20" fill="#4A4A57" fill-opacity="0.18"/>
+    </g>
   </g>
 
   <g fill="#FAFAF8">

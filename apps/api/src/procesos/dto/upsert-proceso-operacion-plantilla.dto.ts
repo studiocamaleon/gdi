@@ -46,6 +46,11 @@ export class UpsertProcesoOperacionPlantillaDto {
   cleanupMin?: number;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  tiempoFijoMin?: number;
+
+  @IsOptional()
   @IsEnum(ModoProductividadProcesoDto)
   modoProductividad?: ModoProductividadProcesoDto;
 

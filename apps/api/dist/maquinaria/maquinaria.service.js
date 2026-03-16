@@ -879,22 +879,53 @@ let MaquinariaService = class MaquinariaService {
             !Array.isArray(perfil.detalleJson)
             ? perfil.detalleJson
             : {};
-        const setupDirecto = this.toNumber(perfil.tiempoPreparacionMin) ??
-            this.parseFiniteNumber(detalle.tiempoPreparacionMin) ??
-            this.parseFiniteNumber(detalle.tiempoSetupMin) ??
-            this.parseFiniteNumber(detalle.setupMin) ??
-            this.parseFiniteNumber(detalle.setup);
-        if (setupDirecto !== null) {
-            return setupDirecto;
-        }
         const partes = [
+            this.parseFiniteNumber(detalle.tiempoSetupMin) ??
+                this.parseFiniteNumber(detalle.setupMin) ??
+                this.parseFiniteNumber(detalle.setup),
+            this.toNumber(perfil.tiempoPreparacionMin) ??
+                this.parseFiniteNumber(detalle.tiempoPreparacionMin),
             this.toNumber(perfil.tiempoRipMin) ??
                 this.parseFiniteNumber(detalle.tiempoRipMin),
-        ].filter((value) => value !== null);
+            ...this.collectExtraSetupMin(detalle),
+        ].filter((value) => value !== null && value > 0);
         if (!partes.length) {
             return null;
         }
         return Number(partes.reduce((acc, item) => acc + item, 0).toFixed(4));
+    }
+    collectExtraSetupMin(detalle) {
+        const extras = [];
+        const parseNumber = (value) => this.parseFiniteNumber(value);
+        const objectCandidates = [
+            detalle.setupComponentesMin,
+            detalle.setupExtraComponentesMin,
+            detalle.tiemposSetupExtraMin,
+        ];
+        for (const candidate of objectCandidates) {
+            if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+                continue;
+            }
+            for (const value of Object.values(candidate)) {
+                const parsed = parseNumber(value);
+                if (parsed !== null && parsed > 0) {
+                    extras.push(parsed);
+                }
+            }
+        }
+        const arrayCandidates = [detalle.setupExtrasMin, detalle.tiemposExtraSetupMin];
+        for (const candidate of arrayCandidates) {
+            if (!Array.isArray(candidate)) {
+                continue;
+            }
+            for (const value of candidate) {
+                const parsed = parseNumber(value);
+                if (parsed !== null && parsed > 0) {
+                    extras.push(parsed);
+                }
+            }
+        }
+        return extras;
     }
     normalizeString(value) {
         if (typeof value !== 'string') {

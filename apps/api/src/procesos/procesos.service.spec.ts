@@ -71,7 +71,7 @@ describe('ProcesosService business rules', () => {
     ) => { setupMin: Prisma.Decimal | null };
   });
 
-  it('rechaza modo formula sin regla de velocidad', () => {
+  it('acepta modo variable con productividad base', () => {
     const payload: UpsertProcesoDto = {
       nombre: 'Proceso prueba',
       plantillaMaquinaria: PlantillaMaquinariaDto.impresora_laser,
@@ -81,7 +81,7 @@ describe('ProcesosService business rules', () => {
           nombre: 'Operacion 1',
           tipoOperacion: TipoOperacionProcesoDto.impresion,
           centroCostoId: 'centro-1',
-          modoProductividad: ModoProductividadProcesoDto.formula,
+          modoProductividad: ModoProductividadProcesoDto.variable,
           productividadBase: 100,
           unidadSalida: UnidadProcesoDto.hoja,
           unidadTiempo: UnidadProcesoDto.minuto,
@@ -107,7 +107,7 @@ describe('ProcesosService business rules', () => {
 
     expect(() =>
       validateBusinessRules.call(service, payload, references),
-    ).toThrow(BadRequestException);
+    ).not.toThrow();
   });
 
   it('rechaza incompatibilidad unidad centro-operacion', () => {
@@ -149,7 +149,7 @@ describe('ProcesosService business rules', () => {
     ).toThrow(BadRequestException);
   });
 
-  it('acepta modo fija sin productividad manual cuando el perfil aporta productividad', () => {
+  it('acepta modo variable cuando el perfil aporta productividad', () => {
     const payload: UpsertProcesoDto = {
       nombre: 'Proceso perfil',
       plantillaMaquinaria: PlantillaMaquinariaDto.impresora_laser,
@@ -161,7 +161,7 @@ describe('ProcesosService business rules', () => {
           centroCostoId: 'centro-1',
           maquinaId: 'maq-1',
           perfilOperativoId: 'perfil-1',
-          modoProductividad: ModoProductividadProcesoDto.fija,
+          modoProductividad: ModoProductividadProcesoDto.variable,
           unidadSalida: UnidadProcesoDto.ninguna,
           unidadTiempo: UnidadProcesoDto.minuto,
           activo: true,
@@ -312,7 +312,7 @@ describe('ProcesosService business rules', () => {
     expect(Number(derived.setupMin)).toBe(3);
   });
 
-  it('fuerza modo fija cuando hay perfil operativo aunque el payload pida formula', () => {
+  it('permite modo variable cuando hay perfil operativo', () => {
     const payload: UpsertProcesoDto = {
       nombre: 'Proceso con perfil forzado',
       plantillaMaquinaria: PlantillaMaquinariaDto.impresora_laser,
@@ -324,7 +324,7 @@ describe('ProcesosService business rules', () => {
           centroCostoId: 'centro-1',
           maquinaId: 'maq-1',
           perfilOperativoId: 'perfil-1',
-          modoProductividad: ModoProductividadProcesoDto.formula,
+          modoProductividad: ModoProductividadProcesoDto.variable,
           unidadSalida: UnidadProcesoDto.ninguna,
           unidadTiempo: UnidadProcesoDto.minuto,
           activo: true,

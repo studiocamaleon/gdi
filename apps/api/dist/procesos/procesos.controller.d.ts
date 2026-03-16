@@ -61,6 +61,7 @@ export declare class ProcesosController {
         perfilOperativoNombre: string;
         setupMin: number | null;
         cleanupMin: number | null;
+        tiempoFijoMin: number | null;
         modoProductividad: import("./dto/upsert-proceso.dto").ModoProductividadProcesoDto;
         productividadBase: number | null;
         unidadEntrada: import("./dto/upsert-proceso.dto").UnidadProcesoDto;
@@ -86,6 +87,7 @@ export declare class ProcesosController {
         perfilOperativoNombre: string;
         setupMin: number | null;
         cleanupMin: number | null;
+        tiempoFijoMin: number | null;
         modoProductividad: import("./dto/upsert-proceso.dto").ModoProductividadProcesoDto;
         productividadBase: number | null;
         unidadEntrada: import("./dto/upsert-proceso.dto").UnidadProcesoDto;
@@ -111,6 +113,7 @@ export declare class ProcesosController {
         perfilOperativoNombre: string;
         setupMin: number | null;
         cleanupMin: number | null;
+        tiempoFijoMin: number | null;
         modoProductividad: import("./dto/upsert-proceso.dto").ModoProductividadProcesoDto;
         productividadBase: number | null;
         unidadEntrada: import("./dto/upsert-proceso.dto").UnidadProcesoDto;
@@ -136,6 +139,7 @@ export declare class ProcesosController {
         perfilOperativoNombre: string;
         setupMin: number | null;
         cleanupMin: number | null;
+        tiempoFijoMin: number | null;
         modoProductividad: import("./dto/upsert-proceso.dto").ModoProductividadProcesoDto;
         productividadBase: number | null;
         unidadEntrada: import("./dto/upsert-proceso.dto").UnidadProcesoDto;
@@ -357,7 +361,7 @@ export declare class ProcesosController {
             cantidadRun: number;
             mermaSetupAplicada: number;
             mermaRunPctAplicada: number;
-            modoProductividad: string;
+            modoProductividad: import("./dto/upsert-proceso.dto").ModoProductividadProcesoDto;
             warnings: string[];
         }[];
         advertencias: string[];
@@ -393,7 +397,7 @@ export declare class ProcesosController {
             cantidadRun: number;
             mermaSetupAplicada: number;
             mermaRunPctAplicada: number;
-            modoProductividad: string;
+            modoProductividad: import("./dto/upsert-proceso.dto").ModoProductividadProcesoDto;
             warnings: string[];
         }[];
         advertencias: string[];
