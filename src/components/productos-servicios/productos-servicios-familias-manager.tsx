@@ -232,7 +232,7 @@ export function ProductosServiciosFamiliasManager({
       <div>
         <Link href="/costos/productos-servicios" className={cn(buttonVariants({ variant: "ghost" }), "-ml-3")}>
           <ArrowLeftIcon data-icon="inline-start" />
-          Volver a productos y servicios
+          Volver a catalogo de productos
         </Link>
         <h1 className="text-xl font-semibold">Familias y subfamilias</h1>
         <p className="text-sm text-muted-foreground">Agrupa productos por familia y subfamilia con edición simple por nombre.</p>

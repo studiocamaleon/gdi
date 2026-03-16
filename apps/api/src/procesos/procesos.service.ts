@@ -43,6 +43,7 @@ type ProcesoCompleto = Prisma.ProcesoDefinicionGetPayload<{
         centroCosto: true;
         maquina: true;
         perfilOperativo: true;
+        requiresProductoAdicional: true;
       };
       orderBy: {
         orden: 'asc';
@@ -110,6 +111,7 @@ export class ProcesosService {
             centroCosto: true,
             maquina: true,
             perfilOperativo: true,
+            requiresProductoAdicional: true,
           },
           orderBy: {
             orden: 'asc',
@@ -476,6 +478,7 @@ export class ProcesosService {
                 centroCosto: true,
                 maquina: true,
                 perfilOperativo: true,
+                requiresProductoAdicional: true,
               },
               orderBy: {
                 orden: 'asc',
@@ -516,6 +519,7 @@ export class ProcesosService {
             centroCosto: true,
             maquina: true,
             perfilOperativo: true,
+            requiresProductoAdicional: true,
           },
           orderBy: {
             orden: 'asc',
@@ -554,6 +558,7 @@ export class ProcesosService {
               centroCosto: true,
               maquina: true,
               perfilOperativo: true,
+              requiresProductoAdicional: true,
             },
             orderBy: {
               orden: 'asc',
@@ -678,6 +683,7 @@ export class ProcesosService {
       reglaVelocidadJson: undefined,
       reglaMermaJson: this.toNullableJson(payload.reglaMerma),
       detalleJson: this.toNullableJson(payload.detalle),
+      requiresProductoAdicionalId: payload.requiresProductoAdicionalId ?? null,
       activo: payload.activo,
     };
   }
@@ -1278,8 +1284,15 @@ export class ProcesosService {
           .filter((value): value is string => Boolean(value)),
       ),
     );
+    const addonIds = Array.from(
+      new Set(
+        operaciones
+          .map((operacion) => operacion.requiresProductoAdicionalId)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
 
-    const [centros, maquinas, perfiles] = await Promise.all([
+    const [centros, maquinas, perfiles, addons] = await Promise.all([
       centerIds.length
         ? this.prisma.centroCosto.findMany({
             where: {
@@ -1326,6 +1339,18 @@ export class ProcesosService {
             },
           })
         : Promise.resolve([] as PerfilRef[]),
+      addonIds.length
+        ? this.prisma.productoAdicionalCatalogo.findMany({
+            where: {
+              tenantId: auth.tenantId,
+              id: { in: addonIds },
+              activo: true,
+            },
+            select: {
+              id: true,
+            },
+          })
+        : Promise.resolve([] as Array<{ id: string }>),
     ]);
 
     const centroPrincipalIds = Array.from(
@@ -1367,6 +1392,11 @@ export class ProcesosService {
     if (perfiles.length !== perfilIds.length) {
       throw new BadRequestException(
         'Al menos un perfil operativo asociado al proceso no existe.',
+      );
+    }
+    if (addons.length !== addonIds.length) {
+      throw new BadRequestException(
+        'Al menos un adicional condicional asociado al proceso no existe o está inactivo.',
       );
     }
 
@@ -1504,6 +1534,7 @@ export class ProcesosService {
             centroCosto: true,
             maquina: true,
             perfilOperativo: true,
+            requiresProductoAdicional: true,
           },
           orderBy: {
             orden: 'asc',
@@ -1600,6 +1631,9 @@ export class ProcesosService {
           (operacion.reglaMermaJson as Record<string, unknown> | null) ?? null,
         detalle:
           (operacion.detalleJson as Record<string, unknown> | null) ?? null,
+        requiresProductoAdicionalId: operacion.requiresProductoAdicionalId ?? null,
+        requiresProductoAdicionalNombre:
+          operacion.requiresProductoAdicional?.nombre ?? '',
         activo: operacion.activo,
         warnings: this.getOperationWarnings(operacion),
       })),
@@ -1812,6 +1846,7 @@ export class ProcesosService {
         reglaVelocidadJson: operacion.reglaVelocidadJson,
         reglaMermaJson: operacion.reglaMermaJson,
         detalleJson: operacion.detalleJson,
+        requiresProductoAdicionalId: operacion.requiresProductoAdicionalId,
         activo: operacion.activo,
       })),
       createdAt: new Date().toISOString(),

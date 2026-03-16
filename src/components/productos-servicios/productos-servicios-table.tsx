@@ -12,11 +12,9 @@ import type {
   MotorCostoCatalogItem,
   ProductoServicio,
   SubfamiliaProducto,
-  TipoProductoServicio,
 } from "@/lib/productos-servicios";
 import {
   estadoProductoServicioItems,
-  tipoProductoServicioItems,
 } from "@/lib/productos-servicios";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,7 +54,6 @@ type ProductosServiciosTableProps = {
 };
 
 type ProductoFormState = {
-  tipo: TipoProductoServicio;
   nombre: string;
   descripcion: string;
   familiaProductoId: string;
@@ -71,7 +68,6 @@ function createEmptyProductoForm(
 ): ProductoFormState {
   const motor = motores[0];
   return {
-    tipo: "producto",
     nombre: "",
     descripcion: "",
     familiaProductoId: familias[0]?.id ?? "",
@@ -79,13 +75,6 @@ function createEmptyProductoForm(
     motorCodigo: motor?.code ?? "impresion_digital_laser",
     motorVersion: motor?.version ?? 1,
   };
-}
-
-function getTipoLabel(value: TipoProductoServicio) {
-  return (
-    tipoProductoServicioItems.find((item) => item.value === value)?.label ??
-    value
-  );
 }
 
 function getEstadoLabel(value: EstadoProductoServicio) {
@@ -146,12 +135,6 @@ export function ProductosServiciosTable({
     setOpenCreate(true);
   };
 
-  const tipoSeleccionadoLabel = React.useMemo(
-    () =>
-      tipoProductoServicioItems.find((item) => item.value === form.tipo)?.label ??
-      "Seleccionar tipo",
-    [form.tipo],
-  );
   const motorCostoValue = `${form.motorCodigo}@${form.motorVersion}`;
   const motorCostoLabel = React.useMemo(
     () =>
@@ -170,7 +153,6 @@ export function ProductosServiciosTable({
       try {
         const created = await createProductoServicio({
           descripcion: form.descripcion.trim() || undefined,
-          tipo: form.tipo,
           nombre: form.nombre.trim(),
           motorCodigo: form.motorCodigo,
           motorVersion: form.motorVersion,
@@ -182,7 +164,7 @@ export function ProductosServiciosTable({
 
         setProductos((prev) => [...prev, created].sort((a, b) => a.nombre.localeCompare(b.nombre)));
         setOpenCreate(false);
-        toast.success("Producto/servicio creado.");
+        toast.success("Producto creado.");
         router.push(`/costos/productos-servicios/${created.id}`);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "No se pudo crear el registro.");
@@ -194,7 +176,7 @@ export function ProductosServiciosTable({
     <>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Productos y servicios</CardTitle>
+          <CardTitle>Catalogo de productos</CardTitle>
           <div className="flex items-center gap-2">
             <Button
               type="button"
@@ -215,7 +197,6 @@ export function ProductosServiciosTable({
               <TableRow>
                 <TableHead>Codigo</TableHead>
                 <TableHead>Nombre</TableHead>
-                <TableHead>Tipo</TableHead>
                 <TableHead>Familia</TableHead>
                 <TableHead>Subfamilia</TableHead>
                 <TableHead>Estado</TableHead>
@@ -230,7 +211,6 @@ export function ProductosServiciosTable({
                 >
                   <TableCell>{item.codigo}</TableCell>
                   <TableCell className="font-medium">{item.nombre}</TableCell>
-                  <TableCell>{getTipoLabel(item.tipo)}</TableCell>
                   <TableCell>{item.familiaProductoNombre}</TableCell>
                   <TableCell>{item.subfamiliaProductoNombre || "Sin subfamilia"}</TableCell>
                   <TableCell>
@@ -248,9 +228,9 @@ export function ProductosServiciosTable({
       <Sheet open={openCreate} onOpenChange={setOpenCreate}>
         <SheetContent side="right" className="w-full overflow-y-auto px-6 sm:max-w-3xl sm:px-8">
           <SheetHeader>
-            <SheetTitle>Crear producto o servicio</SheetTitle>
+            <SheetTitle>Crear producto</SheetTitle>
             <SheetDescription>
-              Crea el producto o servicio base para el catalogo.
+              Crea el producto base para el catalogo.
             </SheetDescription>
           </SheetHeader>
 
@@ -264,30 +244,6 @@ export function ProductosServiciosTable({
                 }
                 placeholder="Ej: Tarjetas personales 9x5"
               />
-            </Field>
-
-            <Field>
-              <FieldLabel>Tipo</FieldLabel>
-              <Select
-                value={form.tipo}
-                onValueChange={(value) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    tipo: (value ?? "producto") as TipoProductoServicio,
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue>{tipoSeleccionadoLabel}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {tipoProductoServicioItems.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </Field>
 
             <Field>

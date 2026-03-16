@@ -81,6 +81,7 @@ export declare class ProcesoOperacionItemDto {
     reglaVelocidad?: Record<string, unknown>;
     reglaMerma?: Record<string, unknown>;
     detalle?: Record<string, unknown>;
+    requiresProductoAdicionalId?: string;
     activo: boolean;
 }
 export declare class UpsertProcesoDto {

@@ -171,6 +171,10 @@ export class ProcesoOperacionItemDto {
   @IsObject()
   detalle?: Record<string, unknown>;
 
+  @IsOptional()
+  @IsUUID()
+  requiresProductoAdicionalId?: string;
+
   @IsBoolean()
   activo: boolean;
 }

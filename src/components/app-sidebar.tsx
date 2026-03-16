@@ -96,9 +96,14 @@ const costos = [
     icon: WorkflowIcon,
   },
   {
-    title: "Productos y servicios",
+    title: "Catalogo de productos",
     href: "/costos/productos-servicios",
     icon: BoxesIcon,
+  },
+  {
+    title: "Biblioteca adicionales",
+    href: "/costos/adicionales",
+    icon: Settings2Icon,
   },
 ];
 

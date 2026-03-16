@@ -33,20 +33,25 @@ import {
   getProcesoOperacionPlantillas,
 } from "@/lib/procesos-api";
 import {
+  assignProductoAdicional,
   assignProductoMotor,
   assignProductoVarianteRuta,
   cotizarProductoVariante,
   createProductoVariante,
   deleteProductoVariante,
   getCatalogoPliegosImpresion,
+  getVarianteAdicionalesRestricciones,
   getCotizacionesProductoVariante,
   getProductoMotorConfig,
+  removeProductoAdicional,
+  setVarianteAdicionalRestriccion,
   getVarianteMotorOverride,
   previewImposicionProductoVariante,
   updateProductoRutaPolicy,
   upsertVarianteMotorOverride,
   updateProductoServicio,
   updateProductoVariante,
+  updateVarianteOpcionesProductivas,
 } from "@/lib/productos-servicios-api";
 import type {
   FamiliaProducto,
@@ -54,15 +59,17 @@ import type {
   PliegoImpresionCatalogItem,
   CotizacionProductoSnapshotResumen,
   CotizacionProductoVariante,
+  ProductoAdicional,
+  ProductoAdicionalAsignado,
   ProductoServicio,
   ProductoVariante,
   SubfamiliaProducto,
+  VarianteAdicionalRestriccion,
 } from "@/lib/productos-servicios";
 import {
   carasProductoVarianteItems,
   estadoProductoServicioItems,
   tipoImpresionProductoVarianteItems,
-  tipoProductoServicioItems,
 } from "@/lib/productos-servicios";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -88,6 +95,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -112,6 +120,8 @@ type ProductoServicioFichaTabsProps = {
   familias: FamiliaProducto[];
   subfamilias: SubfamiliaProducto[];
   motores: MotorCostoCatalogItem[];
+  adicionalesCatalogo: ProductoAdicional[];
+  adicionalesProducto: ProductoAdicionalAsignado[];
 };
 
 type VarianteDraft = {
@@ -121,6 +131,8 @@ type VarianteDraft = {
   papelVarianteId: string;
   tipoImpresion: "bn" | "cmyk";
   caras: "simple_faz" | "doble_faz";
+  opcionesTipoImpresion: Array<"bn" | "cmyk">;
+  opcionesCaras: Array<"simple_faz" | "doble_faz">;
 };
 
 type VarianteEditDraft = VarianteDraft;
@@ -158,10 +170,20 @@ function createVarianteDraft(papeles: PapelOption[]): VarianteDraft {
     papelVarianteId: papeles[0]?.id ?? "",
     tipoImpresion: "cmyk",
     caras: "simple_faz",
+    opcionesTipoImpresion: ["cmyk"],
+    opcionesCaras: ["simple_faz"],
   };
 }
 
 function createEditVarianteDraft(variante: ProductoVariante, papeles: PapelOption[]): VarianteEditDraft {
+  const opcionesTipoImpresion =
+    variante.opcionesProductivas?.find((item) => item.dimension === "tipo_impresion")?.valores.filter(
+      (value): value is "bn" | "cmyk" => value === "bn" || value === "cmyk",
+    ) ?? [variante.tipoImpresion];
+  const opcionesCaras =
+    variante.opcionesProductivas?.find((item) => item.dimension === "caras")?.valores.filter(
+      (value): value is "simple_faz" | "doble_faz" => value === "simple_faz" || value === "doble_faz",
+    ) ?? [variante.caras];
   return {
     nombre: variante.nombre,
     anchoMm: String(variante.anchoMm),
@@ -169,11 +191,29 @@ function createEditVarianteDraft(variante: ProductoVariante, papeles: PapelOptio
     papelVarianteId: variante.papelVarianteId ?? papeles[0]?.id ?? "",
     tipoImpresion: variante.tipoImpresion,
     caras: variante.caras,
+    opcionesTipoImpresion: opcionesTipoImpresion.length ? opcionesTipoImpresion : [variante.tipoImpresion],
+    opcionesCaras: opcionesCaras.length ? opcionesCaras : [variante.caras],
   };
 }
 
 function formatNumber(value: number) {
   return value.toLocaleString("es-AR", { maximumFractionDigits: 2 });
+}
+
+function formatOrigenProcesoLabel(
+  origen: unknown,
+  addonTipo?: "servicio" | "acabado" | null,
+) {
+  const raw = String(origen ?? "Base").trim();
+  if (!raw) return "Producto base";
+  const normalized = raw.toLowerCase();
+  if (normalized === "base" || normalized === "producto base") return "Producto base";
+  if (raw.toLowerCase().startsWith("adicional")) {
+    if (addonTipo === "servicio") return "Servicio adicional";
+    if (addonTipo === "acabado") return "Acabado adicional";
+    return "Adicional";
+  }
+  return raw;
 }
 
 function buildDraftFromTemplate(template: ProcesoOperacionPlantilla): RouteOperationDraft {
@@ -198,6 +238,7 @@ function buildDraftFromTemplate(template: ProcesoOperacionPlantilla): RouteOpera
     reglaVelocidad: template.reglaVelocidad ?? undefined,
     reglaMerma: template.reglaMerma ?? undefined,
     detalle: undefined,
+    requiresProductoAdicionalId: undefined,
     activo: true,
   };
 }
@@ -227,6 +268,7 @@ function buildDraftFromProceso(proceso: Proceso): RouteOperationDraft[] {
       reglaVelocidad: op.reglaVelocidad ?? undefined,
       reglaMerma: op.reglaMerma ?? undefined,
       detalle: op.detalle ?? undefined,
+      requiresProductoAdicionalId: op.requiresProductoAdicionalId ?? undefined,
       activo: op.activo,
     }));
 }
@@ -285,6 +327,8 @@ export function ProductoServicioFichaTabs({
   familias,
   subfamilias,
   motores,
+  adicionalesCatalogo,
+  adicionalesProducto,
 }: ProductoServicioFichaTabsProps) {
   const [productoState, setProductoState] = React.useState(producto);
   const [generalForm, setGeneralForm] = React.useState<{
@@ -331,6 +375,8 @@ export function ProductoServicioFichaTabs({
   }, [materiasPrimas]);
 
   const [variantes, setVariantes] = React.useState(initialVariantes);
+  const [adicionalesAsignados, setAdicionalesAsignados] = React.useState(adicionalesProducto);
+  const [adicionalesPermitidosVariante, setAdicionalesPermitidosVariante] = React.useState<VarianteAdicionalRestriccion[]>([]);
   const [selectedVarianteId, setSelectedVarianteId] = React.useState(initialVariantes[0]?.id ?? "");
   const selectedVariante = React.useMemo(
     () => variantes.find((item) => item.id === selectedVarianteId) ?? null,
@@ -341,6 +387,7 @@ export function ProductoServicioFichaTabs({
   const [isSavingVariante, startSavingVariante] = React.useTransition();
   const [isUpdatingVariante, startUpdatingVariante] = React.useTransition();
   const [isSavingConfig, startSavingConfig] = React.useTransition();
+  const [isSavingAdicionales, startSavingAdicionales] = React.useTransition();
   const [isCotizando, startCotizando] = React.useTransition();
   const [isTogglingVariante, startTogglingVariante] = React.useTransition();
   const [isDeletingVariante, startDeletingVariante] = React.useTransition();
@@ -381,6 +428,8 @@ export function ProductoServicioFichaTabs({
   });
   const [cotizacionCantidad, setCotizacionCantidad] = React.useState("100");
   const [cotizacionPeriodo, setCotizacionPeriodo] = React.useState(buildDefaultPeriodo());
+  const [cotizacionAddonsSeleccionados, setCotizacionAddonsSeleccionados] = React.useState<string[]>([]);
+  const [cotizacionAddonNivelById, setCotizacionAddonNivelById] = React.useState<Record<string, string>>({});
   const [cotizacion, setCotizacion] = React.useState<CotizacionProductoVariante | null>(null);
   const [cotizaciones, setCotizaciones] = React.useState<CotizacionProductoSnapshotResumen[]>([]);
   const [snapshotsOpen, setSnapshotsOpen] = React.useState(false);
@@ -389,6 +438,10 @@ export function ProductoServicioFichaTabs({
 
   React.useEffect(() => {
     setProductoState(producto);
+    setAdicionalesAsignados(adicionalesProducto);
+    setAdicionalesPermitidosVariante([]);
+    setCotizacionAddonsSeleccionados([]);
+    setCotizacionAddonNivelById({});
     setUsarRutaComunVariantes(producto.usarRutaComunVariantes);
     setRutaDefaultProductoId(producto.procesoDefinicionDefaultId ?? "");
     setGeneralForm({
@@ -399,7 +452,7 @@ export function ProductoServicioFichaTabs({
       motorCodigo: producto.motorCodigo,
       motorVersion: producto.motorVersion,
     });
-  }, [producto]);
+  }, [producto, adicionalesProducto]);
 
   React.useEffect(() => {
     setRutasPorVarianteDraft((prev) => {
@@ -422,6 +475,28 @@ export function ProductoServicioFichaTabs({
     () => new Map(procesos.map((item) => [item.id, item.nombre])),
     [procesos],
   );
+  const adicionalesCatalogoById = React.useMemo(
+    () => new Map(adicionalesCatalogo.map((item) => [item.id, item])),
+    [adicionalesCatalogo],
+  );
+  const adicionalesAsignadosActivos = React.useMemo(
+    () => adicionalesAsignados.filter((item) => item.activo),
+    [adicionalesAsignados],
+  );
+  const restriccionesByAdicionalId = React.useMemo(
+    () =>
+      new Map(
+        adicionalesPermitidosVariante.map((item) => [item.adicionalId, item.permitido]),
+      ),
+    [adicionalesPermitidosVariante],
+  );
+  const adicionalesDisponiblesCotizador = React.useMemo(
+    () =>
+      adicionalesAsignadosActivos.filter(
+        (item) => restriccionesByAdicionalId.get(item.adicionalId) !== false,
+      ),
+    [adicionalesAsignadosActivos, restriccionesByAdicionalId],
+  );
 
   React.useEffect(() => {
     getCatalogoPliegosImpresion()
@@ -434,6 +509,37 @@ export function ProductoServicioFichaTabs({
         setPliegosImpresion(fallbackPliegosImpresion);
       });
   }, []);
+
+  React.useEffect(() => {
+    if (!selectedVariante) {
+      setAdicionalesPermitidosVariante([]);
+      setCotizacionAddonsSeleccionados([]);
+      setCotizacionAddonNivelById({});
+      return;
+    }
+    getVarianteAdicionalesRestricciones(selectedVariante.id)
+      .then((items) => {
+        setAdicionalesPermitidosVariante(items);
+      })
+      .catch(() => {
+        setAdicionalesPermitidosVariante([]);
+      });
+  }, [selectedVariante]);
+
+  React.useEffect(() => {
+    const disponibles = new Set(adicionalesDisponiblesCotizador.map((item) => item.adicionalId));
+    setCotizacionAddonsSeleccionados((prev) => prev.filter((id) => disponibles.has(id)));
+    setCotizacionAddonNivelById((prev) => {
+      const next: Record<string, string> = {};
+      for (const item of adicionalesDisponiblesCotizador) {
+        if (!disponibles.has(item.adicionalId)) continue;
+        const niveles = item.adicional.servicioPricing?.niveles?.filter((nivel) => nivel.activo) ?? [];
+        if (niveles.length === 0) continue;
+        next[item.adicionalId] = prev[item.adicionalId] ?? niveles[0].id;
+      }
+      return next;
+    });
+  }, [adicionalesDisponiblesCotizador]);
 
   React.useEffect(() => {
     if (!selectedVariante) {
@@ -558,8 +664,7 @@ export function ProductoServicioFichaTabs({
   }, [motores, motorCostoValue]);
   const rutaDefaultGuardadaId = productoState.procesoDefinicionDefaultId ?? "";
 
-  const tipoProductoLabel =
-    tipoProductoServicioItems.find((item) => item.value === productoState.tipo)?.label ?? productoState.tipo;
+  const tipoProductoLabel = "Producto";
   const estadoProductoLabel =
     estadoProductoServicioItems.find((item) => item.value === productoState.estado)?.label ?? productoState.estado;
 
@@ -716,7 +821,6 @@ export function ProductoServicioFichaTabs({
     startSavingGeneral(async () => {
       try {
         const updated = await updateProductoServicio(productoState.id, {
-          tipo: productoState.tipo,
           codigo: productoState.codigo,
           nombre: generalForm.nombre.trim(),
           descripcion: generalForm.descripcion.trim(),
@@ -768,8 +872,19 @@ export function ProductoServicioFichaTabs({
           caras: draft.caras,
           activo: true,
         });
-        setVariantes((prev) => [...prev, created].sort((a, b) => a.nombre.localeCompare(b.nombre)));
-        setSelectedVarianteId(created.id);
+        const opcionesPayload = {
+          dimensiones: [
+            { dimension: "tipo_impresion" as const, valores: draft.opcionesTipoImpresion },
+            { dimension: "caras" as const, valores: draft.opcionesCaras },
+          ],
+        };
+        const opciones = await updateVarianteOpcionesProductivas(created.id, opcionesPayload);
+        const createdWithOptions: ProductoVariante = {
+          ...created,
+          opcionesProductivas: opciones.dimensiones,
+        };
+        setVariantes((prev) => [...prev, createdWithOptions].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+        setSelectedVarianteId(createdWithOptions.id);
         setDraft(createVarianteDraft(papeles));
         toast.success("Variante creada.");
       } catch (error) {
@@ -836,7 +951,18 @@ export function ProductoServicioFichaTabs({
           tipoImpresion: editDraft.tipoImpresion,
           caras: editDraft.caras,
         });
-        setVariantes((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+        const opcionesPayload = {
+          dimensiones: [
+            { dimension: "tipo_impresion" as const, valores: editDraft.opcionesTipoImpresion },
+            { dimension: "caras" as const, valores: editDraft.opcionesCaras },
+          ],
+        };
+        const opciones = await updateVarianteOpcionesProductivas(updated.id, opcionesPayload);
+        const updatedWithOptions: ProductoVariante = {
+          ...updated,
+          opcionesProductivas: opciones.dimensiones,
+        };
+        setVariantes((prev) => prev.map((item) => (item.id === updatedWithOptions.id ? updatedWithOptions : item)));
         setSelectedVarianteId(updated.id);
         setEditingVarianteId("");
         toast.success("Variante actualizada.");
@@ -1105,6 +1231,50 @@ export function ProductoServicioFichaTabs({
     });
   };
 
+  const handleAssignAdicional = (adicionalId: string, checked: boolean) => {
+    startSavingAdicionales(async () => {
+      try {
+        if (checked) {
+          const saved = await assignProductoAdicional(productoState.id, { adicionalId, activo: true });
+          setAdicionalesAsignados((prev) => {
+            const exists = prev.some((item) => item.adicionalId === adicionalId);
+            if (exists) return prev.map((item) => (item.adicionalId === adicionalId ? saved : item));
+            return [...prev, saved];
+          });
+          toast.success("Adicional asignado al producto.");
+        } else {
+          await removeProductoAdicional(productoState.id, adicionalId);
+          setAdicionalesAsignados((prev) => prev.filter((item) => item.adicionalId !== adicionalId));
+          setCotizacionAddonsSeleccionados((prev) => prev.filter((id) => id !== adicionalId));
+          toast.success("Adicional desasignado del producto.");
+        }
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "No se pudo actualizar el adicional.");
+      }
+    });
+  };
+
+  const handleRestriccionVarianteAdicional = (adicionalId: string, permitido: boolean) => {
+    if (!selectedVariante) {
+      toast.error("Selecciona una variante.");
+      return;
+    }
+    startSavingAdicionales(async () => {
+      try {
+        const saved = await setVarianteAdicionalRestriccion(selectedVariante.id, { adicionalId, permitido });
+        setAdicionalesPermitidosVariante((prev) => {
+          const exists = prev.some((item) => item.adicionalId === adicionalId);
+          if (exists) {
+            return prev.map((item) => (item.adicionalId === adicionalId ? saved : item));
+          }
+          return [...prev, saved];
+        });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "No se pudo guardar la restricción.");
+      }
+    });
+  };
+
   const handleCotizar = () => {
     if (!selectedVariante) {
       toast.error("Selecciona una variante para cotizar.");
@@ -1116,6 +1286,11 @@ export function ProductoServicioFichaTabs({
         const result = await cotizarProductoVariante(selectedVariante.id, {
           cantidad: Number(cotizacionCantidad),
           periodo: cotizacionPeriodo,
+          addonsSeleccionados: cotizacionAddonsSeleccionados,
+          addonsConfig: cotizacionAddonsSeleccionados.map((addonId) => ({
+            addonId,
+            nivelId: cotizacionAddonNivelById[addonId] || undefined,
+          })),
         });
         setCotizacion(result);
         const snapshots = await getCotizacionesProductoVariante(selectedVariante.id);
@@ -1154,7 +1329,7 @@ export function ProductoServicioFichaTabs({
             className={cn(buttonVariants({ variant: "ghost" }), "-ml-3")}
           >
             <ArrowLeftIcon data-icon="inline-start" />
-            Volver a productos y servicios
+            Volver a catalogo de productos
           </Link>
           <h1 className="text-xl font-semibold">{productoState.nombre}</h1>
           <p className="text-sm text-muted-foreground">
@@ -1169,6 +1344,7 @@ export function ProductoServicioFichaTabs({
         <TabsList className="h-auto gap-1 rounded-lg bg-muted/70 p-1.5">
           <TabsTrigger value="general" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">General</TabsTrigger>
           <TabsTrigger value="variantes" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Variantes</TabsTrigger>
+          <TabsTrigger value="adicionales" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Adicionales</TabsTrigger>
           <TabsTrigger value="produccion" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Rutas</TabsTrigger>
           <TabsTrigger value="imposicion" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Imposición</TabsTrigger>
           <TabsTrigger value="cotizador" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Simulador pricing</TabsTrigger>
@@ -1194,7 +1370,7 @@ export function ProductoServicioFichaTabs({
                 <p className="font-medium">{productoState.codigo}</p>
               </div>
               <div className="rounded-lg border p-3">
-                <p className="text-xs text-muted-foreground">Tipo</p>
+                <p className="text-xs text-muted-foreground">Clase</p>
                 <p className="font-medium">{tipoProductoLabel}</p>
               </div>
               <div className="rounded-lg border p-3">
@@ -1305,7 +1481,7 @@ export function ProductoServicioFichaTabs({
           <Card>
             <CardHeader>
               <CardTitle>Variantes del producto</CardTitle>
-              <CardDescription>Define tamaño, papel, tipo de impresión y caras por variante.</CardDescription>
+              <CardDescription>Define tamaño, papel y opciones productivas por variante.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-end gap-3">
@@ -1337,10 +1513,14 @@ export function ProductoServicioFichaTabs({
                       <TableCell className="font-medium">{item.nombre}</TableCell>
                       <TableCell>{item.anchoMm} x {item.altoMm} mm</TableCell>
                       <TableCell>
-                        {tipoImpresionProductoVarianteItems.find((opt) => opt.value === item.tipoImpresion)?.label ?? item.tipoImpresion}
+                        {(item.opcionesProductivas?.find((opt) => opt.dimension === "tipo_impresion")?.valores ?? [item.tipoImpresion])
+                          .map((value) => tipoImpresionProductoVarianteItems.find((opt) => opt.value === value)?.label ?? value)
+                          .join(" / ")}
                       </TableCell>
                       <TableCell>
-                        {carasProductoVarianteItems.find((opt) => opt.value === item.caras)?.label ?? item.caras}
+                        {(item.opcionesProductivas?.find((opt) => opt.dimension === "caras")?.valores ?? [item.caras])
+                          .map((value) => carasProductoVarianteItems.find((opt) => opt.value === value)?.label ?? value)
+                          .join(" / ")}
                       </TableCell>
                       <TableCell>{item.papelNombre || "Sin papel"}</TableCell>
                       <TableCell>
@@ -1441,7 +1621,13 @@ export function ProductoServicioFichaTabs({
                     <Select
                       value={formDraft.tipoImpresion}
                       onValueChange={(value) =>
-                        setFormDraft((prev) => ({ ...prev, tipoImpresion: (value as "bn" | "cmyk") ?? "cmyk" }))
+                        setFormDraft((prev) => {
+                          const next = (value as "bn" | "cmyk") ?? "cmyk";
+                          const opciones = prev.opcionesTipoImpresion.includes(next)
+                            ? prev.opcionesTipoImpresion
+                            : [...prev.opcionesTipoImpresion, next];
+                          return { ...prev, tipoImpresion: next, opcionesTipoImpresion: opciones };
+                        })
                       }
                     >
                       <SelectTrigger>
@@ -1463,7 +1649,13 @@ export function ProductoServicioFichaTabs({
                     <Select
                       value={formDraft.caras}
                       onValueChange={(value) =>
-                        setFormDraft((prev) => ({ ...prev, caras: (value as "simple_faz" | "doble_faz") ?? "simple_faz" }))
+                        setFormDraft((prev) => {
+                          const next = (value as "simple_faz" | "doble_faz") ?? "simple_faz";
+                          const opciones = prev.opcionesCaras.includes(next)
+                            ? prev.opcionesCaras
+                            : [...prev.opcionesCaras, next];
+                          return { ...prev, caras: next, opcionesCaras: opciones };
+                        })
                       }
                     >
                       <SelectTrigger>
@@ -1479,6 +1671,65 @@ export function ProductoServicioFichaTabs({
                         ))}
                       </SelectContent>
                     </Select>
+                  </Field>
+                  <Field className="md:col-span-3">
+                    <FieldLabel>Opciones productivas</FieldLabel>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="rounded-md border p-3">
+                        <p className="mb-2 text-xs font-medium text-muted-foreground">Tipo de impresión habilitado</p>
+                        <div className="space-y-2">
+                          {tipoImpresionProductoVarianteItems.map((item) => (
+                            <label key={`opt-ti-${item.value}`} className="flex items-center justify-between text-sm">
+                              <span>{item.label}</span>
+                              <Checkbox
+                                checked={formDraft.opcionesTipoImpresion.includes(item.value)}
+                                onCheckedChange={(checked) =>
+                                  setFormDraft((prev) => {
+                                    const current = new Set(prev.opcionesTipoImpresion);
+                                    if (checked) current.add(item.value);
+                                    else current.delete(item.value);
+                                    const next = Array.from(current) as Array<"bn" | "cmyk">;
+                                    const safeNext = next.length ? next : [prev.tipoImpresion];
+                                    return {
+                                      ...prev,
+                                      opcionesTipoImpresion: safeNext,
+                                      tipoImpresion: safeNext.includes(prev.tipoImpresion) ? prev.tipoImpresion : safeNext[0],
+                                    };
+                                  })
+                                }
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="rounded-md border p-3">
+                        <p className="mb-2 text-xs font-medium text-muted-foreground">Caras habilitadas</p>
+                        <div className="space-y-2">
+                          {carasProductoVarianteItems.map((item) => (
+                            <label key={`opt-ca-${item.value}`} className="flex items-center justify-between text-sm">
+                              <span>{item.label}</span>
+                              <Checkbox
+                                checked={formDraft.opcionesCaras.includes(item.value)}
+                                onCheckedChange={(checked) =>
+                                  setFormDraft((prev) => {
+                                    const current = new Set(prev.opcionesCaras);
+                                    if (checked) current.add(item.value);
+                                    else current.delete(item.value);
+                                    const next = Array.from(current) as Array<"simple_faz" | "doble_faz">;
+                                    const safeNext = next.length ? next : [prev.caras];
+                                    return {
+                                      ...prev,
+                                      opcionesCaras: safeNext,
+                                      caras: safeNext.includes(prev.caras) ? prev.caras : safeNext[0],
+                                    };
+                                  })
+                                }
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   </Field>
                 </div>
                 <div className="mt-3 flex items-center gap-2">
@@ -1499,6 +1750,85 @@ export function ProductoServicioFichaTabs({
                     </Button>
                   ) : null}
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="adicionales">
+          <Card>
+            <CardHeader>
+              <CardTitle>Adicionales</CardTitle>
+              <CardDescription>Asigna adicionales del catálogo y define restricciones por variante.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-lg border p-3">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium">Asignación al producto</p>
+                  <Link href="/costos/adicionales" className={buttonVariants({ variant: "outline" })}>
+                    Ir a Biblioteca
+                  </Link>
+                </div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {adicionalesCatalogo.map((item) => {
+                    const assigned = adicionalesAsignados.some((entry) => entry.adicionalId === item.id && entry.activo);
+                    const resumenEfectos = item.efectos.length
+                      ? `${item.efectos.length} efecto(s): ${Array.from(new Set(item.efectos.map((ef) => ef.tipo))).join(", ")}`
+                      : "Sin efectos";
+                    return (
+                      <label key={item.id} className="flex items-center justify-between gap-2 rounded-md border p-2 text-sm">
+                        <span className="flex flex-col">
+                          <span>{item.nombre}</span>
+                          <span className="text-xs text-muted-foreground">{resumenEfectos}</span>
+                        </span>
+                        <Checkbox
+                          checked={assigned}
+                          onCheckedChange={(checked) => handleAssignAdicional(item.id, Boolean(checked))}
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-3">
+                <p className="mb-2 text-sm font-medium">Restricciones por variante</p>
+                <div className="mb-3 grid gap-2 md:grid-cols-2">
+                  <Field>
+                    <FieldLabel>Variante</FieldLabel>
+                    <Select value={selectedVarianteId} onValueChange={(value) => setSelectedVarianteId(value ?? "")}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona variante">{varianteLabel}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {variantesSelect.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.nombre}{item.activo ? "" : " (inactiva)"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {adicionalesAsignadosActivos.map((item) => {
+                    const permitido = restriccionesByAdicionalId.get(item.adicionalId) !== false;
+                    return (
+                      <label key={item.adicionalId} className="flex items-center justify-between gap-2 rounded-md border p-2 text-sm">
+                        <span>{item.adicional.nombre}</span>
+                        <Checkbox
+                          checked={permitido}
+                          onCheckedChange={(checked) =>
+                            handleRestriccionVarianteAdicional(item.adicionalId, Boolean(checked))
+                          }
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Marcado = permitido para la variante seleccionada. Desmarcado = restringido.
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -1641,6 +1971,7 @@ export function ProductoServicioFichaTabs({
                                   <TableHead className="w-[56px]">#</TableHead>
                                   <TableHead>Paso</TableHead>
                                   <TableHead>Centro</TableHead>
+                                  <TableHead>Condición</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -1649,6 +1980,11 @@ export function ProductoServicioFichaTabs({
                                     <TableCell>{op.orden}</TableCell>
                                     <TableCell>{op.nombre}</TableCell>
                                     <TableCell>{op.centroCostoNombre}</TableCell>
+                                    <TableCell>
+                                      {op.requiresProductoAdicionalNombre
+                                        ? `Adicional: ${op.requiresProductoAdicionalNombre}`
+                                        : "Sin condición"}
+                                    </TableCell>
                                   </TableRow>
                                 ))}
                               </TableBody>
@@ -1682,6 +2018,7 @@ export function ProductoServicioFichaTabs({
                       <TableHead>Centro de costo</TableHead>
                       <TableHead>Máquina</TableHead>
                       <TableHead>Modo / Productividad</TableHead>
+                      <TableHead>Condición</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1706,12 +2043,17 @@ export function ProductoServicioFichaTabs({
                           <TableCell>{op.centroCostoNombre}</TableCell>
                           <TableCell>{op.maquinaNombre || "-"}</TableCell>
                           <TableCell>{modoLabel} · {detalleModo}</TableCell>
+                          <TableCell>
+                            {op.requiresProductoAdicionalNombre
+                              ? `Adicional: ${op.requiresProductoAdicionalNombre}`
+                              : "Sin condición"}
+                          </TableCell>
                         </TableRow>
                       );
                     })}
                     {!procesoSeleccionado && (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                        <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
                           No hay ruta efectiva seleccionada.
                         </TableCell>
                       </TableRow>
@@ -2120,6 +2462,60 @@ export function ProductoServicioFichaTabs({
                 </div>
               </div>
 
+              <div className="rounded-lg border p-3">
+                <p className="mb-2 text-sm font-medium">Adicionales para cotizar</p>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {adicionalesDisponiblesCotizador.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No hay adicionales habilitados para esta variante.
+                    </p>
+                  ) : (
+                    adicionalesDisponiblesCotizador.map((item) => (
+                      <label key={item.adicionalId} className="flex items-center justify-between rounded-md border p-2 text-sm">
+                        <span className="flex flex-col gap-1">
+                          <span>{item.adicional.nombre}</span>
+                          {item.adicional.tipo === "servicio" ? (
+                            <span className="w-[220px]">
+                              <Select
+                                value={cotizacionAddonNivelById[item.adicionalId] ?? (item.adicional.servicioPricing.niveles.find((nivel) => nivel.activo)?.id ?? "")}
+                                onValueChange={(value) =>
+                                  setCotizacionAddonNivelById((prev) => ({ ...prev, [item.adicionalId]: value ?? "" }))
+                                }
+                              >
+                                <SelectTrigger className="h-8">
+                                  <SelectValue placeholder="Nivel de servicio" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {item.adicional.servicioPricing.niveles
+                                    .filter((nivel) => nivel.activo)
+                                    .map((nivel) => (
+                                      <SelectItem key={nivel.id} value={nivel.id}>
+                                        {nivel.nombre}
+                                      </SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
+                            </span>
+                          ) : null}
+                        </span>
+                        <Checkbox
+                          checked={cotizacionAddonsSeleccionados.includes(item.adicionalId)}
+                          onCheckedChange={(checked) =>
+                            setCotizacionAddonsSeleccionados((prev) => {
+                              if (checked) {
+                                if (prev.includes(item.adicionalId)) return prev;
+                                return [...prev, item.adicionalId];
+                              }
+                              return prev.filter((id) => id !== item.adicionalId);
+                            })
+                          }
+                        />
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+
               {cotizacion ? (
                 <div className="grid gap-3 md:grid-cols-4">
                   <Card>
@@ -2170,6 +2566,7 @@ export function ProductoServicioFichaTabs({
                             <TableHead>#</TableHead>
                             <TableHead>Paso</TableHead>
                             <TableHead>Centro</TableHead>
+                            <TableHead className="w-[180px]">Origen</TableHead>
                             <TableHead className="w-[140px] text-right">Minutos</TableHead>
                             <TableHead className="w-[140px] text-right">Tarifa/h</TableHead>
                             <TableHead className="w-[140px] text-right">Costo</TableHead>
@@ -2178,12 +2575,31 @@ export function ProductoServicioFichaTabs({
                         <TableBody>
                           {procesosCotizados.map((item) => (
                             <TableRow key={item.codigo}>
+                              {/*
+                                El nombre del adicional ya se muestra en "Paso".
+                                En "Origen" solo mostramos la categoría funcional.
+                              */}
+                              {(() => {
+                                const addonTipo =
+                                  (item.addonId
+                                    ? (
+                                        adicionalesCatalogoById.get(item.addonId)?.tipo ??
+                                        adicionalesAsignados.find((asignado) => asignado.adicionalId === item.addonId)
+                                          ?.adicional.tipo
+                                      )
+                                    : null) ?? null;
+                                return (
+                                  <>
                               <TableCell>{item.orden}</TableCell>
                               <TableCell>{item.nombre}</TableCell>
                               <TableCell>{item.centroCostoNombre}</TableCell>
+                              <TableCell className="w-[180px]">{formatOrigenProcesoLabel(item.origen, addonTipo)}</TableCell>
                               <TableCell className="text-right tabular-nums">{formatNumber(item.totalMin)}</TableCell>
                               <TableCell className="text-right tabular-nums">{formatNumber(item.tarifaHora)}</TableCell>
                               <TableCell className="text-right tabular-nums">{formatNumber(item.costo)}</TableCell>
+                                  </>
+                                );
+                              })()}
                             </TableRow>
                           ))}
                         </TableBody>
@@ -2201,6 +2617,7 @@ export function ProductoServicioFichaTabs({
                           <TableRow className="border-b border-border/70">
                             <TableHead>Tipo</TableHead>
                             <TableHead>Componente</TableHead>
+                            <TableHead className="w-[180px]">Origen</TableHead>
                             <TableHead className="w-[140px] text-right">Cantidad</TableHead>
                             <TableHead className="w-[140px] text-right">Costo unitario</TableHead>
                             <TableHead className="w-[140px] text-right">Costo</TableHead>
@@ -2223,10 +2640,22 @@ export function ProductoServicioFichaTabs({
                             const cantidad = Number(item.cantidad ?? 0);
                             const costoUnitario = Number(item.costoUnitario ?? 0);
                             const costo = Number(item.costo ?? 0);
+                            const addonId = typeof item.adicionalId === "string" ? item.adicionalId : null;
+                            const addonTipo =
+                              (addonId
+                                ? (
+                                    adicionalesCatalogoById.get(addonId)?.tipo ??
+                                    adicionalesAsignados.find((asignado) => asignado.adicionalId === addonId)?.adicional
+                                      .tipo
+                                  )
+                                : null) ?? null;
                             return (
                               <TableRow key={`${tipo}-${idx}`}>
                                 <TableCell>{tipoLabel}</TableCell>
                                 <TableCell>{`${nombre}${canal}${sku}`}</TableCell>
+                                <TableCell className="w-[180px]">
+                                  {formatOrigenProcesoLabel(item.origen, addonTipo)}
+                                </TableCell>
                                 <TableCell className="text-right tabular-nums">{formatNumber(cantidad)}</TableCell>
                                 <TableCell className="text-right tabular-nums">{formatNumber(costoUnitario)}</TableCell>
                                 <TableCell className="text-right tabular-nums">{formatNumber(costo)}</TableCell>
@@ -2234,7 +2663,7 @@ export function ProductoServicioFichaTabs({
                             );
                           })}
                           <TableRow>
-                            <TableCell colSpan={3} className="text-right font-medium">
+                            <TableCell colSpan={4} className="text-right font-medium">
                               Total
                             </TableCell>
                             <TableCell className="text-right font-semibold tabular-nums">
@@ -2354,6 +2783,7 @@ export function ProductoServicioFichaTabs({
                   <TableHead>Modo</TableHead>
                   <TableHead>Valor</TableHead>
                   <TableHead>Unidad</TableHead>
+                  <TableHead>Condición</TableHead>
                   <TableHead className="w-[130px] text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -2468,6 +2898,38 @@ export function ProductoServicioFichaTabs({
                         </SelectContent>
                       </Select>
                     </TableCell>
+                    <TableCell>
+                      <Select
+                        value={op.requiresProductoAdicionalId ?? "__none__"}
+                        onValueChange={(value) =>
+                          setRouteEditorOperaciones((prev) =>
+                            prev.map((item, i): RouteOperationDraft =>
+                              i === index
+                                ? {
+                                    ...item,
+                                    requiresProductoAdicionalId:
+                                      value === "__none__"
+                                        ? undefined
+                                        : (value as string | undefined),
+                                  }
+                                : item,
+                            ),
+                          )
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sin condición" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Sin condición</SelectItem>
+                          {adicionalesAsignadosActivos.map((entry) => (
+                            <SelectItem key={entry.adicionalId} value={entry.adicionalId}>
+                              {entry.adicional.nombre}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
                         <Button type="button" size="icon" variant="ghost" onClick={() => moveOperation(index, index - 1)}>
@@ -2492,7 +2954,7 @@ export function ProductoServicioFichaTabs({
                 ))}
                 {routeEditorOperaciones.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
                       Sin pasos. Agrega pasos desde la biblioteca.
                     </TableCell>
                   </TableRow>

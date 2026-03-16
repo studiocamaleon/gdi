@@ -1,11 +1,28 @@
 import { Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
-import { AssignProductoVariantesRutaMasivaDto, AssignProductoMotorDto, AssignVarianteRutaDto, CarasProductoVarianteDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, PreviewImposicionProductoVarianteDto, UpdateProductoRutaPolicyDto, EstadoProductoServicioDto, TipoImpresionProductoVarianteDto, TipoProductoServicioDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
+import { AssignProductoVariantesRutaMasivaDto, AssignProductoAdicionalDto, AssignProductoMotorDto, AssignVarianteRutaDto, DimensionOpcionProductivaDto, CarasProductoVarianteDto, ReglaCostoAdicionalEfectoDto, MetodoCostoProductoAdicionalDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, TipoProductoAdicionalEfectoDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, TipoConsumoAdicionalMaterialDto, TipoProductoAdicionalDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, UpsertProductoAdicionalDto, PreviewImposicionProductoVarianteDto, UpdateProductoRutaPolicyDto, EstadoProductoServicioDto, TipoImpresionProductoVarianteDto, TipoProductoServicioDto, ValorOpcionProductivaDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
+type ServicioPricingNivel = {
+    id: string;
+    nombre: string;
+    orden: number;
+    activo: boolean;
+};
+type ServicioPricingRegla = {
+    id: string;
+    nivelId: string;
+    tiempoMin: number;
+};
+type ServicioPricingConfig = {
+    niveles: ServicioPricingNivel[];
+    reglas: ServicioPricingRegla[];
+};
 export declare class ProductosServiciosService {
     private readonly prisma;
     private static readonly CODIGO_PREFIX;
     private static readonly CODIGO_MAX_RETRIES;
+    private static readonly ADICIONAL_CODIGO_PREFIX;
+    private static readonly ADICIONAL_CODIGO_MAX_RETRIES;
     private static readonly FAMILIA_BASE_CODIGO;
     private static readonly SUBFAMILIA_BASE_CODIGO;
     private static readonly FAMILIA_BASE_CODIGO_LEGACY;
@@ -38,6 +55,232 @@ export declare class ProductosServiciosService {
             mermaAdicionalPct: number;
         };
     }[];
+    findAdicionalesCatalogo(auth: CurrentAuth): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        descripcion: string;
+        tipo: TipoProductoAdicionalDto;
+        metodoCosto: MetodoCostoProductoAdicionalDto;
+        centroCostoId: string | null;
+        centroCostoNombre: string;
+        activo: boolean;
+        metadata: Record<string, unknown> | null;
+        servicioPricing: ServicioPricingConfig;
+        efectos: {
+            id: string;
+            tipo: TipoProductoAdicionalEfectoDto;
+            activo: boolean;
+        }[];
+        materiales: {
+            id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaNombre: string;
+            materiaPrimaSku: string;
+            tipoConsumo: TipoConsumoAdicionalMaterialDto;
+            factorConsumo: number;
+            mermaPct: number | null;
+            activo: boolean;
+            detalle: Record<string, unknown> | null;
+        }[];
+        createdAt: string;
+        updatedAt: string;
+    }[]>;
+    createAdicionalCatalogo(auth: CurrentAuth, payload: UpsertProductoAdicionalDto): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        descripcion: string;
+        tipo: TipoProductoAdicionalDto;
+        metodoCosto: MetodoCostoProductoAdicionalDto;
+        centroCostoId: string | null;
+        centroCostoNombre: string;
+        activo: boolean;
+        metadata: Record<string, unknown> | null;
+        servicioPricing: ServicioPricingConfig;
+        efectos: {
+            id: string;
+            tipo: TipoProductoAdicionalEfectoDto;
+            activo: boolean;
+        }[];
+        materiales: {
+            id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaNombre: string;
+            materiaPrimaSku: string;
+            tipoConsumo: TipoConsumoAdicionalMaterialDto;
+            factorConsumo: number;
+            mermaPct: number | null;
+            activo: boolean;
+            detalle: Record<string, unknown> | null;
+        }[];
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    updateAdicionalCatalogo(auth: CurrentAuth, adicionalId: string, payload: UpsertProductoAdicionalDto): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        descripcion: string;
+        tipo: TipoProductoAdicionalDto;
+        metodoCosto: MetodoCostoProductoAdicionalDto;
+        centroCostoId: string | null;
+        centroCostoNombre: string;
+        activo: boolean;
+        metadata: Record<string, unknown> | null;
+        servicioPricing: ServicioPricingConfig;
+        efectos: {
+            id: string;
+            tipo: TipoProductoAdicionalEfectoDto;
+            activo: boolean;
+        }[];
+        materiales: {
+            id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaNombre: string;
+            materiaPrimaSku: string;
+            tipoConsumo: TipoConsumoAdicionalMaterialDto;
+            factorConsumo: number;
+            mermaPct: number | null;
+            activo: boolean;
+            detalle: Record<string, unknown> | null;
+        }[];
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    toggleAdicionalCatalogo(auth: CurrentAuth, adicionalId: string): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        descripcion: string;
+        tipo: TipoProductoAdicionalDto;
+        metodoCosto: MetodoCostoProductoAdicionalDto;
+        centroCostoId: string | null;
+        centroCostoNombre: string;
+        activo: boolean;
+        metadata: Record<string, unknown> | null;
+        servicioPricing: ServicioPricingConfig;
+        efectos: {
+            id: string;
+            tipo: TipoProductoAdicionalEfectoDto;
+            activo: boolean;
+        }[];
+        materiales: {
+            id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaNombre: string;
+            materiaPrimaSku: string;
+            tipoConsumo: TipoConsumoAdicionalMaterialDto;
+            factorConsumo: number;
+            mermaPct: number | null;
+            activo: boolean;
+            detalle: Record<string, unknown> | null;
+        }[];
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    getAdicionalServicioPricing(auth: CurrentAuth, adicionalId: string): Promise<ServicioPricingConfig>;
+    upsertAdicionalServicioPricing(auth: CurrentAuth, adicionalId: string, payload: UpsertProductoAdicionalServicioPricingDto): Promise<ServicioPricingConfig>;
+    findProductoAdicionales(auth: CurrentAuth, productoId: string): Promise<{
+        id: string;
+        productoServicioId: string;
+        adicionalId: string;
+        activo: boolean;
+        adicional: {
+            id: string;
+            codigo: string;
+            nombre: string;
+            descripcion: string;
+            tipo: TipoProductoAdicionalDto;
+            metodoCosto: MetodoCostoProductoAdicionalDto;
+            centroCostoId: string | null;
+            centroCostoNombre: string;
+            activo: boolean;
+            metadata: Record<string, unknown> | null;
+            servicioPricing: ServicioPricingConfig;
+            efectos: {
+                id: string;
+                tipo: TipoProductoAdicionalEfectoDto;
+                activo: boolean;
+            }[];
+            materiales: {
+                id: string;
+                materiaPrimaVarianteId: string;
+                materiaPrimaNombre: string;
+                materiaPrimaSku: string;
+                tipoConsumo: TipoConsumoAdicionalMaterialDto;
+                factorConsumo: number;
+                mermaPct: number | null;
+                activo: boolean;
+                detalle: Record<string, unknown> | null;
+            }[];
+            createdAt: string;
+            updatedAt: string;
+        };
+        createdAt: string;
+        updatedAt: string;
+    }[]>;
+    assignProductoAdicional(auth: CurrentAuth, productoId: string, payload: AssignProductoAdicionalDto): Promise<{
+        id: string;
+        productoServicioId: string;
+        adicionalId: string;
+        activo: boolean;
+        adicional: {
+            id: string;
+            codigo: string;
+            nombre: string;
+            descripcion: string;
+            tipo: TipoProductoAdicionalDto;
+            metodoCosto: MetodoCostoProductoAdicionalDto;
+            centroCostoId: string | null;
+            centroCostoNombre: string;
+            activo: boolean;
+            metadata: Record<string, unknown> | null;
+            servicioPricing: ServicioPricingConfig;
+            efectos: {
+                id: string;
+                tipo: TipoProductoAdicionalEfectoDto;
+                activo: boolean;
+            }[];
+            materiales: {
+                id: string;
+                materiaPrimaVarianteId: string;
+                materiaPrimaNombre: string;
+                materiaPrimaSku: string;
+                tipoConsumo: TipoConsumoAdicionalMaterialDto;
+                factorConsumo: number;
+                mermaPct: number | null;
+                activo: boolean;
+                detalle: Record<string, unknown> | null;
+            }[];
+            createdAt: string;
+            updatedAt: string;
+        };
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    removeProductoAdicional(auth: CurrentAuth, productoId: string, adicionalId: string): Promise<{
+        productoServicioId: string;
+        adicionalId: string;
+        removed: boolean;
+    }>;
+    findVarianteAdicionalesRestricciones(auth: CurrentAuth, varianteId: string): Promise<{
+        id: string;
+        varianteId: string;
+        adicionalId: string;
+        adicionalNombre: string;
+        permitido: boolean;
+        createdAt: string;
+        updatedAt: string;
+    }[]>;
+    setVarianteAdicionalRestriccion(auth: CurrentAuth, varianteId: string, payload: SetVarianteAdicionalRestrictionDto): Promise<{
+        id: string;
+        varianteId: string;
+        adicionalId: string;
+        permitido: boolean;
+        createdAt: string;
+        updatedAt: string;
+    }>;
     findFamilias(auth: CurrentAuth): Promise<{
         id: string;
         codigo: string;
@@ -262,6 +505,10 @@ export declare class ProductosServiciosService {
         papelNombre: string;
         tipoImpresion: TipoImpresionProductoVarianteDto;
         caras: CarasProductoVarianteDto;
+        opcionesProductivas: {
+            dimension: DimensionOpcionProductivaDto;
+            valores: ValorOpcionProductivaDto[];
+        }[] | null;
         procesoDefinicionId: string | null;
         procesoDefinicionCodigo: string;
         procesoDefinicionNombre: string;
@@ -280,6 +527,10 @@ export declare class ProductosServiciosService {
         papelNombre: string;
         tipoImpresion: TipoImpresionProductoVarianteDto;
         caras: CarasProductoVarianteDto;
+        opcionesProductivas: {
+            dimension: DimensionOpcionProductivaDto;
+            valores: ValorOpcionProductivaDto[];
+        }[] | null;
         procesoDefinicionId: string | null;
         procesoDefinicionCodigo: string;
         procesoDefinicionNombre: string;
@@ -298,12 +549,263 @@ export declare class ProductosServiciosService {
         papelNombre: string;
         tipoImpresion: TipoImpresionProductoVarianteDto;
         caras: CarasProductoVarianteDto;
+        opcionesProductivas: {
+            dimension: DimensionOpcionProductivaDto;
+            valores: ValorOpcionProductivaDto[];
+        }[] | null;
         procesoDefinicionId: string | null;
         procesoDefinicionCodigo: string;
         procesoDefinicionNombre: string;
         activo: boolean;
         createdAt: string;
         updatedAt: string;
+    }>;
+    getVarianteOpcionesProductivas(auth: CurrentAuth, varianteId: string): Promise<{
+        varianteId: string;
+        source: string;
+        dimensiones: {
+            dimension: DimensionOpcionProductivaDto;
+            valores: ValorOpcionProductivaDto[];
+        }[];
+        createdAt?: undefined;
+        updatedAt?: undefined;
+    } | {
+        varianteId: string;
+        source: string;
+        dimensiones: {
+            dimension: DimensionOpcionProductivaDto;
+            valores: ValorOpcionProductivaDto[];
+        }[];
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    upsertVarianteOpcionesProductivas(auth: CurrentAuth, varianteId: string, payload: UpsertVarianteOpcionesProductivasDto): Promise<{
+        varianteId: string;
+        source: string;
+        dimensiones: {
+            dimension: DimensionOpcionProductivaDto;
+            valores: ValorOpcionProductivaDto[];
+        }[];
+        createdAt?: undefined;
+        updatedAt?: undefined;
+    } | {
+        varianteId: string;
+        source: string;
+        dimensiones: {
+            dimension: DimensionOpcionProductivaDto;
+            valores: ValorOpcionProductivaDto[];
+        }[];
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    findAdicionalEfectos(auth: CurrentAuth, adicionalId: string): Promise<{
+        id: string;
+        adicionalId: string;
+        tipo: TipoProductoAdicionalEfectoDto;
+        nombre: string;
+        activo: boolean;
+        scopes: {
+            id: string;
+            varianteId: string | null;
+            dimension: DimensionOpcionProductivaDto | null;
+            valor: ValorOpcionProductivaDto | null;
+        }[];
+        routeEffect: {
+            id: string;
+            pasos: {
+                id: string;
+                orden: number;
+                nombre: string;
+                centroCostoId: string;
+                centroCostoNombre: string;
+                maquinaId: string | null;
+                maquinaNombre: string;
+                perfilOperativoId: string | null;
+                perfilOperativoNombre: string;
+                setupMin: number | null;
+                runMin: number | null;
+                cleanupMin: number | null;
+                tiempoFijoMin: number | null;
+            }[];
+        } | null;
+        costEffect: {
+            id: string;
+            regla: ReglaCostoAdicionalEfectoDto;
+            valor: number;
+            centroCostoId: string | null;
+            centroCostoNombre: string;
+            detalle: Record<string, unknown> | null;
+        } | null;
+        materialEffect: {
+            id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaNombre: string;
+            materiaPrimaSku: string;
+            tipoConsumo: TipoConsumoAdicionalMaterialDto;
+            factorConsumo: number;
+            mermaPct: number | null;
+            detalle: Record<string, unknown> | null;
+        } | null;
+        createdAt: string;
+        updatedAt: string;
+    }[]>;
+    createAdicionalEfecto(auth: CurrentAuth, adicionalId: string, payload: UpsertProductoAdicionalEfectoDto): Promise<{
+        id: string;
+        adicionalId: string;
+        tipo: TipoProductoAdicionalEfectoDto;
+        nombre: string;
+        activo: boolean;
+        scopes: {
+            id: string;
+            varianteId: string | null;
+            dimension: DimensionOpcionProductivaDto | null;
+            valor: ValorOpcionProductivaDto | null;
+        }[];
+        routeEffect: {
+            id: string;
+            pasos: {
+                id: string;
+                orden: number;
+                nombre: string;
+                centroCostoId: string;
+                centroCostoNombre: string;
+                maquinaId: string | null;
+                maquinaNombre: string;
+                perfilOperativoId: string | null;
+                perfilOperativoNombre: string;
+                setupMin: number | null;
+                runMin: number | null;
+                cleanupMin: number | null;
+                tiempoFijoMin: number | null;
+            }[];
+        } | null;
+        costEffect: {
+            id: string;
+            regla: ReglaCostoAdicionalEfectoDto;
+            valor: number;
+            centroCostoId: string | null;
+            centroCostoNombre: string;
+            detalle: Record<string, unknown> | null;
+        } | null;
+        materialEffect: {
+            id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaNombre: string;
+            materiaPrimaSku: string;
+            tipoConsumo: TipoConsumoAdicionalMaterialDto;
+            factorConsumo: number;
+            mermaPct: number | null;
+            detalle: Record<string, unknown> | null;
+        } | null;
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    updateAdicionalEfecto(auth: CurrentAuth, adicionalId: string, efectoId: string, payload: UpsertProductoAdicionalEfectoDto): Promise<{
+        id: string;
+        adicionalId: string;
+        tipo: TipoProductoAdicionalEfectoDto;
+        nombre: string;
+        activo: boolean;
+        scopes: {
+            id: string;
+            varianteId: string | null;
+            dimension: DimensionOpcionProductivaDto | null;
+            valor: ValorOpcionProductivaDto | null;
+        }[];
+        routeEffect: {
+            id: string;
+            pasos: {
+                id: string;
+                orden: number;
+                nombre: string;
+                centroCostoId: string;
+                centroCostoNombre: string;
+                maquinaId: string | null;
+                maquinaNombre: string;
+                perfilOperativoId: string | null;
+                perfilOperativoNombre: string;
+                setupMin: number | null;
+                runMin: number | null;
+                cleanupMin: number | null;
+                tiempoFijoMin: number | null;
+            }[];
+        } | null;
+        costEffect: {
+            id: string;
+            regla: ReglaCostoAdicionalEfectoDto;
+            valor: number;
+            centroCostoId: string | null;
+            centroCostoNombre: string;
+            detalle: Record<string, unknown> | null;
+        } | null;
+        materialEffect: {
+            id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaNombre: string;
+            materiaPrimaSku: string;
+            tipoConsumo: TipoConsumoAdicionalMaterialDto;
+            factorConsumo: number;
+            mermaPct: number | null;
+            detalle: Record<string, unknown> | null;
+        } | null;
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    toggleAdicionalEfecto(auth: CurrentAuth, adicionalId: string, efectoId: string): Promise<{
+        id: string;
+        adicionalId: string;
+        tipo: TipoProductoAdicionalEfectoDto;
+        nombre: string;
+        activo: boolean;
+        scopes: {
+            id: string;
+            varianteId: string | null;
+            dimension: DimensionOpcionProductivaDto | null;
+            valor: ValorOpcionProductivaDto | null;
+        }[];
+        routeEffect: {
+            id: string;
+            pasos: {
+                id: string;
+                orden: number;
+                nombre: string;
+                centroCostoId: string;
+                centroCostoNombre: string;
+                maquinaId: string | null;
+                maquinaNombre: string;
+                perfilOperativoId: string | null;
+                perfilOperativoNombre: string;
+                setupMin: number | null;
+                runMin: number | null;
+                cleanupMin: number | null;
+                tiempoFijoMin: number | null;
+            }[];
+        } | null;
+        costEffect: {
+            id: string;
+            regla: ReglaCostoAdicionalEfectoDto;
+            valor: number;
+            centroCostoId: string | null;
+            centroCostoNombre: string;
+            detalle: Record<string, unknown> | null;
+        } | null;
+        materialEffect: {
+            id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaNombre: string;
+            materiaPrimaSku: string;
+            tipoConsumo: TipoConsumoAdicionalMaterialDto;
+            factorConsumo: number;
+            mermaPct: number | null;
+            detalle: Record<string, unknown> | null;
+        } | null;
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    deleteAdicionalEfecto(auth: CurrentAuth, adicionalId: string, efectoId: string): Promise<{
+        adicionalId: string;
+        efectoId: string;
+        deleted: boolean;
     }>;
     deleteVariante(auth: CurrentAuth, varianteId: string): Promise<{
         id: string;
@@ -320,6 +822,10 @@ export declare class ProductosServiciosService {
         papelNombre: string;
         tipoImpresion: TipoImpresionProductoVarianteDto;
         caras: CarasProductoVarianteDto;
+        opcionesProductivas: {
+            dimension: DimensionOpcionProductivaDto;
+            valores: ValorOpcionProductivaDto[];
+        }[] | null;
         procesoDefinicionId: string | null;
         procesoDefinicionCodigo: string;
         procesoDefinicionNombre: string;
@@ -365,6 +871,8 @@ export declare class ProductosServiciosService {
                 nombre: string;
                 centroCostoId: string;
                 centroCostoNombre: string;
+                origen: string;
+                addonId: string | null;
                 setupMin: number;
                 runMin: number;
                 cleanupMin: number;
@@ -380,6 +888,8 @@ export declare class ProductosServiciosService {
             papel: number;
             toner: number;
             desgaste: number;
+            adicionalesMateriales: number;
+            adicionalesCostEffects: number;
         };
         total: number;
         unitario: number;
@@ -416,6 +926,45 @@ export declare class ProductosServiciosService {
                 pliegosPorSustrato: number;
                 orientacion: string;
             };
+            addonsSeleccionados: string[];
+            addonsConfig: {
+                addonId: string;
+                nivelId: string | null;
+            }[];
+            opcionProductivaEfectiva: {
+                dimension: DimensionOpcionProductivaDto;
+                valores: ValorOpcionProductivaDto[];
+            }[];
+            efectosAplicados: {
+                id: string;
+                addonId: string;
+                addonNombre: string;
+                tipo: TipoProductoAdicionalEfectoDto;
+                nombre: string;
+            }[];
+            routeEffectsAplicados: {
+                id: string;
+                addonId: string;
+                nombre: string;
+                pasos: number;
+            }[];
+            costEffectsAplicados: {
+                id: string;
+                addonId: string;
+                nombre: string;
+                regla: ReglaCostoAdicionalEfectoDto | null;
+            }[];
+            materialEffectsAplicados: {
+                id: string;
+                addonId: string;
+                nombre: string;
+                material: string;
+            }[];
+            costosPorEfecto: Record<string, unknown>[];
+            pasosCondicionalesActivos: {
+                pasoCodigo: string;
+                addonId: string | null;
+            }[];
             config: {
                 tipoCorte: string;
                 demasiaCorteMm: number;
@@ -528,11 +1077,30 @@ export declare class ProductosServiciosService {
     private findVarianteOrThrow;
     private findPapelVarianteOrThrow;
     private findProcesoOrThrow;
+    private findCentroCostoOrThrow;
+    private findAdicionalCatalogoOrThrow;
+    private getAdicionalCatalogoByIdOrThrow;
+    private validateAdicionalPayload;
+    private getAdicionalEfectoInclude;
+    private parseServicioPricing;
+    private normalizeServicioPricingPayload;
+    private findAdicionalEfectoOrThrow;
+    private getAdicionalEfectoByIdOrThrow;
+    private validateAdicionalEfectoPayload;
+    private resolveAdicionalEfectoNombre;
+    private assertSingleAddonEffectTypeConstraint;
+    private replaceAdicionalEfectoDetail;
+    private toAdicionalEfectoResponse;
+    private validateOpcionesProductivasPayload;
+    private normalizeOpcionesProductivasPayload;
+    private toVarianteOpcionesProductivasResponse;
+    private toAdicionalCatalogoResponse;
     private toFamiliaResponse;
     private toSubfamiliaResponse;
     private validateVarianteRelations;
     private toVarianteResponse;
     private generateProductoCodigo;
+    private generateAdicionalCodigo;
     private ensureCatalogoInicialImprentaDigital;
     private resolveMotorOrThrow;
     private getDefaultMotorConfig;
@@ -545,6 +1113,7 @@ export declare class ProductosServiciosService {
     private resolvePapelDimensionesMm;
     private normalizeToMm;
     private resolveMachineMarginsMm;
+    private resolveImposicionMachineMargins;
     private calculateImposicion;
     private resolvePliegoImpresion;
     private calculateSustratoToPliegoConversion;
@@ -552,6 +1121,20 @@ export declare class ProductosServiciosService {
     private calculateMachineConsumables;
     private normalizeColor;
     private getSetupFromPerfilOperativo;
+    private groupOpcionesProductivas;
+    private resolveEffectiveOptionValues;
+    private isAddonEffectScopeMatch;
+    private assertScopeDimensionMatchesValue;
+    private toDimensionOpcionProductiva;
+    private fromDimensionOpcionProductiva;
+    private toValorOpcionProductiva;
+    private fromValorOpcionProductiva;
+    private toValorFromTipoImpresion;
+    private toValorFromCaras;
+    private toTipoAdicionalEfecto;
+    private fromTipoAdicionalEfecto;
+    private toReglaCostoAdicionalEfecto;
+    private fromReglaCostoAdicionalEfecto;
     private toTipoImpresion;
     private fromTipoImpresion;
     private toCaras;
@@ -560,5 +1143,13 @@ export declare class ProductosServiciosService {
     private fromTipoProducto;
     private toEstadoProducto;
     private fromEstadoProducto;
+    private toNullableJson;
+    private toTipoAdicional;
+    private fromTipoAdicional;
+    private toMetodoCostoAdicional;
+    private fromMetodoCostoAdicional;
+    private toTipoConsumoAdicionalMaterial;
+    private fromTipoConsumoAdicionalMaterial;
     private handleWriteError;
 }
+export {};

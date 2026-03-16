@@ -100,6 +100,7 @@ class ProcesoOperacionItemDto {
     reglaVelocidad;
     reglaMerma;
     detalle;
+    requiresProductoAdicionalId;
     activo;
 }
 exports.ProcesoOperacionItemDto = ProcesoOperacionItemDto;
@@ -216,6 +217,11 @@ __decorate([
     (0, class_validator_1.IsObject)(),
     __metadata("design:type", Object)
 ], ProcesoOperacionItemDto.prototype, "detalle", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], ProcesoOperacionItemDto.prototype, "requiresProductoAdicionalId", void 0);
 __decorate([
     (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)

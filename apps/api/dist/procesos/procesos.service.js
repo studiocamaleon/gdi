@@ -38,6 +38,7 @@ let ProcesosService = class ProcesosService {
                         centroCosto: true,
                         maquina: true,
                         perfilOperativo: true,
+                        requiresProductoAdicional: true,
                     },
                     orderBy: {
                         orden: 'asc',
@@ -313,6 +314,7 @@ let ProcesosService = class ProcesosService {
                                 centroCosto: true,
                                 maquina: true,
                                 perfilOperativo: true,
+                                requiresProductoAdicional: true,
                             },
                             orderBy: {
                                 orden: 'asc',
@@ -349,6 +351,7 @@ let ProcesosService = class ProcesosService {
                         centroCosto: true,
                         maquina: true,
                         perfilOperativo: true,
+                        requiresProductoAdicional: true,
                     },
                     orderBy: {
                         orden: 'asc',
@@ -372,6 +375,7 @@ let ProcesosService = class ProcesosService {
                             centroCosto: true,
                             maquina: true,
                             perfilOperativo: true,
+                            requiresProductoAdicional: true,
                         },
                         orderBy: {
                             orden: 'asc',
@@ -446,6 +450,7 @@ let ProcesosService = class ProcesosService {
             reglaVelocidadJson: undefined,
             reglaMermaJson: this.toNullableJson(payload.reglaMerma),
             detalleJson: this.toNullableJson(payload.detalle),
+            requiresProductoAdicionalId: payload.requiresProductoAdicionalId ?? null,
             activo: payload.activo,
         };
     }
@@ -809,7 +814,10 @@ let ProcesosService = class ProcesosService {
         const perfilIds = Array.from(new Set(operaciones
             .map((operacion) => operacion.perfilOperativoId)
             .filter((value) => Boolean(value))));
-        const [centros, maquinas, perfiles] = await Promise.all([
+        const addonIds = Array.from(new Set(operaciones
+            .map((operacion) => operacion.requiresProductoAdicionalId)
+            .filter((value) => Boolean(value))));
+        const [centros, maquinas, perfiles, addons] = await Promise.all([
             centerIds.length
                 ? this.prisma.centroCosto.findMany({
                     where: {
@@ -856,6 +864,18 @@ let ProcesosService = class ProcesosService {
                     },
                 })
                 : Promise.resolve([]),
+            addonIds.length
+                ? this.prisma.productoAdicionalCatalogo.findMany({
+                    where: {
+                        tenantId: auth.tenantId,
+                        id: { in: addonIds },
+                        activo: true,
+                    },
+                    select: {
+                        id: true,
+                    },
+                })
+                : Promise.resolve([]),
         ]);
         const centroPrincipalIds = Array.from(new Set(maquinas
             .map((maquina) => maquina.centroCostoPrincipalId)
@@ -882,6 +902,9 @@ let ProcesosService = class ProcesosService {
         }
         if (perfiles.length !== perfilIds.length) {
             throw new common_1.BadRequestException('Al menos un perfil operativo asociado al proceso no existe.');
+        }
+        if (addons.length !== addonIds.length) {
+            throw new common_1.BadRequestException('Al menos un adicional condicional asociado al proceso no existe o está inactivo.');
         }
         return {
             centrosById: new Map(centrosConsolidados.map((centro) => [centro.id, centro])),
@@ -987,6 +1010,7 @@ let ProcesosService = class ProcesosService {
                         centroCosto: true,
                         maquina: true,
                         perfilOperativo: true,
+                        requiresProductoAdicional: true,
                     },
                     orderBy: {
                         orden: 'asc',
@@ -1058,6 +1082,8 @@ let ProcesosService = class ProcesosService {
                     null,
                 reglaMerma: operacion.reglaMermaJson ?? null,
                 detalle: operacion.detalleJson ?? null,
+                requiresProductoAdicionalId: operacion.requiresProductoAdicionalId ?? null,
+                requiresProductoAdicionalNombre: operacion.requiresProductoAdicional?.nombre ?? '',
                 activo: operacion.activo,
                 warnings: this.getOperationWarnings(operacion),
             })),
@@ -1215,6 +1241,7 @@ let ProcesosService = class ProcesosService {
                 reglaVelocidadJson: operacion.reglaVelocidadJson,
                 reglaMermaJson: operacion.reglaMermaJson,
                 detalleJson: operacion.detalleJson,
+                requiresProductoAdicionalId: operacion.requiresProductoAdicionalId,
                 activo: operacion.activo,
             })),
             createdAt: new Date().toISOString(),

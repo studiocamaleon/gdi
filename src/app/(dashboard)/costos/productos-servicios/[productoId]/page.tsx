@@ -4,8 +4,10 @@ import { ProductoServicioFichaTabs } from "@/components/productos-servicios/prod
 import { getMateriasPrimas } from "@/lib/materias-primas-api";
 import { getProcesos } from "@/lib/procesos-api";
 import {
+  getAdicionalesCatalogo,
   getFamiliasProducto,
   getMotoresCostoCatalogo,
+  getProductoAdicionales,
   getProductoServicio,
   getProductoVariantes,
   getSubfamiliasProducto,
@@ -25,7 +27,7 @@ export default async function ProductoServicioDetallePage({
   const { productoId } = await params;
 
   try {
-    const [producto, variantes, procesos, materiasPrimas, familias, subfamilias, motores] = await Promise.all([
+    const [producto, variantes, procesos, materiasPrimas, familias, subfamilias, motores, adicionalesCatalogo, adicionalesProducto] = await Promise.all([
       getProductoServicio(productoId),
       getProductoVariantes(productoId),
       getProcesos(),
@@ -33,6 +35,8 @@ export default async function ProductoServicioDetallePage({
       getFamiliasProducto(),
       getSubfamiliasProducto(),
       getMotoresCostoCatalogo(),
+      getAdicionalesCatalogo(),
+      getProductoAdicionales(productoId),
     ]);
 
     return (
@@ -45,6 +49,8 @@ export default async function ProductoServicioDetallePage({
           familias={familias}
           subfamilias={subfamilias}
           motores={motores}
+          adicionalesCatalogo={adicionalesCatalogo}
+          adicionalesProducto={adicionalesProducto}
         />
       </section>
     );

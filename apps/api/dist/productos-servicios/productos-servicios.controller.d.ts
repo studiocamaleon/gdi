@@ -1,5 +1,5 @@
 import type { CurrentAuth } from '../auth/auth.types';
-import { AssignProductoVariantesRutaMasivaDto, AssignProductoMotorDto, AssignVarianteRutaDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, PreviewImposicionProductoVarianteDto, UpdateProductoRutaPolicyDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
+import { AssignProductoAdicionalDto, AssignProductoVariantesRutaMasivaDto, AssignProductoMotorDto, AssignVarianteRutaDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, UpsertProductoAdicionalDto, PreviewImposicionProductoVarianteDto, UpdateProductoRutaPolicyDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
 import { ProductosServiciosService } from './productos-servicios.service';
 export declare class ProductosServiciosController {
     private readonly service;
@@ -37,6 +37,413 @@ export declare class ProductosServiciosController {
             mermaAdicionalPct: number;
         };
     }[];
+    getAdicionales(auth: CurrentAuth): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        descripcion: string;
+        tipo: import("./dto/productos-servicios.dto").TipoProductoAdicionalDto;
+        metodoCosto: import("./dto/productos-servicios.dto").MetodoCostoProductoAdicionalDto;
+        centroCostoId: string | null;
+        centroCostoNombre: string;
+        activo: boolean;
+        metadata: Record<string, unknown> | null;
+        servicioPricing: {
+            niveles: {
+                id: string;
+                nombre: string;
+                orden: number;
+                activo: boolean;
+            }[];
+            reglas: {
+                id: string;
+                nivelId: string;
+                tiempoMin: number;
+            }[];
+        };
+        efectos: {
+            id: string;
+            tipo: import("./dto/productos-servicios.dto").TipoProductoAdicionalEfectoDto;
+            activo: boolean;
+        }[];
+        materiales: {
+            id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaNombre: string;
+            materiaPrimaSku: string;
+            tipoConsumo: import("./dto/productos-servicios.dto").TipoConsumoAdicionalMaterialDto;
+            factorConsumo: number;
+            mermaPct: number | null;
+            activo: boolean;
+            detalle: Record<string, unknown> | null;
+        }[];
+        createdAt: string;
+        updatedAt: string;
+    }[]>;
+    createAdicional(auth: CurrentAuth, payload: UpsertProductoAdicionalDto): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        descripcion: string;
+        tipo: import("./dto/productos-servicios.dto").TipoProductoAdicionalDto;
+        metodoCosto: import("./dto/productos-servicios.dto").MetodoCostoProductoAdicionalDto;
+        centroCostoId: string | null;
+        centroCostoNombre: string;
+        activo: boolean;
+        metadata: Record<string, unknown> | null;
+        servicioPricing: {
+            niveles: {
+                id: string;
+                nombre: string;
+                orden: number;
+                activo: boolean;
+            }[];
+            reglas: {
+                id: string;
+                nivelId: string;
+                tiempoMin: number;
+            }[];
+        };
+        efectos: {
+            id: string;
+            tipo: import("./dto/productos-servicios.dto").TipoProductoAdicionalEfectoDto;
+            activo: boolean;
+        }[];
+        materiales: {
+            id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaNombre: string;
+            materiaPrimaSku: string;
+            tipoConsumo: import("./dto/productos-servicios.dto").TipoConsumoAdicionalMaterialDto;
+            factorConsumo: number;
+            mermaPct: number | null;
+            activo: boolean;
+            detalle: Record<string, unknown> | null;
+        }[];
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    updateAdicional(auth: CurrentAuth, id: string, payload: UpsertProductoAdicionalDto): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        descripcion: string;
+        tipo: import("./dto/productos-servicios.dto").TipoProductoAdicionalDto;
+        metodoCosto: import("./dto/productos-servicios.dto").MetodoCostoProductoAdicionalDto;
+        centroCostoId: string | null;
+        centroCostoNombre: string;
+        activo: boolean;
+        metadata: Record<string, unknown> | null;
+        servicioPricing: {
+            niveles: {
+                id: string;
+                nombre: string;
+                orden: number;
+                activo: boolean;
+            }[];
+            reglas: {
+                id: string;
+                nivelId: string;
+                tiempoMin: number;
+            }[];
+        };
+        efectos: {
+            id: string;
+            tipo: import("./dto/productos-servicios.dto").TipoProductoAdicionalEfectoDto;
+            activo: boolean;
+        }[];
+        materiales: {
+            id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaNombre: string;
+            materiaPrimaSku: string;
+            tipoConsumo: import("./dto/productos-servicios.dto").TipoConsumoAdicionalMaterialDto;
+            factorConsumo: number;
+            mermaPct: number | null;
+            activo: boolean;
+            detalle: Record<string, unknown> | null;
+        }[];
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    toggleAdicional(auth: CurrentAuth, id: string): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        descripcion: string;
+        tipo: import("./dto/productos-servicios.dto").TipoProductoAdicionalDto;
+        metodoCosto: import("./dto/productos-servicios.dto").MetodoCostoProductoAdicionalDto;
+        centroCostoId: string | null;
+        centroCostoNombre: string;
+        activo: boolean;
+        metadata: Record<string, unknown> | null;
+        servicioPricing: {
+            niveles: {
+                id: string;
+                nombre: string;
+                orden: number;
+                activo: boolean;
+            }[];
+            reglas: {
+                id: string;
+                nivelId: string;
+                tiempoMin: number;
+            }[];
+        };
+        efectos: {
+            id: string;
+            tipo: import("./dto/productos-servicios.dto").TipoProductoAdicionalEfectoDto;
+            activo: boolean;
+        }[];
+        materiales: {
+            id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaNombre: string;
+            materiaPrimaSku: string;
+            tipoConsumo: import("./dto/productos-servicios.dto").TipoConsumoAdicionalMaterialDto;
+            factorConsumo: number;
+            mermaPct: number | null;
+            activo: boolean;
+            detalle: Record<string, unknown> | null;
+        }[];
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    getAdicionalEfectos(auth: CurrentAuth, id: string): Promise<{
+        id: string;
+        adicionalId: string;
+        tipo: import("./dto/productos-servicios.dto").TipoProductoAdicionalEfectoDto;
+        nombre: string;
+        activo: boolean;
+        scopes: {
+            id: string;
+            varianteId: string | null;
+            dimension: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto | null;
+            valor: import("./dto/productos-servicios.dto").ValorOpcionProductivaDto | null;
+        }[];
+        routeEffect: {
+            id: string;
+            pasos: {
+                id: string;
+                orden: number;
+                nombre: string;
+                centroCostoId: string;
+                centroCostoNombre: string;
+                maquinaId: string | null;
+                maquinaNombre: string;
+                perfilOperativoId: string | null;
+                perfilOperativoNombre: string;
+                setupMin: number | null;
+                runMin: number | null;
+                cleanupMin: number | null;
+                tiempoFijoMin: number | null;
+            }[];
+        } | null;
+        costEffect: {
+            id: string;
+            regla: import("./dto/productos-servicios.dto").ReglaCostoAdicionalEfectoDto;
+            valor: number;
+            centroCostoId: string | null;
+            centroCostoNombre: string;
+            detalle: Record<string, unknown> | null;
+        } | null;
+        materialEffect: {
+            id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaNombre: string;
+            materiaPrimaSku: string;
+            tipoConsumo: import("./dto/productos-servicios.dto").TipoConsumoAdicionalMaterialDto;
+            factorConsumo: number;
+            mermaPct: number | null;
+            detalle: Record<string, unknown> | null;
+        } | null;
+        createdAt: string;
+        updatedAt: string;
+    }[]>;
+    createAdicionalEfecto(auth: CurrentAuth, id: string, payload: UpsertProductoAdicionalEfectoDto): Promise<{
+        id: string;
+        adicionalId: string;
+        tipo: import("./dto/productos-servicios.dto").TipoProductoAdicionalEfectoDto;
+        nombre: string;
+        activo: boolean;
+        scopes: {
+            id: string;
+            varianteId: string | null;
+            dimension: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto | null;
+            valor: import("./dto/productos-servicios.dto").ValorOpcionProductivaDto | null;
+        }[];
+        routeEffect: {
+            id: string;
+            pasos: {
+                id: string;
+                orden: number;
+                nombre: string;
+                centroCostoId: string;
+                centroCostoNombre: string;
+                maquinaId: string | null;
+                maquinaNombre: string;
+                perfilOperativoId: string | null;
+                perfilOperativoNombre: string;
+                setupMin: number | null;
+                runMin: number | null;
+                cleanupMin: number | null;
+                tiempoFijoMin: number | null;
+            }[];
+        } | null;
+        costEffect: {
+            id: string;
+            regla: import("./dto/productos-servicios.dto").ReglaCostoAdicionalEfectoDto;
+            valor: number;
+            centroCostoId: string | null;
+            centroCostoNombre: string;
+            detalle: Record<string, unknown> | null;
+        } | null;
+        materialEffect: {
+            id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaNombre: string;
+            materiaPrimaSku: string;
+            tipoConsumo: import("./dto/productos-servicios.dto").TipoConsumoAdicionalMaterialDto;
+            factorConsumo: number;
+            mermaPct: number | null;
+            detalle: Record<string, unknown> | null;
+        } | null;
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    updateAdicionalEfecto(auth: CurrentAuth, id: string, efectoId: string, payload: UpsertProductoAdicionalEfectoDto): Promise<{
+        id: string;
+        adicionalId: string;
+        tipo: import("./dto/productos-servicios.dto").TipoProductoAdicionalEfectoDto;
+        nombre: string;
+        activo: boolean;
+        scopes: {
+            id: string;
+            varianteId: string | null;
+            dimension: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto | null;
+            valor: import("./dto/productos-servicios.dto").ValorOpcionProductivaDto | null;
+        }[];
+        routeEffect: {
+            id: string;
+            pasos: {
+                id: string;
+                orden: number;
+                nombre: string;
+                centroCostoId: string;
+                centroCostoNombre: string;
+                maquinaId: string | null;
+                maquinaNombre: string;
+                perfilOperativoId: string | null;
+                perfilOperativoNombre: string;
+                setupMin: number | null;
+                runMin: number | null;
+                cleanupMin: number | null;
+                tiempoFijoMin: number | null;
+            }[];
+        } | null;
+        costEffect: {
+            id: string;
+            regla: import("./dto/productos-servicios.dto").ReglaCostoAdicionalEfectoDto;
+            valor: number;
+            centroCostoId: string | null;
+            centroCostoNombre: string;
+            detalle: Record<string, unknown> | null;
+        } | null;
+        materialEffect: {
+            id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaNombre: string;
+            materiaPrimaSku: string;
+            tipoConsumo: import("./dto/productos-servicios.dto").TipoConsumoAdicionalMaterialDto;
+            factorConsumo: number;
+            mermaPct: number | null;
+            detalle: Record<string, unknown> | null;
+        } | null;
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    toggleAdicionalEfecto(auth: CurrentAuth, id: string, efectoId: string): Promise<{
+        id: string;
+        adicionalId: string;
+        tipo: import("./dto/productos-servicios.dto").TipoProductoAdicionalEfectoDto;
+        nombre: string;
+        activo: boolean;
+        scopes: {
+            id: string;
+            varianteId: string | null;
+            dimension: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto | null;
+            valor: import("./dto/productos-servicios.dto").ValorOpcionProductivaDto | null;
+        }[];
+        routeEffect: {
+            id: string;
+            pasos: {
+                id: string;
+                orden: number;
+                nombre: string;
+                centroCostoId: string;
+                centroCostoNombre: string;
+                maquinaId: string | null;
+                maquinaNombre: string;
+                perfilOperativoId: string | null;
+                perfilOperativoNombre: string;
+                setupMin: number | null;
+                runMin: number | null;
+                cleanupMin: number | null;
+                tiempoFijoMin: number | null;
+            }[];
+        } | null;
+        costEffect: {
+            id: string;
+            regla: import("./dto/productos-servicios.dto").ReglaCostoAdicionalEfectoDto;
+            valor: number;
+            centroCostoId: string | null;
+            centroCostoNombre: string;
+            detalle: Record<string, unknown> | null;
+        } | null;
+        materialEffect: {
+            id: string;
+            materiaPrimaVarianteId: string;
+            materiaPrimaNombre: string;
+            materiaPrimaSku: string;
+            tipoConsumo: import("./dto/productos-servicios.dto").TipoConsumoAdicionalMaterialDto;
+            factorConsumo: number;
+            mermaPct: number | null;
+            detalle: Record<string, unknown> | null;
+        } | null;
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    deleteAdicionalEfecto(auth: CurrentAuth, id: string, efectoId: string): Promise<{
+        adicionalId: string;
+        efectoId: string;
+        deleted: boolean;
+    }>;
+    getAdicionalServicioPricing(auth: CurrentAuth, id: string): Promise<{
+        niveles: {
+            id: string;
+            nombre: string;
+            orden: number;
+            activo: boolean;
+        }[];
+        reglas: {
+            id: string;
+            nivelId: string;
+            tiempoMin: number;
+        }[];
+    }>;
+    upsertAdicionalServicioPricing(auth: CurrentAuth, id: string, payload: UpsertProductoAdicionalServicioPricingDto): Promise<{
+        niveles: {
+            id: string;
+            nombre: string;
+            orden: number;
+            activo: boolean;
+        }[];
+        reglas: {
+            id: string;
+            nivelId: string;
+            tiempoMin: number;
+        }[];
+    }>;
     createFamilia(auth: CurrentAuth, payload: UpsertFamiliaProductoDto): Promise<{
         id: string;
         codigo: string;
@@ -252,6 +659,10 @@ export declare class ProductosServiciosController {
         papelNombre: string;
         tipoImpresion: import("./dto/productos-servicios.dto").TipoImpresionProductoVarianteDto;
         caras: import("./dto/productos-servicios.dto").CarasProductoVarianteDto;
+        opcionesProductivas: {
+            dimension: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto;
+            valores: import("./dto/productos-servicios.dto").ValorOpcionProductivaDto[];
+        }[] | null;
         procesoDefinicionId: string | null;
         procesoDefinicionCodigo: string;
         procesoDefinicionNombre: string;
@@ -259,6 +670,113 @@ export declare class ProductosServiciosController {
         createdAt: string;
         updatedAt: string;
     }[]>;
+    getProductoAdicionales(auth: CurrentAuth, id: string): Promise<{
+        id: string;
+        productoServicioId: string;
+        adicionalId: string;
+        activo: boolean;
+        adicional: {
+            id: string;
+            codigo: string;
+            nombre: string;
+            descripcion: string;
+            tipo: import("./dto/productos-servicios.dto").TipoProductoAdicionalDto;
+            metodoCosto: import("./dto/productos-servicios.dto").MetodoCostoProductoAdicionalDto;
+            centroCostoId: string | null;
+            centroCostoNombre: string;
+            activo: boolean;
+            metadata: Record<string, unknown> | null;
+            servicioPricing: {
+                niveles: {
+                    id: string;
+                    nombre: string;
+                    orden: number;
+                    activo: boolean;
+                }[];
+                reglas: {
+                    id: string;
+                    nivelId: string;
+                    tiempoMin: number;
+                }[];
+            };
+            efectos: {
+                id: string;
+                tipo: import("./dto/productos-servicios.dto").TipoProductoAdicionalEfectoDto;
+                activo: boolean;
+            }[];
+            materiales: {
+                id: string;
+                materiaPrimaVarianteId: string;
+                materiaPrimaNombre: string;
+                materiaPrimaSku: string;
+                tipoConsumo: import("./dto/productos-servicios.dto").TipoConsumoAdicionalMaterialDto;
+                factorConsumo: number;
+                mermaPct: number | null;
+                activo: boolean;
+                detalle: Record<string, unknown> | null;
+            }[];
+            createdAt: string;
+            updatedAt: string;
+        };
+        createdAt: string;
+        updatedAt: string;
+    }[]>;
+    assignProductoAdicional(auth: CurrentAuth, id: string, payload: AssignProductoAdicionalDto): Promise<{
+        id: string;
+        productoServicioId: string;
+        adicionalId: string;
+        activo: boolean;
+        adicional: {
+            id: string;
+            codigo: string;
+            nombre: string;
+            descripcion: string;
+            tipo: import("./dto/productos-servicios.dto").TipoProductoAdicionalDto;
+            metodoCosto: import("./dto/productos-servicios.dto").MetodoCostoProductoAdicionalDto;
+            centroCostoId: string | null;
+            centroCostoNombre: string;
+            activo: boolean;
+            metadata: Record<string, unknown> | null;
+            servicioPricing: {
+                niveles: {
+                    id: string;
+                    nombre: string;
+                    orden: number;
+                    activo: boolean;
+                }[];
+                reglas: {
+                    id: string;
+                    nivelId: string;
+                    tiempoMin: number;
+                }[];
+            };
+            efectos: {
+                id: string;
+                tipo: import("./dto/productos-servicios.dto").TipoProductoAdicionalEfectoDto;
+                activo: boolean;
+            }[];
+            materiales: {
+                id: string;
+                materiaPrimaVarianteId: string;
+                materiaPrimaNombre: string;
+                materiaPrimaSku: string;
+                tipoConsumo: import("./dto/productos-servicios.dto").TipoConsumoAdicionalMaterialDto;
+                factorConsumo: number;
+                mermaPct: number | null;
+                activo: boolean;
+                detalle: Record<string, unknown> | null;
+            }[];
+            createdAt: string;
+            updatedAt: string;
+        };
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    removeProductoAdicional(auth: CurrentAuth, id: string, adicionalId: string): Promise<{
+        productoServicioId: string;
+        adicionalId: string;
+        removed: boolean;
+    }>;
     createVariante(auth: CurrentAuth, id: string, payload: CreateProductoVarianteDto): Promise<{
         id: string;
         productoServicioId: string;
@@ -270,6 +788,10 @@ export declare class ProductosServiciosController {
         papelNombre: string;
         tipoImpresion: import("./dto/productos-servicios.dto").TipoImpresionProductoVarianteDto;
         caras: import("./dto/productos-servicios.dto").CarasProductoVarianteDto;
+        opcionesProductivas: {
+            dimension: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto;
+            valores: import("./dto/productos-servicios.dto").ValorOpcionProductivaDto[];
+        }[] | null;
         procesoDefinicionId: string | null;
         procesoDefinicionCodigo: string;
         procesoDefinicionNombre: string;
@@ -288,6 +810,10 @@ export declare class ProductosServiciosController {
         papelNombre: string;
         tipoImpresion: import("./dto/productos-servicios.dto").TipoImpresionProductoVarianteDto;
         caras: import("./dto/productos-servicios.dto").CarasProductoVarianteDto;
+        opcionesProductivas: {
+            dimension: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto;
+            valores: import("./dto/productos-servicios.dto").ValorOpcionProductivaDto[];
+        }[] | null;
         procesoDefinicionId: string | null;
         procesoDefinicionCodigo: string;
         procesoDefinicionNombre: string;
@@ -295,9 +821,64 @@ export declare class ProductosServiciosController {
         createdAt: string;
         updatedAt: string;
     }>;
+    getVarianteOpcionesProductivas(auth: CurrentAuth, varianteId: string): Promise<{
+        varianteId: string;
+        source: string;
+        dimensiones: {
+            dimension: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto;
+            valores: import("./dto/productos-servicios.dto").ValorOpcionProductivaDto[];
+        }[];
+        createdAt?: undefined;
+        updatedAt?: undefined;
+    } | {
+        varianteId: string;
+        source: string;
+        dimensiones: {
+            dimension: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto;
+            valores: import("./dto/productos-servicios.dto").ValorOpcionProductivaDto[];
+        }[];
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    upsertVarianteOpcionesProductivas(auth: CurrentAuth, varianteId: string, payload: UpsertVarianteOpcionesProductivasDto): Promise<{
+        varianteId: string;
+        source: string;
+        dimensiones: {
+            dimension: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto;
+            valores: import("./dto/productos-servicios.dto").ValorOpcionProductivaDto[];
+        }[];
+        createdAt?: undefined;
+        updatedAt?: undefined;
+    } | {
+        varianteId: string;
+        source: string;
+        dimensiones: {
+            dimension: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto;
+            valores: import("./dto/productos-servicios.dto").ValorOpcionProductivaDto[];
+        }[];
+        createdAt: string;
+        updatedAt: string;
+    }>;
     deleteVariante(auth: CurrentAuth, varianteId: string): Promise<{
         id: string;
         deleted: boolean;
+    }>;
+    getVarianteAdicionalesRestricciones(auth: CurrentAuth, varianteId: string): Promise<{
+        id: string;
+        varianteId: string;
+        adicionalId: string;
+        adicionalNombre: string;
+        permitido: boolean;
+        createdAt: string;
+        updatedAt: string;
+    }[]>;
+    setVarianteAdicionalRestriccion(auth: CurrentAuth, varianteId: string, payload: SetVarianteAdicionalRestrictionDto): Promise<{
+        id: string;
+        varianteId: string;
+        adicionalId: string;
+        permitido: boolean;
+        createdAt: string;
+        updatedAt: string;
     }>;
     assignVarianteRuta(auth: CurrentAuth, varianteId: string, payload: AssignVarianteRutaDto): Promise<{
         id: string;
@@ -310,6 +891,10 @@ export declare class ProductosServiciosController {
         papelNombre: string;
         tipoImpresion: import("./dto/productos-servicios.dto").TipoImpresionProductoVarianteDto;
         caras: import("./dto/productos-servicios.dto").CarasProductoVarianteDto;
+        opcionesProductivas: {
+            dimension: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto;
+            valores: import("./dto/productos-servicios.dto").ValorOpcionProductivaDto[];
+        }[] | null;
         procesoDefinicionId: string | null;
         procesoDefinicionCodigo: string;
         procesoDefinicionNombre: string;
@@ -355,6 +940,8 @@ export declare class ProductosServiciosController {
                 nombre: string;
                 centroCostoId: string;
                 centroCostoNombre: string;
+                origen: string;
+                addonId: string | null;
                 setupMin: number;
                 runMin: number;
                 cleanupMin: number;
@@ -370,6 +957,8 @@ export declare class ProductosServiciosController {
             papel: number;
             toner: number;
             desgaste: number;
+            adicionalesMateriales: number;
+            adicionalesCostEffects: number;
         };
         total: number;
         unitario: number;
@@ -406,6 +995,45 @@ export declare class ProductosServiciosController {
                 pliegosPorSustrato: number;
                 orientacion: string;
             };
+            addonsSeleccionados: string[];
+            addonsConfig: {
+                addonId: string;
+                nivelId: string | null;
+            }[];
+            opcionProductivaEfectiva: {
+                dimension: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto;
+                valores: import("./dto/productos-servicios.dto").ValorOpcionProductivaDto[];
+            }[];
+            efectosAplicados: {
+                id: string;
+                addonId: string;
+                addonNombre: string;
+                tipo: import("./dto/productos-servicios.dto").TipoProductoAdicionalEfectoDto;
+                nombre: string;
+            }[];
+            routeEffectsAplicados: {
+                id: string;
+                addonId: string;
+                nombre: string;
+                pasos: number;
+            }[];
+            costEffectsAplicados: {
+                id: string;
+                addonId: string;
+                nombre: string;
+                regla: import("./dto/productos-servicios.dto").ReglaCostoAdicionalEfectoDto | null;
+            }[];
+            materialEffectsAplicados: {
+                id: string;
+                addonId: string;
+                nombre: string;
+                material: string;
+            }[];
+            costosPorEfecto: Record<string, unknown>[];
+            pasosCondicionalesActivos: {
+                pasoCodigo: string;
+                addonId: string | null;
+            }[];
             config: {
                 tipoCorte: string;
                 demasiaCorteMm: number;

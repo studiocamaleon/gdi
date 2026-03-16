@@ -2,11 +2,17 @@ import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/
 import type { CurrentAuth } from '../auth/auth.types';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import {
+  AssignProductoAdicionalDto,
   AssignProductoVariantesRutaMasivaDto,
   AssignProductoMotorDto,
   AssignVarianteRutaDto,
   CotizarProductoVarianteDto,
   CreateProductoVarianteDto,
+  UpsertProductoAdicionalServicioPricingDto,
+  UpsertVarianteOpcionesProductivasDto,
+  SetVarianteAdicionalRestrictionDto,
+  UpsertProductoAdicionalEfectoDto,
+  UpsertProductoAdicionalDto,
   PreviewImposicionProductoVarianteDto,
   UpdateProductoRutaPolicyDto,
   UpsertProductoMotorConfigDto,
@@ -35,6 +41,98 @@ export class ProductosServiciosController {
   @Get('motores')
   getMotoresCosto() {
     return this.service.getMotoresCosto();
+  }
+
+  @Get('adicionales')
+  getAdicionales(@CurrentSession() auth: CurrentAuth) {
+    return this.service.findAdicionalesCatalogo(auth);
+  }
+
+  @Post('adicionales')
+  createAdicional(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: UpsertProductoAdicionalDto,
+  ) {
+    return this.service.createAdicionalCatalogo(auth, payload);
+  }
+
+  @Put('adicionales/:id')
+  updateAdicional(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: UpsertProductoAdicionalDto,
+  ) {
+    return this.service.updateAdicionalCatalogo(auth, id, payload);
+  }
+
+  @Put('adicionales/:id/toggle')
+  toggleAdicional(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.service.toggleAdicionalCatalogo(auth, id);
+  }
+
+  @Get('adicionales/:id/efectos')
+  getAdicionalEfectos(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.service.findAdicionalEfectos(auth, id);
+  }
+
+  @Post('adicionales/:id/efectos')
+  createAdicionalEfecto(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: UpsertProductoAdicionalEfectoDto,
+  ) {
+    return this.service.createAdicionalEfecto(auth, id, payload);
+  }
+
+  @Put('adicionales/:id/efectos/:efectoId')
+  updateAdicionalEfecto(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Param('efectoId') efectoId: string,
+    @Body() payload: UpsertProductoAdicionalEfectoDto,
+  ) {
+    return this.service.updateAdicionalEfecto(auth, id, efectoId, payload);
+  }
+
+  @Put('adicionales/:id/efectos/:efectoId/toggle')
+  toggleAdicionalEfecto(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Param('efectoId') efectoId: string,
+  ) {
+    return this.service.toggleAdicionalEfecto(auth, id, efectoId);
+  }
+
+  @Delete('adicionales/:id/efectos/:efectoId')
+  deleteAdicionalEfecto(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Param('efectoId') efectoId: string,
+  ) {
+    return this.service.deleteAdicionalEfecto(auth, id, efectoId);
+  }
+
+  @Get('adicionales/:id/servicio-pricing')
+  getAdicionalServicioPricing(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.service.getAdicionalServicioPricing(auth, id);
+  }
+
+  @Put('adicionales/:id/servicio-pricing')
+  upsertAdicionalServicioPricing(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: UpsertProductoAdicionalServicioPricingDto,
+  ) {
+    return this.service.upsertAdicionalServicioPricing(auth, id, payload);
   }
 
   @Post('familias')
@@ -155,6 +253,32 @@ export class ProductosServiciosController {
     return this.service.findVariantes(auth, id);
   }
 
+  @Get(':id/adicionales')
+  getProductoAdicionales(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.service.findProductoAdicionales(auth, id);
+  }
+
+  @Put(':id/adicionales')
+  assignProductoAdicional(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: AssignProductoAdicionalDto,
+  ) {
+    return this.service.assignProductoAdicional(auth, id, payload);
+  }
+
+  @Delete(':id/adicionales/:adicionalId')
+  removeProductoAdicional(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Param('adicionalId') adicionalId: string,
+  ) {
+    return this.service.removeProductoAdicional(auth, id, adicionalId);
+  }
+
   @Post(':id/variantes')
   createVariante(
     @CurrentSession() auth: CurrentAuth,
@@ -173,12 +297,46 @@ export class ProductosServiciosController {
     return this.service.updateVariante(auth, varianteId, payload);
   }
 
+  @Get('variantes/:varianteId/opciones-productivas')
+  getVarianteOpcionesProductivas(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('varianteId') varianteId: string,
+  ) {
+    return this.service.getVarianteOpcionesProductivas(auth, varianteId);
+  }
+
+  @Put('variantes/:varianteId/opciones-productivas')
+  upsertVarianteOpcionesProductivas(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('varianteId') varianteId: string,
+    @Body() payload: UpsertVarianteOpcionesProductivasDto,
+  ) {
+    return this.service.upsertVarianteOpcionesProductivas(auth, varianteId, payload);
+  }
+
   @Delete('variantes/:varianteId')
   deleteVariante(
     @CurrentSession() auth: CurrentAuth,
     @Param('varianteId') varianteId: string,
   ) {
     return this.service.deleteVariante(auth, varianteId);
+  }
+
+  @Get('variantes/:varianteId/adicionales/restricciones')
+  getVarianteAdicionalesRestricciones(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('varianteId') varianteId: string,
+  ) {
+    return this.service.findVarianteAdicionalesRestricciones(auth, varianteId);
+  }
+
+  @Put('variantes/:varianteId/adicionales/restricciones')
+  setVarianteAdicionalRestriccion(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('varianteId') varianteId: string,
+    @Body() payload: SetVarianteAdicionalRestrictionDto,
+  ) {
+    return this.service.setVarianteAdicionalRestriccion(auth, varianteId, payload);
   }
 
   @Put('variantes/:varianteId/ruta')

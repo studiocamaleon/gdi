@@ -2,6 +2,18 @@ export type TipoProductoServicio = 'producto' | 'servicio';
 export type EstadoProductoServicio = 'activo' | 'inactivo';
 export type TipoImpresionProductoVariante = 'bn' | 'cmyk';
 export type CarasProductoVariante = 'simple_faz' | 'doble_faz';
+export type TipoProductoAdicional = 'servicio' | 'acabado';
+export type MetodoCostoProductoAdicional = 'time_only' | 'time_plus_material';
+export type TipoConsumoAdicionalMaterial = 'por_unidad' | 'por_pliego' | 'por_m2';
+export type DimensionOpcionProductiva = 'tipo_impresion' | 'caras';
+export type ValorOpcionProductiva = 'bn' | 'cmyk' | 'simple_faz' | 'doble_faz';
+export type TipoProductoAdicionalEfecto = 'route_effect' | 'cost_effect' | 'material_effect';
+export type ReglaCostoAdicionalEfecto =
+  | 'flat'
+  | 'por_unidad'
+  | 'por_pliego'
+  | 'porcentaje_sobre_total'
+  | 'tiempo_extra_min';
 
 export type FamiliaProducto = {
   id: string;
@@ -57,10 +69,151 @@ export type ProductoVariante = {
   papelNombre: string;
   tipoImpresion: TipoImpresionProductoVariante;
   caras: CarasProductoVariante;
+  opcionesProductivas: Array<{
+    dimension: DimensionOpcionProductiva;
+    valores: ValorOpcionProductiva[];
+  }> | null;
   procesoDefinicionId: string | null;
   procesoDefinicionCodigo: string;
   procesoDefinicionNombre: string;
   activo: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ProductoAdicionalMaterial = {
+  id: string;
+  materiaPrimaVarianteId: string;
+  materiaPrimaNombre: string;
+  materiaPrimaSku: string;
+  tipoConsumo: TipoConsumoAdicionalMaterial;
+  factorConsumo: number;
+  mermaPct: number | null;
+  activo: boolean;
+  detalle: Record<string, unknown> | null;
+};
+
+export type ProductoAdicional = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  descripcion: string;
+  tipo: TipoProductoAdicional;
+  metodoCosto: MetodoCostoProductoAdicional;
+  centroCostoId: string | null;
+  centroCostoNombre: string;
+  activo: boolean;
+  metadata: Record<string, unknown> | null;
+  servicioPricing: {
+    niveles: Array<{
+      id: string;
+      nombre: string;
+      orden: number;
+      activo: boolean;
+    }>;
+    reglas: Array<{
+      id: string;
+      nivelId: string;
+      tiempoMin: number;
+    }>;
+  };
+  efectos: Array<{
+    id: string;
+    tipo: TipoProductoAdicionalEfecto;
+    activo: boolean;
+  }>;
+  materiales: ProductoAdicionalMaterial[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type VarianteOpcionesProductivas = {
+  varianteId: string;
+  source: 'legacy' | 'v2';
+  dimensiones: Array<{
+    dimension: DimensionOpcionProductiva;
+    valores: ValorOpcionProductiva[];
+  }>;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type AddonEffectScope = {
+  id: string;
+  varianteId: string | null;
+  dimension: DimensionOpcionProductiva | null;
+  valor: ValorOpcionProductiva | null;
+};
+
+export type AddonRouteEffect = {
+  id: string;
+  pasos: Array<{
+    id: string;
+    orden: number;
+    nombre: string;
+    centroCostoId: string;
+    centroCostoNombre: string;
+    maquinaId: string | null;
+    maquinaNombre: string;
+    perfilOperativoId: string | null;
+    perfilOperativoNombre: string;
+    setupMin: number | null;
+    runMin: number | null;
+    cleanupMin: number | null;
+    tiempoFijoMin: number | null;
+  }>;
+};
+
+export type AddonCostEffect = {
+  id: string;
+  regla: ReglaCostoAdicionalEfecto;
+  valor: number;
+  centroCostoId: string | null;
+  centroCostoNombre: string;
+  detalle: Record<string, unknown> | null;
+};
+
+export type AddonMaterialEffect = {
+  id: string;
+  materiaPrimaVarianteId: string;
+  materiaPrimaNombre: string;
+  materiaPrimaSku: string;
+  tipoConsumo: TipoConsumoAdicionalMaterial;
+  factorConsumo: number;
+  mermaPct: number | null;
+  detalle: Record<string, unknown> | null;
+};
+
+export type AddonEffect = {
+  id: string;
+  adicionalId: string;
+  tipo: TipoProductoAdicionalEfecto;
+  nombre: string;
+  activo: boolean;
+  scopes: AddonEffectScope[];
+  routeEffect: AddonRouteEffect | null;
+  costEffect: AddonCostEffect | null;
+  materialEffect: AddonMaterialEffect | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ProductoAdicionalAsignado = {
+  id: string;
+  productoServicioId: string;
+  adicionalId: string;
+  activo: boolean;
+  adicional: ProductoAdicional;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type VarianteAdicionalRestriccion = {
+  id: string;
+  varianteId: string;
+  adicionalId: string;
+  adicionalNombre: string;
+  permitido: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -119,6 +272,8 @@ export type CotizacionProductoVariante = {
       nombre: string;
       centroCostoId: string;
       centroCostoNombre: string;
+      origen?: string;
+      addonId?: string | null;
       setupMin: number;
       runMin: number;
       cleanupMin: number;
@@ -134,6 +289,8 @@ export type CotizacionProductoVariante = {
     papel: number;
     toner: number;
     desgaste: number;
+    adicionalesMateriales?: number;
+    adicionalesCostEffects?: number;
   };
   total: number;
   unitario: number;
@@ -164,7 +321,6 @@ export type PliegoImpresionCatalogItem = {
 
 export const tipoProductoServicioItems: Array<{ label: string; value: TipoProductoServicio }> = [
   { label: 'Producto', value: 'producto' },
-  { label: 'Servicio', value: 'servicio' },
 ];
 
 export const estadoProductoServicioItems: Array<{ label: string; value: EstadoProductoServicio }> = [

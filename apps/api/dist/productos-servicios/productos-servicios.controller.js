@@ -31,6 +31,39 @@ let ProductosServiciosController = class ProductosServiciosController {
     getMotoresCosto() {
         return this.service.getMotoresCosto();
     }
+    getAdicionales(auth) {
+        return this.service.findAdicionalesCatalogo(auth);
+    }
+    createAdicional(auth, payload) {
+        return this.service.createAdicionalCatalogo(auth, payload);
+    }
+    updateAdicional(auth, id, payload) {
+        return this.service.updateAdicionalCatalogo(auth, id, payload);
+    }
+    toggleAdicional(auth, id) {
+        return this.service.toggleAdicionalCatalogo(auth, id);
+    }
+    getAdicionalEfectos(auth, id) {
+        return this.service.findAdicionalEfectos(auth, id);
+    }
+    createAdicionalEfecto(auth, id, payload) {
+        return this.service.createAdicionalEfecto(auth, id, payload);
+    }
+    updateAdicionalEfecto(auth, id, efectoId, payload) {
+        return this.service.updateAdicionalEfecto(auth, id, efectoId, payload);
+    }
+    toggleAdicionalEfecto(auth, id, efectoId) {
+        return this.service.toggleAdicionalEfecto(auth, id, efectoId);
+    }
+    deleteAdicionalEfecto(auth, id, efectoId) {
+        return this.service.deleteAdicionalEfecto(auth, id, efectoId);
+    }
+    getAdicionalServicioPricing(auth, id) {
+        return this.service.getAdicionalServicioPricing(auth, id);
+    }
+    upsertAdicionalServicioPricing(auth, id, payload) {
+        return this.service.upsertAdicionalServicioPricing(auth, id, payload);
+    }
     createFamilia(auth, payload) {
         return this.service.createFamilia(auth, payload);
     }
@@ -76,14 +109,35 @@ let ProductosServiciosController = class ProductosServiciosController {
     getVariantes(auth, id) {
         return this.service.findVariantes(auth, id);
     }
+    getProductoAdicionales(auth, id) {
+        return this.service.findProductoAdicionales(auth, id);
+    }
+    assignProductoAdicional(auth, id, payload) {
+        return this.service.assignProductoAdicional(auth, id, payload);
+    }
+    removeProductoAdicional(auth, id, adicionalId) {
+        return this.service.removeProductoAdicional(auth, id, adicionalId);
+    }
     createVariante(auth, id, payload) {
         return this.service.createVariante(auth, id, payload);
     }
     updateVariante(auth, varianteId, payload) {
         return this.service.updateVariante(auth, varianteId, payload);
     }
+    getVarianteOpcionesProductivas(auth, varianteId) {
+        return this.service.getVarianteOpcionesProductivas(auth, varianteId);
+    }
+    upsertVarianteOpcionesProductivas(auth, varianteId, payload) {
+        return this.service.upsertVarianteOpcionesProductivas(auth, varianteId, payload);
+    }
     deleteVariante(auth, varianteId) {
         return this.service.deleteVariante(auth, varianteId);
+    }
+    getVarianteAdicionalesRestricciones(auth, varianteId) {
+        return this.service.findVarianteAdicionalesRestricciones(auth, varianteId);
+    }
+    setVarianteAdicionalRestriccion(auth, varianteId, payload) {
+        return this.service.setVarianteAdicionalRestriccion(auth, varianteId, payload);
     }
     assignVarianteRuta(auth, varianteId, payload) {
         return this.service.assignVarianteRuta(auth, varianteId, payload);
@@ -127,6 +181,100 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], ProductosServiciosController.prototype, "getMotoresCosto", null);
+__decorate([
+    (0, common_1.Get)('adicionales'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "getAdicionales", null);
+__decorate([
+    (0, common_1.Post)('adicionales'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, productos_servicios_dto_1.UpsertProductoAdicionalDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "createAdicional", null);
+__decorate([
+    (0, common_1.Put)('adicionales/:id'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.UpsertProductoAdicionalDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "updateAdicional", null);
+__decorate([
+    (0, common_1.Put)('adicionales/:id/toggle'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "toggleAdicional", null);
+__decorate([
+    (0, common_1.Get)('adicionales/:id/efectos'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "getAdicionalEfectos", null);
+__decorate([
+    (0, common_1.Post)('adicionales/:id/efectos'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.UpsertProductoAdicionalEfectoDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "createAdicionalEfecto", null);
+__decorate([
+    (0, common_1.Put)('adicionales/:id/efectos/:efectoId'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Param)('efectoId')),
+    __param(3, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String, productos_servicios_dto_1.UpsertProductoAdicionalEfectoDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "updateAdicionalEfecto", null);
+__decorate([
+    (0, common_1.Put)('adicionales/:id/efectos/:efectoId/toggle'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Param)('efectoId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "toggleAdicionalEfecto", null);
+__decorate([
+    (0, common_1.Delete)('adicionales/:id/efectos/:efectoId'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Param)('efectoId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "deleteAdicionalEfecto", null);
+__decorate([
+    (0, common_1.Get)('adicionales/:id/servicio-pricing'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "getAdicionalServicioPricing", null);
+__decorate([
+    (0, common_1.Put)('adicionales/:id/servicio-pricing'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.UpsertProductoAdicionalServicioPricingDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "upsertAdicionalServicioPricing", null);
 __decorate([
     (0, common_1.Post)('familias'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),
@@ -254,6 +402,32 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], ProductosServiciosController.prototype, "getVariantes", null);
 __decorate([
+    (0, common_1.Get)(':id/adicionales'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "getProductoAdicionales", null);
+__decorate([
+    (0, common_1.Put)(':id/adicionales'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.AssignProductoAdicionalDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "assignProductoAdicional", null);
+__decorate([
+    (0, common_1.Delete)(':id/adicionales/:adicionalId'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Param)('adicionalId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "removeProductoAdicional", null);
+__decorate([
     (0, common_1.Post)(':id/variantes'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),
     __param(1, (0, common_1.Param)('id')),
@@ -272,6 +446,23 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], ProductosServiciosController.prototype, "updateVariante", null);
 __decorate([
+    (0, common_1.Get)('variantes/:varianteId/opciones-productivas'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('varianteId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "getVarianteOpcionesProductivas", null);
+__decorate([
+    (0, common_1.Put)('variantes/:varianteId/opciones-productivas'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('varianteId')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.UpsertVarianteOpcionesProductivasDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "upsertVarianteOpcionesProductivas", null);
+__decorate([
     (0, common_1.Delete)('variantes/:varianteId'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),
     __param(1, (0, common_1.Param)('varianteId')),
@@ -279,6 +470,23 @@ __decorate([
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", void 0)
 ], ProductosServiciosController.prototype, "deleteVariante", null);
+__decorate([
+    (0, common_1.Get)('variantes/:varianteId/adicionales/restricciones'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('varianteId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "getVarianteAdicionalesRestricciones", null);
+__decorate([
+    (0, common_1.Put)('variantes/:varianteId/adicionales/restricciones'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('varianteId')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.SetVarianteAdicionalRestrictionDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "setVarianteAdicionalRestriccion", null);
 __decorate([
     (0, common_1.Put)('variantes/:varianteId/ruta'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),

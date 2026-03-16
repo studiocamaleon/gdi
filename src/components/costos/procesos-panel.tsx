@@ -46,6 +46,8 @@ import {
   toggleProceso,
   updateProceso,
 } from "@/lib/procesos-api";
+import { getAdicionalesCatalogo } from "@/lib/productos-servicios-api";
+import type { ProductoAdicional } from "@/lib/productos-servicios";
 import {
   estadoConfiguracionProcesoItems,
   modoProductividadProcesoItems,
@@ -661,6 +663,7 @@ export function ProcesosPanel({
   );
   const [allCentrosCosto, setAllCentrosCosto] = React.useState(centrosCosto);
   const [allMaquinas, setAllMaquinas] = React.useState(maquinas);
+  const [allAdicionales, setAllAdicionales] = React.useState<ProductoAdicional[]>([]);
   const [searchTerm, setSearchTerm] = React.useState("");
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const [editingProcesoId, setEditingProcesoId] = React.useState<string | null>(null);
@@ -934,22 +937,35 @@ export function ProcesosPanel({
   const reloadAll = React.useCallback(() => {
     startRefreshing(async () => {
       try {
-        const [nextProcesos, nextCentros, nextMaquinas, nextBiblioteca] = await Promise.all([
+        const [nextProcesos, nextCentros, nextMaquinas, nextBiblioteca, nextAdicionales] = await Promise.all([
           getProcesos(),
           getCentrosCosto(),
           getMaquinas(),
           getProcesoOperacionPlantillas(),
+          getAdicionalesCatalogo(),
         ]);
         setProcesos(nextProcesos);
         setAllCentrosCosto(nextCentros);
         setAllMaquinas(nextMaquinas);
         setBibliotecaOperaciones(nextBiblioteca);
+        setAllAdicionales(nextAdicionales.filter((item) => item.activo));
       } catch (error) {
         toast.error(
           error instanceof Error ? error.message : "No se pudo refrescar rutas de produccion.",
         );
       }
     });
+  }, []);
+
+  React.useEffect(() => {
+    void (async () => {
+      try {
+        const adicionales = await getAdicionalesCatalogo();
+        setAllAdicionales(adicionales.filter((item) => item.activo));
+      } catch {
+        setAllAdicionales([]);
+      }
+    })();
   }, []);
 
   const openCreateSheet = React.useCallback(() => {
@@ -1008,6 +1024,8 @@ export function ProcesosPanel({
             mermaRunPct: operacion.mermaRunPct ?? undefined,
             mermaRuleMode: mermaBuilder.mode,
             mermaTiers: mermaBuilder.tiers,
+            requiresProductoAdicionalId:
+              operacion.requiresProductoAdicionalId ?? undefined,
             activo: operacion.activo,
           };
         }),
@@ -1218,6 +1236,8 @@ export function ProcesosPanel({
       mermaRunPct: operacion.mermaRunPct,
       reglaVelocidad: undefined as Record<string, unknown> | undefined,
       reglaMerma: undefined as Record<string, unknown> | undefined,
+      requiresProductoAdicionalId:
+        operacion.requiresProductoAdicionalId || undefined,
       activo: operacion.activo,
     }));
 
@@ -2130,41 +2150,25 @@ export function ProcesosPanel({
                           <PlusIcon />
                           Crear paso en blanco
                         </Button>
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <span>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={applyTemplateOperations}
-                                aria-label="Cargar pasos base"
-                              >
-                                <ListRestartIcon className="h-4 w-4" />
-                              </Button>
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent side="top">
-                            Cargar pasos base
-                          </TooltipContent>
-                        </Tooltip>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={applyTemplateOperations}
+                          aria-label="Cargar pasos base"
+                          title="Cargar pasos base"
+                        >
+                          <ListRestartIcon className="h-4 w-4" />
+                        </Button>
                         {!editingProcesoId ? (
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <span>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  onClick={clearTemplateOperations}
-                                  aria-label="Vaciar pasos de plantilla"
-                                >
-                                  <EraserIcon className="h-4 w-4" />
-                                </Button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              Vaciar pasos de plantilla
-                            </TooltipContent>
-                          </Tooltip>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={clearTemplateOperations}
+                            aria-label="Vaciar pasos de plantilla"
+                            title="Vaciar pasos de plantilla"
+                          >
+                            <EraserIcon className="h-4 w-4" />
+                          </Button>
                         ) : null}
                       </div>
                     </CardContent>
@@ -2312,6 +2316,47 @@ export function ProcesosPanel({
                                 {tipoOperacionProcesoItems.map((item) => (
                                   <SelectItem key={item.value} value={item.value}>
                                     {item.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </Field>
+
+                          <Field>
+                            <FieldLabel>Condición por adicional</FieldLabel>
+                            <Select
+                              value={
+                                operacion.requiresProductoAdicionalId ||
+                                EMPTY_SELECT_VALUE
+                              }
+                              onValueChange={(value) =>
+                                updateOperacion(operacion.id, (prev) => ({
+                                  ...prev,
+                                  requiresProductoAdicionalId:
+                                    !value || value === EMPTY_SELECT_VALUE
+                                      ? undefined
+                                      : value,
+                                }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Sin condición">
+                                  {operacion.requiresProductoAdicionalId
+                                    ? (allAdicionales.find(
+                                        (item) =>
+                                          item.id ===
+                                          operacion.requiresProductoAdicionalId,
+                                      )?.nombre ?? "Adicional no disponible")
+                                    : "Sin condición"}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={EMPTY_SELECT_VALUE}>
+                                  Sin condición
+                                </SelectItem>
+                                {allAdicionales.map((item) => (
+                                  <SelectItem key={item.id} value={item.id}>
+                                    {item.nombre}
                                   </SelectItem>
                                 ))}
                               </SelectContent>

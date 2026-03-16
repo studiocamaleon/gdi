@@ -46,6 +46,8 @@ export declare class ProcesosService {
             reglaVelocidad: Record<string, unknown> | null;
             reglaMerma: Record<string, unknown> | null;
             detalle: Record<string, unknown> | null;
+            requiresProductoAdicionalId: string | null;
+            requiresProductoAdicionalNombre: string;
             activo: boolean;
             warnings: string[];
         }[];
@@ -193,6 +195,8 @@ export declare class ProcesosService {
             reglaVelocidad: Record<string, unknown> | null;
             reglaMerma: Record<string, unknown> | null;
             detalle: Record<string, unknown> | null;
+            requiresProductoAdicionalId: string | null;
+            requiresProductoAdicionalNombre: string;
             activo: boolean;
             warnings: string[];
         }[];
@@ -315,6 +319,8 @@ export declare class ProcesosService {
             reglaVelocidad: Record<string, unknown> | null;
             reglaMerma: Record<string, unknown> | null;
             detalle: Record<string, unknown> | null;
+            requiresProductoAdicionalId: string | null;
+            requiresProductoAdicionalNombre: string;
             activo: boolean;
             warnings: string[];
         }[];
@@ -358,6 +364,8 @@ export declare class ProcesosService {
             reglaVelocidad: Record<string, unknown> | null;
             reglaMerma: Record<string, unknown> | null;
             detalle: Record<string, unknown> | null;
+            requiresProductoAdicionalId: string | null;
+            requiresProductoAdicionalNombre: string;
             activo: boolean;
             warnings: string[];
         }[];
@@ -401,6 +409,8 @@ export declare class ProcesosService {
             reglaVelocidad: Record<string, unknown> | null;
             reglaMerma: Record<string, unknown> | null;
             detalle: Record<string, unknown> | null;
+            requiresProductoAdicionalId: string | null;
+            requiresProductoAdicionalNombre: string;
             activo: boolean;
             warnings: string[];
         }[];
