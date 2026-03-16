@@ -1304,6 +1304,10 @@ export function ProductoServicioFichaTabs({
 
   const procesosCotizados = cotizacion?.bloques?.procesos ?? [];
   const materialesCotizados = (cotizacion?.bloques?.materiales ?? []) as Array<Record<string, unknown>>;
+  const totalCentroCostos = procesosCotizados.reduce((acc, item) => {
+    const costo = Number(item.costo ?? 0);
+    return Number.isFinite(costo) ? acc + costo : acc;
+  }, 0);
   const totalMaterialesCostoUnitario = materialesCotizados.reduce((acc, item) => {
     const costoUnitario = Number(item.costoUnitario ?? 0);
     return Number.isFinite(costoUnitario) ? acc + costoUnitario : acc;
@@ -1312,6 +1316,7 @@ export function ProductoServicioFichaTabs({
     const costo = Number(item.costo ?? 0);
     return Number.isFinite(costo) ? acc + costo : acc;
   }, 0);
+  const totalCostoGeneral = totalCentroCostos + totalMaterialesCosto;
   const isGeneralDirty =
     generalForm.nombre.trim() !== (productoState.nombre ?? "").trim() ||
     generalForm.descripcion.trim() !== (productoState.descripcion ?? "").trim() ||
@@ -2516,35 +2521,6 @@ export function ProductoServicioFichaTabs({
                 </div>
               </div>
 
-              {cotizacion ? (
-                <div className="grid gap-3 md:grid-cols-4">
-                  <Card>
-                    <CardHeader>
-                      <CardDescription>Total</CardDescription>
-                      <CardTitle>{formatNumber(cotizacion.total)}</CardTitle>
-                    </CardHeader>
-                  </Card>
-                  <Card>
-                    <CardHeader>
-                      <CardDescription>Unitario</CardDescription>
-                      <CardTitle>{formatNumber(cotizacion.unitario)}</CardTitle>
-                    </CardHeader>
-                  </Card>
-                  <Card>
-                    <CardHeader>
-                      <CardDescription>Piezas por pliego</CardDescription>
-                      <CardTitle>{cotizacion.piezasPorPliego}</CardTitle>
-                    </CardHeader>
-                  </Card>
-                  <Card>
-                    <CardHeader>
-                      <CardDescription>Pliegos</CardDescription>
-                      <CardTitle>{cotizacion.pliegos}</CardTitle>
-                    </CardHeader>
-                  </Card>
-                </div>
-              ) : null}
-
               {cotizacion?.warnings?.length ? (
                 <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
                   {cotizacion.warnings.map((warning, index) => (
@@ -2602,6 +2578,14 @@ export function ProductoServicioFichaTabs({
                               })()}
                             </TableRow>
                           ))}
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-right font-medium">
+                              Total
+                            </TableCell>
+                            <TableCell className="text-right font-semibold tabular-nums">
+                              {formatNumber(totalCentroCostos)}
+                            </TableCell>
+                          </TableRow>
                         </TableBody>
                       </Table>
                     </CardContent>
@@ -2671,6 +2655,14 @@ export function ProductoServicioFichaTabs({
                             </TableCell>
                             <TableCell className="text-right font-semibold tabular-nums">
                               {formatNumber(totalMaterialesCosto)}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-right font-medium">
+                              Total costo
+                            </TableCell>
+                            <TableCell className="text-right font-semibold tabular-nums">
+                              {formatNumber(totalCostoGeneral)}
                             </TableCell>
                           </TableRow>
                         </TableBody>
