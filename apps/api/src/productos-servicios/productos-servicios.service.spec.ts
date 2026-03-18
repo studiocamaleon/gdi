@@ -25,6 +25,16 @@ describe('ProductosServiciosService V1 adicionales', () => {
     varianteAltoMm: number;
     overridesProductividad?: Record<string, unknown>;
   }) => { runMin: number; trace: Record<string, unknown> } | null;
+  let buildOperacionesCotizadasOrdenadas: (
+    operacionesBase: Array<{ orden: number; nombre: string; detalleJson?: unknown }>,
+    routeEffects: Array<{
+      effect: { id: string; nombre: string };
+      insertion: { modo: 'append' | 'before_step' | 'after_step'; pasoPlantillaId: string | null };
+      pasos: Array<{ orden: number; nombre: string; detalleJson?: unknown }>;
+    }>,
+    checklistOperaciones: Array<{ orden: number; nombre: string; detalleJson?: unknown }>,
+    warnings: string[],
+  ) => Array<{ orden: number; nombre: string; detalleJson?: unknown }>;
 
   beforeEach(() => {
     service = new ProductosServiciosService({} as never);
@@ -36,6 +46,10 @@ describe('ProductosServiciosService V1 adicionales', () => {
       service as unknown as Record<string, unknown>,
       'calculateTerminatingOperationTiming',
     ) as typeof calculateTerminatingOperationTiming;
+    buildOperacionesCotizadasOrdenadas = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'buildOperacionesCotizadasOrdenadas',
+    ) as typeof buildOperacionesCotizadasOrdenadas;
   });
 
   it('usa la ruta completa para márgenes de imposición aunque haya filtros por addon', () => {
@@ -259,5 +273,67 @@ describe('ProductosServiciosService V1 adicionales', () => {
     expect(result).not.toBeNull();
     expect((result as { sourceProductividad?: string } | null)?.sourceProductividad).toBe('override');
     expect(Number(result?.trace?.pasadasPorPliego ?? 0)).toBe(2);
+  });
+
+  it('mantiene el orden original de la ruta base al cotizar', () => {
+    const warnings: string[] = [];
+    const result = buildOperacionesCotizadasOrdenadas.call(
+      service,
+      [
+        {
+          orden: 1,
+          nombre: 'Impresion Laser',
+          detalleJson: { pasoPlantillaId: 'laser-step', matchingBase: true },
+        },
+        {
+          orden: 2,
+          nombre: 'Corte con guillotina',
+          detalleJson: { pasoPlantillaId: 'guillo-step' },
+        },
+      ],
+      [],
+      [],
+      warnings,
+    );
+
+    expect(warnings).toEqual([]);
+    expect(result.map((item) => item.nombre)).toEqual([
+      'Impresion Laser',
+      'Corte con guillotina',
+    ]);
+    expect(result.map((item) => item.orden)).toEqual([1, 2]);
+  });
+
+  it('inserta route effects antes o después del paso de referencia', () => {
+    const warnings: string[] = [];
+    const result = buildOperacionesCotizadasOrdenadas.call(
+      service,
+      [
+        { orden: 1, nombre: 'Impresion Laser', detalleJson: { pasoPlantillaId: 'laser-step' } },
+        { orden: 2, nombre: 'Corte con guillotina', detalleJson: { pasoPlantillaId: 'guillo-step' } },
+      ],
+      [
+        {
+          effect: { id: 'effect-before', nombre: 'Laminado' },
+          insertion: { modo: 'before_step', pasoPlantillaId: 'guillo-step' },
+          pasos: [{ orden: 1, nombre: 'Laminado BOPP' }],
+        },
+        {
+          effect: { id: 'effect-after', nombre: 'Puntillado' },
+          insertion: { modo: 'after_step', pasoPlantillaId: 'guillo-step' },
+          pasos: [{ orden: 1, nombre: 'Puntillado' }],
+        },
+      ],
+      [],
+      warnings,
+    );
+
+    expect(warnings).toEqual([]);
+    expect(result.map((item) => item.nombre)).toEqual([
+      'Impresion Laser',
+      'Laminado BOPP',
+      'Corte con guillotina',
+      'Puntillado',
+    ]);
   });
 });

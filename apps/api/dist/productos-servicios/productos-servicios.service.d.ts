@@ -17,6 +17,11 @@ type ServicioPricingConfig = {
     niveles: ServicioPricingNivel[];
     reglas: ServicioPricingRegla[];
 };
+type RouteEffectInsertionMode = 'append' | 'before_step' | 'after_step';
+type RouteEffectInsertionConfig = {
+    modo: RouteEffectInsertionMode;
+    pasoPlantillaId: string | null;
+};
 export declare class ProductosServiciosService {
     private readonly prisma;
     private static readonly CODIGO_PREFIX;
@@ -531,7 +536,7 @@ export declare class ProductosServiciosService {
         productoId: string;
         motorCodigo: "impresion_digital_laser";
         motorVersion: 1;
-        parametros: string | number | boolean | Prisma.JsonObject | Prisma.JsonArray | {
+        parametros: string | number | boolean | {
             tipoCorte: string;
             demasiaCorteMm: number;
             lineaCorteMm: number;
@@ -542,7 +547,7 @@ export declare class ProductosServiciosService {
                 altoMm: number;
             };
             mermaAdicionalPct: number;
-        };
+        } | Prisma.JsonObject | Prisma.JsonArray;
         versionConfig: number;
         activo: boolean;
         updatedAt: string | null;
@@ -867,6 +872,7 @@ export declare class ProductosServiciosService {
         }[];
         routeEffect: {
             id: string;
+            insertion: RouteEffectInsertionConfig;
             pasos: {
                 id: string;
                 orden: number;
@@ -921,6 +927,7 @@ export declare class ProductosServiciosService {
         }[];
         routeEffect: {
             id: string;
+            insertion: RouteEffectInsertionConfig;
             pasos: {
                 id: string;
                 orden: number;
@@ -975,6 +982,7 @@ export declare class ProductosServiciosService {
         }[];
         routeEffect: {
             id: string;
+            insertion: RouteEffectInsertionConfig;
             pasos: {
                 id: string;
                 orden: number;
@@ -1029,6 +1037,7 @@ export declare class ProductosServiciosService {
         }[];
         routeEffect: {
             id: string;
+            insertion: RouteEffectInsertionConfig;
             pasos: {
                 id: string;
                 orden: number;
@@ -1225,6 +1234,7 @@ export declare class ProductosServiciosService {
                 addonId: any;
                 nombre: any;
                 pasos: any;
+                insertion: RouteEffectInsertionConfig;
             }[];
             costEffectsAplicados: {
                 id: any;
@@ -1363,6 +1373,10 @@ export declare class ProductosServiciosService {
     private validateAdicionalPayload;
     private getAdicionalEfectoInclude;
     private parseServicioPricing;
+    private normalizeRouteEffectInsertionPayload;
+    private parseRouteEffectInsertion;
+    private parseChecklistRouteInsertion;
+    private getChecklistRouteOrden;
     private normalizeServicioPricingPayload;
     private findAdicionalEfectoOrThrow;
     private getAdicionalEfectoByIdOrThrow;
@@ -1429,6 +1443,7 @@ export declare class ProductosServiciosService {
     private getPasoPlantillaIdFromDetalle;
     private resolvePasoPlantillaIdFromOperacionRuta;
     private normalizePasoNombreBase;
+    private buildOperacionesCotizadasOrdenadas;
     private buildChecklistPasoSignature;
     private isPasoPlantillaEligibleForMatchingBase;
     private getChecklistVariantePasoId;

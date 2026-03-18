@@ -9,6 +9,8 @@ import {
   EstadoProductoServicio,
   FamiliaProducto,
   MotorCostoCatalogItem,
+  ProductoAdicionalAsignado,
+  ProductoAdicionalEfecto,
   ProductoMotorConfig,
   ProductoRutaPolicy,
   ProductoVariante,
@@ -19,6 +21,7 @@ import {
   TipoImpresionProductoVariante,
   TipoProductoServicio,
   VarianteMotorOverride,
+  TipoInsercionRouteEffect,
 } from '@/lib/productos-servicios';
 
 export async function getCatalogoPliegosImpresion() {
@@ -144,6 +147,70 @@ export async function getProductoVariantes(productoId: string) {
 
 export async function getProductoChecklist(productoId: string) {
   return apiRequest<ProductoChecklist>(`/productos-servicios/${productoId}/checklist`);
+}
+
+export async function getProductoAdicionales(productoId: string) {
+  return apiRequest<ProductoAdicionalAsignado[]>(`/productos-servicios/${productoId}/adicionales`);
+}
+
+export async function getAdicionalEfectos(adicionalId: string) {
+  return apiRequest<ProductoAdicionalEfecto[]>(`/productos-servicios/adicionales/${adicionalId}/efectos`);
+}
+
+export async function updateAdicionalEfecto(
+  adicionalId: string,
+  efectoId: string,
+  payload: {
+    tipo: 'route_effect' | 'cost_effect' | 'material_effect';
+    nombre?: string;
+    activo?: boolean;
+    scopes?: Array<{
+      varianteId?: string;
+      dimension?: DimensionOpcionProductiva;
+      valor?: ValorOpcionProductiva;
+    }>;
+    routeEffect?: {
+      insertion?: {
+        modo: TipoInsercionRouteEffect;
+        pasoPlantillaId?: string | null;
+      };
+      pasos: Array<{
+        orden?: number;
+        nombre: string;
+        centroCostoId: string;
+        maquinaId?: string;
+        perfilOperativoId?: string;
+        usarMaquinariaTerminacion?: boolean;
+        setupMin?: number;
+        runMin?: number;
+        cleanupMin?: number;
+        tiempoFijoMin?: number;
+        tiempoFijoMinFallback?: number;
+        overridesProductividad?: Record<string, unknown>;
+      }>;
+    };
+    costEffect?: {
+      regla: 'flat' | 'por_unidad' | 'por_pliego' | 'porcentaje_sobre_total' | 'tiempo_extra_min';
+      valor: number;
+      centroCostoId?: string | null;
+      detalle?: Record<string, unknown>;
+    };
+    materialEffect?: {
+      materiaPrimaVarianteId: string;
+      tipoConsumo: 'por_unidad' | 'por_pliego' | 'por_m2';
+      factorConsumo: number;
+      mermaPct?: number | null;
+      detalle?: Record<string, unknown>;
+    };
+  },
+) {
+  return apiRequest<ProductoAdicionalEfecto>(
+    `/productos-servicios/adicionales/${adicionalId}/efectos/${efectoId}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export async function upsertProductoChecklist(

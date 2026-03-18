@@ -42,6 +42,11 @@ export declare enum TipoProductoAdicionalEfectoDto {
     cost_effect = "cost_effect",
     material_effect = "material_effect"
 }
+export declare enum TipoInsercionRouteEffectDto {
+    append = "append",
+    before_step = "before_step",
+    after_step = "after_step"
+}
 export declare enum ReglaCostoAdicionalEfectoDto {
     flat = "flat",
     por_unidad = "por_unidad",
@@ -93,8 +98,13 @@ export declare class UpsertProductoAdicionalRouteEffectPasoDto {
     tiempoFijoMinFallback?: number;
     overridesProductividad?: Record<string, unknown>;
 }
+export declare class UpsertProductoAdicionalRouteInsertionDto {
+    modo: TipoInsercionRouteEffectDto;
+    pasoPlantillaId?: string;
+}
 export declare class UpsertProductoAdicionalRouteEffectDto {
     pasos: UpsertProductoAdicionalRouteEffectPasoDto[];
+    insertion?: UpsertProductoAdicionalRouteInsertionDto;
 }
 export declare class UpsertProductoAdicionalCostEffectDto {
     regla: ReglaCostoAdicionalEfectoDto;

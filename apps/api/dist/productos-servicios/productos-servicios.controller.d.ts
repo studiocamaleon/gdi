@@ -223,6 +223,10 @@ export declare class ProductosServiciosController {
         }[];
         routeEffect: {
             id: string;
+            insertion: {
+                modo: "append" | "before_step" | "after_step";
+                pasoPlantillaId: string | null;
+            };
             pasos: {
                 id: string;
                 orden: number;
@@ -277,6 +281,10 @@ export declare class ProductosServiciosController {
         }[];
         routeEffect: {
             id: string;
+            insertion: {
+                modo: "append" | "before_step" | "after_step";
+                pasoPlantillaId: string | null;
+            };
             pasos: {
                 id: string;
                 orden: number;
@@ -331,6 +339,10 @@ export declare class ProductosServiciosController {
         }[];
         routeEffect: {
             id: string;
+            insertion: {
+                modo: "append" | "before_step" | "after_step";
+                pasoPlantillaId: string | null;
+            };
             pasos: {
                 id: string;
                 orden: number;
@@ -385,6 +397,10 @@ export declare class ProductosServiciosController {
         }[];
         routeEffect: {
             id: string;
+            insertion: {
+                modo: "append" | "before_step" | "after_step";
+                pasoPlantillaId: string | null;
+            };
             pasos: {
                 id: string;
                 orden: number;
@@ -1293,6 +1309,10 @@ export declare class ProductosServiciosController {
                 addonId: any;
                 nombre: any;
                 pasos: any;
+                insertion: {
+                    modo: "append" | "before_step" | "after_step";
+                    pasoPlantillaId: string | null;
+                };
             }[];
             costEffectsAplicados: {
                 id: any;

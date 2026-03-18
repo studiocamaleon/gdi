@@ -9,8 +9,8 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UpsertChecklistRespuestaDto = exports.UpsertChecklistReglaDto = exports.UpsertChecklistReglaNivelDto = exports.CotizarSeleccionBaseDto = exports.CotizarChecklistRespuestaDto = exports.CotizarAddonConfigDto = exports.UpsertVarianteMotorOverrideDto = exports.UpsertProductoMotorConfigDto = exports.AssignProductoMotorDto = exports.AssignProductoVariantesRutaMasivaDto = exports.UpdateProductoRutaPolicyDto = exports.UpsertProductoRutaPasoFijoVarianteDto = exports.UpsertProductoRutaPasoFijoItemDto = exports.UpsertProductoRutaBaseMatchingVarianteDto = exports.UpsertProductoRutaBaseMatchingItemDto = exports.AssignVarianteRutaDto = exports.UpdateProductoVarianteDto = exports.CreateProductoVarianteDto = exports.UpsertProductoServicioDto = exports.UpsertSubfamiliaProductoDto = exports.UpsertFamiliaProductoDto = exports.SetVarianteAdicionalRestrictionDto = exports.AssignProductoAdicionalDto = exports.UpsertProductoAdicionalServicioPricingDto = exports.UpsertProductoAdicionalServicioReglaCostoDto = exports.UpsertProductoAdicionalServicioNivelDto = exports.UpsertProductoAdicionalDto = exports.UpsertProductoAdicionalMaterialDto = exports.UpsertProductoAdicionalEfectoDto = exports.UpsertProductoAdicionalMaterialEffectDto = exports.UpsertProductoAdicionalCostEffectDto = exports.UpsertProductoAdicionalRouteEffectDto = exports.UpsertProductoAdicionalRouteEffectPasoDto = exports.UpsertProductoAdicionalEfectoScopeDto = exports.UpsertVarianteOpcionesProductivasDto = exports.UpsertVarianteOpcionProductivaDimensionDto = exports.ReglaCostoChecklistDto = exports.TipoChecklistAccionReglaDto = exports.TipoChecklistPreguntaDto = exports.ReglaCostoAdicionalEfectoDto = exports.TipoProductoAdicionalEfectoDto = exports.ValorOpcionProductivaDto = exports.DimensionOpcionProductivaDto = exports.TipoConsumoAdicionalMaterialDto = exports.MetodoCostoProductoAdicionalDto = exports.TipoProductoAdicionalDto = exports.CarasProductoVarianteDto = exports.TipoImpresionProductoVarianteDto = exports.EstadoProductoServicioDto = exports.TipoProductoServicioDto = void 0;
-exports.PreviewImposicionProductoVarianteDto = exports.CotizarProductoVarianteDto = exports.UpsertProductoChecklistDto = exports.UpsertChecklistPreguntaDto = void 0;
+exports.UpsertChecklistReglaNivelDto = exports.CotizarSeleccionBaseDto = exports.CotizarChecklistRespuestaDto = exports.CotizarAddonConfigDto = exports.UpsertVarianteMotorOverrideDto = exports.UpsertProductoMotorConfigDto = exports.AssignProductoMotorDto = exports.AssignProductoVariantesRutaMasivaDto = exports.UpdateProductoRutaPolicyDto = exports.UpsertProductoRutaPasoFijoVarianteDto = exports.UpsertProductoRutaPasoFijoItemDto = exports.UpsertProductoRutaBaseMatchingVarianteDto = exports.UpsertProductoRutaBaseMatchingItemDto = exports.AssignVarianteRutaDto = exports.UpdateProductoVarianteDto = exports.CreateProductoVarianteDto = exports.UpsertProductoServicioDto = exports.UpsertSubfamiliaProductoDto = exports.UpsertFamiliaProductoDto = exports.SetVarianteAdicionalRestrictionDto = exports.AssignProductoAdicionalDto = exports.UpsertProductoAdicionalServicioPricingDto = exports.UpsertProductoAdicionalServicioReglaCostoDto = exports.UpsertProductoAdicionalServicioNivelDto = exports.UpsertProductoAdicionalDto = exports.UpsertProductoAdicionalMaterialDto = exports.UpsertProductoAdicionalEfectoDto = exports.UpsertProductoAdicionalMaterialEffectDto = exports.UpsertProductoAdicionalCostEffectDto = exports.UpsertProductoAdicionalRouteEffectDto = exports.UpsertProductoAdicionalRouteInsertionDto = exports.UpsertProductoAdicionalRouteEffectPasoDto = exports.UpsertProductoAdicionalEfectoScopeDto = exports.UpsertVarianteOpcionesProductivasDto = exports.UpsertVarianteOpcionProductivaDimensionDto = exports.ReglaCostoChecklistDto = exports.TipoChecklistAccionReglaDto = exports.TipoChecklistPreguntaDto = exports.ReglaCostoAdicionalEfectoDto = exports.TipoInsercionRouteEffectDto = exports.TipoProductoAdicionalEfectoDto = exports.ValorOpcionProductivaDto = exports.DimensionOpcionProductivaDto = exports.TipoConsumoAdicionalMaterialDto = exports.MetodoCostoProductoAdicionalDto = exports.TipoProductoAdicionalDto = exports.CarasProductoVarianteDto = exports.TipoImpresionProductoVarianteDto = exports.EstadoProductoServicioDto = exports.TipoProductoServicioDto = void 0;
+exports.PreviewImposicionProductoVarianteDto = exports.CotizarProductoVarianteDto = exports.UpsertProductoChecklistDto = exports.UpsertChecklistPreguntaDto = exports.UpsertChecklistRespuestaDto = exports.UpsertChecklistReglaDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 var TipoProductoServicioDto;
@@ -67,6 +67,12 @@ var TipoProductoAdicionalEfectoDto;
     TipoProductoAdicionalEfectoDto["cost_effect"] = "cost_effect";
     TipoProductoAdicionalEfectoDto["material_effect"] = "material_effect";
 })(TipoProductoAdicionalEfectoDto || (exports.TipoProductoAdicionalEfectoDto = TipoProductoAdicionalEfectoDto = {}));
+var TipoInsercionRouteEffectDto;
+(function (TipoInsercionRouteEffectDto) {
+    TipoInsercionRouteEffectDto["append"] = "append";
+    TipoInsercionRouteEffectDto["before_step"] = "before_step";
+    TipoInsercionRouteEffectDto["after_step"] = "after_step";
+})(TipoInsercionRouteEffectDto || (exports.TipoInsercionRouteEffectDto = TipoInsercionRouteEffectDto = {}));
 var ReglaCostoAdicionalEfectoDto;
 (function (ReglaCostoAdicionalEfectoDto) {
     ReglaCostoAdicionalEfectoDto["flat"] = "flat";
@@ -230,8 +236,23 @@ __decorate([
     (0, class_validator_1.IsObject)(),
     __metadata("design:type", Object)
 ], UpsertProductoAdicionalRouteEffectPasoDto.prototype, "overridesProductividad", void 0);
+class UpsertProductoAdicionalRouteInsertionDto {
+    modo;
+    pasoPlantillaId;
+}
+exports.UpsertProductoAdicionalRouteInsertionDto = UpsertProductoAdicionalRouteInsertionDto;
+__decorate([
+    (0, class_validator_1.IsEnum)(TipoInsercionRouteEffectDto),
+    __metadata("design:type", String)
+], UpsertProductoAdicionalRouteInsertionDto.prototype, "modo", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UpsertProductoAdicionalRouteInsertionDto.prototype, "pasoPlantillaId", void 0);
 class UpsertProductoAdicionalRouteEffectDto {
     pasos;
+    insertion;
 }
 exports.UpsertProductoAdicionalRouteEffectDto = UpsertProductoAdicionalRouteEffectDto;
 __decorate([
@@ -242,6 +263,12 @@ __decorate([
     (0, class_transformer_1.Type)(() => UpsertProductoAdicionalRouteEffectPasoDto),
     __metadata("design:type", Array)
 ], UpsertProductoAdicionalRouteEffectDto.prototype, "pasos", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.ValidateNested)(),
+    (0, class_transformer_1.Type)(() => UpsertProductoAdicionalRouteInsertionDto),
+    __metadata("design:type", UpsertProductoAdicionalRouteInsertionDto)
+], UpsertProductoAdicionalRouteEffectDto.prototype, "insertion", void 0);
 class UpsertProductoAdicionalCostEffectDto {
     regla;
     valor;

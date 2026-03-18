@@ -1,7 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDownIcon, ChevronRightIcon, Loader2Icon, PlusIcon, SaveIcon, Trash2Icon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  GripVerticalIcon,
+  Loader2Icon,
+  PlusIcon,
+  SaveIcon,
+  Trash2Icon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import type { MateriaPrima } from "@/lib/materias-primas";
@@ -338,20 +346,93 @@ type ChecklistEditorProps = {
   initialChecklist: ProductoChecklist;
   plantillasPaso: ProcesoOperacionPlantilla[];
   materiasPrimas: MateriaPrima[];
+  routeStepOptions: Array<{ id: string; label: string }>;
   onSaved: (checklist: ProductoChecklist) => void;
 };
+
+type RouteInsertionMode = "append" | "before_step" | "after_step";
+
+type ChecklistRoutePreviewItem =
+  | {
+      key: string;
+      kind: "base";
+      stepId: string;
+      label: string;
+    }
+  | {
+      key: string;
+      kind: "optional";
+      stepId: string;
+      label: string;
+      questionLabels: string[];
+      responseLabels: string[];
+      ruleCount: number;
+      insertion: { modo: RouteInsertionMode; pasoPlantillaId: string | null; orden: number | null };
+    };
+
+function getReglaRouteInsertion(
+  regla: ProductoChecklistRegla,
+): { modo: RouteInsertionMode; pasoPlantillaId: string | null; orden: number | null } {
+  const detalle =
+    regla.detalle && typeof regla.detalle === "object" && !Array.isArray(regla.detalle)
+      ? (regla.detalle as Record<string, unknown>)
+      : {};
+  const raw =
+    detalle.routeInsertion && typeof detalle.routeInsertion === "object" && !Array.isArray(detalle.routeInsertion)
+      ? (detalle.routeInsertion as Record<string, unknown>)
+      : {};
+  const modo =
+    raw.modo === "before_step" || raw.modo === "after_step" ? raw.modo : "append";
+  const pasoPlantillaId =
+    typeof raw.pasoPlantillaId === "string" && raw.pasoPlantillaId.trim().length
+      ? raw.pasoPlantillaId.trim()
+      : null;
+  const orden =
+    typeof raw.orden === "number" && Number.isFinite(raw.orden) ? raw.orden : null;
+  return { modo, pasoPlantillaId, orden };
+}
+
+function patchReglaRouteInsertion(
+  regla: ProductoChecklistRegla,
+  patch: Partial<{ modo: RouteInsertionMode; pasoPlantillaId: string | null; orden: number | null }>,
+): ProductoChecklistRegla {
+  const current = getReglaRouteInsertion(regla);
+  const next = { ...current, ...patch };
+  if (next.modo === "append") {
+    next.pasoPlantillaId = null;
+  }
+  const detalle =
+    regla.detalle && typeof regla.detalle === "object" && !Array.isArray(regla.detalle)
+      ? { ...(regla.detalle as Record<string, unknown>) }
+      : {};
+  detalle.routeInsertion = next;
+  return {
+    ...regla,
+    detalle,
+  };
+}
+
+function isStepRule(regla: ProductoChecklistRegla) {
+  return regla.accion === "activar_paso" || regla.accion === "seleccionar_variante_paso";
+}
 
 export function ProductoServicioChecklistEditor({
   productoId,
   initialChecklist,
   plantillasPaso,
   materiasPrimas,
+  routeStepOptions,
   onSaved,
 }: ChecklistEditorProps) {
   const [draft, setDraft] = React.useState<ProductoChecklist>(initialChecklist);
   const [isSaving, startSaving] = React.useTransition();
   const [preguntasAbiertas, setPreguntasAbiertas] = React.useState<Record<string, boolean>>({});
   const [reglasAbiertas, setReglasAbiertas] = React.useState<Record<string, boolean>>({});
+  const [draggedRouteStepId, setDraggedRouteStepId] = React.useState<string | null>(null);
+  const [routeDropIndicator, setRouteDropIndicator] = React.useState<{
+    targetKey: string;
+    position: "before" | "after";
+  } | null>(null);
 
   React.useEffect(() => {
     setDraft(initialChecklist);
@@ -455,6 +536,156 @@ export function ProductoServicioChecklistEditor({
     });
   };
 
+  const routePreviewItems = React.useMemo<ChecklistRoutePreviewItem[]>(() => {
+    const aggregated = new Map<
+      string,
+      Extract<ChecklistRoutePreviewItem, { kind: "optional" }>
+    >();
+    for (const pregunta of draft.preguntas) {
+      for (const respuesta of pregunta.respuestas) {
+        for (const regla of respuesta.reglas) {
+          if (!isStepRule(regla) || !regla.pasoPlantillaId) continue;
+          const questionLabel = pregunta.texto.trim() || "Pregunta sin texto";
+          const responseLabel = respuesta.texto.trim() || "Opción sin texto";
+          const existing = aggregated.get(regla.pasoPlantillaId);
+          if (existing) {
+            if (!existing.questionLabels.includes(questionLabel)) {
+              existing.questionLabels.push(questionLabel);
+            }
+            if (!existing.responseLabels.includes(responseLabel)) {
+              existing.responseLabels.push(responseLabel);
+            }
+            existing.ruleCount += 1;
+            if (existing.insertion.orden === null) {
+              existing.insertion = getReglaRouteInsertion(regla);
+            }
+            continue;
+          }
+          aggregated.set(regla.pasoPlantillaId, {
+            key: `optional:${regla.pasoPlantillaId}`,
+            kind: "optional",
+            stepId: regla.pasoPlantillaId,
+            label:
+              regla.pasoPlantillaNombre ||
+              operaciones.find((item) => item.id === regla.pasoPlantillaId)?.label ||
+              "Paso opcional",
+            questionLabels: [questionLabel],
+            responseLabels: [responseLabel],
+            ruleCount: 1,
+            insertion: getReglaRouteInsertion(regla),
+          });
+        }
+      }
+    }
+
+    const ordered: ChecklistRoutePreviewItem[] = routeStepOptions.map((item) => ({
+      key: `base:${item.id}`,
+      kind: "base",
+      stepId: item.id,
+      label: item.label,
+    }));
+
+    const optionalItems = Array.from(aggregated.values()).sort((a, b) => {
+      const ordenA = a.insertion.orden ?? Number.MAX_SAFE_INTEGER;
+      const ordenB = b.insertion.orden ?? Number.MAX_SAFE_INTEGER;
+      if (ordenA !== ordenB) return ordenA - ordenB;
+      return a.label.localeCompare(b.label);
+    });
+
+    for (const item of optionalItems) {
+      let insertIndex = ordered.length;
+      const anchorIndex =
+        item.insertion.pasoPlantillaId
+          ? ordered.findIndex((entry) => entry.stepId === item.insertion.pasoPlantillaId)
+          : -1;
+      if (item.insertion.modo === "before_step" && anchorIndex >= 0) {
+        insertIndex = anchorIndex;
+      } else if (item.insertion.modo === "after_step" && anchorIndex >= 0) {
+        insertIndex = anchorIndex + 1;
+      }
+      ordered.splice(insertIndex, 0, item);
+    }
+
+    return ordered;
+  }, [draft.preguntas, operaciones, routeStepOptions]);
+
+  const applyPreviewOrder = (nextPreviewItems: ChecklistRoutePreviewItem[]) => {
+    const nextConfigs = new Map<
+      string,
+      { modo: RouteInsertionMode; pasoPlantillaId: string | null; orden: number }
+    >();
+    let optionalOrder = 1;
+
+    for (let index = 0; index < nextPreviewItems.length; index += 1) {
+      const item = nextPreviewItems[index];
+      if (item.kind !== "optional") continue;
+
+      const previous = nextPreviewItems.slice(0, index).reverse().find((entry) => entry.stepId);
+      if (previous) {
+        nextConfigs.set(item.stepId, {
+          modo: "after_step",
+          pasoPlantillaId: previous.stepId,
+          orden: optionalOrder,
+        });
+      } else {
+        const nextBase = nextPreviewItems
+          .slice(index + 1)
+          .find((entry): entry is Extract<ChecklistRoutePreviewItem, { kind: "base" }> => entry.kind === "base");
+        nextConfigs.set(item.stepId, {
+          modo: nextBase ? "before_step" : "append",
+          pasoPlantillaId: nextBase?.stepId ?? null,
+          orden: optionalOrder,
+        });
+      }
+
+      optionalOrder += 1;
+    }
+
+    setDraft((prev) => ({
+      ...prev,
+      preguntas: prev.preguntas.map((pregunta) => ({
+        ...pregunta,
+        respuestas: pregunta.respuestas.map((respuesta) => ({
+          ...respuesta,
+          reglas: respuesta.reglas.map((regla) => {
+            if (!isStepRule(regla) || !regla.pasoPlantillaId) {
+              return regla;
+            }
+            const config = nextConfigs.get(regla.pasoPlantillaId);
+            if (!config) {
+              return regla;
+            }
+            return {
+              ...patchReglaRouteInsertion(regla, config),
+              orden: config.orden,
+            };
+          }),
+        })),
+      })),
+    }));
+  };
+
+  const moveRoutePreviewItem = (
+    draggedStepId: string,
+    targetKey: string,
+    position: "before" | "after",
+  ) => {
+    const currentOptional = routePreviewItems.find(
+      (item): item is Extract<ChecklistRoutePreviewItem, { kind: "optional" }> =>
+        item.kind === "optional" && item.stepId === draggedStepId,
+    );
+    if (!currentOptional) return;
+    const withoutDragged = routePreviewItems.filter(
+      (item) => !(item.kind === "optional" && item.stepId === draggedStepId),
+    );
+    const targetIndex = withoutDragged.findIndex((item) => item.key === targetKey);
+    if (targetIndex === -1) return;
+    const insertIndex = position === "before" ? targetIndex : targetIndex + 1;
+    const next = [...withoutDragged];
+    next.splice(insertIndex, 0, currentOptional);
+    applyPreviewOrder(next);
+  };
+
   const renderRuleControls = (
     pregunta: ProductoChecklistPregunta,
     respuesta: ProductoChecklistRespuesta,
@@ -463,7 +694,8 @@ export function ProductoServicioChecklistEditor({
   ) => {
     if (regla.accion === "activar_paso" || regla.accion === "seleccionar_variante_paso") {
       return (
-        <div className={cn("grid gap-2", regla.accion === "seleccionar_variante_paso" ? "md:grid-cols-2" : "md:grid-cols-1")}>
+        <div className="grid gap-2">
+          <div className={cn("grid gap-2", regla.accion === "seleccionar_variante_paso" ? "md:grid-cols-2" : "md:grid-cols-1")}>
           <div className="grid gap-1">
             {!compact ? <FieldLabel>Paso</FieldLabel> : null}
             <Select
@@ -522,8 +754,8 @@ export function ProductoServicioChecklistEditor({
                   </SelectItem>
                 ))}
               </SelectContent>
-            </Select>
-          </div>
+              </Select>
+            </div>
           {regla.accion === "seleccionar_variante_paso" ? (
             <div className="grid gap-1">
               {!compact ? <FieldLabel>Variante</FieldLabel> : null}
@@ -562,9 +794,10 @@ export function ProductoServicioChecklistEditor({
                       </SelectItem>
                     ))}
                   </SelectContent>
-                </Select>
+              </Select>
             </div>
           ) : null}
+          </div>
         </div>
       );
     }
@@ -746,8 +979,9 @@ export function ProductoServicioChecklistEditor({
   };
 
   return (
-    <div className="space-y-4">
-      {draft.preguntas.map((pregunta, preguntaIndex) => (
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
+      <div className="space-y-4">
+        {draft.preguntas.map((pregunta, preguntaIndex) => (
         <div key={pregunta.id} className="overflow-hidden rounded-lg border">
           <div className="flex items-center justify-between gap-3 border-b bg-muted/30 px-4 py-3">
             <button
@@ -870,7 +1104,7 @@ export function ProductoServicioChecklistEditor({
                     <TableHeader className="bg-muted/30">
                       <TableRow className="hover:bg-transparent">
                         <TableHead className="w-[240px] text-xs uppercase tracking-wide text-muted-foreground">Respuesta</TableHead>
-                        <TableHead className="w-[220px] text-xs uppercase tracking-wide text-muted-foreground">Acción</TableHead>
+                        <TableHead className="w-[360px] text-xs uppercase tracking-wide text-muted-foreground">Acción</TableHead>
                         <TableHead className="text-xs uppercase tracking-wide text-muted-foreground">Configuración</TableHead>
                         <TableHead className="w-[96px] text-right text-xs uppercase tracking-wide text-muted-foreground">Acciones</TableHead>
                       </TableRow>
@@ -911,7 +1145,7 @@ export function ProductoServicioChecklistEditor({
                                   )
                                 }
                               >
-                                <SelectTrigger>
+                                <SelectTrigger className="w-full min-w-0">
                                   <SelectValue>{getAccionLabel(reglaPrincipal.accion)}</SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1026,7 +1260,7 @@ export function ProductoServicioChecklistEditor({
                                             )
                                           }
                                         >
-                                          <SelectTrigger>
+                                          <SelectTrigger className="w-full min-w-0">
                                             <SelectValue>{getAccionLabel(regla.accion)}</SelectValue>
                                           </SelectTrigger>
                                           <SelectContent>
@@ -1072,24 +1306,146 @@ export function ProductoServicioChecklistEditor({
         </div>
       ))}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() =>
-            setDraft((prev) => ({
-              ...prev,
-              preguntas: [...prev.preguntas, { ...buildDefaultPregunta(), orden: prev.preguntas.length + 1 }],
-            }))
-          }
-        >
-          <PlusIcon className="size-4" />
-          Agregar pregunta
-        </Button>
-        <Button type="button" onClick={handleSave} disabled={isSaving || !isDirty}>
-          {isSaving ? <Loader2Icon className="animate-spin" /> : <SaveIcon />}
-          Guardar configurador
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              setDraft((prev) => ({
+                ...prev,
+                preguntas: [...prev.preguntas, { ...buildDefaultPregunta(), orden: prev.preguntas.length + 1 }],
+              }))
+            }
+          >
+            <PlusIcon className="size-4" />
+            Agregar pregunta
+          </Button>
+          <Button type="button" onClick={handleSave} disabled={isSaving || !isDirty}>
+            {isSaving ? <Loader2Icon className="animate-spin" /> : <SaveIcon />}
+            Guardar configurador
+          </Button>
+        </div>
+      </div>
+
+      <div className="rounded-lg border bg-muted/10 xl:sticky xl:top-4">
+        <div className="border-b px-4 py-3">
+          <p className="text-sm font-medium">Preview de ruta</p>
+          <p className="text-xs text-muted-foreground">
+            Simula la ruta con todos los pasos opcionales y arrastrá cada contenedor para definir el orden final.
+          </p>
+        </div>
+        <div className="space-y-2 p-3">
+          {routePreviewItems.length === 0 ? (
+            <div className="rounded-md border border-dashed bg-background px-3 py-6 text-center text-sm text-muted-foreground">
+              Todavía no hay pasos para previsualizar.
+            </div>
+          ) : (
+            <>
+              {routePreviewItems.map((item) => {
+                const isOptional = item.kind === "optional";
+                const isDragged = isOptional && draggedRouteStepId === item.stepId;
+                const dropBefore = routeDropIndicator?.targetKey === item.key && routeDropIndicator.position === "before";
+                const dropAfter = routeDropIndicator?.targetKey === item.key && routeDropIndicator.position === "after";
+
+                return (
+                  <div key={item.key} className="space-y-1">
+                    {dropBefore ? <div className="h-1 rounded-full bg-orange-500" /> : null}
+                    <div
+                      className={cn(
+                        "rounded-md border bg-background px-3 py-2",
+                        isOptional ? "cursor-grab" : "border-dashed bg-muted/20",
+                        isDragged && "opacity-50",
+                      )}
+                      draggable={isOptional}
+                      onDragStart={() => {
+                        if (!isOptional) return;
+                        setDraggedRouteStepId(item.stepId);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedRouteStepId(null);
+                        setRouteDropIndicator(null);
+                      }}
+                      onDragOver={(event) => {
+                        if (!draggedRouteStepId || draggedRouteStepId === item.stepId) return;
+                        event.preventDefault();
+                        const bounds = event.currentTarget.getBoundingClientRect();
+                        const position =
+                          event.clientY - bounds.top < bounds.height / 2 ? "before" : "after";
+                        setRouteDropIndicator({ targetKey: item.key, position });
+                      }}
+                      onDrop={(event) => {
+                        if (!draggedRouteStepId || draggedRouteStepId === item.stepId) return;
+                        event.preventDefault();
+                        const bounds = event.currentTarget.getBoundingClientRect();
+                        const position =
+                          event.clientY - bounds.top < bounds.height / 2 ? "before" : "after";
+                        moveRoutePreviewItem(draggedRouteStepId, item.key, position);
+                        setDraggedRouteStepId(null);
+                        setRouteDropIndicator(null);
+                      }}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="pt-0.5 text-muted-foreground">
+                          {isOptional ? <GripVerticalIcon className="size-4" /> : <span className="block size-4 rounded-full bg-muted-foreground/30" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-medium">{item.label}</p>
+                            <span className={cn(
+                              "rounded-full px-2 py-0.5 text-[11px]",
+                              isOptional ? "bg-orange-100 text-orange-700" : "bg-muted text-muted-foreground",
+                            )}>
+                              {isOptional ? "Opcional" : "Base"}
+                            </span>
+                          </div>
+                          {isOptional ? (
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">
+                                {item.questionLabels.slice(0, 2).join(" · ")}
+                                {item.questionLabels.length > 2 ? ` +${item.questionLabels.length - 2}` : ""}
+                              </p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {item.responseLabels.length} respuesta(s) usan este paso
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">Paso de la ruta base</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {dropAfter ? <div className="h-1 rounded-full bg-orange-500" /> : null}
+                  </div>
+                );
+              })}
+              <div
+                className="rounded-md border border-dashed px-3 py-2 text-center text-xs text-muted-foreground"
+                onDragOver={(event) => {
+                  if (!draggedRouteStepId) return;
+                  event.preventDefault();
+                  setRouteDropIndicator({ targetKey: "__end__", position: "after" });
+                }}
+                onDrop={(event) => {
+                  if (!draggedRouteStepId) return;
+                  event.preventDefault();
+                  const withoutDragged = routePreviewItems.filter(
+                    (item) => !(item.kind === "optional" && item.stepId === draggedRouteStepId),
+                  );
+                  const draggedItem = routePreviewItems.find(
+                    (item): item is Extract<ChecklistRoutePreviewItem, { kind: "optional" }> =>
+                      item.kind === "optional" && item.stepId === draggedRouteStepId,
+                  );
+                  if (!draggedItem) return;
+                  applyPreviewOrder([...withoutDragged, draggedItem]);
+                  setDraggedRouteStepId(null);
+                  setRouteDropIndicator(null);
+                }}
+              >
+                Soltar al final de la ruta
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

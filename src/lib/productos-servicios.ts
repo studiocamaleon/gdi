@@ -160,6 +160,111 @@ export type VarianteMotorOverride = {
   updatedAt: string | null;
 };
 
+export type TipoProductoAdicional = "servicio" | "acabado";
+export type MetodoCostoProductoAdicional = "time_only" | "time_plus_material";
+export type TipoProductoAdicionalEfecto = "route_effect" | "cost_effect" | "material_effect";
+export type TipoInsercionRouteEffect = "append" | "before_step" | "after_step";
+
+export type ProductoAdicionalCatalogo = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  descripcion: string;
+  tipo: TipoProductoAdicional;
+  metodoCosto: MetodoCostoProductoAdicional;
+  centroCostoId: string | null;
+  centroCostoNombre: string;
+  activo: boolean;
+  metadata: Record<string, unknown> | null;
+  servicioPricing: {
+    niveles: Array<{ id: string; nombre: string; orden: number; activo: boolean }>;
+    reglas: Array<{ id: string; nivelId: string; tiempoMin: number }>;
+  };
+  efectos: Array<{ id: string; tipo: TipoProductoAdicionalEfecto; activo: boolean }>;
+  materiales: Array<{
+    id: string;
+    materiaPrimaVarianteId: string;
+    materiaPrimaNombre: string;
+    materiaPrimaSku: string;
+    tipoConsumo: "por_unidad" | "por_pliego" | "por_m2";
+    factorConsumo: number;
+    mermaPct: number | null;
+    activo: boolean;
+    detalle: Record<string, unknown> | null;
+  }>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ProductoAdicionalAsignado = {
+  id: string;
+  productoServicioId: string;
+  adicionalId: string;
+  activo: boolean;
+  adicional: ProductoAdicionalCatalogo;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ProductoAdicionalEfecto = {
+  id: string;
+  adicionalId: string;
+  tipo: TipoProductoAdicionalEfecto;
+  nombre: string;
+  activo: boolean;
+  scopes: Array<{
+    id: string;
+    varianteId: string | null;
+    dimension: DimensionOpcionProductiva | null;
+    valor: ValorOpcionProductiva | null;
+  }>;
+  routeEffect: {
+    id: string;
+    insertion: {
+      modo: TipoInsercionRouteEffect;
+      pasoPlantillaId: string | null;
+    };
+    pasos: Array<{
+      id: string;
+      orden: number;
+      nombre: string;
+      centroCostoId: string;
+      centroCostoNombre: string;
+      maquinaId: string | null;
+      maquinaNombre: string;
+      perfilOperativoId: string | null;
+      perfilOperativoNombre: string;
+      usarMaquinariaTerminacion: boolean;
+      setupMin: number | null;
+      runMin: number | null;
+      cleanupMin: number | null;
+      tiempoFijoMin: number | null;
+      tiempoFijoMinFallback: number | null;
+      overridesProductividad: Record<string, unknown> | null;
+    }>;
+  } | null;
+  costEffect: {
+    id: string;
+    regla: "flat" | "por_unidad" | "por_pliego" | "porcentaje_sobre_total" | "tiempo_extra_min";
+    valor: number;
+    centroCostoId: string | null;
+    centroCostoNombre: string;
+    detalle: Record<string, unknown> | null;
+  } | null;
+  materialEffect: {
+    id: string;
+    materiaPrimaVarianteId: string;
+    materiaPrimaNombre: string;
+    materiaPrimaSku: string;
+    tipoConsumo: "por_unidad" | "por_pliego" | "por_m2";
+    factorConsumo: number;
+    mermaPct: number | null;
+    detalle: Record<string, unknown> | null;
+  } | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type CotizacionProductoVariante = {
   snapshotId: string;
   varianteId: string;

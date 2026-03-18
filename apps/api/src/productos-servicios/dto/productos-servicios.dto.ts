@@ -72,6 +72,12 @@ export enum TipoProductoAdicionalEfectoDto {
   material_effect = 'material_effect',
 }
 
+export enum TipoInsercionRouteEffectDto {
+  append = 'append',
+  before_step = 'before_step',
+  after_step = 'after_step',
+}
+
 export enum ReglaCostoAdicionalEfectoDto {
   flat = 'flat',
   por_unidad = 'por_unidad',
@@ -196,6 +202,15 @@ export class UpsertProductoAdicionalRouteEffectPasoDto {
   overridesProductividad?: Record<string, unknown>;
 }
 
+export class UpsertProductoAdicionalRouteInsertionDto {
+  @IsEnum(TipoInsercionRouteEffectDto)
+  modo: TipoInsercionRouteEffectDto;
+
+  @IsOptional()
+  @IsUUID()
+  pasoPlantillaId?: string;
+}
+
 export class UpsertProductoAdicionalRouteEffectDto {
   @IsArray()
   @ArrayMinSize(1)
@@ -203,6 +218,11 @@ export class UpsertProductoAdicionalRouteEffectDto {
   @ValidateNested({ each: true })
   @Type(() => UpsertProductoAdicionalRouteEffectPasoDto)
   pasos: UpsertProductoAdicionalRouteEffectPasoDto[];
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpsertProductoAdicionalRouteInsertionDto)
+  insertion?: UpsertProductoAdicionalRouteInsertionDto;
 }
 
 export class UpsertProductoAdicionalCostEffectDto {

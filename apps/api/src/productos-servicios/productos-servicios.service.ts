@@ -50,6 +50,7 @@ import {
   UpsertProductoAdicionalEfectoDto,
   TipoConsumoAdicionalMaterialDto,
   TipoProductoAdicionalDto,
+  TipoInsercionRouteEffectDto,
   UpsertProductoAdicionalServicioPricingDto,
   UpsertVarianteOpcionesProductivasDto,
   UpsertProductoAdicionalDto,
@@ -86,6 +87,11 @@ type ServicioPricingRegla = {
 type ServicioPricingConfig = {
   niveles: ServicioPricingNivel[];
   reglas: ServicioPricingRegla[];
+};
+type RouteEffectInsertionMode = 'append' | 'before_step' | 'after_step';
+type RouteEffectInsertionConfig = {
+  modo: RouteEffectInsertionMode;
+  pasoPlantillaId: string | null;
 };
 
 @Injectable()
@@ -2059,9 +2065,6 @@ export class ProductosServiciosService {
     ]);
     const checklistNivelMaquinaById = new Map(checklistNivelMaquinas.map((item) => [item.id, item]));
     const checklistNivelPerfilById = new Map(checklistNivelPerfiles.map((item) => [item.id, item]));
-    const matchingPasoPlantillaIds = new Set(
-      matchingBaseAplicado.map((item) => item.pasoPlantilla.id),
-    );
     const checklistOperacionesActivadas = checklistReglasActivas
       .filter(
         (item) =>
@@ -2069,11 +2072,14 @@ export class ProductosServiciosService {
           item.pasoPlantilla &&
           this.getProcesoOperacionNiveles(item.pasoPlantilla.detalleJson).length === 0,
       )
-      .map((item) => this.buildChecklistOperacionFromPlantilla(item.pasoPlantilla!))
-      .filter((item) => item.activo);
-    const routeBaseOperacionesMatching = matchingBaseAplicado
-      .map((item) => this.buildChecklistOperacionFromPlantillaConPerfil(item.pasoPlantilla, item.perfilOperativo))
-      .filter((item) => item.activo);
+      .map((item) => ({
+        operacion: {
+          ...this.buildChecklistOperacionFromPlantilla(item.pasoPlantilla!),
+          orden: this.getChecklistRouteOrden(item.regla.detalleJson),
+        },
+        insertion: this.parseChecklistRouteInsertion(item.regla.detalleJson),
+      }))
+      .filter((item) => item.operacion.activo);
     const checklistPasoPlantillaIds = new Set(
       checklistReglasActivas
         .map((item) => item.pasoPlantilla?.id ?? null)
@@ -2085,20 +2091,37 @@ export class ProductosServiciosService {
         .filter((value): value is string => Boolean(value)),
     );
     const operacionesBaseCotizadas = proceso.operaciones
-      .filter((op) => {
-        if (!op.activo) {
-          return false;
-        }
+      .filter((op) => op.activo)
+      .map((op) => {
         const pasoPlantillaId =
           this.getPasoPlantillaIdFromDetalle(op.detalleJson) ??
           this.resolvePasoPlantillaIdFromOperacionRuta(op, matchingPlantillas);
-        if (!pasoPlantillaId) {
-          return true;
+        const matchingSeleccion = pasoPlantillaId
+          ? matchingBaseAplicado.find((item) => item.pasoPlantilla.id === pasoPlantillaId) ?? null
+          : null;
+        if (matchingSeleccion) {
+          return {
+            ...this.buildChecklistOperacionFromPlantillaConPerfil(
+              matchingSeleccion.pasoPlantilla,
+              matchingSeleccion.perfilOperativo,
+            ),
+            orden: op.orden,
+            codigo: op.codigo,
+            detalleJson: {
+              ...this.asObject(op.detalleJson),
+              ...this.asObject(
+                this.buildChecklistOperacionFromPlantillaConPerfil(
+                  matchingSeleccion.pasoPlantilla,
+                  matchingSeleccion.perfilOperativo,
+                ).detalleJson,
+              ),
+              pasoPlantillaId: matchingSeleccion.pasoPlantilla.id,
+              perfilOperativoId: matchingSeleccion.perfilOperativo.id,
+              matchingBase: true,
+              matchingBaseOrdenOriginal: op.orden,
+            } as Prisma.JsonObject,
+          };
         }
-        return !matchingPasoPlantillaIds.has(pasoPlantillaId);
-      })
-      .map((op) => {
-        const pasoPlantillaId = this.getPasoPlantillaIdFromDetalle(op.detalleJson);
         if (!pasoPlantillaId) {
           return op;
         }
@@ -2144,14 +2167,12 @@ export class ProductosServiciosService {
         `Conflicto de configuración: el paso "${nombrePaso}" está en la ruta base y también se activa desde Configurador.`,
     );
     const conflictosMatchingRutaWarnings: string[] = [];
-    const maxOrdenBase = [...operacionesBaseCotizadas, ...routeBaseOperacionesMatching, ...checklistOperacionesActivadas].reduce(
-      (acc, item) => Math.max(acc, item.orden),
-      0,
-    );
-    const operacionesRouteEffect = routeEffectsAplicados.flatMap((effect, effectIndex) =>
-      (effect.routeEffect?.pasos ?? []).map((paso: any, pasoIndex: number) => ({
+    const operacionesRouteEffect = routeEffectsAplicados.map((effect) => ({
+      effect,
+      insertion: this.parseRouteEffectInsertion(effect.routeEffect?.detalleJson ?? null),
+      pasos: (effect.routeEffect?.pasos ?? []).map((paso: any) => ({
         id: paso.id,
-        orden: maxOrdenBase + 1 + effectIndex * 1000 + pasoIndex,
+        orden: paso.orden,
         codigo: `ADON-${effect.id.slice(0, 6).toUpperCase()}-${paso.orden}`,
         nombre: paso.nombre,
         centroCostoId: paso.centroCostoId,
@@ -2164,7 +2185,12 @@ export class ProductosServiciosService {
         runMin: paso.runMin,
         cleanupMin: paso.cleanupMin,
         tiempoFijoMin: paso.tiempoFijoMin,
-        detalleJson: paso.detalleJson,
+        detalleJson: {
+          ...this.asObject(paso.detalleJson),
+          routeEffectId: effect.id,
+          routeEffectNombre: effect.nombre,
+          routeEffectInsertion: this.parseRouteEffectInsertion(effect.routeEffect?.detalleJson ?? null),
+        } as Prisma.JsonObject,
         unidadEntrada: UnidadProceso.NINGUNA,
         unidadSalida: UnidadProceso.NINGUNA,
         unidadTiempo: UnidadProceso.MINUTO,
@@ -2173,22 +2199,12 @@ export class ProductosServiciosService {
         mermaRunPct: null,
         reglaMermaJson: null,
       })),
-    );
-    const operacionesRutaBase = routeBaseOperacionesMatching.map((op, routeBaseIndex) => ({
-      ...op,
-      orden: maxOrdenBase + 1 + routeEffectsAplicados.length * 1000 + routeBaseIndex,
     }));
-    const operacionesChecklist = checklistOperacionesActivadas.map((op, checklistIndex) => ({
-      ...op,
-      orden:
-        maxOrdenBase +
-        1 +
-        routeEffectsAplicados.length * 1000 +
-        routeBaseOperacionesMatching.length +
-        checklistIndex,
-    }));
-    const operacionesCotizadas = [...operacionesBaseCotizadas, ...operacionesRouteEffect, ...operacionesRutaBase, ...operacionesChecklist].sort(
-      (a, b) => a.orden - b.orden,
+    const operacionesCotizadas = this.buildOperacionesCotizadasOrdenadas(
+      operacionesBaseCotizadas,
+      operacionesRouteEffect,
+      checklistOperacionesActivadas,
+      conflictosMatchingRutaWarnings,
     );
     if (operacionesCotizadas.length === 0) {
       throw new BadRequestException('La ruta no tiene pasos activos para la selección actual.');
@@ -2480,8 +2496,8 @@ export class ProductosServiciosService {
       const totalMin = setupMin + runMin + cleanupMin + tiempoFijoMin;
       const tarifa = tarifaByCentro.get(op.centroCostoId)!;
       const costoPaso = Number(tarifa.mul(totalMin / 60).toFixed(6));
-      const esChecklist = checklistOperacionesActivadas.some((item) => item.id === op.id);
-      const esRouteEffect = operacionesRouteEffect.some((item) => item.id === op.id && item.codigo === op.codigo);
+      const esChecklist = checklistOperacionesActivadas.some((item) => item.operacion.id === op.id);
+      const esRouteEffect = Boolean(this.asObject(op.detalleJson).routeEffectId);
       return {
         orden: op.orden,
         codigo: op.codigo,
@@ -2764,6 +2780,14 @@ export class ProductosServiciosService {
       });
     }
 
+    const ordenRutaBaseByPasoPlantillaId = new Map<string, number>();
+    for (const operacion of operacionesCotizadas) {
+      const pasoPlantillaId = this.getPasoPlantillaIdFromDetalle(operacion.detalleJson ?? null);
+      if (!pasoPlantillaId || ordenRutaBaseByPasoPlantillaId.has(pasoPlantillaId)) continue;
+      ordenRutaBaseByPasoPlantillaId.set(pasoPlantillaId, operacion.orden);
+    }
+    const checklistInsertionCounts = new Map<string, number>();
+
     const pasosConVariantesActivos = [
       ...checklistReglasActivas
         .filter((item) => item.regla.accion === TipoProductoChecklistReglaAccion.SELECCIONAR_VARIANTE_PASO)
@@ -2771,12 +2795,14 @@ export class ProductosServiciosService {
           source: 'checklist' as const,
           pasoPlantilla: item.pasoPlantilla,
           variantePasoId: this.getChecklistVariantePasoId(item.regla.detalleJson),
+          insertion: this.parseChecklistRouteInsertion(item.regla.detalleJson),
+          routeOrden: this.getChecklistRouteOrden(item.regla.detalleJson),
           reglaId: item.regla.id,
           label: 'Configurador',
         })),
     ];
 
-    for (const item of pasosConVariantesActivos) {
+    for (const item of [...pasosConVariantesActivos].sort((a, b) => a.routeOrden - b.routeOrden)) {
       const nivelesPaso = this.getProcesoOperacionNiveles(item.pasoPlantilla?.detalleJson ?? null);
       if (!nivelesPaso.length) {
         continue;
@@ -2954,8 +2980,34 @@ export class ProductosServiciosService {
         tiempoMin: totalMin,
         monto: costoNivel,
       });
+      const insertionKey = `${item.insertion.modo}:${item.insertion.pasoPlantillaId ?? 'append'}`;
+      const insertionCount = checklistInsertionCounts.get(insertionKey) ?? 0;
+      checklistInsertionCounts.set(insertionKey, insertionCount + 1);
+      const anchorOrder = item.insertion.pasoPlantillaId
+        ? ordenRutaBaseByPasoPlantillaId.get(item.insertion.pasoPlantillaId) ?? null
+        : null;
+      let ordenPaso = pasos.length + 1;
+      if (
+        item.insertion.modo === TipoInsercionRouteEffectDto.before_step &&
+        anchorOrder !== null
+      ) {
+        ordenPaso = anchorOrder - 0.49 + insertionCount * 0.01;
+      } else if (
+        item.insertion.modo === TipoInsercionRouteEffectDto.after_step &&
+        anchorOrder !== null
+      ) {
+        ordenPaso = anchorOrder + 0.49 + insertionCount * 0.01;
+      } else if (
+        (item.insertion.modo === TipoInsercionRouteEffectDto.before_step ||
+          item.insertion.modo === TipoInsercionRouteEffectDto.after_step) &&
+        anchorOrder === null
+      ) {
+        warnings.push(
+          `${item.label}: no se encontró el paso de referencia para "${item.pasoPlantilla?.nombre ?? item.reglaId}". Se insertó al final.`,
+        );
+      }
       pasos.push({
-        orden: pasos.length + 1,
+        orden: ordenPaso,
         codigo: `CHK-LVL-${item.reglaId.slice(0, 6).toUpperCase()}`,
         nombre: `${item.pasoPlantilla?.nombre ?? 'Paso configurador'} (${nivel.nombre})`,
         centroCostoId: centroId,
@@ -2971,6 +3023,9 @@ export class ProductosServiciosService {
         costo: costoNivel,
         detalleTecnico,
       });
+      if (item.pasoPlantilla?.id) {
+        ordenRutaBaseByPasoPlantillaId.set(item.pasoPlantilla.id, ordenPaso);
+      }
     }
 
     for (const item of checklistReglasActivas) {
@@ -3158,6 +3213,7 @@ export class ProductosServiciosService {
           addonId: item.productoAdicionalId,
           nombre: item.nombre,
           pasos: item.routeEffect?.pasos.length ?? 0,
+          insertion: this.parseRouteEffectInsertion(item.routeEffect?.detalleJson ?? null),
         })),
         costEffectsAplicados: costEffectsAplicados.map((item) => ({
           id: item.id,
@@ -3677,6 +3733,73 @@ export class ProductosServiciosService {
     return { niveles, reglas };
   }
 
+  private normalizeRouteEffectInsertionPayload(
+    insertion: { modo?: TipoInsercionRouteEffectDto; pasoPlantillaId?: string } | null | undefined,
+  ): RouteEffectInsertionConfig {
+    const modo =
+      insertion?.modo === TipoInsercionRouteEffectDto.before_step ||
+      insertion?.modo === TipoInsercionRouteEffectDto.after_step
+        ? insertion.modo
+        : TipoInsercionRouteEffectDto.append;
+    const pasoPlantillaId =
+      typeof insertion?.pasoPlantillaId === 'string' && insertion.pasoPlantillaId.trim().length
+        ? insertion.pasoPlantillaId.trim()
+        : null;
+    return { modo, pasoPlantillaId };
+  }
+
+  private parseRouteEffectInsertion(detalleJson: Prisma.JsonValue | null | undefined): RouteEffectInsertionConfig {
+    const detalle = this.asObject(detalleJson);
+    const insertionRaw =
+      detalle.insertion && typeof detalle.insertion === 'object' && !Array.isArray(detalle.insertion)
+        ? (detalle.insertion as Record<string, unknown>)
+        : {};
+    const modo =
+      insertionRaw.modo === TipoInsercionRouteEffectDto.before_step ||
+      insertionRaw.modo === TipoInsercionRouteEffectDto.after_step
+        ? insertionRaw.modo
+        : TipoInsercionRouteEffectDto.append;
+    const pasoPlantillaId =
+      typeof insertionRaw.pasoPlantillaId === 'string' && insertionRaw.pasoPlantillaId.trim().length
+        ? insertionRaw.pasoPlantillaId.trim()
+        : null;
+    return { modo, pasoPlantillaId };
+  }
+
+  private parseChecklistRouteInsertion(
+    detalleJson: Prisma.JsonValue | Record<string, unknown> | null | undefined,
+  ): RouteEffectInsertionConfig {
+    const detalle = this.asObject(detalleJson);
+    const raw =
+      detalle.routeInsertion && typeof detalle.routeInsertion === 'object' && !Array.isArray(detalle.routeInsertion)
+        ? (detalle.routeInsertion as Record<string, unknown>)
+        : {};
+    const modo =
+      raw.modo === TipoInsercionRouteEffectDto.before_step ||
+      raw.modo === TipoInsercionRouteEffectDto.after_step
+        ? raw.modo
+        : TipoInsercionRouteEffectDto.append;
+    const pasoPlantillaId =
+      typeof raw.pasoPlantillaId === 'string' && raw.pasoPlantillaId.trim().length
+        ? raw.pasoPlantillaId.trim()
+        : null;
+    return {
+      modo,
+      pasoPlantillaId,
+    };
+  }
+
+  private getChecklistRouteOrden(
+    detalleJson: Prisma.JsonValue | Record<string, unknown> | null | undefined,
+  ) {
+    const detalle = this.asObject(detalleJson);
+    const raw =
+      detalle.routeInsertion && typeof detalle.routeInsertion === 'object' && !Array.isArray(detalle.routeInsertion)
+        ? (detalle.routeInsertion as Record<string, unknown>)
+        : {};
+    return typeof raw.orden === 'number' && Number.isFinite(raw.orden) ? raw.orden : 0;
+  }
+
   private normalizeServicioPricingPayload(payload: UpsertProductoAdicionalServicioPricingDto): ServicioPricingConfig {
     if (!payload.niveles.length) {
       throw new BadRequestException('Debes configurar al menos un nivel.');
@@ -3771,6 +3894,15 @@ export class ProductosServiciosService {
       }
     }
     if (payload.routeEffect?.pasos?.length) {
+      const insertion = this.normalizeRouteEffectInsertionPayload(payload.routeEffect.insertion);
+      if (
+        insertion.modo !== TipoInsercionRouteEffectDto.append &&
+        !insertion.pasoPlantillaId
+      ) {
+        throw new BadRequestException(
+          'La inserción de Regla de pasos requiere indicar un paso de referencia.',
+        );
+      }
       for (const paso of payload.routeEffect.pasos) {
         await this.findCentroCostoOrThrow(auth, paso.centroCostoId, tx);
         const usarMaquinariaTerminacion =
@@ -3936,10 +4068,14 @@ export class ProductosServiciosService {
       });
     }
     if (payload.tipo === TipoProductoAdicionalEfectoDto.route_effect && payload.routeEffect) {
+      const insertion = this.normalizeRouteEffectInsertionPayload(payload.routeEffect.insertion);
       const route = await tx.productoAdicionalRouteEffect.create({
         data: {
           tenantId: auth.tenantId,
           productoAdicionalEfectoId: efectoId,
+          detalleJson: {
+            insertion,
+          } as Prisma.InputJsonValue,
         },
       });
       await tx.productoAdicionalRouteEffectPaso.createMany({
@@ -4016,6 +4152,7 @@ export class ProductosServiciosService {
     }>;
     routeEffect: {
       id: string;
+      detalleJson: Prisma.JsonValue | null;
       pasos: Array<{
         id: string;
         orden: number;
@@ -4069,6 +4206,7 @@ export class ProductosServiciosService {
       routeEffect: item.routeEffect
         ? {
             id: item.routeEffect.id,
+            insertion: this.parseRouteEffectInsertion(item.routeEffect.detalleJson),
             pasos: item.routeEffect.pasos.map((paso) => ({
               ...(this.asObject(paso.detalleJson).usarMaquinariaTerminacion === true
                 ? { usarMaquinariaTerminacion: true }
@@ -4178,6 +4316,21 @@ export class ProductosServiciosService {
           }
           if (regla.accion === TipoChecklistAccionReglaDto.material_extra && !regla.materiaPrimaVarianteId) {
             throw new BadRequestException('La regla MATERIAL_EXTRA requiere materiaPrimaVarianteId.');
+          }
+          if (
+            (regla.accion === TipoChecklistAccionReglaDto.activar_paso ||
+              regla.accion === TipoChecklistAccionReglaDto.seleccionar_variante_paso)
+          ) {
+            const insertion = this.parseChecklistRouteInsertion(regla.detalle);
+            if (
+              (insertion.modo === TipoInsercionRouteEffectDto.before_step ||
+                insertion.modo === TipoInsercionRouteEffectDto.after_step) &&
+              !insertion.pasoPlantillaId
+            ) {
+              throw new BadRequestException(
+                'Las reglas de paso con inserción antes/después requieren un paso de referencia.',
+              );
+            }
           }
           if (regla.accion === TipoChecklistAccionReglaDto.set_atributo_tecnico) {
             throw new BadRequestException(
@@ -6245,6 +6398,7 @@ export class ProductosServiciosService {
   }
 
   private buildChecklistOperacionFromPlantilla(template: any) {
+    const detalleBase = this.asObject(template.detalleJson);
     return {
       id: template.id,
       orden: 0,
@@ -6260,7 +6414,10 @@ export class ProductosServiciosService {
       runMin: null,
       cleanupMin: template.cleanupMin,
       tiempoFijoMin: template.tiempoFijoMin,
-      detalleJson: template.detalleJson,
+      detalleJson: {
+        ...detalleBase,
+        pasoPlantillaId: this.getPasoPlantillaIdFromDetalle(template.detalleJson) ?? template.id,
+      } as Prisma.JsonObject,
       unidadEntrada: template.unidadEntrada,
       unidadSalida: template.unidadSalida,
       unidadTiempo: template.unidadTiempo,
@@ -6379,6 +6536,86 @@ export class ProductosServiciosService {
       return normalized;
     }
     return normalized.slice(0, colonIndex).trim();
+  }
+
+  private buildOperacionesCotizadasOrdenadas(
+    operacionesBase: any[],
+    routeEffects: Array<{
+      effect: { id: string; nombre: string };
+      insertion: RouteEffectInsertionConfig;
+      pasos: any[];
+    }>,
+    checklistOperaciones: Array<{
+      operacion: any;
+      insertion: RouteEffectInsertionConfig;
+    }>,
+    warnings: string[],
+  ): any[] {
+    const ordered = [...operacionesBase].sort((a, b) => a.orden - b.orden);
+    for (const routeEffect of routeEffects) {
+      if (!routeEffect.pasos.length) {
+        continue;
+      }
+      const pasosOrdenados = [...routeEffect.pasos].sort((a, b) => a.orden - b.orden);
+      let insertIndex = ordered.length;
+      if (
+        routeEffect.insertion.modo === TipoInsercionRouteEffectDto.before_step ||
+        routeEffect.insertion.modo === TipoInsercionRouteEffectDto.after_step
+      ) {
+        const pasoPlantillaId = routeEffect.insertion.pasoPlantillaId;
+        const anchorIndex =
+          pasoPlantillaId
+            ? ordered.findIndex(
+                (item) => this.getPasoPlantillaIdFromDetalle(item.detalleJson ?? null) === pasoPlantillaId,
+              )
+            : -1;
+        if (anchorIndex === -1) {
+          warnings.push(
+            `Regla de pasos "${routeEffect.effect.nombre}": no se encontró el paso de referencia en la ruta efectiva. Se insertó al final.`,
+          );
+        } else {
+          insertIndex =
+            routeEffect.insertion.modo === TipoInsercionRouteEffectDto.before_step
+              ? anchorIndex
+              : anchorIndex + 1;
+        }
+      }
+      ordered.splice(insertIndex, 0, ...pasosOrdenados);
+    }
+
+    for (const checklistItem of [...checklistOperaciones].sort(
+      (a, b) => a.operacion.orden - b.operacion.orden,
+    )) {
+      let insertIndex = ordered.length;
+      if (
+        checklistItem.insertion.modo === TipoInsercionRouteEffectDto.before_step ||
+        checklistItem.insertion.modo === TipoInsercionRouteEffectDto.after_step
+      ) {
+        const pasoPlantillaId = checklistItem.insertion.pasoPlantillaId;
+        const anchorIndex =
+          pasoPlantillaId
+            ? ordered.findIndex(
+                (item) => this.getPasoPlantillaIdFromDetalle(item.detalleJson ?? null) === pasoPlantillaId,
+              )
+            : -1;
+        if (anchorIndex === -1) {
+          warnings.push(
+            `Configurador "${checklistItem.operacion.nombre}": no se encontró el paso de referencia en la ruta efectiva. Se insertó al final.`,
+          );
+        } else {
+          insertIndex =
+            checklistItem.insertion.modo === TipoInsercionRouteEffectDto.before_step
+              ? anchorIndex
+              : anchorIndex + 1;
+        }
+      }
+      ordered.splice(insertIndex, 0, checklistItem.operacion);
+    }
+
+    return ordered.map((item, index) => ({
+      ...item,
+      orden: index + 1,
+    }));
   }
 
   private buildChecklistPasoSignature(

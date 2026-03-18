@@ -403,6 +403,49 @@ function normalizePasoNombreBase(value: string | null | undefined) {
   return normalized.slice(0, colonIndex).trim();
 }
 
+function resolveProcesoOperacionPlantilla(
+  operacion: Pick<Proceso["operaciones"][number], "nombre" | "maquinaId" | "perfilOperativoId" | "detalle">,
+  plantillasPaso: ProcesoOperacionPlantilla[],
+) {
+  const operationName = operacion.nombre.trim().toLowerCase();
+  const operationBaseName = normalizePasoNombreBase(operacion.nombre);
+  const pasoPlantillaId =
+    operacion.detalle && typeof operacion.detalle === "object"
+      ? String((operacion.detalle as Record<string, unknown>).pasoPlantillaId ?? "").trim()
+      : "";
+  if (pasoPlantillaId) {
+    return plantillasPaso.find((item) => item.id === pasoPlantillaId && item.activo) ?? null;
+  }
+  const exactWithProfile =
+    plantillasPaso.find(
+      (item) =>
+        item.activo &&
+        item.perfilOperativoId &&
+        item.perfilOperativoId === (operacion.perfilOperativoId ?? "") &&
+        (item.maquinaId ?? "") === (operacion.maquinaId ?? ""),
+    ) ?? null;
+  if (exactWithProfile) {
+    return exactWithProfile;
+  }
+  return (
+    plantillasPaso.find(
+      (item) =>
+        item.activo &&
+        item.nombre.trim().toLowerCase() === operationName &&
+        (item.maquinaId ?? "") === (operacion.maquinaId ?? ""),
+    ) ??
+    plantillasPaso.find(
+      (item) =>
+        item.activo &&
+        normalizePasoNombreBase(item.nombre) === operationBaseName &&
+        (item.maquinaId ?? "") === (operacion.maquinaId ?? ""),
+    ) ??
+    plantillasPaso.find((item) => item.activo && item.nombre.trim().toLowerCase() === operationName) ??
+    plantillasPaso.find((item) => item.activo && normalizePasoNombreBase(item.nombre) === operationBaseName) ??
+    null
+  );
+}
+
 function isPerfilCompatibleWithMatchingRow(
   perfil: Maquina["perfilesOperativos"][number],
   row: { tipoImpresion: "bn" | "cmyk" | null; caras: "simple_faz" | "doble_faz" | null },
@@ -431,49 +474,7 @@ function getRutaBasePasoOptions(
   const requiresBasePrintMatching =
     dimensionesConsumidas.includes("tipo_impresion") || dimensionesConsumidas.includes("caras");
   const matches = proceso.operaciones
-    .map((op) => {
-      const operationName = op.nombre.trim().toLowerCase();
-      const operationBaseName = normalizePasoNombreBase(op.nombre);
-      const pasoPlantillaId =
-        op.detalle && typeof op.detalle === "object"
-          ? String((op.detalle as Record<string, unknown>).pasoPlantillaId ?? "").trim()
-          : "";
-      if (pasoPlantillaId) {
-        return plantillasPaso.find((item) => item.id === pasoPlantillaId && item.activo) ?? null;
-      }
-      const exactWithProfile =
-        plantillasPaso.find(
-          (item) =>
-            item.activo &&
-            item.perfilOperativoId &&
-            item.perfilOperativoId === (op.perfilOperativoId ?? "") &&
-            (item.maquinaId ?? "") === (op.maquinaId ?? ""),
-        ) ?? null;
-      if (exactWithProfile) {
-        return exactWithProfile;
-      }
-      return (
-        plantillasPaso.find(
-          (item) =>
-            item.activo &&
-            item.nombre.trim().toLowerCase() === operationName &&
-            (item.maquinaId ?? "") === (op.maquinaId ?? ""),
-        ) ??
-        plantillasPaso.find(
-          (item) =>
-            item.activo &&
-            normalizePasoNombreBase(item.nombre) === operationBaseName &&
-            (item.maquinaId ?? "") === (op.maquinaId ?? ""),
-        ) ??
-        plantillasPaso.find(
-          (item) => item.activo && item.nombre.trim().toLowerCase() === operationName,
-        ) ??
-        plantillasPaso.find(
-          (item) => item.activo && normalizePasoNombreBase(item.nombre) === operationBaseName,
-        ) ??
-        null
-      );
-    })
+    .map((op) => resolveProcesoOperacionPlantilla(op, plantillasPaso))
     .filter((item): item is ProcesoOperacionPlantilla => Boolean(item))
     .filter((item) => {
       if (!requiresBasePrintMatching) {
@@ -505,34 +506,23 @@ function getRutaBasePasoFijoOptions(
   const proceso = procesos.find((item) => item.id === procesoId) ?? null;
   if (!proceso) return [];
   const matches = proceso.operaciones
-    .map((op) => {
-      const operationName = op.nombre.trim().toLowerCase();
-      const operationBaseName = normalizePasoNombreBase(op.nombre);
-      const pasoPlantillaId =
-        op.detalle && typeof op.detalle === "object"
-          ? String((op.detalle as Record<string, unknown>).pasoPlantillaId ?? "").trim()
-          : "";
-      if (pasoPlantillaId) {
-        return plantillasPaso.find((item) => item.id === pasoPlantillaId && item.activo) ?? null;
-      }
-      return (
-        plantillasPaso.find(
-          (item) =>
-            item.activo &&
-            item.nombre.trim().toLowerCase() === operationName &&
-            (item.maquinaId ?? "") === (op.maquinaId ?? ""),
-        ) ??
-        plantillasPaso.find(
-          (item) =>
-            item.activo &&
-            normalizePasoNombreBase(item.nombre) === operationBaseName &&
-            (item.maquinaId ?? "") === (op.maquinaId ?? ""),
-        ) ??
-        null
-      );
-    })
+    .map((op) => resolveProcesoOperacionPlantilla(op, plantillasPaso))
     .filter((item): item is ProcesoOperacionPlantilla => Boolean(item))
     .filter((item) => !matchingIds.has(item.id));
+
+  return Array.from(new Map(matches.map((item) => [item.id, item])).values());
+}
+
+function getRutaPasoOptions(
+  procesoId: string | null | undefined,
+  procesos: Proceso[],
+  plantillasPaso: ProcesoOperacionPlantilla[],
+) {
+  const proceso = procesos.find((item) => item.id === procesoId) ?? null;
+  if (!proceso) return [];
+  const matches = proceso.operaciones
+    .map((op) => resolveProcesoOperacionPlantilla(op, plantillasPaso))
+    .filter((item): item is ProcesoOperacionPlantilla => Boolean(item));
 
   return Array.from(new Map(matches.map((item) => [item.id, item])).values());
 }
@@ -947,6 +937,25 @@ export function ProductoServicioFichaTabs({
     () => new Map(maquinas.map((item) => [item.id, item])),
     [maquinas],
   );
+  const pasosRutaOpcionales = React.useMemo(() => {
+    const processIds = new Set<string>();
+    if (usarRutaComunVariantes) {
+      if (rutaDefaultProductoId) processIds.add(rutaDefaultProductoId);
+    } else {
+      for (const variante of variantes) {
+        const processId = rutasPorVarianteDraft[variante.id] ?? variante.procesoDefinicionId ?? "";
+        if (processId) processIds.add(processId);
+      }
+    }
+    const options = Array.from(processIds).flatMap((procesoId) =>
+      getRutaPasoOptions(procesoId, procesos, plantillasPaso).map((paso) => ({
+        id: paso.id,
+        nombre: paso.nombre,
+        procesoId,
+      })),
+    );
+    return Array.from(new Map(options.map((item) => [item.id, item])).values());
+  }, [usarRutaComunVariantes, rutaDefaultProductoId, rutasPorVarianteDraft, variantes, procesos, plantillasPaso]);
   React.useEffect(() => {
     getCatalogoPliegosImpresion()
       .then((items) => {
@@ -2348,6 +2357,7 @@ export function ProductoServicioFichaTabs({
                 initialChecklist={productoChecklist}
                 plantillasPaso={plantillasPaso}
                 materiasPrimas={materiasPrimas}
+                routeStepOptions={pasosRutaOpcionales.map((item) => ({ id: item.id, label: item.nombre }))}
                 onSaved={setProductoChecklist}
               />
             </CardContent>
@@ -2497,7 +2507,7 @@ export function ProductoServicioFichaTabs({
                                 {procesoVariante.operaciones.map((op) => (
                                   <TableRow key={`${item.id}-${op.id}`}>
                                     <TableCell>{op.orden}</TableCell>
-                                    <TableCell>{op.nombre}</TableCell>
+                                    <TableCell>{resolveProcesoOperacionPlantilla(op, plantillasPaso)?.nombre ?? op.nombre}</TableCell>
                                     <TableCell>{op.centroCostoNombre}</TableCell>
                                   </TableRow>
                                 ))}
