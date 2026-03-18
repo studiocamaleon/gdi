@@ -42,6 +42,7 @@ import {
   createProductoVariante,
   deleteProductoVariante,
   getCatalogoPliegosImpresion,
+  getCotizacionProductoById,
   getCotizacionesProductoVariante,
   getProductoMotorConfig,
   getVarianteMotorOverride,
@@ -64,6 +65,8 @@ import type {
   CotizacionProductoSnapshotResumen,
   CotizacionProductoVariante,
   ProductoChecklist,
+  ProductoPrecioComisionItem,
+  ProductoPrecioComisionTipo,
   ProductoPrecioConfig,
   ProductoPrecioEspecialCliente,
   ProductoImpuestoCatalogo,
@@ -82,6 +85,7 @@ import {
   estadoProductoServicioItems,
   tipoImpresionProductoVarianteItems,
 } from "@/lib/productos-servicios";
+import { simularPrecioComercial } from "@/lib/productos-servicios-simulacion";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -192,6 +196,8 @@ type PrecioEspecialClienteDraft = {
   detalle: Record<string, unknown>;
 };
 
+type PrecioComisionDraft = ProductoPrecioComisionItem;
+
 const dimensionBaseLabelByValue: Record<DimensionOpcionProductiva, string> = {
   tipo_impresion: "Tipo de impresión",
   caras: "Caras",
@@ -235,6 +241,16 @@ const metodoCalculoPrecioItems: Array<{ value: MetodoCalculoPrecioProducto; labe
   { value: "variable_por_cantidad", label: metodoCalculoPrecioLabels.variable_por_cantidad },
 ];
 
+const precioComisionTipoLabels: Record<ProductoPrecioComisionTipo, string> = {
+  financiera: "Financiera",
+  vendedor: "Vendedor",
+};
+
+const precioComisionTipoItems: Array<{ value: ProductoPrecioComisionTipo; label: string }> = [
+  { value: "financiera", label: precioComisionTipoLabels.financiera },
+  { value: "vendedor", label: precioComisionTipoLabels.vendedor },
+];
+
 function buildDefaultPrecioDetalle(metodoCalculo: MetodoCalculoPrecioProducto) {
   if (metodoCalculo === "por_margen") {
     return { marginPct: 0, minimumMarginPct: 0 };
@@ -266,6 +282,13 @@ function buildDefaultPrecioImpuestos() {
   };
 }
 
+function buildDefaultPrecioComisiones() {
+  return {
+    items: [] as ProductoPrecioComisionItem[],
+    porcentajeTotal: 0,
+  };
+}
+
 function buildPrecioConfigDraft(
   precio: ProductoPrecioConfig | null | undefined,
   measurementUnitFallback: string,
@@ -275,6 +298,7 @@ function buildPrecioConfigDraft(
     metodoCalculo,
     measurementUnit: precio?.measurementUnit ?? measurementUnitFallback,
     impuestos: precio?.impuestos ?? buildDefaultPrecioImpuestos(),
+    comisiones: precio?.comisiones ?? buildDefaultPrecioComisiones(),
     detalle: precio?.detalle ?? buildDefaultPrecioDetalle(metodoCalculo),
   } as ProductoPrecioConfig;
 }
@@ -287,8 +311,19 @@ function buildPrecioConfigForMethod(
     metodoCalculo,
     measurementUnit,
     impuestos: buildDefaultPrecioImpuestos(),
+    comisiones: buildDefaultPrecioComisiones(),
     detalle: buildDefaultPrecioDetalle(metodoCalculo),
   } as ProductoPrecioConfig;
+}
+
+function buildPrecioComisionDraft(item?: ProductoPrecioComisionItem | null): PrecioComisionDraft {
+  return {
+    id: item?.id ?? crypto.randomUUID(),
+    nombre: item?.nombre ?? "",
+    tipo: item?.tipo ?? "financiera",
+    porcentaje: item?.porcentaje ?? 0,
+    activo: item?.activo ?? true,
+  };
 }
 
 function buildPrecioEspecialClienteDraft(
@@ -992,6 +1027,11 @@ export function ProductoServicioFichaTabs({
   const [precioEspecialClientesForm, setPrecioEspecialClientesForm] = React.useState<ProductoPrecioEspecialCliente[]>(
     () => producto.precioEspecialClientes ?? [],
   );
+  const [precioComisionEditorOpen, setPrecioComisionEditorOpen] = React.useState(false);
+  const [precioComisionEditorDraft, setPrecioComisionEditorDraft] = React.useState<PrecioComisionDraft>(() =>
+    buildPrecioComisionDraft(),
+  );
+  const [precioComisionToDelete, setPrecioComisionToDelete] = React.useState<ProductoPrecioComisionItem | null>(null);
   const [isSavingPrecioEspecialClientes, startSavingPrecioEspecialClientes] = React.useTransition();
   const [precioEspecialClienteToDelete, setPrecioEspecialClienteToDelete] =
     React.useState<PrecioEspecialClienteConfirmDelete | null>(null);
@@ -1214,9 +1254,12 @@ export function ProductoServicioFichaTabs({
 
   React.useEffect(() => {
     if (!selectedVariante) {
+      setCotizacion(null);
       setCotizaciones([]);
       return;
     }
+
+    setCotizacion(null);
 
     Promise.all([
       getProductoMotorConfig(productoState.id),
@@ -1265,7 +1308,20 @@ export function ProductoServicioFichaTabs({
       );
 
     getCotizacionesProductoVariante(selectedVariante.id)
-      .then(setCotizaciones)
+      .then(async (snapshots) => {
+        setCotizaciones(snapshots);
+        const latestSnapshot = snapshots[0];
+        if (!latestSnapshot) {
+          setCotizacion(null);
+          return;
+        }
+        const detalle = await getCotizacionProductoById(latestSnapshot.id);
+        setCotizacion({
+          snapshotId: detalle.id,
+          ...(detalle.resultado as Omit<CotizacionProductoVariante, "snapshotId" | "createdAt">),
+          createdAt: detalle.createdAt,
+        });
+      })
       .catch((error) =>
         toast.error(error instanceof Error ? error.message : "No se pudieron cargar cotizaciones."),
       );
@@ -1549,6 +1605,7 @@ export function ProductoServicioFichaTabs({
           metodoCalculo: draftPrecio.metodoCalculo,
           measurementUnit: draftPrecio.measurementUnit,
           impuestos: draftPrecio.impuestos,
+          comisiones: draftPrecio.comisiones,
           detalle: draftPrecio.detalle as Record<string, unknown>,
         });
         syncProductoCommercialState(updated);
@@ -1562,6 +1619,36 @@ export function ProductoServicioFichaTabs({
     });
   };
 
+  const persistPrecioComisiones = (
+    nextComisiones: ProductoPrecioConfig["comisiones"],
+    options?: { successMessage?: string; onSuccess?: () => void },
+  ) => {
+    const nextPrecio = {
+      ...precioForm,
+      comisiones: nextComisiones,
+    } as ProductoPrecioConfig;
+
+    setPrecioForm(nextPrecio);
+    setPrecioEditorDraft((current) => ({ ...current, comisiones: nextComisiones }));
+
+    startSavingPrecio(async () => {
+      try {
+        const updated = await updateProductoPrecio(productoState.id, {
+          metodoCalculo: nextPrecio.metodoCalculo,
+          measurementUnit: nextPrecio.measurementUnit,
+          impuestos: nextPrecio.impuestos,
+          comisiones: nextPrecio.comisiones,
+          detalle: nextPrecio.detalle as Record<string, unknown>,
+        });
+        syncProductoCommercialState(updated);
+        options?.onSuccess?.();
+        toast.success(options?.successMessage ?? "Comisiones actualizadas.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "No se pudieron guardar las comisiones.");
+      }
+    });
+  };
+
   const handleChangeMetodoCalculoPrecio = (metodoCalculo: MetodoCalculoPrecioProducto) => {
     const nextMeasurementUnit =
       precioForm.measurementUnit ?? productoState.unidadComercial?.trim() ?? "unidad";
@@ -1571,9 +1658,83 @@ export function ProductoServicioFichaTabs({
         nextMeasurementUnit,
       ),
       impuestos: precioForm.impuestos,
+      comisiones: precioForm.comisiones,
     } as ProductoPrecioConfig;
     setPrecioForm(next);
     setPrecioEditorDraft(next);
+  };
+
+  const handleOpenPrecioComisionEditor = (item?: ProductoPrecioComisionItem) => {
+    setPrecioComisionEditorDraft(buildPrecioComisionDraft(item));
+    setPrecioComisionEditorOpen(true);
+  };
+
+  const handleSavePrecioComisionDraft = () => {
+    if (!precioComisionEditorDraft.nombre.trim()) {
+      toast.error("El nombre de la comisión es obligatorio.");
+      return;
+    }
+    const nextItem: ProductoPrecioComisionItem = {
+      ...precioComisionEditorDraft,
+      nombre: precioComisionEditorDraft.nombre.trim(),
+      porcentaje: Number(precioComisionEditorDraft.porcentaje || 0),
+    };
+    const nextItems = precioForm.comisiones.items.some((item) => item.id === nextItem.id)
+      ? precioForm.comisiones.items.map((item) => (item.id === nextItem.id ? nextItem : item))
+      : [...precioForm.comisiones.items, nextItem];
+    const comisiones = {
+      items: nextItems,
+      porcentajeTotal: Number(
+        nextItems
+          .filter((item) => item.activo)
+          .reduce((sum, item) => sum + Number(item.porcentaje || 0), 0)
+          .toFixed(4),
+      ),
+    };
+    persistPrecioComisiones(comisiones, {
+      successMessage: "Comisión guardada.",
+      onSuccess: () => setPrecioComisionEditorOpen(false),
+    });
+  };
+
+  const handleTogglePrecioComision = (itemId: string, activo: boolean) => {
+    const nextItems = precioForm.comisiones.items.map((item) =>
+      item.id === itemId
+        ? {
+            ...item,
+            activo,
+          }
+        : item,
+    );
+    const comisiones = {
+      items: nextItems,
+      porcentajeTotal: Number(
+        nextItems
+          .filter((item) => item.activo)
+          .reduce((sum, item) => sum + Number(item.porcentaje || 0), 0)
+          .toFixed(4),
+      ),
+    };
+    persistPrecioComisiones(comisiones, {
+      successMessage: "Estado de comisión actualizado.",
+    });
+  };
+
+  const handleDeletePrecioComision = (itemId: string) => {
+    const nextItems = precioForm.comisiones.items.filter((item) => item.id !== itemId);
+    const comisiones = {
+      items: nextItems,
+      porcentajeTotal: Number(
+        nextItems
+          .filter((item) => item.activo)
+          .reduce((sum, item) => sum + Number(item.porcentaje || 0), 0)
+          .toFixed(4),
+      ),
+    };
+    persistPrecioComisiones(comisiones, {
+      successMessage: "Comisión eliminada.",
+      onSuccess: () => setPrecioComisionToDelete(null),
+    });
   };
 
   const handleChangeImpuestoEsquema = (esquemaId: string | null) => {
@@ -2524,6 +2685,15 @@ export function ProductoServicioFichaTabs({
     return Number.isFinite(costo) ? acc + costo : acc;
   }, 0);
   const totalCostoGeneral = totalCentroCostos + totalMaterialesCosto;
+  const simulacionComercial = React.useMemo(
+    () =>
+      simularPrecioComercial({
+        precio: precioForm,
+        costoTotal: cotizacion ? totalCostoGeneral : null,
+        cantidad: Number(cotizacionCantidad),
+      }),
+    [precioForm, cotizacion, totalCostoGeneral, cotizacionCantidad],
+  );
   const isGeneralDirty =
     generalForm.nombre.trim() !== (productoState.nombre ?? "").trim() ||
     generalForm.descripcion.trim() !== (productoState.descripcion ?? "").trim() ||
@@ -2566,6 +2736,7 @@ export function ProductoServicioFichaTabs({
           <TabsTrigger value="imposicion" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Imposición</TabsTrigger>
           <TabsTrigger value="cotizador" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Costos</TabsTrigger>
           <TabsTrigger value="precio" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Precio</TabsTrigger>
+          <TabsTrigger value="simulacion-comercial" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Simulación comercial</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general">
@@ -3888,6 +4059,84 @@ export function ProductoServicioFichaTabs({
               </div>
 
               <div className="rounded-lg border p-4">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">Comisiones</p>
+                      <p className="text-xs text-muted-foreground">
+                        Define cargos financieros y comisiones comerciales que afectan la rentabilidad del producto.
+                      </p>
+                    </div>
+                    <Button type="button" variant="outline" onClick={() => handleOpenPrecioComisionEditor()}>
+                      <PlusIcon className="size-4" />
+                      Agregar
+                    </Button>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+                    <div className="overflow-hidden rounded-lg border">
+                      <Table>
+                        <TableHeader className="bg-muted/50">
+                          <TableRow>
+                            <TableHead>Nombre</TableHead>
+                            <TableHead>Tipo</TableHead>
+                            <TableHead>Porcentaje</TableHead>
+                            <TableHead>Estado</TableHead>
+                            <TableHead className="w-[140px] text-right">Acciones</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {precioForm.comisiones.items.length ? (
+                            precioForm.comisiones.items.map((item) => (
+                              <TableRow key={item.id}>
+                                <TableCell className="font-medium">{item.nombre}</TableCell>
+                                <TableCell>{precioComisionTipoLabels[item.tipo]}</TableCell>
+                                <TableCell>{formatNumber(item.porcentaje)}%</TableCell>
+                                <TableCell>{item.activo ? "Activa" : "Inactiva"}</TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleOpenPrecioComisionEditor(item)}
+                                    >
+                                      <PencilIcon className="size-4" />
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => setPrecioComisionToDelete(item)}
+                                    >
+                                      <Trash2Icon className="size-4" />
+                                    </Button>
+                                    <Switch
+                                      checked={item.activo}
+                                      onCheckedChange={(checked) => handleTogglePrecioComision(item.id, Boolean(checked))}
+                                    />
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                                No hay comisiones configuradas.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <Field>
+                      <FieldLabel>Comisiones Totales</FieldLabel>
+                      <Input value={formatNumber(precioForm.comisiones.porcentajeTotal)} disabled />
+                    </Field>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium">Precio especial para clientes</p>
@@ -3971,6 +4220,164 @@ export function ProductoServicioFichaTabs({
                 {isSavingPrecio ? <Loader2Icon className="animate-spin" /> : <SaveIcon />}
                 Guardar configuración de precio
               </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="simulacion-comercial">
+          <Card>
+            <CardHeader>
+              <CardTitle>Simulación comercial</CardTitle>
+              <CardDescription>
+                Estima el precio final de venta a partir de la última cotización de costos y la configuración comercial del producto.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-lg border p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">Estado de simulación</p>
+                    <p className="text-xs text-muted-foreground">
+                      Usa la cantidad de la última cotización y la configuración base del tab Precio.
+                    </p>
+                  </div>
+                  <Badge
+                    variant={
+                      simulacionComercial.status === "disponible"
+                        ? "default"
+                        : simulacionComercial.status === "no_calculable"
+                          ? "secondary"
+                          : "outline"
+                    }
+                  >
+                    {simulacionComercial.status === "disponible"
+                      ? "Simulación disponible"
+                      : simulacionComercial.status === "no_calculable"
+                        ? "No calculable"
+                        : "Sin cotización"}
+                  </Badge>
+                </div>
+                <div className="mt-3 rounded-md border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+                  {simulacionComercial.reason ??
+                    simulacionComercial.descripcion ??
+                    "La simulación comercial está lista con la última cotización calculada."}
+                </div>
+              </div>
+
+              {simulacionComercial.status === "disponible" ? (
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="overflow-hidden rounded-lg border">
+                    <Table>
+                      <TableHeader className="bg-muted/50">
+                        <TableRow>
+                          <TableHead>Resumen comercial</TableHead>
+                          <TableHead className="w-[220px] text-right">Valor</TableHead>
+                          <TableHead className="w-[140px] text-right">%</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        <TableRow>
+                          <TableCell className="text-muted-foreground">Costo total</TableCell>
+                          <TableCell className="text-right font-medium">{formatCurrency(simulacionComercial.costoTotal)}</TableCell>
+                          <TableCell className="text-right font-medium">
+                            {simulacionComercial.precioFinal
+                              ? `${formatNumber((simulacionComercial.costoTotal / simulacionComercial.precioFinal) * 100)}%`
+                              : "-"}
+                          </TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell className="text-muted-foreground">Impuestos</TableCell>
+                          <TableCell className="text-right font-medium">
+                            {simulacionComercial.impuestosMonto != null
+                              ? formatCurrency(simulacionComercial.impuestosMonto)
+                              : "-"}
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {simulacionComercial.impuestosMonto != null
+                              ? `${formatNumber(simulacionComercial.impuestosPct)}%`
+                              : "-"}
+                          </TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell className="text-muted-foreground">Comisiones</TableCell>
+                          <TableCell className="text-right font-medium">
+                            {simulacionComercial.comisionesMonto != null
+                              ? formatCurrency(simulacionComercial.comisionesMonto)
+                              : "-"}
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {simulacionComercial.comisionesMonto != null
+                              ? `${formatNumber(simulacionComercial.comisionesPct)}%`
+                              : "-"}
+                          </TableCell>
+                        </TableRow>
+                        <TableRow className="bg-muted/20">
+                          <TableCell className="font-medium">Precio final al cliente</TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {simulacionComercial.precioFinal != null
+                              ? formatCurrency(simulacionComercial.precioFinal)
+                              : "-"}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {simulacionComercial.precioFinal != null ? "100%" : "-"}
+                          </TableCell>
+                        </TableRow>
+                        <TableRow className="bg-emerald-50/60">
+                          <TableCell className="font-medium">Margen real</TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {simulacionComercial.margenRealMonto != null
+                              ? formatCurrency(simulacionComercial.margenRealMonto)
+                              : "-"}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {simulacionComercial.margenRealPct != null
+                              ? `${formatNumber(simulacionComercial.margenRealPct)}%`
+                              : "-"}
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm font-medium">Lectura rápida</p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {simulacionComercial.descripcion}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm font-medium">Configuración usada</p>
+                      <div className="mt-3 space-y-2 text-sm">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">Unidad comercial</span>
+                          <span>{precioForm.measurementUnit?.trim() || productoState.unidadComercial || "unidad"}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">Esquema impositivo</span>
+                          <span>{precioForm.impuestos.esquemaNombre || "Sin impuestos"}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">Comisiones activas</span>
+                          <span>{precioForm.comisiones.items.filter((item) => item.activo).length}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed p-8 text-center">
+                  <p className="text-sm font-medium">
+                    {simulacionComercial.status === "sin_cotizacion"
+                      ? "Todavía no hay una cotización de costos para simular."
+                      : "La configuración actual no permite calcular un precio comercial."}
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {simulacionComercial.reason ??
+                      "Revisá la cotización en Costos y la configuración del tab Precio."}
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -5142,6 +5549,100 @@ export function ProductoServicioFichaTabs({
           </div>
         </SheetContent>
       </Sheet>
+      <Sheet open={precioComisionEditorOpen} onOpenChange={setPrecioComisionEditorOpen}>
+        <SheetContent
+          side="right"
+          className="overflow-y-auto px-4 py-6 data-[side=right]:w-[96vw] data-[side=right]:max-w-none sm:px-6 sm:data-[side=right]:w-[52vw] sm:data-[side=right]:max-w-none lg:px-8 lg:data-[side=right]:w-[30vw] lg:data-[side=right]:min-w-[440px] lg:data-[side=right]:max-w-none"
+        >
+          <SheetHeader className="border-b pb-4">
+            <SheetTitle>{precioForm.comisiones.items.some((item) => item.id === precioComisionEditorDraft.id) ? "Editar comisión" : "Añadir comisión"}</SheetTitle>
+            <SheetDescription>
+              Configura un cargo financiero o una comisión comercial del producto.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-6 space-y-5">
+            <Field>
+              <FieldLabel>Nombre</FieldLabel>
+              <Input
+                value={precioComisionEditorDraft.nombre}
+                onChange={(e) =>
+                  setPrecioComisionEditorDraft((current) => ({
+                    ...current,
+                    nombre: e.target.value,
+                  }))
+                }
+                placeholder="Ej: Mercado Pago o Comisión vendedor"
+              />
+            </Field>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field>
+                <FieldLabel>Tipo</FieldLabel>
+                <Select
+                  value={precioComisionEditorDraft.tipo}
+                  onValueChange={(value) =>
+                    setPrecioComisionEditorDraft((current) => ({
+                      ...current,
+                      tipo: (value as ProductoPrecioComisionTipo) ?? "financiera",
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona tipo">
+                      {precioComisionTipoLabels[precioComisionEditorDraft.tipo]}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {precioComisionTipoItems.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel>Porcentaje (%)</FieldLabel>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={precioComisionEditorDraft.porcentaje}
+                  onChange={(e) =>
+                    setPrecioComisionEditorDraft((current) => ({
+                      ...current,
+                      porcentaje: Number(e.target.value || 0),
+                    }))
+                  }
+                />
+              </Field>
+            </div>
+
+            <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+              <Switch
+                checked={precioComisionEditorDraft.activo}
+                onCheckedChange={(checked) =>
+                  setPrecioComisionEditorDraft((current) => ({
+                    ...current,
+                    activo: Boolean(checked),
+                  }))
+                }
+              />
+              <span className="text-sm">Comisión activa</span>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t pt-4">
+              <Button type="button" variant="outline" onClick={() => setPrecioComisionEditorOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={handleSavePrecioComisionDraft}>
+                Aplicar
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
       <Sheet open={impuestosEditorOpen} onOpenChange={setImpuestosEditorOpen}>
         <SheetContent
           side="right"
@@ -5487,6 +5988,32 @@ export function ProductoServicioFichaTabs({
                 if (!precioEspecialClienteToDelete) return;
                 handleDeletePrecioEspecialCliente(precioEspecialClienteToDelete.id);
                 setPrecioEspecialClienteToDelete(null);
+              }}
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={Boolean(precioComisionToDelete)}
+        onOpenChange={(open) => (!open ? setPrecioComisionToDelete(null) : null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar comisión</AlertDialogTitle>
+            <AlertDialogDescription>
+              {precioComisionToDelete
+                ? `Vas a eliminar la comisión "${precioComisionToDelete.nombre}". Esta acción no se puede deshacer.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!precioComisionToDelete) return;
+                handleDeletePrecioComision(precioComisionToDelete.id);
               }}
             >
               Confirmar

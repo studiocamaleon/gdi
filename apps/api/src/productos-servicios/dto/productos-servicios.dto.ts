@@ -714,6 +714,10 @@ export class UpdateProductoPrecioDto {
   @IsOptional()
   @IsObject()
   impuestos?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsObject()
+  comisiones?: Record<string, unknown>;
 }
 
 export class UpdateProductoPrecioEspecialClientesDto {

@@ -598,6 +598,16 @@ export declare class ProductosServiciosController {
                 }>;
                 porcentajeTotal: number;
             };
+            comisiones: {
+                items: Array<{
+                    id: string;
+                    nombre: string;
+                    tipo: "financiera" | "vendedor";
+                    porcentaje: number;
+                    activo: boolean;
+                }>;
+                porcentajeTotal: number;
+            };
             detalle: Record<string, unknown>;
         } | null;
         precioEspecialClientes: ({
@@ -609,6 +619,16 @@ export declare class ProductosServiciosController {
                 items: Array<{
                     nombre: string;
                     porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            comisiones: {
+                items: Array<{
+                    id: string;
+                    nombre: string;
+                    tipo: "financiera" | "vendedor";
+                    porcentaje: number;
+                    activo: boolean;
                 }>;
                 porcentajeTotal: number;
             };
@@ -676,6 +696,16 @@ export declare class ProductosServiciosController {
                 }>;
                 porcentajeTotal: number;
             };
+            comisiones: {
+                items: Array<{
+                    id: string;
+                    nombre: string;
+                    tipo: "financiera" | "vendedor";
+                    porcentaje: number;
+                    activo: boolean;
+                }>;
+                porcentajeTotal: number;
+            };
             detalle: Record<string, unknown>;
         } | null;
         precioEspecialClientes: ({
@@ -687,6 +717,16 @@ export declare class ProductosServiciosController {
                 items: Array<{
                     nombre: string;
                     porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            comisiones: {
+                items: Array<{
+                    id: string;
+                    nombre: string;
+                    tipo: "financiera" | "vendedor";
+                    porcentaje: number;
+                    activo: boolean;
                 }>;
                 porcentajeTotal: number;
             };
@@ -754,6 +794,16 @@ export declare class ProductosServiciosController {
                 }>;
                 porcentajeTotal: number;
             };
+            comisiones: {
+                items: Array<{
+                    id: string;
+                    nombre: string;
+                    tipo: "financiera" | "vendedor";
+                    porcentaje: number;
+                    activo: boolean;
+                }>;
+                porcentajeTotal: number;
+            };
             detalle: Record<string, unknown>;
         } | null;
         precioEspecialClientes: ({
@@ -765,6 +815,16 @@ export declare class ProductosServiciosController {
                 items: Array<{
                     nombre: string;
                     porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            comisiones: {
+                items: Array<{
+                    id: string;
+                    nombre: string;
+                    tipo: "financiera" | "vendedor";
+                    porcentaje: number;
+                    activo: boolean;
                 }>;
                 porcentajeTotal: number;
             };
@@ -832,6 +892,16 @@ export declare class ProductosServiciosController {
                 }>;
                 porcentajeTotal: number;
             };
+            comisiones: {
+                items: Array<{
+                    id: string;
+                    nombre: string;
+                    tipo: "financiera" | "vendedor";
+                    porcentaje: number;
+                    activo: boolean;
+                }>;
+                porcentajeTotal: number;
+            };
             detalle: Record<string, unknown>;
         } | null;
         precioEspecialClientes: ({
@@ -843,6 +913,16 @@ export declare class ProductosServiciosController {
                 items: Array<{
                     nombre: string;
                     porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            comisiones: {
+                items: Array<{
+                    id: string;
+                    nombre: string;
+                    tipo: "financiera" | "vendedor";
+                    porcentaje: number;
+                    activo: boolean;
                 }>;
                 porcentajeTotal: number;
             };
@@ -910,6 +990,16 @@ export declare class ProductosServiciosController {
                 }>;
                 porcentajeTotal: number;
             };
+            comisiones: {
+                items: Array<{
+                    id: string;
+                    nombre: string;
+                    tipo: "financiera" | "vendedor";
+                    porcentaje: number;
+                    activo: boolean;
+                }>;
+                porcentajeTotal: number;
+            };
             detalle: Record<string, unknown>;
         } | null;
         precioEspecialClientes: ({
@@ -921,6 +1011,16 @@ export declare class ProductosServiciosController {
                 items: Array<{
                     nombre: string;
                     porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            comisiones: {
+                items: Array<{
+                    id: string;
+                    nombre: string;
+                    tipo: "financiera" | "vendedor";
+                    porcentaje: number;
+                    activo: boolean;
                 }>;
                 porcentajeTotal: number;
             };
@@ -988,6 +1088,16 @@ export declare class ProductosServiciosController {
                 }>;
                 porcentajeTotal: number;
             };
+            comisiones: {
+                items: Array<{
+                    id: string;
+                    nombre: string;
+                    tipo: "financiera" | "vendedor";
+                    porcentaje: number;
+                    activo: boolean;
+                }>;
+                porcentajeTotal: number;
+            };
             detalle: Record<string, unknown>;
         } | null;
         precioEspecialClientes: ({
@@ -999,6 +1109,16 @@ export declare class ProductosServiciosController {
                 items: Array<{
                     nombre: string;
                     porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            comisiones: {
+                items: Array<{
+                    id: string;
+                    nombre: string;
+                    tipo: "financiera" | "vendedor";
+                    porcentaje: number;
+                    activo: boolean;
                 }>;
                 porcentajeTotal: number;
             };
@@ -1066,6 +1186,16 @@ export declare class ProductosServiciosController {
                 }>;
                 porcentajeTotal: number;
             };
+            comisiones: {
+                items: Array<{
+                    id: string;
+                    nombre: string;
+                    tipo: "financiera" | "vendedor";
+                    porcentaje: number;
+                    activo: boolean;
+                }>;
+                porcentajeTotal: number;
+            };
             detalle: Record<string, unknown>;
         } | null;
         precioEspecialClientes: ({
@@ -1077,6 +1207,16 @@ export declare class ProductosServiciosController {
                 items: Array<{
                     nombre: string;
                     porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            comisiones: {
+                items: Array<{
+                    id: string;
+                    nombre: string;
+                    tipo: "financiera" | "vendedor";
+                    porcentaje: number;
+                    activo: boolean;
                 }>;
                 porcentajeTotal: number;
             };
@@ -1173,6 +1313,16 @@ export declare class ProductosServiciosController {
                 }>;
                 porcentajeTotal: number;
             };
+            comisiones: {
+                items: Array<{
+                    id: string;
+                    nombre: string;
+                    tipo: "financiera" | "vendedor";
+                    porcentaje: number;
+                    activo: boolean;
+                }>;
+                porcentajeTotal: number;
+            };
             detalle: Record<string, unknown>;
         } | null;
         precioEspecialClientes: ({
@@ -1184,6 +1334,16 @@ export declare class ProductosServiciosController {
                 items: Array<{
                     nombre: string;
                     porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            comisiones: {
+                items: Array<{
+                    id: string;
+                    nombre: string;
+                    tipo: "financiera" | "vendedor";
+                    porcentaje: number;
+                    activo: boolean;
                 }>;
                 porcentajeTotal: number;
             };

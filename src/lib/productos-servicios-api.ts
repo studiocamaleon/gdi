@@ -11,6 +11,7 @@ import {
   MetodoCalculoPrecioProducto,
   MotorCostoCatalogItem,
   ProductoImpuestoCatalogo,
+  ProductoPrecioComisionesConfig,
   ProductoPrecioImpuestosConfig,
   ProductoPrecioEspecialClientePayload,
   ProductoAdicionalAsignado,
@@ -156,6 +157,7 @@ export async function updateProductoPrecio(
     metodoCalculo: MetodoCalculoPrecioProducto;
     measurementUnit?: string | null;
     impuestos?: ProductoPrecioImpuestosConfig;
+    comisiones?: ProductoPrecioComisionesConfig;
     detalle?: Record<string, unknown>;
   },
 ) {

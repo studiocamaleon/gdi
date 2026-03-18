@@ -976,6 +976,7 @@ class UpdateProductoPrecioDto {
     measurementUnit;
     detalle;
     impuestos;
+    comisiones;
 }
 exports.UpdateProductoPrecioDto = UpdateProductoPrecioDto;
 __decorate([
@@ -997,6 +998,11 @@ __decorate([
     (0, class_validator_1.IsObject)(),
     __metadata("design:type", Object)
 ], UpdateProductoPrecioDto.prototype, "impuestos", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsObject)(),
+    __metadata("design:type", Object)
+], UpdateProductoPrecioDto.prototype, "comisiones", void 0);
 class UpdateProductoPrecioEspecialClientesDto {
     items;
 }

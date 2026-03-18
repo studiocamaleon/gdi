@@ -270,6 +270,7 @@ export declare class UpdateProductoPrecioDto {
     measurementUnit?: string | null;
     detalle?: Record<string, unknown>;
     impuestos?: Record<string, unknown>;
+    comisiones?: Record<string, unknown>;
 }
 export declare class UpdateProductoPrecioEspecialClientesDto {
     items: Record<string, unknown>[];

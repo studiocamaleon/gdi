@@ -677,12 +677,16 @@ let ProductosServiciosService = class ProductosServiciosService {
         const currentPrecio = this.getProductoPrecioConfig(producto.detalleJson);
         const measurementUnit = payload.measurementUnit?.trim() || currentPrecio?.measurementUnit || null;
         const impuestos = await this.resolveProductoPrecioImpuestos(auth, payload.impuestos ?? currentPrecio?.impuestos ?? null);
+        const comisiones = this.normalizeProductoPrecioComisiones(payload.comisiones && typeof payload.comisiones === 'object' && !Array.isArray(payload.comisiones)
+            ? payload.comisiones
+            : currentPrecio?.comisiones ?? null);
         const detalle = this.normalizeProductoPrecioDetalle(payload.metodoCalculo, payload.detalle ?? null, false);
         const nextDetalle = this.mergeProductoDetalle(producto.detalleJson, {
             precio: {
                 metodoCalculo: payload.metodoCalculo,
                 measurementUnit,
                 impuestos,
+                comisiones,
                 detalle,
             },
         });
@@ -4167,10 +4171,13 @@ let ProductosServiciosService = class ProductosServiciosService {
         const impuestos = this.normalizeProductoPrecioImpuestos(raw.impuestos && typeof raw.impuestos === 'object' && !Array.isArray(raw.impuestos)
             ? raw.impuestos
             : null);
+        const comisiones = this.normalizeProductoPrecioComisiones(raw.comisiones && typeof raw.comisiones === 'object' && !Array.isArray(raw.comisiones)
+            ? raw.comisiones
+            : null);
         const detallePrecio = this.normalizeProductoPrecioDetalle(metodoCalculo, raw.detalle && typeof raw.detalle === 'object' && !Array.isArray(raw.detalle)
             ? raw.detalle
             : null, true);
-        return { metodoCalculo, measurementUnit, impuestos, detalle: detallePrecio };
+        return { metodoCalculo, measurementUnit, impuestos, comisiones, detalle: detallePrecio };
     }
     getProductoPrecioEspecialClientes(detalleJson) {
         const detalle = this.asObject(detalleJson);
@@ -4211,6 +4218,44 @@ let ProductosServiciosService = class ProductosServiciosService {
                 : 0,
         };
     }
+    normalizeProductoPrecioComisiones(value) {
+        const raw = value && typeof value === 'object' && !Array.isArray(value)
+            ? value
+            : {};
+        const items = Array.isArray(raw.items)
+            ? raw.items
+                .map((item) => {
+                if (!item || typeof item !== 'object' || Array.isArray(item)) {
+                    return null;
+                }
+                const row = item;
+                if (typeof row.nombre !== 'string' || !row.nombre.trim().length) {
+                    return null;
+                }
+                const tipo = row.tipo === 'vendedor' ? 'vendedor' : row.tipo === 'financiera' ? 'financiera' : null;
+                if (!tipo) {
+                    return null;
+                }
+                return {
+                    id: typeof row.id === 'string' && row.id.trim().length
+                        ? row.id.trim()
+                        : (0, node_crypto_1.randomUUID)(),
+                    nombre: row.nombre.trim(),
+                    tipo,
+                    porcentaje: this.toSafeNumber(row.porcentaje, 0),
+                    activo: row.activo !== false,
+                };
+            })
+                .filter((item) => Boolean(item))
+            : [];
+        return {
+            items,
+            porcentajeTotal: Number(items
+                .filter((item) => item.activo)
+                .reduce((sum, item) => sum + item.porcentaje, 0)
+                .toFixed(4)),
+        };
+    }
     normalizeProductoPrecioEspecialClienteStored(value) {
         if (!value || typeof value !== 'object' || Array.isArray(value)) {
             return null;
@@ -4242,6 +4287,7 @@ let ProductosServiciosService = class ProductosServiciosService {
             metodoCalculo,
             measurementUnit,
             impuestos: this.normalizeProductoPrecioImpuestos(null),
+            comisiones: this.normalizeProductoPrecioComisiones(null),
             detalle,
         };
     }
@@ -4306,6 +4352,7 @@ let ProductosServiciosService = class ProductosServiciosService {
                 metodoCalculo,
                 measurementUnit,
                 impuestos: this.normalizeProductoPrecioImpuestos(null),
+                comisiones: this.normalizeProductoPrecioComisiones(null),
                 detalle,
             };
         });

@@ -53,6 +53,21 @@ export type ProductoPrecioImpuestosConfig = {
   porcentajeTotal: number;
 };
 
+export type ProductoPrecioComisionTipo = 'financiera' | 'vendedor';
+
+export type ProductoPrecioComisionItem = {
+  id: string;
+  nombre: string;
+  tipo: ProductoPrecioComisionTipo;
+  porcentaje: number;
+  activo: boolean;
+};
+
+export type ProductoPrecioComisionesConfig = {
+  items: ProductoPrecioComisionItem[];
+  porcentajeTotal: number;
+};
+
 export type ProductoPrecioFilaCantidadPrecio = {
   quantity: number;
   price: number;
@@ -120,6 +135,7 @@ export type ProductoPrecioConfig = {
     metodoCalculo: K;
     measurementUnit: string | null;
     impuestos: ProductoPrecioImpuestosConfig;
+    comisiones: ProductoPrecioComisionesConfig;
     detalle: ProductoPrecioDetalleMap[K];
   }
 }[MetodoCalculoPrecioProducto];

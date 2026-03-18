@@ -101,6 +101,16 @@ type ProductoPrecioConfig = {
     items: Array<{ nombre: string; porcentaje: number }>;
     porcentajeTotal: number;
   };
+  comisiones: {
+    items: Array<{
+      id: string;
+      nombre: string;
+      tipo: 'financiera' | 'vendedor';
+      porcentaje: number;
+      activo: boolean;
+    }>;
+    porcentajeTotal: number;
+  };
   detalle: Record<string, unknown>;
 };
 type ProductoPrecioEspecialClienteConfig = ProductoPrecioConfig & {
@@ -902,12 +912,18 @@ export class ProductosServiciosService {
       auth,
       payload.impuestos ?? currentPrecio?.impuestos ?? null,
     );
+    const comisiones = this.normalizeProductoPrecioComisiones(
+      payload.comisiones && typeof payload.comisiones === 'object' && !Array.isArray(payload.comisiones)
+        ? (payload.comisiones as Record<string, unknown>)
+        : currentPrecio?.comisiones ?? null,
+    );
     const detalle = this.normalizeProductoPrecioDetalle(payload.metodoCalculo, payload.detalle ?? null, false);
     const nextDetalle = this.mergeProductoDetalle(producto.detalleJson, {
       precio: {
         metodoCalculo: payload.metodoCalculo,
         measurementUnit,
         impuestos,
+        comisiones,
         detalle,
       },
     });
@@ -5273,6 +5289,11 @@ export class ProductosServiciosService {
         ? (raw.impuestos as Record<string, unknown>)
         : null,
     );
+    const comisiones = this.normalizeProductoPrecioComisiones(
+      raw.comisiones && typeof raw.comisiones === 'object' && !Array.isArray(raw.comisiones)
+        ? (raw.comisiones as Record<string, unknown>)
+        : null,
+    );
     const detallePrecio = this.normalizeProductoPrecioDetalle(
       metodoCalculo,
       raw.detalle && typeof raw.detalle === 'object' && !Array.isArray(raw.detalle)
@@ -5280,7 +5301,7 @@ export class ProductosServiciosService {
         : null,
       true,
     );
-    return { metodoCalculo, measurementUnit, impuestos, detalle: detallePrecio };
+    return { metodoCalculo, measurementUnit, impuestos, comisiones, detalle: detallePrecio };
   }
 
   private getProductoPrecioEspecialClientes(
@@ -5331,6 +5352,59 @@ export class ProductosServiciosService {
     };
   }
 
+  private normalizeProductoPrecioComisiones(value: Record<string, unknown> | null) {
+    const raw =
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? value
+        : {};
+    const items = Array.isArray(raw.items)
+      ? raw.items
+          .map((item) => {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) {
+              return null;
+            }
+            const row = item as Record<string, unknown>;
+            if (typeof row.nombre !== 'string' || !row.nombre.trim().length) {
+              return null;
+            }
+            const tipo = row.tipo === 'vendedor' ? 'vendedor' : row.tipo === 'financiera' ? 'financiera' : null;
+            if (!tipo) {
+              return null;
+            }
+            return {
+              id:
+                typeof row.id === 'string' && row.id.trim().length
+                  ? row.id.trim()
+                  : randomUUID(),
+              nombre: row.nombre.trim(),
+              tipo,
+              porcentaje: this.toSafeNumber(row.porcentaje, 0),
+              activo: row.activo !== false,
+            };
+          })
+          .filter(
+            (
+              item,
+            ): item is {
+              id: string;
+              nombre: string;
+              tipo: 'financiera' | 'vendedor';
+              porcentaje: number;
+              activo: boolean;
+            } => Boolean(item),
+          )
+      : [];
+    return {
+      items,
+      porcentajeTotal: Number(
+        items
+          .filter((item) => item.activo)
+          .reduce((sum, item) => sum + item.porcentaje, 0)
+          .toFixed(4),
+      ),
+    };
+  }
+
   private normalizeProductoPrecioEspecialClienteStored(value: unknown): ProductoPrecioEspecialClienteConfig | null {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return null;
@@ -5369,6 +5443,7 @@ export class ProductosServiciosService {
       metodoCalculo,
       measurementUnit,
       impuestos: this.normalizeProductoPrecioImpuestos(null),
+      comisiones: this.normalizeProductoPrecioComisiones(null),
       detalle,
     };
   }
@@ -5450,6 +5525,7 @@ export class ProductosServiciosService {
         metodoCalculo,
         measurementUnit,
         impuestos: this.normalizeProductoPrecioImpuestos(null),
+        comisiones: this.normalizeProductoPrecioComisiones(null),
         detalle,
       };
     });

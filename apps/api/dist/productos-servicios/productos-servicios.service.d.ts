@@ -29,6 +29,16 @@ type ProductoPrecioConfig = {
         }>;
         porcentajeTotal: number;
     };
+    comisiones: {
+        items: Array<{
+            id: string;
+            nombre: string;
+            tipo: 'financiera' | 'vendedor';
+            porcentaje: number;
+            activo: boolean;
+        }>;
+        porcentajeTotal: number;
+    };
     detalle: Record<string, unknown>;
 };
 type ProductoPrecioEspecialClienteConfig = ProductoPrecioConfig & {
@@ -1577,6 +1587,7 @@ export declare class ProductosServiciosService {
     private getProductoPrecioConfig;
     private getProductoPrecioEspecialClientes;
     private normalizeProductoPrecioImpuestos;
+    private normalizeProductoPrecioComisiones;
     private normalizeProductoPrecioEspecialClienteStored;
     private resolveProductoPrecioEspecialClientes;
     private resolveProductoPrecioImpuestos;

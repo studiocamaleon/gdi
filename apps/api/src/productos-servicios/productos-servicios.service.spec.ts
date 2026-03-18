@@ -46,6 +46,10 @@ describe('ProductosServiciosService V1 adicionales', () => {
       items: Array<{ nombre: string; porcentaje: number }>;
       porcentajeTotal: number;
     };
+    comisiones: {
+      items: Array<{ id: string; nombre: string; tipo: string; porcentaje: number; activo: boolean }>;
+      porcentajeTotal: number;
+    };
     detalle: Record<string, unknown>;
   } | null;
   let getProductoPrecioEspecialClientes: (
@@ -64,6 +68,10 @@ describe('ProductosServiciosService V1 adicionales', () => {
       esquemaId: string | null;
       esquemaNombre: string;
       items: Array<{ nombre: string; porcentaje: number }>;
+      porcentajeTotal: number;
+    };
+    comisiones: {
+      items: Array<{ id: string; nombre: string; tipo: string; porcentaje: number; activo: boolean }>;
       porcentajeTotal: number;
     };
     detalle: Record<string, unknown>;
@@ -86,6 +94,10 @@ describe('ProductosServiciosService V1 adicionales', () => {
         esquemaId: string | null;
         esquemaNombre: string;
         items: Array<{ nombre: string; porcentaje: number }>;
+        porcentajeTotal: number;
+      };
+      comisiones: {
+        items: Array<{ id: string; nombre: string; tipo: string; porcentaje: number; activo: boolean }>;
         porcentajeTotal: number;
       };
       detalle: Record<string, unknown>;
@@ -436,6 +448,10 @@ describe('ProductosServiciosService V1 adicionales', () => {
         items: [],
         porcentajeTotal: 0,
       },
+      comisiones: {
+        items: [],
+        porcentajeTotal: 0,
+      },
       detalle: { marginPct: 30, minimumMarginPct: 20 },
     });
   });
@@ -451,6 +467,10 @@ describe('ProductosServiciosService V1 adicionales', () => {
       impuestos: {
         esquemaId: null,
         esquemaNombre: '',
+        items: [],
+        porcentajeTotal: 0,
+      },
+      comisiones: {
         items: [],
         porcentajeTotal: 0,
       },
@@ -471,6 +491,10 @@ describe('ProductosServiciosService V1 adicionales', () => {
       impuestos: {
         esquemaId: null,
         esquemaNombre: '',
+        items: [],
+        porcentajeTotal: 0,
+      },
+      comisiones: {
         items: [],
         porcentajeTotal: 0,
       },
@@ -534,6 +558,10 @@ describe('ProductosServiciosService V1 adicionales', () => {
         items: [],
         porcentajeTotal: 0,
       },
+      comisiones: {
+        items: [],
+        porcentajeTotal: 0,
+      },
       detalle: {
         tiers: [{ quantityUntil: 1, marginPct: 0 }],
       },
@@ -563,6 +591,45 @@ describe('ProductosServiciosService V1 adicionales', () => {
         esquemaNombre: 'Prestación de servicios',
         items: [{ nombre: 'IVA', porcentaje: 21 }],
         porcentajeTotal: 21,
+      },
+      comisiones: {
+        items: [],
+        porcentajeTotal: 0,
+      },
+      detalle: { price: 100, minimumPrice: 80 },
+    });
+  });
+
+  it('normaliza comisiones configuradas dentro de precio', () => {
+    expect(
+      getProductoPrecioConfig.call(service, {
+        precio: {
+          metodoCalculo: 'precio_fijo',
+          comisiones: {
+            items: [
+              { id: 'com-1', nombre: 'Mercado Pago', tipo: 'financiera', porcentaje: 8.5, activo: true },
+              { id: 'com-2', nombre: 'Vendedor', tipo: 'vendedor', porcentaje: 5, activo: false },
+            ],
+            porcentajeTotal: 999,
+          },
+          detalle: { price: 100, minimumPrice: 80 },
+        },
+      }),
+    ).toEqual({
+      metodoCalculo: 'precio_fijo',
+      measurementUnit: null,
+      impuestos: {
+        esquemaId: null,
+        esquemaNombre: '',
+        items: [],
+        porcentajeTotal: 0,
+      },
+      comisiones: {
+        items: [
+          { id: 'com-1', nombre: 'Mercado Pago', tipo: 'financiera', porcentaje: 8.5, activo: true },
+          { id: 'com-2', nombre: 'Vendedor', tipo: 'vendedor', porcentaje: 5, activo: false },
+        ],
+        porcentajeTotal: 8.5,
       },
       detalle: { price: 100, minimumPrice: 80 },
     });
@@ -600,6 +667,10 @@ describe('ProductosServiciosService V1 adicionales', () => {
         impuestos: {
           esquemaId: null,
           esquemaNombre: '',
+          items: [],
+          porcentajeTotal: 0,
+        },
+        comisiones: {
           items: [],
           porcentajeTotal: 0,
         },
@@ -659,6 +730,10 @@ describe('ProductosServiciosService V1 adicionales', () => {
         impuestos: {
           esquemaId: null,
           esquemaNombre: '',
+          items: [],
+          porcentajeTotal: 0,
+        },
+        comisiones: {
           items: [],
           porcentajeTotal: 0,
         },
