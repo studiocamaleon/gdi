@@ -9,7 +9,8 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PreviewImposicionProductoVarianteDto = exports.CotizarProductoVarianteDto = exports.CotizarAddonConfigDto = exports.UpsertVarianteMotorOverrideDto = exports.UpsertProductoMotorConfigDto = exports.AssignProductoMotorDto = exports.AssignProductoVariantesRutaMasivaDto = exports.UpdateProductoRutaPolicyDto = exports.AssignVarianteRutaDto = exports.UpdateProductoVarianteDto = exports.CreateProductoVarianteDto = exports.UpsertProductoServicioDto = exports.UpsertSubfamiliaProductoDto = exports.UpsertFamiliaProductoDto = exports.SetVarianteAdicionalRestrictionDto = exports.AssignProductoAdicionalDto = exports.UpsertProductoAdicionalServicioPricingDto = exports.UpsertProductoAdicionalServicioReglaCostoDto = exports.UpsertProductoAdicionalServicioNivelDto = exports.UpsertProductoAdicionalDto = exports.UpsertProductoAdicionalMaterialDto = exports.UpsertProductoAdicionalEfectoDto = exports.UpsertProductoAdicionalMaterialEffectDto = exports.UpsertProductoAdicionalCostEffectDto = exports.UpsertProductoAdicionalRouteEffectDto = exports.UpsertProductoAdicionalRouteEffectPasoDto = exports.UpsertProductoAdicionalEfectoScopeDto = exports.UpsertVarianteOpcionesProductivasDto = exports.UpsertVarianteOpcionProductivaDimensionDto = exports.ReglaCostoAdicionalEfectoDto = exports.TipoProductoAdicionalEfectoDto = exports.ValorOpcionProductivaDto = exports.DimensionOpcionProductivaDto = exports.TipoConsumoAdicionalMaterialDto = exports.MetodoCostoProductoAdicionalDto = exports.TipoProductoAdicionalDto = exports.CarasProductoVarianteDto = exports.TipoImpresionProductoVarianteDto = exports.EstadoProductoServicioDto = exports.TipoProductoServicioDto = void 0;
+exports.UpsertChecklistRespuestaDto = exports.UpsertChecklistReglaDto = exports.UpsertChecklistReglaNivelDto = exports.CotizarSeleccionBaseDto = exports.CotizarChecklistRespuestaDto = exports.CotizarAddonConfigDto = exports.UpsertVarianteMotorOverrideDto = exports.UpsertProductoMotorConfigDto = exports.AssignProductoMotorDto = exports.AssignProductoVariantesRutaMasivaDto = exports.UpdateProductoRutaPolicyDto = exports.UpsertProductoRutaPasoFijoVarianteDto = exports.UpsertProductoRutaPasoFijoItemDto = exports.UpsertProductoRutaBaseMatchingVarianteDto = exports.UpsertProductoRutaBaseMatchingItemDto = exports.AssignVarianteRutaDto = exports.UpdateProductoVarianteDto = exports.CreateProductoVarianteDto = exports.UpsertProductoServicioDto = exports.UpsertSubfamiliaProductoDto = exports.UpsertFamiliaProductoDto = exports.SetVarianteAdicionalRestrictionDto = exports.AssignProductoAdicionalDto = exports.UpsertProductoAdicionalServicioPricingDto = exports.UpsertProductoAdicionalServicioReglaCostoDto = exports.UpsertProductoAdicionalServicioNivelDto = exports.UpsertProductoAdicionalDto = exports.UpsertProductoAdicionalMaterialDto = exports.UpsertProductoAdicionalEfectoDto = exports.UpsertProductoAdicionalMaterialEffectDto = exports.UpsertProductoAdicionalCostEffectDto = exports.UpsertProductoAdicionalRouteEffectDto = exports.UpsertProductoAdicionalRouteEffectPasoDto = exports.UpsertProductoAdicionalEfectoScopeDto = exports.UpsertVarianteOpcionesProductivasDto = exports.UpsertVarianteOpcionProductivaDimensionDto = exports.ReglaCostoChecklistDto = exports.TipoChecklistAccionReglaDto = exports.TipoChecklistPreguntaDto = exports.ReglaCostoAdicionalEfectoDto = exports.TipoProductoAdicionalEfectoDto = exports.ValorOpcionProductivaDto = exports.DimensionOpcionProductivaDto = exports.TipoConsumoAdicionalMaterialDto = exports.MetodoCostoProductoAdicionalDto = exports.TipoProductoAdicionalDto = exports.CarasProductoVarianteDto = exports.TipoImpresionProductoVarianteDto = exports.EstadoProductoServicioDto = exports.TipoProductoServicioDto = void 0;
+exports.PreviewImposicionProductoVarianteDto = exports.CotizarProductoVarianteDto = exports.UpsertProductoChecklistDto = exports.UpsertChecklistPreguntaDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 var TipoProductoServicioDto;
@@ -74,6 +75,27 @@ var ReglaCostoAdicionalEfectoDto;
     ReglaCostoAdicionalEfectoDto["porcentaje_sobre_total"] = "porcentaje_sobre_total";
     ReglaCostoAdicionalEfectoDto["tiempo_extra_min"] = "tiempo_extra_min";
 })(ReglaCostoAdicionalEfectoDto || (exports.ReglaCostoAdicionalEfectoDto = ReglaCostoAdicionalEfectoDto = {}));
+var TipoChecklistPreguntaDto;
+(function (TipoChecklistPreguntaDto) {
+    TipoChecklistPreguntaDto["binaria"] = "binaria";
+    TipoChecklistPreguntaDto["single_select"] = "single_select";
+})(TipoChecklistPreguntaDto || (exports.TipoChecklistPreguntaDto = TipoChecklistPreguntaDto = {}));
+var TipoChecklistAccionReglaDto;
+(function (TipoChecklistAccionReglaDto) {
+    TipoChecklistAccionReglaDto["activar_paso"] = "activar_paso";
+    TipoChecklistAccionReglaDto["seleccionar_variante_paso"] = "seleccionar_variante_paso";
+    TipoChecklistAccionReglaDto["costo_extra"] = "costo_extra";
+    TipoChecklistAccionReglaDto["material_extra"] = "material_extra";
+    TipoChecklistAccionReglaDto["set_atributo_tecnico"] = "set_atributo_tecnico";
+})(TipoChecklistAccionReglaDto || (exports.TipoChecklistAccionReglaDto = TipoChecklistAccionReglaDto = {}));
+var ReglaCostoChecklistDto;
+(function (ReglaCostoChecklistDto) {
+    ReglaCostoChecklistDto["tiempo_min"] = "tiempo_min";
+    ReglaCostoChecklistDto["flat"] = "flat";
+    ReglaCostoChecklistDto["por_unidad"] = "por_unidad";
+    ReglaCostoChecklistDto["por_pliego"] = "por_pliego";
+    ReglaCostoChecklistDto["porcentaje_sobre_total"] = "porcentaje_sobre_total";
+})(ReglaCostoChecklistDto || (exports.ReglaCostoChecklistDto = ReglaCostoChecklistDto = {}));
 class UpsertVarianteOpcionProductivaDimensionDto {
     dimension;
     valores;
@@ -128,10 +150,13 @@ class UpsertProductoAdicionalRouteEffectPasoDto {
     centroCostoId;
     maquinaId;
     perfilOperativoId;
+    usarMaquinariaTerminacion;
     setupMin;
     runMin;
     cleanupMin;
     tiempoFijoMin;
+    tiempoFijoMinFallback;
+    overridesProductividad;
 }
 exports.UpsertProductoAdicionalRouteEffectPasoDto = UpsertProductoAdicionalRouteEffectPasoDto;
 __decorate([
@@ -162,6 +187,11 @@ __decorate([
 ], UpsertProductoAdicionalRouteEffectPasoDto.prototype, "perfilOperativoId", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], UpsertProductoAdicionalRouteEffectPasoDto.prototype, "usarMaquinariaTerminacion", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
     (0, class_transformer_1.Type)(() => Number),
     (0, class_validator_1.IsNumber)(),
     (0, class_validator_1.Min)(0),
@@ -188,6 +218,18 @@ __decorate([
     (0, class_validator_1.Min)(0),
     __metadata("design:type", Number)
 ], UpsertProductoAdicionalRouteEffectPasoDto.prototype, "tiempoFijoMin", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpsertProductoAdicionalRouteEffectPasoDto.prototype, "tiempoFijoMinFallback", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsObject)(),
+    __metadata("design:type", Object)
+], UpsertProductoAdicionalRouteEffectPasoDto.prototype, "overridesProductividad", void 0);
 class UpsertProductoAdicionalRouteEffectDto {
     pasos;
 }
@@ -720,9 +762,82 @@ __decorate([
     (0, class_validator_1.IsUUID)(),
     __metadata("design:type", String)
 ], AssignVarianteRutaDto.prototype, "procesoDefinicionId", void 0);
+class UpsertProductoRutaBaseMatchingItemDto {
+    tipoImpresion;
+    caras;
+    pasoPlantillaId;
+    perfilOperativoId;
+}
+exports.UpsertProductoRutaBaseMatchingItemDto = UpsertProductoRutaBaseMatchingItemDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(TipoImpresionProductoVarianteDto),
+    __metadata("design:type", Object)
+], UpsertProductoRutaBaseMatchingItemDto.prototype, "tipoImpresion", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(CarasProductoVarianteDto),
+    __metadata("design:type", Object)
+], UpsertProductoRutaBaseMatchingItemDto.prototype, "caras", void 0);
+__decorate([
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UpsertProductoRutaBaseMatchingItemDto.prototype, "pasoPlantillaId", void 0);
+__decorate([
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UpsertProductoRutaBaseMatchingItemDto.prototype, "perfilOperativoId", void 0);
+class UpsertProductoRutaBaseMatchingVarianteDto {
+    varianteId;
+    matching;
+}
+exports.UpsertProductoRutaBaseMatchingVarianteDto = UpsertProductoRutaBaseMatchingVarianteDto;
+__decorate([
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UpsertProductoRutaBaseMatchingVarianteDto.prototype, "varianteId", void 0);
+__decorate([
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ArrayMaxSize)(50),
+    (0, class_validator_1.ValidateNested)({ each: true }),
+    (0, class_transformer_1.Type)(() => UpsertProductoRutaBaseMatchingItemDto),
+    __metadata("design:type", Array)
+], UpsertProductoRutaBaseMatchingVarianteDto.prototype, "matching", void 0);
+class UpsertProductoRutaPasoFijoItemDto {
+    pasoPlantillaId;
+    perfilOperativoId;
+}
+exports.UpsertProductoRutaPasoFijoItemDto = UpsertProductoRutaPasoFijoItemDto;
+__decorate([
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UpsertProductoRutaPasoFijoItemDto.prototype, "pasoPlantillaId", void 0);
+__decorate([
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UpsertProductoRutaPasoFijoItemDto.prototype, "perfilOperativoId", void 0);
+class UpsertProductoRutaPasoFijoVarianteDto {
+    varianteId;
+    pasos;
+}
+exports.UpsertProductoRutaPasoFijoVarianteDto = UpsertProductoRutaPasoFijoVarianteDto;
+__decorate([
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UpsertProductoRutaPasoFijoVarianteDto.prototype, "varianteId", void 0);
+__decorate([
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ArrayMaxSize)(50),
+    (0, class_validator_1.ValidateNested)({ each: true }),
+    (0, class_transformer_1.Type)(() => UpsertProductoRutaPasoFijoItemDto),
+    __metadata("design:type", Array)
+], UpsertProductoRutaPasoFijoVarianteDto.prototype, "pasos", void 0);
 class UpdateProductoRutaPolicyDto {
     usarRutaComunVariantes;
     procesoDefinicionDefaultId;
+    dimensionesBaseConsumidas;
+    matchingBasePorVariante;
+    pasosFijosPorVariante;
 }
 exports.UpdateProductoRutaPolicyDto = UpdateProductoRutaPolicyDto;
 __decorate([
@@ -734,6 +849,29 @@ __decorate([
     (0, class_validator_1.IsUUID)(),
     __metadata("design:type", Object)
 ], UpdateProductoRutaPolicyDto.prototype, "procesoDefinicionDefaultId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ArrayMaxSize)(10),
+    (0, class_validator_1.IsEnum)(DimensionOpcionProductivaDto, { each: true }),
+    __metadata("design:type", Array)
+], UpdateProductoRutaPolicyDto.prototype, "dimensionesBaseConsumidas", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ArrayMaxSize)(200),
+    (0, class_validator_1.ValidateNested)({ each: true }),
+    (0, class_transformer_1.Type)(() => UpsertProductoRutaBaseMatchingVarianteDto),
+    __metadata("design:type", Array)
+], UpdateProductoRutaPolicyDto.prototype, "matchingBasePorVariante", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ArrayMaxSize)(200),
+    (0, class_validator_1.ValidateNested)({ each: true }),
+    (0, class_transformer_1.Type)(() => UpsertProductoRutaPasoFijoVarianteDto),
+    __metadata("design:type", Array)
+], UpdateProductoRutaPolicyDto.prototype, "pasosFijosPorVariante", void 0);
 class AssignProductoVariantesRutaMasivaDto {
     procesoDefinicionId;
     incluirInactivas;
@@ -793,11 +931,298 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CotizarAddonConfigDto.prototype, "nivelId", void 0);
+class CotizarChecklistRespuestaDto {
+    preguntaId;
+    respuestaId;
+}
+exports.CotizarChecklistRespuestaDto = CotizarChecklistRespuestaDto;
+__decorate([
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], CotizarChecklistRespuestaDto.prototype, "preguntaId", void 0);
+__decorate([
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], CotizarChecklistRespuestaDto.prototype, "respuestaId", void 0);
+class CotizarSeleccionBaseDto {
+    dimension;
+    valor;
+}
+exports.CotizarSeleccionBaseDto = CotizarSeleccionBaseDto;
+__decorate([
+    (0, class_validator_1.IsEnum)(DimensionOpcionProductivaDto),
+    __metadata("design:type", String)
+], CotizarSeleccionBaseDto.prototype, "dimension", void 0);
+__decorate([
+    (0, class_validator_1.IsEnum)(ValorOpcionProductivaDto),
+    __metadata("design:type", String)
+], CotizarSeleccionBaseDto.prototype, "valor", void 0);
+class UpsertChecklistReglaNivelDto {
+    id;
+    nombreNivel;
+    orden;
+    activo;
+    costoRegla;
+    costoValor;
+    tiempoMin;
+}
+exports.UpsertChecklistReglaNivelDto = UpsertChecklistReglaNivelDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UpsertChecklistReglaNivelDto.prototype, "id", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], UpsertChecklistReglaNivelDto.prototype, "nombreNivel", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    __metadata("design:type", Number)
+], UpsertChecklistReglaNivelDto.prototype, "orden", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], UpsertChecklistReglaNivelDto.prototype, "activo", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(ReglaCostoChecklistDto),
+    __metadata("design:type", String)
+], UpsertChecklistReglaNivelDto.prototype, "costoRegla", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Number)
+], UpsertChecklistReglaNivelDto.prototype, "costoValor", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpsertChecklistReglaNivelDto.prototype, "tiempoMin", void 0);
+class UpsertChecklistReglaDto {
+    id;
+    accion;
+    orden;
+    activo;
+    pasoPlantillaId;
+    variantePasoId;
+    atributoTecnicoDimension;
+    atributoTecnicoValor;
+    costoRegla;
+    costoValor;
+    costoCentroCostoId;
+    materiaPrimaVarianteId;
+    tipoConsumo;
+    factorConsumo;
+    mermaPct;
+    detalle;
+}
+exports.UpsertChecklistReglaDto = UpsertChecklistReglaDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UpsertChecklistReglaDto.prototype, "id", void 0);
+__decorate([
+    (0, class_validator_1.IsEnum)(TipoChecklistAccionReglaDto),
+    __metadata("design:type", String)
+], UpsertChecklistReglaDto.prototype, "accion", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    __metadata("design:type", Number)
+], UpsertChecklistReglaDto.prototype, "orden", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], UpsertChecklistReglaDto.prototype, "activo", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UpsertChecklistReglaDto.prototype, "pasoPlantillaId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UpsertChecklistReglaDto.prototype, "variantePasoId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(DimensionOpcionProductivaDto),
+    __metadata("design:type", String)
+], UpsertChecklistReglaDto.prototype, "atributoTecnicoDimension", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(ValorOpcionProductivaDto),
+    __metadata("design:type", String)
+], UpsertChecklistReglaDto.prototype, "atributoTecnicoValor", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(ReglaCostoChecklistDto),
+    __metadata("design:type", String)
+], UpsertChecklistReglaDto.prototype, "costoRegla", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Number)
+], UpsertChecklistReglaDto.prototype, "costoValor", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UpsertChecklistReglaDto.prototype, "costoCentroCostoId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UpsertChecklistReglaDto.prototype, "materiaPrimaVarianteId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(TipoConsumoAdicionalMaterialDto),
+    __metadata("design:type", String)
+], UpsertChecklistReglaDto.prototype, "tipoConsumo", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpsertChecklistReglaDto.prototype, "factorConsumo", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    (0, class_validator_1.Max)(100),
+    __metadata("design:type", Number)
+], UpsertChecklistReglaDto.prototype, "mermaPct", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsObject)(),
+    __metadata("design:type", Object)
+], UpsertChecklistReglaDto.prototype, "detalle", void 0);
+class UpsertChecklistRespuestaDto {
+    id;
+    texto;
+    codigo;
+    orden;
+    activo;
+    reglas;
+}
+exports.UpsertChecklistRespuestaDto = UpsertChecklistRespuestaDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UpsertChecklistRespuestaDto.prototype, "id", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], UpsertChecklistRespuestaDto.prototype, "texto", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpsertChecklistRespuestaDto.prototype, "codigo", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    __metadata("design:type", Number)
+], UpsertChecklistRespuestaDto.prototype, "orden", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], UpsertChecklistRespuestaDto.prototype, "activo", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ArrayMaxSize)(30),
+    (0, class_validator_1.ValidateNested)({ each: true }),
+    (0, class_transformer_1.Type)(() => UpsertChecklistReglaDto),
+    __metadata("design:type", Array)
+], UpsertChecklistRespuestaDto.prototype, "reglas", void 0);
+class UpsertChecklistPreguntaDto {
+    id;
+    texto;
+    tipoPregunta;
+    orden;
+    activo;
+    respuestas;
+}
+exports.UpsertChecklistPreguntaDto = UpsertChecklistPreguntaDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UpsertChecklistPreguntaDto.prototype, "id", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], UpsertChecklistPreguntaDto.prototype, "texto", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(TipoChecklistPreguntaDto),
+    __metadata("design:type", String)
+], UpsertChecklistPreguntaDto.prototype, "tipoPregunta", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    __metadata("design:type", Number)
+], UpsertChecklistPreguntaDto.prototype, "orden", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], UpsertChecklistPreguntaDto.prototype, "activo", void 0);
+__decorate([
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ArrayMinSize)(1),
+    (0, class_validator_1.ArrayMaxSize)(20),
+    (0, class_validator_1.ValidateNested)({ each: true }),
+    (0, class_transformer_1.Type)(() => UpsertChecklistRespuestaDto),
+    __metadata("design:type", Array)
+], UpsertChecklistPreguntaDto.prototype, "respuestas", void 0);
+class UpsertProductoChecklistDto {
+    activo;
+    preguntas;
+}
+exports.UpsertProductoChecklistDto = UpsertProductoChecklistDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], UpsertProductoChecklistDto.prototype, "activo", void 0);
+__decorate([
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ArrayMaxSize)(50),
+    (0, class_validator_1.ValidateNested)({ each: true }),
+    (0, class_transformer_1.Type)(() => UpsertChecklistPreguntaDto),
+    __metadata("design:type", Array)
+], UpsertProductoChecklistDto.prototype, "preguntas", void 0);
 class CotizarProductoVarianteDto {
     cantidad;
     periodo;
-    addonsSeleccionados;
-    addonsConfig;
+    checklistRespuestas;
+    seleccionesBase;
 }
 exports.CotizarProductoVarianteDto = CotizarProductoVarianteDto;
 __decorate([
@@ -814,18 +1239,19 @@ __decorate([
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsArray)(),
-    (0, class_validator_1.ArrayMaxSize)(50),
-    (0, class_validator_1.IsUUID)(undefined, { each: true }),
+    (0, class_validator_1.ArrayMaxSize)(100),
+    (0, class_validator_1.ValidateNested)({ each: true }),
+    (0, class_transformer_1.Type)(() => CotizarChecklistRespuestaDto),
     __metadata("design:type", Array)
-], CotizarProductoVarianteDto.prototype, "addonsSeleccionados", void 0);
+], CotizarProductoVarianteDto.prototype, "checklistRespuestas", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsArray)(),
-    (0, class_validator_1.ArrayMaxSize)(50),
+    (0, class_validator_1.ArrayMaxSize)(10),
     (0, class_validator_1.ValidateNested)({ each: true }),
-    (0, class_transformer_1.Type)(() => CotizarAddonConfigDto),
+    (0, class_transformer_1.Type)(() => CotizarSeleccionBaseDto),
     __metadata("design:type", Array)
-], CotizarProductoVarianteDto.prototype, "addonsConfig", void 0);
+], CotizarProductoVarianteDto.prototype, "seleccionesBase", void 0);
 class PreviewImposicionProductoVarianteDto {
     parametros;
 }

@@ -35,10 +35,10 @@ type ReferenceShape = {
       id: string;
       nombre: string;
       maquinaId: string;
-      productividad: Prisma.Decimal | null;
-      unidadProductividad: UnidadProduccionMaquina | null;
-      tiempoPreparacionMin: Prisma.Decimal | null;
-      tiempoRipMin?: Prisma.Decimal | null;
+      productivityValue: Prisma.Decimal | null;
+      productivityUnit: UnidadProduccionMaquina | null;
+      setupMin: Prisma.Decimal | null;
+      cleanupMin?: Prisma.Decimal | null;
     }
   >;
 };
@@ -54,6 +54,7 @@ describe('ProcesosService business rules', () => {
     references: ReferenceShape,
   ) => {
     setupMin: Prisma.Decimal | null;
+    cleanupMin: Prisma.Decimal | null;
   };
 
   beforeEach(() => {
@@ -68,7 +69,7 @@ describe('ProcesosService business rules', () => {
     ) as (
       payload: UpsertProcesoDto['operaciones'][number],
       references: ReferenceShape,
-    ) => { setupMin: Prisma.Decimal | null };
+    ) => { setupMin: Prisma.Decimal | null; cleanupMin: Prisma.Decimal | null };
   });
 
   it('acepta modo variable con productividad base', () => {
@@ -199,9 +200,9 @@ describe('ProcesosService business rules', () => {
             id: 'perfil-1',
             nombre: 'Perfil rapido',
             maquinaId: 'maq-1',
-            productividad: new Prisma.Decimal(120),
-            unidadProductividad: 'M2_H',
-            tiempoPreparacionMin: new Prisma.Decimal(15),
+            productivityValue: new Prisma.Decimal(120),
+            productivityUnit: 'M2_H',
+            setupMin: new Prisma.Decimal(15),
           },
         ],
       ]),
@@ -263,7 +264,7 @@ describe('ProcesosService business rules', () => {
     ).not.toThrow();
   });
 
-  it('deriva setup desde RIP cuando el perfil no tiene tiempoPreparacionMin', () => {
+  it('deriva cleanup desde el perfil cuando la operación no lo define', () => {
     const references: ReferenceShape = {
       centrosById: new Map(),
       maquinasById: new Map([
@@ -285,10 +286,10 @@ describe('ProcesosService business rules', () => {
             id: 'perfil-1',
             nombre: 'Perfil laser',
             maquinaId: 'maq-1',
-            productividad: new Prisma.Decimal(35),
-            unidadProductividad: UnidadProduccionMaquina.PPM,
-            tiempoPreparacionMin: null,
-            tiempoRipMin: new Prisma.Decimal(3),
+            productivityValue: new Prisma.Decimal(35),
+            productivityUnit: UnidadProduccionMaquina.PPM,
+            setupMin: null,
+            cleanupMin: new Prisma.Decimal(3),
           },
         ],
       ]),
@@ -309,7 +310,8 @@ describe('ProcesosService business rules', () => {
       references,
     );
 
-    expect(Number(derived.setupMin)).toBe(3);
+    expect(derived.setupMin).toBeNull();
+    expect(Number(derived.cleanupMin)).toBe(3);
   });
 
   it('permite modo variable cuando hay perfil operativo', () => {
@@ -362,9 +364,9 @@ describe('ProcesosService business rules', () => {
             id: 'perfil-1',
             nombre: 'Perfil rapido',
             maquinaId: 'maq-1',
-            productividad: new Prisma.Decimal(100),
-            unidadProductividad: UnidadProduccionMaquina.PPM,
-            tiempoPreparacionMin: new Prisma.Decimal(4),
+            productivityValue: new Prisma.Decimal(100),
+            productivityUnit: UnidadProduccionMaquina.PPM,
+            setupMin: new Prisma.Decimal(4),
           },
         ],
       ]),

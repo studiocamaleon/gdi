@@ -36,6 +36,12 @@ let ProductosServiciosService = class ProductosServiciosService {
         label: 'Impresión digital laser · v1',
     };
     static DEFAULT_A4_AREA_M2 = 0.06237;
+    static TERMINACION_PLANTILLAS_SOPORTADAS = new Set([
+        client_1.PlantillaMaquinaria.GUILLOTINA,
+        client_1.PlantillaMaquinaria.LAMINADORA_BOPP_ROLLO,
+        client_1.PlantillaMaquinaria.REDONDEADORA_PUNTAS,
+        client_1.PlantillaMaquinaria.PERFORADORA,
+    ]);
     static CANONICAL_PLIEGOS_MM = [
         { codigo: 'A6', nombre: 'A6', anchoMm: 105, altoMm: 148 },
         { codigo: 'A5', nombre: 'A5', anchoMm: 148, altoMm: 210 },
@@ -534,47 +540,17 @@ let ProductosServiciosService = class ProductosServiciosService {
             orderBy: [{ nombre: 'asc' }],
         });
         return rows.map((item) => ({
-            id: item.id,
-            tipo: this.fromTipoProducto(item.tipo),
-            codigo: item.codigo,
-            nombre: item.nombre,
-            descripcion: item.descripcion ?? '',
-            motorCodigo: item.motorCodigo,
-            motorVersion: item.motorVersion,
-            usarRutaComunVariantes: item.usarRutaComunVariantes,
-            procesoDefinicionDefaultId: item.procesoDefinicionDefaultId,
-            procesoDefinicionDefaultNombre: item.procesoDefinicionDefault?.nombre ?? '',
-            estado: this.fromEstadoProducto(item.estado),
-            activo: item.activo,
-            familiaProductoId: item.familiaProductoId,
-            familiaProductoNombre: item.familiaProducto.nombre,
-            subfamiliaProductoId: item.subfamiliaProductoId,
-            subfamiliaProductoNombre: item.subfamiliaProducto?.nombre ?? '',
-            createdAt: item.createdAt.toISOString(),
-            updatedAt: item.updatedAt.toISOString(),
+            ...this.toProductoResponseBase(item),
+            matchingBasePorVariante: [],
+            pasosFijosPorVariante: [],
         }));
     }
     async findProducto(auth, id) {
         const item = await this.findProductoOrThrow(auth, id, this.prisma);
         return {
-            id: item.id,
-            tipo: this.fromTipoProducto(item.tipo),
-            codigo: item.codigo,
-            nombre: item.nombre,
-            descripcion: item.descripcion ?? '',
-            motorCodigo: item.motorCodigo,
-            motorVersion: item.motorVersion,
-            usarRutaComunVariantes: item.usarRutaComunVariantes,
-            procesoDefinicionDefaultId: item.procesoDefinicionDefaultId,
-            procesoDefinicionDefaultNombre: item.procesoDefinicionDefault?.nombre ?? '',
-            estado: this.fromEstadoProducto(item.estado),
-            activo: item.activo,
-            familiaProductoId: item.familiaProductoId,
-            familiaProductoNombre: item.familiaProducto.nombre,
-            subfamiliaProductoId: item.subfamiliaProductoId,
-            subfamiliaProductoNombre: item.subfamiliaProducto?.nombre ?? '',
-            createdAt: item.createdAt.toISOString(),
-            updatedAt: item.updatedAt.toISOString(),
+            ...this.toProductoResponseBase(item),
+            matchingBasePorVariante: await this.toRutaBaseMatchingResponse(item.detalleJson ?? null),
+            pasosFijosPorVariante: await this.toRutaBasePasosFijosResponse(item.detalleJson ?? null),
         };
     }
     async createProducto(auth, payload) {
@@ -712,12 +688,27 @@ let ProductosServiciosService = class ProductosServiciosService {
         if (procesoDefaultId) {
             await this.findProcesoOrThrow(auth, procesoDefaultId, this.prisma);
         }
+        const dimensionesBaseConsumidas = payload.dimensionesBaseConsumidas === undefined
+            ? this.getProductoDimensionesBaseConsumidas(producto.detalleJson)
+            : Array.from(new Set(payload.dimensionesBaseConsumidas.map((item) => this.toDimensionOpcionProductiva(item))));
+        const matchingBasePorVariante = payload.matchingBasePorVariante === undefined
+            ? this.getProductoMatchingBaseByVariante(producto.detalleJson)
+            : await this.validateAndNormalizeMatchingBase(auth, producto.id, dimensionesBaseConsumidas, payload.matchingBasePorVariante, this.prisma);
+        const pasosFijosPorVariante = payload.pasosFijosPorVariante === undefined
+            ? this.getProductoPasosFijosByVariante(producto.detalleJson)
+            : await this.validateAndNormalizePasosFijosRutaBase(auth, producto.id, dimensionesBaseConsumidas, payload.pasosFijosPorVariante, this.prisma);
+        const nextDetalle = this.mergeProductoDetalle(producto.detalleJson, {
+            dimensionesBaseConsumidas: dimensionesBaseConsumidas.map((item) => this.fromDimensionOpcionProductiva(item)),
+            matchingBasePorVariante,
+            pasosFijosPorVariante,
+        });
         await this.prisma.$transaction(async (tx) => {
             await tx.productoServicio.update({
                 where: { id: producto.id },
                 data: {
                     usarRutaComunVariantes: payload.usarRutaComunVariantes,
                     procesoDefinicionDefaultId: procesoDefaultId,
+                    detalleJson: this.toNullableJson(nextDetalle),
                 },
             });
             if (payload.usarRutaComunVariantes) {
@@ -930,6 +921,269 @@ let ProductosServiciosService = class ProductosServiciosService {
         });
         return this.toVarianteOpcionesProductivasResponse(variante.id, variante, saved);
     }
+    async getProductoChecklist(auth, productoId) {
+        await this.findProductoOrThrow(auth, productoId, this.prisma);
+        const checklist = await this.prisma.productoChecklist.findFirst({
+            where: {
+                tenantId: auth.tenantId,
+                productoServicioId: productoId,
+            },
+            include: {
+                preguntas: {
+                    orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+                    include: {
+                        respuestas: {
+                            orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+                            include: {
+                                reglas: {
+                                    orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+                                    include: {
+                                        procesoOperacion: {
+                                            include: {
+                                                centroCosto: true,
+                                                maquina: true,
+                                                perfilOperativo: true,
+                                            },
+                                        },
+                                        costoCentroCosto: true,
+                                        materiaPrimaVariante: {
+                                            include: {
+                                                materiaPrima: true,
+                                            },
+                                        },
+                                        niveles: {
+                                            orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        });
+        if (!checklist) {
+            return {
+                productoId,
+                activo: true,
+                preguntas: [],
+                createdAt: null,
+                updatedAt: null,
+            };
+        }
+        const plantillasById = await this.getChecklistPasoPlantillasMap(auth, checklist);
+        return this.toProductoChecklistResponse(checklist, plantillasById);
+    }
+    async upsertProductoChecklist(auth, productoId, payload) {
+        await this.findProductoOrThrow(auth, productoId, this.prisma);
+        this.validateProductoChecklistPayload(payload);
+        const checklistId = await this.prisma.$transaction(async (tx) => {
+            const checklist = (await tx.productoChecklist.findFirst({
+                where: {
+                    tenantId: auth.tenantId,
+                    productoServicioId: productoId,
+                },
+                select: { id: true },
+            })) ??
+                (await tx.productoChecklist.create({
+                    data: {
+                        tenantId: auth.tenantId,
+                        productoServicioId: productoId,
+                        activo: payload.activo ?? true,
+                    },
+                    select: { id: true },
+                }));
+            await tx.productoChecklist.update({
+                where: { id: checklist.id },
+                data: {
+                    activo: payload.activo ?? true,
+                },
+            });
+            const preguntasPrevias = await tx.productoChecklistPregunta.findMany({
+                where: {
+                    tenantId: auth.tenantId,
+                    productoChecklistId: checklist.id,
+                },
+                select: { id: true },
+            });
+            if (preguntasPrevias.length > 0) {
+                const preguntaIds = preguntasPrevias.map((item) => item.id);
+                const respuestasPrevias = await tx.productoChecklistRespuesta.findMany({
+                    where: {
+                        tenantId: auth.tenantId,
+                        productoChecklistPreguntaId: { in: preguntaIds },
+                    },
+                    select: { id: true },
+                });
+                if (respuestasPrevias.length > 0) {
+                    const respuestaIds = respuestasPrevias.map((item) => item.id);
+                    const reglasPrevias = await tx.productoChecklistRegla.findMany({
+                        where: {
+                            tenantId: auth.tenantId,
+                            productoChecklistRespuestaId: { in: respuestaIds },
+                        },
+                        select: { id: true },
+                    });
+                    if (reglasPrevias.length > 0) {
+                        await tx.productoChecklistReglaNivel.deleteMany({
+                            where: {
+                                tenantId: auth.tenantId,
+                                productoChecklistReglaId: { in: reglasPrevias.map((item) => item.id) },
+                            },
+                        });
+                    }
+                    await tx.productoChecklistRegla.deleteMany({
+                        where: {
+                            tenantId: auth.tenantId,
+                            productoChecklistRespuestaId: { in: respuestaIds },
+                        },
+                    });
+                }
+                await tx.productoChecklistRespuesta.deleteMany({
+                    where: {
+                        tenantId: auth.tenantId,
+                        productoChecklistPreguntaId: { in: preguntaIds },
+                    },
+                });
+                await tx.productoChecklistPregunta.deleteMany({
+                    where: {
+                        tenantId: auth.tenantId,
+                        id: { in: preguntaIds },
+                    },
+                });
+            }
+            for (let indexPregunta = 0; indexPregunta < payload.preguntas.length; indexPregunta += 1) {
+                const pregunta = payload.preguntas[indexPregunta];
+                const preguntaRow = await tx.productoChecklistPregunta.create({
+                    data: {
+                        tenantId: auth.tenantId,
+                        productoChecklistId: checklist.id,
+                        texto: pregunta.texto.trim(),
+                        tipoPregunta: this.toTipoChecklistPregunta(pregunta.tipoPregunta ?? productos_servicios_dto_1.TipoChecklistPreguntaDto.binaria),
+                        orden: pregunta.orden ?? indexPregunta + 1,
+                        activo: pregunta.activo ?? true,
+                    },
+                });
+                for (let indexRespuesta = 0; indexRespuesta < pregunta.respuestas.length; indexRespuesta += 1) {
+                    const respuesta = pregunta.respuestas[indexRespuesta];
+                    const respuestaRow = await tx.productoChecklistRespuesta.create({
+                        data: {
+                            tenantId: auth.tenantId,
+                            productoChecklistPreguntaId: preguntaRow.id,
+                            texto: respuesta.texto.trim(),
+                            codigo: respuesta.codigo?.trim() || null,
+                            orden: respuesta.orden ?? indexRespuesta + 1,
+                            activo: respuesta.activo ?? true,
+                        },
+                    });
+                    const reglas = respuesta.reglas ?? [];
+                    for (let indexRegla = 0; indexRegla < reglas.length; indexRegla += 1) {
+                        const regla = reglas[indexRegla];
+                        let pasoPlantilla = null;
+                        if (regla.pasoPlantillaId) {
+                            pasoPlantilla = await this.findBibliotecaOperacionOrThrow(auth, regla.pasoPlantillaId, tx);
+                        }
+                        if (regla.costoCentroCostoId) {
+                            await this.findCentroCostoOrThrow(auth, regla.costoCentroCostoId, tx);
+                        }
+                        if (regla.materiaPrimaVarianteId) {
+                            await this.findPapelVarianteOrThrow(auth, regla.materiaPrimaVarianteId, tx);
+                        }
+                        const detalleReglaBase = regla.detalle && typeof regla.detalle === 'object' && !Array.isArray(regla.detalle)
+                            ? { ...regla.detalle }
+                            : {};
+                        if ((regla.accion === productos_servicios_dto_1.TipoChecklistAccionReglaDto.activar_paso ||
+                            regla.accion === productos_servicios_dto_1.TipoChecklistAccionReglaDto.seleccionar_variante_paso) &&
+                            pasoPlantilla) {
+                            const variantesPaso = this.getProcesoOperacionNiveles(pasoPlantilla.detalleJson);
+                            if (pregunta.tipoPregunta === productos_servicios_dto_1.TipoChecklistPreguntaDto.binaria &&
+                                variantesPaso.filter((item) => item.activo).length > 2) {
+                                throw new common_1.BadRequestException('Las preguntas binarias no pueden usar pasos con 3 o más variantes.');
+                            }
+                            if (regla.accion === productos_servicios_dto_1.TipoChecklistAccionReglaDto.activar_paso && variantesPaso.length > 0) {
+                                throw new common_1.BadRequestException('Usa SELECCIONAR_VARIANTE_PASO para pasos con variantes.');
+                            }
+                            if (regla.accion === productos_servicios_dto_1.TipoChecklistAccionReglaDto.seleccionar_variante_paso) {
+                                if (!regla.variantePasoId) {
+                                    throw new common_1.BadRequestException('La regla SELECCIONAR_VARIANTE_PASO requiere variante.');
+                                }
+                                const variante = variantesPaso.find((item) => item.id === regla.variantePasoId);
+                                if (!variante) {
+                                    throw new common_1.BadRequestException('La variante seleccionada no pertenece al paso configurado.');
+                                }
+                                detalleReglaBase.variantePasoId = variante.id;
+                            }
+                            else {
+                                delete detalleReglaBase.variantePasoId;
+                            }
+                            detalleReglaBase.pasoPlantillaId = pasoPlantilla.id;
+                        }
+                        if (regla.accion === productos_servicios_dto_1.TipoChecklistAccionReglaDto.set_atributo_tecnico) {
+                            throw new common_1.BadRequestException('SET_ATRIBUTO_TECNICO ya no se admite en Ruta de opcionales.');
+                        }
+                        const reglaRow = await tx.productoChecklistRegla.create({
+                            data: {
+                                tenantId: auth.tenantId,
+                                productoChecklistRespuestaId: respuestaRow.id,
+                                accion: this.toTipoChecklistAccion(regla.accion),
+                                orden: regla.orden ?? indexRegla + 1,
+                                activo: regla.activo ?? true,
+                                procesoOperacionId: null,
+                                usaNiveles: false,
+                                costoRegla: regla.costoRegla ? this.toReglaCostoChecklist(regla.costoRegla) : null,
+                                costoValor: regla.costoValor ?? null,
+                                costoCentroCostoId: regla.costoCentroCostoId ?? null,
+                                materiaPrimaVarianteId: regla.materiaPrimaVarianteId ?? null,
+                                tipoConsumo: regla.tipoConsumo
+                                    ? this.toTipoConsumoAdicionalMaterial(regla.tipoConsumo)
+                                    : null,
+                                factorConsumo: regla.factorConsumo ?? null,
+                                mermaPct: regla.mermaPct ?? null,
+                                detalleJson: this.toNullableJson(detalleReglaBase),
+                            },
+                        });
+                    }
+                }
+            }
+            return checklist.id;
+        });
+        const row = await this.prisma.productoChecklist.findUniqueOrThrow({
+            where: { id: checklistId },
+            include: {
+                preguntas: {
+                    orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+                    include: {
+                        respuestas: {
+                            orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+                            include: {
+                                reglas: {
+                                    orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+                                    include: {
+                                        procesoOperacion: {
+                                            include: {
+                                                centroCosto: true,
+                                                maquina: true,
+                                                perfilOperativo: true,
+                                            },
+                                        },
+                                        costoCentroCosto: true,
+                                        materiaPrimaVariante: {
+                                            include: { materiaPrima: true },
+                                        },
+                                        niveles: {
+                                            orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        });
+        const plantillasById = await this.getChecklistPasoPlantillasMap(auth, row);
+        return this.toProductoChecklistResponse(row, plantillasById);
+    }
     async findAdicionalEfectos(auth, adicionalId) {
         await this.findAdicionalCatalogoOrThrow(auth, adicionalId, this.prisma);
         const rows = await this.prisma.productoAdicionalEfecto.findMany({
@@ -948,7 +1202,7 @@ let ProductosServiciosService = class ProductosServiciosService {
             payload.tipo !== productos_servicios_dto_1.TipoProductoAdicionalEfectoDto.cost_effect) {
             throw new common_1.BadRequestException('Los adicionales de tipo servicio solo permiten reglas de costo.');
         }
-        await this.validateAdicionalEfectoPayload(auth, payload, this.prisma);
+        await this.validateAdicionalEfectoPayload(auth, payload, adicional.tipo, this.prisma);
         await this.assertSingleAddonEffectTypeConstraint(auth, adicionalId, payload.tipo, undefined, this.prisma);
         const createdId = await this.prisma.$transaction(async (tx) => {
             const effect = await tx.productoAdicionalEfecto.create({
@@ -973,7 +1227,7 @@ let ProductosServiciosService = class ProductosServiciosService {
             throw new common_1.BadRequestException('Los adicionales de tipo servicio solo permiten reglas de costo.');
         }
         const effect = await this.findAdicionalEfectoOrThrow(auth, adicionalId, efectoId, this.prisma);
-        await this.validateAdicionalEfectoPayload(auth, payload, this.prisma);
+        await this.validateAdicionalEfectoPayload(auth, payload, adicional.tipo, this.prisma);
         await this.assertSingleAddonEffectTypeConstraint(auth, adicionalId, payload.tipo, effect.id, this.prisma);
         const savedId = await this.prisma.$transaction(async (tx) => {
             await tx.productoAdicionalEfecto.update({
@@ -1136,80 +1390,314 @@ let ProductosServiciosService = class ProductosServiciosService {
         if (proceso.operaciones.length === 0) {
             throw new common_1.BadRequestException('La ruta seleccionada no tiene pasos operativos.');
         }
-        const addonSelectionInput = Array.from(new Set(payload.addonsSeleccionados ?? []));
-        const addonConfigInput = Array.from(new Map((payload.addonsConfig ?? []).map((item) => [item.addonId, item])).values());
-        const addonById = new Map(variante.productoServicio.adicionalesAsignados
-            .filter((item) => item.activo)
-            .map((item) => [item.productoAdicionalId, item]));
-        const restrictionsByAddon = new Map(variante.adicionalesRestricciones.map((item) => [item.productoAdicionalId, item.permitido]));
-        for (const addonId of addonSelectionInput) {
-            if (!addonById.has(addonId)) {
-                throw new common_1.BadRequestException('Uno de los adicionales seleccionados no está asignado al producto.');
-            }
-            if (restrictionsByAddon.get(addonId) === false) {
-                throw new common_1.BadRequestException('Uno de los adicionales seleccionados está restringido para la variante.');
-            }
-        }
-        const addonConfigById = new Map(addonConfigInput.map((item) => [item.addonId, item]));
-        const addonConfigTrace = addonConfigInput.map((item) => ({
-            addonId: item.addonId,
-            nivelId: item.nivelId ?? null,
-        }));
-        for (const configItem of addonConfigInput) {
-            if (!addonById.has(configItem.addonId)) {
-                throw new common_1.BadRequestException('Uno de los addons configurados no está asignado al producto.');
-            }
-            if (restrictionsByAddon.get(configItem.addonId) === false) {
-                throw new common_1.BadRequestException('Uno de los addons configurados está restringido para la variante.');
-            }
-        }
-        const opcionProductivaEfectiva = this.resolveEffectiveOptionValues(variante);
-        const addonEffectsRaw = addonSelectionInput.length > 0
-            ? await this.prisma.productoAdicionalEfecto.findMany({
-                where: {
-                    tenantId: auth.tenantId,
-                    activo: true,
-                    productoAdicionalId: {
-                        in: addonSelectionInput,
+        const checklistRespuestasInput = Array.from(new Map((payload.checklistRespuestas ?? []).map((item) => [item.preguntaId, item])).values());
+        const checklist = await this.prisma.productoChecklist.findFirst({
+            where: {
+                tenantId: auth.tenantId,
+                productoServicioId: variante.productoServicio.id,
+                activo: true,
+            },
+            include: {
+                preguntas: {
+                    where: { activo: true },
+                    include: {
+                        respuestas: {
+                            where: { activo: true },
+                            include: {
+                                reglas: {
+                                    where: { activo: true },
+                                    include: {
+                                        procesoOperacion: {
+                                            include: {
+                                                centroCosto: true,
+                                                maquina: true,
+                                                perfilOperativo: true,
+                                            },
+                                        },
+                                        costoCentroCosto: true,
+                                        materiaPrimaVariante: {
+                                            include: { materiaPrima: true },
+                                        },
+                                        niveles: {
+                                            where: { activo: true },
+                                            orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+                                        },
+                                    },
+                                    orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+                                },
+                            },
+                            orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+                        },
                     },
+                    orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
                 },
-                include: this.getAdicionalEfectoInclude(),
-            })
-            : [];
-        const efectosAplicados = addonEffectsRaw
-            .filter((effect) => this.isAddonEffectScopeMatch({
-            effect,
-            varianteId: variante.id,
-            opcionesProductivas: opcionProductivaEfectiva,
-        }))
-            .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-        const routeEffectsAplicados = efectosAplicados.filter((item) => item.tipo === client_1.TipoProductoAdicionalEfecto.ROUTE_EFFECT && item.routeEffect);
-        const servicePricingByAddon = new Map();
-        for (const addonId of addonSelectionInput) {
-            const addon = addonById.get(addonId)?.productoAdicional;
-            if (!addon || addon.tipo !== client_1.TipoProductoAdicional.SERVICIO)
+            },
+        });
+        const checklistPasoPlantillaById = await this.getChecklistPasoPlantillasMap(auth, checklist);
+        const checklistPreguntaById = new Map((checklist?.preguntas ?? []).map((pregunta) => [pregunta.id, pregunta]));
+        const checklistAplicadoTrace = [];
+        const checklistReglasActivas = [];
+        const opcionesProductivasPermitidas = this.resolveEffectiveOptionValues(variante);
+        const dimensionesBaseConsumidas = this.getProductoDimensionesBaseConsumidas(variante.productoServicio.detalleJson);
+        const matchingBaseVarianteRaw = this.getProductoMatchingBaseByVariante(variante.productoServicio.detalleJson).find((item) => item.varianteId === variante.id)?.matching ?? [];
+        const pasosFijosVarianteRaw = this.getProductoPasosFijosByVariante(variante.productoServicio.detalleJson).find((item) => item.varianteId === variante.id)?.pasos ?? [];
+        const seleccionesBaseInput = new Map(Array.from(new Map((payload.seleccionesBase ?? []).map((item) => [item.dimension, item])).values()).map((item) => [this.toDimensionOpcionProductiva(item.dimension), this.toValorOpcionProductiva(item.valor)]));
+        const atributosTecnicosSeleccionados = new Map();
+        for (const dimension of dimensionesBaseConsumidas) {
+            const valoresMatching = Array.from(new Set(matchingBaseVarianteRaw
+                .map((item) => dimension === client_1.DimensionOpcionProductiva.TIPO_IMPRESION
+                ? item.tipoImpresion
+                : item.caras)
+                .filter((value) => Boolean(value))
+                .map((value) => dimension === client_1.DimensionOpcionProductiva.TIPO_IMPRESION
+                ? this.toValorFromTipoImpresion(this.toTipoImpresion(value))
+                : this.toValorFromCaras(this.toCaras(value)))));
+            const permitidosVariante = opcionesProductivasPermitidas.get(dimension);
+            const allowedValues = valoresMatching.filter((value) => !permitidosVariante || permitidosVariante.has(value));
+            if (!allowedValues.length) {
+                throw new common_1.BadRequestException(`Ruta base: no hay matching configurado para ${this.fromDimensionOpcionProductiva(dimension)} en la variante ${variante.nombre}.`);
+            }
+            if (allowedValues.length === 1) {
+                atributosTecnicosSeleccionados.set(dimension, allowedValues[0]);
                 continue;
-            const parsedPricing = this.parseServicioPricing(addon.metadataJson);
-            if (parsedPricing.niveles.length && parsedPricing.reglas.length) {
-                servicePricingByAddon.set(addonId, parsedPricing);
             }
+            const selectedValue = seleccionesBaseInput.get(dimension);
+            if (!selectedValue) {
+                throw new common_1.BadRequestException(`Falta seleccionar una opción base para ${this.fromDimensionOpcionProductiva(dimension)}.`);
+            }
+            if (permitidosVariante && !permitidosVariante.has(selectedValue)) {
+                throw new common_1.BadRequestException(`La variante seleccionada no soporta ${this.fromDimensionOpcionProductiva(dimension)}=${this.fromValorOpcionProductiva(selectedValue)}.`);
+            }
+            atributosTecnicosSeleccionados.set(dimension, selectedValue);
         }
-        const costEffectsAplicados = efectosAplicados.filter((item) => {
-            if (!(item.tipo === client_1.TipoProductoAdicionalEfecto.COST_EFFECT && item.costEffect)) {
+        const matchingSeleccionado = matchingBaseVarianteRaw.filter((item) => {
+            return dimensionesBaseConsumidas.every((dimension) => {
+                const selectedValue = atributosTecnicosSeleccionados.get(dimension);
+                if (!selectedValue)
+                    return false;
+                if (dimension === client_1.DimensionOpcionProductiva.TIPO_IMPRESION) {
+                    return item.tipoImpresion
+                        ? this.toValorFromTipoImpresion(this.toTipoImpresion(item.tipoImpresion)) === selectedValue
+                        : false;
+                }
+                return item.caras ? this.toValorFromCaras(this.toCaras(item.caras)) === selectedValue : false;
+            });
+        });
+        if (dimensionesBaseConsumidas.length > 0 && matchingSeleccionado.length === 0) {
+            throw new common_1.BadRequestException(`Ruta base: no existe un matching para la combinación seleccionada en ${variante.nombre}.`);
+        }
+        const matchingPlantillaIds = Array.from(new Set(matchingSeleccionado.map((item) => item.pasoPlantillaId)));
+        const matchingPerfilIds = Array.from(new Set(matchingSeleccionado.map((item) => item.perfilOperativoId)));
+        const pasosFijosPerfilIds = Array.from(new Set(pasosFijosVarianteRaw.map((item) => item.perfilOperativoId)));
+        const [matchingPlantillas, matchingPerfiles, pasosFijosPerfiles] = await Promise.all([
+            matchingPlantillaIds.length
+                ? await this.prisma.procesoOperacionPlantilla.findMany({
+                    where: { tenantId: auth.tenantId, id: { in: matchingPlantillaIds } },
+                    include: {
+                        centroCosto: true,
+                        maquina: true,
+                        perfilOperativo: true,
+                    },
+                })
+                : Promise.resolve([]),
+            matchingPerfilIds.length
+                ? await this.prisma.maquinaPerfilOperativo.findMany({
+                    where: { tenantId: auth.tenantId, id: { in: matchingPerfilIds } },
+                })
+                : Promise.resolve([]),
+            pasosFijosPerfilIds.length
+                ? await this.prisma.maquinaPerfilOperativo.findMany({
+                    where: { tenantId: auth.tenantId, id: { in: pasosFijosPerfilIds } },
+                })
+                : Promise.resolve([]),
+        ]);
+        const matchingPlantillaById = new Map(matchingPlantillas.map((item) => [item.id, item]));
+        const matchingPerfilById = new Map(matchingPerfiles.map((item) => [item.id, item]));
+        const pasosFijosPerfilByPasoPlantillaId = new Map(pasosFijosVarianteRaw
+            .map((item) => {
+            const perfilOperativo = pasosFijosPerfiles.find((perfil) => perfil.id === item.perfilOperativoId) ?? null;
+            if (!perfilOperativo)
+                return null;
+            return [item.pasoPlantillaId, perfilOperativo];
+        })
+            .filter((item) => Boolean(item)));
+        const matchingBaseAplicado = [];
+        const matchingSeen = new Set();
+        for (const item of matchingSeleccionado) {
+            const pasoPlantilla = matchingPlantillaById.get(item.pasoPlantillaId) ?? null;
+            const perfilOperativo = matchingPerfilById.get(item.perfilOperativoId) ?? null;
+            if (!pasoPlantilla || !perfilOperativo) {
+                throw new common_1.BadRequestException('Ruta base: el matching referencia un paso o perfil inválido.');
+            }
+            const key = `${pasoPlantilla.id}:${perfilOperativo.id}`;
+            if (matchingSeen.has(key)) {
+                throw new common_1.BadRequestException('Ruta base: el matching seleccionado contiene filas duplicadas.');
+            }
+            matchingSeen.add(key);
+            matchingBaseAplicado.push({
+                pasoPlantilla,
+                perfilOperativo,
+                tipoImpresion: item.tipoImpresion ? this.toTipoImpresion(item.tipoImpresion) : null,
+                caras: item.caras ? this.toCaras(item.caras) : null,
+            });
+        }
+        for (const selected of checklistRespuestasInput) {
+            const pregunta = checklistPreguntaById.get(selected.preguntaId);
+            if (!pregunta) {
+                throw new common_1.BadRequestException('Una respuesta del configurador referencia una pregunta inválida.');
+            }
+            const respuesta = pregunta.respuestas.find((item) => item.id === selected.respuestaId);
+            if (!respuesta) {
+                throw new common_1.BadRequestException('Una respuesta del configurador no pertenece a la pregunta indicada.');
+            }
+            for (const regla of respuesta.reglas) {
+                const pasoPlantilla = this.resolveChecklistPasoPlantilla(regla.detalleJson, checklistPasoPlantillaById, regla.procesoOperacion ?? null);
+                const nivelesPaso = this.getProcesoOperacionNiveles(pasoPlantilla?.detalleJson ?? regla.procesoOperacion?.detalleJson ?? null);
+                const variantePasoId = this.getChecklistVariantePasoId(regla.detalleJson);
+                if (regla.accion === client_1.TipoProductoChecklistReglaAccion.ACTIVAR_PASO &&
+                    !pasoPlantilla) {
+                    throw new common_1.BadRequestException('La regla del configurador referencia un paso de biblioteca inválido.');
+                }
+                if (regla.accion === client_1.TipoProductoChecklistReglaAccion.SELECCIONAR_VARIANTE_PASO &&
+                    !pasoPlantilla) {
+                    throw new common_1.BadRequestException('La regla de configurador referencia un paso de biblioteca inválido.');
+                }
+                if (regla.accion === client_1.TipoProductoChecklistReglaAccion.SELECCIONAR_VARIANTE_PASO &&
+                    nivelesPaso.length > 0 &&
+                    !variantePasoId) {
+                    throw new common_1.BadRequestException('Falta seleccionar variante para un paso del configurador con variantes.');
+                }
+                if (regla.accion === client_1.TipoProductoChecklistReglaAccion.ACTIVAR_PASO && nivelesPaso.length > 0) {
+                    throw new common_1.BadRequestException('Usa SELECCIONAR_VARIANTE_PASO para pasos del configurador con variantes.');
+                }
+                checklistReglasActivas.push({
+                    regla,
+                    respuestaId: respuesta.id,
+                    preguntaId: pregunta.id,
+                    pasoPlantilla,
+                });
+            }
+            checklistAplicadoTrace.push({
+                preguntaId: pregunta.id,
+                pregunta: pregunta.texto,
+                respuestaId: respuesta.id,
+                respuesta: respuesta.texto,
+            });
+        }
+        const tipoImpresionSeleccionado = this.toTipoImpresionFromValor(atributosTecnicosSeleccionados.get(client_1.DimensionOpcionProductiva.TIPO_IMPRESION) ??
+            this.toValorFromTipoImpresion(variante.tipoImpresion));
+        const carasSeleccionadas = this.toCarasFromValor(atributosTecnicosSeleccionados.get(client_1.DimensionOpcionProductiva.CARAS) ??
+            this.toValorFromCaras(variante.caras));
+        const addonSelectionInput = [];
+        const addonConfigInput = [];
+        const addonById = new Map();
+        const addonConfigById = new Map();
+        const addonConfigTrace = [];
+        const opcionProductivaEfectiva = new Map(Array.from(atributosTecnicosSeleccionados.entries()).map(([dimension, value]) => [
+            dimension,
+            new Set([value]),
+        ]));
+        const efectosAplicados = [];
+        const routeEffectsAplicados = [];
+        const costEffectsAplicados = [];
+        const materialEffectsAplicados = [];
+        const servicePricingByAddon = new Map();
+        const checklistNivelesActivos = checklistReglasActivas.filter((item) => item.regla.accion === client_1.TipoProductoChecklistReglaAccion.SELECCIONAR_VARIANTE_PASO &&
+            item.pasoPlantilla &&
+            this.getProcesoOperacionNiveles(item.pasoPlantilla.detalleJson).length > 0);
+        const checklistNivelMachineIds = Array.from(new Set([...checklistNivelesActivos]
+            .flatMap((item) => this.getProcesoOperacionNiveles(item.pasoPlantilla?.detalleJson ?? null)
+            .map((nivel) => nivel.maquinaId)
+            .filter((value) => Boolean(value)))));
+        const checklistNivelPerfilIds = Array.from(new Set([...checklistNivelesActivos]
+            .flatMap((item) => this.getProcesoOperacionNiveles(item.pasoPlantilla?.detalleJson ?? null)
+            .map((nivel) => nivel.perfilOperativoId)
+            .filter((value) => Boolean(value)))));
+        const [checklistNivelMaquinas, checklistNivelPerfiles] = await Promise.all([
+            checklistNivelMachineIds.length
+                ? this.prisma.maquina.findMany({
+                    where: { tenantId: auth.tenantId, id: { in: checklistNivelMachineIds } },
+                    include: { centroCostoPrincipal: true },
+                })
+                : Promise.resolve([]),
+            checklistNivelPerfilIds.length
+                ? this.prisma.maquinaPerfilOperativo.findMany({
+                    where: { tenantId: auth.tenantId, id: { in: checklistNivelPerfilIds } },
+                })
+                : Promise.resolve([]),
+        ]);
+        const checklistNivelMaquinaById = new Map(checklistNivelMaquinas.map((item) => [item.id, item]));
+        const checklistNivelPerfilById = new Map(checklistNivelPerfiles.map((item) => [item.id, item]));
+        const matchingPasoPlantillaIds = new Set(matchingBaseAplicado.map((item) => item.pasoPlantilla.id));
+        const checklistOperacionesActivadas = checklistReglasActivas
+            .filter((item) => item.regla.accion === client_1.TipoProductoChecklistReglaAccion.ACTIVAR_PASO &&
+            item.pasoPlantilla &&
+            this.getProcesoOperacionNiveles(item.pasoPlantilla.detalleJson).length === 0)
+            .map((item) => this.buildChecklistOperacionFromPlantilla(item.pasoPlantilla))
+            .filter((item) => item.activo);
+        const routeBaseOperacionesMatching = matchingBaseAplicado
+            .map((item) => this.buildChecklistOperacionFromPlantillaConPerfil(item.pasoPlantilla, item.perfilOperativo))
+            .filter((item) => item.activo);
+        const checklistPasoPlantillaIds = new Set(checklistReglasActivas
+            .map((item) => item.pasoPlantilla?.id ?? null)
+            .filter((value) => Boolean(value)));
+        const checklistPasoSignatures = new Set(checklistReglasActivas
+            .map((item) => this.buildChecklistPasoSignature(item.pasoPlantilla))
+            .filter((value) => Boolean(value)));
+        const operacionesBaseCotizadas = proceso.operaciones
+            .filter((op) => {
+            if (!op.activo) {
                 return false;
             }
-            return !servicePricingByAddon.has(item.productoAdicionalId);
-        });
-        const materialEffectsAplicados = efectosAplicados.filter((item) => item.tipo === client_1.TipoProductoAdicionalEfecto.MATERIAL_EFFECT && item.materialEffect);
-        const addonsSeleccionadosSet = new Set(addonSelectionInput);
-        const operacionesBaseCotizadas = proceso.operaciones.filter((op) => {
-            if (!op.requiresProductoAdicionalId)
+            const pasoPlantillaId = this.getPasoPlantillaIdFromDetalle(op.detalleJson) ??
+                this.resolvePasoPlantillaIdFromOperacionRuta(op, matchingPlantillas);
+            if (!pasoPlantillaId) {
                 return true;
-            if (servicePricingByAddon.has(op.requiresProductoAdicionalId))
-                return false;
-            return addonsSeleccionadosSet.has(op.requiresProductoAdicionalId);
+            }
+            return !matchingPasoPlantillaIds.has(pasoPlantillaId);
+        })
+            .map((op) => {
+            const pasoPlantillaId = this.getPasoPlantillaIdFromDetalle(op.detalleJson);
+            if (!pasoPlantillaId) {
+                return op;
+            }
+            const perfilOverride = pasosFijosPerfilByPasoPlantillaId.get(pasoPlantillaId) ?? null;
+            if (!perfilOverride) {
+                return op;
+            }
+            return {
+                ...op,
+                perfilOperativoId: perfilOverride.id,
+                perfilOperativo: perfilOverride,
+                setupMin: perfilOverride.setupMin !== null && perfilOverride.setupMin !== undefined
+                    ? perfilOverride.setupMin
+                    : op.setupMin,
+                cleanupMin: perfilOverride.cleanupMin !== null && perfilOverride.cleanupMin !== undefined
+                    ? perfilOverride.cleanupMin
+                    : op.cleanupMin,
+                productividadBase: perfilOverride.productivityValue !== null && perfilOverride.productivityValue !== undefined
+                    ? perfilOverride.productivityValue
+                    : op.productividadBase,
+                detalleJson: {
+                    ...this.asObject(op.detalleJson),
+                    perfilOperativoId: perfilOverride.id,
+                    pasoFijoPerfilOverride: true,
+                },
+            };
         });
-        const maxOrdenBase = operacionesBaseCotizadas.reduce((acc, item) => Math.max(acc, item.orden), 0);
+        const conflictosChecklistRuta = operacionesBaseCotizadas
+            .filter((op) => {
+            const pasoPlantillaId = this.getPasoPlantillaIdFromDetalle(op.detalleJson);
+            if (pasoPlantillaId && checklistPasoPlantillaIds.has(pasoPlantillaId)) {
+                return true;
+            }
+            const signature = this.buildChecklistPasoSignature(op);
+            return Boolean(signature && checklistPasoSignatures.has(signature));
+        })
+            .map((op) => op.nombre);
+        const conflictosChecklistRutaWarnings = Array.from(new Set(conflictosChecklistRuta)).map((nombrePaso) => `Conflicto de configuración: el paso "${nombrePaso}" está en la ruta base y también se activa desde Configurador.`);
+        const conflictosMatchingRutaWarnings = [];
+        const maxOrdenBase = [...operacionesBaseCotizadas, ...routeBaseOperacionesMatching, ...checklistOperacionesActivadas].reduce((acc, item) => Math.max(acc, item.orden), 0);
         const operacionesRouteEffect = routeEffectsAplicados.flatMap((effect, effectIndex) => (effect.routeEffect?.pasos ?? []).map((paso, pasoIndex) => ({
             id: paso.id,
             orden: maxOrdenBase + 1 + effectIndex * 1000 + pasoIndex,
@@ -1225,6 +1713,7 @@ let ProductosServiciosService = class ProductosServiciosService {
             runMin: paso.runMin,
             cleanupMin: paso.cleanupMin,
             tiempoFijoMin: paso.tiempoFijoMin,
+            detalleJson: paso.detalleJson,
             unidadEntrada: client_1.UnidadProceso.NINGUNA,
             unidadSalida: client_1.UnidadProceso.NINGUNA,
             unidadTiempo: client_1.UnidadProceso.MINUTO,
@@ -1232,26 +1721,43 @@ let ProductosServiciosService = class ProductosServiciosService {
             mermaSetup: null,
             mermaRunPct: null,
             reglaMermaJson: null,
-            requiresProductoAdicionalId: effect.productoAdicionalId,
         })));
-        const operacionesCotizadas = [...operacionesBaseCotizadas, ...operacionesRouteEffect].sort((a, b) => a.orden - b.orden);
+        const operacionesRutaBase = routeBaseOperacionesMatching.map((op, routeBaseIndex) => ({
+            ...op,
+            orden: maxOrdenBase + 1 + routeEffectsAplicados.length * 1000 + routeBaseIndex,
+        }));
+        const operacionesChecklist = checklistOperacionesActivadas.map((op, checklistIndex) => ({
+            ...op,
+            orden: maxOrdenBase +
+                1 +
+                routeEffectsAplicados.length * 1000 +
+                routeBaseOperacionesMatching.length +
+                checklistIndex,
+        }));
+        const operacionesCotizadas = [...operacionesBaseCotizadas, ...operacionesRouteEffect, ...operacionesRutaBase, ...operacionesChecklist].sort((a, b) => a.orden - b.orden);
         if (operacionesCotizadas.length === 0) {
-            throw new common_1.BadRequestException('La ruta no tiene pasos activos para la selección de adicionales.');
+            throw new common_1.BadRequestException('La ruta no tiene pasos activos para la selección actual.');
         }
         const centrosCostEffect = costEffectsAplicados
             .map((item) => item.costEffect?.centroCostoId)
             .filter((value) => Boolean(value));
-        const centrosServicePricing = addonSelectionInput
-            .map((addonId) => {
-            if (!servicePricingByAddon.has(addonId))
+        const centrosServicePricing = checklistNivelesActivos
+            .map((item) => item.pasoPlantilla?.centroCostoId ?? null)
+            .filter((value) => Boolean(value));
+        const centrosChecklistCosto = checklistReglasActivas
+            .map((item) => {
+            if (item.regla.accion !== client_1.TipoProductoChecklistReglaAccion.COSTO_EXTRA)
                 return null;
-            return addonById.get(addonId)?.productoAdicional?.centroCostoId ?? null;
+            if (item.regla.costoRegla !== client_1.ReglaCostoChecklist.TIEMPO_MIN)
+                return null;
+            return item.regla.costoCentroCostoId ?? item.pasoPlantilla?.centroCostoId ?? null;
         })
             .filter((value) => Boolean(value));
         const centroIds = Array.from(new Set([
             ...operacionesCotizadas.map((item) => item.centroCostoId),
             ...centrosCostEffect,
             ...centrosServicePricing,
+            ...centrosChecklistCosto,
         ]));
         const tarifas = await this.prisma.centroCostoTarifaPeriodo.findMany({
             where: {
@@ -1297,25 +1803,44 @@ let ProductosServiciosService = class ProductosServiciosService {
             ? precioPapelBase / conversionPapel.pliegosPorSustrato
             : 0;
         const costoPapel = costoPapelUnit * pliegos;
-        const warnings = [];
+        const warnings = [...conflictosChecklistRutaWarnings, ...conflictosMatchingRutaWarnings];
         if (!variante.papelVariante.precioReferencia) {
             warnings.push('El papel asignado no tiene precio de referencia. Se uso 0 para costo de papel.');
         }
         const materiales = [];
         let costoToner = 0;
         let costoDesgaste = 0;
+        let costoConsumiblesTerminacion = 0;
         const areaPliegoM2 = (pliegoImpresion.anchoMm / 1000) * (pliegoImpresion.altoMm / 1000);
         const a4EqFactor = areaPliegoM2 / ProductosServiciosService_1.DEFAULT_A4_AREA_M2;
-        const carasFactor = variante.caras === client_1.CarasProductoVariante.DOBLE_FAZ ? 2 : 1;
+        const carasFactor = carasSeleccionadas === client_1.CarasProductoVariante.DOBLE_FAZ ? 2 : 1;
         const machineIds = Array.from(new Set(operacionesCotizadas
             .map((op) => op.maquinaId)
             .filter((item) => Boolean(item))));
-        const [consumibles, desgastes] = await Promise.all([
+        const [consumibles, consumiblesFilm, desgastes] = await Promise.all([
             this.prisma.maquinaConsumible.findMany({
                 where: {
                     tenantId: auth.tenantId,
                     activo: true,
                     tipo: client_1.TipoConsumibleMaquina.TONER,
+                    maquinaId: {
+                        in: machineIds,
+                    },
+                },
+                include: {
+                    perfilOperativo: true,
+                    materiaPrimaVariante: {
+                        include: {
+                            materiaPrima: true,
+                        },
+                    },
+                },
+            }),
+            this.prisma.maquinaConsumible.findMany({
+                where: {
+                    tenantId: auth.tenantId,
+                    activo: true,
+                    tipo: client_1.TipoConsumibleMaquina.FILM,
                     maquinaId: {
                         in: machineIds,
                     },
@@ -1346,47 +1871,91 @@ let ProductosServiciosService = class ProductosServiciosService {
                 },
             }),
         ]);
+        let pliegosMermaOperativaImpresion = 0;
         const pasos = operacionesCotizadas.map((op) => {
-            const setupMin = Number(op.setupMin ?? this.getSetupFromPerfilOperativo(op.perfilOperativo) ?? 0);
-            const cleanupMin = Number(op.cleanupMin ?? 0);
-            const tiempoFijoMin = Number(op.tiempoFijoMin ?? 0);
-            const usarTiempoFijoManual = tiempoFijoMin > 0;
+            const setupMinBase = Number(op.setupMin ?? this.getSetupFromPerfilOperativo(op.perfilOperativo) ?? 0);
+            const cleanupMinBase = Number(op.cleanupMin ?? 0);
+            const pasoDetalle = this.asObject(op.detalleJson);
+            const tiempoFijoMinFallbackDetalle = this.toSafeNumber(pasoDetalle.tiempoFijoMinFallback, Number(op.tiempoFijoMin ?? 0));
+            const tiempoFijoMinBase = Number(op.tiempoFijoMin ??
+                (Number.isFinite(tiempoFijoMinFallbackDetalle) && tiempoFijoMinFallbackDetalle > 0
+                    ? tiempoFijoMinFallbackDetalle
+                    : 0));
+            const usarTiempoFijoManual = tiempoFijoMinBase > 0;
             const cantidadObjetivoSalida = op.unidadEntrada === client_1.UnidadProceso.HOJA ||
                 op.unidadSalida === client_1.UnidadProceso.HOJA
                 ? pliegos
                 : cantidad;
-            let runMin = Number(op.runMin ?? 0);
+            const timingOverride = this.calculateTerminatingOperationTiming({
+                operacion: op,
+                cantidad,
+                pliegos,
+                setupMinBase,
+                cleanupMinBase,
+                tiempoFijoMinBase,
+                cantidadObjetivoSalida,
+                imposicion: {
+                    cols: imposicion.cols,
+                    rows: imposicion.rows,
+                    tipoCorte: imposicion.tipoCorte,
+                },
+                varianteAnchoMm: Number(variante.anchoMm),
+                varianteAltoMm: Number(variante.altoMm),
+                overridesProductividad: this.asObject(pasoDetalle.overridesProductividad),
+            });
+            let setupMin = timingOverride?.setupMin ?? setupMinBase;
+            let cleanupMin = timingOverride?.cleanupMin ?? cleanupMinBase;
+            let tiempoFijoMin = timingOverride?.tiempoFijoMin ?? tiempoFijoMinBase;
+            let runMin = timingOverride?.runMin ?? Number(op.runMin ?? 0);
+            let cantidadRunOperativa = cantidadObjetivoSalida;
+            let sourceProductividad = timingOverride?.sourceProductividad ?? (usarTiempoFijoManual ? 'fijo' : 'perfil');
+            if (timingOverride?.warnings?.length) {
+                warnings.push(...timingOverride.warnings.map((item) => `Paso ${op.codigo} (${op.nombre}): ${item}`));
+            }
             if (!usarTiempoFijoManual) {
-                const productividad = (0, proceso_productividad_engine_1.evaluateProductividad)({
-                    modoProductividad: client_1.ModoProductividadProceso.FIJA,
-                    productividadBase: op.productividadBase,
-                    reglaVelocidadJson: null,
-                    reglaMermaJson: op.reglaMermaJson,
-                    runMin: op.runMin,
-                    unidadTiempo: op.unidadTiempo,
-                    mermaRunPct: op.mermaRunPct,
-                    mermaSetup: op.mermaSetup,
-                    cantidadObjetivoSalida,
-                    contexto: {
-                        cantidad,
-                        pliegos,
-                        piezasPorPliego: imposicion.piezasPorPliego,
-                        areaPliegoM2,
-                        a4EqFactor,
-                        carasFactor,
-                    },
-                });
-                runMin = productividad.runMin;
-                for (const warning of productividad.warnings) {
-                    warnings.push(`Paso ${op.codigo} (${op.nombre}): ${warning}`);
+                if (!timingOverride) {
+                    const productividad = (0, proceso_productividad_engine_1.evaluateProductividad)({
+                        modoProductividad: client_1.ModoProductividadProceso.FIJA,
+                        productividadBase: op.productividadBase,
+                        reglaVelocidadJson: null,
+                        reglaMermaJson: op.reglaMermaJson,
+                        runMin: op.runMin,
+                        unidadTiempo: op.unidadTiempo,
+                        mermaRunPct: op.mermaRunPct,
+                        mermaSetup: op.mermaSetup,
+                        cantidadObjetivoSalida,
+                        contexto: {
+                            cantidad,
+                            pliegos,
+                            piezasPorPliego: imposicion.piezasPorPliego,
+                            areaPliegoM2,
+                            a4EqFactor,
+                            carasFactor,
+                        },
+                    });
+                    runMin = productividad.runMin;
+                    cantidadRunOperativa = productividad.cantidadRun;
+                    sourceProductividad = 'fijo';
+                    for (const warning of productividad.warnings) {
+                        warnings.push(`Paso ${op.codigo} (${op.nombre}): ${warning}`);
+                    }
                 }
+            }
+            const isLaserMachine = op.maquina?.plantilla === client_1.PlantillaMaquinaria.IMPRESORA_LASER;
+            const pliegosEfectivosOperacion = isLaserMachine &&
+                (op.unidadEntrada === client_1.UnidadProceso.HOJA || op.unidadSalida === client_1.UnidadProceso.HOJA)
+                ? Math.max(pliegos, cantidadRunOperativa)
+                : pliegos;
+            if (isLaserMachine) {
+                pliegosMermaOperativaImpresion += Math.max(0, pliegosEfectivosOperacion - pliegos);
             }
             if (op.maquinaId) {
                 const tonerAndWear = this.calculateMachineConsumables({
                     operation: op,
-                    tipoImpresion: variante.tipoImpresion,
+                    tipoImpresion: tipoImpresionSeleccionado,
                     carasFactor,
                     pliegos,
+                    pliegosEfectivos: pliegosEfectivosOperacion,
                     areaPliegoM2,
                     a4EqFactor,
                     warnings,
@@ -1396,24 +1965,28 @@ let ProductosServiciosService = class ProductosServiciosService {
                 costoToner += tonerAndWear.costoToner;
                 costoDesgaste += tonerAndWear.costoDesgaste;
                 materiales.push(...tonerAndWear.materiales);
+                const laminadoFilm = this.calculateLaminadoraFilmConsumables({
+                    operation: op,
+                    consumiblesFilm,
+                    timingOverride,
+                    warnings,
+                });
+                materiales.push(...laminadoFilm.materiales);
+                costoConsumiblesTerminacion += laminadoFilm.costo;
             }
             const totalMin = setupMin + runMin + cleanupMin + tiempoFijoMin;
             const tarifa = tarifaByCentro.get(op.centroCostoId);
             const costoPaso = Number(tarifa.mul(totalMin / 60).toFixed(6));
-            const esAdicional = Boolean(op.requiresProductoAdicionalId);
-            const addonAsociado = op.requiresProductoAdicionalId
-                ? addonById.get(op.requiresProductoAdicionalId)
-                : null;
+            const esChecklist = checklistOperacionesActivadas.some((item) => item.id === op.id);
+            const esRouteEffect = operacionesRouteEffect.some((item) => item.id === op.id && item.codigo === op.codigo);
             return {
                 orden: op.orden,
                 codigo: op.codigo,
                 nombre: op.nombre,
                 centroCostoId: op.centroCostoId,
                 centroCostoNombre: op.centroCosto.nombre,
-                origen: esAdicional
-                    ? `Adicional:${addonAsociado?.productoAdicional?.nombre ?? op.requiresProductoAdicionalId}`
-                    : 'Base',
-                addonId: op.requiresProductoAdicionalId ?? null,
+                origen: esChecklist ? 'Configurador' : esRouteEffect ? 'Acabado adicional' : 'Producto base',
+                addonId: null,
                 setupMin,
                 runMin,
                 cleanupMin,
@@ -1421,6 +1994,12 @@ let ProductosServiciosService = class ProductosServiciosService {
                 totalMin: Number(totalMin.toFixed(4)),
                 tarifaHora: Number(tarifa),
                 costo: costoPaso,
+                detalleTecnico: {
+                    ...(timingOverride?.trace ?? {}),
+                    sourceProductividad,
+                    maquina: op.maquina?.nombre ?? null,
+                    perfilOperativo: op.perfilOperativo?.nombre ?? null,
+                },
             };
         });
         const costoProcesos = pasos.reduce((acc, item) => acc + item.costo, 0);
@@ -1442,6 +2021,25 @@ let ProductosServiciosService = class ProductosServiciosService {
             pliegoImpresionAltoMm: pliegoImpresion.altoMm,
             origen: 'Base',
         });
+        if (pliegosMermaOperativaImpresion > 0) {
+            const costoPapelMerma = pliegosMermaOperativaImpresion * costoPapelUnit;
+            materiales.splice(1, 0, {
+                tipo: 'PAPEL',
+                nombre: `${variante.papelVariante.materiaPrima.nombre} · Merma operativa`,
+                sku: variante.papelVariante.sku,
+                cantidad: Number(pliegosMermaOperativaImpresion.toFixed(6)),
+                costoUnitario: costoPapelUnit,
+                costo: Number(costoPapelMerma.toFixed(6)),
+                esCostoDerivado: conversionPapel.esDerivado,
+                pliegosPorSustrato: conversionPapel.pliegosPorSustrato,
+                orientacionConversion: conversionPapel.orientacion,
+                sustratoAnchoMm: sustratoDims.anchoMm,
+                sustratoAltoMm: sustratoDims.altoMm,
+                pliegoImpresionAnchoMm: pliegoImpresion.anchoMm,
+                pliegoImpresionAltoMm: pliegoImpresion.altoMm,
+                origen: 'Merma operativa',
+            });
+        }
         if (addonSelectionInput.length) {
             const addonsMateriales = await this.prisma.productoAdicionalMaterial.findMany({
                 where: {
@@ -1554,6 +2152,7 @@ let ProductosServiciosService = class ProductosServiciosService {
                 totalMin: Number(minutosServicio.toFixed(4)),
                 tarifaHora: Number(tarifa),
                 costo: montoTotal,
+                detalleTecnico: null,
             });
         }
         for (const effect of costEffectsAplicados) {
@@ -1571,7 +2170,13 @@ let ProductosServiciosService = class ProductosServiciosService {
                 monto = Number(cost.valor) * pliegos;
             }
             else if (cost.regla === client_1.ReglaCostoAdicionalEfecto.PORCENTAJE_SOBRE_TOTAL) {
-                const base = costoPapel + costoToner + costoDesgaste + costoProcesos + costoAdicionalesMateriales + costoAdicionalesCostEffects;
+                const base = costoPapel +
+                    costoToner +
+                    costoDesgaste +
+                    costoConsumiblesTerminacion +
+                    costoProcesos +
+                    costoAdicionalesMateriales +
+                    costoAdicionalesCostEffects;
                 monto = base * (Number(cost.valor) / 100);
             }
             else if (cost.regla === client_1.ReglaCostoAdicionalEfecto.TIEMPO_EXTRA_MIN) {
@@ -1620,6 +2225,7 @@ let ProductosServiciosService = class ProductosServiciosService {
                 totalMin: 0,
                 tarifaHora: 0,
                 costo: montoRounded,
+                detalleTecnico: null,
             });
         }
         for (const effect of materialEffectsAplicados) {
@@ -1651,6 +2257,304 @@ let ProductosServiciosService = class ProductosServiciosService {
                 origen: `Adicional:${addonById.get(effect.productoAdicionalId)?.productoAdicional?.nombre ?? effect.productoAdicionalId}`,
             });
         }
+        const pasosConVariantesActivos = [
+            ...checklistReglasActivas
+                .filter((item) => item.regla.accion === client_1.TipoProductoChecklistReglaAccion.SELECCIONAR_VARIANTE_PASO)
+                .map((item) => ({
+                source: 'checklist',
+                pasoPlantilla: item.pasoPlantilla,
+                variantePasoId: this.getChecklistVariantePasoId(item.regla.detalleJson),
+                reglaId: item.regla.id,
+                label: 'Configurador',
+            })),
+        ];
+        for (const item of pasosConVariantesActivos) {
+            const nivelesPaso = this.getProcesoOperacionNiveles(item.pasoPlantilla?.detalleJson ?? null);
+            if (!nivelesPaso.length) {
+                continue;
+            }
+            const nivel = nivelesPaso.find((nivelItem) => nivelItem.id === item.variantePasoId) ?? nivelesPaso[0] ?? null;
+            if (!nivel) {
+                warnings.push(`${item.label}: paso con variantes sin variante disponible. Se omitió.`);
+                continue;
+            }
+            const centroId = item.pasoPlantilla?.centroCostoId ?? null;
+            if (!centroId) {
+                warnings.push(`${item.label}: ${item.reglaId} sin centro de costo para costeo por tiempo.`);
+                continue;
+            }
+            const tarifa = tarifaByCentro.get(centroId);
+            if (!tarifa) {
+                warnings.push(`${item.label}: falta tarifa publicada para centro de costo en regla con variantes.`);
+                continue;
+            }
+            const areaPiezaM2 = (Number(variante.anchoMm) * Number(variante.altoMm)) / 1_000_000;
+            const quantityByUnidad = this.resolveChecklistCantidadObjetivo({
+                unidadSalida: nivel.unidadSalida ?? item.pasoPlantilla?.unidadSalida ?? null,
+                cantidad,
+                pliegos,
+                areaPiezaM2,
+                areaPliegoM2,
+                a4EqFactor,
+                anchoMm: Number(variante.anchoMm),
+                altoMm: Number(variante.altoMm),
+            });
+            let setupMin = Number(nivel.setupMin ?? 0);
+            let cleanupMin = Number(nivel.cleanupMin ?? 0);
+            let tiempoFijoMin = 0;
+            let runMin = 0;
+            let sourceProductividad = 'nivel_fijo';
+            let detalleTecnico = {
+                sourceProductividad,
+                variantePasoId: nivel.id,
+                variantePasoNombre: nivel.nombre,
+                modoProductividadNivel: nivel.modoProductividadNivel,
+            };
+            if (nivel.modoProductividadNivel === 'fija') {
+                tiempoFijoMin = Number(nivel.tiempoFijoMin ?? 0);
+            }
+            else if (nivel.modoProductividadNivel === 'variable_manual') {
+                const productividad = (0, proceso_productividad_engine_1.evaluateProductividad)({
+                    modoProductividad: client_1.ModoProductividadProceso.FIJA,
+                    productividadBase: nivel.productividadBase === null ? null : new client_1.Prisma.Decimal(nivel.productividadBase),
+                    reglaVelocidadJson: null,
+                    reglaMermaJson: null,
+                    runMin: null,
+                    unidadTiempo: this.toPrismaUnidadProceso(nivel.unidadTiempo ?? item.pasoPlantilla?.unidadTiempo ?? client_1.UnidadProceso.MINUTO),
+                    mermaRunPct: null,
+                    mermaSetup: null,
+                    cantidadObjetivoSalida: quantityByUnidad,
+                    contexto: {
+                        cantidad,
+                        pliegos,
+                        areaPiezaM2,
+                        areaPliegoM2,
+                        a4EqFactor,
+                    },
+                });
+                runMin = productividad.runMin;
+                sourceProductividad = 'nivel_variable_manual';
+                detalleTecnico = {
+                    ...detalleTecnico,
+                    sourceProductividad,
+                    cantidadObjetivoSalida: quantityByUnidad,
+                    productividadAplicada: productividad.productividadAplicada,
+                    unidadSalida: nivel.unidadSalida,
+                    unidadTiempo: nivel.unidadTiempo,
+                };
+                warnings.push(...productividad.warnings.map((warning) => `${item.label} ${item.pasoPlantilla?.nombre ?? item.reglaId} (${nivel.nombre}): ${warning}`));
+            }
+            else {
+                const maquina = nivel.maquinaId ? checklistNivelMaquinaById.get(nivel.maquinaId) ?? null : null;
+                const perfil = nivel.perfilOperativoId ? checklistNivelPerfilById.get(nivel.perfilOperativoId) ?? null : null;
+                const setupBase = Number(nivel.setupMin ?? this.getSetupFromPerfilOperativo(perfil) ?? 0);
+                const cleanupBase = Number(nivel.cleanupMin ?? 0);
+                const timingOverride = this.calculateTerminatingOperationTiming({
+                    operacion: {
+                        maquina,
+                        perfilOperativo: perfil,
+                    },
+                    cantidad,
+                    pliegos,
+                    setupMinBase: setupBase,
+                    cleanupMinBase: cleanupBase,
+                    tiempoFijoMinBase: 0,
+                    cantidadObjetivoSalida: quantityByUnidad,
+                    varianteAnchoMm: Number(variante.anchoMm),
+                    varianteAltoMm: Number(variante.altoMm),
+                });
+                if (timingOverride) {
+                    setupMin = timingOverride.setupMin;
+                    cleanupMin = timingOverride.cleanupMin;
+                    tiempoFijoMin = timingOverride.tiempoFijoMin;
+                    runMin = timingOverride.runMin;
+                    sourceProductividad = 'nivel_variable_perfil';
+                    detalleTecnico = {
+                        ...detalleTecnico,
+                        sourceProductividad,
+                        maquina: maquina?.nombre ?? null,
+                        perfilOperativo: perfil?.nombre ?? null,
+                        ...(timingOverride.trace ?? {}),
+                    };
+                    if (timingOverride.warnings?.length) {
+                        warnings.push(...timingOverride.warnings.map((warning) => `${item.label} ${item.pasoPlantilla?.nombre ?? item.reglaId} (${nivel.nombre}): ${warning}`));
+                    }
+                }
+                else {
+                    const productividadBase = perfil?.productivityValue
+                        ? Number(perfil.productivityValue)
+                        : item.pasoPlantilla?.productividadBase
+                            ? Number(item.pasoPlantilla.productividadBase)
+                            : 0;
+                    if (productividadBase > 0) {
+                        const productividad = (0, proceso_productividad_engine_1.evaluateProductividad)({
+                            modoProductividad: client_1.ModoProductividadProceso.FIJA,
+                            productividadBase: new client_1.Prisma.Decimal(productividadBase),
+                            reglaVelocidadJson: null,
+                            reglaMermaJson: null,
+                            runMin: null,
+                            unidadTiempo: item.pasoPlantilla?.unidadTiempo ?? client_1.UnidadProceso.MINUTO,
+                            mermaRunPct: null,
+                            mermaSetup: null,
+                            cantidadObjetivoSalida: quantityByUnidad,
+                            contexto: {
+                                cantidad,
+                                pliegos,
+                                areaPiezaM2,
+                                areaPliegoM2,
+                                a4EqFactor,
+                            },
+                        });
+                        setupMin = setupBase;
+                        cleanupMin = cleanupBase;
+                        runMin = productividad.runMin;
+                        sourceProductividad = 'nivel_variable_perfil';
+                        detalleTecnico = {
+                            ...detalleTecnico,
+                            sourceProductividad,
+                            maquina: maquina?.nombre ?? null,
+                            perfilOperativo: perfil?.nombre ?? null,
+                            cantidadObjetivoSalida: quantityByUnidad,
+                            productividadAplicada: productividad.productividadAplicada,
+                        };
+                    }
+                }
+            }
+            const totalMin = Number((setupMin + runMin + cleanupMin + tiempoFijoMin).toFixed(4));
+            if (totalMin <= 0) {
+                continue;
+            }
+            const costoNivel = Number(tarifa.mul(totalMin / 60).toFixed(6));
+            costoAdicionalesCostEffects += costoNivel;
+            costosPorEfecto.push({
+                origen: 'ConfiguradorVariante',
+                reglaId: item.reglaId,
+                variantePasoId: nivel.id,
+                variantePasoNombre: nivel.nombre,
+                tiempoMin: totalMin,
+                monto: costoNivel,
+            });
+            pasos.push({
+                orden: pasos.length + 1,
+                codigo: `CHK-LVL-${item.reglaId.slice(0, 6).toUpperCase()}`,
+                nombre: `${item.pasoPlantilla?.nombre ?? 'Paso configurador'} (${nivel.nombre})`,
+                centroCostoId: centroId,
+                centroCostoNombre: item.pasoPlantilla?.centroCosto?.nombre ?? 'Configurador',
+                origen: 'Configurador',
+                addonId: null,
+                setupMin: Number(setupMin.toFixed(4)),
+                runMin: Number(runMin.toFixed(4)),
+                cleanupMin: Number(cleanupMin.toFixed(4)),
+                tiempoFijoMin: Number(tiempoFijoMin.toFixed(4)),
+                totalMin,
+                tarifaHora: Number(tarifa),
+                costo: costoNivel,
+                detalleTecnico,
+            });
+        }
+        for (const item of checklistReglasActivas) {
+            if (item.regla.accion !== client_1.TipoProductoChecklistReglaAccion.COSTO_EXTRA) {
+                continue;
+            }
+            const regla = item.regla.costoRegla;
+            const valor = Number(item.regla.costoValor ?? 0);
+            if (!regla || !Number.isFinite(valor) || valor === 0) {
+                continue;
+            }
+            let monto = 0;
+            if (regla === client_1.ReglaCostoChecklist.FLAT) {
+                monto = valor;
+            }
+            else if (regla === client_1.ReglaCostoChecklist.POR_UNIDAD) {
+                monto = valor * cantidad;
+            }
+            else if (regla === client_1.ReglaCostoChecklist.POR_PLIEGO) {
+                monto = valor * pliegos;
+            }
+            else if (regla === client_1.ReglaCostoChecklist.PORCENTAJE_SOBRE_TOTAL) {
+                const base = costoPapel +
+                    costoToner +
+                    costoDesgaste +
+                    costoConsumiblesTerminacion +
+                    costoProcesos +
+                    costoAdicionalesMateriales +
+                    costoAdicionalesCostEffects;
+                monto = base * (valor / 100);
+            }
+            else if (regla === client_1.ReglaCostoChecklist.TIEMPO_MIN) {
+                const centroId = item.regla.costoCentroCostoId ?? item.pasoPlantilla?.centroCostoId ?? null;
+                if (!centroId) {
+                    warnings.push('Configurador: COSTO_EXTRA TIEMPO_MIN sin centro de costo.');
+                    continue;
+                }
+                const tarifa = tarifaByCentro.get(centroId);
+                if (!tarifa) {
+                    warnings.push('Configurador: sin tarifa publicada para COSTO_EXTRA TIEMPO_MIN.');
+                    continue;
+                }
+                monto = Number(tarifa.mul(valor / 60).toFixed(6));
+            }
+            const montoRounded = Number(monto.toFixed(6));
+            if (montoRounded === 0)
+                continue;
+            costoAdicionalesCostEffects += montoRounded;
+            costosPorEfecto.push({
+                origen: 'ConfiguradorCosto',
+                reglaId: item.regla.id,
+                regla: regla.toLowerCase(),
+                monto: montoRounded,
+            });
+            pasos.push({
+                orden: pasos.length + 1,
+                codigo: `CHK-COST-${item.regla.id.slice(0, 6).toUpperCase()}`,
+                nombre: 'Ajuste costo configurador',
+                centroCostoId: item.regla.costoCentroCostoId ?? item.pasoPlantilla?.centroCostoId ?? 'N/A',
+                centroCostoNombre: item.regla.costoCentroCosto?.nombre ??
+                    item.pasoPlantilla?.centroCosto?.nombre ??
+                    'Configurador',
+                origen: 'Configurador',
+                addonId: null,
+                setupMin: 0,
+                runMin: 0,
+                cleanupMin: 0,
+                tiempoFijoMin: 0,
+                totalMin: 0,
+                tarifaHora: 0,
+                costo: montoRounded,
+                detalleTecnico: {
+                    sourceProductividad: 'checklist',
+                    reglaId: item.regla.id,
+                },
+            });
+        }
+        for (const item of checklistReglasActivas) {
+            if (item.regla.accion !== client_1.TipoProductoChecklistReglaAccion.MATERIAL_EXTRA) {
+                continue;
+            }
+            if (!item.regla.materiaPrimaVariante || !item.regla.tipoConsumo || !item.regla.factorConsumo) {
+                continue;
+            }
+            const baseQty = item.regla.tipoConsumo === client_1.TipoConsumoAdicionalMaterial.POR_PLIEGO
+                ? pliegos
+                : item.regla.tipoConsumo === client_1.TipoConsumoAdicionalMaterial.POR_M2
+                    ? areaPliegoM2 * pliegos
+                    : cantidad;
+            const factorConsumo = Number(item.regla.factorConsumo);
+            const mermaFactor = 1 + Number(item.regla.mermaPct ?? 0) / 100;
+            const consumo = factorConsumo * baseQty * mermaFactor;
+            const costoUnit = Number(item.regla.materiaPrimaVariante.precioReferencia ?? 0);
+            const costo = Number((consumo * costoUnit).toFixed(6));
+            costoAdicionalesMateriales += costo;
+            materiales.push({
+                tipo: 'CHECKLIST_MATERIAL',
+                nombre: item.regla.materiaPrimaVariante.materiaPrima.nombre,
+                sku: item.regla.materiaPrimaVariante.sku,
+                cantidad: Number(consumo.toFixed(6)),
+                costoUnitario: Number(costoUnit.toFixed(6)),
+                costo,
+                origen: 'Configurador',
+            });
+        }
         const pasosNormalizados = [...pasos]
             .sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre))
             .map((paso, index) => ({
@@ -1660,6 +2564,7 @@ let ProductosServiciosService = class ProductosServiciosService {
         const total = Number((costoPapel +
             costoToner +
             costoDesgaste +
+            costoConsumiblesTerminacion +
             costoProcesos +
             costoAdicionalesCostEffects +
             costoAdicionalesMateriales).toFixed(6));
@@ -1685,6 +2590,7 @@ let ProductosServiciosService = class ProductosServiciosService {
                 papel: Number(costoPapel.toFixed(6)),
                 toner: Number(costoToner.toFixed(6)),
                 desgaste: Number(costoDesgaste.toFixed(6)),
+                consumiblesTerminacion: Number(costoConsumiblesTerminacion.toFixed(6)),
                 adicionalesMateriales: Number(costoAdicionalesMateriales.toFixed(6)),
                 adicionalesCostEffects: Number(costoAdicionalesCostEffects.toFixed(6)),
             },
@@ -1693,8 +2599,20 @@ let ProductosServiciosService = class ProductosServiciosService {
             trazabilidad: {
                 imposicion,
                 conversionPapel,
-                addonsSeleccionados: addonSelectionInput,
-                addonsConfig: addonConfigTrace,
+                matchingBaseAplicado: matchingBaseAplicado.map((item) => ({
+                    pasoPlantillaId: item.pasoPlantilla.id,
+                    pasoPlantillaNombre: item.pasoPlantilla.nombre,
+                    perfilOperativoId: item.perfilOperativo.id,
+                    perfilOperativoNombre: item.perfilOperativo.nombre,
+                    tipoImpresion: item.tipoImpresion ? this.fromTipoImpresion(item.tipoImpresion) : null,
+                    caras: item.caras ? this.fromCaras(item.caras) : null,
+                })),
+                checklistAplicado: checklistAplicadoTrace,
+                checklistRespuestasSeleccionadas: checklistRespuestasInput,
+                atributosTecnicosConfigurados: Array.from(atributosTecnicosSeleccionados.entries()).map(([dimension, value]) => ({
+                    dimension: this.fromDimensionOpcionProductiva(dimension),
+                    valor: this.fromValorOpcionProductiva(value),
+                })),
                 opcionProductivaEfectiva: Array.from(opcionProductivaEfectiva.entries()).map(([dimension, values]) => ({
                     dimension: this.fromDimensionOpcionProductiva(dimension),
                     valores: Array.from(values).map((value) => this.fromValorOpcionProductiva(value)),
@@ -1750,11 +2668,21 @@ let ProductosServiciosService = class ProductosServiciosService {
                     cantidad,
                     periodo,
                     config,
-                    addonsSeleccionados: addonSelectionInput,
-                    addonsConfig: addonConfigTrace,
+                    checklistRespuestas: checklistRespuestasInput,
                 },
                 resultadoJson: result,
                 total: new client_1.Prisma.Decimal(total),
+                checklistRespuestas: checklistRespuestasInput.length
+                    ? {
+                        create: checklistRespuestasInput.map((item) => ({
+                            tenantId: auth.tenantId,
+                            productoVarianteId: variante.id,
+                            preguntaId: item.preguntaId,
+                            respuestaId: item.respuestaId,
+                            nivelId: null,
+                        })),
+                    }
+                    : undefined,
             },
         });
         return {
@@ -1944,6 +2872,35 @@ let ProductosServiciosService = class ProductosServiciosService {
         });
         if (!item) {
             throw new common_1.NotFoundException('Ruta de produccion no encontrada.');
+        }
+        return item;
+    }
+    async findProcesoOperacionOrThrow(auth, id, tx) {
+        const item = await tx.procesoOperacion.findFirst({
+            where: {
+                tenantId: auth.tenantId,
+                id,
+            },
+        });
+        if (!item) {
+            throw new common_1.NotFoundException('Paso de ruta no encontrado.');
+        }
+        return item;
+    }
+    async findBibliotecaOperacionOrThrow(auth, id, tx) {
+        const item = await tx.procesoOperacionPlantilla.findFirst({
+            where: {
+                tenantId: auth.tenantId,
+                id,
+            },
+            include: {
+                centroCosto: true,
+                maquina: true,
+                perfilOperativo: true,
+            },
+        });
+        if (!item) {
+            throw new common_1.NotFoundException('Paso de biblioteca no encontrado.');
         }
         return item;
     }
@@ -2140,7 +3097,7 @@ let ProductosServiciosService = class ProductosServiciosService {
         const item = await this.findAdicionalEfectoOrThrow(auth, adicionalId, efectoId, this.prisma);
         return this.toAdicionalEfectoResponse(item);
     }
-    async validateAdicionalEfectoPayload(auth, payload, tx) {
+    async validateAdicionalEfectoPayload(auth, payload, adicionalTipo, tx) {
         if (payload.tipo === productos_servicios_dto_1.TipoProductoAdicionalEfectoDto.route_effect && !payload.routeEffect) {
             throw new common_1.BadRequestException('El tipo route_effect requiere definir pasos.');
         }
@@ -2166,23 +3123,36 @@ let ProductosServiciosService = class ProductosServiciosService {
         if (payload.routeEffect?.pasos?.length) {
             for (const paso of payload.routeEffect.pasos) {
                 await this.findCentroCostoOrThrow(auth, paso.centroCostoId, tx);
-                if (paso.maquinaId) {
-                    const maq = await tx.maquina.findFirst({
-                        where: { tenantId: auth.tenantId, id: paso.maquinaId },
-                        select: { id: true },
-                    });
-                    if (!maq) {
-                        throw new common_1.NotFoundException('Máquina no encontrada para un paso del route_effect.');
-                    }
+                const usarMaquinariaTerminacion = paso.usarMaquinariaTerminacion ?? Boolean(paso.maquinaId || paso.perfilOperativoId);
+                if (adicionalTipo === client_1.TipoProductoAdicional.SERVICIO && usarMaquinariaTerminacion) {
+                    throw new common_1.BadRequestException('Un adicional de tipo servicio no puede usar maquinaria de terminación en la Regla de pasos.');
                 }
-                if (paso.perfilOperativoId) {
-                    const perfil = await tx.maquinaPerfilOperativo.findFirst({
-                        where: { tenantId: auth.tenantId, id: paso.perfilOperativoId },
-                        select: { id: true },
-                    });
-                    if (!perfil) {
-                        throw new common_1.NotFoundException('Perfil operativo no encontrado para un paso del route_effect.');
-                    }
+                if (!usarMaquinariaTerminacion) {
+                    continue;
+                }
+                if (!paso.maquinaId || !paso.perfilOperativoId) {
+                    throw new common_1.BadRequestException('Cuando "usarMaquinariaTerminacion" está activo, maquinaId y perfilOperativoId son obligatorios.');
+                }
+                const maquina = await tx.maquina.findFirst({
+                    where: { tenantId: auth.tenantId, id: paso.maquinaId },
+                    select: { id: true, plantilla: true },
+                });
+                if (!maquina) {
+                    throw new common_1.NotFoundException('Máquina no encontrada para un paso del route_effect.');
+                }
+                if (!this.isPlantillaTerminacionSoportada(maquina.plantilla)) {
+                    throw new common_1.BadRequestException('La máquina seleccionada no corresponde a una plantilla de terminación soportada.');
+                }
+                const perfil = await tx.maquinaPerfilOperativo.findFirst({
+                    where: {
+                        tenantId: auth.tenantId,
+                        id: paso.perfilOperativoId,
+                        maquinaId: maquina.id,
+                    },
+                    select: { id: true },
+                });
+                if (!perfil) {
+                    throw new common_1.BadRequestException('El perfil operativo seleccionado no pertenece a la máquina indicada.');
                 }
             }
         }
@@ -2293,18 +3263,30 @@ let ProductosServiciosService = class ProductosServiciosService {
             });
             await tx.productoAdicionalRouteEffectPaso.createMany({
                 data: payload.routeEffect.pasos.map((paso, index) => ({
+                    ...(paso.usarMaquinariaTerminacion ?? Boolean(paso.maquinaId || paso.perfilOperativoId)
+                        ? {
+                            maquinaId: paso.maquinaId ?? null,
+                            perfilOperativoId: paso.perfilOperativoId ?? null,
+                        }
+                        : {
+                            maquinaId: null,
+                            perfilOperativoId: null,
+                        }),
                     tenantId: auth.tenantId,
                     productoAdicionalRouteEffectId: route.id,
                     orden: paso.orden ?? index + 1,
                     nombre: paso.nombre.trim(),
                     tipoOperacion: client_1.TipoOperacionProceso.OTRO,
                     centroCostoId: paso.centroCostoId,
-                    maquinaId: paso.maquinaId ?? null,
-                    perfilOperativoId: paso.perfilOperativoId ?? null,
                     setupMin: paso.setupMin ?? null,
                     runMin: paso.runMin ?? null,
                     cleanupMin: paso.cleanupMin ?? null,
                     tiempoFijoMin: paso.tiempoFijoMin ?? null,
+                    detalleJson: {
+                        usarMaquinariaTerminacion: paso.usarMaquinariaTerminacion ?? Boolean(paso.maquinaId || paso.perfilOperativoId),
+                        tiempoFijoMinFallback: paso.tiempoFijoMinFallback ?? paso.tiempoFijoMin ?? null,
+                        overridesProductividad: paso.overridesProductividad ?? null,
+                    },
                 })),
             });
         }
@@ -2351,6 +3333,9 @@ let ProductosServiciosService = class ProductosServiciosService {
                 ? {
                     id: item.routeEffect.id,
                     pasos: item.routeEffect.pasos.map((paso) => ({
+                        ...(this.asObject(paso.detalleJson).usarMaquinariaTerminacion === true
+                            ? { usarMaquinariaTerminacion: true }
+                            : { usarMaquinariaTerminacion: false }),
                         id: paso.id,
                         orden: paso.orden,
                         nombre: paso.nombre,
@@ -2364,6 +3349,15 @@ let ProductosServiciosService = class ProductosServiciosService {
                         runMin: paso.runMin === null ? null : Number(paso.runMin),
                         cleanupMin: paso.cleanupMin === null ? null : Number(paso.cleanupMin),
                         tiempoFijoMin: paso.tiempoFijoMin === null ? null : Number(paso.tiempoFijoMin),
+                        tiempoFijoMinFallback: this.toSafeNumber(this.asObject(paso.detalleJson).tiempoFijoMinFallback, NaN) >= 0
+                            ? this.toSafeNumber(this.asObject(paso.detalleJson).tiempoFijoMinFallback, 0)
+                            : paso.tiempoFijoMin === null
+                                ? null
+                                : Number(paso.tiempoFijoMin),
+                        overridesProductividad: (() => {
+                            const overrides = this.asObject(this.asObject(paso.detalleJson).overridesProductividad);
+                            return Object.keys(overrides).length > 0 ? overrides : null;
+                        })(),
                     })),
                 }
                 : null,
@@ -2393,6 +3387,138 @@ let ProductosServiciosService = class ProductosServiciosService {
             updatedAt: item.updatedAt.toISOString(),
         };
     }
+    isPlantillaTerminacionSoportada(plantilla) {
+        return ProductosServiciosService_1.TERMINACION_PLANTILLAS_SOPORTADAS.has(plantilla);
+    }
+    validateProductoChecklistPayload(payload) {
+        const preguntaOrdenes = new Set();
+        for (const [preguntaIndex, pregunta] of payload.preguntas.entries()) {
+            const ordenPregunta = pregunta.orden ?? preguntaIndex + 1;
+            if (preguntaOrdenes.has(ordenPregunta)) {
+                throw new common_1.BadRequestException('Hay preguntas con orden duplicado en el checklist.');
+            }
+            preguntaOrdenes.add(ordenPregunta);
+            if (!pregunta.texto.trim()) {
+                throw new common_1.BadRequestException('El texto de cada pregunta es obligatorio.');
+            }
+            if (pregunta.tipoPregunta === productos_servicios_dto_1.TipoChecklistPreguntaDto.binaria && pregunta.respuestas.length !== 2) {
+                throw new common_1.BadRequestException('Las preguntas binarias deben tener exactamente dos respuestas.');
+            }
+            const respuestaOrdenes = new Set();
+            for (const [respuestaIndex, respuesta] of pregunta.respuestas.entries()) {
+                const ordenRespuesta = respuesta.orden ?? respuestaIndex + 1;
+                if (respuestaOrdenes.has(ordenRespuesta)) {
+                    throw new common_1.BadRequestException('Hay respuestas con orden duplicado dentro de una pregunta.');
+                }
+                respuestaOrdenes.add(ordenRespuesta);
+                if (!respuesta.texto.trim()) {
+                    throw new common_1.BadRequestException('El texto de cada respuesta es obligatorio.');
+                }
+                const reglas = respuesta.reglas ?? [];
+                const reglaOrdenes = new Set();
+                for (const [reglaIndex, regla] of reglas.entries()) {
+                    const ordenRegla = regla.orden ?? reglaIndex + 1;
+                    if (reglaOrdenes.has(ordenRegla)) {
+                        throw new common_1.BadRequestException('Hay reglas con orden duplicado dentro de una respuesta.');
+                    }
+                    reglaOrdenes.add(ordenRegla);
+                    if (regla.accion === productos_servicios_dto_1.TipoChecklistAccionReglaDto.activar_paso && !regla.pasoPlantillaId) {
+                        throw new common_1.BadRequestException('La regla ACTIVAR_PASO requiere pasoPlantillaId.');
+                    }
+                    if (regla.accion === productos_servicios_dto_1.TipoChecklistAccionReglaDto.seleccionar_variante_paso &&
+                        (!regla.pasoPlantillaId || !regla.variantePasoId)) {
+                        throw new common_1.BadRequestException('La regla SELECCIONAR_VARIANTE_PASO requiere pasoPlantillaId y variantePasoId.');
+                    }
+                    if (regla.accion === productos_servicios_dto_1.TipoChecklistAccionReglaDto.costo_extra && !regla.costoRegla) {
+                        throw new common_1.BadRequestException('La regla COSTO_EXTRA requiere costoRegla.');
+                    }
+                    if (regla.accion === productos_servicios_dto_1.TipoChecklistAccionReglaDto.material_extra && !regla.materiaPrimaVarianteId) {
+                        throw new common_1.BadRequestException('La regla MATERIAL_EXTRA requiere materiaPrimaVarianteId.');
+                    }
+                    if (regla.accion === productos_servicios_dto_1.TipoChecklistAccionReglaDto.set_atributo_tecnico) {
+                        throw new common_1.BadRequestException('SET_ATRIBUTO_TECNICO ya no se admite en Ruta de opcionales.');
+                    }
+                }
+            }
+        }
+    }
+    toProductoChecklistResponse(item, plantillasById = new Map()) {
+        return {
+            id: item.id,
+            productoId: item.productoServicioId,
+            activo: item.activo,
+            preguntas: item.preguntas.map((pregunta) => ({
+                id: pregunta.id,
+                texto: pregunta.texto,
+                tipoPregunta: this.fromTipoChecklistPregunta(pregunta.tipoPregunta),
+                orden: pregunta.orden,
+                activo: pregunta.activo,
+                respuestas: pregunta.respuestas.map((respuesta) => ({
+                    id: respuesta.id,
+                    texto: respuesta.texto,
+                    codigo: respuesta.codigo,
+                    orden: respuesta.orden,
+                    activo: respuesta.activo,
+                    reglas: respuesta.reglas
+                        .filter((regla) => regla.accion !== client_1.TipoProductoChecklistReglaAccion.SET_ATRIBUTO_TECNICO)
+                        .map((regla) => {
+                        const pasoPlantillaId = this.getChecklistPasoPlantillaId(regla.detalleJson);
+                        const pasoPlantilla = pasoPlantillaId ? plantillasById.get(pasoPlantillaId) ?? null : null;
+                        const pasoDetalleJson = pasoPlantilla?.detalleJson ?? regla.procesoOperacion?.detalleJson ?? null;
+                        return {
+                            id: regla.id,
+                            accion: this.fromTipoChecklistAccion(regla.accion),
+                            orden: regla.orden,
+                            activo: regla.activo,
+                            pasoPlantillaId,
+                            pasoPlantillaNombre: pasoPlantilla?.nombre ?? regla.procesoOperacion?.nombre ?? '',
+                            centroCostoId: pasoPlantilla?.centroCostoId ?? regla.procesoOperacion?.centroCosto.id ?? null,
+                            centroCostoNombre: pasoPlantilla?.centroCosto?.nombre ?? regla.procesoOperacion?.centroCosto.nombre ?? '',
+                            maquinaNombre: pasoPlantilla?.maquina?.nombre ?? regla.procesoOperacion?.maquina?.nombre ?? '',
+                            perfilOperativoNombre: pasoPlantilla?.perfilOperativo?.nombre ??
+                                regla.procesoOperacion?.perfilOperativo?.nombre ??
+                                '',
+                            setupMin: pasoPlantilla?.setupMin === null || pasoPlantilla?.setupMin === undefined
+                                ? regla.procesoOperacion?.setupMin
+                                    ? Number(regla.procesoOperacion.setupMin)
+                                    : null
+                                : Number(pasoPlantilla.setupMin),
+                            runMin: regla.procesoOperacion?.runMin ? Number(regla.procesoOperacion.runMin) : null,
+                            cleanupMin: pasoPlantilla?.cleanupMin === null || pasoPlantilla?.cleanupMin === undefined
+                                ? regla.procesoOperacion?.cleanupMin
+                                    ? Number(regla.procesoOperacion.cleanupMin)
+                                    : null
+                                : Number(pasoPlantilla.cleanupMin),
+                            tiempoFijoMin: pasoPlantilla?.tiempoFijoMin === null || pasoPlantilla?.tiempoFijoMin === undefined
+                                ? regla.procesoOperacion?.tiempoFijoMin
+                                    ? Number(regla.procesoOperacion.tiempoFijoMin)
+                                    : null
+                                : Number(pasoPlantilla.tiempoFijoMin),
+                            variantePasoId: this.getChecklistVariantePasoId(regla.detalleJson),
+                            variantePasoNombre: this.getChecklistVariantePasoNombre(this.getChecklistVariantePasoId(regla.detalleJson), pasoDetalleJson),
+                            variantePasoResumen: this.getChecklistVariantePasoResumen(this.getChecklistVariantePasoId(regla.detalleJson), pasoDetalleJson),
+                            nivelesDisponibles: this.getProcesoOperacionNiveles(pasoDetalleJson),
+                            costoRegla: regla.costoRegla ? this.fromReglaCostoChecklist(regla.costoRegla) : null,
+                            costoValor: regla.costoValor === null ? null : Number(regla.costoValor),
+                            costoCentroCostoId: regla.costoCentroCostoId,
+                            costoCentroCostoNombre: regla.costoCentroCosto?.nombre ?? '',
+                            materiaPrimaVarianteId: regla.materiaPrimaVarianteId,
+                            materiaPrimaNombre: regla.materiaPrimaVariante?.materiaPrima.nombre ?? '',
+                            materiaPrimaSku: regla.materiaPrimaVariante?.sku ?? '',
+                            tipoConsumo: regla.tipoConsumo
+                                ? this.fromTipoConsumoAdicionalMaterial(regla.tipoConsumo)
+                                : null,
+                            factorConsumo: regla.factorConsumo === null ? null : Number(regla.factorConsumo),
+                            mermaPct: regla.mermaPct === null ? null : Number(regla.mermaPct),
+                            detalle: regla.detalleJson ?? null,
+                        };
+                    }),
+                })),
+            })),
+            createdAt: item.createdAt.toISOString(),
+            updatedAt: item.updatedAt.toISOString(),
+        };
+    }
     validateOpcionesProductivasPayload(payload) {
         const seen = new Set();
         for (const dimension of payload.dimensiones) {
@@ -2415,6 +3541,281 @@ let ProductosServiciosService = class ProductosServiciosService {
             dimension: dimension.dimension,
             valores: Array.from(new Set(dimension.valores)),
         }));
+    }
+    async validateAndNormalizeMatchingBase(auth, productoId, dimensionesConsumidas, matchingPorVariante, tx) {
+        const producto = await tx.productoServicio.findFirst({
+            where: {
+                tenantId: auth.tenantId,
+                id: productoId,
+            },
+            select: {
+                id: true,
+                usarRutaComunVariantes: true,
+                procesoDefinicionDefaultId: true,
+            },
+        });
+        if (!producto) {
+            throw new common_1.NotFoundException('Producto no encontrado.');
+        }
+        const varianteRows = await tx.productoVariante.findMany({
+            where: {
+                tenantId: auth.tenantId,
+                productoServicioId: productoId,
+            },
+            include: {
+                opcionesProductivasSet: {
+                    include: {
+                        valores: {
+                            where: { activo: true },
+                            orderBy: [{ dimension: 'asc' }, { orden: 'asc' }, { createdAt: 'asc' }],
+                        },
+                    },
+                },
+            },
+        });
+        const variantesById = new Map(varianteRows.map((item) => [item.id, item]));
+        const plantillaIds = Array.from(new Set((matchingPorVariante ?? []).flatMap((item) => item.matching.map((row) => row.pasoPlantillaId))));
+        const procesoIds = Array.from(new Set((matchingPorVariante ?? [])
+            .map((item) => {
+            const variante = variantesById.get(item.varianteId);
+            if (!variante)
+                return null;
+            return producto.usarRutaComunVariantes
+                ? producto.procesoDefinicionDefaultId
+                : variante.procesoDefinicionId;
+        })
+            .filter((value) => Boolean(value))));
+        const [plantillas, procesos] = await Promise.all([
+            plantillaIds.length
+                ? tx.procesoOperacionPlantilla.findMany({
+                    where: { tenantId: auth.tenantId, id: { in: plantillaIds } },
+                })
+                : Promise.resolve([]),
+            procesoIds.length
+                ? tx.procesoDefinicion.findMany({
+                    where: { tenantId: auth.tenantId, id: { in: procesoIds } },
+                    include: {
+                        operaciones: true,
+                    },
+                })
+                : Promise.resolve([]),
+        ]);
+        const plantillasById = new Map(plantillas.map((item) => [item.id, item]));
+        const procesoById = new Map(procesos.map((item) => [item.id, item]));
+        const maquinaIds = Array.from(new Set(plantillas
+            .map((item) => item.maquinaId)
+            .filter((value) => Boolean(value))));
+        const maquinas = maquinaIds.length
+            ? await tx.maquina.findMany({
+                where: { tenantId: auth.tenantId, id: { in: maquinaIds } },
+                select: { id: true, plantilla: true },
+            })
+            : [];
+        const maquinasById = new Map(maquinas.map((item) => [item.id, item]));
+        const perfiles = maquinaIds.length
+            ? await tx.maquinaPerfilOperativo.findMany({
+                where: { tenantId: auth.tenantId, maquinaId: { in: maquinaIds } },
+            })
+            : [];
+        const perfilesById = new Map(perfiles.map((item) => [item.id, item]));
+        const perfilesByMaquinaId = new Map();
+        for (const perfil of perfiles) {
+            const current = perfilesByMaquinaId.get(perfil.maquinaId) ?? [];
+            current.push(perfil);
+            perfilesByMaquinaId.set(perfil.maquinaId, current);
+        }
+        return (matchingPorVariante ?? []).map((item) => {
+            const variante = variantesById.get(item.varianteId);
+            if (!variante) {
+                throw new common_1.BadRequestException('Matching base: variante inválida para este producto.');
+            }
+            const permitidos = this.resolveEffectiveOptionValues(variante);
+            const seen = new Set();
+            const procesoId = producto.usarRutaComunVariantes
+                ? producto.procesoDefinicionDefaultId
+                : variante.procesoDefinicionId;
+            const proceso = procesoId ? procesoById.get(procesoId) ?? null : null;
+            const pasoPlantillaIdsRuta = new Set((proceso?.operaciones ?? [])
+                .map((op) => ({
+                op,
+                pasoPlantillaId: this.resolvePasoPlantillaIdFromOperacionRuta(op, plantillas) ?? '',
+            }))
+                .filter((value) => Boolean(value.pasoPlantillaId))
+                .filter(({ pasoPlantillaId }) => this.isPasoPlantillaEligibleForMatchingBase(plantillasById.get(pasoPlantillaId) ?? null, maquinasById, dimensionesConsumidas))
+                .map((value) => value.pasoPlantillaId));
+            const normalizedMatching = item.matching.map((row) => {
+                const plantilla = plantillasById.get(row.pasoPlantillaId);
+                if (!plantilla) {
+                    throw new common_1.BadRequestException('Matching base: paso de biblioteca inválido.');
+                }
+                if (!pasoPlantillaIdsRuta.has(row.pasoPlantillaId)) {
+                    throw new common_1.BadRequestException('Matching base: el paso elegido no pertenece a la ruta base efectiva de la variante.');
+                }
+                if (!plantilla.maquinaId) {
+                    throw new common_1.BadRequestException('Matching base: el paso elegido no tiene máquina asignada.');
+                }
+                const tipoImpresion = row.tipoImpresion ? this.toTipoImpresion(row.tipoImpresion) : null;
+                const caras = row.caras ? this.toCaras(row.caras) : null;
+                let perfil = perfilesById.get(row.perfilOperativoId) ?? null;
+                if (!perfil) {
+                    perfil =
+                        perfilesByMaquinaId
+                            .get(plantilla.maquinaId)
+                            ?.find((item) => (!tipoImpresion || item.printMode === tipoImpresion) &&
+                            (!caras || item.printSides === caras)) ?? null;
+                }
+                if (!perfil) {
+                    const partes = [];
+                    if (tipoImpresion) {
+                        partes.push(`tipo_impresion=${row.tipoImpresion}`);
+                    }
+                    if (caras) {
+                        partes.push(`caras=${row.caras}`);
+                    }
+                    const contexto = partes.length ? ` para ${partes.join(', ')}` : '';
+                    throw new common_1.BadRequestException(`Matching base: no existe perfil operativo compatible${contexto} en la máquina del paso.`);
+                }
+                if (perfil.maquinaId !== plantilla.maquinaId) {
+                    throw new common_1.BadRequestException('Matching base: el perfil operativo no pertenece a la misma máquina del paso.');
+                }
+                if (dimensionesConsumidas.includes(client_1.DimensionOpcionProductiva.TIPO_IMPRESION)) {
+                    if (!tipoImpresion) {
+                        throw new common_1.BadRequestException('Matching base: falta tipo de impresión en una combinación.');
+                    }
+                    const permitidosTipo = permitidos.get(client_1.DimensionOpcionProductiva.TIPO_IMPRESION);
+                    if (!permitidosTipo?.has(this.toValorFromTipoImpresion(tipoImpresion))) {
+                        throw new common_1.BadRequestException(`Matching base: tipo_impresion=${row.tipoImpresion} no está permitido para la variante.`);
+                    }
+                }
+                if (dimensionesConsumidas.includes(client_1.DimensionOpcionProductiva.CARAS)) {
+                    if (!caras) {
+                        throw new common_1.BadRequestException('Matching base: falta caras en una combinación.');
+                    }
+                    const permitidosCaras = permitidos.get(client_1.DimensionOpcionProductiva.CARAS);
+                    if (!permitidosCaras?.has(this.toValorFromCaras(caras))) {
+                        throw new common_1.BadRequestException(`Matching base: caras=${row.caras} no está permitido para la variante.`);
+                    }
+                }
+                const key = `${row.pasoPlantillaId}:${tipoImpresion ?? 'na'}:${caras ?? 'na'}`;
+                if (seen.has(key)) {
+                    throw new common_1.BadRequestException('Matching base: hay combinaciones duplicadas para el mismo paso dentro de una variante.');
+                }
+                seen.add(key);
+                return {
+                    tipoImpresion: tipoImpresion ? this.fromTipoImpresion(tipoImpresion) : null,
+                    caras: caras ? this.fromCaras(caras) : null,
+                    pasoPlantillaId: row.pasoPlantillaId,
+                    perfilOperativoId: perfil.id,
+                };
+            });
+            return {
+                varianteId: item.varianteId,
+                matching: normalizedMatching,
+            };
+        });
+    }
+    async validateAndNormalizePasosFijosRutaBase(auth, productoId, dimensionesConsumidas, pasosFijosPorVariante, tx) {
+        const producto = await tx.productoServicio.findFirst({
+            where: {
+                tenantId: auth.tenantId,
+                id: productoId,
+            },
+            select: {
+                id: true,
+                usarRutaComunVariantes: true,
+                procesoDefinicionDefaultId: true,
+            },
+        });
+        if (!producto) {
+            throw new common_1.NotFoundException('Producto no encontrado.');
+        }
+        const varianteRows = await tx.productoVariante.findMany({
+            where: {
+                tenantId: auth.tenantId,
+                productoServicioId: productoId,
+            },
+        });
+        const variantesById = new Map(varianteRows.map((item) => [item.id, item]));
+        const procesoIds = Array.from(new Set((pasosFijosPorVariante ?? [])
+            .map((item) => {
+            const variante = variantesById.get(item.varianteId);
+            if (!variante)
+                return null;
+            return producto.usarRutaComunVariantes
+                ? producto.procesoDefinicionDefaultId
+                : variante.procesoDefinicionId;
+        })
+            .filter((value) => Boolean(value))));
+        const procesos = procesoIds.length
+            ? await tx.procesoDefinicion.findMany({
+                where: { tenantId: auth.tenantId, id: { in: procesoIds } },
+                include: { operaciones: true },
+            })
+            : [];
+        const procesoById = new Map(procesos.map((item) => [item.id, item]));
+        const plantillas = await tx.procesoOperacionPlantilla.findMany({
+            where: { tenantId: auth.tenantId, activo: true },
+        });
+        const plantillasById = new Map(plantillas.map((item) => [item.id, item]));
+        const maquinas = await tx.maquina.findMany({
+            where: { tenantId: auth.tenantId },
+            select: { id: true, plantilla: true },
+        });
+        const maquinasById = new Map(maquinas.map((item) => [item.id, item]));
+        const perfiles = await tx.maquinaPerfilOperativo.findMany({
+            where: { tenantId: auth.tenantId },
+        });
+        const perfilesById = new Map(perfiles.map((item) => [item.id, item]));
+        return (pasosFijosPorVariante ?? []).map((item) => {
+            const variante = variantesById.get(item.varianteId);
+            if (!variante) {
+                throw new common_1.BadRequestException('Pasos fijos: variante inválida para este producto.');
+            }
+            const procesoId = producto.usarRutaComunVariantes
+                ? producto.procesoDefinicionDefaultId
+                : variante.procesoDefinicionId;
+            const proceso = procesoId ? procesoById.get(procesoId) ?? null : null;
+            const pasoPlantillaIdsRuta = new Set((proceso?.operaciones ?? [])
+                .map((op) => this.resolvePasoPlantillaIdFromOperacionRuta(op, plantillas) ?? '')
+                .filter(Boolean)
+                .filter((pasoPlantillaId) => {
+                const plantilla = plantillasById.get(pasoPlantillaId) ?? null;
+                return !this.isPasoPlantillaEligibleForMatchingBase(plantilla, maquinasById, dimensionesConsumidas);
+            }));
+            const seen = new Set();
+            const pasos = (item.pasos ?? []).map((row) => {
+                const plantilla = plantillasById.get(row.pasoPlantillaId) ?? null;
+                if (!plantilla) {
+                    throw new common_1.BadRequestException('Pasos fijos: paso de biblioteca inválido.');
+                }
+                if (!pasoPlantillaIdsRuta.has(row.pasoPlantillaId)) {
+                    throw new common_1.BadRequestException('Pasos fijos: el paso elegido no pertenece a los pasos fijos de la ruta efectiva de la variante.');
+                }
+                if (!plantilla.maquinaId) {
+                    throw new common_1.BadRequestException('Pasos fijos: el paso elegido no tiene máquina asignada.');
+                }
+                const perfil = perfilesById.get(row.perfilOperativoId) ?? null;
+                if (!perfil) {
+                    throw new common_1.BadRequestException('Pasos fijos: perfil operativo inválido.');
+                }
+                if (perfil.maquinaId !== plantilla.maquinaId) {
+                    throw new common_1.BadRequestException('Pasos fijos: el perfil operativo no pertenece a la misma máquina del paso.');
+                }
+                const key = `${row.pasoPlantillaId}:${perfil.id}`;
+                if (seen.has(key)) {
+                    throw new common_1.BadRequestException('Pasos fijos: hay configuraciones duplicadas para el mismo paso dentro de una variante.');
+                }
+                seen.add(key);
+                return {
+                    pasoPlantillaId: row.pasoPlantillaId,
+                    perfilOperativoId: perfil.id,
+                };
+            });
+            return {
+                varianteId: item.varianteId,
+                pasos,
+            };
+        });
     }
     toVarianteOpcionesProductivasResponse(varianteId, variante, set) {
         const legacy = [
@@ -2497,6 +3898,210 @@ let ProductosServiciosService = class ProductosServiciosService {
             createdAt: item.createdAt.toISOString(),
             updatedAt: item.updatedAt.toISOString(),
         };
+    }
+    toProductoResponseBase(item) {
+        return {
+            id: item.id,
+            tipo: this.fromTipoProducto(item.tipo),
+            codigo: item.codigo,
+            nombre: item.nombre,
+            descripcion: item.descripcion ?? '',
+            motorCodigo: item.motorCodigo,
+            motorVersion: item.motorVersion,
+            usarRutaComunVariantes: item.usarRutaComunVariantes,
+            procesoDefinicionDefaultId: item.procesoDefinicionDefaultId,
+            procesoDefinicionDefaultNombre: item.procesoDefinicionDefault?.nombre ?? '',
+            estado: this.fromEstadoProducto(item.estado),
+            activo: item.activo,
+            familiaProductoId: item.familiaProductoId,
+            familiaProductoNombre: item.familiaProducto.nombre,
+            subfamiliaProductoId: item.subfamiliaProductoId,
+            subfamiliaProductoNombre: item.subfamiliaProducto?.nombre ?? '',
+            dimensionesBaseConsumidas: this.getProductoDimensionesBaseConsumidas(item.detalleJson).map((dimension) => this.fromDimensionOpcionProductiva(dimension)),
+            createdAt: item.createdAt.toISOString(),
+            updatedAt: item.updatedAt.toISOString(),
+        };
+    }
+    mergeProductoDetalle(detalleJson, patch) {
+        const current = this.asObject(detalleJson);
+        return {
+            ...current,
+            ...patch,
+        };
+    }
+    getProductoDimensionesBaseConsumidas(detalleJson) {
+        const detalle = this.asObject(detalleJson);
+        const raw = detalle.dimensionesBaseConsumidas;
+        if (!Array.isArray(raw)) {
+            return [];
+        }
+        return Array.from(new Set(raw
+            .map((item) => this.normalizeDimensionOpcionProductivaValue(item))
+            .filter((item) => Boolean(item))
+            .map((item) => this.toDimensionOpcionProductiva(item))));
+    }
+    getProductoMatchingBaseByVariante(detalleJson) {
+        const detalle = this.asObject(detalleJson);
+        const raw = detalle.matchingBasePorVariante;
+        if (!Array.isArray(raw)) {
+            return [];
+        }
+        return raw
+            .map((item) => {
+            if (!item || typeof item !== 'object' || Array.isArray(item))
+                return null;
+            const record = item;
+            const varianteId = typeof record.varianteId === 'string' ? record.varianteId.trim() : '';
+            if (!varianteId)
+                return null;
+            const matching = Array.isArray(record.matching)
+                ? record.matching
+                    .map((matchItem) => {
+                    if (!matchItem || typeof matchItem !== 'object' || Array.isArray(matchItem))
+                        return null;
+                    const matchRecord = matchItem;
+                    const tipoImpresion = matchRecord.tipoImpresion === null
+                        ? null
+                        : this.normalizeTipoImpresionProductoVarianteValue(matchRecord.tipoImpresion);
+                    const caras = matchRecord.caras === null
+                        ? null
+                        : this.normalizeCarasProductoVarianteValue(matchRecord.caras);
+                    const pasoPlantillaId = typeof matchRecord.pasoPlantillaId === 'string'
+                        ? matchRecord.pasoPlantillaId.trim()
+                        : '';
+                    const perfilOperativoId = typeof matchRecord.perfilOperativoId === 'string'
+                        ? matchRecord.perfilOperativoId.trim()
+                        : '';
+                    if (!pasoPlantillaId || !perfilOperativoId)
+                        return null;
+                    return {
+                        tipoImpresion,
+                        caras,
+                        pasoPlantillaId,
+                        perfilOperativoId,
+                    };
+                })
+                    .filter((row) => Boolean(row))
+                : [];
+            return {
+                varianteId,
+                matching,
+            };
+        })
+            .filter((item) => Boolean(item));
+    }
+    getProductoPasosFijosByVariante(detalleJson) {
+        const detalle = this.asObject(detalleJson);
+        const raw = detalle.pasosFijosPorVariante;
+        if (!Array.isArray(raw)) {
+            return [];
+        }
+        return raw
+            .map((item) => {
+            if (!item || typeof item !== 'object' || Array.isArray(item))
+                return null;
+            const record = item;
+            const varianteId = typeof record.varianteId === 'string' ? record.varianteId.trim() : '';
+            if (!varianteId)
+                return null;
+            const pasos = Array.isArray(record.pasos)
+                ? record.pasos
+                    .map((pasoItem) => {
+                    if (!pasoItem || typeof pasoItem !== 'object' || Array.isArray(pasoItem))
+                        return null;
+                    const pasoRecord = pasoItem;
+                    const pasoPlantillaId = typeof pasoRecord.pasoPlantillaId === 'string' ? pasoRecord.pasoPlantillaId.trim() : '';
+                    const perfilOperativoId = typeof pasoRecord.perfilOperativoId === 'string'
+                        ? pasoRecord.perfilOperativoId.trim()
+                        : '';
+                    if (!pasoPlantillaId || !perfilOperativoId)
+                        return null;
+                    return {
+                        pasoPlantillaId,
+                        perfilOperativoId,
+                    };
+                })
+                    .filter((row) => Boolean(row))
+                : [];
+            return {
+                varianteId,
+                pasos,
+            };
+        })
+            .filter((item) => Boolean(item));
+    }
+    async toRutaBaseMatchingResponse(detalleJson) {
+        const matchingByVariante = this.getProductoMatchingBaseByVariante(detalleJson);
+        if (!matchingByVariante.length)
+            return [];
+        const plantillaIds = Array.from(new Set(matchingByVariante.flatMap((item) => item.matching.map((row) => row.pasoPlantillaId))));
+        const perfilIds = Array.from(new Set(matchingByVariante.flatMap((item) => item.matching.map((row) => row.perfilOperativoId))));
+        const [plantillas, perfiles] = await Promise.all([
+            plantillaIds.length
+                ? this.prisma.procesoOperacionPlantilla.findMany({
+                    where: { id: { in: plantillaIds } },
+                })
+                : Promise.resolve([]),
+            perfilIds.length
+                ? this.prisma.maquinaPerfilOperativo.findMany({
+                    where: { id: { in: perfilIds } },
+                })
+                : Promise.resolve([]),
+        ]);
+        const plantillasById = new Map(plantillas.map((item) => [item.id, item]));
+        const perfilesById = new Map(perfiles.map((item) => [item.id, item]));
+        return matchingByVariante.map((item) => ({
+            varianteId: item.varianteId,
+            matching: item.matching.map((row) => ({
+                tipoImpresion: row.tipoImpresion,
+                caras: row.caras,
+                pasoPlantillaId: row.pasoPlantillaId,
+                pasoPlantillaNombre: plantillasById.get(row.pasoPlantillaId)?.nombre ?? '',
+                perfilOperativoId: row.perfilOperativoId,
+                perfilOperativoNombre: perfilesById.get(row.perfilOperativoId)?.nombre ?? '',
+            })),
+        }));
+    }
+    async toRutaBasePasosFijosResponse(detalleJson) {
+        const pasosFijosByVariante = this.getProductoPasosFijosByVariante(detalleJson);
+        if (!pasosFijosByVariante.length)
+            return [];
+        const plantillaIds = Array.from(new Set(pasosFijosByVariante.flatMap((item) => item.pasos.map((row) => row.pasoPlantillaId))));
+        const perfilIds = Array.from(new Set(pasosFijosByVariante.flatMap((item) => item.pasos.map((row) => row.perfilOperativoId))));
+        const [plantillas, perfiles] = await Promise.all([
+            plantillaIds.length
+                ? this.prisma.procesoOperacionPlantilla.findMany({
+                    where: { id: { in: plantillaIds } },
+                })
+                : Promise.resolve([]),
+            perfilIds.length
+                ? this.prisma.maquinaPerfilOperativo.findMany({
+                    where: { id: { in: perfilIds } },
+                })
+                : Promise.resolve([]),
+        ]);
+        const plantillasById = new Map(plantillas.map((item) => [item.id, item]));
+        const perfilesById = new Map(perfiles.map((item) => [item.id, item]));
+        return pasosFijosByVariante.map((item) => ({
+            varianteId: item.varianteId,
+            pasos: item.pasos.map((row) => ({
+                pasoPlantillaId: row.pasoPlantillaId,
+                pasoPlantillaNombre: plantillasById.get(row.pasoPlantillaId)?.nombre ?? '',
+                perfilOperativoId: row.perfilOperativoId,
+                perfilOperativoNombre: perfilesById.get(row.perfilOperativoId)?.nombre ?? '',
+            })),
+        }));
+    }
+    normalizeDimensionOpcionProductivaValue(value) {
+        return value === 'tipo_impresion' || value === 'caras' ? value : null;
+    }
+    normalizeTipoImpresionProductoVarianteValue(value) {
+        return value === 'bn' || value === 'cmyk'
+            ? value
+            : null;
+    }
+    normalizeCarasProductoVarianteValue(value) {
+        return value === 'simple_faz' || value === 'doble_faz' ? value : null;
     }
     async validateVarianteRelations(auth, papelVarianteId, procesoDefinicionId, tx) {
         if (papelVarianteId) {
@@ -2931,6 +4536,597 @@ let ProductosServiciosService = class ProductosServiciosService {
     approxEqualMm(a, b) {
         return Math.abs(a - b) <= 0.01;
     }
+    calculateGuillotinaCutsFromImposicion(input) {
+        const cols = Math.max(0, Math.floor(input.cols));
+        const rows = Math.max(0, Math.floor(input.rows));
+        if (cols <= 0 || rows <= 0) {
+            return 0;
+        }
+        const tipoCorte = String(input.tipoCorte ?? 'sin_demasia').trim().toLowerCase();
+        if (tipoCorte === 'con_demasia') {
+            return cols * 2 + rows * 2;
+        }
+        return cols + rows + 2;
+    }
+    calculateTerminatingOperationTiming(input) {
+        const plantilla = input.operacion.maquina?.plantilla ?? null;
+        const machineParams = this.asObject(input.operacion.maquina?.parametrosTecnicosJson);
+        const profileDetail = this.asObject(input.operacion.perfilOperativo?.detalleJson);
+        const overrides = this.asObject(input.overridesProductividad);
+        const hasPerfil = Object.keys(profileDetail).length > 0;
+        const hasOverrides = Object.keys(overrides).length > 0;
+        const factorVelocidad = Math.max(0.01, hasPerfil
+            ? this.toSafeNumber(profileDetail.factorVelocidad, 1)
+            : this.toSafeNumber(overrides.factorVelocidad, 1));
+        const sourceProductividad = hasPerfil ? 'perfil' : 'override';
+        const resolveOverrideNumber = (key, fallback) => {
+            const value = hasPerfil
+                ? this.toSafeNumber(profileDetail[key], fallback)
+                : this.toSafeNumber(overrides[key], fallback);
+            return value;
+        };
+        const resolveProfileNumber = (directValue, detailKey, fallback) => {
+            if (input.operacion.perfilOperativo && directValue !== undefined && directValue !== null) {
+                return this.toSafeNumber(directValue, fallback);
+            }
+            return resolveOverrideNumber(detailKey, fallback);
+        };
+        if (plantilla === client_1.PlantillaMaquinaria.GUILLOTINA) {
+            const altoBocaMm = Math.max(0, this.toSafeNumber(machineParams.altoBocaMm, 0));
+            const sheetThicknessMm = Math.max(0.001, resolveProfileNumber(input.operacion.perfilOperativo?.sheetThicknessMm, 'sheetThicknessMm', 0.1));
+            const maxBatchHeightMm = Math.max(0, resolveProfileNumber(input.operacion.perfilOperativo?.maxBatchHeightMm, 'maxBatchHeightMm', 0));
+            const alturaTandaEfectiva = maxBatchHeightMm > 0 ? Math.min(altoBocaMm, maxBatchHeightMm) : altoBocaMm;
+            const productivityValue = Math.max(0, resolveProfileNumber(input.operacion.perfilOperativo?.productivityValue, 'productivityValue', 0));
+            if (productivityValue <= 0) {
+                throw new common_1.BadRequestException('La guillotina requiere que el perfil operativo defina Cortes por minuto.');
+            }
+            const feedReloadMin = Math.max(0, resolveProfileNumber(input.operacion.perfilOperativo?.feedReloadMin, 'feedReloadMin', 0));
+            const cortesPorImposicion = this.calculateGuillotinaCutsFromImposicion({
+                cols: input.imposicion?.cols ?? 0,
+                rows: input.imposicion?.rows ?? 0,
+                tipoCorte: input.imposicion?.tipoCorte,
+            });
+            if (cortesPorImposicion <= 0) {
+                throw new common_1.BadRequestException('No se pudo derivar la cantidad de cortes de guillotina desde la imposición.');
+            }
+            const pliegosTotales = Math.max(1, input.pliegos);
+            const capacidadTanda = Math.max(1, Math.floor(alturaTandaEfectiva / sheetThicknessMm));
+            const tandas = Math.max(1, Math.ceil(pliegosTotales / capacidadTanda));
+            const cortesTotales = tandas * cortesPorImposicion;
+            const runMin = Number((cortesTotales / productivityValue).toFixed(4));
+            const setupMin = Number((input.setupMinBase + Math.max(0, tandas - 1) * feedReloadMin).toFixed(4));
+            const cleanupMin = Number(input.cleanupMinBase.toFixed(4));
+            return {
+                setupMin,
+                cleanupMin,
+                tiempoFijoMin: Number(input.tiempoFijoMinBase.toFixed(4)),
+                runMin,
+                trace: {
+                    tipo: 'guillotina',
+                    pliegosTotales,
+                    alturaTandaEfectivaMm: Number(alturaTandaEfectiva.toFixed(4)),
+                    capacidadTanda,
+                    tandas,
+                    cortesPorImposicion,
+                    cortesTotales,
+                    productivityValue: Number(productivityValue.toFixed(4)),
+                },
+                sourceProductividad,
+                warnings: [],
+            };
+        }
+        if (plantilla === client_1.PlantillaMaquinaria.LAMINADORA_BOPP_ROLLO) {
+            const anchoRolloMm = Math.max(1, this.toSafeNumber(machineParams.anchoRolloMm, 0));
+            const velocidadMMin = Math.max(0, this.toSafeNumber(machineParams.velocidadMMin, 0));
+            const mermaArranqueMm = Math.max(0, this.toSafeNumber(machineParams.mermaArranqueMm, 0));
+            const mermaCierreMm = Math.max(0, this.toSafeNumber(machineParams.mermaCierreMm, 0));
+            const gapEntreHojasMm = Math.max(0, resolveOverrideNumber('gapEntreHojasMm', 0));
+            const margenLatIzqMm = Math.max(0, resolveOverrideNumber('margenLatIzqMm', 0));
+            const margenLatDerMm = Math.max(0, resolveOverrideNumber('margenLatDerMm', 0));
+            const colaCorteMm = Math.max(0, resolveOverrideNumber('colaCorteMm', 0));
+            const warmupMin = Math.max(0, resolveOverrideNumber('warmupMin', 0));
+            const anchoHojaMm = Math.max(1, input.varianteAnchoMm);
+            const altoHojaMm = Math.max(1, input.varianteAltoMm);
+            const hojasTotales = Math.max(1, input.cantidadObjetivoSalida);
+            const anchoConsumidoMm = Math.min(anchoRolloMm, anchoHojaMm + margenLatIzqMm + margenLatDerMm);
+            const pasoLinealMm = altoHojaMm + gapEntreHojasMm + colaCorteMm;
+            const largoConsumidoMm = hojasTotales * pasoLinealMm + mermaArranqueMm + mermaCierreMm;
+            const velocidadMMinEfectiva = Math.max(0.01, velocidadMMin * factorVelocidad);
+            const runMin = Number(((largoConsumidoMm / 1000) / velocidadMMinEfectiva).toFixed(4));
+            const areaConsumidaM2 = Number(((anchoConsumidoMm / 1000) * (Math.max(0, largoConsumidoMm) / 1000)).toFixed(6));
+            const setupMin = Number((input.setupMinBase + warmupMin).toFixed(4));
+            const cleanupMin = Number(input.cleanupMinBase.toFixed(4));
+            return {
+                setupMin,
+                cleanupMin,
+                tiempoFijoMin: Number(input.tiempoFijoMinBase.toFixed(4)),
+                runMin,
+                trace: {
+                    tipo: 'laminadora_bopp_rollo',
+                    hojasTotales,
+                    anchoConsumidoMm: Number(anchoConsumidoMm.toFixed(2)),
+                    largoConsumidoMm: Number(largoConsumidoMm.toFixed(2)),
+                    areaConsumidaM2,
+                    velocidadMMinEfectiva: Number(velocidadMMinEfectiva.toFixed(4)),
+                },
+                sourceProductividad,
+                warnings: velocidadMMin <= 0 ? ['velocidadMMin debe ser mayor a 0.'] : [],
+            };
+        }
+        if (plantilla === client_1.PlantillaMaquinaria.REDONDEADORA_PUNTAS) {
+            const golpesMinNominal = Math.max(0, this.toSafeNumber(machineParams.golpesMinNominal, 0));
+            const esquinasPorPieza = Math.max(1, Math.floor(resolveOverrideNumber('esquinasPorPieza', 1)));
+            const piezas = Math.max(1, input.cantidad);
+            const golpesTotales = piezas * esquinasPorPieza;
+            const golpesMinEfectivos = Math.max(0.01, golpesMinNominal * factorVelocidad);
+            return {
+                setupMin: Number(input.setupMinBase.toFixed(4)),
+                cleanupMin: Number(input.cleanupMinBase.toFixed(4)),
+                tiempoFijoMin: Number(input.tiempoFijoMinBase.toFixed(4)),
+                runMin: Number((golpesTotales / golpesMinEfectivos).toFixed(4)),
+                trace: {
+                    tipo: 'redondeadora_puntas',
+                    piezas,
+                    esquinasPorPieza,
+                    golpesTotales,
+                    golpesMinEfectivos: Number(golpesMinEfectivos.toFixed(4)),
+                },
+                sourceProductividad,
+                warnings: golpesMinNominal <= 0 ? ['golpesMinNominal debe ser mayor a 0.'] : [],
+            };
+        }
+        if (plantilla === client_1.PlantillaMaquinaria.PERFORADORA) {
+            const pliegosMinNominal = Math.max(0, this.toSafeNumber(machineParams.pliegosMinNominal, 0));
+            const lineasPorPasadaMax = Math.max(1, Math.floor(this.toSafeNumber(machineParams.lineasPorPasadaMax, 1)));
+            const lineasPerforado = Math.max(1, Math.floor(resolveOverrideNumber('lineasPerforado', 1)));
+            const hojas = Math.max(1, input.cantidadObjetivoSalida);
+            const pasadasPorPliego = Math.max(1, Math.ceil(lineasPerforado / lineasPorPasadaMax));
+            const pliegosMinEfectivos = Math.max(0.01, pliegosMinNominal * factorVelocidad);
+            return {
+                setupMin: Number(input.setupMinBase.toFixed(4)),
+                cleanupMin: Number(input.cleanupMinBase.toFixed(4)),
+                tiempoFijoMin: Number(input.tiempoFijoMinBase.toFixed(4)),
+                runMin: Number(((hojas * pasadasPorPliego) / pliegosMinEfectivos).toFixed(4)),
+                trace: {
+                    tipo: 'perforadora',
+                    hojas,
+                    lineasPerforado,
+                    lineasPorPasadaMax,
+                    pasadasPorPliego,
+                    pliegosMinEfectivos: Number(pliegosMinEfectivos.toFixed(4)),
+                },
+                sourceProductividad,
+                warnings: pliegosMinNominal <= 0 ? ['pliegosMinNominal debe ser mayor a 0.'] : [],
+            };
+        }
+        if (!hasPerfil && !hasOverrides) {
+            return null;
+        }
+        return null;
+    }
+    calculateLaminadoraFilmConsumables(input) {
+        if (!input.operation.maquinaId || input.operation.maquina?.plantilla !== client_1.PlantillaMaquinaria.LAMINADORA_BOPP_ROLLO) {
+            return { materiales: [], costo: 0 };
+        }
+        const trace = input.timingOverride?.trace ?? null;
+        const areaConsumidaM2 = this.toSafeNumber(trace?.areaConsumidaM2, 0);
+        const largoConsumidoMm = this.toSafeNumber(trace?.largoConsumidoMm, 0);
+        if (areaConsumidaM2 <= 0 && largoConsumidoMm <= 0) {
+            return { materiales: [], costo: 0 };
+        }
+        const all = input.consumiblesFilm.filter((item) => item.maquinaId === input.operation.maquinaId);
+        const consumibles = input.operation.perfilOperativoId
+            ? all.filter((item) => item.perfilOperativoId === input.operation.perfilOperativoId)
+            : all;
+        if (!consumibles.length) {
+            input.warnings.push('Laminadora: no hay consumible FILM configurado para costeo.');
+            return { materiales: [], costo: 0 };
+        }
+        const materiales = [];
+        let costo = 0;
+        for (const item of consumibles) {
+            const consumoBase = Number(item.consumoBase ?? 1);
+            const factor = consumoBase > 0 ? consumoBase : 1;
+            let cantidad = 0;
+            let unidad = '';
+            if (item.unidad === client_1.UnidadConsumoMaquina.M2) {
+                cantidad = areaConsumidaM2 * factor;
+                unidad = 'm2';
+            }
+            else if (item.unidad === client_1.UnidadConsumoMaquina.METRO_LINEAL) {
+                cantidad = (largoConsumidoMm / 1000) * factor;
+                unidad = 'm';
+            }
+            else {
+                input.warnings.push(`Consumible de film ${item.materiaPrimaVariante.sku} con unidad ${item.unidad}: solo M2 o METRO_LINEAL soportado en v1.`);
+                continue;
+            }
+            const costoUnit = Number(item.materiaPrimaVariante.precioReferencia ?? 0);
+            const costoLinea = Number((cantidad * costoUnit).toFixed(6));
+            costo += costoLinea;
+            materiales.push({
+                tipo: 'FILM',
+                nombre: item.materiaPrimaVariante.materiaPrima.nombre,
+                sku: item.materiaPrimaVariante.sku,
+                unidad,
+                cantidad: Number(cantidad.toFixed(6)),
+                costoUnitario: Number(costoUnit.toFixed(6)),
+                costo: costoLinea,
+            });
+        }
+        return { materiales, costo: Number(costo.toFixed(6)) };
+    }
+    asObject(value) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+            return {};
+        }
+        return value;
+    }
+    getProcesoOperacionNiveles(value) {
+        const detalle = this.asObject(value);
+        const raw = Array.isArray(detalle.niveles) ? detalle.niveles : [];
+        return raw
+            .map((item, index) => {
+            const nivel = this.asObject(item);
+            const nombre = String(nivel.nombre ?? '').trim();
+            if (!nombre) {
+                return null;
+            }
+            return {
+                id: String(nivel.id ?? (0, node_crypto_1.randomUUID)()),
+                nombre,
+                orden: this.toSafeNumber(nivel.orden, index + 1),
+                activo: nivel.activo !== false,
+                modoProductividadNivel: nivel.modoProductividadNivel === 'variable_manual' ||
+                    nivel.modoProductividadNivel === 'variable_perfil'
+                    ? nivel.modoProductividadNivel
+                    : 'fija',
+                tiempoFijoMin: nivel.tiempoFijoMin === undefined || nivel.tiempoFijoMin === null
+                    ? null
+                    : this.toSafeNumber(nivel.tiempoFijoMin, 0),
+                productividadBase: nivel.productividadBase === undefined || nivel.productividadBase === null
+                    ? null
+                    : this.toSafeNumber(nivel.productividadBase, 0),
+                unidadSalida: typeof nivel.unidadSalida === 'string' && nivel.unidadSalida.trim().length
+                    ? nivel.unidadSalida.trim()
+                    : null,
+                unidadTiempo: typeof nivel.unidadTiempo === 'string' && nivel.unidadTiempo.trim().length
+                    ? nivel.unidadTiempo.trim()
+                    : null,
+                maquinaId: typeof nivel.maquinaId === 'string' && nivel.maquinaId.trim().length
+                    ? nivel.maquinaId.trim()
+                    : null,
+                maquinaNombre: typeof nivel.maquinaNombre === 'string' && nivel.maquinaNombre.trim().length
+                    ? nivel.maquinaNombre.trim()
+                    : '',
+                perfilOperativoId: typeof nivel.perfilOperativoId === 'string' && nivel.perfilOperativoId.trim().length
+                    ? nivel.perfilOperativoId.trim()
+                    : null,
+                perfilOperativoNombre: typeof nivel.perfilOperativoNombre === 'string' && nivel.perfilOperativoNombre.trim().length
+                    ? nivel.perfilOperativoNombre.trim()
+                    : '',
+                setupMin: nivel.setupMin === undefined || nivel.setupMin === null
+                    ? null
+                    : this.toSafeNumber(nivel.setupMin, 0),
+                cleanupMin: nivel.cleanupMin === undefined || nivel.cleanupMin === null
+                    ? null
+                    : this.toSafeNumber(nivel.cleanupMin, 0),
+                resumen: typeof nivel.resumen === 'string' && nivel.resumen.trim().length
+                    ? nivel.resumen.trim()
+                    : this.buildChecklistNivelResumen({
+                        nombre,
+                        modoProductividadNivel: nivel.modoProductividadNivel === 'variable_manual' ||
+                            nivel.modoProductividadNivel === 'variable_perfil'
+                            ? nivel.modoProductividadNivel
+                            : 'fija',
+                        tiempoFijoMin: nivel.tiempoFijoMin === undefined || nivel.tiempoFijoMin === null
+                            ? null
+                            : this.toSafeNumber(nivel.tiempoFijoMin, 0),
+                        productividadBase: nivel.productividadBase === undefined || nivel.productividadBase === null
+                            ? null
+                            : this.toSafeNumber(nivel.productividadBase, 0),
+                        unidadSalida: typeof nivel.unidadSalida === 'string' ? nivel.unidadSalida : null,
+                        unidadTiempo: typeof nivel.unidadTiempo === 'string' ? nivel.unidadTiempo : null,
+                        perfilOperativoNombre: typeof nivel.perfilOperativoNombre === 'string'
+                            ? nivel.perfilOperativoNombre
+                            : '',
+                    }),
+                detalle: this.asObject(nivel.detalle),
+            };
+        })
+            .filter((item) => Boolean(item))
+            .sort((a, b) => a.orden - b.orden);
+    }
+    toSafeNumber(value, fallback = 0) {
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric : fallback;
+    }
+    resolveChecklistCantidadObjetivo(input) {
+        switch (input.unidadSalida) {
+            case 'hoja':
+                return input.pliegos;
+            case 'm2':
+                return Number((input.areaPiezaM2 * input.cantidad).toFixed(6));
+            case 'a4_equiv':
+                return Number((input.a4EqFactor * input.pliegos).toFixed(6));
+            case 'metro_lineal':
+                return Number(((Math.max(input.anchoMm, input.altoMm) / 1000) * input.cantidad).toFixed(6));
+            case 'pieza':
+            case 'corte':
+            case 'unidad':
+            case 'copia':
+            case 'ciclo':
+            case 'lote':
+            case 'kg':
+            case 'litro':
+            case 'minuto':
+            case 'hora':
+            case 'ninguna':
+            default:
+                return input.cantidad;
+        }
+    }
+    buildChecklistNivelResumen(input) {
+        if (input.modoProductividadNivel === 'fija') {
+            return `${input.nombre} · ${input.tiempoFijoMin ?? 0} min`;
+        }
+        if (input.modoProductividadNivel === 'variable_manual') {
+            const unidad = [input.unidadSalida, input.unidadTiempo].filter(Boolean).join('/');
+            return `${input.nombre} · ${input.productividadBase ?? 0} ${unidad}`.trim();
+        }
+        return `${input.nombre} · Perfil${input.perfilOperativoNombre ? ` · ${input.perfilOperativoNombre}` : ''}`;
+    }
+    async getChecklistPasoPlantillasMap(auth, checklist) {
+        const ids = Array.from(new Set((checklist?.preguntas ?? [])
+            .flatMap((pregunta) => pregunta.respuestas ?? [])
+            .flatMap((respuesta) => respuesta.reglas ?? [])
+            .map((regla) => this.getChecklistPasoPlantillaId(regla.detalleJson))
+            .filter((value) => Boolean(value))));
+        if (!ids.length) {
+            return new Map();
+        }
+        const rows = await this.prisma.procesoOperacionPlantilla.findMany({
+            where: {
+                tenantId: auth.tenantId,
+                id: { in: ids },
+            },
+            include: {
+                centroCosto: true,
+                maquina: true,
+                perfilOperativo: true,
+            },
+        });
+        return new Map(rows.map((item) => [item.id, item]));
+    }
+    getChecklistPasoPlantillaId(value) {
+        const detalle = this.asObject(value);
+        const pasoPlantillaId = detalle.pasoPlantillaId;
+        return typeof pasoPlantillaId === 'string' && pasoPlantillaId.trim().length
+            ? pasoPlantillaId.trim()
+            : null;
+    }
+    resolveChecklistPasoPlantilla(value, plantillasById, fallbackProcesoOperacion) {
+        const pasoPlantillaId = this.getChecklistPasoPlantillaId(value);
+        if (pasoPlantillaId) {
+            return plantillasById.get(pasoPlantillaId) ?? null;
+        }
+        return fallbackProcesoOperacion;
+    }
+    buildChecklistOperacionFromPlantilla(template) {
+        return {
+            id: template.id,
+            orden: 0,
+            codigo: `CHK-${template.id.slice(0, 6).toUpperCase()}`,
+            nombre: template.nombre,
+            centroCostoId: template.centroCostoId,
+            centroCosto: template.centroCosto,
+            maquinaId: template.maquinaId,
+            maquina: template.maquina,
+            perfilOperativoId: template.perfilOperativoId,
+            perfilOperativo: template.perfilOperativo,
+            setupMin: template.setupMin,
+            runMin: null,
+            cleanupMin: template.cleanupMin,
+            tiempoFijoMin: template.tiempoFijoMin,
+            detalleJson: template.detalleJson,
+            unidadEntrada: template.unidadEntrada,
+            unidadSalida: template.unidadSalida,
+            unidadTiempo: template.unidadTiempo,
+            productividadBase: template.productividadBase,
+            mermaSetup: null,
+            mermaRunPct: template.mermaRunPct,
+            reglaMermaJson: template.reglaMermaJson,
+            reglaVelocidadJson: template.reglaVelocidadJson,
+            modoProductividad: template.modoProductividad,
+            activo: template.activo,
+        };
+    }
+    buildChecklistOperacionFromPlantillaConPerfil(template, perfilOperativo) {
+        const detalleBase = this.asObject(template.detalleJson);
+        return {
+            ...this.buildChecklistOperacionFromPlantilla(template),
+            perfilOperativoId: perfilOperativo.id,
+            perfilOperativo,
+            setupMin: perfilOperativo.setupMin !== null && perfilOperativo.setupMin !== undefined
+                ? perfilOperativo.setupMin
+                : template.setupMin,
+            cleanupMin: perfilOperativo.cleanupMin !== null && perfilOperativo.cleanupMin !== undefined
+                ? perfilOperativo.cleanupMin
+                : template.cleanupMin,
+            productividadBase: perfilOperativo.productivityValue !== null &&
+                perfilOperativo.productivityValue !== undefined
+                ? perfilOperativo.productivityValue
+                : template.productividadBase,
+            detalleJson: {
+                ...detalleBase,
+                pasoPlantillaId: this.getPasoPlantillaIdFromDetalle(template.detalleJson) ?? template.id,
+                perfilOperativoId: perfilOperativo.id,
+                matchingBase: true,
+            },
+        };
+    }
+    getPasoPlantillaIdFromDetalle(value) {
+        const detalle = this.asObject(value);
+        const pasoPlantillaId = detalle.pasoPlantillaId;
+        return typeof pasoPlantillaId === 'string' && pasoPlantillaId.trim().length
+            ? pasoPlantillaId.trim()
+            : null;
+    }
+    resolvePasoPlantillaIdFromOperacionRuta(operacion, plantillas) {
+        const directId = this.getPasoPlantillaIdFromDetalle(operacion.detalleJson ?? null);
+        if (directId) {
+            return directId;
+        }
+        const nombre = typeof operacion.nombre === 'string' ? operacion.nombre.trim().toLowerCase() : '';
+        const nombreBase = this.normalizePasoNombreBase(operacion.nombre ?? null);
+        if (!nombre)
+            return null;
+        const exactWithMachine = plantillas.find((item) => item.nombre.trim().toLowerCase() === nombre &&
+            (item.maquinaId ?? '') === (operacion.maquinaId ?? '')) ?? null;
+        if (exactWithMachine) {
+            return exactWithMachine.id;
+        }
+        const exactWithProfile = plantillas.find((item) => Boolean(item.perfilOperativoId) &&
+            item.perfilOperativoId === (operacion.perfilOperativoId ?? '') &&
+            (item.maquinaId ?? '') === (operacion.maquinaId ?? '')) ?? null;
+        if (exactWithProfile) {
+            return exactWithProfile.id;
+        }
+        const baseWithMachine = plantillas.find((item) => this.normalizePasoNombreBase(item.nombre) === nombreBase &&
+            (item.maquinaId ?? '') === (operacion.maquinaId ?? '')) ?? null;
+        if (baseWithMachine) {
+            return baseWithMachine.id;
+        }
+        const exact = plantillas.find((item) => item.nombre.trim().toLowerCase() === nombre) ?? null;
+        if (exact) {
+            return exact.id;
+        }
+        const base = plantillas.find((item) => this.normalizePasoNombreBase(item.nombre) === nombreBase) ?? null;
+        return base?.id ?? null;
+    }
+    normalizePasoNombreBase(value) {
+        const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+        if (!normalized) {
+            return '';
+        }
+        const colonIndex = normalized.indexOf(':');
+        if (colonIndex <= 0) {
+            return normalized;
+        }
+        return normalized.slice(0, colonIndex).trim();
+    }
+    buildChecklistPasoSignature(item) {
+        const nombre = typeof item?.nombre === 'string' ? item.nombre.trim().toLowerCase() : '';
+        const centroCostoId = typeof item?.centroCostoId === 'string' && item.centroCostoId.trim().length
+            ? item.centroCostoId.trim()
+            : '';
+        if (!nombre || !centroCostoId) {
+            return null;
+        }
+        return `${nombre}::${centroCostoId}`;
+    }
+    isPasoPlantillaEligibleForMatchingBase(pasoPlantilla, maquinasById, dimensionesConsumidas) {
+        if (!dimensionesConsumidas.length) {
+            return true;
+        }
+        if (!pasoPlantilla?.maquinaId) {
+            return false;
+        }
+        const maquina = maquinasById.get(pasoPlantilla.maquinaId);
+        if (!maquina) {
+            return false;
+        }
+        const requiresBasePrintMatching = dimensionesConsumidas.includes(client_1.DimensionOpcionProductiva.TIPO_IMPRESION) ||
+            dimensionesConsumidas.includes(client_1.DimensionOpcionProductiva.CARAS);
+        if (!requiresBasePrintMatching) {
+            return true;
+        }
+        return maquina.plantilla === client_1.PlantillaMaquinaria.IMPRESORA_LASER;
+    }
+    getChecklistVariantePasoId(value) {
+        const detalle = this.asObject(value);
+        const variantePasoId = detalle.variantePasoId;
+        return typeof variantePasoId === 'string' && variantePasoId.trim().length
+            ? variantePasoId.trim()
+            : null;
+    }
+    getChecklistVariantePasoNombre(variantePasoId, detalleJson) {
+        if (!variantePasoId) {
+            return '';
+        }
+        return (this.getProcesoOperacionNiveles(detalleJson).find((item) => item.id === variantePasoId)?.nombre ?? '');
+    }
+    getChecklistVariantePasoResumen(variantePasoId, detalleJson) {
+        if (!variantePasoId) {
+            return '';
+        }
+        return (this.getProcesoOperacionNiveles(detalleJson).find((item) => item.id === variantePasoId)?.resumen ?? '');
+    }
+    getChecklistAtributoTecnicoDimension(value) {
+        const detalle = this.asObject(value);
+        const dimension = detalle.atributoTecnicoDimension;
+        return dimension === 'tipo_impresion' || dimension === 'caras' ? dimension : null;
+    }
+    getChecklistAtributoTecnicoValor(value) {
+        const detalle = this.asObject(value);
+        const optionValue = detalle.atributoTecnicoValor;
+        return optionValue === 'bn' ||
+            optionValue === 'cmyk' ||
+            optionValue === 'simple_faz' ||
+            optionValue === 'doble_faz'
+            ? optionValue
+            : null;
+    }
+    toPrismaUnidadProceso(value) {
+        switch (value) {
+            case 'hora':
+            case client_1.UnidadProceso.HORA:
+                return client_1.UnidadProceso.HORA;
+            case 'hoja':
+            case client_1.UnidadProceso.HOJA:
+                return client_1.UnidadProceso.HOJA;
+            case 'copia':
+            case client_1.UnidadProceso.COPIA:
+                return client_1.UnidadProceso.COPIA;
+            case 'a4_equiv':
+            case client_1.UnidadProceso.A4_EQUIV:
+                return client_1.UnidadProceso.A4_EQUIV;
+            case 'm2':
+            case client_1.UnidadProceso.M2:
+                return client_1.UnidadProceso.M2;
+            case 'metro_lineal':
+            case client_1.UnidadProceso.METRO_LINEAL:
+                return client_1.UnidadProceso.METRO_LINEAL;
+            case 'pieza':
+            case client_1.UnidadProceso.PIEZA:
+                return client_1.UnidadProceso.PIEZA;
+            case 'corte':
+            case client_1.UnidadProceso.CORTE:
+                return client_1.UnidadProceso.CORTE;
+            case 'ciclo':
+            case client_1.UnidadProceso.CICLO:
+                return client_1.UnidadProceso.CICLO;
+            case 'unidad':
+            case client_1.UnidadProceso.UNIDAD:
+                return client_1.UnidadProceso.UNIDAD;
+            case 'kg':
+            case client_1.UnidadProceso.KG:
+                return client_1.UnidadProceso.KG;
+            case 'litro':
+            case client_1.UnidadProceso.LITRO:
+                return client_1.UnidadProceso.LITRO;
+            case 'lote':
+            case client_1.UnidadProceso.LOTE:
+                return client_1.UnidadProceso.LOTE;
+            case 'ninguna':
+            case client_1.UnidadProceso.NINGUNA:
+                return client_1.UnidadProceso.NINGUNA;
+            case 'minuto':
+            case client_1.UnidadProceso.MINUTO:
+            default:
+                return client_1.UnidadProceso.MINUTO;
+        }
+    }
     calculateMachineConsumables(input) {
         if (!input.operation.maquinaId) {
             return { costoToner: 0, costoDesgaste: 0, materiales: [] };
@@ -2942,55 +5138,85 @@ let ProductosServiciosService = class ProductosServiciosService {
         const machineConsumibles = input.consumibles.filter((item) => item.maquinaId === input.operation.maquinaId);
         const machineDesgastes = input.desgastes.filter((item) => item.maquinaId === input.operation.maquinaId);
         const selectedPerfilId = input.operation.perfilOperativoId ??
-            machineConsumibles.find((item) => item.perfilOperativo?.productividad &&
-                Number(item.perfilOperativo.productividad) === operationProductividad)?.perfilOperativoId ??
+            machineConsumibles.find((item) => item.perfilOperativo?.productivityValue &&
+                Number(item.perfilOperativo.productivityValue) === operationProductividad)?.perfilOperativoId ??
             machineConsumibles[0]?.perfilOperativoId ??
             null;
         const consumibles = selectedPerfilId
             ? machineConsumibles.filter((item) => item.perfilOperativoId === selectedPerfilId)
             : machineConsumibles;
+        const tonerConsumibles = consumibles.filter((item) => {
+            const detalle = item.detalleJson;
+            if (!detalle || typeof detalle !== 'object') {
+                return true;
+            }
+            const tipo = String(detalle.tipo ?? '').trim().toLowerCase();
+            return !tipo || tipo === 'toner';
+        });
         const consumiblesByColor = new Map();
-        for (const item of consumibles) {
+        for (const item of tonerConsumibles) {
             const color = this.normalizeColor(item.detalleJson);
             if (!consumiblesByColor.has(color)) {
                 consumiblesByColor.set(color, item);
             }
         }
-        const selectedColors = input.tipoImpresion === client_1.TipoImpresionProductoVariante.BN
-            ? ['negro']
-            : ['cian', 'magenta', 'amarillo', 'negro'];
-        for (const color of selectedColors) {
-            const item = consumiblesByColor.get(color);
-            if (!item) {
-                input.warnings.push(`No se encontró consumible de tóner para el canal ${color}.`);
-                continue;
+        if (tonerConsumibles.length > 0) {
+            const selectedColors = input.tipoImpresion === client_1.TipoImpresionProductoVariante.BN
+                ? ['negro']
+                : ['cian', 'magenta', 'amarillo', 'negro'];
+            for (const color of selectedColors) {
+                const item = consumiblesByColor.get(color);
+                if (!item) {
+                    input.warnings.push(`No se encontró consumible de tóner para el canal ${color}.`);
+                    continue;
+                }
+                if (item.unidad !== client_1.UnidadConsumoMaquina.GRAMO) {
+                    input.warnings.push(`Consumible ${item.materiaPrimaVariante.materiaPrima.nombre} (${item.materiaPrimaVariante.sku}) con unidad ${item.unidad}: v1 solo soporta GRAMO.`);
+                    continue;
+                }
+                const consumoBase = Number(item.consumoBase ?? 0);
+                if (consumoBase <= 0) {
+                    input.warnings.push(`Consumible ${item.materiaPrimaVariante.materiaPrima.nombre} (${item.materiaPrimaVariante.sku}) sin consumoBase válido.`);
+                    continue;
+                }
+                const costoGramo = Number(item.materiaPrimaVariante.precioReferencia ?? 0);
+                if (!item.materiaPrimaVariante.precioReferencia) {
+                    input.warnings.push(`Consumible ${item.materiaPrimaVariante.materiaPrima.nombre} (${item.materiaPrimaVariante.sku}) sin precio de referencia. Se usa 0.`);
+                }
+                const pliegosBase = Math.max(0, input.pliegos);
+                const pliegosEfectivos = Math.max(pliegosBase, input.pliegosEfectivos ?? pliegosBase);
+                const pliegosMermaOperativa = Math.max(0, pliegosEfectivos - pliegosBase);
+                const gramosBase = consumoBase * input.areaPliegoM2 * input.carasFactor * pliegosBase;
+                const costoBase = gramosBase * costoGramo;
+                costoToner += costoBase;
+                materiales.push({
+                    tipo: 'TONER',
+                    canal: color,
+                    nombre: item.materiaPrimaVariante.materiaPrima.nombre,
+                    sku: item.materiaPrimaVariante.sku,
+                    unidad: 'g',
+                    cantidad: Number(gramosBase.toFixed(6)),
+                    costoUnitario: costoGramo,
+                    costo: Number(costoBase.toFixed(6)),
+                    origen: 'Base',
+                });
+                if (pliegosMermaOperativa > 0) {
+                    const gramosMerma = consumoBase * input.areaPliegoM2 * input.carasFactor * pliegosMermaOperativa;
+                    const costoMerma = gramosMerma * costoGramo;
+                    costoToner += costoMerma;
+                    materiales.push({
+                        tipo: 'TONER',
+                        canal: color,
+                        nombre: item.materiaPrimaVariante.materiaPrima.nombre,
+                        sku: item.materiaPrimaVariante.sku,
+                        unidad: 'g',
+                        cantidad: Number(gramosMerma.toFixed(6)),
+                        costoUnitario: costoGramo,
+                        costo: Number(costoMerma.toFixed(6)),
+                        origen: 'Merma operativa',
+                    });
+                }
             }
-            if (item.unidad !== client_1.UnidadConsumoMaquina.GRAMO) {
-                input.warnings.push(`Consumible ${item.materiaPrimaVariante.materiaPrima.nombre} (${item.materiaPrimaVariante.sku}) con unidad ${item.unidad}: v1 solo soporta GRAMO.`);
-                continue;
-            }
-            const consumoBase = Number(item.consumoBase ?? 0);
-            if (consumoBase <= 0) {
-                input.warnings.push(`Consumible ${item.materiaPrimaVariante.materiaPrima.nombre} (${item.materiaPrimaVariante.sku}) sin consumoBase válido.`);
-                continue;
-            }
-            const costoGramo = Number(item.materiaPrimaVariante.precioReferencia ?? 0);
-            if (!item.materiaPrimaVariante.precioReferencia) {
-                input.warnings.push(`Consumible ${item.materiaPrimaVariante.materiaPrima.nombre} (${item.materiaPrimaVariante.sku}) sin precio de referencia. Se usa 0.`);
-            }
-            const gramos = consumoBase * input.areaPliegoM2 * input.carasFactor * input.pliegos;
-            const costo = gramos * costoGramo;
-            costoToner += costo;
-            materiales.push({
-                tipo: 'TONER',
-                canal: color,
-                nombre: item.materiaPrimaVariante.materiaPrima.nombre,
-                sku: item.materiaPrimaVariante.sku,
-                unidad: 'g',
-                cantidad: Number(gramos.toFixed(6)),
-                costoUnitario: costoGramo,
-                costo: Number(costo.toFixed(6)),
-            });
         }
         for (const item of machineDesgastes) {
             if (item.unidadDesgaste !== client_1.UnidadDesgasteMaquina.COPIAS_A4_EQUIV) {
@@ -3006,18 +5232,38 @@ let ProductosServiciosService = class ProductosServiciosService {
             if (!item.materiaPrimaVariante.precioReferencia) {
                 input.warnings.push(`Componente de desgaste ${item.materiaPrimaVariante.materiaPrima.nombre} (${item.materiaPrimaVariante.sku}) sin precio de referencia. Se usa 0.`);
             }
-            const cantidadA4Eq = input.pliegos * input.a4EqFactor * input.carasFactor;
-            const costo = cantidadA4Eq * (precio / vidaUtil);
-            costoDesgaste += costo;
+            const pliegosBase = Math.max(0, input.pliegos);
+            const pliegosEfectivos = Math.max(pliegosBase, input.pliegosEfectivos ?? pliegosBase);
+            const pliegosMermaOperativa = Math.max(0, pliegosEfectivos - pliegosBase);
+            const cantidadA4EqBase = pliegosBase * input.a4EqFactor * input.carasFactor;
+            const costoUnitario = precio / vidaUtil;
+            const costoBase = cantidadA4EqBase * costoUnitario;
+            costoDesgaste += costoBase;
             materiales.push({
                 tipo: 'DESGASTE',
                 nombre: item.materiaPrimaVariante.materiaPrima.nombre,
                 sku: item.materiaPrimaVariante.sku,
                 unidad: 'a4_eq',
-                cantidad: Number(cantidadA4Eq.toFixed(6)),
-                costoUnitario: Number((precio / vidaUtil).toFixed(6)),
-                costo: Number(costo.toFixed(6)),
+                cantidad: Number(cantidadA4EqBase.toFixed(6)),
+                costoUnitario: Number(costoUnitario.toFixed(6)),
+                costo: Number(costoBase.toFixed(6)),
+                origen: 'Base',
             });
+            if (pliegosMermaOperativa > 0) {
+                const cantidadA4EqMerma = pliegosMermaOperativa * input.a4EqFactor * input.carasFactor;
+                const costoMerma = cantidadA4EqMerma * costoUnitario;
+                costoDesgaste += costoMerma;
+                materiales.push({
+                    tipo: 'DESGASTE',
+                    nombre: item.materiaPrimaVariante.materiaPrima.nombre,
+                    sku: item.materiaPrimaVariante.sku,
+                    unidad: 'a4_eq',
+                    cantidad: Number(cantidadA4EqMerma.toFixed(6)),
+                    costoUnitario: Number(costoUnitario.toFixed(6)),
+                    costo: Number(costoMerma.toFixed(6)),
+                    origen: 'Merma operativa',
+                });
+            }
         }
         return { costoToner, costoDesgaste, materiales };
     }
@@ -3050,13 +5296,7 @@ let ProductosServiciosService = class ProductosServiciosService {
                 values.push(numeric);
             }
         };
-        pushIfFinite(detalle.tiempoSetupMin);
-        pushIfFinite(detalle.setupMin);
-        pushIfFinite(detalle.setup);
-        pushIfFinite(perfil.tiempoPreparacionMin ? Number(perfil.tiempoPreparacionMin) : null);
-        pushIfFinite(perfil.tiempoRipMin ? Number(perfil.tiempoRipMin) : null);
-        pushIfFinite(detalle.tiempoPreparacionMin);
-        pushIfFinite(detalle.tiempoRipMin);
+        pushIfFinite(perfil.setupMin ? Number(perfil.setupMin) : null);
         const objectCandidates = [
             detalle.setupComponentesMin,
             detalle.setupExtraComponentesMin,
@@ -3191,6 +5431,18 @@ let ProductosServiciosService = class ProductosServiciosService {
         }
         return client_1.ValorOpcionProductiva.SIMPLE_FAZ;
     }
+    toTipoImpresionFromValor(value) {
+        if (value === client_1.ValorOpcionProductiva.BN) {
+            return client_1.TipoImpresionProductoVariante.BN;
+        }
+        return client_1.TipoImpresionProductoVariante.CMYK;
+    }
+    toCarasFromValor(value) {
+        if (value === client_1.ValorOpcionProductiva.DOBLE_FAZ) {
+            return client_1.CarasProductoVariante.DOBLE_FAZ;
+        }
+        return client_1.CarasProductoVariante.SIMPLE_FAZ;
+    }
     toTipoAdicionalEfecto(value) {
         if (value === productos_servicios_dto_1.TipoProductoAdicionalEfectoDto.cost_effect) {
             return client_1.TipoProductoAdicionalEfecto.COST_EFFECT;
@@ -3238,6 +5490,78 @@ let ProductosServiciosService = class ProductosServiciosService {
             return productos_servicios_dto_1.ReglaCostoAdicionalEfectoDto.tiempo_extra_min;
         }
         return productos_servicios_dto_1.ReglaCostoAdicionalEfectoDto.flat;
+    }
+    toTipoChecklistPregunta(value) {
+        if (value === productos_servicios_dto_1.TipoChecklistPreguntaDto.single_select) {
+            return client_1.TipoProductoChecklistPregunta.SINGLE_SELECT;
+        }
+        return client_1.TipoProductoChecklistPregunta.BINARIA;
+    }
+    fromTipoChecklistPregunta(value) {
+        if (value === client_1.TipoProductoChecklistPregunta.SINGLE_SELECT) {
+            return productos_servicios_dto_1.TipoChecklistPreguntaDto.single_select;
+        }
+        return productos_servicios_dto_1.TipoChecklistPreguntaDto.binaria;
+    }
+    toTipoChecklistAccion(value) {
+        if (value === productos_servicios_dto_1.TipoChecklistAccionReglaDto.seleccionar_variante_paso) {
+            return client_1.TipoProductoChecklistReglaAccion.SELECCIONAR_VARIANTE_PASO;
+        }
+        if (value === productos_servicios_dto_1.TipoChecklistAccionReglaDto.costo_extra) {
+            return client_1.TipoProductoChecklistReglaAccion.COSTO_EXTRA;
+        }
+        if (value === productos_servicios_dto_1.TipoChecklistAccionReglaDto.material_extra) {
+            return client_1.TipoProductoChecklistReglaAccion.MATERIAL_EXTRA;
+        }
+        if (value === productos_servicios_dto_1.TipoChecklistAccionReglaDto.set_atributo_tecnico) {
+            return client_1.TipoProductoChecklistReglaAccion.SET_ATRIBUTO_TECNICO;
+        }
+        return client_1.TipoProductoChecklistReglaAccion.ACTIVAR_PASO;
+    }
+    fromTipoChecklistAccion(value) {
+        if (value === client_1.TipoProductoChecklistReglaAccion.SELECCIONAR_VARIANTE_PASO) {
+            return productos_servicios_dto_1.TipoChecklistAccionReglaDto.seleccionar_variante_paso;
+        }
+        if (value === client_1.TipoProductoChecklistReglaAccion.COSTO_EXTRA) {
+            return productos_servicios_dto_1.TipoChecklistAccionReglaDto.costo_extra;
+        }
+        if (value === client_1.TipoProductoChecklistReglaAccion.MATERIAL_EXTRA) {
+            return productos_servicios_dto_1.TipoChecklistAccionReglaDto.material_extra;
+        }
+        if (value === client_1.TipoProductoChecklistReglaAccion.SET_ATRIBUTO_TECNICO) {
+            return productos_servicios_dto_1.TipoChecklistAccionReglaDto.set_atributo_tecnico;
+        }
+        return productos_servicios_dto_1.TipoChecklistAccionReglaDto.activar_paso;
+    }
+    toReglaCostoChecklist(value) {
+        if (value === productos_servicios_dto_1.ReglaCostoChecklistDto.tiempo_min) {
+            return client_1.ReglaCostoChecklist.TIEMPO_MIN;
+        }
+        if (value === productos_servicios_dto_1.ReglaCostoChecklistDto.por_unidad) {
+            return client_1.ReglaCostoChecklist.POR_UNIDAD;
+        }
+        if (value === productos_servicios_dto_1.ReglaCostoChecklistDto.por_pliego) {
+            return client_1.ReglaCostoChecklist.POR_PLIEGO;
+        }
+        if (value === productos_servicios_dto_1.ReglaCostoChecklistDto.porcentaje_sobre_total) {
+            return client_1.ReglaCostoChecklist.PORCENTAJE_SOBRE_TOTAL;
+        }
+        return client_1.ReglaCostoChecklist.FLAT;
+    }
+    fromReglaCostoChecklist(value) {
+        if (value === client_1.ReglaCostoChecklist.TIEMPO_MIN) {
+            return productos_servicios_dto_1.ReglaCostoChecklistDto.tiempo_min;
+        }
+        if (value === client_1.ReglaCostoChecklist.POR_UNIDAD) {
+            return productos_servicios_dto_1.ReglaCostoChecklistDto.por_unidad;
+        }
+        if (value === client_1.ReglaCostoChecklist.POR_PLIEGO) {
+            return productos_servicios_dto_1.ReglaCostoChecklistDto.por_pliego;
+        }
+        if (value === client_1.ReglaCostoChecklist.PORCENTAJE_SOBRE_TOTAL) {
+            return productos_servicios_dto_1.ReglaCostoChecklistDto.porcentaje_sobre_total;
+        }
+        return productos_servicios_dto_1.ReglaCostoChecklistDto.flat;
     }
     toTipoImpresion(value) {
         if (value === productos_servicios_dto_1.TipoImpresionProductoVarianteDto.bn) {

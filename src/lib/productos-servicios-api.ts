@@ -4,11 +4,8 @@ import {
   DimensionOpcionProductiva,
   PliegoImpresionCatalogItem,
   CotizacionProductoSnapshotResumen,
+  ProductoChecklist,
   CotizacionProductoVariante,
-  AddonEffect,
-  ReglaCostoAdicionalEfecto,
-  ProductoAdicional,
-  ProductoAdicionalAsignado,
   EstadoProductoServicio,
   FamiliaProducto,
   MotorCostoCatalogItem,
@@ -17,14 +14,9 @@ import {
   ProductoVariante,
   ProductoServicio,
   SubfamiliaProducto,
-  TipoProductoAdicionalEfecto,
-  VarianteAdicionalRestriccion,
   VarianteOpcionesProductivas,
   ValorOpcionProductiva,
   TipoImpresionProductoVariante,
-  TipoConsumoAdicionalMaterial,
-  TipoProductoAdicional,
-  MetodoCostoProductoAdicional,
   TipoProductoServicio,
   VarianteMotorOverride,
 } from '@/lib/productos-servicios';
@@ -35,209 +27,6 @@ export async function getCatalogoPliegosImpresion() {
 
 export async function getMotoresCostoCatalogo() {
   return apiRequest<MotorCostoCatalogItem[]>('/productos-servicios/motores');
-}
-
-export async function getAdicionalesCatalogo() {
-  return apiRequest<ProductoAdicional[]>('/productos-servicios/adicionales');
-}
-
-export async function createAdicionalCatalogo(payload: {
-  codigo?: string;
-  nombre: string;
-  descripcion?: string;
-  tipo: TipoProductoAdicional;
-  metodoCosto: MetodoCostoProductoAdicional;
-  centroCostoId?: string;
-  activo: boolean;
-  metadata?: Record<string, unknown>;
-  materiales: Array<{
-    materiaPrimaVarianteId: string;
-    tipoConsumo: TipoConsumoAdicionalMaterial;
-    factorConsumo: number;
-    mermaPct?: number;
-    activo: boolean;
-    detalle?: Record<string, unknown>;
-  }>;
-}) {
-  return apiRequest<ProductoAdicional>('/productos-servicios/adicionales', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function updateAdicionalCatalogo(
-  adicionalId: string,
-  payload: {
-    codigo?: string;
-    nombre: string;
-    descripcion?: string;
-    tipo: TipoProductoAdicional;
-    metodoCosto: MetodoCostoProductoAdicional;
-    centroCostoId?: string;
-    activo: boolean;
-    metadata?: Record<string, unknown>;
-    materiales: Array<{
-      materiaPrimaVarianteId: string;
-      tipoConsumo: TipoConsumoAdicionalMaterial;
-      factorConsumo: number;
-      mermaPct?: number;
-      activo: boolean;
-      detalle?: Record<string, unknown>;
-    }>;
-  },
-) {
-  return apiRequest<ProductoAdicional>(`/productos-servicios/adicionales/${adicionalId}`, {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function toggleAdicionalCatalogo(adicionalId: string) {
-  return apiRequest<ProductoAdicional>(`/productos-servicios/adicionales/${adicionalId}/toggle`, {
-    method: 'PUT',
-  });
-}
-
-export async function getAdicionalEfectos(adicionalId: string) {
-  return apiRequest<AddonEffect[]>(`/productos-servicios/adicionales/${adicionalId}/efectos`);
-}
-
-export async function createAdicionalEfecto(
-  adicionalId: string,
-  payload: {
-    tipo: TipoProductoAdicionalEfecto;
-    nombre?: string;
-    activo?: boolean;
-    scopes?: Array<{
-      varianteId?: string;
-      dimension?: DimensionOpcionProductiva;
-      valor?: ValorOpcionProductiva;
-    }>;
-    routeEffect?: {
-      pasos: Array<{
-        orden?: number;
-        nombre: string;
-        centroCostoId: string;
-        maquinaId?: string;
-        perfilOperativoId?: string;
-        setupMin?: number;
-        runMin?: number;
-        cleanupMin?: number;
-        tiempoFijoMin?: number;
-      }>;
-    };
-    costEffect?: {
-      regla: ReglaCostoAdicionalEfecto;
-      valor: number;
-      centroCostoId?: string;
-      detalle?: Record<string, unknown>;
-    };
-    materialEffect?: {
-      materiaPrimaVarianteId: string;
-      tipoConsumo: TipoConsumoAdicionalMaterial;
-      factorConsumo: number;
-      mermaPct?: number;
-      detalle?: Record<string, unknown>;
-    };
-  },
-) {
-  return apiRequest<AddonEffect>(`/productos-servicios/adicionales/${adicionalId}/efectos`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function updateAdicionalEfecto(
-  adicionalId: string,
-  efectoId: string,
-  payload: {
-    tipo: TipoProductoAdicionalEfecto;
-    nombre?: string;
-    activo?: boolean;
-    scopes?: Array<{
-      varianteId?: string;
-      dimension?: DimensionOpcionProductiva;
-      valor?: ValorOpcionProductiva;
-    }>;
-    routeEffect?: {
-      pasos: Array<{
-        orden?: number;
-        nombre: string;
-        centroCostoId: string;
-        maquinaId?: string;
-        perfilOperativoId?: string;
-        setupMin?: number;
-        runMin?: number;
-        cleanupMin?: number;
-        tiempoFijoMin?: number;
-      }>;
-    };
-    costEffect?: {
-      regla: ReglaCostoAdicionalEfecto;
-      valor: number;
-      centroCostoId?: string;
-      detalle?: Record<string, unknown>;
-    };
-    materialEffect?: {
-      materiaPrimaVarianteId: string;
-      tipoConsumo: TipoConsumoAdicionalMaterial;
-      factorConsumo: number;
-      mermaPct?: number;
-      detalle?: Record<string, unknown>;
-    };
-  },
-) {
-  return apiRequest<AddonEffect>(`/productos-servicios/adicionales/${adicionalId}/efectos/${efectoId}`, {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function toggleAdicionalEfecto(adicionalId: string, efectoId: string) {
-  return apiRequest<AddonEffect>(`/productos-servicios/adicionales/${adicionalId}/efectos/${efectoId}/toggle`, {
-    method: 'PUT',
-  });
-}
-
-export async function deleteAdicionalEfecto(adicionalId: string, efectoId: string) {
-  return apiRequest<{ adicionalId: string; efectoId: string; deleted: boolean }>(
-    `/productos-servicios/adicionales/${adicionalId}/efectos/${efectoId}`,
-    { method: 'DELETE' },
-  );
-}
-
-export async function getAdicionalServicioPricing(adicionalId: string) {
-  return apiRequest<{
-    niveles: Array<{ id: string; nombre: string; orden: number; activo: boolean }>;
-    reglas: Array<{
-      id: string;
-      nivelId: string;
-      tiempoMin: number;
-    }>;
-  }>(`/productos-servicios/adicionales/${adicionalId}/servicio-pricing`);
-}
-
-export async function updateAdicionalServicioPricing(
-  adicionalId: string,
-  payload: {
-    niveles: Array<{ id?: string; nombre: string; orden?: number; activo?: boolean }>;
-    reglas: Array<{
-      nivelId: string;
-      tiempoMin: number;
-    }>;
-  },
-) {
-  return apiRequest<{
-    niveles: Array<{ id: string; nombre: string; orden: number; activo: boolean }>;
-    reglas: Array<{
-      id: string;
-      nivelId: string;
-      tiempoMin: number;
-    }>;
-  }>(`/productos-servicios/adicionales/${adicionalId}/servicio-pricing`, {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  });
 }
 
 export async function getFamiliasProducto() {
@@ -353,33 +142,54 @@ export async function getProductoVariantes(productoId: string) {
   return apiRequest<ProductoVariante[]>(`/productos-servicios/${productoId}/variantes`);
 }
 
-export async function getProductoAdicionales(productoId: string) {
-  return apiRequest<ProductoAdicionalAsignado[]>(`/productos-servicios/${productoId}/adicionales`);
+export async function getProductoChecklist(productoId: string) {
+  return apiRequest<ProductoChecklist>(`/productos-servicios/${productoId}/checklist`);
 }
 
-export async function assignProductoAdicional(
+export async function upsertProductoChecklist(
   productoId: string,
   payload: {
-    adicionalId: string;
     activo?: boolean;
+    preguntas: Array<{
+      id?: string;
+      texto: string;
+      tipoPregunta?: 'binaria' | 'single_select';
+      orden?: number;
+      activo?: boolean;
+      respuestas: Array<{
+        id?: string;
+        texto: string;
+        codigo?: string;
+        orden?: number;
+        activo?: boolean;
+        reglas?: Array<{
+          id?: string;
+          accion:
+            | 'activar_paso'
+            | 'seleccionar_variante_paso'
+            | 'costo_extra'
+            | 'material_extra';
+          orden?: number;
+          activo?: boolean;
+          pasoPlantillaId?: string;
+          variantePasoId?: string;
+          costoRegla?: 'tiempo_min' | 'flat' | 'por_unidad' | 'por_pliego' | 'porcentaje_sobre_total';
+          costoValor?: number;
+          costoCentroCostoId?: string;
+          materiaPrimaVarianteId?: string;
+          tipoConsumo?: 'por_unidad' | 'por_pliego' | 'por_m2';
+          factorConsumo?: number;
+          mermaPct?: number;
+          detalle?: Record<string, unknown>;
+        }>;
+      }>;
+    }>;
   },
 ) {
-  return apiRequest<ProductoAdicionalAsignado>(`/productos-servicios/${productoId}/adicionales`, {
+  return apiRequest<ProductoChecklist>(`/productos-servicios/${productoId}/checklist`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   });
-}
-
-export async function removeProductoAdicional(
-  productoId: string,
-  adicionalId: string,
-) {
-  return apiRequest<{ productoServicioId: string; adicionalId: string; removed: boolean }>(
-    `/productos-servicios/${productoId}/adicionales/${adicionalId}`,
-    {
-      method: 'DELETE',
-    },
-  );
 }
 
 export async function createProductoVariante(
@@ -450,28 +260,6 @@ export async function deleteProductoVariante(varianteId: string) {
   });
 }
 
-export async function getVarianteAdicionalesRestricciones(varianteId: string) {
-  return apiRequest<VarianteAdicionalRestriccion[]>(
-    `/productos-servicios/variantes/${varianteId}/adicionales/restricciones`,
-  );
-}
-
-export async function setVarianteAdicionalRestriccion(
-  varianteId: string,
-  payload: {
-    adicionalId: string;
-    permitido: boolean;
-  },
-) {
-  return apiRequest<VarianteAdicionalRestriccion>(
-    `/productos-servicios/variantes/${varianteId}/adicionales/restricciones`,
-    {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    },
-  );
-}
-
 export async function assignProductoVarianteRuta(
   varianteId: string,
   procesoDefinicionId: string | null,
@@ -490,6 +278,23 @@ export async function updateProductoRutaPolicy(
   payload: {
     usarRutaComunVariantes: boolean;
     procesoDefinicionDefaultId?: string | null;
+    dimensionesBaseConsumidas?: DimensionOpcionProductiva[];
+    matchingBasePorVariante?: Array<{
+      varianteId: string;
+      matching: Array<{
+        tipoImpresion?: TipoImpresionProductoVariante | null;
+        caras?: CarasProductoVariante | null;
+        pasoPlantillaId: string;
+        perfilOperativoId: string;
+      }>;
+    }>;
+    pasosFijosPorVariante?: Array<{
+      varianteId: string;
+      pasos: Array<{
+        pasoPlantillaId: string;
+        perfilOperativoId: string;
+      }>;
+    }>;
   },
 ) {
   return apiRequest<ProductoRutaPolicy>(
@@ -575,8 +380,8 @@ export async function cotizarProductoVariante(
   payload: {
     cantidad: number;
     periodo?: string;
-    addonsSeleccionados?: string[];
-    addonsConfig?: Array<{ addonId: string; nivelId?: string }>;
+    seleccionesBase?: Array<{ dimension: DimensionOpcionProductiva; valor: ValorOpcionProductiva }>;
+    checklistRespuestas?: Array<{ preguntaId: string; respuestaId: string }>;
   },
 ) {
   return apiRequest<CotizacionProductoVariante>(

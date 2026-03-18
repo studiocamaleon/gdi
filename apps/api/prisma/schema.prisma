@@ -113,6 +113,10 @@ enum EstadoTarifaCentroCostoPeriodo {
 enum PlantillaMaquinaria {
   ROUTER_CNC
   CORTE_LASER
+  GUILLOTINA
+  LAMINADORA_BOPP_ROLLO
+  REDONDEADORA_PUNTAS
+  PERFORADORA
   IMPRESORA_3D
   IMPRESORA_DTF
   IMPRESORA_DTF_UV
@@ -163,6 +167,10 @@ enum UnidadProduccionMaquina {
   PIEZAS_H
   PIEZA
   CICLO
+  CORTES_MIN
+  GOLPES_MIN
+  PLIEGOS_MIN
+  M_MIN
 }
 
 enum TipoPerfilOperativoMaquina {
@@ -274,6 +282,7 @@ enum UnidadProceso {
   M2
   METRO_LINEAL
   PIEZA
+  CORTE
   CICLO
   UNIDAD
   KG
@@ -446,6 +455,27 @@ enum ReglaCostoAdicionalEfecto {
   TIEMPO_EXTRA_MIN
 }
 
+enum TipoProductoChecklistPregunta {
+  BINARIA
+  SINGLE_SELECT
+}
+
+enum TipoProductoChecklistReglaAccion {
+  ACTIVAR_PASO
+  SELECCIONAR_VARIANTE_PASO
+  COSTO_EXTRA
+  MATERIAL_EXTRA
+  SET_ATRIBUTO_TECNICO
+}
+
+enum ReglaCostoChecklist {
+  TIEMPO_MIN
+  FLAT
+  POR_UNIDAD
+  POR_PLIEGO
+  PORCENTAJE_SOBRE_TOTAL
+}
+
 enum EstadoAlgoritmoCosto {
   ACTIVO
   INACTIVO
@@ -513,6 +543,12 @@ model Tenant {
   productoAdicionalRouteEffectPasos      ProductoAdicionalRouteEffectPaso[]
   productoAdicionalCostEffects           ProductoAdicionalCostEffect[]
   productoAdicionalMaterialEffects       ProductoAdicionalMaterialEffect[]
+  productoChecklists                     ProductoChecklist[]
+  productoChecklistPreguntas             ProductoChecklistPregunta[]
+  productoChecklistRespuestas            ProductoChecklistRespuesta[]
+  productoChecklistReglas                ProductoChecklistRegla[]
+  productoChecklistReglaNiveles          ProductoChecklistReglaNivel[]
+  cotizacionChecklistRespuestas          CotizacionChecklistRespuestaSnapshot[]
 }
 
 model User {
@@ -830,6 +866,7 @@ model CentroCosto {
   productosAdicionalesCatalogo         ProductoAdicionalCatalogo[]
   productosAdicionalesCostEffects      ProductoAdicionalCostEffect[]
   productosAdicionalesRouteEffectPasos ProductoAdicionalRouteEffectPaso[]
+  productoChecklistReglasCosto         ProductoChecklistRegla[]      @relation("ProductoChecklistReglaCentroCosto")
 
   @@unique([tenantId, codigo])
   @@index([tenantId, plantaId, areaCostoId])
@@ -1015,11 +1052,17 @@ model MaquinaPerfilOperativo {
   activo                               Boolean                            @default(true)
   anchoAplicable                       Decimal?                           @db.Decimal(12, 2)
   altoAplicable                        Decimal?                           @db.Decimal(12, 2)
-  modoTrabajo                          String?
-  productividad                        Decimal?                           @db.Decimal(12, 2)
-  unidadProductividad                  UnidadProduccionMaquina?
-  tiempoPreparacionMin                 Decimal?                           @db.Decimal(12, 2)
-  tiempoRipMin                         Decimal?                           @db.Decimal(12, 2)
+  operationMode                        String?
+  printMode                            TipoImpresionProductoVariante?
+  printSides                           CarasProductoVariante?
+  productivityValue                    Decimal?                           @db.Decimal(12, 2)
+  productivityUnit                     UnidadProduccionMaquina?
+  setupMin                             Decimal?                           @db.Decimal(12, 2)
+  cleanupMin                           Decimal?                           @db.Decimal(12, 2)
+  feedReloadMin                        Decimal?                           @db.Decimal(12, 2)
+  sheetThicknessMm                     Decimal?                           @db.Decimal(12, 3)
+  maxBatchHeightMm                     Decimal?                           @db.Decimal(12, 2)
+  materialPreset                       String?
   cantidadPasadas                      Int?
   dobleFaz                             Boolean                            @default(false)
   detalleJson                          Json?
@@ -1129,6 +1172,7 @@ model ProcesoOperacionPlantilla {
   mermaRunPct        Decimal?                 @db.Decimal(8, 4)
   reglaVelocidadJson Json?
   reglaMermaJson     Json?
+  detalleJson        Json?
   observaciones      String?
   activo             Boolean                  @default(true)
   createdAt          DateTime                 @default(now())
@@ -1181,6 +1225,7 @@ model ProcesoOperacion {
   maquina                     Maquina?                   @relation("ProcesoOperacionMaquina", fields: [maquinaId], references: [id], onDelete: SetNull)
   perfilOperativo             MaquinaPerfilOperativo?    @relation("ProcesoOperacionPerfil", fields: [perfilOperativoId], references: [id], onDelete: SetNull)
   requiresProductoAdicional   ProductoAdicionalCatalogo? @relation("ProductoAdicionalCondicionOperacion", fields: [requiresProductoAdicionalId], references: [id], onDelete: SetNull)
+  productoChecklistReglasPaso ProductoChecklistRegla[]   @relation("ProductoChecklistReglaOperacion")
 
   @@unique([tenantId, procesoDefinicionId, orden])
   @@unique([tenantId, procesoDefinicionId, codigo])
@@ -1256,6 +1301,7 @@ model MateriaPrimaVariante {
   productosVariantes               ProductoVariante[]
   productosAdicionalesMateriales   ProductoAdicionalMaterial[]
   productoAdicionalMaterialEffects ProductoAdicionalMaterialEffect[]
+  productoChecklistReglasMaterial  ProductoChecklistRegla[] @relation("ProductoChecklistReglaMateriaPrima")
 
   @@unique([tenantId, sku])
   @@index([tenantId, materiaPrimaId, activo])
@@ -1387,6 +1433,7 @@ model ProductoServicio {
   motorVersion               Int                         @default(1)
   usarRutaComunVariantes     Boolean                     @default(true)
   procesoDefinicionDefaultId String?                     @db.Uuid
+  detalleJson                Json?
   familiaProductoId          String                      @db.Uuid
   subfamiliaProductoId       String?                     @db.Uuid
   estado                     EstadoProductoServicio      @default(ACTIVO)
@@ -1400,6 +1447,7 @@ model ProductoServicio {
   variantes                  ProductoVariante[]
   motorConfigs               ProductoMotorConfig[]
   adicionalesAsignados       ProductoServicioAdicional[]
+  checklist                  ProductoChecklist?
 
   @@unique([tenantId, codigo])
   @@index([tenantId, nombre, activo])
@@ -1431,6 +1479,7 @@ model ProductoVariante {
   adicionalesRestricciones ProductoVarianteAdicionalRestriction[]
   opcionesProductivasSet   ProductoVarianteOpcionProductivaSet?
   addonEffectScopes        ProductoAdicionalEfectoScope[]
+  checklistRespuestas      CotizacionChecklistRespuestaSnapshot[]
 
   @@unique([tenantId, productoServicioId, nombre])
   @@index([tenantId, productoServicioId, activo])
@@ -1676,6 +1725,107 @@ model ProductoAdicionalMaterialEffect {
   @@index([tenantId, materiaPrimaVarianteId])
 }
 
+model ProductoChecklist {
+  id                 String                     @id @default(uuid()) @db.Uuid
+  tenantId           String                     @db.Uuid
+  productoServicioId String                     @unique @db.Uuid
+  activo             Boolean                    @default(true)
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  tenant             Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productoServicio   ProductoServicio           @relation(fields: [productoServicioId], references: [id], onDelete: Cascade)
+  preguntas          ProductoChecklistPregunta[]
+
+  @@unique([tenantId, productoServicioId])
+  @@index([tenantId, productoServicioId])
+}
+
+model ProductoChecklistPregunta {
+  id                    String                             @id @default(uuid()) @db.Uuid
+  tenantId              String                             @db.Uuid
+  productoChecklistId   String                             @db.Uuid
+  texto                 String
+  tipoPregunta          TipoProductoChecklistPregunta      @default(BINARIA)
+  orden                 Int                                @default(1)
+  activo                Boolean                            @default(true)
+  createdAt             DateTime                           @default(now())
+  updatedAt             DateTime                           @updatedAt
+  tenant                Tenant                             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productoChecklist     ProductoChecklist                  @relation(fields: [productoChecklistId], references: [id], onDelete: Cascade)
+  respuestas            ProductoChecklistRespuesta[]
+  cotizacionRespuestas  CotizacionChecklistRespuestaSnapshot[]
+
+  @@index([tenantId, productoChecklistId, orden])
+}
+
+model ProductoChecklistRespuesta {
+  id                         String                             @id @default(uuid()) @db.Uuid
+  tenantId                   String                             @db.Uuid
+  productoChecklistPreguntaId String                            @db.Uuid
+  texto                      String
+  codigo                     String?
+  orden                      Int                                @default(1)
+  activo                     Boolean                            @default(true)
+  createdAt                  DateTime                           @default(now())
+  updatedAt                  DateTime                           @updatedAt
+  tenant                     Tenant                             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pregunta                   ProductoChecklistPregunta          @relation(fields: [productoChecklistPreguntaId], references: [id], onDelete: Cascade)
+  reglas                     ProductoChecklistRegla[]
+  cotizacionRespuestas       CotizacionChecklistRespuestaSnapshot[]
+
+  @@index([tenantId, productoChecklistPreguntaId, orden])
+}
+
+model ProductoChecklistRegla {
+  id                           String                           @id @default(uuid()) @db.Uuid
+  tenantId                     String                           @db.Uuid
+  productoChecklistRespuestaId String                           @db.Uuid
+  accion                       TipoProductoChecklistReglaAccion
+  orden                        Int                              @default(1)
+  activo                       Boolean                          @default(true)
+  procesoOperacionId           String?                          @db.Uuid
+  usaNiveles                   Boolean                          @default(false)
+  costoRegla                   ReglaCostoChecklist?
+  costoValor                   Decimal?                         @db.Decimal(14, 6)
+  costoCentroCostoId           String?                          @db.Uuid
+  materiaPrimaVarianteId       String?                          @db.Uuid
+  tipoConsumo                  TipoConsumoAdicionalMaterial?
+  factorConsumo                Decimal?                         @db.Decimal(14, 6)
+  mermaPct                     Decimal?                         @db.Decimal(8, 4)
+  detalleJson                  Json?
+  createdAt                    DateTime                         @default(now())
+  updatedAt                    DateTime                         @updatedAt
+  tenant                       Tenant                           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  respuesta                    ProductoChecklistRespuesta       @relation(fields: [productoChecklistRespuestaId], references: [id], onDelete: Cascade)
+  procesoOperacion             ProcesoOperacion?                @relation("ProductoChecklistReglaOperacion", fields: [procesoOperacionId], references: [id], onDelete: SetNull)
+  costoCentroCosto             CentroCosto?                     @relation("ProductoChecklistReglaCentroCosto", fields: [costoCentroCostoId], references: [id], onDelete: SetNull)
+  materiaPrimaVariante         MateriaPrimaVariante?            @relation("ProductoChecklistReglaMateriaPrima", fields: [materiaPrimaVarianteId], references: [id], onDelete: SetNull)
+  niveles                      ProductoChecklistReglaNivel[]
+
+  @@index([tenantId, productoChecklistRespuestaId, orden])
+  @@index([tenantId, accion, activo])
+}
+
+model ProductoChecklistReglaNivel {
+  id                       String                    @id @default(uuid()) @db.Uuid
+  tenantId                 String                    @db.Uuid
+  productoChecklistReglaId String                    @db.Uuid
+  nombreNivel              String
+  orden                    Int                       @default(1)
+  activo                   Boolean                   @default(true)
+  costoRegla               ReglaCostoChecklist?
+  costoValor               Decimal?                  @db.Decimal(14, 6)
+  tiempoMin                Decimal?                  @db.Decimal(12, 2)
+  detalleJson              Json?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  tenant                   Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  regla                    ProductoChecklistRegla    @relation(fields: [productoChecklistReglaId], references: [id], onDelete: Cascade)
+  cotizacionRespuestas     CotizacionChecklistRespuestaSnapshot[]
+
+  @@index([tenantId, productoChecklistReglaId, orden])
+}
+
 model ProductoMotorConfig {
   id                 String           @id @default(uuid()) @db.Uuid
   tenantId           String           @db.Uuid
@@ -1762,7 +1912,29 @@ model CotizacionProductoSnapshot {
   createdAt             DateTime         @default(now())
   tenant                Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   productoVariante      ProductoVariante @relation(fields: [productoVarianteId], references: [id], onDelete: Cascade)
+  checklistRespuestas   CotizacionChecklistRespuestaSnapshot[]
 
   @@index([tenantId, productoVarianteId, createdAt])
   @@index([tenantId, motorCodigo, motorVersion, createdAt])
+}
+
+model CotizacionChecklistRespuestaSnapshot {
+  id                           String                             @id @default(uuid()) @db.Uuid
+  tenantId                     String                             @db.Uuid
+  cotizacionProductoSnapshotId String                             @db.Uuid
+  productoVarianteId           String                             @db.Uuid
+  preguntaId                   String                             @db.Uuid
+  respuestaId                  String                             @db.Uuid
+  nivelId                      String?                            @db.Uuid
+  createdAt                    DateTime                           @default(now())
+  updatedAt                    DateTime                           @updatedAt
+  tenant                       Tenant                             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cotizacion                   CotizacionProductoSnapshot         @relation(fields: [cotizacionProductoSnapshotId], references: [id], onDelete: Cascade)
+  productoVariante             ProductoVariante                   @relation(fields: [productoVarianteId], references: [id], onDelete: Cascade)
+  pregunta                     ProductoChecklistPregunta          @relation(fields: [preguntaId], references: [id], onDelete: Cascade)
+  respuesta                    ProductoChecklistRespuesta         @relation(fields: [respuestaId], references: [id], onDelete: Cascade)
+  nivel                        ProductoChecklistReglaNivel?       @relation(fields: [nivelId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, cotizacionProductoSnapshotId])
+  @@index([tenantId, productoVarianteId])
 }

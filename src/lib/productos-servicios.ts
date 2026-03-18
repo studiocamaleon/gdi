@@ -2,18 +2,20 @@ export type TipoProductoServicio = 'producto' | 'servicio';
 export type EstadoProductoServicio = 'activo' | 'inactivo';
 export type TipoImpresionProductoVariante = 'bn' | 'cmyk';
 export type CarasProductoVariante = 'simple_faz' | 'doble_faz';
-export type TipoProductoAdicional = 'servicio' | 'acabado';
-export type MetodoCostoProductoAdicional = 'time_only' | 'time_plus_material';
-export type TipoConsumoAdicionalMaterial = 'por_unidad' | 'por_pliego' | 'por_m2';
 export type DimensionOpcionProductiva = 'tipo_impresion' | 'caras';
 export type ValorOpcionProductiva = 'bn' | 'cmyk' | 'simple_faz' | 'doble_faz';
-export type TipoProductoAdicionalEfecto = 'route_effect' | 'cost_effect' | 'material_effect';
-export type ReglaCostoAdicionalEfecto =
+export type TipoChecklistPregunta = 'binaria' | 'single_select';
+export type TipoChecklistAccionRegla =
+  | 'activar_paso'
+  | 'seleccionar_variante_paso'
+  | 'costo_extra'
+  | 'material_extra';
+export type ReglaCostoChecklist =
+  | 'tiempo_min'
   | 'flat'
   | 'por_unidad'
   | 'por_pliego'
-  | 'porcentaje_sobre_total'
-  | 'tiempo_extra_min';
+  | 'porcentaje_sobre_total';
 
 export type FamiliaProducto = {
   id: string;
@@ -54,8 +56,37 @@ export type ProductoServicio = {
   familiaProductoNombre: string;
   subfamiliaProductoId: string | null;
   subfamiliaProductoNombre: string;
+  dimensionesBaseConsumidas?: DimensionOpcionProductiva[];
+  matchingBasePorVariante?: ProductoRutaBaseMatchingVariante[];
+  pasosFijosPorVariante?: ProductoRutaPasoFijoVariante[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type ProductoRutaBaseMatchingItem = {
+  tipoImpresion: TipoImpresionProductoVariante | null;
+  caras: CarasProductoVariante | null;
+  pasoPlantillaId: string;
+  pasoPlantillaNombre: string;
+  perfilOperativoId: string;
+  perfilOperativoNombre: string;
+};
+
+export type ProductoRutaBaseMatchingVariante = {
+  varianteId: string;
+  matching: ProductoRutaBaseMatchingItem[];
+};
+
+export type ProductoRutaPasoFijoItem = {
+  pasoPlantillaId: string;
+  pasoPlantillaNombre: string;
+  perfilOperativoId: string;
+  perfilOperativoNombre: string;
+};
+
+export type ProductoRutaPasoFijoVariante = {
+  varianteId: string;
+  pasos: ProductoRutaPasoFijoItem[];
 };
 
 export type ProductoVariante = {
@@ -81,52 +112,6 @@ export type ProductoVariante = {
   updatedAt: string;
 };
 
-export type ProductoAdicionalMaterial = {
-  id: string;
-  materiaPrimaVarianteId: string;
-  materiaPrimaNombre: string;
-  materiaPrimaSku: string;
-  tipoConsumo: TipoConsumoAdicionalMaterial;
-  factorConsumo: number;
-  mermaPct: number | null;
-  activo: boolean;
-  detalle: Record<string, unknown> | null;
-};
-
-export type ProductoAdicional = {
-  id: string;
-  codigo: string;
-  nombre: string;
-  descripcion: string;
-  tipo: TipoProductoAdicional;
-  metodoCosto: MetodoCostoProductoAdicional;
-  centroCostoId: string | null;
-  centroCostoNombre: string;
-  activo: boolean;
-  metadata: Record<string, unknown> | null;
-  servicioPricing: {
-    niveles: Array<{
-      id: string;
-      nombre: string;
-      orden: number;
-      activo: boolean;
-    }>;
-    reglas: Array<{
-      id: string;
-      nivelId: string;
-      tiempoMin: number;
-    }>;
-  };
-  efectos: Array<{
-    id: string;
-    tipo: TipoProductoAdicionalEfecto;
-    activo: boolean;
-  }>;
-  materiales: ProductoAdicionalMaterial[];
-  createdAt: string;
-  updatedAt: string;
-};
-
 export type VarianteOpcionesProductivas = {
   varianteId: string;
   source: 'legacy' | 'v2';
@@ -136,86 +121,6 @@ export type VarianteOpcionesProductivas = {
   }>;
   createdAt?: string;
   updatedAt?: string;
-};
-
-export type AddonEffectScope = {
-  id: string;
-  varianteId: string | null;
-  dimension: DimensionOpcionProductiva | null;
-  valor: ValorOpcionProductiva | null;
-};
-
-export type AddonRouteEffect = {
-  id: string;
-  pasos: Array<{
-    id: string;
-    orden: number;
-    nombre: string;
-    centroCostoId: string;
-    centroCostoNombre: string;
-    maquinaId: string | null;
-    maquinaNombre: string;
-    perfilOperativoId: string | null;
-    perfilOperativoNombre: string;
-    setupMin: number | null;
-    runMin: number | null;
-    cleanupMin: number | null;
-    tiempoFijoMin: number | null;
-  }>;
-};
-
-export type AddonCostEffect = {
-  id: string;
-  regla: ReglaCostoAdicionalEfecto;
-  valor: number;
-  centroCostoId: string | null;
-  centroCostoNombre: string;
-  detalle: Record<string, unknown> | null;
-};
-
-export type AddonMaterialEffect = {
-  id: string;
-  materiaPrimaVarianteId: string;
-  materiaPrimaNombre: string;
-  materiaPrimaSku: string;
-  tipoConsumo: TipoConsumoAdicionalMaterial;
-  factorConsumo: number;
-  mermaPct: number | null;
-  detalle: Record<string, unknown> | null;
-};
-
-export type AddonEffect = {
-  id: string;
-  adicionalId: string;
-  tipo: TipoProductoAdicionalEfecto;
-  nombre: string;
-  activo: boolean;
-  scopes: AddonEffectScope[];
-  routeEffect: AddonRouteEffect | null;
-  costEffect: AddonCostEffect | null;
-  materialEffect: AddonMaterialEffect | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type ProductoAdicionalAsignado = {
-  id: string;
-  productoServicioId: string;
-  adicionalId: string;
-  activo: boolean;
-  adicional: ProductoAdicional;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type VarianteAdicionalRestriccion = {
-  id: string;
-  varianteId: string;
-  adicionalId: string;
-  adicionalNombre: string;
-  permitido: boolean;
-  createdAt: string;
-  updatedAt: string;
 };
 
 export type MotorCostoCatalogItem = {
@@ -240,6 +145,9 @@ export type ProductoRutaPolicy = {
   usarRutaComunVariantes: boolean;
   procesoDefinicionDefaultId: string | null;
   procesoDefinicionDefaultNombre: string;
+  dimensionesBaseConsumidas?: DimensionOpcionProductiva[];
+  matchingBasePorVariante?: ProductoRutaBaseMatchingVariante[];
+  pasosFijosPorVariante?: ProductoRutaPasoFijoVariante[];
 };
 
 export type VarianteMotorOverride = {
@@ -274,6 +182,7 @@ export type CotizacionProductoVariante = {
       centroCostoNombre: string;
       origen?: string;
       addonId?: string | null;
+      detalleTecnico?: Record<string, unknown> | null;
       setupMin: number;
       runMin: number;
       cleanupMin: number;
@@ -289,6 +198,7 @@ export type CotizacionProductoVariante = {
     papel: number;
     toner: number;
     desgaste: number;
+    consumiblesTerminacion?: number;
     adicionalesMateriales?: number;
     adicionalesCostEffects?: number;
   };
@@ -296,6 +206,83 @@ export type CotizacionProductoVariante = {
   unitario: number;
   trazabilidad: Record<string, unknown>;
   createdAt: string;
+};
+
+export type ProductoChecklistRegla = {
+  id: string;
+  accion: TipoChecklistAccionRegla;
+  orden: number;
+  activo: boolean;
+  pasoPlantillaId: string | null;
+  pasoPlantillaNombre: string;
+  centroCostoId: string | null;
+  centroCostoNombre: string;
+  maquinaNombre: string;
+  perfilOperativoNombre: string;
+  setupMin: number | null;
+  runMin: number | null;
+  cleanupMin: number | null;
+  tiempoFijoMin: number | null;
+  variantePasoId: string | null;
+  variantePasoNombre: string;
+  variantePasoResumen: string;
+  nivelesDisponibles: Array<{
+    id: string;
+    nombre: string;
+    orden: number;
+    activo: boolean;
+    modoProductividadNivel: 'fija' | 'variable_manual' | 'variable_perfil';
+    tiempoFijoMin: number | null;
+    productividadBase: number | null;
+    unidadSalida: string | null;
+    unidadTiempo: string | null;
+    maquinaId: string | null;
+    maquinaNombre: string;
+    perfilOperativoId: string | null;
+    perfilOperativoNombre: string;
+    setupMin: number | null;
+    cleanupMin: number | null;
+    resumen: string;
+    detalle: Record<string, unknown> | null;
+  }>;
+  costoRegla: ReglaCostoChecklist | null;
+  costoValor: number | null;
+  costoCentroCostoId: string | null;
+  costoCentroCostoNombre: string;
+  materiaPrimaVarianteId: string | null;
+  materiaPrimaNombre: string;
+  materiaPrimaSku: string;
+  tipoConsumo: 'por_unidad' | 'por_pliego' | 'por_m2' | null;
+  factorConsumo: number | null;
+  mermaPct: number | null;
+  detalle: Record<string, unknown> | null;
+};
+
+export type ProductoChecklistRespuesta = {
+  id: string;
+  texto: string;
+  codigo: string | null;
+  orden: number;
+  activo: boolean;
+  reglas: ProductoChecklistRegla[];
+};
+
+export type ProductoChecklistPregunta = {
+  id: string;
+  texto: string;
+  tipoPregunta: TipoChecklistPregunta;
+  orden: number;
+  activo: boolean;
+  respuestas: ProductoChecklistRespuesta[];
+};
+
+export type ProductoChecklist = {
+  id?: string;
+  productoId: string;
+  activo: boolean;
+  preguntas: ProductoChecklistPregunta[];
+  createdAt: string | null;
+  updatedAt: string | null;
 };
 
 export type CotizacionProductoSnapshotResumen = {

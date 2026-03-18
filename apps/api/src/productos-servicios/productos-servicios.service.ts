@@ -10,13 +10,17 @@ import {
   ModoProductividadProceso,
   EstadoProductoServicio,
   EstadoTarifaCentroCostoPeriodo,
+  ReglaCostoChecklist,
   ReglaCostoAdicionalEfecto,
   MetodoCostoProductoAdicional,
+  PlantillaMaquinaria,
   Prisma,
   TipoProductoAdicionalEfecto,
   TipoConsumoAdicionalMaterial,
   TipoConsumibleMaquina,
   TipoProductoAdicional,
+  TipoProductoChecklistPregunta,
+  TipoProductoChecklistReglaAccion,
   TipoImpresionProductoVariante,
   TipoOperacionProceso,
   TipoProductoServicio,
@@ -49,7 +53,11 @@ import {
   UpsertProductoAdicionalServicioPricingDto,
   UpsertVarianteOpcionesProductivasDto,
   UpsertProductoAdicionalDto,
+  UpsertProductoChecklistDto,
   PreviewImposicionProductoVarianteDto,
+  ReglaCostoChecklistDto,
+  TipoChecklistPreguntaDto,
+  TipoChecklistAccionReglaDto,
   UpdateProductoRutaPolicyDto,
   EstadoProductoServicioDto,
   TipoImpresionProductoVarianteDto,
@@ -96,6 +104,12 @@ export class ProductosServiciosService {
     label: 'Impresión digital laser · v1',
   } as const;
   private static readonly DEFAULT_A4_AREA_M2 = 0.06237;
+  private static readonly TERMINACION_PLANTILLAS_SOPORTADAS = new Set<PlantillaMaquinaria>([
+    PlantillaMaquinaria.GUILLOTINA,
+    PlantillaMaquinaria.LAMINADORA_BOPP_ROLLO,
+    PlantillaMaquinaria.REDONDEADORA_PUNTAS,
+    PlantillaMaquinaria.PERFORADORA,
+  ]);
   private static readonly CANONICAL_PLIEGOS_MM: Array<{
     codigo: string;
     nombre: string;
@@ -682,24 +696,9 @@ export class ProductosServiciosService {
     });
 
     return rows.map((item) => ({
-      id: item.id,
-      tipo: this.fromTipoProducto(item.tipo),
-      codigo: item.codigo,
-      nombre: item.nombre,
-      descripcion: item.descripcion ?? '',
-      motorCodigo: item.motorCodigo,
-      motorVersion: item.motorVersion,
-      usarRutaComunVariantes: item.usarRutaComunVariantes,
-      procesoDefinicionDefaultId: item.procesoDefinicionDefaultId,
-      procesoDefinicionDefaultNombre: item.procesoDefinicionDefault?.nombre ?? '',
-      estado: this.fromEstadoProducto(item.estado),
-      activo: item.activo,
-      familiaProductoId: item.familiaProductoId,
-      familiaProductoNombre: item.familiaProducto.nombre,
-      subfamiliaProductoId: item.subfamiliaProductoId,
-      subfamiliaProductoNombre: item.subfamiliaProducto?.nombre ?? '',
-      createdAt: item.createdAt.toISOString(),
-      updatedAt: item.updatedAt.toISOString(),
+      ...this.toProductoResponseBase(item),
+      matchingBasePorVariante: [],
+      pasosFijosPorVariante: [],
     }));
   }
 
@@ -707,24 +706,9 @@ export class ProductosServiciosService {
     const item = await this.findProductoOrThrow(auth, id, this.prisma);
 
     return {
-      id: item.id,
-      tipo: this.fromTipoProducto(item.tipo),
-      codigo: item.codigo,
-      nombre: item.nombre,
-      descripcion: item.descripcion ?? '',
-      motorCodigo: item.motorCodigo,
-      motorVersion: item.motorVersion,
-      usarRutaComunVariantes: item.usarRutaComunVariantes,
-      procesoDefinicionDefaultId: item.procesoDefinicionDefaultId,
-      procesoDefinicionDefaultNombre: item.procesoDefinicionDefault?.nombre ?? '',
-      estado: this.fromEstadoProducto(item.estado),
-      activo: item.activo,
-      familiaProductoId: item.familiaProductoId,
-      familiaProductoNombre: item.familiaProducto.nombre,
-      subfamiliaProductoId: item.subfamiliaProductoId,
-      subfamiliaProductoNombre: item.subfamiliaProducto?.nombre ?? '',
-      createdAt: item.createdAt.toISOString(),
-      updatedAt: item.updatedAt.toISOString(),
+      ...this.toProductoResponseBase(item),
+      matchingBasePorVariante: await this.toRutaBaseMatchingResponse(item.detalleJson ?? null),
+      pasosFijosPorVariante: await this.toRutaBasePasosFijosResponse(item.detalleJson ?? null),
     };
   }
 
@@ -894,6 +878,39 @@ export class ProductosServiciosService {
     if (procesoDefaultId) {
       await this.findProcesoOrThrow(auth, procesoDefaultId, this.prisma);
     }
+    const dimensionesBaseConsumidas =
+      payload.dimensionesBaseConsumidas === undefined
+        ? this.getProductoDimensionesBaseConsumidas(producto.detalleJson)
+        : Array.from(
+            new Set(payload.dimensionesBaseConsumidas.map((item) => this.toDimensionOpcionProductiva(item))),
+          );
+    const matchingBasePorVariante =
+      payload.matchingBasePorVariante === undefined
+        ? this.getProductoMatchingBaseByVariante(producto.detalleJson)
+        : await this.validateAndNormalizeMatchingBase(
+            auth,
+            producto.id,
+            dimensionesBaseConsumidas,
+            payload.matchingBasePorVariante,
+            this.prisma,
+          );
+    const pasosFijosPorVariante =
+      payload.pasosFijosPorVariante === undefined
+        ? this.getProductoPasosFijosByVariante(producto.detalleJson)
+        : await this.validateAndNormalizePasosFijosRutaBase(
+            auth,
+            producto.id,
+            dimensionesBaseConsumidas,
+            payload.pasosFijosPorVariante,
+            this.prisma,
+          );
+    const nextDetalle = this.mergeProductoDetalle(producto.detalleJson, {
+      dimensionesBaseConsumidas: dimensionesBaseConsumidas.map((item) =>
+        this.fromDimensionOpcionProductiva(item),
+      ),
+      matchingBasePorVariante,
+      pasosFijosPorVariante,
+    });
 
     await this.prisma.$transaction(async (tx) => {
       await tx.productoServicio.update({
@@ -901,6 +918,7 @@ export class ProductosServiciosService {
         data: {
           usarRutaComunVariantes: payload.usarRutaComunVariantes,
           procesoDefinicionDefaultId: procesoDefaultId,
+          detalleJson: this.toNullableJson(nextDetalle),
         },
       });
 
@@ -1148,6 +1166,300 @@ export class ProductosServiciosService {
     return this.toVarianteOpcionesProductivasResponse(variante.id, variante, saved);
   }
 
+  async getProductoChecklist(auth: CurrentAuth, productoId: string) {
+    await this.findProductoOrThrow(auth, productoId, this.prisma);
+    const checklist = await this.prisma.productoChecklist.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        productoServicioId: productoId,
+      },
+      include: {
+        preguntas: {
+          orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+          include: {
+            respuestas: {
+              orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+              include: {
+                reglas: {
+                  orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+                  include: {
+                    procesoOperacion: {
+                      include: {
+                        centroCosto: true,
+                        maquina: true,
+                        perfilOperativo: true,
+                      },
+                    },
+                    costoCentroCosto: true,
+                    materiaPrimaVariante: {
+                      include: {
+                        materiaPrima: true,
+                      },
+                    },
+                    niveles: {
+                      orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!checklist) {
+      return {
+        productoId,
+        activo: true,
+        preguntas: [],
+        createdAt: null,
+        updatedAt: null,
+      };
+    }
+    const plantillasById = await this.getChecklistPasoPlantillasMap(auth, checklist);
+    return this.toProductoChecklistResponse(checklist, plantillasById);
+  }
+
+  async upsertProductoChecklist(
+    auth: CurrentAuth,
+    productoId: string,
+    payload: UpsertProductoChecklistDto,
+  ) {
+    await this.findProductoOrThrow(auth, productoId, this.prisma);
+    this.validateProductoChecklistPayload(payload);
+
+    const checklistId = await this.prisma.$transaction(async (tx) => {
+      const checklist =
+        (await tx.productoChecklist.findFirst({
+          where: {
+            tenantId: auth.tenantId,
+            productoServicioId: productoId,
+          },
+          select: { id: true },
+        })) ??
+        (await tx.productoChecklist.create({
+          data: {
+            tenantId: auth.tenantId,
+            productoServicioId: productoId,
+            activo: payload.activo ?? true,
+          },
+          select: { id: true },
+        }));
+
+      await tx.productoChecklist.update({
+        where: { id: checklist.id },
+        data: {
+          activo: payload.activo ?? true,
+        },
+      });
+
+      const preguntasPrevias = await tx.productoChecklistPregunta.findMany({
+        where: {
+          tenantId: auth.tenantId,
+          productoChecklistId: checklist.id,
+        },
+        select: { id: true },
+      });
+
+      if (preguntasPrevias.length > 0) {
+        const preguntaIds = preguntasPrevias.map((item) => item.id);
+        const respuestasPrevias = await tx.productoChecklistRespuesta.findMany({
+          where: {
+            tenantId: auth.tenantId,
+            productoChecklistPreguntaId: { in: preguntaIds },
+          },
+          select: { id: true },
+        });
+        if (respuestasPrevias.length > 0) {
+          const respuestaIds = respuestasPrevias.map((item) => item.id);
+          const reglasPrevias = await tx.productoChecklistRegla.findMany({
+            where: {
+              tenantId: auth.tenantId,
+              productoChecklistRespuestaId: { in: respuestaIds },
+            },
+            select: { id: true },
+          });
+          if (reglasPrevias.length > 0) {
+            await tx.productoChecklistReglaNivel.deleteMany({
+              where: {
+                tenantId: auth.tenantId,
+                productoChecklistReglaId: { in: reglasPrevias.map((item) => item.id) },
+              },
+            });
+          }
+          await tx.productoChecklistRegla.deleteMany({
+            where: {
+              tenantId: auth.tenantId,
+              productoChecklistRespuestaId: { in: respuestaIds },
+            },
+          });
+        }
+        await tx.productoChecklistRespuesta.deleteMany({
+          where: {
+            tenantId: auth.tenantId,
+            productoChecklistPreguntaId: { in: preguntaIds },
+          },
+        });
+        await tx.productoChecklistPregunta.deleteMany({
+          where: {
+            tenantId: auth.tenantId,
+            id: { in: preguntaIds },
+          },
+        });
+      }
+
+      for (let indexPregunta = 0; indexPregunta < payload.preguntas.length; indexPregunta += 1) {
+        const pregunta = payload.preguntas[indexPregunta];
+        const preguntaRow = await tx.productoChecklistPregunta.create({
+          data: {
+            tenantId: auth.tenantId,
+            productoChecklistId: checklist.id,
+            texto: pregunta.texto.trim(),
+            tipoPregunta: this.toTipoChecklistPregunta(pregunta.tipoPregunta ?? TipoChecklistPreguntaDto.binaria),
+            orden: pregunta.orden ?? indexPregunta + 1,
+            activo: pregunta.activo ?? true,
+          },
+        });
+
+        for (let indexRespuesta = 0; indexRespuesta < pregunta.respuestas.length; indexRespuesta += 1) {
+          const respuesta = pregunta.respuestas[indexRespuesta];
+          const respuestaRow = await tx.productoChecklistRespuesta.create({
+            data: {
+              tenantId: auth.tenantId,
+              productoChecklistPreguntaId: preguntaRow.id,
+              texto: respuesta.texto.trim(),
+              codigo: respuesta.codigo?.trim() || null,
+              orden: respuesta.orden ?? indexRespuesta + 1,
+              activo: respuesta.activo ?? true,
+            },
+          });
+
+          const reglas = respuesta.reglas ?? [];
+          for (let indexRegla = 0; indexRegla < reglas.length; indexRegla += 1) {
+            const regla = reglas[indexRegla];
+            let pasoPlantilla:
+              | Awaited<ReturnType<ProductosServiciosService['findBibliotecaOperacionOrThrow']>>
+              | null = null;
+            if (regla.pasoPlantillaId) {
+              pasoPlantilla = await this.findBibliotecaOperacionOrThrow(auth, regla.pasoPlantillaId, tx);
+            }
+            if (regla.costoCentroCostoId) {
+              await this.findCentroCostoOrThrow(auth, regla.costoCentroCostoId, tx);
+            }
+            if (regla.materiaPrimaVarianteId) {
+              await this.findPapelVarianteOrThrow(auth, regla.materiaPrimaVarianteId, tx);
+            }
+            const detalleReglaBase =
+              regla.detalle && typeof regla.detalle === 'object' && !Array.isArray(regla.detalle)
+                ? { ...regla.detalle }
+                : {};
+            if (
+              (regla.accion === TipoChecklistAccionReglaDto.activar_paso ||
+                regla.accion === TipoChecklistAccionReglaDto.seleccionar_variante_paso) &&
+              pasoPlantilla
+            ) {
+              const variantesPaso = this.getProcesoOperacionNiveles(pasoPlantilla.detalleJson);
+              if (
+                pregunta.tipoPregunta === TipoChecklistPreguntaDto.binaria &&
+                variantesPaso.filter((item) => item.activo).length > 2
+              ) {
+                throw new BadRequestException(
+                  'Las preguntas binarias no pueden usar pasos con 3 o más variantes.',
+                );
+              }
+              if (regla.accion === TipoChecklistAccionReglaDto.activar_paso && variantesPaso.length > 0) {
+                throw new BadRequestException(
+                  'Usa SELECCIONAR_VARIANTE_PASO para pasos con variantes.',
+                );
+              }
+              if (regla.accion === TipoChecklistAccionReglaDto.seleccionar_variante_paso) {
+                if (!regla.variantePasoId) {
+                  throw new BadRequestException(
+                    'La regla SELECCIONAR_VARIANTE_PASO requiere variante.',
+                  );
+                }
+                const variante = variantesPaso.find((item) => item.id === regla.variantePasoId);
+                if (!variante) {
+                  throw new BadRequestException('La variante seleccionada no pertenece al paso configurado.');
+                }
+                detalleReglaBase.variantePasoId = variante.id;
+              } else {
+                delete detalleReglaBase.variantePasoId;
+              }
+              detalleReglaBase.pasoPlantillaId = pasoPlantilla.id;
+            }
+            if (regla.accion === TipoChecklistAccionReglaDto.set_atributo_tecnico) {
+              throw new BadRequestException(
+                'SET_ATRIBUTO_TECNICO ya no se admite en Ruta de opcionales.',
+              );
+            }
+            const reglaRow = await tx.productoChecklistRegla.create({
+              data: {
+                tenantId: auth.tenantId,
+                productoChecklistRespuestaId: respuestaRow.id,
+                accion: this.toTipoChecklistAccion(regla.accion),
+                orden: regla.orden ?? indexRegla + 1,
+                activo: regla.activo ?? true,
+                procesoOperacionId: null,
+                usaNiveles: false,
+                costoRegla: regla.costoRegla ? this.toReglaCostoChecklist(regla.costoRegla) : null,
+                costoValor: regla.costoValor ?? null,
+                costoCentroCostoId: regla.costoCentroCostoId ?? null,
+                materiaPrimaVarianteId: regla.materiaPrimaVarianteId ?? null,
+                tipoConsumo: regla.tipoConsumo
+                  ? this.toTipoConsumoAdicionalMaterial(regla.tipoConsumo)
+                  : null,
+                factorConsumo: regla.factorConsumo ?? null,
+                mermaPct: regla.mermaPct ?? null,
+                detalleJson: this.toNullableJson(detalleReglaBase),
+              },
+            });
+          }
+        }
+      }
+
+      return checklist.id;
+    });
+
+    const row = await this.prisma.productoChecklist.findUniqueOrThrow({
+      where: { id: checklistId },
+      include: {
+        preguntas: {
+          orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+          include: {
+            respuestas: {
+              orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+              include: {
+                reglas: {
+                  orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+                  include: {
+                    procesoOperacion: {
+                      include: {
+                        centroCosto: true,
+                        maquina: true,
+                        perfilOperativo: true,
+                      },
+                    },
+                    costoCentroCosto: true,
+                    materiaPrimaVariante: {
+                      include: { materiaPrima: true },
+                    },
+                    niveles: {
+                      orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    const plantillasById = await this.getChecklistPasoPlantillasMap(auth, row);
+    return this.toProductoChecklistResponse(row, plantillasById);
+  }
+
   async findAdicionalEfectos(auth: CurrentAuth, adicionalId: string) {
     await this.findAdicionalCatalogoOrThrow(auth, adicionalId, this.prisma);
     const rows = await this.prisma.productoAdicionalEfecto.findMany({
@@ -1173,7 +1485,7 @@ export class ProductosServiciosService {
     ) {
       throw new BadRequestException('Los adicionales de tipo servicio solo permiten reglas de costo.');
     }
-    await this.validateAdicionalEfectoPayload(auth, payload, this.prisma);
+    await this.validateAdicionalEfectoPayload(auth, payload, adicional.tipo, this.prisma);
     await this.assertSingleAddonEffectTypeConstraint(
       auth,
       adicionalId,
@@ -1212,7 +1524,7 @@ export class ProductosServiciosService {
       throw new BadRequestException('Los adicionales de tipo servicio solo permiten reglas de costo.');
     }
     const effect = await this.findAdicionalEfectoOrThrow(auth, adicionalId, efectoId, this.prisma);
-    await this.validateAdicionalEfectoPayload(auth, payload, this.prisma);
+    await this.validateAdicionalEfectoPayload(auth, payload, adicional.tipo, this.prisma);
     await this.assertSingleAddonEffectTypeConstraint(
       auth,
       adicionalId,
@@ -1416,94 +1728,428 @@ export class ProductosServiciosService {
     if (proceso.operaciones.length === 0) {
       throw new BadRequestException('La ruta seleccionada no tiene pasos operativos.');
     }
-    const addonSelectionInput = Array.from(new Set(payload.addonsSeleccionados ?? []));
-    const addonConfigInput = Array.from(
-      new Map((payload.addonsConfig ?? []).map((item) => [item.addonId, item])).values(),
+    const checklistRespuestasInput = Array.from(
+      new Map((payload.checklistRespuestas ?? []).map((item) => [item.preguntaId, item])).values(),
     );
-    const addonById = new Map(
-      variante.productoServicio.adicionalesAsignados
-        .filter((item) => item.activo)
-        .map((item) => [item.productoAdicionalId, item]),
-    );
-    const restrictionsByAddon = new Map(
-      variante.adicionalesRestricciones.map((item) => [item.productoAdicionalId, item.permitido]),
-    );
-    for (const addonId of addonSelectionInput) {
-      if (!addonById.has(addonId)) {
-        throw new BadRequestException('Uno de los adicionales seleccionados no está asignado al producto.');
-      }
-      if (restrictionsByAddon.get(addonId) === false) {
-        throw new BadRequestException('Uno de los adicionales seleccionados está restringido para la variante.');
-      }
-    }
-    const addonConfigById = new Map(addonConfigInput.map((item) => [item.addonId, item]));
-    const addonConfigTrace = addonConfigInput.map((item) => ({
-      addonId: item.addonId,
-      nivelId: item.nivelId ?? null,
-    }));
-    for (const configItem of addonConfigInput) {
-      if (!addonById.has(configItem.addonId)) {
-        throw new BadRequestException('Uno de los addons configurados no está asignado al producto.');
-      }
-      if (restrictionsByAddon.get(configItem.addonId) === false) {
-        throw new BadRequestException('Uno de los addons configurados está restringido para la variante.');
-      }
-    }
-    const opcionProductivaEfectiva = this.resolveEffectiveOptionValues(variante);
-    const addonEffectsRaw =
-      addonSelectionInput.length > 0
-        ? await this.prisma.productoAdicionalEfecto.findMany({
-            where: {
-              tenantId: auth.tenantId,
-              activo: true,
-              productoAdicionalId: {
-                in: addonSelectionInput,
+    const checklist = await this.prisma.productoChecklist.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        productoServicioId: variante.productoServicio.id,
+        activo: true,
+      },
+      include: {
+        preguntas: {
+          where: { activo: true },
+          include: {
+            respuestas: {
+              where: { activo: true },
+              include: {
+                reglas: {
+                  where: { activo: true },
+                  include: {
+                    procesoOperacion: {
+                      include: {
+                        centroCosto: true,
+                        maquina: true,
+                        perfilOperativo: true,
+                      },
+                    },
+                    costoCentroCosto: true,
+                    materiaPrimaVariante: {
+                      include: { materiaPrima: true },
+                    },
+                    niveles: {
+                      where: { activo: true },
+                      orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+                    },
+                  },
+                  orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+                },
               },
+              orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
             },
-            include: this.getAdicionalEfectoInclude(),
-          })
-        : [];
-    const efectosAplicados = addonEffectsRaw
-      .filter((effect) =>
-        this.isAddonEffectScopeMatch({
-          effect,
-          varianteId: variante.id,
-          opcionesProductivas: opcionProductivaEfectiva,
-        }),
-      )
-      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-    const routeEffectsAplicados = efectosAplicados.filter(
-      (item) => item.tipo === TipoProductoAdicionalEfecto.ROUTE_EFFECT && item.routeEffect,
+          },
+          orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+        },
+      },
+    });
+    const checklistPasoPlantillaById = await this.getChecklistPasoPlantillasMap(auth, checklist);
+    const checklistPreguntaById = new Map(
+      (checklist?.preguntas ?? []).map((pregunta) => [pregunta.id, pregunta]),
     );
-    const servicePricingByAddon = new Map<string, ServicioPricingConfig>();
-    for (const addonId of addonSelectionInput) {
-      const addon = addonById.get(addonId)?.productoAdicional;
-      if (!addon || addon.tipo !== TipoProductoAdicional.SERVICIO) continue;
-      const parsedPricing = this.parseServicioPricing(addon.metadataJson);
-      if (parsedPricing.niveles.length && parsedPricing.reglas.length) {
-        servicePricingByAddon.set(addonId, parsedPricing);
+    const checklistAplicadoTrace: Array<Record<string, unknown>> = [];
+    const checklistReglasActivas: Array<{
+      regla: any;
+      respuestaId: string;
+      preguntaId: string;
+      pasoPlantilla: any | null;
+    }> = [];
+    const opcionesProductivasPermitidas = this.resolveEffectiveOptionValues(variante);
+    const dimensionesBaseConsumidas = this.getProductoDimensionesBaseConsumidas(
+      variante.productoServicio.detalleJson,
+    );
+    const matchingBaseVarianteRaw =
+      this.getProductoMatchingBaseByVariante(variante.productoServicio.detalleJson).find(
+        (item) => item.varianteId === variante.id,
+      )?.matching ?? [];
+    const pasosFijosVarianteRaw =
+      this.getProductoPasosFijosByVariante(variante.productoServicio.detalleJson).find(
+        (item) => item.varianteId === variante.id,
+      )?.pasos ?? [];
+    const seleccionesBaseInput = new Map(
+      Array.from(
+        new Map((payload.seleccionesBase ?? []).map((item) => [item.dimension, item])).values(),
+      ).map((item) => [this.toDimensionOpcionProductiva(item.dimension), this.toValorOpcionProductiva(item.valor)]),
+    );
+    const atributosTecnicosSeleccionados = new Map<DimensionOpcionProductiva, ValorOpcionProductiva>();
+    for (const dimension of dimensionesBaseConsumidas) {
+      const valoresMatching = Array.from(
+        new Set(
+          matchingBaseVarianteRaw
+            .map((item) =>
+              dimension === DimensionOpcionProductiva.TIPO_IMPRESION
+                ? item.tipoImpresion
+                : item.caras,
+            )
+            .filter((value): value is TipoImpresionProductoVarianteDto | CarasProductoVarianteDto => Boolean(value))
+            .map((value) =>
+              dimension === DimensionOpcionProductiva.TIPO_IMPRESION
+                ? this.toValorFromTipoImpresion(this.toTipoImpresion(value as TipoImpresionProductoVarianteDto))
+                : this.toValorFromCaras(this.toCaras(value as CarasProductoVarianteDto)),
+            ),
+        ),
+      );
+      const permitidosVariante = opcionesProductivasPermitidas.get(dimension);
+      const allowedValues = valoresMatching.filter((value) => !permitidosVariante || permitidosVariante.has(value));
+      if (!allowedValues.length) {
+        throw new BadRequestException(
+          `Ruta base: no hay matching configurado para ${this.fromDimensionOpcionProductiva(dimension)} en la variante ${variante.nombre}.`,
+        );
       }
+      if (allowedValues.length === 1) {
+        atributosTecnicosSeleccionados.set(dimension, allowedValues[0]);
+        continue;
+      }
+      const selectedValue = seleccionesBaseInput.get(dimension);
+      if (!selectedValue) {
+        throw new BadRequestException(
+          `Falta seleccionar una opción base para ${this.fromDimensionOpcionProductiva(dimension)}.`,
+        );
+      }
+      if (permitidosVariante && !permitidosVariante.has(selectedValue)) {
+        throw new BadRequestException(
+          `La variante seleccionada no soporta ${this.fromDimensionOpcionProductiva(dimension)}=${this.fromValorOpcionProductiva(selectedValue)}.`,
+        );
+      }
+      atributosTecnicosSeleccionados.set(dimension, selectedValue);
     }
-    const costEffectsAplicados = efectosAplicados.filter((item) => {
-      if (!(item.tipo === TipoProductoAdicionalEfecto.COST_EFFECT && item.costEffect)) {
-        return false;
-      }
-      return !servicePricingByAddon.has(item.productoAdicionalId);
+    const matchingSeleccionado = matchingBaseVarianteRaw.filter((item) => {
+      return dimensionesBaseConsumidas.every((dimension) => {
+        const selectedValue = atributosTecnicosSeleccionados.get(dimension);
+        if (!selectedValue) return false;
+        if (dimension === DimensionOpcionProductiva.TIPO_IMPRESION) {
+          return item.tipoImpresion
+            ? this.toValorFromTipoImpresion(this.toTipoImpresion(item.tipoImpresion)) === selectedValue
+            : false;
+        }
+        return item.caras ? this.toValorFromCaras(this.toCaras(item.caras)) === selectedValue : false;
+      });
     });
-    const materialEffectsAplicados = efectosAplicados.filter(
-      (item) => item.tipo === TipoProductoAdicionalEfecto.MATERIAL_EFFECT && item.materialEffect,
+    if (dimensionesBaseConsumidas.length > 0 && matchingSeleccionado.length === 0) {
+      throw new BadRequestException(
+        `Ruta base: no existe un matching para la combinación seleccionada en ${variante.nombre}.`,
+      );
+    }
+    const matchingPlantillaIds = Array.from(new Set(matchingSeleccionado.map((item) => item.pasoPlantillaId)));
+    const matchingPerfilIds = Array.from(new Set(matchingSeleccionado.map((item) => item.perfilOperativoId)));
+    const pasosFijosPerfilIds = Array.from(new Set(pasosFijosVarianteRaw.map((item) => item.perfilOperativoId)));
+    const [matchingPlantillas, matchingPerfiles, pasosFijosPerfiles] = await Promise.all([
+      matchingPlantillaIds.length
+        ? await this.prisma.procesoOperacionPlantilla.findMany({
+            where: { tenantId: auth.tenantId, id: { in: matchingPlantillaIds } },
+            include: {
+              centroCosto: true,
+              maquina: true,
+              perfilOperativo: true,
+            },
+          })
+        : Promise.resolve([]),
+      matchingPerfilIds.length
+        ? await this.prisma.maquinaPerfilOperativo.findMany({
+            where: { tenantId: auth.tenantId, id: { in: matchingPerfilIds } },
+          })
+        : Promise.resolve([]),
+      pasosFijosPerfilIds.length
+        ? await this.prisma.maquinaPerfilOperativo.findMany({
+            where: { tenantId: auth.tenantId, id: { in: pasosFijosPerfilIds } },
+          })
+        : Promise.resolve([]),
+    ]);
+    const matchingPlantillaById = new Map(matchingPlantillas.map((item) => [item.id, item]));
+    const matchingPerfilById = new Map(matchingPerfiles.map((item) => [item.id, item]));
+    const pasosFijosPerfilByPasoPlantillaId = new Map(
+      pasosFijosVarianteRaw
+        .map((item) => {
+          const perfilOperativo = pasosFijosPerfiles.find((perfil) => perfil.id === item.perfilOperativoId) ?? null;
+          if (!perfilOperativo) return null;
+          return [item.pasoPlantillaId, perfilOperativo] as const;
+        })
+        .filter((item): item is readonly [string, any] => Boolean(item)),
     );
-    const addonsSeleccionadosSet = new Set(addonSelectionInput);
-    const operacionesBaseCotizadas = proceso.operaciones.filter((op) => {
-      if (!op.requiresProductoAdicionalId) return true;
-      // Evita doble costeo cuando el adicional usa pricing de servicio por nivel:
-      // en ese caso el costo lo agrega servicePricing (línea sintética), no la ruta legacy.
-      if (servicePricingByAddon.has(op.requiresProductoAdicionalId)) return false;
-      return addonsSeleccionadosSet.has(op.requiresProductoAdicionalId);
-    });
-    const maxOrdenBase = operacionesBaseCotizadas.reduce((acc, item) => Math.max(acc, item.orden), 0);
+    const matchingBaseAplicado: Array<{
+      pasoPlantilla: any;
+      perfilOperativo: any;
+      tipoImpresion: TipoImpresionProductoVariante | null;
+      caras: CarasProductoVariante | null;
+    }> = [];
+    const matchingSeen = new Set<string>();
+    for (const item of matchingSeleccionado) {
+      const pasoPlantilla = matchingPlantillaById.get(item.pasoPlantillaId) ?? null;
+      const perfilOperativo = matchingPerfilById.get(item.perfilOperativoId) ?? null;
+      if (!pasoPlantilla || !perfilOperativo) {
+        throw new BadRequestException('Ruta base: el matching referencia un paso o perfil inválido.');
+      }
+      const key = `${pasoPlantilla.id}:${perfilOperativo.id}`;
+      if (matchingSeen.has(key)) {
+        throw new BadRequestException('Ruta base: el matching seleccionado contiene filas duplicadas.');
+      }
+      matchingSeen.add(key);
+      matchingBaseAplicado.push({
+        pasoPlantilla,
+        perfilOperativo,
+        tipoImpresion: item.tipoImpresion ? this.toTipoImpresion(item.tipoImpresion) : null,
+        caras: item.caras ? this.toCaras(item.caras) : null,
+      });
+    }
+    for (const selected of checklistRespuestasInput) {
+      const pregunta = checklistPreguntaById.get(selected.preguntaId);
+      if (!pregunta) {
+        throw new BadRequestException('Una respuesta del configurador referencia una pregunta inválida.');
+      }
+      const respuesta = pregunta.respuestas.find((item) => item.id === selected.respuestaId);
+      if (!respuesta) {
+        throw new BadRequestException('Una respuesta del configurador no pertenece a la pregunta indicada.');
+      }
+      for (const regla of respuesta.reglas) {
+        const pasoPlantilla = this.resolveChecklistPasoPlantilla(
+          regla.detalleJson,
+          checklistPasoPlantillaById,
+          regla.procesoOperacion ?? null,
+        );
+        const nivelesPaso = this.getProcesoOperacionNiveles(
+          pasoPlantilla?.detalleJson ?? regla.procesoOperacion?.detalleJson ?? null,
+        );
+        const variantePasoId = this.getChecklistVariantePasoId(regla.detalleJson);
+        if (
+          regla.accion === TipoProductoChecklistReglaAccion.ACTIVAR_PASO &&
+          !pasoPlantilla
+        ) {
+          throw new BadRequestException('La regla del configurador referencia un paso de biblioteca inválido.');
+        }
+        if (
+          regla.accion === TipoProductoChecklistReglaAccion.SELECCIONAR_VARIANTE_PASO &&
+          !pasoPlantilla
+        ) {
+          throw new BadRequestException(
+            'La regla de configurador referencia un paso de biblioteca inválido.',
+          );
+        }
+        if (
+          regla.accion === TipoProductoChecklistReglaAccion.SELECCIONAR_VARIANTE_PASO &&
+          nivelesPaso.length > 0 &&
+          !variantePasoId
+        ) {
+          throw new BadRequestException(
+            'Falta seleccionar variante para un paso del configurador con variantes.',
+          );
+        }
+        if (regla.accion === TipoProductoChecklistReglaAccion.ACTIVAR_PASO && nivelesPaso.length > 0) {
+          throw new BadRequestException(
+            'Usa SELECCIONAR_VARIANTE_PASO para pasos del configurador con variantes.',
+          );
+        }
+        checklistReglasActivas.push({
+          regla,
+          respuestaId: respuesta.id,
+          preguntaId: pregunta.id,
+          pasoPlantilla,
+        });
+      }
+      checklistAplicadoTrace.push({
+        preguntaId: pregunta.id,
+        pregunta: pregunta.texto,
+        respuestaId: respuesta.id,
+        respuesta: respuesta.texto,
+      });
+    }
+    const tipoImpresionSeleccionado = this.toTipoImpresionFromValor(
+      atributosTecnicosSeleccionados.get(DimensionOpcionProductiva.TIPO_IMPRESION) ??
+        this.toValorFromTipoImpresion(variante.tipoImpresion),
+    );
+    const carasSeleccionadas = this.toCarasFromValor(
+      atributosTecnicosSeleccionados.get(DimensionOpcionProductiva.CARAS) ??
+        this.toValorFromCaras(variante.caras),
+    );
+    const addonSelectionInput: string[] = [];
+    const addonConfigInput: Array<{ addonId: string; nivelId?: string | null }> = [];
+    const addonById = new Map<
+      string,
+      {
+        productoAdicional: {
+          id: string;
+          nombre: string;
+          tipo: TipoProductoAdicional;
+          centroCostoId: string | null;
+          centroCosto: { nombre: string } | null;
+          metadataJson: Prisma.JsonValue | null;
+        };
+      }
+    >();
+    const addonConfigById = new Map<string, { addonId: string; nivelId?: string | null }>();
+    const addonConfigTrace: Array<{ addonId: string; nivelId: string | null }> = [];
+    const opcionProductivaEfectiva = new Map<DimensionOpcionProductiva, Set<ValorOpcionProductiva>>(
+      Array.from(atributosTecnicosSeleccionados.entries()).map(([dimension, value]) => [
+        dimension,
+        new Set([value]),
+      ]),
+    );
+    const efectosAplicados: any[] = [];
+    const routeEffectsAplicados: any[] = [];
+    const costEffectsAplicados: any[] = [];
+    const materialEffectsAplicados: any[] = [];
+    const servicePricingByAddon = new Map<string, ServicioPricingConfig>();
+    const checklistNivelesActivos = checklistReglasActivas.filter(
+      (item) =>
+        item.regla.accion === TipoProductoChecklistReglaAccion.SELECCIONAR_VARIANTE_PASO &&
+        item.pasoPlantilla &&
+        this.getProcesoOperacionNiveles(item.pasoPlantilla.detalleJson).length > 0,
+    );
+    const checklistNivelMachineIds = Array.from(
+      new Set(
+        [...checklistNivelesActivos]
+          .flatMap((item) =>
+            this.getProcesoOperacionNiveles(item.pasoPlantilla?.detalleJson ?? null)
+              .map((nivel) => nivel.maquinaId)
+              .filter((value): value is string => Boolean(value)),
+          ),
+      ),
+    );
+    const checklistNivelPerfilIds = Array.from(
+      new Set(
+        [...checklistNivelesActivos]
+          .flatMap((item) =>
+            this.getProcesoOperacionNiveles(item.pasoPlantilla?.detalleJson ?? null)
+              .map((nivel) => nivel.perfilOperativoId)
+              .filter((value): value is string => Boolean(value)),
+          ),
+      ),
+    );
+    const [checklistNivelMaquinas, checklistNivelPerfiles] = await Promise.all([
+      checklistNivelMachineIds.length
+        ? this.prisma.maquina.findMany({
+            where: { tenantId: auth.tenantId, id: { in: checklistNivelMachineIds } },
+            include: { centroCostoPrincipal: true },
+          })
+        : Promise.resolve([]),
+      checklistNivelPerfilIds.length
+        ? this.prisma.maquinaPerfilOperativo.findMany({
+            where: { tenantId: auth.tenantId, id: { in: checklistNivelPerfilIds } },
+          })
+        : Promise.resolve([]),
+    ]);
+    const checklistNivelMaquinaById = new Map(checklistNivelMaquinas.map((item) => [item.id, item]));
+    const checklistNivelPerfilById = new Map(checklistNivelPerfiles.map((item) => [item.id, item]));
+    const matchingPasoPlantillaIds = new Set(
+      matchingBaseAplicado.map((item) => item.pasoPlantilla.id),
+    );
+    const checklistOperacionesActivadas = checklistReglasActivas
+      .filter(
+        (item) =>
+          item.regla.accion === TipoProductoChecklistReglaAccion.ACTIVAR_PASO &&
+          item.pasoPlantilla &&
+          this.getProcesoOperacionNiveles(item.pasoPlantilla.detalleJson).length === 0,
+      )
+      .map((item) => this.buildChecklistOperacionFromPlantilla(item.pasoPlantilla!))
+      .filter((item) => item.activo);
+    const routeBaseOperacionesMatching = matchingBaseAplicado
+      .map((item) => this.buildChecklistOperacionFromPlantillaConPerfil(item.pasoPlantilla, item.perfilOperativo))
+      .filter((item) => item.activo);
+    const checklistPasoPlantillaIds = new Set(
+      checklistReglasActivas
+        .map((item) => item.pasoPlantilla?.id ?? null)
+        .filter((value): value is string => Boolean(value)),
+    );
+    const checklistPasoSignatures = new Set(
+      checklistReglasActivas
+        .map((item) => this.buildChecklistPasoSignature(item.pasoPlantilla))
+        .filter((value): value is string => Boolean(value)),
+    );
+    const operacionesBaseCotizadas = proceso.operaciones
+      .filter((op) => {
+        if (!op.activo) {
+          return false;
+        }
+        const pasoPlantillaId =
+          this.getPasoPlantillaIdFromDetalle(op.detalleJson) ??
+          this.resolvePasoPlantillaIdFromOperacionRuta(op, matchingPlantillas);
+        if (!pasoPlantillaId) {
+          return true;
+        }
+        return !matchingPasoPlantillaIds.has(pasoPlantillaId);
+      })
+      .map((op) => {
+        const pasoPlantillaId = this.getPasoPlantillaIdFromDetalle(op.detalleJson);
+        if (!pasoPlantillaId) {
+          return op;
+        }
+        const perfilOverride = pasosFijosPerfilByPasoPlantillaId.get(pasoPlantillaId) ?? null;
+        if (!perfilOverride) {
+          return op;
+        }
+        return {
+          ...op,
+          perfilOperativoId: perfilOverride.id,
+          perfilOperativo: perfilOverride,
+          setupMin:
+            perfilOverride.setupMin !== null && perfilOverride.setupMin !== undefined
+              ? perfilOverride.setupMin
+              : op.setupMin,
+          cleanupMin:
+            perfilOverride.cleanupMin !== null && perfilOverride.cleanupMin !== undefined
+              ? perfilOverride.cleanupMin
+              : op.cleanupMin,
+          productividadBase:
+            perfilOverride.productivityValue !== null && perfilOverride.productivityValue !== undefined
+              ? perfilOverride.productivityValue
+              : op.productividadBase,
+          detalleJson: {
+            ...this.asObject(op.detalleJson),
+            perfilOperativoId: perfilOverride.id,
+            pasoFijoPerfilOverride: true,
+          } as Prisma.JsonObject,
+        };
+      });
+    const conflictosChecklistRuta = operacionesBaseCotizadas
+      .filter((op) => {
+        const pasoPlantillaId = this.getPasoPlantillaIdFromDetalle(op.detalleJson);
+        if (pasoPlantillaId && checklistPasoPlantillaIds.has(pasoPlantillaId)) {
+          return true;
+        }
+        const signature = this.buildChecklistPasoSignature(op);
+        return Boolean(signature && checklistPasoSignatures.has(signature));
+      })
+      .map((op) => op.nombre);
+    const conflictosChecklistRutaWarnings = Array.from(new Set(conflictosChecklistRuta)).map(
+      (nombrePaso) =>
+        `Conflicto de configuración: el paso "${nombrePaso}" está en la ruta base y también se activa desde Configurador.`,
+    );
+    const conflictosMatchingRutaWarnings: string[] = [];
+    const maxOrdenBase = [...operacionesBaseCotizadas, ...routeBaseOperacionesMatching, ...checklistOperacionesActivadas].reduce(
+      (acc, item) => Math.max(acc, item.orden),
+      0,
+    );
     const operacionesRouteEffect = routeEffectsAplicados.flatMap((effect, effectIndex) =>
-      (effect.routeEffect?.pasos ?? []).map((paso, pasoIndex) => ({
+      (effect.routeEffect?.pasos ?? []).map((paso: any, pasoIndex: number) => ({
         id: paso.id,
         orden: maxOrdenBase + 1 + effectIndex * 1000 + pasoIndex,
         codigo: `ADON-${effect.id.slice(0, 6).toUpperCase()}-${paso.orden}`,
@@ -1518,6 +2164,7 @@ export class ProductosServiciosService {
         runMin: paso.runMin,
         cleanupMin: paso.cleanupMin,
         tiempoFijoMin: paso.tiempoFijoMin,
+        detalleJson: paso.detalleJson,
         unidadEntrada: UnidadProceso.NINGUNA,
         unidadSalida: UnidadProceso.NINGUNA,
         unidadTiempo: UnidadProceso.MINUTO,
@@ -1525,23 +2172,39 @@ export class ProductosServiciosService {
         mermaSetup: null,
         mermaRunPct: null,
         reglaMermaJson: null,
-        requiresProductoAdicionalId: effect.productoAdicionalId,
       })),
     );
-    const operacionesCotizadas = [...operacionesBaseCotizadas, ...operacionesRouteEffect].sort(
+    const operacionesRutaBase = routeBaseOperacionesMatching.map((op, routeBaseIndex) => ({
+      ...op,
+      orden: maxOrdenBase + 1 + routeEffectsAplicados.length * 1000 + routeBaseIndex,
+    }));
+    const operacionesChecklist = checklistOperacionesActivadas.map((op, checklistIndex) => ({
+      ...op,
+      orden:
+        maxOrdenBase +
+        1 +
+        routeEffectsAplicados.length * 1000 +
+        routeBaseOperacionesMatching.length +
+        checklistIndex,
+    }));
+    const operacionesCotizadas = [...operacionesBaseCotizadas, ...operacionesRouteEffect, ...operacionesRutaBase, ...operacionesChecklist].sort(
       (a, b) => a.orden - b.orden,
     );
     if (operacionesCotizadas.length === 0) {
-      throw new BadRequestException('La ruta no tiene pasos activos para la selección de adicionales.');
+      throw new BadRequestException('La ruta no tiene pasos activos para la selección actual.');
     }
 
     const centrosCostEffect = costEffectsAplicados
       .map((item) => item.costEffect?.centroCostoId)
       .filter((value): value is string => Boolean(value));
-    const centrosServicePricing = addonSelectionInput
-      .map((addonId) => {
-        if (!servicePricingByAddon.has(addonId)) return null;
-        return addonById.get(addonId)?.productoAdicional?.centroCostoId ?? null;
+    const centrosServicePricing = checklistNivelesActivos
+      .map((item) => item.pasoPlantilla?.centroCostoId ?? null)
+      .filter((value): value is string => Boolean(value));
+    const centrosChecklistCosto = checklistReglasActivas
+      .map((item) => {
+        if (item.regla.accion !== TipoProductoChecklistReglaAccion.COSTO_EXTRA) return null;
+        if (item.regla.costoRegla !== ReglaCostoChecklist.TIEMPO_MIN) return null;
+        return item.regla.costoCentroCostoId ?? item.pasoPlantilla?.centroCostoId ?? null;
       })
       .filter((value): value is string => Boolean(value));
     const centroIds = Array.from(
@@ -1549,6 +2212,7 @@ export class ProductosServiciosService {
         ...operacionesCotizadas.map((item) => item.centroCostoId),
         ...centrosCostEffect,
         ...centrosServicePricing,
+        ...centrosChecklistCosto,
       ]),
     );
     const tarifas = await this.prisma.centroCostoTarifaPeriodo.findMany({
@@ -1604,7 +2268,7 @@ export class ProductosServiciosService {
         ? precioPapelBase / conversionPapel.pliegosPorSustrato
         : 0;
     const costoPapel = costoPapelUnit * pliegos;
-    const warnings: string[] = [];
+    const warnings: string[] = [...conflictosChecklistRutaWarnings, ...conflictosMatchingRutaWarnings];
     if (!variante.papelVariante.precioReferencia) {
       warnings.push('El papel asignado no tiene precio de referencia. Se uso 0 para costo de papel.');
     }
@@ -1612,10 +2276,11 @@ export class ProductosServiciosService {
     const materiales: Array<Record<string, unknown>> = [];
     let costoToner = 0;
     let costoDesgaste = 0;
+    let costoConsumiblesTerminacion = 0;
 
     const areaPliegoM2 = (pliegoImpresion.anchoMm / 1000) * (pliegoImpresion.altoMm / 1000);
     const a4EqFactor = areaPliegoM2 / ProductosServiciosService.DEFAULT_A4_AREA_M2;
-    const carasFactor = variante.caras === CarasProductoVariante.DOBLE_FAZ ? 2 : 1;
+    const carasFactor = carasSeleccionadas === CarasProductoVariante.DOBLE_FAZ ? 2 : 1;
     const machineIds = Array.from(
       new Set(
         operacionesCotizadas
@@ -1623,12 +2288,30 @@ export class ProductosServiciosService {
           .filter((item): item is string => Boolean(item)),
       ),
     );
-    const [consumibles, desgastes] = await Promise.all([
+    const [consumibles, consumiblesFilm, desgastes] = await Promise.all([
       this.prisma.maquinaConsumible.findMany({
         where: {
           tenantId: auth.tenantId,
           activo: true,
           tipo: TipoConsumibleMaquina.TONER,
+          maquinaId: {
+            in: machineIds,
+          },
+        },
+        include: {
+          perfilOperativo: true,
+          materiaPrimaVariante: {
+            include: {
+              materiaPrima: true,
+            },
+          },
+        },
+      }),
+      this.prisma.maquinaConsumible.findMany({
+        where: {
+          tenantId: auth.tenantId,
+          activo: true,
+          tipo: TipoConsumibleMaquina.FILM,
           maquinaId: {
             in: machineIds,
           },
@@ -1660,49 +2343,121 @@ export class ProductosServiciosService {
       }),
     ]);
 
-    const pasos = operacionesCotizadas.map((op) => {
-      const setupMin = Number(op.setupMin ?? this.getSetupFromPerfilOperativo(op.perfilOperativo) ?? 0);
-      const cleanupMin = Number(op.cleanupMin ?? 0);
-      const tiempoFijoMin = Number(op.tiempoFijoMin ?? 0);
-      const usarTiempoFijoManual = tiempoFijoMin > 0;
+    type PasoCotizado = {
+      orden: number;
+      codigo: string;
+      nombre: string;
+      centroCostoId: string;
+      centroCostoNombre: string;
+      origen: string;
+      addonId: string | null;
+      setupMin: number;
+      runMin: number;
+      cleanupMin: number;
+      tiempoFijoMin: number;
+      totalMin: number;
+      tarifaHora: number;
+      costo: number;
+      detalleTecnico: Record<string, unknown> | null;
+    };
+
+    let pliegosMermaOperativaImpresion = 0;
+    const pasos: PasoCotizado[] = operacionesCotizadas.map((op) => {
+      const setupMinBase = Number(op.setupMin ?? this.getSetupFromPerfilOperativo(op.perfilOperativo) ?? 0);
+      const cleanupMinBase = Number(op.cleanupMin ?? 0);
+      const pasoDetalle = this.asObject(op.detalleJson);
+      const tiempoFijoMinFallbackDetalle = this.toSafeNumber(
+        pasoDetalle.tiempoFijoMinFallback,
+        Number(op.tiempoFijoMin ?? 0),
+      );
+      const tiempoFijoMinBase = Number(
+        op.tiempoFijoMin ??
+          (Number.isFinite(tiempoFijoMinFallbackDetalle) && tiempoFijoMinFallbackDetalle > 0
+            ? tiempoFijoMinFallbackDetalle
+            : 0),
+      );
+      const usarTiempoFijoManual = tiempoFijoMinBase > 0;
       const cantidadObjetivoSalida =
         op.unidadEntrada === UnidadProceso.HOJA ||
         op.unidadSalida === UnidadProceso.HOJA
           ? pliegos
           : cantidad;
-      let runMin = Number(op.runMin ?? 0);
+      const timingOverride = this.calculateTerminatingOperationTiming({
+        operacion: op,
+        cantidad,
+        pliegos,
+        setupMinBase,
+        cleanupMinBase,
+        tiempoFijoMinBase,
+        cantidadObjetivoSalida,
+        imposicion: {
+          cols: imposicion.cols,
+          rows: imposicion.rows,
+          tipoCorte: imposicion.tipoCorte,
+        },
+        varianteAnchoMm: Number(variante.anchoMm),
+        varianteAltoMm: Number(variante.altoMm),
+        overridesProductividad: this.asObject(
+          pasoDetalle.overridesProductividad as Prisma.JsonValue | undefined,
+        ),
+      });
+      let setupMin = timingOverride?.setupMin ?? setupMinBase;
+      let cleanupMin = timingOverride?.cleanupMin ?? cleanupMinBase;
+      let tiempoFijoMin = timingOverride?.tiempoFijoMin ?? tiempoFijoMinBase;
+      let runMin = timingOverride?.runMin ?? Number(op.runMin ?? 0);
+      let cantidadRunOperativa = cantidadObjetivoSalida;
+      let sourceProductividad: 'perfil' | 'override' | 'fijo' =
+        timingOverride?.sourceProductividad ?? (usarTiempoFijoManual ? 'fijo' : 'perfil');
+      if (timingOverride?.warnings?.length) {
+        warnings.push(...timingOverride.warnings.map((item) => `Paso ${op.codigo} (${op.nombre}): ${item}`));
+      }
       if (!usarTiempoFijoManual) {
-        const productividad = evaluateProductividad({
-          modoProductividad: ModoProductividadProceso.FIJA,
-          productividadBase: op.productividadBase,
-          reglaVelocidadJson: null,
-          reglaMermaJson: op.reglaMermaJson,
-          runMin: op.runMin,
-          unidadTiempo: op.unidadTiempo,
-          mermaRunPct: op.mermaRunPct,
-          mermaSetup: op.mermaSetup,
-          cantidadObjetivoSalida,
-          contexto: {
-            cantidad,
-            pliegos,
-            piezasPorPliego: imposicion.piezasPorPliego,
-            areaPliegoM2,
-            a4EqFactor,
-            carasFactor,
-          },
-        });
-        runMin = productividad.runMin;
-        for (const warning of productividad.warnings) {
-          warnings.push(`Paso ${op.codigo} (${op.nombre}): ${warning}`);
+        if (!timingOverride) {
+          const productividad = evaluateProductividad({
+            modoProductividad: ModoProductividadProceso.FIJA,
+            productividadBase: op.productividadBase,
+            reglaVelocidadJson: null,
+            reglaMermaJson: op.reglaMermaJson,
+            runMin: op.runMin,
+            unidadTiempo: op.unidadTiempo,
+            mermaRunPct: op.mermaRunPct,
+            mermaSetup: op.mermaSetup,
+            cantidadObjetivoSalida,
+            contexto: {
+              cantidad,
+              pliegos,
+              piezasPorPliego: imposicion.piezasPorPliego,
+              areaPliegoM2,
+              a4EqFactor,
+              carasFactor,
+            },
+          });
+          runMin = productividad.runMin;
+          cantidadRunOperativa = productividad.cantidadRun;
+          sourceProductividad = 'fijo';
+          for (const warning of productividad.warnings) {
+            warnings.push(`Paso ${op.codigo} (${op.nombre}): ${warning}`);
+          }
         }
+      }
+
+      const isLaserMachine = op.maquina?.plantilla === PlantillaMaquinaria.IMPRESORA_LASER;
+      const pliegosEfectivosOperacion =
+        isLaserMachine &&
+        (op.unidadEntrada === UnidadProceso.HOJA || op.unidadSalida === UnidadProceso.HOJA)
+          ? Math.max(pliegos, cantidadRunOperativa)
+          : pliegos;
+      if (isLaserMachine) {
+        pliegosMermaOperativaImpresion += Math.max(0, pliegosEfectivosOperacion - pliegos);
       }
 
       if (op.maquinaId) {
         const tonerAndWear = this.calculateMachineConsumables({
           operation: op,
-          tipoImpresion: variante.tipoImpresion,
+          tipoImpresion: tipoImpresionSeleccionado,
           carasFactor,
           pliegos,
+          pliegosEfectivos: pliegosEfectivosOperacion,
           areaPliegoM2,
           a4EqFactor,
           warnings,
@@ -1712,25 +2467,29 @@ export class ProductosServiciosService {
         costoToner += tonerAndWear.costoToner;
         costoDesgaste += tonerAndWear.costoDesgaste;
         materiales.push(...tonerAndWear.materiales);
+        const laminadoFilm = this.calculateLaminadoraFilmConsumables({
+          operation: op,
+          consumiblesFilm,
+          timingOverride,
+          warnings,
+        });
+        materiales.push(...laminadoFilm.materiales);
+        costoConsumiblesTerminacion += laminadoFilm.costo;
       }
 
       const totalMin = setupMin + runMin + cleanupMin + tiempoFijoMin;
       const tarifa = tarifaByCentro.get(op.centroCostoId)!;
       const costoPaso = Number(tarifa.mul(totalMin / 60).toFixed(6));
-      const esAdicional = Boolean(op.requiresProductoAdicionalId);
-      const addonAsociado = op.requiresProductoAdicionalId
-        ? addonById.get(op.requiresProductoAdicionalId)
-        : null;
+      const esChecklist = checklistOperacionesActivadas.some((item) => item.id === op.id);
+      const esRouteEffect = operacionesRouteEffect.some((item) => item.id === op.id && item.codigo === op.codigo);
       return {
         orden: op.orden,
         codigo: op.codigo,
         nombre: op.nombre,
         centroCostoId: op.centroCostoId,
         centroCostoNombre: op.centroCosto.nombre,
-        origen: esAdicional
-          ? `Adicional:${addonAsociado?.productoAdicional?.nombre ?? op.requiresProductoAdicionalId}`
-          : 'Base',
-        addonId: op.requiresProductoAdicionalId ?? null,
+        origen: esChecklist ? 'Configurador' : esRouteEffect ? 'Acabado adicional' : 'Producto base',
+        addonId: null,
         setupMin,
         runMin,
         cleanupMin,
@@ -1738,6 +2497,12 @@ export class ProductosServiciosService {
         totalMin: Number(totalMin.toFixed(4)),
         tarifaHora: Number(tarifa),
         costo: costoPaso,
+        detalleTecnico: {
+          ...(timingOverride?.trace ?? {}),
+          sourceProductividad,
+          maquina: op.maquina?.nombre ?? null,
+          perfilOperativo: op.perfilOperativo?.nombre ?? null,
+        } as Record<string, unknown>,
       };
     });
 
@@ -1760,6 +2525,25 @@ export class ProductosServiciosService {
       pliegoImpresionAltoMm: pliegoImpresion.altoMm,
       origen: 'Base',
     });
+    if (pliegosMermaOperativaImpresion > 0) {
+      const costoPapelMerma = pliegosMermaOperativaImpresion * costoPapelUnit;
+      materiales.splice(1, 0, {
+        tipo: 'PAPEL',
+        nombre: `${variante.papelVariante.materiaPrima.nombre} · Merma operativa`,
+        sku: variante.papelVariante.sku,
+        cantidad: Number(pliegosMermaOperativaImpresion.toFixed(6)),
+        costoUnitario: costoPapelUnit,
+        costo: Number(costoPapelMerma.toFixed(6)),
+        esCostoDerivado: conversionPapel.esDerivado,
+        pliegosPorSustrato: conversionPapel.pliegosPorSustrato,
+        orientacionConversion: conversionPapel.orientacion,
+        sustratoAnchoMm: sustratoDims.anchoMm,
+        sustratoAltoMm: sustratoDims.altoMm,
+        pliegoImpresionAnchoMm: pliegoImpresion.anchoMm,
+        pliegoImpresionAltoMm: pliegoImpresion.altoMm,
+        origen: 'Merma operativa',
+      });
+    }
 
     if (addonSelectionInput.length) {
       const addonsMateriales = await this.prisma.productoAdicionalMaterial.findMany({
@@ -1875,6 +2659,7 @@ export class ProductosServiciosService {
         totalMin: Number(minutosServicio.toFixed(4)),
         tarifaHora: Number(tarifa),
         costo: montoTotal,
+        detalleTecnico: null,
       });
     }
     for (const effect of costEffectsAplicados) {
@@ -1888,7 +2673,14 @@ export class ProductosServiciosService {
       } else if (cost.regla === ReglaCostoAdicionalEfecto.POR_PLIEGO) {
         monto = Number(cost.valor) * pliegos;
       } else if (cost.regla === ReglaCostoAdicionalEfecto.PORCENTAJE_SOBRE_TOTAL) {
-        const base = costoPapel + costoToner + costoDesgaste + costoProcesos + costoAdicionalesMateriales + costoAdicionalesCostEffects;
+        const base =
+          costoPapel +
+          costoToner +
+          costoDesgaste +
+          costoConsumiblesTerminacion +
+          costoProcesos +
+          costoAdicionalesMateriales +
+          costoAdicionalesCostEffects;
         monto = base * (Number(cost.valor) / 100);
       } else if (cost.regla === ReglaCostoAdicionalEfecto.TIEMPO_EXTRA_MIN) {
         const centroId =
@@ -1938,6 +2730,7 @@ export class ProductosServiciosService {
         totalMin: 0,
         tarifaHora: 0,
         costo: montoRounded,
+        detalleTecnico: null,
       });
     }
 
@@ -1971,6 +2764,318 @@ export class ProductosServiciosService {
       });
     }
 
+    const pasosConVariantesActivos = [
+      ...checklistReglasActivas
+        .filter((item) => item.regla.accion === TipoProductoChecklistReglaAccion.SELECCIONAR_VARIANTE_PASO)
+        .map((item) => ({
+          source: 'checklist' as const,
+          pasoPlantilla: item.pasoPlantilla,
+          variantePasoId: this.getChecklistVariantePasoId(item.regla.detalleJson),
+          reglaId: item.regla.id,
+          label: 'Configurador',
+        })),
+    ];
+
+    for (const item of pasosConVariantesActivos) {
+      const nivelesPaso = this.getProcesoOperacionNiveles(item.pasoPlantilla?.detalleJson ?? null);
+      if (!nivelesPaso.length) {
+        continue;
+      }
+      const nivel =
+        nivelesPaso.find((nivelItem: any) => nivelItem.id === item.variantePasoId) ?? nivelesPaso[0] ?? null;
+      if (!nivel) {
+        warnings.push(`${item.label}: paso con variantes sin variante disponible. Se omitió.`);
+        continue;
+      }
+      const centroId = item.pasoPlantilla?.centroCostoId ?? null;
+      if (!centroId) {
+        warnings.push(`${item.label}: ${item.reglaId} sin centro de costo para costeo por tiempo.`);
+        continue;
+      }
+      const tarifa = tarifaByCentro.get(centroId);
+      if (!tarifa) {
+        warnings.push(`${item.label}: falta tarifa publicada para centro de costo en regla con variantes.`);
+        continue;
+      }
+      const areaPiezaM2 = (Number(variante.anchoMm) * Number(variante.altoMm)) / 1_000_000;
+      const quantityByUnidad = this.resolveChecklistCantidadObjetivo({
+        unidadSalida: nivel.unidadSalida ?? item.pasoPlantilla?.unidadSalida ?? null,
+        cantidad,
+        pliegos,
+        areaPiezaM2,
+        areaPliegoM2,
+        a4EqFactor,
+        anchoMm: Number(variante.anchoMm),
+        altoMm: Number(variante.altoMm),
+      });
+      let setupMin = Number(nivel.setupMin ?? 0);
+      let cleanupMin = Number(nivel.cleanupMin ?? 0);
+      let tiempoFijoMin = 0;
+      let runMin = 0;
+      let sourceProductividad = 'nivel_fijo';
+      let detalleTecnico: Record<string, unknown> = {
+        sourceProductividad,
+        variantePasoId: nivel.id,
+        variantePasoNombre: nivel.nombre,
+        modoProductividadNivel: nivel.modoProductividadNivel,
+      };
+
+      if (nivel.modoProductividadNivel === 'fija') {
+        tiempoFijoMin = Number(nivel.tiempoFijoMin ?? 0);
+      } else if (nivel.modoProductividadNivel === 'variable_manual') {
+        const productividad = evaluateProductividad({
+          modoProductividad: ModoProductividadProceso.FIJA,
+          productividadBase:
+            nivel.productividadBase === null ? null : new Prisma.Decimal(nivel.productividadBase),
+          reglaVelocidadJson: null,
+          reglaMermaJson: null,
+          runMin: null,
+          unidadTiempo: this.toPrismaUnidadProceso(
+            nivel.unidadTiempo ?? item.pasoPlantilla?.unidadTiempo ?? UnidadProceso.MINUTO,
+          ),
+          mermaRunPct: null,
+          mermaSetup: null,
+          cantidadObjetivoSalida: quantityByUnidad,
+          contexto: {
+            cantidad,
+            pliegos,
+            areaPiezaM2,
+            areaPliegoM2,
+            a4EqFactor,
+          },
+        });
+        runMin = productividad.runMin;
+        sourceProductividad = 'nivel_variable_manual';
+        detalleTecnico = {
+          ...detalleTecnico,
+          sourceProductividad,
+          cantidadObjetivoSalida: quantityByUnidad,
+          productividadAplicada: productividad.productividadAplicada,
+          unidadSalida: nivel.unidadSalida,
+          unidadTiempo: nivel.unidadTiempo,
+        };
+        warnings.push(
+          ...productividad.warnings.map(
+            (warning) => `${item.label} ${item.pasoPlantilla?.nombre ?? item.reglaId} (${nivel.nombre}): ${warning}`,
+          ),
+        );
+      } else {
+        const maquina = nivel.maquinaId ? checklistNivelMaquinaById.get(nivel.maquinaId) ?? null : null;
+        const perfil = nivel.perfilOperativoId ? checklistNivelPerfilById.get(nivel.perfilOperativoId) ?? null : null;
+        const setupBase = Number(nivel.setupMin ?? this.getSetupFromPerfilOperativo(perfil) ?? 0);
+        const cleanupBase = Number(nivel.cleanupMin ?? 0);
+        const timingOverride = this.calculateTerminatingOperationTiming({
+          operacion: {
+            maquina,
+            perfilOperativo: perfil,
+          },
+          cantidad,
+          pliegos,
+          setupMinBase: setupBase,
+          cleanupMinBase: cleanupBase,
+          tiempoFijoMinBase: 0,
+          cantidadObjetivoSalida: quantityByUnidad,
+          varianteAnchoMm: Number(variante.anchoMm),
+          varianteAltoMm: Number(variante.altoMm),
+        });
+        if (timingOverride) {
+          setupMin = timingOverride.setupMin;
+          cleanupMin = timingOverride.cleanupMin;
+          tiempoFijoMin = timingOverride.tiempoFijoMin;
+          runMin = timingOverride.runMin;
+          sourceProductividad = 'nivel_variable_perfil';
+          detalleTecnico = {
+            ...detalleTecnico,
+            sourceProductividad,
+            maquina: maquina?.nombre ?? null,
+            perfilOperativo: perfil?.nombre ?? null,
+            ...(timingOverride.trace ?? {}),
+          };
+          if (timingOverride.warnings?.length) {
+            warnings.push(
+              ...timingOverride.warnings.map(
+                (warning) => `${item.label} ${item.pasoPlantilla?.nombre ?? item.reglaId} (${nivel.nombre}): ${warning}`,
+              ),
+            );
+          }
+        } else {
+          const productividadBase =
+            perfil?.productivityValue
+              ? Number(perfil.productivityValue)
+              : item.pasoPlantilla?.productividadBase
+                ? Number(item.pasoPlantilla.productividadBase)
+                : 0;
+          if (productividadBase > 0) {
+            const productividad = evaluateProductividad({
+              modoProductividad: ModoProductividadProceso.FIJA,
+              productividadBase: new Prisma.Decimal(productividadBase),
+              reglaVelocidadJson: null,
+              reglaMermaJson: null,
+              runMin: null,
+              unidadTiempo: item.pasoPlantilla?.unidadTiempo ?? UnidadProceso.MINUTO,
+              mermaRunPct: null,
+              mermaSetup: null,
+              cantidadObjetivoSalida: quantityByUnidad,
+              contexto: {
+                cantidad,
+                pliegos,
+                areaPiezaM2,
+                areaPliegoM2,
+                a4EqFactor,
+              },
+            });
+            setupMin = setupBase;
+            cleanupMin = cleanupBase;
+            runMin = productividad.runMin;
+            sourceProductividad = 'nivel_variable_perfil';
+            detalleTecnico = {
+              ...detalleTecnico,
+              sourceProductividad,
+              maquina: maquina?.nombre ?? null,
+              perfilOperativo: perfil?.nombre ?? null,
+              cantidadObjetivoSalida: quantityByUnidad,
+              productividadAplicada: productividad.productividadAplicada,
+            };
+          }
+        }
+      }
+
+      const totalMin = Number((setupMin + runMin + cleanupMin + tiempoFijoMin).toFixed(4));
+      if (totalMin <= 0) {
+        continue;
+      }
+      const costoNivel = Number(tarifa.mul(totalMin / 60).toFixed(6));
+      costoAdicionalesCostEffects += costoNivel;
+      costosPorEfecto.push({
+        origen: 'ConfiguradorVariante',
+        reglaId: item.reglaId,
+        variantePasoId: nivel.id,
+        variantePasoNombre: nivel.nombre,
+        tiempoMin: totalMin,
+        monto: costoNivel,
+      });
+      pasos.push({
+        orden: pasos.length + 1,
+        codigo: `CHK-LVL-${item.reglaId.slice(0, 6).toUpperCase()}`,
+        nombre: `${item.pasoPlantilla?.nombre ?? 'Paso configurador'} (${nivel.nombre})`,
+        centroCostoId: centroId,
+        centroCostoNombre: item.pasoPlantilla?.centroCosto?.nombre ?? 'Configurador',
+        origen: 'Configurador',
+        addonId: null,
+        setupMin: Number(setupMin.toFixed(4)),
+        runMin: Number(runMin.toFixed(4)),
+        cleanupMin: Number(cleanupMin.toFixed(4)),
+        tiempoFijoMin: Number(tiempoFijoMin.toFixed(4)),
+        totalMin,
+        tarifaHora: Number(tarifa),
+        costo: costoNivel,
+        detalleTecnico,
+      });
+    }
+
+    for (const item of checklistReglasActivas) {
+      if (item.regla.accion !== TipoProductoChecklistReglaAccion.COSTO_EXTRA) {
+        continue;
+      }
+      const regla = item.regla.costoRegla;
+      const valor = Number(item.regla.costoValor ?? 0);
+      if (!regla || !Number.isFinite(valor) || valor === 0) {
+        continue;
+      }
+      let monto = 0;
+      if (regla === ReglaCostoChecklist.FLAT) {
+        monto = valor;
+      } else if (regla === ReglaCostoChecklist.POR_UNIDAD) {
+        monto = valor * cantidad;
+      } else if (regla === ReglaCostoChecklist.POR_PLIEGO) {
+        monto = valor * pliegos;
+      } else if (regla === ReglaCostoChecklist.PORCENTAJE_SOBRE_TOTAL) {
+        const base =
+          costoPapel +
+          costoToner +
+          costoDesgaste +
+          costoConsumiblesTerminacion +
+          costoProcesos +
+          costoAdicionalesMateriales +
+          costoAdicionalesCostEffects;
+        monto = base * (valor / 100);
+      } else if (regla === ReglaCostoChecklist.TIEMPO_MIN) {
+        const centroId = item.regla.costoCentroCostoId ?? item.pasoPlantilla?.centroCostoId ?? null;
+        if (!centroId) {
+          warnings.push('Configurador: COSTO_EXTRA TIEMPO_MIN sin centro de costo.');
+          continue;
+        }
+        const tarifa = tarifaByCentro.get(centroId);
+        if (!tarifa) {
+          warnings.push('Configurador: sin tarifa publicada para COSTO_EXTRA TIEMPO_MIN.');
+          continue;
+        }
+        monto = Number(tarifa.mul(valor / 60).toFixed(6));
+      }
+      const montoRounded = Number(monto.toFixed(6));
+      if (montoRounded === 0) continue;
+      costoAdicionalesCostEffects += montoRounded;
+      costosPorEfecto.push({
+        origen: 'ConfiguradorCosto',
+        reglaId: item.regla.id,
+        regla: regla.toLowerCase(),
+        monto: montoRounded,
+      });
+      pasos.push({
+        orden: pasos.length + 1,
+        codigo: `CHK-COST-${item.regla.id.slice(0, 6).toUpperCase()}`,
+        nombre: 'Ajuste costo configurador',
+        centroCostoId: item.regla.costoCentroCostoId ?? item.pasoPlantilla?.centroCostoId ?? 'N/A',
+        centroCostoNombre:
+          item.regla.costoCentroCosto?.nombre ??
+          item.pasoPlantilla?.centroCosto?.nombre ??
+          'Configurador',
+        origen: 'Configurador',
+        addonId: null,
+        setupMin: 0,
+        runMin: 0,
+        cleanupMin: 0,
+        tiempoFijoMin: 0,
+        totalMin: 0,
+        tarifaHora: 0,
+        costo: montoRounded,
+        detalleTecnico: {
+          sourceProductividad: 'checklist',
+          reglaId: item.regla.id,
+        },
+      });
+    }
+
+    for (const item of checklistReglasActivas) {
+      if (item.regla.accion !== TipoProductoChecklistReglaAccion.MATERIAL_EXTRA) {
+        continue;
+      }
+      if (!item.regla.materiaPrimaVariante || !item.regla.tipoConsumo || !item.regla.factorConsumo) {
+        continue;
+      }
+      const baseQty =
+        item.regla.tipoConsumo === TipoConsumoAdicionalMaterial.POR_PLIEGO
+          ? pliegos
+          : item.regla.tipoConsumo === TipoConsumoAdicionalMaterial.POR_M2
+            ? areaPliegoM2 * pliegos
+            : cantidad;
+      const factorConsumo = Number(item.regla.factorConsumo);
+      const mermaFactor = 1 + Number(item.regla.mermaPct ?? 0) / 100;
+      const consumo = factorConsumo * baseQty * mermaFactor;
+      const costoUnit = Number(item.regla.materiaPrimaVariante.precioReferencia ?? 0);
+      const costo = Number((consumo * costoUnit).toFixed(6));
+      costoAdicionalesMateriales += costo;
+      materiales.push({
+        tipo: 'CHECKLIST_MATERIAL',
+        nombre: item.regla.materiaPrimaVariante.materiaPrima.nombre,
+        sku: item.regla.materiaPrimaVariante.sku,
+        cantidad: Number(consumo.toFixed(6)),
+        costoUnitario: Number(costoUnit.toFixed(6)),
+        costo,
+        origen: 'Configurador',
+      });
+    }
+
     const pasosNormalizados = [...pasos]
       .sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre))
       .map((paso, index) => ({
@@ -1983,6 +3088,7 @@ export class ProductosServiciosService {
         costoPapel +
         costoToner +
         costoDesgaste +
+        costoConsumiblesTerminacion +
         costoProcesos +
         costoAdicionalesCostEffects +
         costoAdicionalesMateriales
@@ -2011,6 +3117,7 @@ export class ProductosServiciosService {
         papel: Number(costoPapel.toFixed(6)),
         toner: Number(costoToner.toFixed(6)),
         desgaste: Number(costoDesgaste.toFixed(6)),
+        consumiblesTerminacion: Number(costoConsumiblesTerminacion.toFixed(6)),
         adicionalesMateriales: Number(costoAdicionalesMateriales.toFixed(6)),
         adicionalesCostEffects: Number(costoAdicionalesCostEffects.toFixed(6)),
       },
@@ -2019,8 +3126,22 @@ export class ProductosServiciosService {
       trazabilidad: {
         imposicion,
         conversionPapel,
-        addonsSeleccionados: addonSelectionInput,
-        addonsConfig: addonConfigTrace,
+        matchingBaseAplicado: matchingBaseAplicado.map((item) => ({
+          pasoPlantillaId: item.pasoPlantilla.id,
+          pasoPlantillaNombre: item.pasoPlantilla.nombre,
+          perfilOperativoId: item.perfilOperativo.id,
+          perfilOperativoNombre: item.perfilOperativo.nombre,
+          tipoImpresion: item.tipoImpresion ? this.fromTipoImpresion(item.tipoImpresion) : null,
+          caras: item.caras ? this.fromCaras(item.caras) : null,
+        })),
+        checklistAplicado: checklistAplicadoTrace,
+        checklistRespuestasSeleccionadas: checklistRespuestasInput,
+        atributosTecnicosConfigurados: Array.from(atributosTecnicosSeleccionados.entries()).map(
+          ([dimension, value]) => ({
+            dimension: this.fromDimensionOpcionProductiva(dimension),
+            valor: this.fromValorOpcionProductiva(value),
+          }),
+        ),
         opcionProductivaEfectiva: Array.from(opcionProductivaEfectiva.entries()).map(([dimension, values]) => ({
           dimension: this.fromDimensionOpcionProductiva(dimension),
           valores: Array.from(values).map((value) => this.fromValorOpcionProductiva(value)),
@@ -2073,15 +3194,25 @@ export class ProductosServiciosService {
         configVersionOverride,
         cantidad,
         periodoTarifa: periodo,
-        inputJson: {
+        inputJson: ({
           cantidad,
           periodo,
           config,
-          addonsSeleccionados: addonSelectionInput,
-          addonsConfig: addonConfigTrace,
-        } as Prisma.InputJsonValue,
-        resultadoJson: result as Prisma.InputJsonValue,
+          checklistRespuestas: checklistRespuestasInput,
+        } as unknown) as Prisma.InputJsonValue,
+        resultadoJson: (result as unknown) as Prisma.InputJsonValue,
         total: new Prisma.Decimal(total),
+        checklistRespuestas: checklistRespuestasInput.length
+          ? {
+              create: checklistRespuestasInput.map((item) => ({
+                tenantId: auth.tenantId,
+                productoVarianteId: variante.id,
+                preguntaId: item.preguntaId,
+                respuestaId: item.respuestaId,
+                nivelId: null,
+              })),
+            }
+          : undefined,
       },
     });
 
@@ -2344,6 +3475,45 @@ export class ProductosServiciosService {
     return item;
   }
 
+  private async findProcesoOperacionOrThrow(
+    auth: CurrentAuth,
+    id: string,
+    tx: PrismaService | Prisma.TransactionClient,
+  ) {
+    const item = await tx.procesoOperacion.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        id,
+      },
+    });
+    if (!item) {
+      throw new NotFoundException('Paso de ruta no encontrado.');
+    }
+    return item;
+  }
+
+  private async findBibliotecaOperacionOrThrow(
+    auth: CurrentAuth,
+    id: string,
+    tx: PrismaService | Prisma.TransactionClient,
+  ) {
+    const item = await tx.procesoOperacionPlantilla.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        id,
+      },
+      include: {
+        centroCosto: true,
+        maquina: true,
+        perfilOperativo: true,
+      },
+    });
+    if (!item) {
+      throw new NotFoundException('Paso de biblioteca no encontrado.');
+    }
+    return item;
+  }
+
   private async findCentroCostoOrThrow(
     auth: CurrentAuth,
     id: string,
@@ -2575,6 +3745,7 @@ export class ProductosServiciosService {
   private async validateAdicionalEfectoPayload(
     auth: CurrentAuth,
     payload: UpsertProductoAdicionalEfectoDto,
+    adicionalTipo: TipoProductoAdicional,
     tx: PrismaService | Prisma.TransactionClient,
   ) {
     if (payload.tipo === TipoProductoAdicionalEfectoDto.route_effect && !payload.routeEffect) {
@@ -2602,23 +3773,49 @@ export class ProductosServiciosService {
     if (payload.routeEffect?.pasos?.length) {
       for (const paso of payload.routeEffect.pasos) {
         await this.findCentroCostoOrThrow(auth, paso.centroCostoId, tx);
-        if (paso.maquinaId) {
-          const maq = await tx.maquina.findFirst({
-            where: { tenantId: auth.tenantId, id: paso.maquinaId },
-            select: { id: true },
-          });
-          if (!maq) {
-            throw new NotFoundException('Máquina no encontrada para un paso del route_effect.');
-          }
+        const usarMaquinariaTerminacion =
+          paso.usarMaquinariaTerminacion ?? Boolean(paso.maquinaId || paso.perfilOperativoId);
+
+        if (adicionalTipo === TipoProductoAdicional.SERVICIO && usarMaquinariaTerminacion) {
+          throw new BadRequestException(
+            'Un adicional de tipo servicio no puede usar maquinaria de terminación en la Regla de pasos.',
+          );
         }
-        if (paso.perfilOperativoId) {
-          const perfil = await tx.maquinaPerfilOperativo.findFirst({
-            where: { tenantId: auth.tenantId, id: paso.perfilOperativoId },
-            select: { id: true },
-          });
-          if (!perfil) {
-            throw new NotFoundException('Perfil operativo no encontrado para un paso del route_effect.');
-          }
+        if (!usarMaquinariaTerminacion) {
+          continue;
+        }
+
+        if (!paso.maquinaId || !paso.perfilOperativoId) {
+          throw new BadRequestException(
+            'Cuando "usarMaquinariaTerminacion" está activo, maquinaId y perfilOperativoId son obligatorios.',
+          );
+        }
+
+        const maquina = await tx.maquina.findFirst({
+          where: { tenantId: auth.tenantId, id: paso.maquinaId },
+          select: { id: true, plantilla: true },
+        });
+        if (!maquina) {
+          throw new NotFoundException('Máquina no encontrada para un paso del route_effect.');
+        }
+        if (!this.isPlantillaTerminacionSoportada(maquina.plantilla)) {
+          throw new BadRequestException(
+            'La máquina seleccionada no corresponde a una plantilla de terminación soportada.',
+          );
+        }
+
+        const perfil = await tx.maquinaPerfilOperativo.findFirst({
+          where: {
+            tenantId: auth.tenantId,
+            id: paso.perfilOperativoId,
+            maquinaId: maquina.id,
+          },
+          select: { id: true },
+        });
+        if (!perfil) {
+          throw new BadRequestException(
+            'El perfil operativo seleccionado no pertenece a la máquina indicada.',
+          );
         }
       }
     }
@@ -2747,18 +3944,32 @@ export class ProductosServiciosService {
       });
       await tx.productoAdicionalRouteEffectPaso.createMany({
         data: payload.routeEffect.pasos.map((paso, index) => ({
+          ...(paso.usarMaquinariaTerminacion ?? Boolean(paso.maquinaId || paso.perfilOperativoId)
+            ? {
+                maquinaId: paso.maquinaId ?? null,
+                perfilOperativoId: paso.perfilOperativoId ?? null,
+              }
+            : {
+                maquinaId: null,
+                perfilOperativoId: null,
+              }),
           tenantId: auth.tenantId,
           productoAdicionalRouteEffectId: route.id,
           orden: paso.orden ?? index + 1,
           nombre: paso.nombre.trim(),
           tipoOperacion: TipoOperacionProceso.OTRO,
           centroCostoId: paso.centroCostoId,
-          maquinaId: paso.maquinaId ?? null,
-          perfilOperativoId: paso.perfilOperativoId ?? null,
           setupMin: paso.setupMin ?? null,
           runMin: paso.runMin ?? null,
           cleanupMin: paso.cleanupMin ?? null,
           tiempoFijoMin: paso.tiempoFijoMin ?? null,
+          detalleJson: {
+            usarMaquinariaTerminacion:
+              paso.usarMaquinariaTerminacion ?? Boolean(paso.maquinaId || paso.perfilOperativoId),
+            tiempoFijoMinFallback:
+              paso.tiempoFijoMinFallback ?? paso.tiempoFijoMin ?? null,
+            overridesProductividad: paso.overridesProductividad ?? null,
+          } as Prisma.InputJsonValue,
         })),
       });
     }
@@ -2819,6 +4030,7 @@ export class ProductosServiciosService {
         runMin: Prisma.Decimal | null;
         cleanupMin: Prisma.Decimal | null;
         tiempoFijoMin: Prisma.Decimal | null;
+        detalleJson: Prisma.JsonValue | null;
       }>;
     } | null;
     costEffect: {
@@ -2858,6 +4070,9 @@ export class ProductosServiciosService {
         ? {
             id: item.routeEffect.id,
             pasos: item.routeEffect.pasos.map((paso) => ({
+              ...(this.asObject(paso.detalleJson).usarMaquinariaTerminacion === true
+                ? { usarMaquinariaTerminacion: true }
+                : { usarMaquinariaTerminacion: false }),
               id: paso.id,
               orden: paso.orden,
               nombre: paso.nombre,
@@ -2871,6 +4086,16 @@ export class ProductosServiciosService {
               runMin: paso.runMin === null ? null : Number(paso.runMin),
               cleanupMin: paso.cleanupMin === null ? null : Number(paso.cleanupMin),
               tiempoFijoMin: paso.tiempoFijoMin === null ? null : Number(paso.tiempoFijoMin),
+              tiempoFijoMinFallback:
+                this.toSafeNumber(this.asObject(paso.detalleJson).tiempoFijoMinFallback, NaN) >= 0
+                  ? this.toSafeNumber(this.asObject(paso.detalleJson).tiempoFijoMinFallback, 0)
+                  : paso.tiempoFijoMin === null
+                    ? null
+                    : Number(paso.tiempoFijoMin),
+              overridesProductividad: (() => {
+                const overrides = this.asObject(this.asObject(paso.detalleJson).overridesProductividad);
+                return Object.keys(overrides).length > 0 ? overrides : null;
+              })(),
             })),
           }
         : null,
@@ -2901,6 +4126,219 @@ export class ProductosServiciosService {
     };
   }
 
+  private isPlantillaTerminacionSoportada(plantilla: PlantillaMaquinaria) {
+    return ProductosServiciosService.TERMINACION_PLANTILLAS_SOPORTADAS.has(plantilla);
+  }
+
+  private validateProductoChecklistPayload(payload: UpsertProductoChecklistDto) {
+    const preguntaOrdenes = new Set<number>();
+    for (const [preguntaIndex, pregunta] of payload.preguntas.entries()) {
+      const ordenPregunta = pregunta.orden ?? preguntaIndex + 1;
+      if (preguntaOrdenes.has(ordenPregunta)) {
+        throw new BadRequestException('Hay preguntas con orden duplicado en el checklist.');
+      }
+      preguntaOrdenes.add(ordenPregunta);
+      if (!pregunta.texto.trim()) {
+        throw new BadRequestException('El texto de cada pregunta es obligatorio.');
+      }
+      if (pregunta.tipoPregunta === TipoChecklistPreguntaDto.binaria && pregunta.respuestas.length !== 2) {
+        throw new BadRequestException('Las preguntas binarias deben tener exactamente dos respuestas.');
+      }
+      const respuestaOrdenes = new Set<number>();
+      for (const [respuestaIndex, respuesta] of pregunta.respuestas.entries()) {
+        const ordenRespuesta = respuesta.orden ?? respuestaIndex + 1;
+        if (respuestaOrdenes.has(ordenRespuesta)) {
+          throw new BadRequestException('Hay respuestas con orden duplicado dentro de una pregunta.');
+        }
+        respuestaOrdenes.add(ordenRespuesta);
+        if (!respuesta.texto.trim()) {
+          throw new BadRequestException('El texto de cada respuesta es obligatorio.');
+        }
+        const reglas = respuesta.reglas ?? [];
+        const reglaOrdenes = new Set<number>();
+        for (const [reglaIndex, regla] of reglas.entries()) {
+          const ordenRegla = regla.orden ?? reglaIndex + 1;
+          if (reglaOrdenes.has(ordenRegla)) {
+            throw new BadRequestException('Hay reglas con orden duplicado dentro de una respuesta.');
+          }
+          reglaOrdenes.add(ordenRegla);
+          if (regla.accion === TipoChecklistAccionReglaDto.activar_paso && !regla.pasoPlantillaId) {
+            throw new BadRequestException('La regla ACTIVAR_PASO requiere pasoPlantillaId.');
+          }
+          if (
+            regla.accion === TipoChecklistAccionReglaDto.seleccionar_variante_paso &&
+            (!regla.pasoPlantillaId || !regla.variantePasoId)
+          ) {
+            throw new BadRequestException(
+              'La regla SELECCIONAR_VARIANTE_PASO requiere pasoPlantillaId y variantePasoId.',
+            );
+          }
+          if (regla.accion === TipoChecklistAccionReglaDto.costo_extra && !regla.costoRegla) {
+            throw new BadRequestException('La regla COSTO_EXTRA requiere costoRegla.');
+          }
+          if (regla.accion === TipoChecklistAccionReglaDto.material_extra && !regla.materiaPrimaVarianteId) {
+            throw new BadRequestException('La regla MATERIAL_EXTRA requiere materiaPrimaVarianteId.');
+          }
+          if (regla.accion === TipoChecklistAccionReglaDto.set_atributo_tecnico) {
+            throw new BadRequestException(
+              'SET_ATRIBUTO_TECNICO ya no se admite en Ruta de opcionales.',
+            );
+          }
+        }
+      }
+    }
+  }
+
+  private toProductoChecklistResponse(
+    item: {
+    id: string;
+    productoServicioId: string;
+    activo: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+    preguntas: Array<{
+      id: string;
+      texto: string;
+      tipoPregunta: TipoProductoChecklistPregunta;
+      orden: number;
+      activo: boolean;
+      respuestas: Array<{
+        id: string;
+        texto: string;
+        codigo: string | null;
+        orden: number;
+        activo: boolean;
+        reglas: Array<{
+          id: string;
+          accion: TipoProductoChecklistReglaAccion;
+          orden: number;
+          activo: boolean;
+          procesoOperacionId: string | null;
+          procesoOperacion: {
+            id: string;
+            nombre: string;
+            codigo: string;
+            centroCosto: { id: string; nombre: string };
+            maquina: { id: string; nombre: string } | null;
+            perfilOperativo: { id: string; nombre: string } | null;
+            setupMin: Prisma.Decimal | null;
+            runMin: Prisma.Decimal | null;
+            cleanupMin: Prisma.Decimal | null;
+            tiempoFijoMin: Prisma.Decimal | null;
+            detalleJson: Prisma.JsonValue | null;
+          } | null;
+          costoRegla: ReglaCostoChecklist | null;
+          costoValor: Prisma.Decimal | null;
+          costoCentroCostoId: string | null;
+          costoCentroCosto: { nombre: string } | null;
+          materiaPrimaVarianteId: string | null;
+          materiaPrimaVariante: {
+            id: string;
+            sku: string;
+            materiaPrima: { nombre: string };
+          } | null;
+          tipoConsumo: TipoConsumoAdicionalMaterial | null;
+          factorConsumo: Prisma.Decimal | null;
+          mermaPct: Prisma.Decimal | null;
+          detalleJson: Prisma.JsonValue | null;
+        }>;
+      }>;
+    }>;
+    },
+    plantillasById: Map<string, any> = new Map(),
+  ) {
+    return {
+      id: item.id,
+      productoId: item.productoServicioId,
+      activo: item.activo,
+      preguntas: item.preguntas.map((pregunta) => ({
+        id: pregunta.id,
+        texto: pregunta.texto,
+        tipoPregunta: this.fromTipoChecklistPregunta(pregunta.tipoPregunta),
+        orden: pregunta.orden,
+        activo: pregunta.activo,
+        respuestas: pregunta.respuestas.map((respuesta) => ({
+          id: respuesta.id,
+          texto: respuesta.texto,
+          codigo: respuesta.codigo,
+          orden: respuesta.orden,
+          activo: respuesta.activo,
+          reglas: respuesta.reglas
+            .filter((regla) => regla.accion !== TipoProductoChecklistReglaAccion.SET_ATRIBUTO_TECNICO)
+            .map((regla) => {
+              const pasoPlantillaId = this.getChecklistPasoPlantillaId(regla.detalleJson);
+              const pasoPlantilla = pasoPlantillaId ? plantillasById.get(pasoPlantillaId) ?? null : null;
+              const pasoDetalleJson =
+                pasoPlantilla?.detalleJson ?? regla.procesoOperacion?.detalleJson ?? null;
+
+              return {
+                id: regla.id,
+                accion: this.fromTipoChecklistAccion(regla.accion),
+                orden: regla.orden,
+                activo: regla.activo,
+                pasoPlantillaId,
+                pasoPlantillaNombre: pasoPlantilla?.nombre ?? regla.procesoOperacion?.nombre ?? '',
+                centroCostoId:
+                  pasoPlantilla?.centroCostoId ?? regla.procesoOperacion?.centroCosto.id ?? null,
+                centroCostoNombre:
+                  pasoPlantilla?.centroCosto?.nombre ?? regla.procesoOperacion?.centroCosto.nombre ?? '',
+                maquinaNombre:
+                  pasoPlantilla?.maquina?.nombre ?? regla.procesoOperacion?.maquina?.nombre ?? '',
+                perfilOperativoNombre:
+                  pasoPlantilla?.perfilOperativo?.nombre ??
+                  regla.procesoOperacion?.perfilOperativo?.nombre ??
+                  '',
+                setupMin:
+                  pasoPlantilla?.setupMin === null || pasoPlantilla?.setupMin === undefined
+                    ? regla.procesoOperacion?.setupMin
+                      ? Number(regla.procesoOperacion.setupMin)
+                      : null
+                    : Number(pasoPlantilla.setupMin),
+                runMin: regla.procesoOperacion?.runMin ? Number(regla.procesoOperacion.runMin) : null,
+                cleanupMin:
+                  pasoPlantilla?.cleanupMin === null || pasoPlantilla?.cleanupMin === undefined
+                    ? regla.procesoOperacion?.cleanupMin
+                      ? Number(regla.procesoOperacion.cleanupMin)
+                      : null
+                    : Number(pasoPlantilla.cleanupMin),
+                tiempoFijoMin:
+                  pasoPlantilla?.tiempoFijoMin === null || pasoPlantilla?.tiempoFijoMin === undefined
+                    ? regla.procesoOperacion?.tiempoFijoMin
+                      ? Number(regla.procesoOperacion.tiempoFijoMin)
+                      : null
+                    : Number(pasoPlantilla.tiempoFijoMin),
+                variantePasoId: this.getChecklistVariantePasoId(regla.detalleJson),
+                variantePasoNombre: this.getChecklistVariantePasoNombre(
+                  this.getChecklistVariantePasoId(regla.detalleJson),
+                  pasoDetalleJson,
+                ),
+                variantePasoResumen: this.getChecklistVariantePasoResumen(
+                  this.getChecklistVariantePasoId(regla.detalleJson),
+                  pasoDetalleJson,
+                ),
+                nivelesDisponibles: this.getProcesoOperacionNiveles(pasoDetalleJson),
+                costoRegla: regla.costoRegla ? this.fromReglaCostoChecklist(regla.costoRegla) : null,
+                costoValor: regla.costoValor === null ? null : Number(regla.costoValor),
+                costoCentroCostoId: regla.costoCentroCostoId,
+                costoCentroCostoNombre: regla.costoCentroCosto?.nombre ?? '',
+                materiaPrimaVarianteId: regla.materiaPrimaVarianteId,
+                materiaPrimaNombre: regla.materiaPrimaVariante?.materiaPrima.nombre ?? '',
+                materiaPrimaSku: regla.materiaPrimaVariante?.sku ?? '',
+                tipoConsumo: regla.tipoConsumo
+                  ? this.fromTipoConsumoAdicionalMaterial(regla.tipoConsumo)
+                  : null,
+                factorConsumo: regla.factorConsumo === null ? null : Number(regla.factorConsumo),
+                mermaPct: regla.mermaPct === null ? null : Number(regla.mermaPct),
+                detalle: (regla.detalleJson as Record<string, unknown> | null) ?? null,
+              };
+            }),
+        })),
+      })),
+      createdAt: item.createdAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString(),
+    };
+  }
+
   private validateOpcionesProductivasPayload(payload: UpsertVarianteOpcionesProductivasDto) {
     const seen = new Set<DimensionOpcionProductivaDto>();
     for (const dimension of payload.dimensiones) {
@@ -2926,6 +4364,344 @@ export class ProductosServiciosService {
       dimension: dimension.dimension,
       valores: Array.from(new Set(dimension.valores)),
     }));
+  }
+
+  private async validateAndNormalizeMatchingBase(
+    auth: CurrentAuth,
+    productoId: string,
+    dimensionesConsumidas: DimensionOpcionProductiva[],
+    matchingPorVariante: UpdateProductoRutaPolicyDto['matchingBasePorVariante'],
+    tx: PrismaService | Prisma.TransactionClient,
+  ) {
+    const producto = await tx.productoServicio.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        id: productoId,
+      },
+      select: {
+        id: true,
+        usarRutaComunVariantes: true,
+        procesoDefinicionDefaultId: true,
+      },
+    });
+    if (!producto) {
+      throw new NotFoundException('Producto no encontrado.');
+    }
+    const varianteRows = await tx.productoVariante.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        productoServicioId: productoId,
+      },
+      include: {
+        opcionesProductivasSet: {
+          include: {
+            valores: {
+              where: { activo: true },
+              orderBy: [{ dimension: 'asc' }, { orden: 'asc' }, { createdAt: 'asc' }],
+            },
+          },
+        },
+      },
+    });
+    const variantesById = new Map(varianteRows.map((item) => [item.id, item]));
+    const plantillaIds = Array.from(
+      new Set((matchingPorVariante ?? []).flatMap((item) => item.matching.map((row) => row.pasoPlantillaId))),
+    );
+    const procesoIds = Array.from(
+      new Set(
+        (matchingPorVariante ?? [])
+          .map((item) => {
+            const variante = variantesById.get(item.varianteId);
+            if (!variante) return null;
+            return producto.usarRutaComunVariantes
+              ? producto.procesoDefinicionDefaultId
+              : variante.procesoDefinicionId;
+          })
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+    const [plantillas, procesos] = await Promise.all([
+      plantillaIds.length
+        ? tx.procesoOperacionPlantilla.findMany({
+            where: { tenantId: auth.tenantId, id: { in: plantillaIds } },
+          })
+        : Promise.resolve([]),
+      procesoIds.length
+        ? tx.procesoDefinicion.findMany({
+            where: { tenantId: auth.tenantId, id: { in: procesoIds } },
+            include: {
+              operaciones: true,
+            },
+          })
+        : Promise.resolve([]),
+    ]);
+    const plantillasById = new Map(plantillas.map((item) => [item.id, item]));
+    const procesoById = new Map(procesos.map((item) => [item.id, item]));
+    const maquinaIds = Array.from(
+      new Set(
+        plantillas
+          .map((item) => item.maquinaId)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+    const maquinas = maquinaIds.length
+      ? await tx.maquina.findMany({
+          where: { tenantId: auth.tenantId, id: { in: maquinaIds } },
+          select: { id: true, plantilla: true },
+        })
+      : [];
+    const maquinasById = new Map(maquinas.map((item) => [item.id, item]));
+    const perfiles = maquinaIds.length
+      ? await tx.maquinaPerfilOperativo.findMany({
+          where: { tenantId: auth.tenantId, maquinaId: { in: maquinaIds } },
+        })
+      : [];
+    const perfilesById = new Map(perfiles.map((item) => [item.id, item]));
+    const perfilesByMaquinaId = new Map<string, typeof perfiles>();
+    for (const perfil of perfiles) {
+      const current = perfilesByMaquinaId.get(perfil.maquinaId) ?? [];
+      current.push(perfil);
+      perfilesByMaquinaId.set(perfil.maquinaId, current);
+    }
+
+    return (matchingPorVariante ?? []).map((item) => {
+      const variante = variantesById.get(item.varianteId);
+      if (!variante) {
+        throw new BadRequestException('Matching base: variante inválida para este producto.');
+      }
+      const permitidos = this.resolveEffectiveOptionValues(variante as any);
+      const seen = new Set<string>();
+      const procesoId = producto.usarRutaComunVariantes
+        ? producto.procesoDefinicionDefaultId
+        : variante.procesoDefinicionId;
+      const proceso = procesoId ? procesoById.get(procesoId) ?? null : null;
+      const pasoPlantillaIdsRuta = new Set(
+        (proceso?.operaciones ?? [])
+          .map((op) => ({
+            op,
+            pasoPlantillaId: this.resolvePasoPlantillaIdFromOperacionRuta(op, plantillas) ?? '',
+          }))
+          .filter((value) => Boolean(value.pasoPlantillaId))
+          .filter(({ pasoPlantillaId }) =>
+            this.isPasoPlantillaEligibleForMatchingBase(
+              plantillasById.get(pasoPlantillaId) ?? null,
+              maquinasById,
+              dimensionesConsumidas,
+            ),
+          )
+          .map((value) => value.pasoPlantillaId),
+      );
+      const normalizedMatching = item.matching.map((row) => {
+        const plantilla = plantillasById.get(row.pasoPlantillaId);
+        if (!plantilla) {
+          throw new BadRequestException('Matching base: paso de biblioteca inválido.');
+        }
+        if (!pasoPlantillaIdsRuta.has(row.pasoPlantillaId)) {
+          throw new BadRequestException(
+            'Matching base: el paso elegido no pertenece a la ruta base efectiva de la variante.',
+          );
+        }
+        if (!plantilla.maquinaId) {
+          throw new BadRequestException('Matching base: el paso elegido no tiene máquina asignada.');
+        }
+        const tipoImpresion = row.tipoImpresion ? this.toTipoImpresion(row.tipoImpresion) : null;
+        const caras = row.caras ? this.toCaras(row.caras) : null;
+        let perfil = perfilesById.get(row.perfilOperativoId) ?? null;
+        if (!perfil) {
+          perfil =
+            perfilesByMaquinaId
+              .get(plantilla.maquinaId)
+              ?.find(
+                (item) =>
+                  (!tipoImpresion || item.printMode === tipoImpresion) &&
+                  (!caras || item.printSides === caras),
+              ) ?? null;
+        }
+        if (!perfil) {
+          const partes: string[] = [];
+          if (tipoImpresion) {
+            partes.push(`tipo_impresion=${row.tipoImpresion}`);
+          }
+          if (caras) {
+            partes.push(`caras=${row.caras}`);
+          }
+          const contexto = partes.length ? ` para ${partes.join(', ')}` : '';
+          throw new BadRequestException(
+            `Matching base: no existe perfil operativo compatible${contexto} en la máquina del paso.`,
+          );
+        }
+        if (perfil.maquinaId !== plantilla.maquinaId) {
+          throw new BadRequestException(
+            'Matching base: el perfil operativo no pertenece a la misma máquina del paso.',
+          );
+        }
+        if (dimensionesConsumidas.includes(DimensionOpcionProductiva.TIPO_IMPRESION)) {
+          if (!tipoImpresion) {
+            throw new BadRequestException('Matching base: falta tipo de impresión en una combinación.');
+          }
+          const permitidosTipo = permitidos.get(DimensionOpcionProductiva.TIPO_IMPRESION);
+          if (!permitidosTipo?.has(this.toValorFromTipoImpresion(tipoImpresion))) {
+            throw new BadRequestException(
+              `Matching base: tipo_impresion=${row.tipoImpresion} no está permitido para la variante.`,
+            );
+          }
+        }
+        if (dimensionesConsumidas.includes(DimensionOpcionProductiva.CARAS)) {
+          if (!caras) {
+            throw new BadRequestException('Matching base: falta caras en una combinación.');
+          }
+          const permitidosCaras = permitidos.get(DimensionOpcionProductiva.CARAS);
+          if (!permitidosCaras?.has(this.toValorFromCaras(caras))) {
+            throw new BadRequestException(
+              `Matching base: caras=${row.caras} no está permitido para la variante.`,
+            );
+          }
+        }
+        const key = `${row.pasoPlantillaId}:${tipoImpresion ?? 'na'}:${caras ?? 'na'}`;
+        if (seen.has(key)) {
+          throw new BadRequestException(
+            'Matching base: hay combinaciones duplicadas para el mismo paso dentro de una variante.',
+          );
+        }
+        seen.add(key);
+        return {
+          tipoImpresion: tipoImpresion ? this.fromTipoImpresion(tipoImpresion) : null,
+          caras: caras ? this.fromCaras(caras) : null,
+          pasoPlantillaId: row.pasoPlantillaId,
+          perfilOperativoId: perfil.id,
+        };
+      });
+      return {
+        varianteId: item.varianteId,
+        matching: normalizedMatching,
+      };
+    });
+  }
+
+  private async validateAndNormalizePasosFijosRutaBase(
+    auth: CurrentAuth,
+    productoId: string,
+    dimensionesConsumidas: DimensionOpcionProductiva[],
+    pasosFijosPorVariante: UpdateProductoRutaPolicyDto['pasosFijosPorVariante'],
+    tx: PrismaService | Prisma.TransactionClient,
+  ) {
+    const producto = await tx.productoServicio.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        id: productoId,
+      },
+      select: {
+        id: true,
+        usarRutaComunVariantes: true,
+        procesoDefinicionDefaultId: true,
+      },
+    });
+    if (!producto) {
+      throw new NotFoundException('Producto no encontrado.');
+    }
+    const varianteRows = await tx.productoVariante.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        productoServicioId: productoId,
+      },
+    });
+    const variantesById = new Map(varianteRows.map((item) => [item.id, item]));
+    const procesoIds = Array.from(
+      new Set(
+        (pasosFijosPorVariante ?? [])
+          .map((item) => {
+            const variante = variantesById.get(item.varianteId);
+            if (!variante) return null;
+            return producto.usarRutaComunVariantes
+              ? producto.procesoDefinicionDefaultId
+              : variante.procesoDefinicionId;
+          })
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+    const procesos = procesoIds.length
+      ? await tx.procesoDefinicion.findMany({
+          where: { tenantId: auth.tenantId, id: { in: procesoIds } },
+          include: { operaciones: true },
+        })
+      : [];
+    const procesoById = new Map(procesos.map((item) => [item.id, item]));
+    const plantillas = await tx.procesoOperacionPlantilla.findMany({
+      where: { tenantId: auth.tenantId, activo: true },
+    });
+    const plantillasById = new Map(plantillas.map((item) => [item.id, item]));
+    const maquinas = await tx.maquina.findMany({
+      where: { tenantId: auth.tenantId },
+      select: { id: true, plantilla: true },
+    });
+    const maquinasById = new Map(maquinas.map((item) => [item.id, item]));
+    const perfiles = await tx.maquinaPerfilOperativo.findMany({
+      where: { tenantId: auth.tenantId },
+    });
+    const perfilesById = new Map(perfiles.map((item) => [item.id, item]));
+
+    return (pasosFijosPorVariante ?? []).map((item) => {
+      const variante = variantesById.get(item.varianteId);
+      if (!variante) {
+        throw new BadRequestException('Pasos fijos: variante inválida para este producto.');
+      }
+      const procesoId = producto.usarRutaComunVariantes
+        ? producto.procesoDefinicionDefaultId
+        : variante.procesoDefinicionId;
+      const proceso = procesoId ? procesoById.get(procesoId) ?? null : null;
+      const pasoPlantillaIdsRuta = new Set(
+        (proceso?.operaciones ?? [])
+          .map((op) => this.resolvePasoPlantillaIdFromOperacionRuta(op, plantillas) ?? '')
+          .filter(Boolean)
+          .filter((pasoPlantillaId) => {
+            const plantilla = plantillasById.get(pasoPlantillaId) ?? null;
+            return !this.isPasoPlantillaEligibleForMatchingBase(
+              plantilla,
+              maquinasById,
+              dimensionesConsumidas,
+            );
+          }),
+      );
+      const seen = new Set<string>();
+      const pasos = (item.pasos ?? []).map((row) => {
+        const plantilla = plantillasById.get(row.pasoPlantillaId) ?? null;
+        if (!plantilla) {
+          throw new BadRequestException('Pasos fijos: paso de biblioteca inválido.');
+        }
+        if (!pasoPlantillaIdsRuta.has(row.pasoPlantillaId)) {
+          throw new BadRequestException(
+            'Pasos fijos: el paso elegido no pertenece a los pasos fijos de la ruta efectiva de la variante.',
+          );
+        }
+        if (!plantilla.maquinaId) {
+          throw new BadRequestException('Pasos fijos: el paso elegido no tiene máquina asignada.');
+        }
+        const perfil = perfilesById.get(row.perfilOperativoId) ?? null;
+        if (!perfil) {
+          throw new BadRequestException('Pasos fijos: perfil operativo inválido.');
+        }
+        if (perfil.maquinaId !== plantilla.maquinaId) {
+          throw new BadRequestException(
+            'Pasos fijos: el perfil operativo no pertenece a la misma máquina del paso.',
+          );
+        }
+        const key = `${row.pasoPlantillaId}:${perfil.id}`;
+        if (seen.has(key)) {
+          throw new BadRequestException(
+            'Pasos fijos: hay configuraciones duplicadas para el mismo paso dentro de una variante.',
+          );
+        }
+        seen.add(key);
+        return {
+          pasoPlantillaId: row.pasoPlantillaId,
+          perfilOperativoId: perfil.id,
+        };
+      });
+      return {
+        varianteId: item.varianteId,
+        pasos,
+      };
+    });
   }
 
   private toVarianteOpcionesProductivasResponse(
@@ -3082,6 +4858,289 @@ export class ProductosServiciosService {
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
     };
+  }
+
+  private toProductoResponseBase(item: {
+    id: string;
+    tipo: TipoProductoServicio;
+    codigo: string;
+    nombre: string;
+    descripcion: string | null;
+    motorCodigo: string;
+    motorVersion: number;
+    usarRutaComunVariantes: boolean;
+    procesoDefinicionDefaultId: string | null;
+    detalleJson?: Prisma.JsonValue | null;
+    estado: EstadoProductoServicio;
+    activo: boolean;
+    familiaProductoId: string;
+    familiaProducto: { nombre: string };
+    subfamiliaProductoId: string | null;
+    subfamiliaProducto?: { nombre: string } | null;
+    procesoDefinicionDefault?: { nombre: string } | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
+    return {
+      id: item.id,
+      tipo: this.fromTipoProducto(item.tipo),
+      codigo: item.codigo,
+      nombre: item.nombre,
+      descripcion: item.descripcion ?? '',
+      motorCodigo: item.motorCodigo,
+      motorVersion: item.motorVersion,
+      usarRutaComunVariantes: item.usarRutaComunVariantes,
+      procesoDefinicionDefaultId: item.procesoDefinicionDefaultId,
+      procesoDefinicionDefaultNombre: item.procesoDefinicionDefault?.nombre ?? '',
+      estado: this.fromEstadoProducto(item.estado),
+      activo: item.activo,
+      familiaProductoId: item.familiaProductoId,
+      familiaProductoNombre: item.familiaProducto.nombre,
+      subfamiliaProductoId: item.subfamiliaProductoId,
+      subfamiliaProductoNombre: item.subfamiliaProducto?.nombre ?? '',
+      dimensionesBaseConsumidas: this.getProductoDimensionesBaseConsumidas(item.detalleJson).map((dimension) =>
+        this.fromDimensionOpcionProductiva(dimension),
+      ),
+      createdAt: item.createdAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString(),
+    };
+  }
+
+  private mergeProductoDetalle(
+    detalleJson: Prisma.JsonValue | null | undefined,
+    patch: Record<string, unknown>,
+  ) {
+    const current = this.asObject(detalleJson);
+    return {
+      ...current,
+      ...patch,
+    };
+  }
+
+  private getProductoDimensionesBaseConsumidas(
+    detalleJson: Prisma.JsonValue | Record<string, unknown> | null | undefined,
+  ) {
+    const detalle = this.asObject(detalleJson);
+    const raw = detalle.dimensionesBaseConsumidas;
+    if (!Array.isArray(raw)) {
+      return [] as DimensionOpcionProductiva[];
+    }
+    return Array.from(
+      new Set(
+        raw
+          .map((item) => this.normalizeDimensionOpcionProductivaValue(item))
+          .filter((item): item is DimensionOpcionProductivaDto => Boolean(item))
+          .map((item) => this.toDimensionOpcionProductiva(item)),
+      ),
+    );
+  }
+
+  private getProductoMatchingBaseByVariante(
+    detalleJson: Prisma.JsonValue | Record<string, unknown> | null | undefined,
+  ) {
+    const detalle = this.asObject(detalleJson);
+    const raw = detalle.matchingBasePorVariante;
+    if (!Array.isArray(raw)) {
+      return [] as Array<{
+        varianteId: string;
+        matching: Array<{
+          tipoImpresion: TipoImpresionProductoVarianteDto | null;
+          caras: CarasProductoVarianteDto | null;
+          pasoPlantillaId: string;
+          perfilOperativoId: string;
+        }>;
+      }>;
+    }
+    return raw
+      .map((item) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+        const record = item as Record<string, unknown>;
+        const varianteId = typeof record.varianteId === 'string' ? record.varianteId.trim() : '';
+        if (!varianteId) return null;
+        const matching = Array.isArray(record.matching)
+          ? record.matching
+              .map((matchItem) => {
+                if (!matchItem || typeof matchItem !== 'object' || Array.isArray(matchItem)) return null;
+                const matchRecord = matchItem as Record<string, unknown>;
+                const tipoImpresion =
+                  matchRecord.tipoImpresion === null
+                    ? null
+                    : this.normalizeTipoImpresionProductoVarianteValue(matchRecord.tipoImpresion);
+                const caras =
+                  matchRecord.caras === null
+                    ? null
+                    : this.normalizeCarasProductoVarianteValue(matchRecord.caras);
+                const pasoPlantillaId =
+                  typeof matchRecord.pasoPlantillaId === 'string'
+                    ? matchRecord.pasoPlantillaId.trim()
+                    : '';
+                const perfilOperativoId =
+                  typeof matchRecord.perfilOperativoId === 'string'
+                    ? matchRecord.perfilOperativoId.trim()
+                    : '';
+                if (!pasoPlantillaId || !perfilOperativoId) return null;
+                return {
+                  tipoImpresion,
+                  caras,
+                  pasoPlantillaId,
+                  perfilOperativoId,
+                };
+              })
+              .filter(
+                (
+                  row,
+                ): row is {
+                  tipoImpresion: TipoImpresionProductoVarianteDto | null;
+                  caras: CarasProductoVarianteDto | null;
+                  pasoPlantillaId: string;
+                  perfilOperativoId: string;
+                } => Boolean(row),
+              )
+          : [];
+        return {
+          varianteId,
+          matching,
+        };
+      })
+      .filter((item): item is { varianteId: string; matching: any[] } => Boolean(item));
+  }
+
+  private getProductoPasosFijosByVariante(
+    detalleJson: Prisma.JsonValue | Record<string, unknown> | null | undefined,
+  ) {
+    const detalle = this.asObject(detalleJson);
+    const raw = detalle.pasosFijosPorVariante;
+    if (!Array.isArray(raw)) {
+      return [] as Array<{
+        varianteId: string;
+        pasos: Array<{
+          pasoPlantillaId: string;
+          perfilOperativoId: string;
+        }>;
+      }>;
+    }
+    return raw
+      .map((item) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+        const record = item as Record<string, unknown>;
+        const varianteId = typeof record.varianteId === 'string' ? record.varianteId.trim() : '';
+        if (!varianteId) return null;
+        const pasos = Array.isArray(record.pasos)
+          ? record.pasos
+              .map((pasoItem) => {
+                if (!pasoItem || typeof pasoItem !== 'object' || Array.isArray(pasoItem)) return null;
+                const pasoRecord = pasoItem as Record<string, unknown>;
+                const pasoPlantillaId =
+                  typeof pasoRecord.pasoPlantillaId === 'string' ? pasoRecord.pasoPlantillaId.trim() : '';
+                const perfilOperativoId =
+                  typeof pasoRecord.perfilOperativoId === 'string'
+                    ? pasoRecord.perfilOperativoId.trim()
+                    : '';
+                if (!pasoPlantillaId || !perfilOperativoId) return null;
+                return {
+                  pasoPlantillaId,
+                  perfilOperativoId,
+                };
+              })
+              .filter(
+                (
+                  row,
+                ): row is {
+                  pasoPlantillaId: string;
+                  perfilOperativoId: string;
+                } => Boolean(row),
+              )
+          : [];
+        return {
+          varianteId,
+          pasos,
+        };
+      })
+      .filter((item): item is { varianteId: string; pasos: any[] } => Boolean(item));
+  }
+
+  private async toRutaBaseMatchingResponse(detalleJson: Prisma.JsonValue | null) {
+    const matchingByVariante = this.getProductoMatchingBaseByVariante(detalleJson);
+    if (!matchingByVariante.length) return [];
+    const plantillaIds = Array.from(
+      new Set(matchingByVariante.flatMap((item) => item.matching.map((row) => row.pasoPlantillaId))),
+    );
+    const perfilIds = Array.from(
+      new Set(matchingByVariante.flatMap((item) => item.matching.map((row) => row.perfilOperativoId))),
+    );
+    const [plantillas, perfiles] = await Promise.all([
+      plantillaIds.length
+        ? this.prisma.procesoOperacionPlantilla.findMany({
+            where: { id: { in: plantillaIds } },
+          })
+        : Promise.resolve([]),
+      perfilIds.length
+        ? this.prisma.maquinaPerfilOperativo.findMany({
+            where: { id: { in: perfilIds } },
+          })
+        : Promise.resolve([]),
+    ]);
+    const plantillasById = new Map(plantillas.map((item) => [item.id, item]));
+    const perfilesById = new Map(perfiles.map((item) => [item.id, item]));
+    return matchingByVariante.map((item) => ({
+      varianteId: item.varianteId,
+      matching: item.matching.map((row) => ({
+        tipoImpresion: row.tipoImpresion,
+        caras: row.caras,
+        pasoPlantillaId: row.pasoPlantillaId,
+        pasoPlantillaNombre: plantillasById.get(row.pasoPlantillaId)?.nombre ?? '',
+        perfilOperativoId: row.perfilOperativoId,
+        perfilOperativoNombre: perfilesById.get(row.perfilOperativoId)?.nombre ?? '',
+      })),
+    }));
+  }
+
+  private async toRutaBasePasosFijosResponse(detalleJson: Prisma.JsonValue | null) {
+    const pasosFijosByVariante = this.getProductoPasosFijosByVariante(detalleJson);
+    if (!pasosFijosByVariante.length) return [];
+    const plantillaIds = Array.from(
+      new Set(pasosFijosByVariante.flatMap((item) => item.pasos.map((row) => row.pasoPlantillaId))),
+    );
+    const perfilIds = Array.from(
+      new Set(pasosFijosByVariante.flatMap((item) => item.pasos.map((row) => row.perfilOperativoId))),
+    );
+    const [plantillas, perfiles] = await Promise.all([
+      plantillaIds.length
+        ? this.prisma.procesoOperacionPlantilla.findMany({
+            where: { id: { in: plantillaIds } },
+          })
+        : Promise.resolve([]),
+      perfilIds.length
+        ? this.prisma.maquinaPerfilOperativo.findMany({
+            where: { id: { in: perfilIds } },
+          })
+        : Promise.resolve([]),
+    ]);
+    const plantillasById = new Map(plantillas.map((item) => [item.id, item]));
+    const perfilesById = new Map(perfiles.map((item) => [item.id, item]));
+    return pasosFijosByVariante.map((item) => ({
+      varianteId: item.varianteId,
+      pasos: item.pasos.map((row) => ({
+        pasoPlantillaId: row.pasoPlantillaId,
+        pasoPlantillaNombre: plantillasById.get(row.pasoPlantillaId)?.nombre ?? '',
+        perfilOperativoId: row.perfilOperativoId,
+        perfilOperativoNombre: perfilesById.get(row.perfilOperativoId)?.nombre ?? '',
+      })),
+    }));
+  }
+
+  private normalizeDimensionOpcionProductivaValue(value: unknown) {
+    return value === 'tipo_impresion' || value === 'caras' ? value : null;
+  }
+
+  private normalizeTipoImpresionProductoVarianteValue(value: unknown) {
+    return value === 'bn' || value === 'cmyk'
+      ? value
+      : null;
+  }
+
+  private normalizeCarasProductoVarianteValue(value: unknown) {
+    return value === 'simple_faz' || value === 'doble_faz' ? value : null;
   }
 
   private async validateVarianteRelations(
@@ -3652,6 +5711,818 @@ export class ProductosServiciosService {
     return Math.abs(a - b) <= 0.01;
   }
 
+  private calculateGuillotinaCutsFromImposicion(input: {
+    cols: number;
+    rows: number;
+    tipoCorte?: string;
+  }) {
+    const cols = Math.max(0, Math.floor(input.cols));
+    const rows = Math.max(0, Math.floor(input.rows));
+    if (cols <= 0 || rows <= 0) {
+      return 0;
+    }
+    const tipoCorte = String(input.tipoCorte ?? 'sin_demasia').trim().toLowerCase();
+    if (tipoCorte === 'con_demasia') {
+      return cols * 2 + rows * 2;
+    }
+    return cols + rows + 2;
+  }
+
+  private calculateTerminatingOperationTiming(input: {
+    operacion: {
+      maquina: {
+        plantilla: PlantillaMaquinaria;
+        parametrosTecnicosJson: Prisma.JsonValue;
+      } | null;
+      perfilOperativo: {
+        detalleJson: Prisma.JsonValue;
+        productivityValue?: Prisma.Decimal | null;
+        feedReloadMin?: Prisma.Decimal | null;
+        sheetThicknessMm?: Prisma.Decimal | null;
+        maxBatchHeightMm?: Prisma.Decimal | null;
+      } | null;
+    };
+    cantidad: number;
+    pliegos: number;
+    setupMinBase: number;
+    cleanupMinBase: number;
+    tiempoFijoMinBase: number;
+    cantidadObjetivoSalida: number;
+    imposicion?: {
+      cols: number;
+      rows: number;
+      tipoCorte?: string;
+    };
+    varianteAnchoMm: number;
+    varianteAltoMm: number;
+    overridesProductividad?: Record<string, unknown>;
+  }) {
+    const plantilla = input.operacion.maquina?.plantilla ?? null;
+    const machineParams = this.asObject(input.operacion.maquina?.parametrosTecnicosJson);
+    const profileDetail = this.asObject(input.operacion.perfilOperativo?.detalleJson);
+    const overrides = this.asObject(input.overridesProductividad);
+    const hasPerfil = Object.keys(profileDetail).length > 0;
+    const hasOverrides = Object.keys(overrides).length > 0;
+    const factorVelocidad = Math.max(
+      0.01,
+      hasPerfil
+        ? this.toSafeNumber(profileDetail.factorVelocidad, 1)
+        : this.toSafeNumber(overrides.factorVelocidad, 1),
+    );
+    const sourceProductividad: 'perfil' | 'override' = hasPerfil ? 'perfil' : 'override';
+
+    const resolveOverrideNumber = (key: string, fallback: number) => {
+      const value = hasPerfil
+        ? this.toSafeNumber(profileDetail[key], fallback)
+        : this.toSafeNumber(overrides[key], fallback);
+      return value;
+    };
+
+    const resolveProfileNumber = (
+      directValue: Prisma.Decimal | null | undefined,
+      detailKey: string,
+      fallback: number,
+    ) => {
+      if (input.operacion.perfilOperativo && directValue !== undefined && directValue !== null) {
+        return this.toSafeNumber(directValue, fallback);
+      }
+      return resolveOverrideNumber(detailKey, fallback);
+    };
+
+    if (plantilla === PlantillaMaquinaria.GUILLOTINA) {
+      const altoBocaMm = Math.max(0, this.toSafeNumber(machineParams.altoBocaMm, 0));
+      const sheetThicknessMm = Math.max(
+        0.001,
+        resolveProfileNumber(input.operacion.perfilOperativo?.sheetThicknessMm, 'sheetThicknessMm', 0.1),
+      );
+      const maxBatchHeightMm = Math.max(
+        0,
+        resolveProfileNumber(input.operacion.perfilOperativo?.maxBatchHeightMm, 'maxBatchHeightMm', 0),
+      );
+      const alturaTandaEfectiva =
+        maxBatchHeightMm > 0 ? Math.min(altoBocaMm, maxBatchHeightMm) : altoBocaMm;
+      const productivityValue = Math.max(
+        0,
+        resolveProfileNumber(input.operacion.perfilOperativo?.productivityValue, 'productivityValue', 0),
+      );
+      if (productivityValue <= 0) {
+        throw new BadRequestException(
+          'La guillotina requiere que el perfil operativo defina Cortes por minuto.',
+        );
+      }
+      const feedReloadMin = Math.max(
+        0,
+        resolveProfileNumber(input.operacion.perfilOperativo?.feedReloadMin, 'feedReloadMin', 0),
+      );
+      const cortesPorImposicion = this.calculateGuillotinaCutsFromImposicion({
+        cols: input.imposicion?.cols ?? 0,
+        rows: input.imposicion?.rows ?? 0,
+        tipoCorte: input.imposicion?.tipoCorte,
+      });
+      if (cortesPorImposicion <= 0) {
+        throw new BadRequestException(
+          'No se pudo derivar la cantidad de cortes de guillotina desde la imposición.',
+        );
+      }
+      const pliegosTotales = Math.max(1, input.pliegos);
+      const capacidadTanda = Math.max(1, Math.floor(alturaTandaEfectiva / sheetThicknessMm));
+      const tandas = Math.max(1, Math.ceil(pliegosTotales / capacidadTanda));
+      const cortesTotales = tandas * cortesPorImposicion;
+      const runMin = Number((cortesTotales / productivityValue).toFixed(4));
+      const setupMin = Number((input.setupMinBase + Math.max(0, tandas - 1) * feedReloadMin).toFixed(4));
+      const cleanupMin = Number(input.cleanupMinBase.toFixed(4));
+      return {
+        setupMin,
+        cleanupMin,
+        tiempoFijoMin: Number(input.tiempoFijoMinBase.toFixed(4)),
+        runMin,
+        trace: {
+          tipo: 'guillotina',
+          pliegosTotales,
+          alturaTandaEfectivaMm: Number(alturaTandaEfectiva.toFixed(4)),
+          capacidadTanda,
+          tandas,
+          cortesPorImposicion,
+          cortesTotales,
+          productivityValue: Number(productivityValue.toFixed(4)),
+        },
+        sourceProductividad,
+        warnings: [],
+      };
+    }
+
+    if (plantilla === PlantillaMaquinaria.LAMINADORA_BOPP_ROLLO) {
+      const anchoRolloMm = Math.max(1, this.toSafeNumber(machineParams.anchoRolloMm, 0));
+      const velocidadMMin = Math.max(0, this.toSafeNumber(machineParams.velocidadMMin, 0));
+      const mermaArranqueMm = Math.max(0, this.toSafeNumber(machineParams.mermaArranqueMm, 0));
+      const mermaCierreMm = Math.max(0, this.toSafeNumber(machineParams.mermaCierreMm, 0));
+      const gapEntreHojasMm = Math.max(0, resolveOverrideNumber('gapEntreHojasMm', 0));
+      const margenLatIzqMm = Math.max(0, resolveOverrideNumber('margenLatIzqMm', 0));
+      const margenLatDerMm = Math.max(0, resolveOverrideNumber('margenLatDerMm', 0));
+      const colaCorteMm = Math.max(0, resolveOverrideNumber('colaCorteMm', 0));
+      const warmupMin = Math.max(0, resolveOverrideNumber('warmupMin', 0));
+      const anchoHojaMm = Math.max(1, input.varianteAnchoMm);
+      const altoHojaMm = Math.max(1, input.varianteAltoMm);
+      const hojasTotales = Math.max(1, input.cantidadObjetivoSalida);
+      const anchoConsumidoMm = Math.min(anchoRolloMm, anchoHojaMm + margenLatIzqMm + margenLatDerMm);
+      const pasoLinealMm = altoHojaMm + gapEntreHojasMm + colaCorteMm;
+      const largoConsumidoMm = hojasTotales * pasoLinealMm + mermaArranqueMm + mermaCierreMm;
+      const velocidadMMinEfectiva = Math.max(0.01, velocidadMMin * factorVelocidad);
+      const runMin = Number(((largoConsumidoMm / 1000) / velocidadMMinEfectiva).toFixed(4));
+      const areaConsumidaM2 = Number(
+        ((anchoConsumidoMm / 1000) * (Math.max(0, largoConsumidoMm) / 1000)).toFixed(6),
+      );
+      const setupMin = Number((input.setupMinBase + warmupMin).toFixed(4));
+      const cleanupMin = Number(input.cleanupMinBase.toFixed(4));
+      return {
+        setupMin,
+        cleanupMin,
+        tiempoFijoMin: Number(input.tiempoFijoMinBase.toFixed(4)),
+        runMin,
+        trace: {
+          tipo: 'laminadora_bopp_rollo',
+          hojasTotales,
+          anchoConsumidoMm: Number(anchoConsumidoMm.toFixed(2)),
+          largoConsumidoMm: Number(largoConsumidoMm.toFixed(2)),
+          areaConsumidaM2,
+          velocidadMMinEfectiva: Number(velocidadMMinEfectiva.toFixed(4)),
+        },
+        sourceProductividad,
+        warnings: velocidadMMin <= 0 ? ['velocidadMMin debe ser mayor a 0.'] : [],
+      };
+    }
+
+    if (plantilla === PlantillaMaquinaria.REDONDEADORA_PUNTAS) {
+      const golpesMinNominal = Math.max(0, this.toSafeNumber(machineParams.golpesMinNominal, 0));
+      const esquinasPorPieza = Math.max(1, Math.floor(resolveOverrideNumber('esquinasPorPieza', 1)));
+      const piezas = Math.max(1, input.cantidad);
+      const golpesTotales = piezas * esquinasPorPieza;
+      const golpesMinEfectivos = Math.max(0.01, golpesMinNominal * factorVelocidad);
+      return {
+        setupMin: Number(input.setupMinBase.toFixed(4)),
+        cleanupMin: Number(input.cleanupMinBase.toFixed(4)),
+        tiempoFijoMin: Number(input.tiempoFijoMinBase.toFixed(4)),
+        runMin: Number((golpesTotales / golpesMinEfectivos).toFixed(4)),
+        trace: {
+          tipo: 'redondeadora_puntas',
+          piezas,
+          esquinasPorPieza,
+          golpesTotales,
+          golpesMinEfectivos: Number(golpesMinEfectivos.toFixed(4)),
+        },
+        sourceProductividad,
+        warnings: golpesMinNominal <= 0 ? ['golpesMinNominal debe ser mayor a 0.'] : [],
+      };
+    }
+
+    if (plantilla === PlantillaMaquinaria.PERFORADORA) {
+      const pliegosMinNominal = Math.max(0, this.toSafeNumber(machineParams.pliegosMinNominal, 0));
+      const lineasPorPasadaMax = Math.max(1, Math.floor(this.toSafeNumber(machineParams.lineasPorPasadaMax, 1)));
+      const lineasPerforado = Math.max(1, Math.floor(resolveOverrideNumber('lineasPerforado', 1)));
+      const hojas = Math.max(1, input.cantidadObjetivoSalida);
+      const pasadasPorPliego = Math.max(1, Math.ceil(lineasPerforado / lineasPorPasadaMax));
+      const pliegosMinEfectivos = Math.max(0.01, pliegosMinNominal * factorVelocidad);
+      return {
+        setupMin: Number(input.setupMinBase.toFixed(4)),
+        cleanupMin: Number(input.cleanupMinBase.toFixed(4)),
+        tiempoFijoMin: Number(input.tiempoFijoMinBase.toFixed(4)),
+        runMin: Number(((hojas * pasadasPorPliego) / pliegosMinEfectivos).toFixed(4)),
+        trace: {
+          tipo: 'perforadora',
+          hojas,
+          lineasPerforado,
+          lineasPorPasadaMax,
+          pasadasPorPliego,
+          pliegosMinEfectivos: Number(pliegosMinEfectivos.toFixed(4)),
+        },
+        sourceProductividad,
+        warnings: pliegosMinNominal <= 0 ? ['pliegosMinNominal debe ser mayor a 0.'] : [],
+      };
+    }
+
+    if (!hasPerfil && !hasOverrides) {
+      return null;
+    }
+
+    return null;
+  }
+
+  private calculateLaminadoraFilmConsumables(input: {
+    operation: {
+      maquinaId: string | null;
+      perfilOperativoId: string | null;
+      maquina: {
+        plantilla: PlantillaMaquinaria;
+      } | null;
+    };
+    consumiblesFilm: Array<{
+      maquinaId: string;
+      perfilOperativoId: string | null;
+      unidad: UnidadConsumoMaquina;
+      consumoBase: Prisma.Decimal | null;
+      materiaPrimaVariante: {
+        sku: string;
+        precioReferencia: Prisma.Decimal | null;
+        materiaPrima: {
+          nombre: string;
+        };
+      };
+    }>;
+    timingOverride: { trace?: Record<string, unknown> | null } | null;
+    warnings: string[];
+  }) {
+    if (!input.operation.maquinaId || input.operation.maquina?.plantilla !== PlantillaMaquinaria.LAMINADORA_BOPP_ROLLO) {
+      return { materiales: [] as Array<Record<string, unknown>>, costo: 0 };
+    }
+    const trace = input.timingOverride?.trace ?? null;
+    const areaConsumidaM2 = this.toSafeNumber((trace as Record<string, unknown> | null)?.areaConsumidaM2, 0);
+    const largoConsumidoMm = this.toSafeNumber((trace as Record<string, unknown> | null)?.largoConsumidoMm, 0);
+    if (areaConsumidaM2 <= 0 && largoConsumidoMm <= 0) {
+      return { materiales: [] as Array<Record<string, unknown>>, costo: 0 };
+    }
+    const all = input.consumiblesFilm.filter((item) => item.maquinaId === input.operation.maquinaId);
+    const consumibles = input.operation.perfilOperativoId
+      ? all.filter((item) => item.perfilOperativoId === input.operation.perfilOperativoId)
+      : all;
+    if (!consumibles.length) {
+      input.warnings.push('Laminadora: no hay consumible FILM configurado para costeo.');
+      return { materiales: [] as Array<Record<string, unknown>>, costo: 0 };
+    }
+    const materiales: Array<Record<string, unknown>> = [];
+    let costo = 0;
+    for (const item of consumibles) {
+      const consumoBase = Number(item.consumoBase ?? 1);
+      const factor = consumoBase > 0 ? consumoBase : 1;
+      let cantidad = 0;
+      let unidad = '';
+      if (item.unidad === UnidadConsumoMaquina.M2) {
+        cantidad = areaConsumidaM2 * factor;
+        unidad = 'm2';
+      } else if (item.unidad === UnidadConsumoMaquina.METRO_LINEAL) {
+        cantidad = (largoConsumidoMm / 1000) * factor;
+        unidad = 'm';
+      } else {
+        input.warnings.push(
+          `Consumible de film ${item.materiaPrimaVariante.sku} con unidad ${item.unidad}: solo M2 o METRO_LINEAL soportado en v1.`,
+        );
+        continue;
+      }
+      const costoUnit = Number(item.materiaPrimaVariante.precioReferencia ?? 0);
+      const costoLinea = Number((cantidad * costoUnit).toFixed(6));
+      costo += costoLinea;
+      materiales.push({
+        tipo: 'FILM',
+        nombre: item.materiaPrimaVariante.materiaPrima.nombre,
+        sku: item.materiaPrimaVariante.sku,
+        unidad,
+        cantidad: Number(cantidad.toFixed(6)),
+        costoUnitario: Number(costoUnit.toFixed(6)),
+        costo: costoLinea,
+      });
+    }
+    return { materiales, costo: Number(costo.toFixed(6)) };
+  }
+
+  private asObject(value: unknown) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return {} as Record<string, unknown>;
+    }
+    return value as Record<string, unknown>;
+  }
+
+  private getProcesoOperacionNiveles(value: unknown) {
+    const detalle = this.asObject(value);
+    const raw = Array.isArray(detalle.niveles) ? detalle.niveles : [];
+    return raw
+      .map((item, index) => {
+        const nivel = this.asObject(item);
+        const nombre = String(nivel.nombre ?? '').trim();
+        if (!nombre) {
+          return null;
+        }
+        return {
+          id: String(nivel.id ?? randomUUID()),
+          nombre,
+          orden: this.toSafeNumber(nivel.orden, index + 1),
+          activo: nivel.activo !== false,
+          modoProductividadNivel:
+            nivel.modoProductividadNivel === 'variable_manual' ||
+            nivel.modoProductividadNivel === 'variable_perfil'
+              ? nivel.modoProductividadNivel
+              : 'fija',
+          tiempoFijoMin:
+            nivel.tiempoFijoMin === undefined || nivel.tiempoFijoMin === null
+              ? null
+              : this.toSafeNumber(nivel.tiempoFijoMin, 0),
+          productividadBase:
+            nivel.productividadBase === undefined || nivel.productividadBase === null
+              ? null
+              : this.toSafeNumber(nivel.productividadBase, 0),
+          unidadSalida:
+            typeof nivel.unidadSalida === 'string' && nivel.unidadSalida.trim().length
+              ? nivel.unidadSalida.trim()
+              : null,
+          unidadTiempo:
+            typeof nivel.unidadTiempo === 'string' && nivel.unidadTiempo.trim().length
+              ? nivel.unidadTiempo.trim()
+              : null,
+          maquinaId:
+            typeof nivel.maquinaId === 'string' && nivel.maquinaId.trim().length
+              ? nivel.maquinaId.trim()
+              : null,
+          maquinaNombre:
+            typeof nivel.maquinaNombre === 'string' && nivel.maquinaNombre.trim().length
+              ? nivel.maquinaNombre.trim()
+              : '',
+          perfilOperativoId:
+            typeof nivel.perfilOperativoId === 'string' && nivel.perfilOperativoId.trim().length
+              ? nivel.perfilOperativoId.trim()
+              : null,
+          perfilOperativoNombre:
+            typeof nivel.perfilOperativoNombre === 'string' && nivel.perfilOperativoNombre.trim().length
+              ? nivel.perfilOperativoNombre.trim()
+              : '',
+          setupMin:
+            nivel.setupMin === undefined || nivel.setupMin === null
+              ? null
+              : this.toSafeNumber(nivel.setupMin, 0),
+          cleanupMin:
+            nivel.cleanupMin === undefined || nivel.cleanupMin === null
+              ? null
+              : this.toSafeNumber(nivel.cleanupMin, 0),
+          resumen:
+            typeof nivel.resumen === 'string' && nivel.resumen.trim().length
+              ? nivel.resumen.trim()
+              : this.buildChecklistNivelResumen({
+                  nombre,
+                  modoProductividadNivel:
+                    nivel.modoProductividadNivel === 'variable_manual' ||
+                    nivel.modoProductividadNivel === 'variable_perfil'
+                      ? nivel.modoProductividadNivel
+                      : 'fija',
+                  tiempoFijoMin:
+                    nivel.tiempoFijoMin === undefined || nivel.tiempoFijoMin === null
+                      ? null
+                      : this.toSafeNumber(nivel.tiempoFijoMin, 0),
+                  productividadBase:
+                    nivel.productividadBase === undefined || nivel.productividadBase === null
+                      ? null
+                      : this.toSafeNumber(nivel.productividadBase, 0),
+                  unidadSalida:
+                    typeof nivel.unidadSalida === 'string' ? nivel.unidadSalida : null,
+                  unidadTiempo:
+                    typeof nivel.unidadTiempo === 'string' ? nivel.unidadTiempo : null,
+                  perfilOperativoNombre:
+                    typeof nivel.perfilOperativoNombre === 'string'
+                      ? nivel.perfilOperativoNombre
+                      : '',
+                }),
+          detalle: this.asObject(nivel.detalle),
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      .sort((a, b) => a.orden - b.orden);
+  }
+
+  private toSafeNumber(value: unknown, fallback = 0) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : fallback;
+  }
+
+  private resolveChecklistCantidadObjetivo(input: {
+    unidadSalida: string | null;
+    cantidad: number;
+    pliegos: number;
+    areaPiezaM2: number;
+    areaPliegoM2: number;
+    a4EqFactor: number;
+    anchoMm: number;
+    altoMm: number;
+  }) {
+    switch (input.unidadSalida) {
+      case 'hoja':
+        return input.pliegos;
+      case 'm2':
+        return Number((input.areaPiezaM2 * input.cantidad).toFixed(6));
+      case 'a4_equiv':
+        return Number((input.a4EqFactor * input.pliegos).toFixed(6));
+      case 'metro_lineal':
+        return Number(((Math.max(input.anchoMm, input.altoMm) / 1000) * input.cantidad).toFixed(6));
+      case 'pieza':
+      case 'corte':
+      case 'unidad':
+      case 'copia':
+      case 'ciclo':
+      case 'lote':
+      case 'kg':
+      case 'litro':
+      case 'minuto':
+      case 'hora':
+      case 'ninguna':
+      default:
+        return input.cantidad;
+    }
+  }
+
+  private buildChecklistNivelResumen(input: {
+    nombre: string;
+    modoProductividadNivel: 'fija' | 'variable_manual' | 'variable_perfil';
+    tiempoFijoMin: number | null;
+    productividadBase: number | null;
+    unidadSalida: string | null;
+    unidadTiempo: string | null;
+    perfilOperativoNombre: string;
+  }) {
+    if (input.modoProductividadNivel === 'fija') {
+      return `${input.nombre} · ${input.tiempoFijoMin ?? 0} min`;
+    }
+    if (input.modoProductividadNivel === 'variable_manual') {
+      const unidad = [input.unidadSalida, input.unidadTiempo].filter(Boolean).join('/');
+      return `${input.nombre} · ${input.productividadBase ?? 0} ${unidad}`.trim();
+    }
+    return `${input.nombre} · Perfil${input.perfilOperativoNombre ? ` · ${input.perfilOperativoNombre}` : ''}`;
+  }
+
+  private async getChecklistPasoPlantillasMap(
+    auth: CurrentAuth,
+    checklist:
+      | {
+          preguntas?: Array<{
+            respuestas?: Array<{
+              reglas?: Array<{
+                detalleJson?: Prisma.JsonValue | null;
+              }>;
+            }>;
+          }>;
+        }
+      | null
+      | undefined,
+  ) {
+    const ids = Array.from(
+      new Set(
+        (checklist?.preguntas ?? [])
+          .flatMap((pregunta) => pregunta.respuestas ?? [])
+          .flatMap((respuesta) => respuesta.reglas ?? [])
+          .map((regla) => this.getChecklistPasoPlantillaId(regla.detalleJson))
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+    if (!ids.length) {
+      return new Map<string, any>();
+    }
+    const rows = await this.prisma.procesoOperacionPlantilla.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        id: { in: ids },
+      },
+      include: {
+        centroCosto: true,
+        maquina: true,
+        perfilOperativo: true,
+      },
+    });
+    return new Map(rows.map((item) => [item.id, item]));
+  }
+
+  private getChecklistPasoPlantillaId(value: Prisma.JsonValue | Record<string, unknown> | null | undefined) {
+    const detalle = this.asObject(value);
+    const pasoPlantillaId = detalle.pasoPlantillaId;
+    return typeof pasoPlantillaId === 'string' && pasoPlantillaId.trim().length
+      ? pasoPlantillaId.trim()
+      : null;
+  }
+
+  private resolveChecklistPasoPlantilla(
+    value: Prisma.JsonValue | Record<string, unknown> | null | undefined,
+    plantillasById: Map<string, any>,
+    fallbackProcesoOperacion: any | null,
+  ) {
+    const pasoPlantillaId = this.getChecklistPasoPlantillaId(value);
+    if (pasoPlantillaId) {
+      return plantillasById.get(pasoPlantillaId) ?? null;
+    }
+    return fallbackProcesoOperacion;
+  }
+
+  private buildChecklistOperacionFromPlantilla(template: any) {
+    return {
+      id: template.id,
+      orden: 0,
+      codigo: `CHK-${template.id.slice(0, 6).toUpperCase()}`,
+      nombre: template.nombre,
+      centroCostoId: template.centroCostoId,
+      centroCosto: template.centroCosto,
+      maquinaId: template.maquinaId,
+      maquina: template.maquina,
+      perfilOperativoId: template.perfilOperativoId,
+      perfilOperativo: template.perfilOperativo,
+      setupMin: template.setupMin,
+      runMin: null,
+      cleanupMin: template.cleanupMin,
+      tiempoFijoMin: template.tiempoFijoMin,
+      detalleJson: template.detalleJson,
+      unidadEntrada: template.unidadEntrada,
+      unidadSalida: template.unidadSalida,
+      unidadTiempo: template.unidadTiempo,
+      productividadBase: template.productividadBase,
+      mermaSetup: null,
+      mermaRunPct: template.mermaRunPct,
+      reglaMermaJson: template.reglaMermaJson,
+      reglaVelocidadJson: template.reglaVelocidadJson,
+      modoProductividad: template.modoProductividad,
+      activo: template.activo,
+    };
+  }
+
+  private buildChecklistOperacionFromPlantillaConPerfil(template: any, perfilOperativo: any) {
+    const detalleBase = this.asObject(template.detalleJson);
+    return {
+      ...this.buildChecklistOperacionFromPlantilla(template),
+      perfilOperativoId: perfilOperativo.id,
+      perfilOperativo,
+      setupMin:
+        perfilOperativo.setupMin !== null && perfilOperativo.setupMin !== undefined
+          ? perfilOperativo.setupMin
+          : template.setupMin,
+      cleanupMin:
+        perfilOperativo.cleanupMin !== null && perfilOperativo.cleanupMin !== undefined
+          ? perfilOperativo.cleanupMin
+          : template.cleanupMin,
+      productividadBase:
+        perfilOperativo.productivityValue !== null &&
+        perfilOperativo.productivityValue !== undefined
+          ? perfilOperativo.productivityValue
+          : template.productividadBase,
+      detalleJson: {
+        ...detalleBase,
+        pasoPlantillaId: this.getPasoPlantillaIdFromDetalle(template.detalleJson) ?? template.id,
+        perfilOperativoId: perfilOperativo.id,
+        matchingBase: true,
+      },
+    };
+  }
+
+  private getPasoPlantillaIdFromDetalle(value: Prisma.JsonValue | Record<string, unknown> | null | undefined) {
+    const detalle = this.asObject(value);
+    const pasoPlantillaId = detalle.pasoPlantillaId;
+    return typeof pasoPlantillaId === 'string' && pasoPlantillaId.trim().length
+      ? pasoPlantillaId.trim()
+      : null;
+  }
+
+  private resolvePasoPlantillaIdFromOperacionRuta(
+    operacion: {
+      nombre?: string | null;
+      maquinaId?: string | null;
+      perfilOperativoId?: string | null;
+      detalleJson?: Prisma.JsonValue | null;
+    },
+    plantillas: Array<{
+      id: string;
+      nombre: string;
+      maquinaId: string | null;
+      perfilOperativoId?: string | null;
+      activo?: boolean;
+    }>,
+  ) {
+    const directId = this.getPasoPlantillaIdFromDetalle(operacion.detalleJson ?? null);
+    if (directId) {
+      return directId;
+    }
+    const nombre = typeof operacion.nombre === 'string' ? operacion.nombre.trim().toLowerCase() : '';
+    const nombreBase = this.normalizePasoNombreBase(operacion.nombre ?? null);
+    if (!nombre) return null;
+    const exactWithMachine =
+      plantillas.find(
+        (item) =>
+          item.nombre.trim().toLowerCase() === nombre &&
+          (item.maquinaId ?? '') === (operacion.maquinaId ?? ''),
+      ) ?? null;
+    if (exactWithMachine) {
+      return exactWithMachine.id;
+    }
+    const exactWithProfile =
+      plantillas.find(
+        (item) =>
+          Boolean(item.perfilOperativoId) &&
+          item.perfilOperativoId === (operacion.perfilOperativoId ?? '') &&
+          (item.maquinaId ?? '') === (operacion.maquinaId ?? ''),
+      ) ?? null;
+    if (exactWithProfile) {
+      return exactWithProfile.id;
+    }
+    const baseWithMachine =
+      plantillas.find(
+        (item) =>
+          this.normalizePasoNombreBase(item.nombre) === nombreBase &&
+          (item.maquinaId ?? '') === (operacion.maquinaId ?? ''),
+      ) ?? null;
+    if (baseWithMachine) {
+      return baseWithMachine.id;
+    }
+    const exact = plantillas.find((item) => item.nombre.trim().toLowerCase() === nombre) ?? null;
+    if (exact) {
+      return exact.id;
+    }
+    const base =
+      plantillas.find((item) => this.normalizePasoNombreBase(item.nombre) === nombreBase) ?? null;
+    return base?.id ?? null;
+  }
+
+  private normalizePasoNombreBase(value: string | null | undefined) {
+    const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+    if (!normalized) {
+      return '';
+    }
+    const colonIndex = normalized.indexOf(':');
+    if (colonIndex <= 0) {
+      return normalized;
+    }
+    return normalized.slice(0, colonIndex).trim();
+  }
+
+  private buildChecklistPasoSignature(
+    item:
+      | {
+          nombre?: string | null;
+          centroCostoId?: string | null;
+        }
+      | null
+      | undefined,
+  ) {
+    const nombre = typeof item?.nombre === 'string' ? item.nombre.trim().toLowerCase() : '';
+    const centroCostoId =
+      typeof item?.centroCostoId === 'string' && item.centroCostoId.trim().length
+        ? item.centroCostoId.trim()
+        : '';
+    if (!nombre || !centroCostoId) {
+      return null;
+    }
+    return `${nombre}::${centroCostoId}`;
+  }
+
+  private isPasoPlantillaEligibleForMatchingBase(
+    pasoPlantilla: { maquinaId?: string | null } | null | undefined,
+    maquinasById: Map<string, { plantilla: string }>,
+    dimensionesConsumidas: DimensionOpcionProductiva[],
+  ) {
+    if (!dimensionesConsumidas.length) {
+      return true;
+    }
+    if (!pasoPlantilla?.maquinaId) {
+      return false;
+    }
+    const maquina = maquinasById.get(pasoPlantilla.maquinaId);
+    if (!maquina) {
+      return false;
+    }
+    const requiresBasePrintMatching =
+      dimensionesConsumidas.includes(DimensionOpcionProductiva.TIPO_IMPRESION) ||
+      dimensionesConsumidas.includes(DimensionOpcionProductiva.CARAS);
+    if (!requiresBasePrintMatching) {
+      return true;
+    }
+    return maquina.plantilla === PlantillaMaquinaria.IMPRESORA_LASER;
+  }
+
+  private getChecklistVariantePasoId(value: Prisma.JsonValue | Record<string, unknown> | null | undefined) {
+    const detalle = this.asObject(value);
+    const variantePasoId = detalle.variantePasoId;
+    return typeof variantePasoId === 'string' && variantePasoId.trim().length
+      ? variantePasoId.trim()
+      : null;
+  }
+
+  private getChecklistVariantePasoNombre(variantePasoId: string | null, detalleJson: Prisma.JsonValue | null) {
+    if (!variantePasoId) {
+      return '';
+    }
+    return (
+      this.getProcesoOperacionNiveles(detalleJson).find((item) => item.id === variantePasoId)?.nombre ?? ''
+    );
+  }
+
+  private getChecklistVariantePasoResumen(variantePasoId: string | null, detalleJson: Prisma.JsonValue | null) {
+    if (!variantePasoId) {
+      return '';
+    }
+    return (
+      this.getProcesoOperacionNiveles(detalleJson).find((item) => item.id === variantePasoId)?.resumen ?? ''
+    );
+  }
+
+  private getChecklistAtributoTecnicoDimension(
+    value: Prisma.JsonValue | Record<string, unknown> | null | undefined,
+  ) {
+    const detalle = this.asObject(value);
+    const dimension = detalle.atributoTecnicoDimension;
+    return dimension === 'tipo_impresion' || dimension === 'caras' ? dimension : null;
+  }
+
+  private getChecklistAtributoTecnicoValor(
+    value: Prisma.JsonValue | Record<string, unknown> | null | undefined,
+  ) {
+    const detalle = this.asObject(value);
+    const optionValue = detalle.atributoTecnicoValor;
+    return optionValue === 'bn' ||
+      optionValue === 'cmyk' ||
+      optionValue === 'simple_faz' ||
+      optionValue === 'doble_faz'
+      ? optionValue
+      : null;
+  }
+
+  private toPrismaUnidadProceso(value: string | UnidadProceso | null) {
+    switch (value) {
+      case 'hora':
+      case UnidadProceso.HORA:
+        return UnidadProceso.HORA;
+      case 'hoja':
+      case UnidadProceso.HOJA:
+        return UnidadProceso.HOJA;
+      case 'copia':
+      case UnidadProceso.COPIA:
+        return UnidadProceso.COPIA;
+      case 'a4_equiv':
+      case UnidadProceso.A4_EQUIV:
+        return UnidadProceso.A4_EQUIV;
+      case 'm2':
+      case UnidadProceso.M2:
+        return UnidadProceso.M2;
+      case 'metro_lineal':
+      case UnidadProceso.METRO_LINEAL:
+        return UnidadProceso.METRO_LINEAL;
+      case 'pieza':
+      case UnidadProceso.PIEZA:
+        return UnidadProceso.PIEZA;
+      case 'corte':
+      case UnidadProceso.CORTE:
+        return UnidadProceso.CORTE;
+      case 'ciclo':
+      case UnidadProceso.CICLO:
+        return UnidadProceso.CICLO;
+      case 'unidad':
+      case UnidadProceso.UNIDAD:
+        return UnidadProceso.UNIDAD;
+      case 'kg':
+      case UnidadProceso.KG:
+        return UnidadProceso.KG;
+      case 'litro':
+      case UnidadProceso.LITRO:
+        return UnidadProceso.LITRO;
+      case 'lote':
+      case UnidadProceso.LOTE:
+        return UnidadProceso.LOTE;
+      case 'ninguna':
+      case UnidadProceso.NINGUNA:
+        return UnidadProceso.NINGUNA;
+      case 'minuto':
+      case UnidadProceso.MINUTO:
+      default:
+        return UnidadProceso.MINUTO;
+    }
+  }
+
   private calculateMachineConsumables(input: {
     operation: {
       maquinaId: string | null;
@@ -3661,6 +6532,7 @@ export class ProductosServiciosService {
     tipoImpresion: TipoImpresionProductoVariante;
     carasFactor: number;
     pliegos: number;
+    pliegosEfectivos?: number;
     areaPliegoM2: number;
     a4EqFactor: number;
     warnings: string[];
@@ -3678,7 +6550,7 @@ export class ProductosServiciosService {
         };
       };
       perfilOperativo: {
-        productividad: Prisma.Decimal | null;
+        productivityValue: Prisma.Decimal | null;
       } | null;
     }>;
     desgastes: Array<{
@@ -3709,8 +6581,8 @@ export class ProductosServiciosService {
       input.operation.perfilOperativoId ??
       machineConsumibles.find(
         (item) =>
-          item.perfilOperativo?.productividad &&
-          Number(item.perfilOperativo.productividad) === operationProductividad,
+          item.perfilOperativo?.productivityValue &&
+          Number(item.perfilOperativo.productivityValue) === operationProductividad,
       )?.perfilOperativoId ??
       machineConsumibles[0]?.perfilOperativoId ??
       null;
@@ -3718,57 +6590,87 @@ export class ProductosServiciosService {
     const consumibles = selectedPerfilId
       ? machineConsumibles.filter((item) => item.perfilOperativoId === selectedPerfilId)
       : machineConsumibles;
+    const tonerConsumibles = consumibles.filter((item) => {
+      const detalle = item.detalleJson;
+      if (!detalle || typeof detalle !== 'object') {
+        return true;
+      }
+      const tipo = String((detalle as Record<string, unknown>).tipo ?? '').trim().toLowerCase();
+      return !tipo || tipo === 'toner';
+    });
 
-    const consumiblesByColor = new Map<string, (typeof consumibles)[number]>();
-    for (const item of consumibles) {
+    const consumiblesByColor = new Map<string, (typeof tonerConsumibles)[number]>();
+    for (const item of tonerConsumibles) {
       const color = this.normalizeColor(item.detalleJson);
       if (!consumiblesByColor.has(color)) {
         consumiblesByColor.set(color, item);
       }
     }
 
-    const selectedColors = input.tipoImpresion === TipoImpresionProductoVariante.BN
-      ? ['negro']
-      : ['cian', 'magenta', 'amarillo', 'negro'];
+    if (tonerConsumibles.length > 0) {
+      const selectedColors = input.tipoImpresion === TipoImpresionProductoVariante.BN
+        ? ['negro']
+        : ['cian', 'magenta', 'amarillo', 'negro'];
 
-    for (const color of selectedColors) {
-      const item = consumiblesByColor.get(color);
-      if (!item) {
-        input.warnings.push(`No se encontró consumible de tóner para el canal ${color}.`);
-        continue;
-      }
-      if (item.unidad !== UnidadConsumoMaquina.GRAMO) {
-        input.warnings.push(
-          `Consumible ${item.materiaPrimaVariante.materiaPrima.nombre} (${item.materiaPrimaVariante.sku}) con unidad ${item.unidad}: v1 solo soporta GRAMO.`,
-        );
-        continue;
-      }
+      for (const color of selectedColors) {
+        const item = consumiblesByColor.get(color);
+        if (!item) {
+          input.warnings.push(`No se encontró consumible de tóner para el canal ${color}.`);
+          continue;
+        }
+        if (item.unidad !== UnidadConsumoMaquina.GRAMO) {
+          input.warnings.push(
+            `Consumible ${item.materiaPrimaVariante.materiaPrima.nombre} (${item.materiaPrimaVariante.sku}) con unidad ${item.unidad}: v1 solo soporta GRAMO.`,
+          );
+          continue;
+        }
       const consumoBase = Number(item.consumoBase ?? 0);
       if (consumoBase <= 0) {
-        input.warnings.push(
-          `Consumible ${item.materiaPrimaVariante.materiaPrima.nombre} (${item.materiaPrimaVariante.sku}) sin consumoBase válido.`,
-        );
-        continue;
-      }
-      const costoGramo = Number(item.materiaPrimaVariante.precioReferencia ?? 0);
-      if (!item.materiaPrimaVariante.precioReferencia) {
-        input.warnings.push(
-          `Consumible ${item.materiaPrimaVariante.materiaPrima.nombre} (${item.materiaPrimaVariante.sku}) sin precio de referencia. Se usa 0.`,
-        );
-      }
-      const gramos = consumoBase * input.areaPliegoM2 * input.carasFactor * input.pliegos;
-      const costo = gramos * costoGramo;
-      costoToner += costo;
+          input.warnings.push(
+            `Consumible ${item.materiaPrimaVariante.materiaPrima.nombre} (${item.materiaPrimaVariante.sku}) sin consumoBase válido.`,
+          );
+          continue;
+        }
+        const costoGramo = Number(item.materiaPrimaVariante.precioReferencia ?? 0);
+        if (!item.materiaPrimaVariante.precioReferencia) {
+          input.warnings.push(
+            `Consumible ${item.materiaPrimaVariante.materiaPrima.nombre} (${item.materiaPrimaVariante.sku}) sin precio de referencia. Se usa 0.`,
+          );
+        }
+      const pliegosBase = Math.max(0, input.pliegos);
+      const pliegosEfectivos = Math.max(pliegosBase, input.pliegosEfectivos ?? pliegosBase);
+      const pliegosMermaOperativa = Math.max(0, pliegosEfectivos - pliegosBase);
+      const gramosBase = consumoBase * input.areaPliegoM2 * input.carasFactor * pliegosBase;
+      const costoBase = gramosBase * costoGramo;
+      costoToner += costoBase;
       materiales.push({
         tipo: 'TONER',
         canal: color,
         nombre: item.materiaPrimaVariante.materiaPrima.nombre,
         sku: item.materiaPrimaVariante.sku,
         unidad: 'g',
-        cantidad: Number(gramos.toFixed(6)),
+        cantidad: Number(gramosBase.toFixed(6)),
         costoUnitario: costoGramo,
-        costo: Number(costo.toFixed(6)),
+        costo: Number(costoBase.toFixed(6)),
+        origen: 'Base',
       });
+      if (pliegosMermaOperativa > 0) {
+        const gramosMerma = consumoBase * input.areaPliegoM2 * input.carasFactor * pliegosMermaOperativa;
+        const costoMerma = gramosMerma * costoGramo;
+        costoToner += costoMerma;
+        materiales.push({
+          tipo: 'TONER',
+          canal: color,
+          nombre: item.materiaPrimaVariante.materiaPrima.nombre,
+          sku: item.materiaPrimaVariante.sku,
+          unidad: 'g',
+          cantidad: Number(gramosMerma.toFixed(6)),
+          costoUnitario: costoGramo,
+          costo: Number(costoMerma.toFixed(6)),
+          origen: 'Merma operativa',
+        });
+      }
+    }
     }
 
     for (const item of machineDesgastes) {
@@ -3791,18 +6693,38 @@ export class ProductosServiciosService {
           `Componente de desgaste ${item.materiaPrimaVariante.materiaPrima.nombre} (${item.materiaPrimaVariante.sku}) sin precio de referencia. Se usa 0.`,
         );
       }
-      const cantidadA4Eq = input.pliegos * input.a4EqFactor * input.carasFactor;
-      const costo = cantidadA4Eq * (precio / vidaUtil);
-      costoDesgaste += costo;
+      const pliegosBase = Math.max(0, input.pliegos);
+      const pliegosEfectivos = Math.max(pliegosBase, input.pliegosEfectivos ?? pliegosBase);
+      const pliegosMermaOperativa = Math.max(0, pliegosEfectivos - pliegosBase);
+      const cantidadA4EqBase = pliegosBase * input.a4EqFactor * input.carasFactor;
+      const costoUnitario = precio / vidaUtil;
+      const costoBase = cantidadA4EqBase * costoUnitario;
+      costoDesgaste += costoBase;
       materiales.push({
         tipo: 'DESGASTE',
         nombre: item.materiaPrimaVariante.materiaPrima.nombre,
         sku: item.materiaPrimaVariante.sku,
         unidad: 'a4_eq',
-        cantidad: Number(cantidadA4Eq.toFixed(6)),
-        costoUnitario: Number((precio / vidaUtil).toFixed(6)),
-        costo: Number(costo.toFixed(6)),
+        cantidad: Number(cantidadA4EqBase.toFixed(6)),
+        costoUnitario: Number(costoUnitario.toFixed(6)),
+        costo: Number(costoBase.toFixed(6)),
+        origen: 'Base',
       });
+      if (pliegosMermaOperativa > 0) {
+        const cantidadA4EqMerma = pliegosMermaOperativa * input.a4EqFactor * input.carasFactor;
+        const costoMerma = cantidadA4EqMerma * costoUnitario;
+        costoDesgaste += costoMerma;
+        materiales.push({
+          tipo: 'DESGASTE',
+          nombre: item.materiaPrimaVariante.materiaPrima.nombre,
+          sku: item.materiaPrimaVariante.sku,
+          unidad: 'a4_eq',
+          cantidad: Number(cantidadA4EqMerma.toFixed(6)),
+          costoUnitario: Number(costoUnitario.toFixed(6)),
+          costo: Number(costoMerma.toFixed(6)),
+          origen: 'Merma operativa',
+        });
+      }
     }
 
     return { costoToner, costoDesgaste, materiales };
@@ -3825,8 +6747,8 @@ export class ProductosServiciosService {
   private getSetupFromPerfilOperativo(
     perfil:
       | {
-          tiempoPreparacionMin: Prisma.Decimal | null;
-          tiempoRipMin: Prisma.Decimal | null;
+          setupMin: Prisma.Decimal | null;
+          cleanupMin: Prisma.Decimal | null;
           detalleJson: Prisma.JsonValue;
         }
       | null
@@ -3851,13 +6773,7 @@ export class ProductosServiciosService {
       }
     };
 
-    pushIfFinite(detalle.tiempoSetupMin);
-    pushIfFinite(detalle.setupMin);
-    pushIfFinite(detalle.setup);
-    pushIfFinite(perfil.tiempoPreparacionMin ? Number(perfil.tiempoPreparacionMin) : null);
-    pushIfFinite(perfil.tiempoRipMin ? Number(perfil.tiempoRipMin) : null);
-    pushIfFinite(detalle.tiempoPreparacionMin);
-    pushIfFinite(detalle.tiempoRipMin);
+    pushIfFinite(perfil.setupMin ? Number(perfil.setupMin) : null);
 
     const objectCandidates = [
       detalle.setupComponentesMin,
@@ -4044,6 +6960,20 @@ export class ProductosServiciosService {
     return ValorOpcionProductiva.SIMPLE_FAZ;
   }
 
+  private toTipoImpresionFromValor(value: ValorOpcionProductiva) {
+    if (value === ValorOpcionProductiva.BN) {
+      return TipoImpresionProductoVariante.BN;
+    }
+    return TipoImpresionProductoVariante.CMYK;
+  }
+
+  private toCarasFromValor(value: ValorOpcionProductiva) {
+    if (value === ValorOpcionProductiva.DOBLE_FAZ) {
+      return CarasProductoVariante.DOBLE_FAZ;
+    }
+    return CarasProductoVariante.SIMPLE_FAZ;
+  }
+
   private toTipoAdicionalEfecto(value: TipoProductoAdicionalEfectoDto) {
     if (value === TipoProductoAdicionalEfectoDto.cost_effect) {
       return TipoProductoAdicionalEfecto.COST_EFFECT;
@@ -4094,6 +7024,84 @@ export class ProductosServiciosService {
       return ReglaCostoAdicionalEfectoDto.tiempo_extra_min;
     }
     return ReglaCostoAdicionalEfectoDto.flat;
+  }
+
+  private toTipoChecklistPregunta(value: TipoChecklistPreguntaDto) {
+    if (value === TipoChecklistPreguntaDto.single_select) {
+      return TipoProductoChecklistPregunta.SINGLE_SELECT;
+    }
+    return TipoProductoChecklistPregunta.BINARIA;
+  }
+
+  private fromTipoChecklistPregunta(value: TipoProductoChecklistPregunta) {
+    if (value === TipoProductoChecklistPregunta.SINGLE_SELECT) {
+      return TipoChecklistPreguntaDto.single_select;
+    }
+    return TipoChecklistPreguntaDto.binaria;
+  }
+
+  private toTipoChecklistAccion(value: TipoChecklistAccionReglaDto) {
+    if (value === TipoChecklistAccionReglaDto.seleccionar_variante_paso) {
+      return TipoProductoChecklistReglaAccion.SELECCIONAR_VARIANTE_PASO;
+    }
+    if (value === TipoChecklistAccionReglaDto.costo_extra) {
+      return TipoProductoChecklistReglaAccion.COSTO_EXTRA;
+    }
+    if (value === TipoChecklistAccionReglaDto.material_extra) {
+      return TipoProductoChecklistReglaAccion.MATERIAL_EXTRA;
+    }
+    if (value === TipoChecklistAccionReglaDto.set_atributo_tecnico) {
+      return TipoProductoChecklistReglaAccion.SET_ATRIBUTO_TECNICO;
+    }
+    return TipoProductoChecklistReglaAccion.ACTIVAR_PASO;
+  }
+
+  private fromTipoChecklistAccion(value: TipoProductoChecklistReglaAccion) {
+    if (value === TipoProductoChecklistReglaAccion.SELECCIONAR_VARIANTE_PASO) {
+      return TipoChecklistAccionReglaDto.seleccionar_variante_paso;
+    }
+    if (value === TipoProductoChecklistReglaAccion.COSTO_EXTRA) {
+      return TipoChecklistAccionReglaDto.costo_extra;
+    }
+    if (value === TipoProductoChecklistReglaAccion.MATERIAL_EXTRA) {
+      return TipoChecklistAccionReglaDto.material_extra;
+    }
+    if (value === TipoProductoChecklistReglaAccion.SET_ATRIBUTO_TECNICO) {
+      return TipoChecklistAccionReglaDto.set_atributo_tecnico;
+    }
+    return TipoChecklistAccionReglaDto.activar_paso;
+  }
+
+  private toReglaCostoChecklist(value: ReglaCostoChecklistDto) {
+    if (value === ReglaCostoChecklistDto.tiempo_min) {
+      return ReglaCostoChecklist.TIEMPO_MIN;
+    }
+    if (value === ReglaCostoChecklistDto.por_unidad) {
+      return ReglaCostoChecklist.POR_UNIDAD;
+    }
+    if (value === ReglaCostoChecklistDto.por_pliego) {
+      return ReglaCostoChecklist.POR_PLIEGO;
+    }
+    if (value === ReglaCostoChecklistDto.porcentaje_sobre_total) {
+      return ReglaCostoChecklist.PORCENTAJE_SOBRE_TOTAL;
+    }
+    return ReglaCostoChecklist.FLAT;
+  }
+
+  private fromReglaCostoChecklist(value: ReglaCostoChecklist) {
+    if (value === ReglaCostoChecklist.TIEMPO_MIN) {
+      return ReglaCostoChecklistDto.tiempo_min;
+    }
+    if (value === ReglaCostoChecklist.POR_UNIDAD) {
+      return ReglaCostoChecklistDto.por_unidad;
+    }
+    if (value === ReglaCostoChecklist.POR_PLIEGO) {
+      return ReglaCostoChecklistDto.por_pliego;
+    }
+    if (value === ReglaCostoChecklist.PORCENTAJE_SOBRE_TOTAL) {
+      return ReglaCostoChecklistDto.porcentaje_sobre_total;
+    }
+    return ReglaCostoChecklistDto.flat;
   }
 
   private toTipoImpresion(value: TipoImpresionProductoVarianteDto) {

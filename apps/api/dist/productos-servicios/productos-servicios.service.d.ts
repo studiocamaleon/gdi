@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
-import { AssignProductoVariantesRutaMasivaDto, AssignProductoAdicionalDto, AssignProductoMotorDto, AssignVarianteRutaDto, DimensionOpcionProductivaDto, CarasProductoVarianteDto, ReglaCostoAdicionalEfectoDto, MetodoCostoProductoAdicionalDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, TipoProductoAdicionalEfectoDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, TipoConsumoAdicionalMaterialDto, TipoProductoAdicionalDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, UpsertProductoAdicionalDto, PreviewImposicionProductoVarianteDto, UpdateProductoRutaPolicyDto, EstadoProductoServicioDto, TipoImpresionProductoVarianteDto, TipoProductoServicioDto, ValorOpcionProductivaDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
+import { AssignProductoVariantesRutaMasivaDto, AssignProductoAdicionalDto, AssignProductoMotorDto, AssignVarianteRutaDto, DimensionOpcionProductivaDto, CarasProductoVarianteDto, ReglaCostoAdicionalEfectoDto, MetodoCostoProductoAdicionalDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, TipoProductoAdicionalEfectoDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, TipoConsumoAdicionalMaterialDto, TipoProductoAdicionalDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, UpsertProductoAdicionalDto, UpsertProductoChecklistDto, PreviewImposicionProductoVarianteDto, ReglaCostoChecklistDto, TipoChecklistPreguntaDto, TipoChecklistAccionReglaDto, UpdateProductoRutaPolicyDto, EstadoProductoServicioDto, TipoImpresionProductoVarianteDto, TipoProductoServicioDto, ValorOpcionProductivaDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
 type ServicioPricingNivel = {
     id: string;
     nombre: string;
@@ -29,6 +29,7 @@ export declare class ProductosServiciosService {
     private static readonly SUBFAMILIA_BASE_CODIGO_LEGACY;
     private static readonly MOTOR_DEFAULT;
     private static readonly DEFAULT_A4_AREA_M2;
+    private static readonly TERMINACION_PLANTILLAS_SOPORTADAS;
     private static readonly CANONICAL_PLIEGOS_MM;
     constructor(prisma: PrismaService);
     getCatalogoPliegosImpresion(): {
@@ -340,6 +341,8 @@ export declare class ProductosServiciosService {
         updatedAt: string;
     }>;
     findProductos(auth: CurrentAuth): Promise<{
+        matchingBasePorVariante: never[];
+        pasosFijosPorVariante: never[];
         id: string;
         tipo: TipoProductoServicioDto;
         codigo: string;
@@ -356,10 +359,31 @@ export declare class ProductosServiciosService {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
     }[]>;
     findProducto(auth: CurrentAuth, id: string): Promise<{
+        matchingBasePorVariante: {
+            varianteId: string;
+            matching: {
+                tipoImpresion: any;
+                caras: any;
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
+        pasosFijosPorVariante: {
+            varianteId: string;
+            pasos: {
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
         id: string;
         tipo: TipoProductoServicioDto;
         codigo: string;
@@ -376,10 +400,31 @@ export declare class ProductosServiciosService {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
     }>;
     createProducto(auth: CurrentAuth, payload: UpsertProductoServicioDto): Promise<{
+        matchingBasePorVariante: {
+            varianteId: string;
+            matching: {
+                tipoImpresion: any;
+                caras: any;
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
+        pasosFijosPorVariante: {
+            varianteId: string;
+            pasos: {
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
         id: string;
         tipo: TipoProductoServicioDto;
         codigo: string;
@@ -396,10 +441,31 @@ export declare class ProductosServiciosService {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
     }>;
     updateProducto(auth: CurrentAuth, id: string, payload: UpsertProductoServicioDto): Promise<{
+        matchingBasePorVariante: {
+            varianteId: string;
+            matching: {
+                tipoImpresion: any;
+                caras: any;
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
+        pasosFijosPorVariante: {
+            varianteId: string;
+            pasos: {
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
         id: string;
         tipo: TipoProductoServicioDto;
         codigo: string;
@@ -416,10 +482,31 @@ export declare class ProductosServiciosService {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
     }>;
     assignProductoMotor(auth: CurrentAuth, productoId: string, payload: AssignProductoMotorDto): Promise<{
+        matchingBasePorVariante: {
+            varianteId: string;
+            matching: {
+                tipoImpresion: any;
+                caras: any;
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
+        pasosFijosPorVariante: {
+            varianteId: string;
+            pasos: {
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
         id: string;
         tipo: TipoProductoServicioDto;
         codigo: string;
@@ -436,6 +523,7 @@ export declare class ProductosServiciosService {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
     }>;
@@ -469,6 +557,26 @@ export declare class ProductosServiciosService {
         updatedAt: string;
     }>;
     updateProductoRutaPolicy(auth: CurrentAuth, productoId: string, payload: UpdateProductoRutaPolicyDto): Promise<{
+        matchingBasePorVariante: {
+            varianteId: string;
+            matching: {
+                tipoImpresion: any;
+                caras: any;
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
+        pasosFijosPorVariante: {
+            varianteId: string;
+            pasos: {
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
         id: string;
         tipo: TipoProductoServicioDto;
         codigo: string;
@@ -485,6 +593,7 @@ export declare class ProductosServiciosService {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
     }>;
@@ -598,6 +707,152 @@ export declare class ProductosServiciosService {
         createdAt: string;
         updatedAt: string;
     }>;
+    getProductoChecklist(auth: CurrentAuth, productoId: string): Promise<{
+        id: string;
+        productoId: string;
+        activo: boolean;
+        preguntas: {
+            id: string;
+            texto: string;
+            tipoPregunta: TipoChecklistPreguntaDto;
+            orden: number;
+            activo: boolean;
+            respuestas: {
+                id: string;
+                texto: string;
+                codigo: string | null;
+                orden: number;
+                activo: boolean;
+                reglas: {
+                    id: string;
+                    accion: TipoChecklistAccionReglaDto;
+                    orden: number;
+                    activo: boolean;
+                    pasoPlantillaId: string | null;
+                    pasoPlantillaNombre: any;
+                    centroCostoId: any;
+                    centroCostoNombre: any;
+                    maquinaNombre: any;
+                    perfilOperativoNombre: any;
+                    setupMin: number | null;
+                    runMin: number | null;
+                    cleanupMin: number | null;
+                    tiempoFijoMin: number | null;
+                    variantePasoId: string | null;
+                    variantePasoNombre: string;
+                    variantePasoResumen: string;
+                    nivelesDisponibles: {
+                        id: string;
+                        nombre: string;
+                        orden: number;
+                        activo: boolean;
+                        modoProductividadNivel: string;
+                        tiempoFijoMin: number | null;
+                        productividadBase: number | null;
+                        unidadSalida: string | null;
+                        unidadTiempo: string | null;
+                        maquinaId: string | null;
+                        maquinaNombre: string;
+                        perfilOperativoId: string | null;
+                        perfilOperativoNombre: string;
+                        setupMin: number | null;
+                        cleanupMin: number | null;
+                        resumen: string;
+                        detalle: Record<string, unknown>;
+                    }[];
+                    costoRegla: ReglaCostoChecklistDto | null;
+                    costoValor: number | null;
+                    costoCentroCostoId: string | null;
+                    costoCentroCostoNombre: string;
+                    materiaPrimaVarianteId: string | null;
+                    materiaPrimaNombre: string;
+                    materiaPrimaSku: string;
+                    tipoConsumo: TipoConsumoAdicionalMaterialDto | null;
+                    factorConsumo: number | null;
+                    mermaPct: number | null;
+                    detalle: Record<string, unknown> | null;
+                }[];
+            }[];
+        }[];
+        createdAt: string;
+        updatedAt: string;
+    } | {
+        productoId: string;
+        activo: boolean;
+        preguntas: never[];
+        createdAt: null;
+        updatedAt: null;
+    }>;
+    upsertProductoChecklist(auth: CurrentAuth, productoId: string, payload: UpsertProductoChecklistDto): Promise<{
+        id: string;
+        productoId: string;
+        activo: boolean;
+        preguntas: {
+            id: string;
+            texto: string;
+            tipoPregunta: TipoChecklistPreguntaDto;
+            orden: number;
+            activo: boolean;
+            respuestas: {
+                id: string;
+                texto: string;
+                codigo: string | null;
+                orden: number;
+                activo: boolean;
+                reglas: {
+                    id: string;
+                    accion: TipoChecklistAccionReglaDto;
+                    orden: number;
+                    activo: boolean;
+                    pasoPlantillaId: string | null;
+                    pasoPlantillaNombre: any;
+                    centroCostoId: any;
+                    centroCostoNombre: any;
+                    maquinaNombre: any;
+                    perfilOperativoNombre: any;
+                    setupMin: number | null;
+                    runMin: number | null;
+                    cleanupMin: number | null;
+                    tiempoFijoMin: number | null;
+                    variantePasoId: string | null;
+                    variantePasoNombre: string;
+                    variantePasoResumen: string;
+                    nivelesDisponibles: {
+                        id: string;
+                        nombre: string;
+                        orden: number;
+                        activo: boolean;
+                        modoProductividadNivel: string;
+                        tiempoFijoMin: number | null;
+                        productividadBase: number | null;
+                        unidadSalida: string | null;
+                        unidadTiempo: string | null;
+                        maquinaId: string | null;
+                        maquinaNombre: string;
+                        perfilOperativoId: string | null;
+                        perfilOperativoNombre: string;
+                        setupMin: number | null;
+                        cleanupMin: number | null;
+                        resumen: string;
+                        detalle: Record<string, unknown>;
+                    }[];
+                    costoRegla: ReglaCostoChecklistDto | null;
+                    costoValor: number | null;
+                    costoCentroCostoId: string | null;
+                    costoCentroCostoNombre: string;
+                    materiaPrimaVarianteId: string | null;
+                    materiaPrimaNombre: string;
+                    materiaPrimaSku: string;
+                    tipoConsumo: TipoConsumoAdicionalMaterialDto | null;
+                    factorConsumo: number | null;
+                    mermaPct: number | null;
+                    detalle: Record<string, unknown> | null;
+                }[];
+            }[];
+        }[];
+        createdAt: string;
+        updatedAt: string;
+    }>;
     findAdicionalEfectos(auth: CurrentAuth, adicionalId: string): Promise<{
         id: string;
         adicionalId: string;
@@ -626,6 +881,9 @@ export declare class ProductosServiciosService {
                 runMin: number | null;
                 cleanupMin: number | null;
                 tiempoFijoMin: number | null;
+                tiempoFijoMinFallback: number | null;
+                overridesProductividad: Record<string, unknown> | null;
+                usarMaquinariaTerminacion: boolean;
             }[];
         } | null;
         costEffect: {
@@ -677,6 +935,9 @@ export declare class ProductosServiciosService {
                 runMin: number | null;
                 cleanupMin: number | null;
                 tiempoFijoMin: number | null;
+                tiempoFijoMinFallback: number | null;
+                overridesProductividad: Record<string, unknown> | null;
+                usarMaquinariaTerminacion: boolean;
             }[];
         } | null;
         costEffect: {
@@ -728,6 +989,9 @@ export declare class ProductosServiciosService {
                 runMin: number | null;
                 cleanupMin: number | null;
                 tiempoFijoMin: number | null;
+                tiempoFijoMinFallback: number | null;
+                overridesProductividad: Record<string, unknown> | null;
+                usarMaquinariaTerminacion: boolean;
             }[];
         } | null;
         costEffect: {
@@ -779,6 +1043,9 @@ export declare class ProductosServiciosService {
                 runMin: number | null;
                 cleanupMin: number | null;
                 tiempoFijoMin: number | null;
+                tiempoFijoMinFallback: number | null;
+                overridesProductividad: Record<string, unknown> | null;
+                usarMaquinariaTerminacion: boolean;
             }[];
         } | null;
         costEffect: {
@@ -880,6 +1147,7 @@ export declare class ProductosServiciosService {
                 totalMin: number;
                 tarifaHora: number;
                 costo: number;
+                detalleTecnico: Record<string, unknown> | null;
             }[];
             materiales: Record<string, unknown>[];
         };
@@ -888,6 +1156,7 @@ export declare class ProductosServiciosService {
             papel: number;
             toner: number;
             desgaste: number;
+            consumiblesTerminacion: number;
             adicionalesMateriales: number;
             adicionalesCostEffects: number;
         };
@@ -926,39 +1195,48 @@ export declare class ProductosServiciosService {
                 pliegosPorSustrato: number;
                 orientacion: string;
             };
-            addonsSeleccionados: string[];
-            addonsConfig: {
-                addonId: string;
-                nivelId: string | null;
+            matchingBaseAplicado: {
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: any;
+                perfilOperativoId: any;
+                perfilOperativoNombre: any;
+                tipoImpresion: TipoImpresionProductoVarianteDto | null;
+                caras: CarasProductoVarianteDto | null;
+            }[];
+            checklistAplicado: Record<string, unknown>[];
+            checklistRespuestasSeleccionadas: import("./dto/productos-servicios.dto").CotizarChecklistRespuestaDto[];
+            atributosTecnicosConfigurados: {
+                dimension: DimensionOpcionProductivaDto;
+                valor: ValorOpcionProductivaDto;
             }[];
             opcionProductivaEfectiva: {
                 dimension: DimensionOpcionProductivaDto;
                 valores: ValorOpcionProductivaDto[];
             }[];
             efectosAplicados: {
-                id: string;
-                addonId: string;
+                id: any;
+                addonId: any;
                 addonNombre: string;
                 tipo: TipoProductoAdicionalEfectoDto;
-                nombre: string;
+                nombre: any;
             }[];
             routeEffectsAplicados: {
-                id: string;
-                addonId: string;
-                nombre: string;
-                pasos: number;
+                id: any;
+                addonId: any;
+                nombre: any;
+                pasos: any;
             }[];
             costEffectsAplicados: {
-                id: string;
-                addonId: string;
-                nombre: string;
+                id: any;
+                addonId: any;
+                nombre: any;
                 regla: ReglaCostoAdicionalEfectoDto | null;
             }[];
             materialEffectsAplicados: {
-                id: string;
-                addonId: string;
-                nombre: string;
-                material: string;
+                id: any;
+                addonId: any;
+                nombre: any;
+                material: any;
             }[];
             costosPorEfecto: Record<string, unknown>[];
             pasosCondicionalesActivos: {
@@ -1077,6 +1355,8 @@ export declare class ProductosServiciosService {
     private findVarianteOrThrow;
     private findPapelVarianteOrThrow;
     private findProcesoOrThrow;
+    private findProcesoOperacionOrThrow;
+    private findBibliotecaOperacionOrThrow;
     private findCentroCostoOrThrow;
     private findAdicionalCatalogoOrThrow;
     private getAdicionalCatalogoByIdOrThrow;
@@ -1091,12 +1371,27 @@ export declare class ProductosServiciosService {
     private assertSingleAddonEffectTypeConstraint;
     private replaceAdicionalEfectoDetail;
     private toAdicionalEfectoResponse;
+    private isPlantillaTerminacionSoportada;
+    private validateProductoChecklistPayload;
+    private toProductoChecklistResponse;
     private validateOpcionesProductivasPayload;
     private normalizeOpcionesProductivasPayload;
+    private validateAndNormalizeMatchingBase;
+    private validateAndNormalizePasosFijosRutaBase;
     private toVarianteOpcionesProductivasResponse;
     private toAdicionalCatalogoResponse;
     private toFamiliaResponse;
     private toSubfamiliaResponse;
+    private toProductoResponseBase;
+    private mergeProductoDetalle;
+    private getProductoDimensionesBaseConsumidas;
+    private getProductoMatchingBaseByVariante;
+    private getProductoPasosFijosByVariante;
+    private toRutaBaseMatchingResponse;
+    private toRutaBasePasosFijosResponse;
+    private normalizeDimensionOpcionProductivaValue;
+    private normalizeTipoImpresionProductoVarianteValue;
+    private normalizeCarasProductoVarianteValue;
     private validateVarianteRelations;
     private toVarianteResponse;
     private generateProductoCodigo;
@@ -1118,6 +1413,30 @@ export declare class ProductosServiciosService {
     private resolvePliegoImpresion;
     private calculateSustratoToPliegoConversion;
     private approxEqualMm;
+    private calculateGuillotinaCutsFromImposicion;
+    private calculateTerminatingOperationTiming;
+    private calculateLaminadoraFilmConsumables;
+    private asObject;
+    private getProcesoOperacionNiveles;
+    private toSafeNumber;
+    private resolveChecklistCantidadObjetivo;
+    private buildChecklistNivelResumen;
+    private getChecklistPasoPlantillasMap;
+    private getChecklistPasoPlantillaId;
+    private resolveChecklistPasoPlantilla;
+    private buildChecklistOperacionFromPlantilla;
+    private buildChecklistOperacionFromPlantillaConPerfil;
+    private getPasoPlantillaIdFromDetalle;
+    private resolvePasoPlantillaIdFromOperacionRuta;
+    private normalizePasoNombreBase;
+    private buildChecklistPasoSignature;
+    private isPasoPlantillaEligibleForMatchingBase;
+    private getChecklistVariantePasoId;
+    private getChecklistVariantePasoNombre;
+    private getChecklistVariantePasoResumen;
+    private getChecklistAtributoTecnicoDimension;
+    private getChecklistAtributoTecnicoValor;
+    private toPrismaUnidadProceso;
     private calculateMachineConsumables;
     private normalizeColor;
     private getSetupFromPerfilOperativo;
@@ -1131,10 +1450,18 @@ export declare class ProductosServiciosService {
     private fromValorOpcionProductiva;
     private toValorFromTipoImpresion;
     private toValorFromCaras;
+    private toTipoImpresionFromValor;
+    private toCarasFromValor;
     private toTipoAdicionalEfecto;
     private fromTipoAdicionalEfecto;
     private toReglaCostoAdicionalEfecto;
     private fromReglaCostoAdicionalEfecto;
+    private toTipoChecklistPregunta;
+    private fromTipoChecklistPregunta;
+    private toTipoChecklistAccion;
+    private fromTipoChecklistAccion;
+    private toReglaCostoChecklist;
+    private fromReglaCostoChecklist;
     private toTipoImpresion;
     private fromTipoImpresion;
     private toCaras;

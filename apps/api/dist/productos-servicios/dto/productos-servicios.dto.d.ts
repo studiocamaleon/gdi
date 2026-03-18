@@ -49,6 +49,24 @@ export declare enum ReglaCostoAdicionalEfectoDto {
     porcentaje_sobre_total = "porcentaje_sobre_total",
     tiempo_extra_min = "tiempo_extra_min"
 }
+export declare enum TipoChecklistPreguntaDto {
+    binaria = "binaria",
+    single_select = "single_select"
+}
+export declare enum TipoChecklistAccionReglaDto {
+    activar_paso = "activar_paso",
+    seleccionar_variante_paso = "seleccionar_variante_paso",
+    costo_extra = "costo_extra",
+    material_extra = "material_extra",
+    set_atributo_tecnico = "set_atributo_tecnico"
+}
+export declare enum ReglaCostoChecklistDto {
+    tiempo_min = "tiempo_min",
+    flat = "flat",
+    por_unidad = "por_unidad",
+    por_pliego = "por_pliego",
+    porcentaje_sobre_total = "porcentaje_sobre_total"
+}
 export declare class UpsertVarianteOpcionProductivaDimensionDto {
     dimension: DimensionOpcionProductivaDto;
     valores: ValorOpcionProductivaDto[];
@@ -67,10 +85,13 @@ export declare class UpsertProductoAdicionalRouteEffectPasoDto {
     centroCostoId: string;
     maquinaId?: string;
     perfilOperativoId?: string;
+    usarMaquinariaTerminacion?: boolean;
     setupMin?: number;
     runMin?: number;
     cleanupMin?: number;
     tiempoFijoMin?: number;
+    tiempoFijoMinFallback?: number;
+    overridesProductividad?: Record<string, unknown>;
 }
 export declare class UpsertProductoAdicionalRouteEffectDto {
     pasos: UpsertProductoAdicionalRouteEffectPasoDto[];
@@ -185,9 +206,30 @@ export declare class UpdateProductoVarianteDto {
 export declare class AssignVarianteRutaDto {
     procesoDefinicionId?: string;
 }
+export declare class UpsertProductoRutaBaseMatchingItemDto {
+    tipoImpresion?: TipoImpresionProductoVarianteDto | null;
+    caras?: CarasProductoVarianteDto | null;
+    pasoPlantillaId: string;
+    perfilOperativoId: string;
+}
+export declare class UpsertProductoRutaBaseMatchingVarianteDto {
+    varianteId: string;
+    matching: UpsertProductoRutaBaseMatchingItemDto[];
+}
+export declare class UpsertProductoRutaPasoFijoItemDto {
+    pasoPlantillaId: string;
+    perfilOperativoId: string;
+}
+export declare class UpsertProductoRutaPasoFijoVarianteDto {
+    varianteId: string;
+    pasos: UpsertProductoRutaPasoFijoItemDto[];
+}
 export declare class UpdateProductoRutaPolicyDto {
     usarRutaComunVariantes: boolean;
     procesoDefinicionDefaultId?: string | null;
+    dimensionesBaseConsumidas?: DimensionOpcionProductivaDto[];
+    matchingBasePorVariante?: UpsertProductoRutaBaseMatchingVarianteDto[];
+    pasosFijosPorVariante?: UpsertProductoRutaPasoFijoVarianteDto[];
 }
 export declare class AssignProductoVariantesRutaMasivaDto {
     procesoDefinicionId: string;
@@ -207,11 +249,66 @@ export declare class CotizarAddonConfigDto {
     addonId: string;
     nivelId?: string;
 }
+export declare class CotizarChecklistRespuestaDto {
+    preguntaId: string;
+    respuestaId: string;
+}
+export declare class CotizarSeleccionBaseDto {
+    dimension: DimensionOpcionProductivaDto;
+    valor: ValorOpcionProductivaDto;
+}
+export declare class UpsertChecklistReglaNivelDto {
+    id?: string;
+    nombreNivel: string;
+    orden?: number;
+    activo?: boolean;
+    costoRegla?: ReglaCostoChecklistDto;
+    costoValor?: number;
+    tiempoMin?: number;
+}
+export declare class UpsertChecklistReglaDto {
+    id?: string;
+    accion: TipoChecklistAccionReglaDto;
+    orden?: number;
+    activo?: boolean;
+    pasoPlantillaId?: string;
+    variantePasoId?: string;
+    atributoTecnicoDimension?: DimensionOpcionProductivaDto;
+    atributoTecnicoValor?: ValorOpcionProductivaDto;
+    costoRegla?: ReglaCostoChecklistDto;
+    costoValor?: number;
+    costoCentroCostoId?: string;
+    materiaPrimaVarianteId?: string;
+    tipoConsumo?: TipoConsumoAdicionalMaterialDto;
+    factorConsumo?: number;
+    mermaPct?: number;
+    detalle?: Record<string, unknown>;
+}
+export declare class UpsertChecklistRespuestaDto {
+    id?: string;
+    texto: string;
+    codigo?: string;
+    orden?: number;
+    activo?: boolean;
+    reglas?: UpsertChecklistReglaDto[];
+}
+export declare class UpsertChecklistPreguntaDto {
+    id?: string;
+    texto: string;
+    tipoPregunta?: TipoChecklistPreguntaDto;
+    orden?: number;
+    activo?: boolean;
+    respuestas: UpsertChecklistRespuestaDto[];
+}
+export declare class UpsertProductoChecklistDto {
+    activo?: boolean;
+    preguntas: UpsertChecklistPreguntaDto[];
+}
 export declare class CotizarProductoVarianteDto {
     cantidad: number;
     periodo?: string;
-    addonsSeleccionados?: string[];
-    addonsConfig?: CotizarAddonConfigDto[];
+    checklistRespuestas?: CotizarChecklistRespuestaDto[];
+    seleccionesBase?: CotizarSeleccionBaseDto[];
 }
 export declare class PreviewImposicionProductoVarianteDto {
     parametros?: Record<string, unknown>;

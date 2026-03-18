@@ -20,6 +20,18 @@ const RULES: Record<PlantillaMaquinariaDto, MachineTemplateRule> = {
   [PlantillaMaquinariaDto.corte_laser]: {
     requiredMachineKeys: ['ejeXUtil', 'ejeYUtil', 'tipoLaser'],
   },
+  [PlantillaMaquinariaDto.guillotina]: {
+    requiredMachineKeys: ['altoBocaMm'],
+  },
+  [PlantillaMaquinariaDto.laminadora_bopp_rollo]: {
+    requiredMachineKeys: ['anchoRolloMm', 'velocidadMMin', 'mermaArranqueMm', 'mermaCierreMm'],
+  },
+  [PlantillaMaquinariaDto.redondeadora_puntas]: {
+    requiredMachineKeys: ['golpesMinNominal', 'maxEspesorPilaMm'],
+  },
+  [PlantillaMaquinariaDto.perforadora]: {
+    requiredMachineKeys: ['pliegosMinNominal', 'lineasPorPasadaMax'],
+  },
   [PlantillaMaquinariaDto.impresora_3d]: {
     requiredMachineKeys: ['volumenX', 'volumenY', 'volumenZ', 'tecnologia'],
   },

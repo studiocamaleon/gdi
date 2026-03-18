@@ -1,13 +1,14 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { ProductoServicioFichaTabs } from "@/components/productos-servicios/producto-servicio-ficha-tabs";
+import { ApiError } from "@/lib/api";
+import { getMaquinas } from "@/lib/maquinaria-api";
 import { getMateriasPrimas } from "@/lib/materias-primas-api";
-import { getProcesos } from "@/lib/procesos-api";
+import { getProcesoOperacionPlantillas, getProcesos } from "@/lib/procesos-api";
 import {
-  getAdicionalesCatalogo,
   getFamiliasProducto,
   getMotoresCostoCatalogo,
-  getProductoAdicionales,
+  getProductoChecklist,
   getProductoServicio,
   getProductoVariantes,
   getSubfamiliasProducto,
@@ -27,16 +28,17 @@ export default async function ProductoServicioDetallePage({
   const { productoId } = await params;
 
   try {
-    const [producto, variantes, procesos, materiasPrimas, familias, subfamilias, motores, adicionalesCatalogo, adicionalesProducto] = await Promise.all([
+    const [producto, variantes, procesos, plantillasPaso, materiasPrimas, familias, subfamilias, motores, checklist, maquinas] = await Promise.all([
       getProductoServicio(productoId),
       getProductoVariantes(productoId),
       getProcesos(),
+      getProcesoOperacionPlantillas(),
       getMateriasPrimas(),
       getFamiliasProducto(),
       getSubfamiliasProducto(),
       getMotoresCostoCatalogo(),
-      getAdicionalesCatalogo(),
-      getProductoAdicionales(productoId),
+      getProductoChecklist(productoId),
+      getMaquinas(),
     ]);
 
     return (
@@ -45,16 +47,25 @@ export default async function ProductoServicioDetallePage({
           producto={producto}
           initialVariantes={variantes}
           procesos={procesos}
+          plantillasPaso={plantillasPaso}
           materiasPrimas={materiasPrimas}
           familias={familias}
           subfamilias={subfamilias}
           motores={motores}
-          adicionalesCatalogo={adicionalesCatalogo}
-          adicionalesProducto={adicionalesProducto}
+          checklist={checklist}
+          maquinas={maquinas}
         />
       </section>
     );
-  } catch {
-    notFound();
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      notFound();
+    }
+
+    if (error instanceof ApiError && error.status === 401) {
+      redirect("/login");
+    }
+
+    throw error;
   }
 }

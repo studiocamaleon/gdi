@@ -9,13 +9,17 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UpsertMaquinaDto = exports.MaquinaComponenteDesgasteItemDto = exports.MaquinaConsumibleItemDto = exports.MaquinaPerfilOperativoItemDto = exports.UnidadDesgasteMaquinaDto = exports.TipoComponenteDesgasteMaquinaDto = exports.UnidadConsumoMaquinaDto = exports.TipoConsumibleMaquinaDto = exports.TipoPerfilOperativoMaquinaDto = exports.UnidadProduccionMaquinaDto = exports.GeometriaTrabajoMaquinaDto = exports.EstadoConfiguracionMaquinaDto = exports.EstadoMaquinaDto = exports.PlantillaMaquinariaDto = void 0;
+exports.UpsertMaquinaDto = exports.MaquinaComponenteDesgasteItemDto = exports.MaquinaConsumibleItemDto = exports.MaquinaPerfilOperativoItemDto = exports.UnidadDesgasteMaquinaDto = exports.TipoComponenteDesgasteMaquinaDto = exports.UnidadConsumoMaquinaDto = exports.TipoConsumibleMaquinaDto = exports.CarasPerfilDto = exports.ModoImpresionPerfilDto = exports.TipoPerfilOperativoMaquinaDto = exports.UnidadProduccionMaquinaDto = exports.GeometriaTrabajoMaquinaDto = exports.EstadoConfiguracionMaquinaDto = exports.EstadoMaquinaDto = exports.PlantillaMaquinariaDto = void 0;
 const class_transformer_1 = require("class-transformer");
 const class_validator_1 = require("class-validator");
 var PlantillaMaquinariaDto;
 (function (PlantillaMaquinariaDto) {
     PlantillaMaquinariaDto["router_cnc"] = "router_cnc";
     PlantillaMaquinariaDto["corte_laser"] = "corte_laser";
+    PlantillaMaquinariaDto["guillotina"] = "guillotina";
+    PlantillaMaquinariaDto["laminadora_bopp_rollo"] = "laminadora_bopp_rollo";
+    PlantillaMaquinariaDto["redondeadora_puntas"] = "redondeadora_puntas";
+    PlantillaMaquinariaDto["perforadora"] = "perforadora";
     PlantillaMaquinariaDto["impresora_3d"] = "impresora_3d";
     PlantillaMaquinariaDto["impresora_dtf"] = "impresora_dtf";
     PlantillaMaquinariaDto["impresora_dtf_uv"] = "impresora_dtf_uv";
@@ -66,6 +70,10 @@ var UnidadProduccionMaquinaDto;
     UnidadProduccionMaquinaDto["piezas_h"] = "piezas_h";
     UnidadProduccionMaquinaDto["pieza"] = "pieza";
     UnidadProduccionMaquinaDto["ciclo"] = "ciclo";
+    UnidadProduccionMaquinaDto["cortes_min"] = "cortes_min";
+    UnidadProduccionMaquinaDto["golpes_min"] = "golpes_min";
+    UnidadProduccionMaquinaDto["pliegos_min"] = "pliegos_min";
+    UnidadProduccionMaquinaDto["m_min"] = "m_min";
 })(UnidadProduccionMaquinaDto || (exports.UnidadProduccionMaquinaDto = UnidadProduccionMaquinaDto = {}));
 var TipoPerfilOperativoMaquinaDto;
 (function (TipoPerfilOperativoMaquinaDto) {
@@ -76,6 +84,16 @@ var TipoPerfilOperativoMaquinaDto;
     TipoPerfilOperativoMaquinaDto["fabricacion"] = "fabricacion";
     TipoPerfilOperativoMaquinaDto["mixto"] = "mixto";
 })(TipoPerfilOperativoMaquinaDto || (exports.TipoPerfilOperativoMaquinaDto = TipoPerfilOperativoMaquinaDto = {}));
+var ModoImpresionPerfilDto;
+(function (ModoImpresionPerfilDto) {
+    ModoImpresionPerfilDto["cmyk"] = "cmyk";
+    ModoImpresionPerfilDto["k"] = "k";
+})(ModoImpresionPerfilDto || (exports.ModoImpresionPerfilDto = ModoImpresionPerfilDto = {}));
+var CarasPerfilDto;
+(function (CarasPerfilDto) {
+    CarasPerfilDto["simple_faz"] = "simple_faz";
+    CarasPerfilDto["doble_faz"] = "doble_faz";
+})(CarasPerfilDto || (exports.CarasPerfilDto = CarasPerfilDto = {}));
 var TipoConsumibleMaquinaDto;
 (function (TipoConsumibleMaquinaDto) {
     TipoConsumibleMaquinaDto["toner"] = "toner";
@@ -137,21 +155,33 @@ var UnidadDesgasteMaquinaDto;
     UnidadDesgasteMaquinaDto["piezas"] = "piezas";
 })(UnidadDesgasteMaquinaDto || (exports.UnidadDesgasteMaquinaDto = UnidadDesgasteMaquinaDto = {}));
 class MaquinaPerfilOperativoItemDto {
+    id;
     nombre;
     tipoPerfil;
     activo;
     anchoAplicable;
     altoAplicable;
-    modoTrabajo;
-    productividad;
-    unidadProductividad;
-    tiempoPreparacionMin;
-    tiempoRipMin;
+    operationMode;
+    printMode;
+    printSides;
+    productivityValue;
+    productivityUnit;
+    setupMin;
+    cleanupMin;
+    feedReloadMin;
+    sheetThicknessMm;
+    maxBatchHeightMm;
+    materialPreset;
     cantidadPasadas;
     dobleFaz;
     detalle;
 }
 exports.MaquinaPerfilOperativoItemDto = MaquinaPerfilOperativoItemDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], MaquinaPerfilOperativoItemDto.prototype, "id", void 0);
 __decorate([
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.MinLength)(1),
@@ -181,30 +211,63 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
-], MaquinaPerfilOperativoItemDto.prototype, "modoTrabajo", void 0);
+], MaquinaPerfilOperativoItemDto.prototype, "operationMode", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(ModoImpresionPerfilDto),
+    __metadata("design:type", String)
+], MaquinaPerfilOperativoItemDto.prototype, "printMode", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(CarasPerfilDto),
+    __metadata("design:type", String)
+], MaquinaPerfilOperativoItemDto.prototype, "printSides", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_transformer_1.Type)(() => Number),
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
-], MaquinaPerfilOperativoItemDto.prototype, "productividad", void 0);
+], MaquinaPerfilOperativoItemDto.prototype, "productivityValue", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEnum)(UnidadProduccionMaquinaDto),
     __metadata("design:type", String)
-], MaquinaPerfilOperativoItemDto.prototype, "unidadProductividad", void 0);
+], MaquinaPerfilOperativoItemDto.prototype, "productivityUnit", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_transformer_1.Type)(() => Number),
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
-], MaquinaPerfilOperativoItemDto.prototype, "tiempoPreparacionMin", void 0);
+], MaquinaPerfilOperativoItemDto.prototype, "setupMin", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_transformer_1.Type)(() => Number),
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
-], MaquinaPerfilOperativoItemDto.prototype, "tiempoRipMin", void 0);
+], MaquinaPerfilOperativoItemDto.prototype, "cleanupMin", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Number)
+], MaquinaPerfilOperativoItemDto.prototype, "feedReloadMin", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Number)
+], MaquinaPerfilOperativoItemDto.prototype, "sheetThicknessMm", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Number)
+], MaquinaPerfilOperativoItemDto.prototype, "maxBatchHeightMm", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], MaquinaPerfilOperativoItemDto.prototype, "materialPreset", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_transformer_1.Type)(() => Number),
@@ -222,18 +285,24 @@ __decorate([
     __metadata("design:type", Object)
 ], MaquinaPerfilOperativoItemDto.prototype, "detalle", void 0);
 class MaquinaConsumibleItemDto {
+    id;
     materiaPrimaVarianteId;
     nombre;
     tipo;
     unidad;
     rendimientoEstimado;
     consumoBase;
-    perfilOperativoNombre;
+    perfilOperativoId;
     activo;
     detalle;
     observaciones;
 }
 exports.MaquinaConsumibleItemDto = MaquinaConsumibleItemDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], MaquinaConsumibleItemDto.prototype, "id", void 0);
 __decorate([
     (0, class_validator_1.IsUUID)(undefined, {
         message: 'Selecciona una variante valida para el consumible.',
@@ -267,9 +336,9 @@ __decorate([
 ], MaquinaConsumibleItemDto.prototype, "consumoBase", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsUUID)(),
     __metadata("design:type", String)
-], MaquinaConsumibleItemDto.prototype, "perfilOperativoNombre", void 0);
+], MaquinaConsumibleItemDto.prototype, "perfilOperativoId", void 0);
 __decorate([
     (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)
@@ -285,6 +354,7 @@ __decorate([
     __metadata("design:type", String)
 ], MaquinaConsumibleItemDto.prototype, "observaciones", void 0);
 class MaquinaComponenteDesgasteItemDto {
+    id;
     materiaPrimaVarianteId;
     nombre;
     tipo;
@@ -296,6 +366,11 @@ class MaquinaComponenteDesgasteItemDto {
     observaciones;
 }
 exports.MaquinaComponenteDesgasteItemDto = MaquinaComponenteDesgasteItemDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], MaquinaComponenteDesgasteItemDto.prototype, "id", void 0);
 __decorate([
     (0, class_validator_1.IsUUID)(undefined, {
         message: 'Selecciona una variante valida para el componente de desgaste.',

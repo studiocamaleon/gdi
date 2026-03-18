@@ -8,6 +8,7 @@ import {
   AssignVarianteRutaDto,
   CotizarProductoVarianteDto,
   CreateProductoVarianteDto,
+  UpsertProductoChecklistDto,
   UpsertProductoAdicionalServicioPricingDto,
   UpsertVarianteOpcionesProductivasDto,
   SetVarianteAdicionalRestrictionDto,
@@ -251,6 +252,23 @@ export class ProductosServiciosController {
   @Get(':id/variantes')
   getVariantes(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.service.findVariantes(auth, id);
+  }
+
+  @Get(':id/checklist')
+  getProductoChecklist(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.service.getProductoChecklist(auth, id);
+  }
+
+  @Put(':id/checklist')
+  upsertProductoChecklist(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: UpsertProductoChecklistDto,
+  ) {
+    return this.service.upsertProductoChecklist(auth, id, payload);
   }
 
   @Get(':id/adicionales')

@@ -1,6 +1,10 @@
 export declare enum PlantillaMaquinariaDto {
     router_cnc = "router_cnc",
     corte_laser = "corte_laser",
+    guillotina = "guillotina",
+    laminadora_bopp_rollo = "laminadora_bopp_rollo",
+    redondeadora_puntas = "redondeadora_puntas",
+    perforadora = "perforadora",
     impresora_3d = "impresora_3d",
     impresora_dtf = "impresora_dtf",
     impresora_dtf_uv = "impresora_dtf_uv",
@@ -46,7 +50,11 @@ export declare enum UnidadProduccionMaquinaDto {
     metro_lineal = "metro_lineal",
     piezas_h = "piezas_h",
     pieza = "pieza",
-    ciclo = "ciclo"
+    ciclo = "ciclo",
+    cortes_min = "cortes_min",
+    golpes_min = "golpes_min",
+    pliegos_min = "pliegos_min",
+    m_min = "m_min"
 }
 export declare enum TipoPerfilOperativoMaquinaDto {
     impresion = "impresion",
@@ -55,6 +63,14 @@ export declare enum TipoPerfilOperativoMaquinaDto {
     grabado = "grabado",
     fabricacion = "fabricacion",
     mixto = "mixto"
+}
+export declare enum ModoImpresionPerfilDto {
+    cmyk = "cmyk",
+    k = "k"
+}
+export declare enum CarasPerfilDto {
+    simple_faz = "simple_faz",
+    doble_faz = "doble_faz"
 }
 export declare enum TipoConsumibleMaquinaDto {
     toner = "toner",
@@ -113,33 +129,42 @@ export declare enum UnidadDesgasteMaquinaDto {
     piezas = "piezas"
 }
 export declare class MaquinaPerfilOperativoItemDto {
+    id?: string;
     nombre: string;
     tipoPerfil: TipoPerfilOperativoMaquinaDto;
     activo: boolean;
     anchoAplicable?: number;
     altoAplicable?: number;
-    modoTrabajo?: string;
-    productividad?: number;
-    unidadProductividad?: UnidadProduccionMaquinaDto;
-    tiempoPreparacionMin?: number;
-    tiempoRipMin?: number;
+    operationMode?: string;
+    printMode?: ModoImpresionPerfilDto;
+    printSides?: CarasPerfilDto;
+    productivityValue?: number;
+    productivityUnit?: UnidadProduccionMaquinaDto;
+    setupMin?: number;
+    cleanupMin?: number;
+    feedReloadMin?: number;
+    sheetThicknessMm?: number;
+    maxBatchHeightMm?: number;
+    materialPreset?: string;
     cantidadPasadas?: number;
     dobleFaz?: boolean;
     detalle?: Record<string, unknown>;
 }
 export declare class MaquinaConsumibleItemDto {
+    id?: string;
     materiaPrimaVarianteId: string;
     nombre: string;
     tipo: TipoConsumibleMaquinaDto;
     unidad: UnidadConsumoMaquinaDto;
     rendimientoEstimado?: number;
     consumoBase?: number;
-    perfilOperativoNombre?: string;
+    perfilOperativoId?: string;
     activo: boolean;
     detalle?: Record<string, unknown>;
     observaciones?: string;
 }
 export declare class MaquinaComponenteDesgasteItemDto {
+    id?: string;
     materiaPrimaVarianteId: string;
     nombre: string;
     tipo: TipoComponenteDesgasteMaquinaDto;

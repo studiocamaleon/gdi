@@ -1,6 +1,10 @@
 export type PlantillaMaquinaria =
   | "router_cnc"
   | "corte_laser"
+  | "guillotina"
+  | "laminadora_bopp_rollo"
+  | "redondeadora_puntas"
+  | "perforadora"
   | "impresora_3d"
   | "impresora_dtf"
   | "impresora_dtf_uv"
@@ -19,6 +23,7 @@ export type PlantillaMaquinaria =
 
 export type FamiliaPlantillaMaquinaria =
   | "corte_mecanizado"
+  | "terminacion"
   | "fabricacion_aditiva"
   | "impresion_transferencia"
   | "impresion_uv"
@@ -47,7 +52,11 @@ export type UnidadProduccionMaquina =
   | "metro_lineal"
   | "piezas_h"
   | "pieza"
-  | "ciclo";
+  | "ciclo"
+  | "cortes_min"
+  | "golpes_min"
+  | "pliegos_min"
+  | "m_min";
 
 export type TipoPerfilOperativoMaquina =
   | "impresion"
@@ -56,6 +65,9 @@ export type TipoPerfilOperativoMaquina =
   | "grabado"
   | "fabricacion"
   | "mixto";
+
+export type ModoImpresionPerfil = "cmyk" | "k";
+export type CarasPerfil = "simple_faz" | "doble_faz";
 
 export type TipoConsumibleMaquina =
   | "toner"
@@ -201,6 +213,7 @@ export type MaquinariaTemplateDefinition = {
   description: string;
   geometry: GeometriaTrabajoMaquina;
   defaultProductionUnit: UnidadProduccionMaquina;
+  allowedProductionUnits?: UnidadProduccionMaquina[];
   visibleSections: MaquinariaTemplateSectionId[];
   sections: MaquinariaTemplateSection[];
   help: MaquinariaTemplateHelp;
@@ -211,6 +224,7 @@ export const familiaPlantillaMaquinariaItems: Array<{
   value: FamiliaPlantillaMaquinaria;
 }> = [
   { label: "Corte y mecanizado", value: "corte_mecanizado" },
+  { label: "Terminacion", value: "terminacion" },
   { label: "Fabricacion aditiva", value: "fabricacion_aditiva" },
   { label: "Impresion por transferencia", value: "impresion_transferencia" },
   { label: "Impresion UV", value: "impresion_uv" },
@@ -260,6 +274,10 @@ export const unidadProduccionMaquinaItems: Array<{
   { label: "Piezas por hora", value: "piezas_h" },
   { label: "Pieza", value: "pieza" },
   { label: "Ciclo", value: "ciclo" },
+  { label: "Cortes por minuto", value: "cortes_min" },
+  { label: "Golpes por minuto", value: "golpes_min" },
+  { label: "Pliegos por minuto", value: "pliegos_min" },
+  { label: "Metros por minuto", value: "m_min" },
 ];
 
 export const tipoPerfilOperativoMaquinaItems: Array<{
@@ -387,11 +405,17 @@ export type MaquinaPerfilOperativo = {
   activo: boolean;
   anchoAplicable: number | null;
   altoAplicable: number | null;
-  modoTrabajo: string;
-  productividad: number | null;
-  unidadProductividad: UnidadProduccionMaquina | "";
-  tiempoPreparacionMin: number | null;
-  tiempoRipMin: number | null;
+  operationMode: string;
+  printMode: ModoImpresionPerfil | "";
+  printSides: CarasPerfil | "";
+  productivityValue: number | null;
+  productivityUnit: UnidadProduccionMaquina | "";
+  setupMin: number | null;
+  cleanupMin: number | null;
+  feedReloadMin: number | null;
+  sheetThicknessMm: number | null;
+  maxBatchHeightMm: number | null;
+  materialPreset: string;
   setupEstimadoMin: number | null;
   cantidadPasadas: number | null;
   dobleFaz: boolean;
@@ -492,33 +516,43 @@ export type MaquinaPayload = {
   parametrosTecnicos?: Record<string, unknown>;
   capacidadesAvanzadas?: Record<string, unknown>;
   perfilesOperativos: Array<{
+    id?: string;
     nombre: string;
     tipoPerfil: TipoPerfilOperativoMaquina;
     activo: boolean;
     anchoAplicable?: number;
     altoAplicable?: number;
-    modoTrabajo?: string;
-    productividad?: number;
-    unidadProductividad?: UnidadProduccionMaquina;
-    tiempoPreparacionMin?: number;
-    tiempoRipMin?: number;
+    operationMode?: string;
+    printMode?: ModoImpresionPerfil;
+    printSides?: CarasPerfil;
+    productivityValue?: number;
+    productivityUnit?: UnidadProduccionMaquina;
+    setupMin?: number;
+    cleanupMin?: number;
+    feedReloadMin?: number;
+    sheetThicknessMm?: number;
+    maxBatchHeightMm?: number;
+    materialPreset?: string;
     cantidadPasadas?: number;
     dobleFaz?: boolean;
     detalle?: Record<string, unknown>;
   }>;
   consumibles: Array<{
+    id?: string;
     materiaPrimaVarianteId: string;
     nombre: string;
     tipo: TipoConsumibleMaquina;
     unidad: UnidadConsumoMaquina;
     rendimientoEstimado?: number;
     consumoBase?: number;
+    perfilOperativoId?: string;
     perfilOperativoNombre?: string;
     activo: boolean;
     detalle?: Record<string, unknown>;
     observaciones?: string;
   }>;
   componentesDesgaste: Array<{
+    id?: string;
     materiaPrimaVarianteId: string;
     nombre: string;
     tipo: TipoComponenteDesgasteMaquina;
@@ -530,3 +564,13 @@ export type MaquinaPayload = {
     observaciones?: string;
   }>;
 };
+
+export const printModeItems: Array<{ label: string; value: ModoImpresionPerfil }> = [
+  { label: "CMYK", value: "cmyk" },
+  { label: "K", value: "k" },
+];
+
+export const printSidesItems: Array<{ label: string; value: CarasPerfil }> = [
+  { label: "Simple faz", value: "simple_faz" },
+  { label: "Doble faz", value: "doble_faz" },
+];

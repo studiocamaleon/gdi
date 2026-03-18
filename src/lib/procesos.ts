@@ -11,6 +11,7 @@ export type UnidadProceso =
   | 'm2'
   | 'metro_lineal'
   | 'pieza'
+  | 'corte'
   | 'ciclo'
   | 'unidad'
   | 'kg'
@@ -18,23 +19,18 @@ export type UnidadProceso =
   | 'lote';
 
 export type TipoOperacionProceso =
-  | 'preflight'
   | 'preprensa'
-  | 'impresion'
-  | 'corte'
-  | 'mecanizado'
-  | 'grabado'
-  | 'terminacion'
-  | 'curado'
-  | 'laminado'
-  | 'transferencia'
-  | 'control_calidad'
-  | 'empaque'
-  | 'logistica'
-  | 'tercerizado'
-  | 'otro';
+  | 'prensa'
+  | 'postprensa'
+  | 'acabado'
+  | 'servicio'
+  | 'instalacion';
 
 export type ModoProductividadProceso = 'fija' | 'variable';
+export type ModoProductividadNivel =
+  | 'fija'
+  | 'variable_manual'
+  | 'variable_perfil';
 
 export type ProcesoOperacion = {
   id: string;
@@ -62,10 +58,29 @@ export type ProcesoOperacion = {
   reglaVelocidad: Record<string, unknown> | null;
   reglaMerma: Record<string, unknown> | null;
   detalle: Record<string, unknown> | null;
-  requiresProductoAdicionalId: string | null;
-  requiresProductoAdicionalNombre: string;
+  niveles: ProcesoOperacionNivel[];
   activo: boolean;
   warnings?: string[];
+};
+
+export type ProcesoOperacionNivel = {
+  id: string;
+  nombre: string;
+  orden: number;
+  activo: boolean;
+  modoProductividadNivel: ModoProductividadNivel;
+  tiempoFijoMin: number | null;
+  productividadBase: number | null;
+  unidadSalida: UnidadProceso | null;
+  unidadTiempo: UnidadProceso | null;
+  maquinaId: string | null;
+  maquinaNombre: string;
+  perfilOperativoId: string | null;
+  perfilOperativoNombre: string;
+  setupMin: number | null;
+  cleanupMin: number | null;
+  resumen: string;
+  detalle: Record<string, unknown> | null;
 };
 
 export type Proceso = {
@@ -106,8 +121,25 @@ export type ProcesoOperacionPayload = {
   reglaVelocidad?: Record<string, unknown>;
   reglaMerma?: Record<string, unknown>;
   detalle?: Record<string, unknown>;
-  requiresProductoAdicionalId?: string;
+  niveles?: ProcesoOperacionNivelPayload[];
   activo: boolean;
+};
+
+export type ProcesoOperacionNivelPayload = {
+  id?: string;
+  nombre: string;
+  orden?: number;
+  activo: boolean;
+  modoProductividadNivel: ModoProductividadNivel;
+  tiempoFijoMin?: number;
+  productividadBase?: number;
+  unidadSalida?: UnidadProceso;
+  unidadTiempo?: UnidadProceso;
+  maquinaId?: string;
+  perfilOperativoId?: string;
+  setupMin?: number;
+  cleanupMin?: number;
+  detalle?: Record<string, unknown>;
 };
 
 export type ProcesoPayload = {
@@ -143,6 +175,7 @@ export type ProcesoOperacionPlantilla = {
   reglaVelocidad: Record<string, unknown> | null;
   reglaMerma: Record<string, unknown> | null;
   observaciones: string;
+  niveles: ProcesoOperacionNivel[];
   activo: boolean;
   createdAt: string;
   updatedAt: string;
@@ -166,6 +199,7 @@ export type ProcesoOperacionPlantillaPayload = {
   reglaVelocidad?: Record<string, unknown>;
   reglaMerma?: Record<string, unknown>;
   observaciones?: string;
+  niveles?: ProcesoOperacionNivelPayload[];
   activo: boolean;
 };
 
@@ -182,21 +216,12 @@ export const tipoOperacionProcesoItems: Array<{
   label: string;
   value: TipoOperacionProceso;
 }> = [
-  { label: 'Preflight', value: 'preflight' },
   { label: 'Preprensa', value: 'preprensa' },
-  { label: 'Impresion', value: 'impresion' },
-  { label: 'Corte', value: 'corte' },
-  { label: 'Mecanizado', value: 'mecanizado' },
-  { label: 'Grabado', value: 'grabado' },
-  { label: 'Terminacion', value: 'terminacion' },
-  { label: 'Curado', value: 'curado' },
-  { label: 'Laminado', value: 'laminado' },
-  { label: 'Transferencia', value: 'transferencia' },
-  { label: 'Control calidad', value: 'control_calidad' },
-  { label: 'Empaque', value: 'empaque' },
-  { label: 'Logistica', value: 'logistica' },
-  { label: 'Tercerizado', value: 'tercerizado' },
-  { label: 'Otro', value: 'otro' },
+  { label: 'Prensa', value: 'prensa' },
+  { label: 'Post-prensa', value: 'postprensa' },
+  { label: 'Acabado', value: 'acabado' },
+  { label: 'Servicio', value: 'servicio' },
+  { label: 'Instalación', value: 'instalacion' },
 ];
 
 export const modoProductividadProcesoItems: Array<{
@@ -217,6 +242,7 @@ export const unidadProcesoItems: Array<{ label: string; value: UnidadProceso }> 
   { label: 'Metro cuadrado', value: 'm2' },
   { label: 'Metro lineal', value: 'metro_lineal' },
   { label: 'Pieza', value: 'pieza' },
+  { label: 'Corte', value: 'corte' },
   { label: 'Ciclo', value: 'ciclo' },
   { label: 'Unidad', value: 'unidad' },
   { label: 'Kilogramo', value: 'kg' },

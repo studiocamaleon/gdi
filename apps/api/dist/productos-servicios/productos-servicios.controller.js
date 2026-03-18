@@ -109,6 +109,12 @@ let ProductosServiciosController = class ProductosServiciosController {
     getVariantes(auth, id) {
         return this.service.findVariantes(auth, id);
     }
+    getProductoChecklist(auth, id) {
+        return this.service.getProductoChecklist(auth, id);
+    }
+    upsertProductoChecklist(auth, id, payload) {
+        return this.service.upsertProductoChecklist(auth, id, payload);
+    }
     getProductoAdicionales(auth, id) {
         return this.service.findProductoAdicionales(auth, id);
     }
@@ -401,6 +407,23 @@ __decorate([
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", void 0)
 ], ProductosServiciosController.prototype, "getVariantes", null);
+__decorate([
+    (0, common_1.Get)(':id/checklist'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "getProductoChecklist", null);
+__decorate([
+    (0, common_1.Put)(':id/checklist'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.UpsertProductoChecklistDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "upsertProductoChecklist", null);
 __decorate([
     (0, common_1.Get)(':id/adicionales'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),

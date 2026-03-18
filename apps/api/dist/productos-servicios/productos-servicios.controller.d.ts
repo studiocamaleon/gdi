@@ -1,5 +1,5 @@
 import type { CurrentAuth } from '../auth/auth.types';
-import { AssignProductoAdicionalDto, AssignProductoVariantesRutaMasivaDto, AssignProductoMotorDto, AssignVarianteRutaDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, UpsertProductoAdicionalDto, PreviewImposicionProductoVarianteDto, UpdateProductoRutaPolicyDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
+import { AssignProductoAdicionalDto, AssignProductoVariantesRutaMasivaDto, AssignProductoMotorDto, AssignVarianteRutaDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, UpsertProductoChecklistDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, UpsertProductoAdicionalDto, PreviewImposicionProductoVarianteDto, UpdateProductoRutaPolicyDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
 import { ProductosServiciosService } from './productos-servicios.service';
 export declare class ProductosServiciosController {
     private readonly service;
@@ -237,6 +237,9 @@ export declare class ProductosServiciosController {
                 runMin: number | null;
                 cleanupMin: number | null;
                 tiempoFijoMin: number | null;
+                tiempoFijoMinFallback: number | null;
+                overridesProductividad: Record<string, unknown> | null;
+                usarMaquinariaTerminacion: boolean;
             }[];
         } | null;
         costEffect: {
@@ -288,6 +291,9 @@ export declare class ProductosServiciosController {
                 runMin: number | null;
                 cleanupMin: number | null;
                 tiempoFijoMin: number | null;
+                tiempoFijoMinFallback: number | null;
+                overridesProductividad: Record<string, unknown> | null;
+                usarMaquinariaTerminacion: boolean;
             }[];
         } | null;
         costEffect: {
@@ -339,6 +345,9 @@ export declare class ProductosServiciosController {
                 runMin: number | null;
                 cleanupMin: number | null;
                 tiempoFijoMin: number | null;
+                tiempoFijoMinFallback: number | null;
+                overridesProductividad: Record<string, unknown> | null;
+                usarMaquinariaTerminacion: boolean;
             }[];
         } | null;
         costEffect: {
@@ -390,6 +399,9 @@ export declare class ProductosServiciosController {
                 runMin: number | null;
                 cleanupMin: number | null;
                 tiempoFijoMin: number | null;
+                tiempoFijoMinFallback: number | null;
+                overridesProductividad: Record<string, unknown> | null;
+                usarMaquinariaTerminacion: boolean;
             }[];
         } | null;
         costEffect: {
@@ -494,6 +506,8 @@ export declare class ProductosServiciosController {
         updatedAt: string;
     }>;
     getProductos(auth: CurrentAuth): Promise<{
+        matchingBasePorVariante: never[];
+        pasosFijosPorVariante: never[];
         id: string;
         tipo: import("./dto/productos-servicios.dto").TipoProductoServicioDto;
         codigo: string;
@@ -510,10 +524,31 @@ export declare class ProductosServiciosController {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        dimensionesBaseConsumidas: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
     }[]>;
     getProducto(auth: CurrentAuth, id: string): Promise<{
+        matchingBasePorVariante: {
+            varianteId: string;
+            matching: {
+                tipoImpresion: any;
+                caras: any;
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
+        pasosFijosPorVariante: {
+            varianteId: string;
+            pasos: {
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
         id: string;
         tipo: import("./dto/productos-servicios.dto").TipoProductoServicioDto;
         codigo: string;
@@ -530,10 +565,31 @@ export declare class ProductosServiciosController {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        dimensionesBaseConsumidas: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
     }>;
     createProducto(auth: CurrentAuth, payload: UpsertProductoServicioDto): Promise<{
+        matchingBasePorVariante: {
+            varianteId: string;
+            matching: {
+                tipoImpresion: any;
+                caras: any;
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
+        pasosFijosPorVariante: {
+            varianteId: string;
+            pasos: {
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
         id: string;
         tipo: import("./dto/productos-servicios.dto").TipoProductoServicioDto;
         codigo: string;
@@ -550,10 +606,31 @@ export declare class ProductosServiciosController {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        dimensionesBaseConsumidas: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
     }>;
     updateProducto(auth: CurrentAuth, id: string, payload: UpsertProductoServicioDto): Promise<{
+        matchingBasePorVariante: {
+            varianteId: string;
+            matching: {
+                tipoImpresion: any;
+                caras: any;
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
+        pasosFijosPorVariante: {
+            varianteId: string;
+            pasos: {
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
         id: string;
         tipo: import("./dto/productos-servicios.dto").TipoProductoServicioDto;
         codigo: string;
@@ -570,10 +647,31 @@ export declare class ProductosServiciosController {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        dimensionesBaseConsumidas: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
     }>;
     assignProductoMotor(auth: CurrentAuth, id: string, payload: AssignProductoMotorDto): Promise<{
+        matchingBasePorVariante: {
+            varianteId: string;
+            matching: {
+                tipoImpresion: any;
+                caras: any;
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
+        pasosFijosPorVariante: {
+            varianteId: string;
+            pasos: {
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
         id: string;
         tipo: import("./dto/productos-servicios.dto").TipoProductoServicioDto;
         codigo: string;
@@ -590,6 +688,7 @@ export declare class ProductosServiciosController {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        dimensionesBaseConsumidas: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
     }>;
@@ -623,6 +722,26 @@ export declare class ProductosServiciosController {
         updatedAt: string;
     }>;
     updateProductoRutaPolicy(auth: CurrentAuth, id: string, payload: UpdateProductoRutaPolicyDto): Promise<{
+        matchingBasePorVariante: {
+            varianteId: string;
+            matching: {
+                tipoImpresion: any;
+                caras: any;
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
+        pasosFijosPorVariante: {
+            varianteId: string;
+            pasos: {
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
         id: string;
         tipo: import("./dto/productos-servicios.dto").TipoProductoServicioDto;
         codigo: string;
@@ -639,6 +758,7 @@ export declare class ProductosServiciosController {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        dimensionesBaseConsumidas: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
     }>;
@@ -670,6 +790,152 @@ export declare class ProductosServiciosController {
         createdAt: string;
         updatedAt: string;
     }[]>;
+    getProductoChecklist(auth: CurrentAuth, id: string): Promise<{
+        id: string;
+        productoId: string;
+        activo: boolean;
+        preguntas: {
+            id: string;
+            texto: string;
+            tipoPregunta: import("./dto/productos-servicios.dto").TipoChecklistPreguntaDto;
+            orden: number;
+            activo: boolean;
+            respuestas: {
+                id: string;
+                texto: string;
+                codigo: string | null;
+                orden: number;
+                activo: boolean;
+                reglas: {
+                    id: string;
+                    accion: import("./dto/productos-servicios.dto").TipoChecklistAccionReglaDto;
+                    orden: number;
+                    activo: boolean;
+                    pasoPlantillaId: string | null;
+                    pasoPlantillaNombre: any;
+                    centroCostoId: any;
+                    centroCostoNombre: any;
+                    maquinaNombre: any;
+                    perfilOperativoNombre: any;
+                    setupMin: number | null;
+                    runMin: number | null;
+                    cleanupMin: number | null;
+                    tiempoFijoMin: number | null;
+                    variantePasoId: string | null;
+                    variantePasoNombre: string;
+                    variantePasoResumen: string;
+                    nivelesDisponibles: {
+                        id: string;
+                        nombre: string;
+                        orden: number;
+                        activo: boolean;
+                        modoProductividadNivel: string;
+                        tiempoFijoMin: number | null;
+                        productividadBase: number | null;
+                        unidadSalida: string | null;
+                        unidadTiempo: string | null;
+                        maquinaId: string | null;
+                        maquinaNombre: string;
+                        perfilOperativoId: string | null;
+                        perfilOperativoNombre: string;
+                        setupMin: number | null;
+                        cleanupMin: number | null;
+                        resumen: string;
+                        detalle: Record<string, unknown>;
+                    }[];
+                    costoRegla: import("./dto/productos-servicios.dto").ReglaCostoChecklistDto | null;
+                    costoValor: number | null;
+                    costoCentroCostoId: string | null;
+                    costoCentroCostoNombre: string;
+                    materiaPrimaVarianteId: string | null;
+                    materiaPrimaNombre: string;
+                    materiaPrimaSku: string;
+                    tipoConsumo: import("./dto/productos-servicios.dto").TipoConsumoAdicionalMaterialDto | null;
+                    factorConsumo: number | null;
+                    mermaPct: number | null;
+                    detalle: Record<string, unknown> | null;
+                }[];
+            }[];
+        }[];
+        createdAt: string;
+        updatedAt: string;
+    } | {
+        productoId: string;
+        activo: boolean;
+        preguntas: never[];
+        createdAt: null;
+        updatedAt: null;
+    }>;
+    upsertProductoChecklist(auth: CurrentAuth, id: string, payload: UpsertProductoChecklistDto): Promise<{
+        id: string;
+        productoId: string;
+        activo: boolean;
+        preguntas: {
+            id: string;
+            texto: string;
+            tipoPregunta: import("./dto/productos-servicios.dto").TipoChecklistPreguntaDto;
+            orden: number;
+            activo: boolean;
+            respuestas: {
+                id: string;
+                texto: string;
+                codigo: string | null;
+                orden: number;
+                activo: boolean;
+                reglas: {
+                    id: string;
+                    accion: import("./dto/productos-servicios.dto").TipoChecklistAccionReglaDto;
+                    orden: number;
+                    activo: boolean;
+                    pasoPlantillaId: string | null;
+                    pasoPlantillaNombre: any;
+                    centroCostoId: any;
+                    centroCostoNombre: any;
+                    maquinaNombre: any;
+                    perfilOperativoNombre: any;
+                    setupMin: number | null;
+                    runMin: number | null;
+                    cleanupMin: number | null;
+                    tiempoFijoMin: number | null;
+                    variantePasoId: string | null;
+                    variantePasoNombre: string;
+                    variantePasoResumen: string;
+                    nivelesDisponibles: {
+                        id: string;
+                        nombre: string;
+                        orden: number;
+                        activo: boolean;
+                        modoProductividadNivel: string;
+                        tiempoFijoMin: number | null;
+                        productividadBase: number | null;
+                        unidadSalida: string | null;
+                        unidadTiempo: string | null;
+                        maquinaId: string | null;
+                        maquinaNombre: string;
+                        perfilOperativoId: string | null;
+                        perfilOperativoNombre: string;
+                        setupMin: number | null;
+                        cleanupMin: number | null;
+                        resumen: string;
+                        detalle: Record<string, unknown>;
+                    }[];
+                    costoRegla: import("./dto/productos-servicios.dto").ReglaCostoChecklistDto | null;
+                    costoValor: number | null;
+                    costoCentroCostoId: string | null;
+                    costoCentroCostoNombre: string;
+                    materiaPrimaVarianteId: string | null;
+                    materiaPrimaNombre: string;
+                    materiaPrimaSku: string;
+                    tipoConsumo: import("./dto/productos-servicios.dto").TipoConsumoAdicionalMaterialDto | null;
+                    factorConsumo: number | null;
+                    mermaPct: number | null;
+                    detalle: Record<string, unknown> | null;
+                }[];
+            }[];
+        }[];
+        createdAt: string;
+        updatedAt: string;
+    }>;
     getProductoAdicionales(auth: CurrentAuth, id: string): Promise<{
         id: string;
         productoServicioId: string;
@@ -949,6 +1215,7 @@ export declare class ProductosServiciosController {
                 totalMin: number;
                 tarifaHora: number;
                 costo: number;
+                detalleTecnico: Record<string, unknown> | null;
             }[];
             materiales: Record<string, unknown>[];
         };
@@ -957,6 +1224,7 @@ export declare class ProductosServiciosController {
             papel: number;
             toner: number;
             desgaste: number;
+            consumiblesTerminacion: number;
             adicionalesMateriales: number;
             adicionalesCostEffects: number;
         };
@@ -995,39 +1263,48 @@ export declare class ProductosServiciosController {
                 pliegosPorSustrato: number;
                 orientacion: string;
             };
-            addonsSeleccionados: string[];
-            addonsConfig: {
-                addonId: string;
-                nivelId: string | null;
+            matchingBaseAplicado: {
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: any;
+                perfilOperativoId: any;
+                perfilOperativoNombre: any;
+                tipoImpresion: import("./dto/productos-servicios.dto").TipoImpresionProductoVarianteDto | null;
+                caras: import("./dto/productos-servicios.dto").CarasProductoVarianteDto | null;
+            }[];
+            checklistAplicado: Record<string, unknown>[];
+            checklistRespuestasSeleccionadas: import("./dto/productos-servicios.dto").CotizarChecklistRespuestaDto[];
+            atributosTecnicosConfigurados: {
+                dimension: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto;
+                valor: import("./dto/productos-servicios.dto").ValorOpcionProductivaDto;
             }[];
             opcionProductivaEfectiva: {
                 dimension: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto;
                 valores: import("./dto/productos-servicios.dto").ValorOpcionProductivaDto[];
             }[];
             efectosAplicados: {
-                id: string;
-                addonId: string;
+                id: any;
+                addonId: any;
                 addonNombre: string;
                 tipo: import("./dto/productos-servicios.dto").TipoProductoAdicionalEfectoDto;
-                nombre: string;
+                nombre: any;
             }[];
             routeEffectsAplicados: {
-                id: string;
-                addonId: string;
-                nombre: string;
-                pasos: number;
+                id: any;
+                addonId: any;
+                nombre: any;
+                pasos: any;
             }[];
             costEffectsAplicados: {
-                id: string;
-                addonId: string;
-                nombre: string;
+                id: any;
+                addonId: any;
+                nombre: any;
                 regla: import("./dto/productos-servicios.dto").ReglaCostoAdicionalEfectoDto | null;
             }[];
             materialEffectsAplicados: {
-                id: string;
-                addonId: string;
-                nombre: string;
-                material: string;
+                id: any;
+                addonId: any;
+                nombre: any;
+                material: any;
             }[];
             costosPorEfecto: Record<string, unknown>[];
             pasosCondicionalesActivos: {

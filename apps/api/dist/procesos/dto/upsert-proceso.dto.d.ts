@@ -1,6 +1,10 @@
 export declare enum PlantillaMaquinariaDto {
     router_cnc = "router_cnc",
     corte_laser = "corte_laser",
+    guillotina = "guillotina",
+    laminadora_bopp_rollo = "laminadora_bopp_rollo",
+    redondeadora_puntas = "redondeadora_puntas",
+    perforadora = "perforadora",
     impresora_3d = "impresora_3d",
     impresora_dtf = "impresora_dtf",
     impresora_dtf_uv = "impresora_dtf_uv",
@@ -23,25 +27,21 @@ export declare enum EstadoConfiguracionProcesoDto {
     lista = "lista"
 }
 export declare enum TipoOperacionProcesoDto {
-    preflight = "preflight",
     preprensa = "preprensa",
-    impresion = "impresion",
-    corte = "corte",
-    mecanizado = "mecanizado",
-    grabado = "grabado",
-    terminacion = "terminacion",
-    curado = "curado",
-    laminado = "laminado",
-    transferencia = "transferencia",
-    control_calidad = "control_calidad",
-    empaque = "empaque",
-    logistica = "logistica",
-    tercerizado = "tercerizado",
-    otro = "otro"
+    prensa = "prensa",
+    postprensa = "postprensa",
+    acabado = "acabado",
+    servicio = "servicio",
+    instalacion = "instalacion"
 }
 export declare enum ModoProductividadProcesoDto {
     fija = "fija",
     variable = "variable"
+}
+export declare enum ModoProductividadNivelDto {
+    fija = "fija",
+    variable_manual = "variable_manual",
+    variable_perfil = "variable_perfil"
 }
 export declare enum UnidadProcesoDto {
     ninguna = "ninguna",
@@ -53,6 +53,7 @@ export declare enum UnidadProcesoDto {
     m2 = "m2",
     metro_lineal = "metro_lineal",
     pieza = "pieza",
+    corte = "corte",
     ciclo = "ciclo",
     unidad = "unidad",
     kg = "kg",
@@ -81,8 +82,24 @@ export declare class ProcesoOperacionItemDto {
     reglaVelocidad?: Record<string, unknown>;
     reglaMerma?: Record<string, unknown>;
     detalle?: Record<string, unknown>;
-    requiresProductoAdicionalId?: string;
+    niveles?: ProcesoOperacionNivelDto[];
     activo: boolean;
+}
+export declare class ProcesoOperacionNivelDto {
+    id?: string;
+    nombre: string;
+    orden?: number;
+    activo?: boolean;
+    modoProductividadNivel: ModoProductividadNivelDto;
+    tiempoFijoMin?: number;
+    productividadBase?: number;
+    unidadSalida?: UnidadProcesoDto;
+    unidadTiempo?: UnidadProcesoDto;
+    maquinaId?: string;
+    perfilOperativoId?: string;
+    setupMin?: number;
+    cleanupMin?: number;
+    detalle?: Record<string, unknown>;
 }
 export declare class UpsertProcesoDto {
     codigo?: string;

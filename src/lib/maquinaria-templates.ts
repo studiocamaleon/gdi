@@ -34,8 +34,22 @@ const qualityOptions = [
 ];
 
 const printModeOptions = [
-  option("blanco_negro", "Blanco y negro"),
-  option("color", "Color"),
+  option("k", "K"),
+  option("cmyk", "CMYK"),
+];
+
+const carasPerfilOptions = [
+  option("simple_faz", "Simple faz"),
+  option("doble_faz", "Doble faz"),
+];
+
+const guillotinaPaperPresetOptions = [
+  option("obra_90", "Obra 90 g"),
+  option("ilustracion_150", "Ilustración 150 g"),
+  option("ilustracion_200", "Ilustración 200 g"),
+  option("ilustracion_250", "Ilustración 250 g"),
+  option("ilustracion_300", "Ilustración 300 g"),
+  option("otro", "Otro"),
 ];
 
 const uvPrintModeOptions = [
@@ -116,6 +130,20 @@ const laserTypeOptions = [
   option("co2", "CO2"),
   option("fibra", "Fibra"),
   option("mixto", "Mixto"),
+];
+
+const cornerRadiusOptions = [
+  option("r2", "R2"),
+  option("r3", "R3"),
+  option("r4", "R4"),
+  option("r6", "R6"),
+  option("r8", "R8"),
+  option("r10", "R10"),
+];
+
+const perforationTypeOptions = [
+  option("estandar", "Perforado estandar"),
+  option("micro", "Microperforado"),
 ];
 
 const sheetFormatOptions = [
@@ -498,13 +526,22 @@ function buildLaserPrinterSections(): MaquinariaTemplateSection[] {
           options: sheetFormatOptions,
         }),
         field({
-          key: "modoImpresion",
+          key: "printMode",
           label: "Modo de impresion",
           scope: "perfil_operativo",
           kind: "select",
           required: true,
-          description: "Define si el perfil imprime en blanco y negro o color.",
+          description: "Define si el perfil imprime en K o CMYK.",
           options: printModeOptions,
+        }),
+        field({
+          key: "printSides",
+          label: "Caras",
+          scope: "perfil_operativo",
+          kind: "select",
+          required: true,
+          description: "Indica si el perfil corresponde a simple o doble faz.",
+          options: carasPerfilOptions,
         }),
         field({
           key: "calidad",
@@ -516,7 +553,7 @@ function buildLaserPrinterSections(): MaquinariaTemplateSection[] {
           options: qualityOptions,
         }),
         field({
-          key: "productividad",
+          key: "productivityValue",
           label: "Productividad",
           scope: "perfil_operativo",
           kind: "number",
@@ -526,16 +563,16 @@ function buildLaserPrinterSections(): MaquinariaTemplateSection[] {
           placeholder: "33",
         }),
         field({
-          key: "tiempoRipMin",
-          label: "Tiempo RIP",
+          key: "cleanupMin",
+          label: "Cleanup",
           scope: "perfil_operativo",
           kind: "number",
           unit: "min",
-          description: "Tiempo medio de RIP por corrida.",
+          description: "Tiempo final de cierre o limpieza de la corrida.",
           placeholder: "3",
         }),
         field({
-          key: "tiempoPreparacionMin",
+          key: "setupMin",
           label: "Setup",
           scope: "perfil_operativo",
           kind: "number",
@@ -691,7 +728,7 @@ function buildUvFlatbedSections(kind: "flatbed" | "mesa_extensora"): MaquinariaT
           placeholder: "Rigido blanco y barniz - normal",
         }),
         field({
-          key: "modoImpresion",
+          key: "printMode",
           label: "Modo de impresion",
           scope: "perfil_operativo",
           kind: "select",
@@ -709,7 +746,7 @@ function buildUvFlatbedSections(kind: "flatbed" | "mesa_extensora"): MaquinariaT
           options: qualityOptions,
         }),
         field({
-          key: "productividad",
+          key: "productivityValue",
           label: "Productividad",
           scope: "perfil_operativo",
           kind: "number",
@@ -727,7 +764,7 @@ function buildUvFlatbedSections(kind: "flatbed" | "mesa_extensora"): MaquinariaT
           placeholder: "8",
         }),
         field({
-          key: "tiempoPreparacionMin",
+          key: "setupMin",
           label: "Setup",
           scope: "perfil_operativo",
           kind: "number",
@@ -884,7 +921,7 @@ function buildUvRolloSections(): MaquinariaTemplateSection[] {
           placeholder: "Vinilo CMYK + Blanco normal",
         }),
         field({
-          key: "modoImpresion",
+          key: "printMode",
           label: "Modo impresion",
           scope: "perfil_operativo",
           kind: "select",
@@ -902,7 +939,7 @@ function buildUvRolloSections(): MaquinariaTemplateSection[] {
           options: qualityOptions,
         }),
         field({
-          key: "productividad",
+          key: "productivityValue",
           label: "Productividad",
           scope: "perfil_operativo",
           kind: "number",
@@ -920,7 +957,7 @@ function buildUvRolloSections(): MaquinariaTemplateSection[] {
           placeholder: "6",
         }),
         field({
-          key: "tiempoPreparacionMin",
+          key: "setupMin",
           label: "Setup",
           scope: "perfil_operativo",
           kind: "number",
@@ -1061,7 +1098,7 @@ function buildUvCylindricalSections(): MaquinariaTemplateSection[] {
           placeholder: "Termo blanco normal",
         }),
         field({
-          key: "modoImpresion",
+          key: "printMode",
           label: "Modo impresion",
           scope: "perfil_operativo",
           kind: "select",
@@ -1079,7 +1116,7 @@ function buildUvCylindricalSections(): MaquinariaTemplateSection[] {
           options: qualityOptions,
         }),
         field({
-          key: "productividad",
+          key: "productivityValue",
           label: "Productividad",
           scope: "perfil_operativo",
           kind: "number",
@@ -1097,7 +1134,7 @@ function buildUvCylindricalSections(): MaquinariaTemplateSection[] {
           placeholder: "6",
         }),
         field({
-          key: "tiempoPreparacionMin",
+          key: "setupMin",
           label: "Setup",
           scope: "perfil_operativo",
           kind: "number",
@@ -1235,7 +1272,7 @@ function buildRollInkjetSections(
           options: qualityOptions,
         }),
         field({
-          key: "productividad",
+          key: "productivityValue",
           label: "Productividad",
           scope: "perfil_operativo",
           kind: "number",
@@ -1253,7 +1290,7 @@ function buildRollInkjetSections(
           placeholder: "6",
         }),
         field({
-          key: "tiempoPreparacionMin",
+          key: "setupMin",
           label: "Setup",
           scope: "perfil_operativo",
           kind: "number",
@@ -1437,7 +1474,7 @@ function buildDtfSections(kind: "dtf" | "dtf_uv"): MaquinariaTemplateSection[] {
           options: qualityOptions,
         }),
         field({
-          key: "productividad",
+          key: "productivityValue",
           label: "Productividad",
           scope: "perfil_operativo",
           kind: "number",
@@ -1455,7 +1492,7 @@ function buildDtfSections(kind: "dtf" | "dtf_uv"): MaquinariaTemplateSection[] {
           placeholder: "8",
         }),
         field({
-          key: "tiempoPreparacionMin",
+          key: "setupMin",
           label: "Setup",
           scope: "perfil_operativo",
           kind: "number",
@@ -1619,7 +1656,7 @@ function build3dSections(): MaquinariaTemplateSection[] {
           placeholder: "150",
         }),
         field({
-          key: "productividad",
+          key: "productivityValue",
           label: "Productividad",
           scope: "perfil_operativo",
           kind: "number",
@@ -2168,7 +2205,7 @@ function buildCuttingTableSections(kind: "mesa" | "plotter"): MaquinariaTemplate
           placeholder: kind === "mesa" ? "Cuchilla tangencial" : "Cuchilla 45 grados",
         }),
         field({
-          key: "productividad",
+          key: "productivityValue",
           label: "Productividad",
           scope: "perfil_operativo",
           kind: "number",
@@ -2177,7 +2214,7 @@ function buildCuttingTableSections(kind: "mesa" | "plotter"): MaquinariaTemplate
           placeholder: kind === "mesa" ? "35" : "12",
         }),
         field({
-          key: "tiempoPreparacionMin",
+          key: "setupMin",
           label: "Setup",
           scope: "perfil_operativo",
           kind: "number",
@@ -2197,6 +2234,442 @@ function buildCuttingTableSections(kind: "mesa" | "plotter"): MaquinariaTemplate
       id: "desgaste_repuestos",
       title: "Desgaste y repuestos",
       description: "Cuchillas, ruedas y kits de mantenimiento.",
+      fields: genericWearFields,
+    }),
+  ];
+}
+
+function buildGuillotinaSections(): MaquinariaTemplateSection[] {
+  return [
+    section({
+      id: "capacidades_fisicas",
+      title: "Capacidades fisicas",
+      description: "Limites de carga y corte del equipo.",
+      fields: [
+        field({
+          key: "altoBocaMm",
+          label: "Alto de boca (mm)",
+          scope: "maquina",
+          kind: "number",
+          required: true,
+          unit: "mm",
+          description: "Altura maxima de pila que admite el equipo.",
+          placeholder: "80",
+        }),
+      ],
+    }),
+    section({
+      id: "perfiles_operativos",
+      title: "Perfiles operativos",
+      description: "Perfiles por sustrato y configuración operativa de corte.",
+      fields: [
+        field({
+          key: "nombre",
+          label: "Nombre del perfil",
+          scope: "perfil_operativo",
+          kind: "text",
+          required: true,
+          description: "Nombre del perfil operativo.",
+          placeholder: "Papel 300g corte estandar",
+        }),
+        field({
+          key: "materialPreset",
+          label: "Papel / gramaje",
+          scope: "perfil_operativo",
+          kind: "select",
+          description: "Preset asistido para autocompletar el espesor de hoja. Es orientativo.",
+          options: guillotinaPaperPresetOptions,
+          placeholder: "Seleccionar preset",
+        }),
+        field({
+          key: "sheetThicknessMm",
+          label: "Espesor hoja (mm)",
+          scope: "perfil_operativo",
+          kind: "number",
+          required: true,
+          unit: "mm",
+          description: "Espesor unitario de la hoja. Se usa para calcular la capacidad por tanda.",
+          placeholder: "0.12",
+        }),
+        field({
+          key: "productivityValue",
+          label: "Cortes por minuto",
+          scope: "perfil_operativo",
+          kind: "number",
+          required: true,
+          description: "Velocidad real de corte para este perfil operativo.",
+          placeholder: "28",
+        }),
+        field({
+          key: "setupMin",
+          label: "Setup (min)",
+          scope: "perfil_operativo",
+          kind: "number",
+          unit: "min",
+          description: "Tiempo de preparación inicial para este perfil.",
+          placeholder: "2",
+        }),
+        field({
+          key: "feedReloadMin",
+          label: "Recarga de tanda (min)",
+          scope: "perfil_operativo",
+          kind: "number",
+          unit: "min",
+          description: "Tiempo promedio de recarga entre tandas para este perfil.",
+          placeholder: "0.8",
+        }),
+        field({
+          key: "maxBatchHeightMm",
+          label: "Altura máxima de tanda (mm)",
+          scope: "perfil_operativo",
+          kind: "number",
+          unit: "mm",
+          description: "Límite operativo opcional. Si no se carga, se usa el alto de boca de la máquina.",
+          placeholder: "60",
+        }),
+      ],
+    }),
+    section({
+      id: "consumibles",
+      title: "Consumibles",
+      description: "Consumibles asociados al corte.",
+      fields: genericConsumableFields,
+    }),
+    section({
+      id: "desgaste_repuestos",
+      title: "Desgaste y repuestos",
+      description: "Cuchillas y repuestos de mantenimiento.",
+      fields: genericWearFields,
+    }),
+  ];
+}
+
+function buildLaminadoraBoppSections(): MaquinariaTemplateSection[] {
+  return [
+    section({
+      id: "capacidades_fisicas",
+      title: "Capacidades fisicas",
+      description: "Parametros fisicos del rollo y del equipo.",
+      fields: [
+        field({
+          key: "anchoRolloMm",
+          label: "Ancho rollo (mm)",
+          scope: "maquina",
+          kind: "number",
+          required: true,
+          unit: "mm",
+          description: "Ancho util del rollo BOPP.",
+          placeholder: "330",
+        }),
+      ],
+    }),
+    section({
+      id: "parametros_tecnicos",
+      title: "Parametros tecnicos",
+      description: "Velocidad y mermas base de laminado.",
+      fields: [
+        field({
+          key: "velocidadMMin",
+          label: "Velocidad (m/min)",
+          scope: "maquina",
+          kind: "number",
+          required: true,
+          description: "Velocidad lineal nominal del laminado.",
+          placeholder: "20",
+        }),
+        field({
+          key: "mermaArranqueMm",
+          label: "Merma arranque (mm)",
+          scope: "maquina",
+          kind: "number",
+          required: true,
+          unit: "mm",
+          description: "Consumo inicial por arranque/calibracion.",
+          placeholder: "500",
+        }),
+        field({
+          key: "mermaCierreMm",
+          label: "Merma cierre (mm)",
+          scope: "maquina",
+          kind: "number",
+          required: true,
+          unit: "mm",
+          description: "Consumo final de cierre de tirada.",
+          placeholder: "300",
+        }),
+      ],
+    }),
+    section({
+      id: "perfiles_operativos",
+      title: "Perfiles operativos",
+      description: "Perfiles de laminado por material y tolerancias.",
+      fields: [
+        field({
+          key: "nombre",
+          label: "Nombre del perfil",
+          scope: "perfil_operativo",
+          kind: "text",
+          required: true,
+          description: "Nombre del perfil operativo.",
+          placeholder: "BOPP brillo estandar",
+        }),
+        field({
+          key: "gapEntreHojasMm",
+          label: "Gap entre hojas (mm)",
+          scope: "perfil_operativo",
+          kind: "number",
+          required: true,
+          unit: "mm",
+          description: "Separacion longitudinal entre hojas.",
+          placeholder: "6",
+        }),
+        field({
+          key: "margenLatIzqMm",
+          label: "Margen lateral izq (mm)",
+          scope: "perfil_operativo",
+          kind: "number",
+          unit: "mm",
+          description: "Desperdicio lateral izquierdo.",
+          placeholder: "4",
+        }),
+        field({
+          key: "margenLatDerMm",
+          label: "Margen lateral der (mm)",
+          scope: "perfil_operativo",
+          kind: "number",
+          unit: "mm",
+          description: "Desperdicio lateral derecho.",
+          placeholder: "4",
+        }),
+        field({
+          key: "colaCorteMm",
+          label: "Cola de corte (mm)",
+          scope: "perfil_operativo",
+          kind: "number",
+          unit: "mm",
+          description: "Reserva longitudinal adicional para corte final.",
+          placeholder: "2",
+        }),
+        field({
+          key: "warmupMin",
+          label: "Warmup (min)",
+          scope: "perfil_operativo",
+          kind: "number",
+          unit: "min",
+          description: "Tiempo de calentamiento adicional.",
+          placeholder: "4",
+        }),
+        field({
+          key: "factorVelocidad",
+          label: "Factor velocidad",
+          scope: "perfil_operativo",
+          kind: "number",
+          description: "Ajuste multiplicador sobre velocidad nominal (1 = normal).",
+          placeholder: "1",
+        }),
+      ],
+    }),
+    section({
+      id: "consumibles",
+      title: "Consumibles",
+      description: "Film BOPP y auxiliares.",
+      fields: genericConsumableFields,
+    }),
+    section({
+      id: "desgaste_repuestos",
+      title: "Desgaste y repuestos",
+      description: "Rodillos, cuchillas y kits de mantenimiento.",
+      fields: genericWearFields,
+    }),
+  ];
+}
+
+function buildRedondeadoraSections(): MaquinariaTemplateSection[] {
+  return [
+    section({
+      id: "capacidades_fisicas",
+      title: "Capacidades fisicas",
+      description: "Capacidad de trabajo del equipo.",
+      fields: [
+        field({
+          key: "maxEspesorPilaMm",
+          label: "Max espesor pila (mm)",
+          scope: "maquina",
+          kind: "number",
+          required: true,
+          unit: "mm",
+          description: "Espesor maximo de pila por golpe.",
+          placeholder: "10",
+        }),
+      ],
+    }),
+    section({
+      id: "parametros_tecnicos",
+      title: "Parametros tecnicos",
+      description: "Ritmo de operación del equipo.",
+      fields: [
+        field({
+          key: "golpesMinNominal",
+          label: "Golpes por minuto",
+          scope: "maquina",
+          kind: "number",
+          required: true,
+          description: "Frecuencia nominal de golpes del equipo.",
+          placeholder: "35",
+        }),
+      ],
+    }),
+    section({
+      id: "perfiles_operativos",
+      title: "Perfiles operativos",
+      description: "Perfiles por radio y cantidad de esquinas.",
+      fields: [
+        field({
+          key: "nombre",
+          label: "Nombre del perfil",
+          scope: "perfil_operativo",
+          kind: "text",
+          required: true,
+          description: "Nombre del perfil operativo.",
+          placeholder: "Tarjeta radio 3",
+        }),
+        field({
+          key: "radio",
+          label: "Radio",
+          scope: "perfil_operativo",
+          kind: "select",
+          description: "Radio de redondeado configurado.",
+          options: cornerRadiusOptions,
+        }),
+        field({
+          key: "esquinasPorPieza",
+          label: "Esquinas por pieza",
+          scope: "perfil_operativo",
+          kind: "number",
+          required: true,
+          description: "Cantidad de esquinas a redondear por pieza.",
+          placeholder: "4",
+        }),
+        field({
+          key: "factorVelocidad",
+          label: "Factor velocidad",
+          scope: "perfil_operativo",
+          kind: "number",
+          description: "Ajuste multiplicador sobre velocidad nominal (1 = normal).",
+          placeholder: "1",
+        }),
+      ],
+    }),
+    section({
+      id: "consumibles",
+      title: "Consumibles",
+      description: "Consumibles auxiliares del proceso.",
+      fields: genericConsumableFields,
+    }),
+    section({
+      id: "desgaste_repuestos",
+      title: "Desgaste y repuestos",
+      description: "Cuchillas y repuestos de mantenimiento.",
+      fields: genericWearFields,
+    }),
+  ];
+}
+
+function buildPerforadoraSections(): MaquinariaTemplateSection[] {
+  return [
+    section({
+      id: "capacidades_fisicas",
+      title: "Capacidades fisicas",
+      description: "Ancho útil y capacidad de alimentación.",
+      fields: [
+        field({
+          key: "anchoUtil",
+          label: "Ancho util",
+          scope: "maquina",
+          kind: "number",
+          required: true,
+          unit: "cm",
+          description: "Ancho maximo de hoja a perforar.",
+          placeholder: "50",
+        }),
+      ],
+    }),
+    section({
+      id: "parametros_tecnicos",
+      title: "Parametros tecnicos",
+      description: "Capacidad nominal y lineas por pasada.",
+      fields: [
+        field({
+          key: "pliegosMinNominal",
+          label: "Pliegos por minuto",
+          scope: "maquina",
+          kind: "number",
+          required: true,
+          description: "Capacidad nominal del alimentador.",
+          placeholder: "80",
+        }),
+        field({
+          key: "lineasPorPasadaMax",
+          label: "Lineas por pasada (max)",
+          scope: "maquina",
+          kind: "number",
+          required: true,
+          description: "Cantidad maxima de lineas perforables por pasada.",
+          placeholder: "1",
+        }),
+      ],
+    }),
+    section({
+      id: "perfiles_operativos",
+      title: "Perfiles operativos",
+      description: "Perfiles por tipo y cantidad de lineas.",
+      fields: [
+        field({
+          key: "nombre",
+          label: "Nombre del perfil",
+          scope: "perfil_operativo",
+          kind: "text",
+          required: true,
+          description: "Nombre del perfil operativo.",
+          placeholder: "Microperforado doble linea",
+        }),
+        field({
+          key: "lineasPerforado",
+          label: "Lineas por hoja",
+          scope: "perfil_operativo",
+          kind: "number",
+          required: true,
+          description: "Cantidad de lineas requeridas por hoja.",
+          placeholder: "2",
+        }),
+        field({
+          key: "tipoPerforado",
+          label: "Tipo perforado",
+          scope: "perfil_operativo",
+          kind: "select",
+          description: "Tipo de herramienta/perforación.",
+          options: perforationTypeOptions,
+        }),
+        field({
+          key: "factorVelocidad",
+          label: "Factor velocidad",
+          scope: "perfil_operativo",
+          kind: "number",
+          description: "Ajuste multiplicador sobre velocidad nominal (1 = normal).",
+          placeholder: "1",
+        }),
+      ],
+    }),
+    section({
+      id: "consumibles",
+      title: "Consumibles",
+      description: "Consumibles auxiliares del perforado.",
+      fields: genericConsumableFields,
+    }),
+    section({
+      id: "desgaste_repuestos",
+      title: "Desgaste y repuestos",
+      description: "Peines, cuchillas y repuestos.",
       fields: genericWearFields,
     }),
   ];
@@ -2243,6 +2716,81 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
         "No todos los materiales son aptos para corte laser; evita cargar compatibilidades dudosas.",
       ],
       examples: ["Laser CO2 130x90 cm para acrilico y MDF"],
+    },
+  }),
+  template({
+    id: "guillotina",
+    label: "Guillotina",
+    family: "terminacion",
+    description: "Equipo de corte en pila para terminación de pliegos.",
+    geometry: "pliego",
+    defaultProductionUnit: "cortes_min",
+    allowedProductionUnits: ["cortes_min", "ciclo"],
+    visibleSections: commonTemplateSections.filter((sectionId) => sectionId !== "parametros_tecnicos"),
+    sections: buildGuillotinaSections(),
+    help: {
+      summary:
+        "Usa esta plantilla para guillotinas donde la capacidad física y el perfil del sustrato determinan la velocidad real de corte.",
+      tips: [
+        "Configura alto de boca en capacidades físicas y define por perfil el espesor real del sustrato.",
+        "Usa presets de papel/gramaje como ayuda inicial y corrige el espesor si tu proveedor difiere.",
+      ],
+      examples: ["Guillotina 92 cm para corte final de pliegos impresos"],
+    },
+  }),
+  template({
+    id: "laminadora_bopp_rollo",
+    label: "Laminadora BOPP rollo",
+    family: "terminacion",
+    description: "Equipo de laminación en rollo con consumo continuo de film.",
+    geometry: "rollo",
+    defaultProductionUnit: "metro_lineal",
+    visibleSections: commonTemplateSections,
+    sections: buildLaminadoraBoppSections(),
+    help: {
+      summary:
+        "Usa esta plantilla para laminado térmico/BOPP donde existen mermas longitudinales y laterales del film.",
+      tips: [
+        "Configura gap y márgenes laterales para costear consumo real del film.",
+        "Carga warmup cuando la máquina requiere estabilización térmica.",
+      ],
+      examples: ["Laminadora BOPP para tarjetas y folletería en hoja"],
+    },
+  }),
+  template({
+    id: "redondeadora_puntas",
+    label: "Redondeadora de puntas",
+    family: "terminacion",
+    description: "Equipo para redondeo de esquinas en piezas finales.",
+    geometry: "pliego",
+    defaultProductionUnit: "pieza",
+    visibleSections: commonTemplateSections,
+    sections: buildRedondeadoraSections(),
+    help: {
+      summary:
+        "Usa esta plantilla para redondeadoras donde la productividad depende de golpes por minuto y esquinas por pieza.",
+      tips: [
+        "Separa perfiles por radio y cantidad de esquinas para reflejar tiempos reales.",
+      ],
+      examples: ["Redondeadora para tarjetas personales"],
+    },
+  }),
+  template({
+    id: "perforadora",
+    label: "Perforadora",
+    family: "terminacion",
+    description: "Equipo para perforado y microperforado en hoja/pliego.",
+    geometry: "pliego",
+    defaultProductionUnit: "hoja",
+    visibleSections: commonTemplateSections,
+    sections: buildPerforadoraSections(),
+    help: {
+      summary:
+        "Usa esta plantilla para perforado donde la cantidad de líneas por hoja puede requerir múltiples pasadas.",
+      tips: [
+        "Configura líneas máximas por pasada para modelar correctamente el tiempo de corrida.",
+      ],
+      examples: ["Perforadora para cuponeras y desprendibles"],
     },
   }),
   template({
@@ -2551,7 +3099,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
 export const plantillaMaquinariaItems = maquinariaTemplates.map((templateItem) => ({
   label: templateItem.label,
   value: templateItem.id,
-}));
+})).sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" }));
 
 export function getMaquinariaTemplate(templateId: PlantillaMaquinaria) {
   return maquinariaTemplates.find((templateItem) => templateItem.id === templateId) ?? null;

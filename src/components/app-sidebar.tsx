@@ -100,11 +100,6 @@ const costos = [
     href: "/costos/productos-servicios",
     icon: BoxesIcon,
   },
-  {
-    title: "Biblioteca adicionales",
-    href: "/costos/adicionales",
-    icon: Settings2Icon,
-  },
 ];
 
 const inventario = [

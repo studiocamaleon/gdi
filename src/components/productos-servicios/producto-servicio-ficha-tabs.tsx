@@ -19,6 +19,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 
 import type { MateriaPrima } from "@/lib/materias-primas";
+import type { Maquina } from "@/lib/maquinaria";
 import type { Proceso } from "@/lib/procesos";
 import {
   modoProductividadProcesoItems,
@@ -33,18 +34,14 @@ import {
   getProcesoOperacionPlantillas,
 } from "@/lib/procesos-api";
 import {
-  assignProductoAdicional,
   assignProductoMotor,
   assignProductoVarianteRuta,
   cotizarProductoVariante,
   createProductoVariante,
   deleteProductoVariante,
   getCatalogoPliegosImpresion,
-  getVarianteAdicionalesRestricciones,
   getCotizacionesProductoVariante,
   getProductoMotorConfig,
-  removeProductoAdicional,
-  setVarianteAdicionalRestriccion,
   getVarianteMotorOverride,
   previewImposicionProductoVariante,
   updateProductoRutaPolicy,
@@ -54,17 +51,18 @@ import {
   updateVarianteOpcionesProductivas,
 } from "@/lib/productos-servicios-api";
 import type {
+  DimensionOpcionProductiva,
   FamiliaProducto,
   MotorCostoCatalogItem,
   PliegoImpresionCatalogItem,
   CotizacionProductoSnapshotResumen,
   CotizacionProductoVariante,
-  ProductoAdicional,
-  ProductoAdicionalAsignado,
+  ProductoChecklist,
+  ProductoRutaBaseMatchingVariante,
   ProductoServicio,
   ProductoVariante,
   SubfamiliaProducto,
-  VarianteAdicionalRestriccion,
+  ValorOpcionProductiva,
 } from "@/lib/productos-servicios";
 import {
   carasProductoVarianteItems,
@@ -101,6 +99,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import {
+  ProductoServicioChecklistCotizador,
+  ProductoServicioChecklistEditor,
+} from "@/components/productos-servicios/producto-servicio-checklist";
 
 type PapelOption = {
   id: string;
@@ -116,12 +118,13 @@ type ProductoServicioFichaTabsProps = {
   producto: ProductoServicio;
   initialVariantes: ProductoVariante[];
   procesos: Proceso[];
+  plantillasPaso: ProcesoOperacionPlantilla[];
   materiasPrimas: MateriaPrima[];
   familias: FamiliaProducto[];
   subfamilias: SubfamiliaProducto[];
   motores: MotorCostoCatalogItem[];
-  adicionalesCatalogo: ProductoAdicional[];
-  adicionalesProducto: ProductoAdicionalAsignado[];
+  checklist: ProductoChecklist;
+  maquinas: Maquina[];
 };
 
 type VarianteDraft = {
@@ -143,6 +146,42 @@ type VarianteConfirmAction =
 type RouteOperationDraft = ProcesoOperacionPayload & {
   id: string;
 };
+
+type RutaBaseMatchingDraft = {
+  tipoImpresion: "bn" | "cmyk" | null;
+  caras: "simple_faz" | "doble_faz" | null;
+  pasoPlantillaId: string;
+  perfilOperativoId: string;
+};
+
+type RutaBasePasoFijoDraft = {
+  pasoPlantillaId: string;
+  perfilOperativoId: string;
+};
+
+const dimensionBaseLabelByValue: Record<DimensionOpcionProductiva, string> = {
+  tipo_impresion: "Tipo de impresión",
+  caras: "Caras",
+};
+
+const valorOpcionBaseLabelByValue: Record<ValorOpcionProductiva, string> = {
+  bn: "Escala de grises",
+  cmyk: "CMYK",
+  simple_faz: "Simple faz",
+  doble_faz: "Doble faz",
+};
+
+const tipoImpresionPermitidoSelectItems = [
+  { value: "cmyk", label: "Solo CMYK", values: ["cmyk"] as Array<"bn" | "cmyk"> },
+  { value: "bn", label: "Solo K", values: ["bn"] as Array<"bn" | "cmyk"> },
+  { value: "cmyk_bn", label: "CMYK y K", values: ["cmyk", "bn"] as Array<"bn" | "cmyk"> },
+];
+
+const carasPermitidasSelectItems = [
+  { value: "simple_faz", label: "Solo simple faz", values: ["simple_faz"] as Array<"simple_faz" | "doble_faz"> },
+  { value: "doble_faz", label: "Solo doble faz", values: ["doble_faz"] as Array<"simple_faz" | "doble_faz"> },
+  { value: "simple_doble", label: "Simple y doble faz", values: ["simple_faz", "doble_faz"] as Array<"simple_faz" | "doble_faz"> },
+];
 
 const tipoCorteItems = [
   { value: "sin_demasia", label: "Sin demasía", help: "Corte al borde de la pieza, sin separación interna." },
@@ -196,8 +235,314 @@ function createEditVarianteDraft(variante: ProductoVariante, papeles: PapelOptio
   };
 }
 
+function buildRutaBaseMatchingDraft(
+  producto: ProductoServicio,
+  variantes: ProductoVariante[],
+) {
+  const current = new Map(
+    (producto.matchingBasePorVariante ?? []).map((item) => [
+      item.varianteId,
+      item.matching.map((row) => ({
+        tipoImpresion: row.tipoImpresion,
+        caras: row.caras,
+        pasoPlantillaId: row.pasoPlantillaId,
+        perfilOperativoId: row.perfilOperativoId,
+      })),
+    ]),
+  );
+  const next: Record<string, RutaBaseMatchingDraft[]> = {};
+  for (const variante of variantes) {
+    next[variante.id] = current.get(variante.id) ?? [];
+  }
+  return next;
+}
+
+function buildRutaBasePasosFijosDraft(
+  producto: ProductoServicio,
+  variantes: ProductoVariante[],
+) {
+  const current = new Map(
+    (producto.pasosFijosPorVariante ?? []).map((item) => [
+      item.varianteId,
+      item.pasos.map((row) => ({
+        pasoPlantillaId: row.pasoPlantillaId,
+        perfilOperativoId: row.perfilOperativoId,
+      })),
+    ]),
+  );
+  const next: Record<string, RutaBasePasoFijoDraft[]> = {};
+  for (const variante of variantes) {
+    next[variante.id] = current.get(variante.id) ?? [];
+  }
+  return next;
+}
+
+function normalizeRutaBaseMatchingDraftForVariantes(
+  nextMatchingDraft: Record<string, RutaBaseMatchingDraft[]>,
+  variantes: ProductoVariante[],
+  dimensionesConsumidas: DimensionOpcionProductiva[],
+) {
+  const normalized: Record<string, RutaBaseMatchingDraft[]> = {};
+  for (const variante of variantes) {
+    const rows = buildMatchingRowsForVariante(
+      variante,
+      dimensionesConsumidas,
+      nextMatchingDraft[variante.id] ?? [],
+    );
+    normalized[variante.id] = rows.map((row) => ({
+      tipoImpresion: row.tipoImpresion,
+      caras: row.caras,
+      pasoPlantillaId: row.pasoPlantillaId,
+      perfilOperativoId: row.perfilOperativoId,
+    }));
+  }
+  return normalized;
+}
+
+function buildDimensionesBaseConsumidasDraft(producto: ProductoServicio) {
+  return producto.dimensionesBaseConsumidas ?? [];
+}
+
+function getValoresOpcionesBase(variante: ProductoVariante, dimension: DimensionOpcionProductiva) {
+  if (dimension === "tipo_impresion") {
+    return (
+      variante.opcionesProductivas?.find((item) => item.dimension === "tipo_impresion")?.valores.filter(
+        (value): value is "bn" | "cmyk" => value === "bn" || value === "cmyk",
+      ) ?? [variante.tipoImpresion]
+    );
+  }
+  return (
+    variante.opcionesProductivas?.find((item) => item.dimension === "caras")?.valores.filter(
+      (value): value is "simple_faz" | "doble_faz" => value === "simple_faz" || value === "doble_faz",
+    ) ?? [variante.caras]
+  );
+}
+
+function toggleAllowedValue<T extends string>(currentValues: T[], value: T, fallbackValue: T) {
+  const current = new Set(currentValues);
+  if (current.has(value)) {
+    current.delete(value);
+  } else {
+    current.add(value);
+  }
+  const next = Array.from(current) as T[];
+  return next.length ? next : [fallbackValue];
+}
+
+function getTipoImpresionPermitidoSelectValue(values: Array<"bn" | "cmyk">) {
+  const normalized = [...new Set(values)].sort().join("|");
+  if (normalized === "bn") return "bn";
+  if (normalized === "bn|cmyk") return "cmyk_bn";
+  return "cmyk";
+}
+
+function getCarasPermitidasSelectValue(values: Array<"simple_faz" | "doble_faz">) {
+  const normalized = [...new Set(values)].sort().join("|");
+  if (normalized === "doble_faz") return "doble_faz";
+  if (normalized === "doble_faz|simple_faz") return "simple_doble";
+  return "simple_faz";
+}
+
+function buildMatchingRowsForVariante(
+  variante: ProductoVariante,
+  dimensionesConsumidas: DimensionOpcionProductiva[],
+  currentMatching: RutaBaseMatchingDraft[],
+  defaultPasoPlantillaId?: string,
+) {
+  const tipos = dimensionesConsumidas.includes("tipo_impresion")
+    ? getValoresOpcionesBase(variante, "tipo_impresion").filter(
+        (value): value is "bn" | "cmyk" => value === "bn" || value === "cmyk",
+      )
+    : [null];
+  const caras = dimensionesConsumidas.includes("caras")
+    ? getValoresOpcionesBase(variante, "caras").filter(
+        (value): value is "simple_faz" | "doble_faz" => value === "simple_faz" || value === "doble_faz",
+      )
+    : [null];
+
+  return tipos.flatMap((tipoImpresion) =>
+    caras.map((carasValue) => {
+      const current =
+        currentMatching.find(
+          (item) => item.tipoImpresion === tipoImpresion && item.caras === carasValue,
+        ) ?? null;
+      return {
+        key: `${tipoImpresion ?? "na"}-${carasValue ?? "na"}`,
+        tipoImpresion,
+        caras: carasValue,
+        pasoPlantillaId: current?.pasoPlantillaId ?? defaultPasoPlantillaId ?? "",
+        perfilOperativoId: current?.perfilOperativoId ?? "",
+      };
+    }),
+  );
+}
+
+function getGuillotinaCutsFromImposicion(
+  cols: number,
+  rows: number,
+  tipoCorte: "sin_demasia" | "con_demasia",
+) {
+  const normalizedCols = Math.max(0, Math.floor(cols));
+  const normalizedRows = Math.max(0, Math.floor(rows));
+  if (normalizedCols <= 0 || normalizedRows <= 0) {
+    return 0;
+  }
+  if (tipoCorte === "con_demasia") {
+    return normalizedCols * 2 + normalizedRows * 2;
+  }
+  return normalizedCols + normalizedRows + 2;
+}
+
+function normalizePasoNombreBase(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) return "";
+  const colonIndex = normalized.indexOf(":");
+  if (colonIndex <= 0) {
+    return normalized;
+  }
+  return normalized.slice(0, colonIndex).trim();
+}
+
+function isPerfilCompatibleWithMatchingRow(
+  perfil: Maquina["perfilesOperativos"][number],
+  row: { tipoImpresion: "bn" | "cmyk" | null; caras: "simple_faz" | "doble_faz" | null },
+) {
+  const normalizedPrintMode = perfil.printMode || null;
+  const normalizedPrintSides = perfil.printSides || null;
+  if (row.tipoImpresion && normalizedPrintMode && normalizedPrintMode !== row.tipoImpresion) {
+    return false;
+  }
+  if (row.caras && normalizedPrintSides && normalizedPrintSides !== row.caras) {
+    return false;
+  }
+  return true;
+}
+
+function getRutaBasePasoOptions(
+  procesoId: string | null | undefined,
+  procesos: Proceso[],
+  plantillasPaso: ProcesoOperacionPlantilla[],
+  maquinas: Maquina[],
+  dimensionesConsumidas: DimensionOpcionProductiva[],
+) {
+  const proceso = procesos.find((item) => item.id === procesoId) ?? null;
+  if (!proceso) return [];
+  const maquinaById = new Map(maquinas.map((item) => [item.id, item]));
+  const requiresBasePrintMatching =
+    dimensionesConsumidas.includes("tipo_impresion") || dimensionesConsumidas.includes("caras");
+  const matches = proceso.operaciones
+    .map((op) => {
+      const operationName = op.nombre.trim().toLowerCase();
+      const operationBaseName = normalizePasoNombreBase(op.nombre);
+      const pasoPlantillaId =
+        op.detalle && typeof op.detalle === "object"
+          ? String((op.detalle as Record<string, unknown>).pasoPlantillaId ?? "").trim()
+          : "";
+      if (pasoPlantillaId) {
+        return plantillasPaso.find((item) => item.id === pasoPlantillaId && item.activo) ?? null;
+      }
+      const exactWithProfile =
+        plantillasPaso.find(
+          (item) =>
+            item.activo &&
+            item.perfilOperativoId &&
+            item.perfilOperativoId === (op.perfilOperativoId ?? "") &&
+            (item.maquinaId ?? "") === (op.maquinaId ?? ""),
+        ) ?? null;
+      if (exactWithProfile) {
+        return exactWithProfile;
+      }
+      return (
+        plantillasPaso.find(
+          (item) =>
+            item.activo &&
+            item.nombre.trim().toLowerCase() === operationName &&
+            (item.maquinaId ?? "") === (op.maquinaId ?? ""),
+        ) ??
+        plantillasPaso.find(
+          (item) =>
+            item.activo &&
+            normalizePasoNombreBase(item.nombre) === operationBaseName &&
+            (item.maquinaId ?? "") === (op.maquinaId ?? ""),
+        ) ??
+        plantillasPaso.find(
+          (item) => item.activo && item.nombre.trim().toLowerCase() === operationName,
+        ) ??
+        plantillasPaso.find(
+          (item) => item.activo && normalizePasoNombreBase(item.nombre) === operationBaseName,
+        ) ??
+        null
+      );
+    })
+    .filter((item): item is ProcesoOperacionPlantilla => Boolean(item))
+    .filter((item) => {
+      if (!requiresBasePrintMatching) {
+        return true;
+      }
+      if (!item.maquinaId) {
+        return false;
+      }
+      const maquina = maquinaById.get(item.maquinaId);
+      if (!maquina) {
+        return false;
+      }
+      return maquina.plantilla === "impresora_laser";
+    });
+
+  return Array.from(new Map(matches.map((item) => [item.id, item])).values());
+}
+
+function getRutaBasePasoFijoOptions(
+  procesoId: string | null | undefined,
+  procesos: Proceso[],
+  plantillasPaso: ProcesoOperacionPlantilla[],
+  maquinas: Maquina[],
+  dimensionesConsumidas: DimensionOpcionProductiva[],
+) {
+  const matchingIds = new Set(
+    getRutaBasePasoOptions(procesoId, procesos, plantillasPaso, maquinas, dimensionesConsumidas).map((item) => item.id),
+  );
+  const proceso = procesos.find((item) => item.id === procesoId) ?? null;
+  if (!proceso) return [];
+  const matches = proceso.operaciones
+    .map((op) => {
+      const operationName = op.nombre.trim().toLowerCase();
+      const operationBaseName = normalizePasoNombreBase(op.nombre);
+      const pasoPlantillaId =
+        op.detalle && typeof op.detalle === "object"
+          ? String((op.detalle as Record<string, unknown>).pasoPlantillaId ?? "").trim()
+          : "";
+      if (pasoPlantillaId) {
+        return plantillasPaso.find((item) => item.id === pasoPlantillaId && item.activo) ?? null;
+      }
+      return (
+        plantillasPaso.find(
+          (item) =>
+            item.activo &&
+            item.nombre.trim().toLowerCase() === operationName &&
+            (item.maquinaId ?? "") === (op.maquinaId ?? ""),
+        ) ??
+        plantillasPaso.find(
+          (item) =>
+            item.activo &&
+            normalizePasoNombreBase(item.nombre) === operationBaseName &&
+            (item.maquinaId ?? "") === (op.maquinaId ?? ""),
+        ) ??
+        null
+      );
+    })
+    .filter((item): item is ProcesoOperacionPlantilla => Boolean(item))
+    .filter((item) => !matchingIds.has(item.id));
+
+  return Array.from(new Map(matches.map((item) => [item.id, item])).values());
+}
+
 function formatNumber(value: number) {
   return value.toLocaleString("es-AR", { maximumFractionDigits: 2 });
+}
+
+function formatCurrency(value: number) {
+  return `$ ${formatNumber(value)}`;
 }
 
 function formatOrigenProcesoLabel(
@@ -214,6 +559,85 @@ function formatOrigenProcesoLabel(
     return "Adicional";
   }
   return raw;
+}
+
+function getMaterialTipoLabel(tipo: unknown) {
+  const raw = String(tipo ?? "").trim().toUpperCase();
+  if (raw === "PAPEL") return "Papel";
+  if (raw === "TONER") return "Tóner";
+  if (raw === "DESGASTE") return "Desgaste";
+  if (raw === "CONSUMIBLE_FILM") return "Consumibles de terminación";
+  if (raw === "ADDITIONAL_MATERIAL_EFFECT") return "Material adicional";
+  return raw || "-";
+}
+
+function formatDetalleTecnico(detalle: Record<string, unknown> | null | undefined) {
+  if (!detalle) return "";
+  const lines: string[] = [];
+  const push = (label: string, value: unknown, suffix = "") => {
+    if (value === null || value === undefined || value === "") return;
+    lines.push(`${label}: ${String(value)}${suffix}`);
+  };
+
+  if ("maquina" in detalle) push("Máquina", detalle.maquina);
+  if ("perfilOperativo" in detalle) push("Perfil operativo", detalle.perfilOperativo);
+  if ("sourceProductividad" in detalle) {
+    const sourceLabels: Record<string, string> = {
+      nivel_fijo: "Nivel fijo",
+      nivel_variable_manual: "Nivel variable manual",
+      nivel_variable_perfil: "Perfil operativo",
+      checklist: "Checklist",
+      plantilla: "Plantilla",
+      perfil: "Perfil",
+    };
+    const raw = String(detalle.sourceProductividad ?? "").trim();
+    push("Fuente", sourceLabels[raw] ?? raw);
+  }
+  if ("cantidadObjetivoSalida" in detalle) push("Cantidad objetivo", detalle.cantidadObjetivoSalida);
+  if ("productividadAplicada" in detalle) push("Productividad aplicada", detalle.productividadAplicada);
+
+  const hasGuillotinaTrace =
+    "alturaTandaEfectivaMm" in detalle ||
+    "capacidadTanda" in detalle ||
+    "tandas" in detalle ||
+    "cortesPorImposicion" in detalle ||
+    "cortesTotales" in detalle ||
+    "cortesMinPerfil" in detalle;
+
+  if (hasGuillotinaTrace) {
+    push("Pliegos totales", detalle.pliegosTotales);
+    push("Altura efectiva de tanda", detalle.alturaTandaEfectivaMm, " mm");
+    push("Capacidad por tanda", detalle.capacidadTanda, " hojas");
+    push("Tandas", detalle.tandas);
+    push("Cortes por imposición", detalle.cortesPorImposicion);
+    push("Cortes totales", detalle.cortesTotales);
+    push("Cortes por minuto", detalle.cortesMinPerfil ?? detalle.productivityValue);
+  }
+
+  const preferredKeys = new Set([
+    "maquina",
+    "perfilOperativo",
+    "sourceProductividad",
+    "pliegosTotales",
+    "cantidadObjetivoSalida",
+    "productividadAplicada",
+    "alturaTandaEfectivaMm",
+    "capacidadTanda",
+    "tandas",
+    "cortesPorImposicion",
+    "cortesTotales",
+    "cortesMinPerfil",
+    "tipo",
+    "productivityValue",
+  ]);
+
+  for (const [key, value] of Object.entries(detalle)) {
+    if (preferredKeys.has(key)) continue;
+    if (value === null || value === undefined || value === "") continue;
+    lines.push(`${key}: ${String(value)}`);
+  }
+
+  return lines.join("\n");
 }
 
 function buildDraftFromTemplate(template: ProcesoOperacionPlantilla): RouteOperationDraft {
@@ -237,8 +661,9 @@ function buildDraftFromTemplate(template: ProcesoOperacionPlantilla): RouteOpera
     mermaRunPct: template.mermaRunPct ?? undefined,
     reglaVelocidad: template.reglaVelocidad ?? undefined,
     reglaMerma: template.reglaMerma ?? undefined,
-    detalle: undefined,
-    requiresProductoAdicionalId: undefined,
+    detalle: {
+      pasoPlantillaId: template.id,
+    },
     activo: true,
   };
 }
@@ -268,7 +693,6 @@ function buildDraftFromProceso(proceso: Proceso): RouteOperationDraft[] {
       reglaVelocidad: op.reglaVelocidad ?? undefined,
       reglaMerma: op.reglaMerma ?? undefined,
       detalle: op.detalle ?? undefined,
-      requiresProductoAdicionalId: op.requiresProductoAdicionalId ?? undefined,
       activo: op.activo,
     }));
 }
@@ -323,12 +747,13 @@ export function ProductoServicioFichaTabs({
   producto,
   initialVariantes,
   procesos,
+  plantillasPaso,
   materiasPrimas,
   familias,
   subfamilias,
   motores,
-  adicionalesCatalogo,
-  adicionalesProducto,
+  checklist,
+  maquinas,
 }: ProductoServicioFichaTabsProps) {
   const [productoState, setProductoState] = React.useState(producto);
   const [generalForm, setGeneralForm] = React.useState<{
@@ -375,8 +800,7 @@ export function ProductoServicioFichaTabs({
   }, [materiasPrimas]);
 
   const [variantes, setVariantes] = React.useState(initialVariantes);
-  const [adicionalesAsignados, setAdicionalesAsignados] = React.useState(adicionalesProducto);
-  const [adicionalesPermitidosVariante, setAdicionalesPermitidosVariante] = React.useState<VarianteAdicionalRestriccion[]>([]);
+  const [productoChecklist, setProductoChecklist] = React.useState(checklist);
   const [selectedVarianteId, setSelectedVarianteId] = React.useState(initialVariantes[0]?.id ?? "");
   const selectedVariante = React.useMemo(
     () => variantes.find((item) => item.id === selectedVarianteId) ?? null,
@@ -387,7 +811,6 @@ export function ProductoServicioFichaTabs({
   const [isSavingVariante, startSavingVariante] = React.useTransition();
   const [isUpdatingVariante, startUpdatingVariante] = React.useTransition();
   const [isSavingConfig, startSavingConfig] = React.useTransition();
-  const [isSavingAdicionales, startSavingAdicionales] = React.useTransition();
   const [isCotizando, startCotizando] = React.useTransition();
   const [isTogglingVariante, startTogglingVariante] = React.useTransition();
   const [isDeletingVariante, startDeletingVariante] = React.useTransition();
@@ -402,8 +825,18 @@ export function ProductoServicioFichaTabs({
   const [rutaDefaultProductoId, setRutaDefaultProductoId] = React.useState(producto.procesoDefinicionDefaultId ?? "");
   const [rutasPorVarianteDraft, setRutasPorVarianteDraft] = React.useState<Record<string, string>>({});
   const [isSavingRutaPolicy, startSavingRutaPolicy] = React.useTransition();
+  const [isSavingRutaBaseRules, startSavingRutaBaseRules] = React.useTransition();
   const [isSavingRutaVariante, startSavingRutaVariante] = React.useTransition();
   const [savingVarianteId, setSavingVarianteId] = React.useState<string | null>(null);
+  const [dimensionesBaseConsumidasDraft, setDimensionesBaseConsumidasDraft] = React.useState<DimensionOpcionProductiva[]>(
+    () => buildDimensionesBaseConsumidasDraft(producto),
+  );
+  const [rutaBaseMatchingDraft, setRutaBaseMatchingDraft] = React.useState<Record<string, RutaBaseMatchingDraft[]>>(
+    () => buildRutaBaseMatchingDraft(producto, initialVariantes),
+  );
+  const [rutaBasePasosFijosDraft, setRutaBasePasosFijosDraft] = React.useState<Record<string, RutaBasePasoFijoDraft[]>>(
+    () => buildRutaBasePasosFijosDraft(producto, initialVariantes),
+  );
   const [routeEditorOpen, setRouteEditorOpen] = React.useState(false);
   const [routeEditorCodigo, setRouteEditorCodigo] = React.useState("");
   const [routeEditorNombre, setRouteEditorNombre] = React.useState("");
@@ -428,8 +861,12 @@ export function ProductoServicioFichaTabs({
   });
   const [cotizacionCantidad, setCotizacionCantidad] = React.useState("100");
   const [cotizacionPeriodo, setCotizacionPeriodo] = React.useState(buildDefaultPeriodo());
-  const [cotizacionAddonsSeleccionados, setCotizacionAddonsSeleccionados] = React.useState<string[]>([]);
-  const [cotizacionAddonNivelById, setCotizacionAddonNivelById] = React.useState<Record<string, string>>({});
+  const [cotizacionChecklistRespuestas, setCotizacionChecklistRespuestas] = React.useState<
+    Record<string, { respuestaId: string }>
+  >({});
+  const [cotizacionSeleccionesBase, setCotizacionSeleccionesBase] = React.useState<
+    Partial<Record<DimensionOpcionProductiva, ValorOpcionProductiva>>
+  >({});
   const [cotizacion, setCotizacion] = React.useState<CotizacionProductoVariante | null>(null);
   const [cotizaciones, setCotizaciones] = React.useState<CotizacionProductoSnapshotResumen[]>([]);
   const [snapshotsOpen, setSnapshotsOpen] = React.useState(false);
@@ -438,10 +875,11 @@ export function ProductoServicioFichaTabs({
 
   React.useEffect(() => {
     setProductoState(producto);
-    setAdicionalesAsignados(adicionalesProducto);
-    setAdicionalesPermitidosVariante([]);
-    setCotizacionAddonsSeleccionados([]);
-    setCotizacionAddonNivelById({});
+    setProductoChecklist(checklist);
+    setCotizacionChecklistRespuestas({});
+    setDimensionesBaseConsumidasDraft(buildDimensionesBaseConsumidasDraft(producto));
+    setRutaBaseMatchingDraft(buildRutaBaseMatchingDraft(producto, initialVariantes));
+    setRutaBasePasosFijosDraft(buildRutaBasePasosFijosDraft(producto, initialVariantes));
     setUsarRutaComunVariantes(producto.usarRutaComunVariantes);
     setRutaDefaultProductoId(producto.procesoDefinicionDefaultId ?? "");
     setGeneralForm({
@@ -452,13 +890,43 @@ export function ProductoServicioFichaTabs({
       motorCodigo: producto.motorCodigo,
       motorVersion: producto.motorVersion,
     });
-  }, [producto, adicionalesProducto]);
+  }, [producto, checklist]);
+
+  React.useEffect(() => {
+    if (!selectedVariante) {
+      setCotizacionSeleccionesBase({});
+      return;
+    }
+    const next: Partial<Record<DimensionOpcionProductiva, ValorOpcionProductiva>> = {};
+    dimensionesBaseConsumidasDraft.forEach((dimension) => {
+      const values = getValoresOpcionesBase(selectedVariante, dimension);
+      if (values.length === 1) {
+        next[dimension] = values[0];
+      }
+    });
+    setCotizacionSeleccionesBase(next);
+  }, [selectedVariante, dimensionesBaseConsumidasDraft]);
 
   React.useEffect(() => {
     setRutasPorVarianteDraft((prev) => {
       const next: Record<string, string> = {};
       for (const variante of variantes) {
         next[variante.id] = prev[variante.id] ?? variante.procesoDefinicionId ?? "";
+      }
+      return next;
+    });
+  }, [variantes]);
+
+  React.useEffect(() => {
+    setRutaBaseMatchingDraft((prev) => {
+      const next = { ...prev };
+      for (const variante of variantes) {
+        next[variante.id] = next[variante.id] ?? [];
+      }
+      for (const key of Object.keys(next)) {
+        if (!variantes.some((variante) => variante.id === key)) {
+          delete next[key];
+        }
       }
       return next;
     });
@@ -475,29 +943,10 @@ export function ProductoServicioFichaTabs({
     () => new Map(procesos.map((item) => [item.id, item.nombre])),
     [procesos],
   );
-  const adicionalesCatalogoById = React.useMemo(
-    () => new Map(adicionalesCatalogo.map((item) => [item.id, item])),
-    [adicionalesCatalogo],
+  const maquinaById = React.useMemo(
+    () => new Map(maquinas.map((item) => [item.id, item])),
+    [maquinas],
   );
-  const adicionalesAsignadosActivos = React.useMemo(
-    () => adicionalesAsignados.filter((item) => item.activo),
-    [adicionalesAsignados],
-  );
-  const restriccionesByAdicionalId = React.useMemo(
-    () =>
-      new Map(
-        adicionalesPermitidosVariante.map((item) => [item.adicionalId, item.permitido]),
-      ),
-    [adicionalesPermitidosVariante],
-  );
-  const adicionalesDisponiblesCotizador = React.useMemo(
-    () =>
-      adicionalesAsignadosActivos.filter(
-        (item) => restriccionesByAdicionalId.get(item.adicionalId) !== false,
-      ),
-    [adicionalesAsignadosActivos, restriccionesByAdicionalId],
-  );
-
   React.useEffect(() => {
     getCatalogoPliegosImpresion()
       .then((items) => {
@@ -509,37 +958,6 @@ export function ProductoServicioFichaTabs({
         setPliegosImpresion(fallbackPliegosImpresion);
       });
   }, []);
-
-  React.useEffect(() => {
-    if (!selectedVariante) {
-      setAdicionalesPermitidosVariante([]);
-      setCotizacionAddonsSeleccionados([]);
-      setCotizacionAddonNivelById({});
-      return;
-    }
-    getVarianteAdicionalesRestricciones(selectedVariante.id)
-      .then((items) => {
-        setAdicionalesPermitidosVariante(items);
-      })
-      .catch(() => {
-        setAdicionalesPermitidosVariante([]);
-      });
-  }, [selectedVariante]);
-
-  React.useEffect(() => {
-    const disponibles = new Set(adicionalesDisponiblesCotizador.map((item) => item.adicionalId));
-    setCotizacionAddonsSeleccionados((prev) => prev.filter((id) => disponibles.has(id)));
-    setCotizacionAddonNivelById((prev) => {
-      const next: Record<string, string> = {};
-      for (const item of adicionalesDisponiblesCotizador) {
-        if (!disponibles.has(item.adicionalId)) continue;
-        const niveles = item.adicional.servicioPricing?.niveles?.filter((nivel) => nivel.activo) ?? [];
-        if (niveles.length === 0) continue;
-        next[item.adicionalId] = prev[item.adicionalId] ?? niveles[0].id;
-      }
-      return next;
-    });
-  }, [adicionalesDisponiblesCotizador]);
 
   React.useEffect(() => {
     if (!selectedVariante) {
@@ -774,6 +1192,11 @@ export function ProductoServicioFichaTabs({
       orientacion,
       cols,
       rows,
+      cortesGuillotina: getGuillotinaCutsFromImposicion(
+        cols,
+        rows,
+        tipoCorteValue === "con_demasia" ? "con_demasia" : "sin_demasia",
+      ),
       piezasPorPliego: Math.max(normal, rotada),
       pliegosPorSustrato,
       orientacionSustrato,
@@ -962,7 +1385,17 @@ export function ProductoServicioFichaTabs({
           ...updated,
           opcionesProductivas: opciones.dimensiones,
         };
-        setVariantes((prev) => prev.map((item) => (item.id === updatedWithOptions.id ? updatedWithOptions : item)));
+        const nextVariantes = variantes.map((item) =>
+          item.id === updatedWithOptions.id ? updatedWithOptions : item,
+        );
+        setVariantes(nextVariantes);
+        setRutaBaseMatchingDraft((prev) =>
+          normalizeRutaBaseMatchingDraftForVariantes(
+            prev,
+            nextVariantes,
+            dimensionesBaseConsumidasDraft,
+          ),
+        );
         setSelectedVarianteId(updated.id);
         setEditingVarianteId("");
         toast.success("Variante actualizada.");
@@ -1092,6 +1525,153 @@ export function ProductoServicioFichaTabs({
         toast.error(error instanceof Error ? error.message : "No se pudo asignar la ruta.");
       } finally {
         setSavingVarianteId(null);
+      }
+    });
+  };
+
+  const handleRutaBaseMatchingChange = (
+    varianteId: string,
+    key: { tipoImpresion: "bn" | "cmyk" | null; caras: "simple_faz" | "doble_faz" | null },
+    patch: Partial<RutaBaseMatchingDraft>,
+  ) => {
+    let nextState: Record<string, RutaBaseMatchingDraft[]> | null = null;
+    setRutaBaseMatchingDraft((prev) => {
+      const current = prev[varianteId] ?? [];
+      const nextRow: RutaBaseMatchingDraft = {
+        tipoImpresion: key.tipoImpresion,
+        caras: key.caras,
+        pasoPlantillaId: "",
+        perfilOperativoId: "",
+        ...current.find(
+          (item) => item.tipoImpresion === key.tipoImpresion && item.caras === key.caras,
+        ),
+        ...patch,
+      };
+      const nextRows = current.filter(
+        (item) => !(item.tipoImpresion === key.tipoImpresion && item.caras === key.caras),
+      );
+      nextRows.push(nextRow);
+      nextState = {
+        ...prev,
+        [varianteId]: nextRows,
+      };
+      return nextState;
+    });
+    if (nextState) {
+      persistRutaBaseMatching(nextState);
+    }
+  };
+
+  const handleRutaBasePasoFijoChange = (
+    varianteId: string,
+    pasoPlantillaId: string,
+    perfilOperativoId: string,
+  ) => {
+    let nextState: Record<string, RutaBasePasoFijoDraft[]> | null = null;
+    setRutaBasePasosFijosDraft((prev) => {
+      const current = prev[varianteId] ?? [];
+      const nextRows = current.filter((item) => item.pasoPlantillaId !== pasoPlantillaId);
+      if (perfilOperativoId) {
+        nextRows.push({ pasoPlantillaId, perfilOperativoId });
+      }
+      nextState = {
+        ...prev,
+        [varianteId]: nextRows,
+      };
+      return nextState;
+    });
+    if (nextState) {
+      persistRutaBaseMatching(rutaBaseMatchingDraft, dimensionesBaseConsumidasDraft, variantes, nextState);
+    }
+  };
+
+  const persistRutaBaseMatching = (
+    nextMatchingDraft: Record<string, RutaBaseMatchingDraft[]>,
+    nextDimensiones = dimensionesBaseConsumidasDraft,
+    nextVariantes = variantes,
+    nextPasosFijosDraft = rutaBasePasosFijosDraft,
+  ) => {
+    startSavingRutaBaseRules(async () => {
+      try {
+        const normalizedDraft = normalizeRutaBaseMatchingDraftForVariantes(
+          nextMatchingDraft,
+          nextVariantes,
+          nextDimensiones,
+        );
+        const updated = await updateProductoRutaPolicy(productoState.id, {
+          usarRutaComunVariantes,
+          procesoDefinicionDefaultId: rutaDefaultProductoId || null,
+          dimensionesBaseConsumidas: nextDimensiones,
+          matchingBasePorVariante: nextVariantes.map((variante) => ({
+            varianteId: variante.id,
+            matching: (normalizedDraft[variante.id] ?? [])
+              .filter((row) => row.pasoPlantillaId && row.perfilOperativoId)
+              .map((row) => ({
+                tipoImpresion: row.tipoImpresion ?? undefined,
+                caras: row.caras ?? undefined,
+                pasoPlantillaId: row.pasoPlantillaId,
+                perfilOperativoId: row.perfilOperativoId,
+              })),
+          })),
+          pasosFijosPorVariante: nextVariantes.map((variante) => ({
+            varianteId: variante.id,
+            pasos: (nextPasosFijosDraft[variante.id] ?? [])
+              .filter((row) => row.pasoPlantillaId && row.perfilOperativoId)
+              .map((row) => ({
+                pasoPlantillaId: row.pasoPlantillaId,
+                perfilOperativoId: row.perfilOperativoId,
+              })),
+          })),
+        });
+        setProductoState((prev) => ({
+          ...prev,
+          usarRutaComunVariantes: updated.usarRutaComunVariantes,
+          procesoDefinicionDefaultId: updated.procesoDefinicionDefaultId,
+          procesoDefinicionDefaultNombre: updated.procesoDefinicionDefaultNombre,
+          dimensionesBaseConsumidas: updated.dimensionesBaseConsumidas ?? [],
+          matchingBasePorVariante: updated.matchingBasePorVariante ?? [],
+          pasosFijosPorVariante: updated.pasosFijosPorVariante ?? [],
+        }));
+        setDimensionesBaseConsumidasDraft(updated.dimensionesBaseConsumidas ?? []);
+        setRutaBaseMatchingDraft(
+          buildRutaBaseMatchingDraft(
+            {
+              ...productoState,
+              dimensionesBaseConsumidas: updated.dimensionesBaseConsumidas ?? [],
+              matchingBasePorVariante: updated.matchingBasePorVariante ?? [],
+            },
+            variantes,
+          ),
+        );
+        setRutaBasePasosFijosDraft(
+          buildRutaBasePasosFijosDraft(
+            {
+              ...productoState,
+              pasosFijosPorVariante: updated.pasosFijosPorVariante ?? [],
+            },
+            variantes,
+          ),
+        );
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "No se pudo guardar la ruta base.");
+      }
+    });
+  };
+
+  const handleToggleDimensionConsumida = (
+    dimension: DimensionOpcionProductiva,
+    checked: boolean,
+  ) => {
+    const nextDimensiones = checked
+      ? Array.from(new Set([...dimensionesBaseConsumidasDraft, dimension]))
+      : dimensionesBaseConsumidasDraft.filter((item) => item !== dimension);
+    setDimensionesBaseConsumidasDraft(nextDimensiones);
+    startSavingRutaBaseRules(async () => {
+      try {
+        persistRutaBaseMatching(rutaBaseMatchingDraft, nextDimensiones);
+      } catch (error) {
+        setDimensionesBaseConsumidasDraft(productoState.dimensionesBaseConsumidas ?? []);
+        toast.error(error instanceof Error ? error.message : "No se pudieron guardar las dimensiones del producto.");
       }
     });
   };
@@ -1231,50 +1811,6 @@ export function ProductoServicioFichaTabs({
     });
   };
 
-  const handleAssignAdicional = (adicionalId: string, checked: boolean) => {
-    startSavingAdicionales(async () => {
-      try {
-        if (checked) {
-          const saved = await assignProductoAdicional(productoState.id, { adicionalId, activo: true });
-          setAdicionalesAsignados((prev) => {
-            const exists = prev.some((item) => item.adicionalId === adicionalId);
-            if (exists) return prev.map((item) => (item.adicionalId === adicionalId ? saved : item));
-            return [...prev, saved];
-          });
-          toast.success("Adicional asignado al producto.");
-        } else {
-          await removeProductoAdicional(productoState.id, adicionalId);
-          setAdicionalesAsignados((prev) => prev.filter((item) => item.adicionalId !== adicionalId));
-          setCotizacionAddonsSeleccionados((prev) => prev.filter((id) => id !== adicionalId));
-          toast.success("Adicional desasignado del producto.");
-        }
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "No se pudo actualizar el adicional.");
-      }
-    });
-  };
-
-  const handleRestriccionVarianteAdicional = (adicionalId: string, permitido: boolean) => {
-    if (!selectedVariante) {
-      toast.error("Selecciona una variante.");
-      return;
-    }
-    startSavingAdicionales(async () => {
-      try {
-        const saved = await setVarianteAdicionalRestriccion(selectedVariante.id, { adicionalId, permitido });
-        setAdicionalesPermitidosVariante((prev) => {
-          const exists = prev.some((item) => item.adicionalId === adicionalId);
-          if (exists) {
-            return prev.map((item) => (item.adicionalId === adicionalId ? saved : item));
-          }
-          return [...prev, saved];
-        });
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "No se pudo guardar la restricción.");
-      }
-    });
-  };
-
   const handleCotizar = () => {
     if (!selectedVariante) {
       toast.error("Selecciona una variante para cotizar.");
@@ -1286,11 +1822,18 @@ export function ProductoServicioFichaTabs({
         const result = await cotizarProductoVariante(selectedVariante.id, {
           cantidad: Number(cotizacionCantidad),
           periodo: cotizacionPeriodo,
-          addonsSeleccionados: cotizacionAddonsSeleccionados,
-          addonsConfig: cotizacionAddonsSeleccionados.map((addonId) => ({
-            addonId,
-            nivelId: cotizacionAddonNivelById[addonId] || undefined,
-          })),
+          seleccionesBase: Object.entries(cotizacionSeleccionesBase)
+            .filter(([, value]) => Boolean(value))
+            .map(([dimension, valor]) => ({
+              dimension: dimension as DimensionOpcionProductiva,
+              valor: valor as ValorOpcionProductiva,
+            })),
+          checklistRespuestas: Object.entries(cotizacionChecklistRespuestas)
+            .filter(([, value]) => Boolean(value?.respuestaId))
+            .map(([preguntaId, value]) => ({
+              preguntaId,
+              respuestaId: value.respuestaId,
+            })),
         });
         setCotizacion(result);
         const snapshots = await getCotizacionesProductoVariante(selectedVariante.id);
@@ -1304,13 +1847,55 @@ export function ProductoServicioFichaTabs({
 
   const procesosCotizados = cotizacion?.bloques?.procesos ?? [];
   const materialesCotizados = (cotizacion?.bloques?.materiales ?? []) as Array<Record<string, unknown>>;
+  const materialesAgrupados = React.useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        tipo: string;
+        label: string;
+        items: Array<Record<string, unknown>>;
+        mermaOperativa: Array<Record<string, unknown>>;
+        totalMermaCantidad: number;
+        totalMermaCosto: number;
+        totalCantidad: number;
+        totalCosto: number;
+      }
+    >();
+    for (const item of materialesCotizados) {
+      const tipo = String(item.tipo ?? "");
+      const current =
+        groups.get(tipo) ??
+        {
+          tipo,
+          label: getMaterialTipoLabel(tipo),
+          items: [],
+          mermaOperativa: [],
+          totalMermaCantidad: 0,
+          totalMermaCosto: 0,
+          totalCantidad: 0,
+          totalCosto: 0,
+        };
+      const cantidad = Number(item.cantidad ?? 0) || 0;
+      const costo = Number(item.costo ?? 0) || 0;
+      const origen = String(item.origen ?? "Base").trim().toLowerCase();
+      if (origen === "merma operativa") {
+        current.mermaOperativa.push(item);
+        current.totalMermaCantidad += cantidad;
+        current.totalMermaCosto += costo;
+      } else {
+        current.items.push(item);
+      }
+      current.totalCantidad += cantidad;
+      current.totalCosto += costo;
+      groups.set(tipo, current);
+    }
+    return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [materialesCotizados]);
+  const [materialesOpen, setMaterialesOpen] = React.useState<Record<string, boolean>>({});
+  const [materialesMermaOpen, setMaterialesMermaOpen] = React.useState<Record<string, boolean>>({});
   const totalCentroCostos = procesosCotizados.reduce((acc, item) => {
     const costo = Number(item.costo ?? 0);
     return Number.isFinite(costo) ? acc + costo : acc;
-  }, 0);
-  const totalMaterialesCostoUnitario = materialesCotizados.reduce((acc, item) => {
-    const costoUnitario = Number(item.costoUnitario ?? 0);
-    return Number.isFinite(costoUnitario) ? acc + costoUnitario : acc;
   }, 0);
   const totalMaterialesCosto = materialesCotizados.reduce((acc, item) => {
     const costo = Number(item.costo ?? 0);
@@ -1349,8 +1934,8 @@ export function ProductoServicioFichaTabs({
         <TabsList className="h-auto gap-1 rounded-lg bg-muted/70 p-1.5">
           <TabsTrigger value="general" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">General</TabsTrigger>
           <TabsTrigger value="variantes" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Variantes</TabsTrigger>
-          <TabsTrigger value="adicionales" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Adicionales</TabsTrigger>
-          <TabsTrigger value="produccion" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Rutas</TabsTrigger>
+          <TabsTrigger value="produccion" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Ruta base</TabsTrigger>
+          <TabsTrigger value="checklist" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Ruta de opcionales</TabsTrigger>
           <TabsTrigger value="imposicion" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Imposición</TabsTrigger>
           <TabsTrigger value="cotizador" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Simulador pricing</TabsTrigger>
         </TabsList>
@@ -1486,7 +2071,7 @@ export function ProductoServicioFichaTabs({
           <Card>
             <CardHeader>
               <CardTitle>Variantes del producto</CardTitle>
-              <CardDescription>Define tamaño, papel y opciones productivas por variante.</CardDescription>
+              <CardDescription>Define tamaño, papel y valores permitidos por variante para las dimensiones base consumidas.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-end gap-3">
@@ -1499,13 +2084,45 @@ export function ProductoServicioFichaTabs({
                 </Button>
               </div>
 
+              <div className="rounded-lg border p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">Dimensiones del producto</p>
+                    <p className="text-xs text-muted-foreground">
+                      Define qué dimensiones técnicas del proceso forman parte del producto y deberán resolverse en la ruta base.
+                    </p>
+                  </div>
+                  {isSavingRutaBaseRules ? (
+                    <div className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      <Loader2Icon className="size-3 animate-spin" />
+                      Guardando...
+                    </div>
+                  ) : null}
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  {(["tipo_impresion", "caras"] as DimensionOpcionProductiva[]).map((dimension) => (
+                    <label key={`dimension-consumida-${dimension}`} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                      <span>{dimensionBaseLabelByValue[dimension]}</span>
+                      <Checkbox
+                        checked={dimensionesBaseConsumidasDraft.includes(dimension)}
+                        onCheckedChange={(checked) => handleToggleDimensionConsumida(dimension, Boolean(checked))}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               <Table>
                 <TableHeader className="bg-muted/50 shadow-[inset_0_-1px_0_rgba(0,0,0,0.06)]">
                   <TableRow className="border-b border-border/70">
                     <TableHead>Nombre</TableHead>
                     <TableHead>Tamaño</TableHead>
-                    <TableHead>Tipo de impresión</TableHead>
-                    <TableHead>Caras</TableHead>
+                    {dimensionesBaseConsumidasDraft.includes("tipo_impresion") ? (
+                      <TableHead>Tipo de impresión</TableHead>
+                    ) : null}
+                    {dimensionesBaseConsumidasDraft.includes("caras") ? (
+                      <TableHead>Caras</TableHead>
+                    ) : null}
                     <TableHead>Papel</TableHead>
                     <TableHead>Ruta</TableHead>
                     <TableHead className="w-[120px]">Estado</TableHead>
@@ -1517,16 +2134,20 @@ export function ProductoServicioFichaTabs({
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.nombre}</TableCell>
                       <TableCell>{item.anchoMm} x {item.altoMm} mm</TableCell>
-                      <TableCell>
-                        {(item.opcionesProductivas?.find((opt) => opt.dimension === "tipo_impresion")?.valores ?? [item.tipoImpresion])
-                          .map((value) => tipoImpresionProductoVarianteItems.find((opt) => opt.value === value)?.label ?? value)
-                          .join(" / ")}
-                      </TableCell>
-                      <TableCell>
-                        {(item.opcionesProductivas?.find((opt) => opt.dimension === "caras")?.valores ?? [item.caras])
-                          .map((value) => carasProductoVarianteItems.find((opt) => opt.value === value)?.label ?? value)
-                          .join(" / ")}
-                      </TableCell>
+                      {dimensionesBaseConsumidasDraft.includes("tipo_impresion") ? (
+                        <TableCell>
+                          {(item.opcionesProductivas?.find((opt) => opt.dimension === "tipo_impresion")?.valores ?? [item.tipoImpresion])
+                            .map((value) => tipoImpresionProductoVarianteItems.find((opt) => opt.value === value)?.label ?? value)
+                            .join(" / ")}
+                        </TableCell>
+                      ) : null}
+                      {dimensionesBaseConsumidasDraft.includes("caras") ? (
+                        <TableCell>
+                          {(item.opcionesProductivas?.find((opt) => opt.dimension === "caras")?.valores ?? [item.caras])
+                            .map((value) => carasProductoVarianteItems.find((opt) => opt.value === value)?.label ?? value)
+                            .join(" / ")}
+                        </TableCell>
+                      ) : null}
                       <TableCell>{item.papelNombre || "Sin papel"}</TableCell>
                       <TableCell>
                         {usarRutaComunVariantes
@@ -1621,121 +2242,76 @@ export function ProductoServicioFichaTabs({
                       </SelectContent>
                     </Select>
                   </Field>
-                  <Field>
-                    <FieldLabel>Tipo de impresión</FieldLabel>
-                    <Select
-                      value={formDraft.tipoImpresion}
-                      onValueChange={(value) =>
-                        setFormDraft((prev) => {
-                          const next = (value as "bn" | "cmyk") ?? "cmyk";
-                          const opciones = prev.opcionesTipoImpresion.includes(next)
-                            ? prev.opcionesTipoImpresion
-                            : [...prev.opcionesTipoImpresion, next];
-                          return { ...prev, tipoImpresion: next, opcionesTipoImpresion: opciones };
-                        })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue>
-                          {tipoImpresionProductoVarianteItems.find((item) => item.value === formDraft.tipoImpresion)?.label ?? ""}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {tipoImpresionProductoVarianteItems.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field>
-                    <FieldLabel>Caras</FieldLabel>
-                    <Select
-                      value={formDraft.caras}
-                      onValueChange={(value) =>
-                        setFormDraft((prev) => {
-                          const next = (value as "simple_faz" | "doble_faz") ?? "simple_faz";
-                          const opciones = prev.opcionesCaras.includes(next)
-                            ? prev.opcionesCaras
-                            : [...prev.opcionesCaras, next];
-                          return { ...prev, caras: next, opcionesCaras: opciones };
-                        })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue>
-                          {carasProductoVarianteItems.find((item) => item.value === formDraft.caras)?.label ?? ""}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {carasProductoVarianteItems.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field className="md:col-span-3">
-                    <FieldLabel>Opciones productivas</FieldLabel>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="rounded-md border p-3">
-                        <p className="mb-2 text-xs font-medium text-muted-foreground">Tipo de impresión habilitado</p>
-                        <div className="space-y-2">
-                          {tipoImpresionProductoVarianteItems.map((item) => (
-                            <label key={`opt-ti-${item.value}`} className="flex items-center justify-between text-sm">
-                              <span>{item.label}</span>
-                              <Checkbox
-                                checked={formDraft.opcionesTipoImpresion.includes(item.value)}
-                                onCheckedChange={(checked) =>
-                                  setFormDraft((prev) => {
-                                    const current = new Set(prev.opcionesTipoImpresion);
-                                    if (checked) current.add(item.value);
-                                    else current.delete(item.value);
-                                    const next = Array.from(current) as Array<"bn" | "cmyk">;
-                                    const safeNext = next.length ? next : [prev.tipoImpresion];
-                                    return {
-                                      ...prev,
-                                      opcionesTipoImpresion: safeNext,
-                                      tipoImpresion: safeNext.includes(prev.tipoImpresion) ? prev.tipoImpresion : safeNext[0],
-                                    };
-                                  })
-                                }
-                              />
-                            </label>
+                  {dimensionesBaseConsumidasDraft.includes("tipo_impresion") ? (
+                    <Field>
+                      <FieldLabel>Tipo de impresión permitido</FieldLabel>
+                      <Select
+                        value={getTipoImpresionPermitidoSelectValue(formDraft.opcionesTipoImpresion)}
+                        onValueChange={(value) =>
+                          setFormDraft((prev) => {
+                            const selected =
+                              tipoImpresionPermitidoSelectItems.find((item) => item.value === value) ??
+                              tipoImpresionPermitidoSelectItems[0];
+                            return {
+                              ...prev,
+                              opcionesTipoImpresion: selected.values,
+                              tipoImpresion: selected.values.includes(prev.tipoImpresion) ? prev.tipoImpresion : selected.values[0],
+                            };
+                          })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona una opción">
+                            {tipoImpresionPermitidoSelectItems.find(
+                              (item) => item.value === getTipoImpresionPermitidoSelectValue(formDraft.opcionesTipoImpresion),
+                            )?.label ?? "Selecciona una opción"}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {tipoImpresionPermitidoSelectItems.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
                           ))}
-                        </div>
-                      </div>
-                      <div className="rounded-md border p-3">
-                        <p className="mb-2 text-xs font-medium text-muted-foreground">Caras habilitadas</p>
-                        <div className="space-y-2">
-                          {carasProductoVarianteItems.map((item) => (
-                            <label key={`opt-ca-${item.value}`} className="flex items-center justify-between text-sm">
-                              <span>{item.label}</span>
-                              <Checkbox
-                                checked={formDraft.opcionesCaras.includes(item.value)}
-                                onCheckedChange={(checked) =>
-                                  setFormDraft((prev) => {
-                                    const current = new Set(prev.opcionesCaras);
-                                    if (checked) current.add(item.value);
-                                    else current.delete(item.value);
-                                    const next = Array.from(current) as Array<"simple_faz" | "doble_faz">;
-                                    const safeNext = next.length ? next : [prev.caras];
-                                    return {
-                                      ...prev,
-                                      opcionesCaras: safeNext,
-                                      caras: safeNext.includes(prev.caras) ? prev.caras : safeNext[0],
-                                    };
-                                  })
-                                }
-                              />
-                            </label>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  ) : null}
+                  {dimensionesBaseConsumidasDraft.includes("caras") ? (
+                    <Field>
+                      <FieldLabel>Caras permitidas</FieldLabel>
+                      <Select
+                        value={getCarasPermitidasSelectValue(formDraft.opcionesCaras)}
+                        onValueChange={(value) =>
+                          setFormDraft((prev) => {
+                            const selected =
+                              carasPermitidasSelectItems.find((item) => item.value === value) ??
+                              carasPermitidasSelectItems[0];
+                            return {
+                              ...prev,
+                              opcionesCaras: selected.values,
+                              caras: selected.values.includes(prev.caras) ? prev.caras : selected.values[0],
+                            };
+                          })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona una opción">
+                            {carasPermitidasSelectItems.find(
+                              (item) => item.value === getCarasPermitidasSelectValue(formDraft.opcionesCaras),
+                            )?.label ?? "Selecciona una opción"}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {carasPermitidasSelectItems.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
                           ))}
-                        </div>
-                      </div>
-                    </div>
-                  </Field>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  ) : null}
                 </div>
                 <div className="mt-3 flex items-center gap-2">
                   {isEditingVariante ? (
@@ -1760,81 +2336,20 @@ export function ProductoServicioFichaTabs({
           </Card>
         </TabsContent>
 
-        <TabsContent value="adicionales">
+        <TabsContent value="checklist">
           <Card>
             <CardHeader>
-              <CardTitle>Adicionales</CardTitle>
-              <CardDescription>Asigna adicionales del catálogo y define restricciones por variante.</CardDescription>
+              <CardTitle>Ruta de opcionales</CardTitle>
+              <CardDescription>Define servicios, acabados y otros opcionales fuera de la ruta base del producto.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-lg border p-3">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium">Asignación al producto</p>
-                  <Link href="/costos/adicionales" className={buttonVariants({ variant: "outline" })}>
-                    Ir a Biblioteca
-                  </Link>
-                </div>
-                <div className="grid gap-2 md:grid-cols-2">
-                  {adicionalesCatalogo.map((item) => {
-                    const assigned = adicionalesAsignados.some((entry) => entry.adicionalId === item.id && entry.activo);
-                    const resumenEfectos = item.efectos.length
-                      ? `${item.efectos.length} efecto(s): ${Array.from(new Set(item.efectos.map((ef) => ef.tipo))).join(", ")}`
-                      : "Sin efectos";
-                    return (
-                      <label key={item.id} className="flex items-center justify-between gap-2 rounded-md border p-2 text-sm">
-                        <span className="flex flex-col">
-                          <span>{item.nombre}</span>
-                          <span className="text-xs text-muted-foreground">{resumenEfectos}</span>
-                        </span>
-                        <Checkbox
-                          checked={assigned}
-                          onCheckedChange={(checked) => handleAssignAdicional(item.id, Boolean(checked))}
-                        />
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="rounded-lg border p-3">
-                <p className="mb-2 text-sm font-medium">Restricciones por variante</p>
-                <div className="mb-3 grid gap-2 md:grid-cols-2">
-                  <Field>
-                    <FieldLabel>Variante</FieldLabel>
-                    <Select value={selectedVarianteId} onValueChange={(value) => setSelectedVarianteId(value ?? "")}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona variante">{varianteLabel}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {variantesSelect.map((item) => (
-                          <SelectItem key={item.id} value={item.id}>
-                            {item.nombre}{item.activo ? "" : " (inactiva)"}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                </div>
-                <div className="grid gap-2 md:grid-cols-2">
-                  {adicionalesAsignadosActivos.map((item) => {
-                    const permitido = restriccionesByAdicionalId.get(item.adicionalId) !== false;
-                    return (
-                      <label key={item.adicionalId} className="flex items-center justify-between gap-2 rounded-md border p-2 text-sm">
-                        <span>{item.adicional.nombre}</span>
-                        <Checkbox
-                          checked={permitido}
-                          onCheckedChange={(checked) =>
-                            handleRestriccionVarianteAdicional(item.adicionalId, Boolean(checked))
-                          }
-                        />
-                      </label>
-                    );
-                  })}
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Marcado = permitido para la variante seleccionada. Desmarcado = restringido.
-                </p>
-              </div>
+            <CardContent>
+              <ProductoServicioChecklistEditor
+                productoId={productoState.id}
+                initialChecklist={productoChecklist}
+                plantillasPaso={plantillasPaso}
+                materiasPrimas={materiasPrimas}
+                onSaved={setProductoChecklist}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -1842,8 +2357,8 @@ export function ProductoServicioFichaTabs({
         <TabsContent value="produccion">
           <Card>
             <CardHeader>
-              <CardTitle>Rutas</CardTitle>
-              <CardDescription>Define si el producto usa una ruta común o rutas por variante.</CardDescription>
+              <CardTitle>Ruta base</CardTitle>
+              <CardDescription>Define la ruta principal del producto y la lógica obligatoria de sus dimensiones base.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap items-center gap-3 rounded-lg border p-3">
@@ -1976,7 +2491,6 @@ export function ProductoServicioFichaTabs({
                                   <TableHead className="w-[56px]">#</TableHead>
                                   <TableHead>Paso</TableHead>
                                   <TableHead>Centro</TableHead>
-                                  <TableHead>Condición</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -1985,11 +2499,6 @@ export function ProductoServicioFichaTabs({
                                     <TableCell>{op.orden}</TableCell>
                                     <TableCell>{op.nombre}</TableCell>
                                     <TableCell>{op.centroCostoNombre}</TableCell>
-                                    <TableCell>
-                                      {op.requiresProductoAdicionalNombre
-                                        ? `Adicional: ${op.requiresProductoAdicionalNombre}`
-                                        : "Sin condición"}
-                                    </TableCell>
                                   </TableRow>
                                 ))}
                               </TableBody>
@@ -2007,6 +2516,232 @@ export function ProductoServicioFichaTabs({
                 </div>
               )}
 
+              <div className="space-y-3 rounded-lg border p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">Configuración de ruta base</p>
+                    <p className="text-xs text-muted-foreground">
+                      Define qué paso y qué perfil operativo se usan para cada combinación técnica obligatoria del producto.
+                    </p>
+                  </div>
+                  {isSavingRutaBaseRules ? (
+                    <div className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      <Loader2Icon className="size-3 animate-spin" />
+                      Guardando...
+                    </div>
+                  ) : null}
+                </div>
+                <div className="space-y-4">
+                  {variantes.map((variante) => {
+                    const procesoIdRutaBase = usarRutaComunVariantes
+                      ? rutaDefaultProductoId
+                      : (rutasPorVarianteDraft[variante.id] ?? variante.procesoDefinicionId ?? "");
+                    const pasosRutaBaseDisponibles = getRutaBasePasoOptions(
+                      procesoIdRutaBase,
+                      procesos,
+                      plantillasPaso,
+                      maquinas,
+                      dimensionesBaseConsumidasDraft,
+                    );
+                    const pasoDefaultUnico =
+                      pasosRutaBaseDisponibles.length === 1 ? pasosRutaBaseDisponibles[0]?.id ?? "" : "";
+                    const pasosFijosRutaBase = getRutaBasePasoFijoOptions(
+                      procesoIdRutaBase,
+                      procesos,
+                      plantillasPaso,
+                      maquinas,
+                      dimensionesBaseConsumidasDraft,
+                    );
+                    const rows = buildMatchingRowsForVariante(
+                      variante,
+                      dimensionesBaseConsumidasDraft,
+                      rutaBaseMatchingDraft[variante.id] ?? [],
+                      pasoDefaultUnico,
+                    );
+                    return (
+                      <React.Fragment key={`base-rules-${variante.id}`}>
+                        <div className="rounded-md border">
+                          <div className="border-b bg-muted/30 px-3 py-2 text-sm font-medium">
+                            {variante.nombre}
+                          </div>
+                          <Table>
+                          <TableHeader className="bg-muted/20">
+                            <TableRow>
+                              {dimensionesBaseConsumidasDraft.includes("tipo_impresion") ? (
+                                <TableHead className="w-[180px]">Tipo de impresión</TableHead>
+                              ) : null}
+                              {dimensionesBaseConsumidasDraft.includes("caras") ? (
+                                <TableHead className="w-[180px]">Caras</TableHead>
+                              ) : null}
+                              <TableHead className="w-[320px]">Paso</TableHead>
+                              <TableHead>Perfil operativo</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {rows.length ? rows.map((row) => {
+                              const plantilla =
+                                pasosRutaBaseDisponibles.find((item) => item.id === row.pasoPlantillaId) ?? null;
+                              const perfilesDisponibles = plantilla?.maquinaId
+                                ? (maquinaById.get(plantilla.maquinaId)?.perfilesOperativos ?? [])
+                                    .filter((item) => item.activo)
+                                    .filter((item) => isPerfilCompatibleWithMatchingRow(item, row))
+                                : [];
+                              return (
+                                <TableRow key={`${variante.id}-${row.key}`}>
+                                  {dimensionesBaseConsumidasDraft.includes("tipo_impresion") ? (
+                                    <TableCell>{row.tipoImpresion ? valorOpcionBaseLabelByValue[row.tipoImpresion] : "-"}</TableCell>
+                                  ) : null}
+                                  {dimensionesBaseConsumidasDraft.includes("caras") ? (
+                                    <TableCell>{row.caras ? valorOpcionBaseLabelByValue[row.caras] : "-"}</TableCell>
+                                  ) : null}
+                                  <TableCell>
+                                    <Select
+                                      value={row.pasoPlantillaId || "__none__"}
+                                      onValueChange={(next) =>
+                                        {
+                                          const nextPasoPlantillaId = next === "__none__" ? "" : (next ?? "");
+                                          const nextPlantilla =
+                                            pasosRutaBaseDisponibles.find((item) => item.id === nextPasoPlantillaId) ?? null;
+                                          handleRutaBaseMatchingChange(
+                                            variante.id,
+                                            { tipoImpresion: row.tipoImpresion, caras: row.caras },
+                                          {
+                                            pasoPlantillaId: nextPasoPlantillaId,
+                                              perfilOperativoId:
+                                                (nextPlantilla?.maquinaId
+                                                  ? (maquinaById.get(nextPlantilla.maquinaId)?.perfilesOperativos ?? [])
+                                                      .filter((item) => item.activo)
+                                                      .filter((item) => isPerfilCompatibleWithMatchingRow(item, row))[0]?.id
+                                                  : "") ??
+                                                "",
+                                            },
+                                          );
+                                        }
+                                      }
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Selecciona paso">
+                                          {plantilla?.nombre ?? "Selecciona paso"}
+                                        </SelectValue>
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="__none__">Selecciona paso</SelectItem>
+                                        {pasosRutaBaseDisponibles.map((item) => (
+                                          <SelectItem key={item.id} value={item.id}>
+                                            {item.nombre}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Select
+                                      value={row.perfilOperativoId || "__none__"}
+                                      onValueChange={(next) =>
+                                        handleRutaBaseMatchingChange(
+                                          variante.id,
+                                          { tipoImpresion: row.tipoImpresion, caras: row.caras },
+                                          { perfilOperativoId: next === "__none__" ? "" : (next ?? "") },
+                                        )
+                                      }
+                                      disabled={!plantilla?.maquinaId}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Selecciona perfil">
+                                          {perfilesDisponibles.find((item) => item.id === row.perfilOperativoId)?.nombre ?? "Selecciona perfil"}
+                                        </SelectValue>
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="__none__">Selecciona perfil</SelectItem>
+                                        {perfilesDisponibles.map((item) => (
+                                          <SelectItem key={item.id} value={item.id}>
+                                            {item.nombre}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            }) : (
+                              <TableRow>
+                                <TableCell
+                                  colSpan={Math.max(2, dimensionesBaseConsumidasDraft.length + 2)}
+                                  className="text-center text-sm text-muted-foreground"
+                                >
+                                  Marca al menos una dimensión consumida en la pestaña Variantes.
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                          </Table>
+                        </div>
+                        {pasosFijosRutaBase.length ? (
+                          <div className="rounded-md border">
+                          <div className="border-b bg-muted/30 px-3 py-2 text-sm font-medium">
+                            Pasos fijos de la ruta
+                          </div>
+                          <Table>
+                            <TableHeader className="bg-muted/20">
+                              <TableRow>
+                                <TableHead className="w-[320px]">Paso</TableHead>
+                                <TableHead>Perfil operativo</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {pasosFijosRutaBase.map((pasoFijo) => {
+                                const perfilesDisponibles = pasoFijo.maquinaId
+                                  ? (maquinaById.get(pasoFijo.maquinaId)?.perfilesOperativos ?? []).filter((item) => item.activo)
+                                  : [];
+                                const currentPerfilId =
+                                  (rutaBasePasosFijosDraft[variante.id] ?? []).find(
+                                    (item) => item.pasoPlantillaId === pasoFijo.id,
+                                  )?.perfilOperativoId ??
+                                  pasoFijo.perfilOperativoId ??
+                                  "";
+                                return (
+                                  <TableRow key={`${variante.id}-fijo-${pasoFijo.id}`}>
+                                    <TableCell>{pasoFijo.nombre}</TableCell>
+                                    <TableCell>
+                                      <Select
+                                        value={currentPerfilId || "__none__"}
+                                        onValueChange={(next) =>
+                                          handleRutaBasePasoFijoChange(
+                                            variante.id,
+                                            pasoFijo.id,
+                                            next === "__none__" ? "" : (next ?? ""),
+                                          )
+                                        }
+                                        disabled={!pasoFijo.maquinaId}
+                                      >
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Selecciona perfil">
+                                            {perfilesDisponibles.find((item) => item.id === currentPerfilId)?.nombre ?? "Selecciona perfil"}
+                                          </SelectValue>
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="__none__">Selecciona perfil</SelectItem>
+                                          {perfilesDisponibles.map((item) => (
+                                            <SelectItem key={item.id} value={item.id}>
+                                              {item.nombre}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                        ) : null}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              </div>
+
               {usarRutaComunVariantes ? (
               <div className="rounded-lg border">
                 <div className="flex items-center justify-end border-b bg-muted/30 p-2">
@@ -2023,7 +2758,6 @@ export function ProductoServicioFichaTabs({
                       <TableHead>Centro de costo</TableHead>
                       <TableHead>Máquina</TableHead>
                       <TableHead>Modo / Productividad</TableHead>
-                      <TableHead>Condición</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -2048,17 +2782,12 @@ export function ProductoServicioFichaTabs({
                           <TableCell>{op.centroCostoNombre}</TableCell>
                           <TableCell>{op.maquinaNombre || "-"}</TableCell>
                           <TableCell>{modoLabel} · {detalleModo}</TableCell>
-                          <TableCell>
-                            {op.requiresProductoAdicionalNombre
-                              ? `Adicional: ${op.requiresProductoAdicionalNombre}`
-                              : "Sin condición"}
-                          </TableCell>
                         </TableRow>
                       );
                     })}
                     {!procesoSeleccionado && (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                        <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
                           No hay ruta efectiva seleccionada.
                         </TableCell>
                       </TableRow>
@@ -2139,11 +2868,19 @@ export function ProductoServicioFichaTabs({
                   <Select
                     value={tipoCorteValue}
                     onValueChange={(value) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        tipoCorte: value,
-                        demasiaCorteMm: value === "con_demasia" ? Number(prev.demasiaCorteMm ?? 2) : 0,
-                      }))
+                      setConfig((prev) => {
+                        const demasiaActual = Number(prev.demasiaCorteMm ?? 0);
+                        return {
+                          ...prev,
+                          tipoCorte: value,
+                          demasiaCorteMm:
+                            value === "con_demasia"
+                              ? demasiaActual > 0
+                                ? demasiaActual
+                                : 2
+                              : 0,
+                        };
+                      })
                     }
                   >
                     <SelectTrigger className="h-9 w-full min-w-0">
@@ -2410,6 +3147,10 @@ export function ProductoServicioFichaTabs({
                             <TableCell className="text-right font-medium">{previewImposicion.piezasPorPliego}</TableCell>
                           </TableRow>
                           <TableRow>
+                            <TableCell className="text-muted-foreground">Cortes de guillotina</TableCell>
+                            <TableCell className="text-right font-medium">{previewImposicion.cortesGuillotina}</TableCell>
+                          </TableRow>
+                          <TableRow>
                             <TableCell className="text-muted-foreground">Tamaño de pieza</TableCell>
                             <TableCell className="text-right font-medium">{formatNumber(previewImposicion.piezaW)} x {formatNumber(previewImposicion.piezaH)} mm</TableCell>
                           </TableRow>
@@ -2468,57 +3209,55 @@ export function ProductoServicioFichaTabs({
               </div>
 
               <div className="rounded-lg border p-3">
-                <p className="mb-2 text-sm font-medium">Adicionales para cotizar</p>
-                <div className="grid gap-2 md:grid-cols-2">
-                  {adicionalesDisponiblesCotizador.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No hay adicionales habilitados para esta variante.
-                    </p>
-                  ) : (
-                    adicionalesDisponiblesCotizador.map((item) => (
-                      <label key={item.adicionalId} className="flex items-center justify-between rounded-md border p-2 text-sm">
-                        <span className="flex flex-col gap-1">
-                          <span>{item.adicional.nombre}</span>
-                          {item.adicional.tipo === "servicio" ? (
-                            <span className="w-[220px]">
-                              <Select
-                                value={cotizacionAddonNivelById[item.adicionalId] ?? (item.adicional.servicioPricing.niveles.find((nivel) => nivel.activo)?.id ?? "")}
-                                onValueChange={(value) =>
-                                  setCotizacionAddonNivelById((prev) => ({ ...prev, [item.adicionalId]: value ?? "" }))
-                                }
-                              >
-                                <SelectTrigger className="h-8">
-                                  <SelectValue placeholder="Nivel de servicio" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {item.adicional.servicioPricing.niveles
-                                    .filter((nivel) => nivel.activo)
-                                    .map((nivel) => (
-                                      <SelectItem key={nivel.id} value={nivel.id}>
-                                        {nivel.nombre}
-                                      </SelectItem>
-                                    ))}
-                                </SelectContent>
-                              </Select>
-                            </span>
-                          ) : null}
-                        </span>
-                        <Checkbox
-                          checked={cotizacionAddonsSeleccionados.includes(item.adicionalId)}
-                          onCheckedChange={(checked) =>
-                            setCotizacionAddonsSeleccionados((prev) => {
-                              if (checked) {
-                                if (prev.includes(item.adicionalId)) return prev;
-                                return [...prev, item.adicionalId];
+                <p className="mb-2 text-sm font-medium">Opciones base del producto</p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {selectedVariante
+                    ? dimensionesBaseConsumidasDraft.map((dimension) => {
+                        const values = getValoresOpcionesBase(selectedVariante, dimension);
+                        const selectedValue = cotizacionSeleccionesBase[dimension];
+                        return (
+                          <Field key={`base-select-${dimension}`}>
+                            <FieldLabel>{dimensionBaseLabelByValue[dimension]}</FieldLabel>
+                            <Select
+                              value={selectedValue ?? "__none__"}
+                              onValueChange={(value) =>
+                                setCotizacionSeleccionesBase((prev) => ({
+                                  ...prev,
+                                  [dimension]: value === "__none__" ? undefined : (value as ValorOpcionProductiva),
+                                }))
                               }
-                              return prev.filter((id) => id !== item.adicionalId);
-                            })
-                          }
-                        />
-                      </label>
-                    ))
-                  )}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecciona una opción">
+                                  {selectedValue ? valorOpcionBaseLabelByValue[selectedValue] : "Selecciona una opción"}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {values.length > 1 ? <SelectItem value="__none__">Selecciona una opción</SelectItem> : null}
+                                {values.map((value) => (
+                                  <SelectItem key={`${dimension}-${value}`} value={value}>
+                                    {valorOpcionBaseLabelByValue[value]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </Field>
+                        );
+                      })
+                    : null}
+                  {selectedVariante && dimensionesBaseConsumidasDraft.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Este producto no consume dimensiones base configurables.</p>
+                  ) : null}
                 </div>
+              </div>
+
+              <div className="rounded-lg border p-3">
+                <p className="mb-2 text-sm font-medium">Opcionales para cotizar</p>
+                <ProductoServicioChecklistCotizador
+                  checklist={productoChecklist}
+                  value={cotizacionChecklistRespuestas}
+                  onChange={setCotizacionChecklistRespuestas}
+                />
               </div>
 
               {cotizacion?.warnings?.length ? (
@@ -2556,20 +3295,29 @@ export function ProductoServicioFichaTabs({
                                 En "Origen" solo mostramos la categoría funcional.
                               */}
                               {(() => {
-                                const addonTipo =
-                                  (item.addonId
-                                    ? (
-                                        adicionalesCatalogoById.get(item.addonId)?.tipo ??
-                                        adicionalesAsignados.find((asignado) => asignado.adicionalId === item.addonId)
-                                          ?.adicional.tipo
-                                      )
-                                    : null) ?? null;
                                 return (
                                   <>
                               <TableCell>{item.orden}</TableCell>
-                              <TableCell>{item.nombre}</TableCell>
+                              <TableCell>
+                                <span className="inline-flex items-center gap-1">
+                                  <span>{item.nombre}</span>
+                                  {item.detalleTecnico ? (
+                                    <Tooltip>
+                                      <TooltipTrigger
+                                        className="inline-flex size-5 items-center justify-center rounded border border-border/60 text-muted-foreground transition-colors hover:bg-muted"
+                                        aria-label="Ver detalle técnico"
+                                      >
+                                        <InfoIcon className="size-3.5" />
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-[360px] whitespace-pre-wrap text-xs">
+                                        {formatDetalleTecnico(item.detalleTecnico)}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : null}
+                                </span>
+                              </TableCell>
                               <TableCell>{item.centroCostoNombre}</TableCell>
-                              <TableCell className="w-[180px]">{formatOrigenProcesoLabel(item.origen, addonTipo)}</TableCell>
+                              <TableCell className="w-[180px]">{formatOrigenProcesoLabel(item.origen, null)}</TableCell>
                               <TableCell className="text-right tabular-nums">{formatNumber(item.totalMin)}</TableCell>
                               <TableCell className="text-right tabular-nums">{formatNumber(item.tarifaHora)}</TableCell>
                               <TableCell className="text-right tabular-nums">{formatNumber(item.costo)}</TableCell>
@@ -2578,14 +3326,14 @@ export function ProductoServicioFichaTabs({
                               })()}
                             </TableRow>
                           ))}
-                          <TableRow>
-                            <TableCell colSpan={6} className="text-right font-medium">
-                              Total
-                            </TableCell>
-                            <TableCell className="text-right font-semibold tabular-nums">
-                              {formatNumber(totalCentroCostos)}
-                            </TableCell>
-                          </TableRow>
+                            <TableRow>
+                              <TableCell colSpan={6} className="text-right font-medium">
+                                Total
+                              </TableCell>
+                              <TableCell className="text-right font-semibold tabular-nums">
+                              {formatCurrency(totalCentroCostos)}
+                              </TableCell>
+                            </TableRow>
                         </TableBody>
                       </Table>
                     </CardContent>
@@ -2595,78 +3343,150 @@ export function ProductoServicioFichaTabs({
                     <CardHeader>
                       <CardTitle>Materias primas</CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <Table>
-                        <TableHeader className="bg-muted/50 shadow-[inset_0_-1px_0_rgba(0,0,0,0.06)]">
-                          <TableRow className="border-b border-border/70">
-                            <TableHead>Tipo</TableHead>
-                            <TableHead>Componente</TableHead>
-                            <TableHead className="w-[180px]">Origen</TableHead>
-                            <TableHead className="w-[140px] text-right">Cantidad</TableHead>
-                            <TableHead className="w-[140px] text-right">Costo unitario</TableHead>
-                            <TableHead className="w-[140px] text-right">Costo</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {materialesCotizados.map((item, idx) => {
-                            const tipo = String(item.tipo ?? "");
-                            const tipoLabel =
-                              tipo === "PAPEL"
-                                ? "Papel"
-                                : tipo === "TONER"
-                                  ? "Tóner"
-                                  : tipo === "DESGASTE"
-                                    ? "Desgaste"
-                                    : tipo || "-";
-                            const nombre = String(item.nombre ?? "Componente");
-                            const canal = item.canal ? ` (${String(item.canal).toUpperCase()})` : "";
-                            const sku = item.sku ? ` · ${String(item.sku)}` : "";
-                            const cantidad = Number(item.cantidad ?? 0);
-                            const costoUnitario = Number(item.costoUnitario ?? 0);
-                            const costo = Number(item.costo ?? 0);
-                            const addonId = typeof item.adicionalId === "string" ? item.adicionalId : null;
-                            const addonTipo =
-                              (addonId
-                                ? (
-                                    adicionalesCatalogoById.get(addonId)?.tipo ??
-                                    adicionalesAsignados.find((asignado) => asignado.adicionalId === addonId)?.adicional
-                                      .tipo
-                                  )
-                                : null) ?? null;
-                            return (
-                              <TableRow key={`${tipo}-${idx}`}>
-                                <TableCell>{tipoLabel}</TableCell>
-                                <TableCell>{`${nombre}${canal}${sku}`}</TableCell>
-                                <TableCell className="w-[180px]">
-                                  {formatOrigenProcesoLabel(item.origen, addonTipo)}
-                                </TableCell>
-                                <TableCell className="text-right tabular-nums">{formatNumber(cantidad)}</TableCell>
-                                <TableCell className="text-right tabular-nums">{formatNumber(costoUnitario)}</TableCell>
-                                <TableCell className="text-right tabular-nums">{formatNumber(costo)}</TableCell>
-                              </TableRow>
-                            );
-                          })}
-                          <TableRow>
-                            <TableCell colSpan={4} className="text-right font-medium">
-                              Total
-                            </TableCell>
-                            <TableCell className="text-right font-semibold tabular-nums">
-                              {formatNumber(totalMaterialesCostoUnitario)}
-                            </TableCell>
-                            <TableCell className="text-right font-semibold tabular-nums">
-                              {formatNumber(totalMaterialesCosto)}
-                            </TableCell>
-                          </TableRow>
-                          <TableRow>
-                            <TableCell colSpan={5} className="text-right font-medium">
-                              Total costo
-                            </TableCell>
-                            <TableCell className="text-right font-semibold tabular-nums">
-                              {formatNumber(totalCostoGeneral)}
-                            </TableCell>
-                          </TableRow>
-                        </TableBody>
-                      </Table>
+                    <CardContent className="space-y-3">
+                      {materialesAgrupados.map((grupo) => (
+                        <Collapsible
+                          key={grupo.tipo}
+                          open={materialesOpen[grupo.tipo] ?? false}
+                          onOpenChange={(open) =>
+                            setMaterialesOpen((prev) => ({ ...prev, [grupo.tipo]: open }))
+                          }
+                        >
+                          <div className="rounded-lg border">
+                            <CollapsibleTrigger className="flex w-full cursor-pointer items-center justify-between px-3 py-3 text-left transition-colors hover:bg-muted/60">
+                              <div className="grid flex-1 gap-1 md:grid-cols-[minmax(0,1fr)_140px_140px] md:items-center">
+                                <div>
+                                  <p className="font-medium">{grupo.label}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {grupo.items.length} componente{grupo.items.length === 1 ? "" : "s"}
+                                  </p>
+                                </div>
+                                <div className="text-left md:text-right">
+                                  <p className="text-xs text-muted-foreground">Cantidad total</p>
+                                  <p className="tabular-nums">{formatNumber(grupo.totalCantidad)}</p>
+                                </div>
+                                <div className="text-left md:text-right">
+                                  <p className="text-xs text-muted-foreground">Costo total</p>
+                                  <p className="font-medium tabular-nums">{formatCurrency(grupo.totalCosto)}</p>
+                                </div>
+                              </div>
+                              <span className="ml-3 inline-flex items-center text-muted-foreground">
+                                {materialesOpen[grupo.tipo] ? (
+                                  <ChevronDownIcon className="size-4" />
+                                ) : (
+                                  <ChevronRightIcon className="size-4" />
+                                )}
+                              </span>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                              <div className="border-t">
+                                <Table>
+                                  <TableHeader className="bg-muted/50 shadow-[inset_0_-1px_0_rgba(0,0,0,0.06)]">
+                                    <TableRow className="border-b border-border/70">
+                                      <TableHead>Componente</TableHead>
+                                      <TableHead className="w-[180px]">Origen</TableHead>
+                                      <TableHead className="w-[140px] text-right">Cantidad</TableHead>
+                                      <TableHead className="w-[140px] text-right">Costo unitario</TableHead>
+                                      <TableHead className="w-[140px] text-right">Costo</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {grupo.items.map((item, idx) => {
+                                      const nombre = String(item.nombre ?? "Componente");
+                                      const canal = item.canal ? ` (${String(item.canal).toUpperCase()})` : "";
+                                      const sku = item.sku ? ` · ${String(item.sku)}` : "";
+                                      const cantidad = Number(item.cantidad ?? 0);
+                                      const costoUnitario = Number(item.costoUnitario ?? 0);
+                                      const costo = Number(item.costo ?? 0);
+                                      return (
+                                        <TableRow key={`${grupo.tipo}-${idx}`}>
+                                          <TableCell>{`${nombre}${canal}${sku}`}</TableCell>
+                                          <TableCell className="w-[180px]">
+                                            {formatOrigenProcesoLabel(item.origen, null)}
+                                          </TableCell>
+                                          <TableCell className="text-right tabular-nums">{formatNumber(cantidad)}</TableCell>
+                                          <TableCell className="text-right tabular-nums">{formatNumber(costoUnitario)}</TableCell>
+                                          <TableCell className="text-right tabular-nums">{formatNumber(costo)}</TableCell>
+                                        </TableRow>
+                                      );
+                                    })}
+                                    {grupo.mermaOperativa.length ? (
+                                      <>
+                                        <TableRow
+                                          className="cursor-pointer bg-amber-50/60 hover:bg-amber-50"
+                                          onClick={() =>
+                                            setMaterialesMermaOpen((prev) => ({
+                                              ...prev,
+                                              [grupo.tipo]: !(prev[grupo.tipo] ?? false),
+                                            }))
+                                          }
+                                        >
+                                          <TableCell>
+                                            <div className="flex items-center gap-2">
+                                              {materialesMermaOpen[grupo.tipo] ? (
+                                                <ChevronDownIcon className="size-4 text-muted-foreground" />
+                                              ) : (
+                                                <ChevronRightIcon className="size-4 text-muted-foreground" />
+                                              )}
+                                              <span className="font-medium">Merma operativa</span>
+                                            </div>
+                                          </TableCell>
+                                          <TableCell className="w-[180px]">Producto base</TableCell>
+                                          <TableCell className="text-right tabular-nums">{formatNumber(grupo.totalMermaCantidad)}</TableCell>
+                                          <TableCell className="text-right tabular-nums">-</TableCell>
+                                          <TableCell className="text-right tabular-nums">{formatNumber(grupo.totalMermaCosto)}</TableCell>
+                                        </TableRow>
+                                        {materialesMermaOpen[grupo.tipo]
+                                          ? grupo.mermaOperativa.map((item, idx) => {
+                                              const nombre = String(item.nombre ?? "Componente");
+                                              const canal = item.canal ? ` (${String(item.canal).toUpperCase()})` : "";
+                                              const sku = item.sku ? ` · ${String(item.sku)}` : "";
+                                              const cantidad = Number(item.cantidad ?? 0);
+                                              const costoUnitario = Number(item.costoUnitario ?? 0);
+                                              const costo = Number(item.costo ?? 0);
+                                              return (
+                                                <TableRow key={`${grupo.tipo}-merma-${idx}`} className="bg-muted/20">
+                                                  <TableCell className="pl-10">{`${nombre}${canal}${sku}`}</TableCell>
+                                                  <TableCell className="w-[180px]">Merma operativa</TableCell>
+                                                  <TableCell className="text-right tabular-nums">{formatNumber(cantidad)}</TableCell>
+                                                  <TableCell className="text-right tabular-nums">{formatNumber(costoUnitario)}</TableCell>
+                                                  <TableCell className="text-right tabular-nums">{formatNumber(costo)}</TableCell>
+                                                </TableRow>
+                                              );
+                                            })
+                                          : null}
+                                      </>
+                                    ) : null}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            </CollapsibleContent>
+                          </div>
+                        </Collapsible>
+                      ))}
+
+                      <div className="rounded-lg border">
+                        <Table>
+                          <TableBody>
+                            <TableRow>
+                              <TableCell colSpan={4} className="text-right font-medium">
+                                Total materiales
+                              </TableCell>
+                              <TableCell className="text-right font-semibold tabular-nums">
+                                {formatCurrency(totalMaterialesCosto)}
+                              </TableCell>
+                            </TableRow>
+                            <TableRow className="bg-amber-100/60">
+                              <TableCell colSpan={4} className="text-right font-semibold">
+                                Total costo
+                              </TableCell>
+                              <TableCell className="text-right font-bold tabular-nums">
+                                {formatCurrency(totalCostoGeneral)}
+                              </TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </div>
                     </CardContent>
                   </Card>
                 </>
@@ -2775,7 +3595,6 @@ export function ProductoServicioFichaTabs({
                   <TableHead>Modo</TableHead>
                   <TableHead>Valor</TableHead>
                   <TableHead>Unidad</TableHead>
-                  <TableHead>Condición</TableHead>
                   <TableHead className="w-[130px] text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -2886,38 +3705,6 @@ export function ProductoServicioFichaTabs({
                         <SelectContent>
                           {unidadProcesoItems.map((item) => (
                             <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell>
-                      <Select
-                        value={op.requiresProductoAdicionalId ?? "__none__"}
-                        onValueChange={(value) =>
-                          setRouteEditorOperaciones((prev) =>
-                            prev.map((item, i): RouteOperationDraft =>
-                              i === index
-                                ? {
-                                    ...item,
-                                    requiresProductoAdicionalId:
-                                      value === "__none__"
-                                        ? undefined
-                                        : (value as string | undefined),
-                                  }
-                                : item,
-                            ),
-                          )
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sin condición" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">Sin condición</SelectItem>
-                          {adicionalesAsignadosActivos.map((entry) => (
-                            <SelectItem key={entry.adicionalId} value={entry.adicionalId}>
-                              {entry.adicional.nombre}
-                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>

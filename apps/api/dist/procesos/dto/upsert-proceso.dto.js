@@ -9,13 +9,17 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UpsertProcesoDto = exports.ProcesoOperacionItemDto = exports.UnidadProcesoDto = exports.ModoProductividadProcesoDto = exports.TipoOperacionProcesoDto = exports.EstadoConfiguracionProcesoDto = exports.PlantillaMaquinariaDto = void 0;
+exports.UpsertProcesoDto = exports.ProcesoOperacionNivelDto = exports.ProcesoOperacionItemDto = exports.UnidadProcesoDto = exports.ModoProductividadNivelDto = exports.ModoProductividadProcesoDto = exports.TipoOperacionProcesoDto = exports.EstadoConfiguracionProcesoDto = exports.PlantillaMaquinariaDto = void 0;
 const class_transformer_1 = require("class-transformer");
 const class_validator_1 = require("class-validator");
 var PlantillaMaquinariaDto;
 (function (PlantillaMaquinariaDto) {
     PlantillaMaquinariaDto["router_cnc"] = "router_cnc";
     PlantillaMaquinariaDto["corte_laser"] = "corte_laser";
+    PlantillaMaquinariaDto["guillotina"] = "guillotina";
+    PlantillaMaquinariaDto["laminadora_bopp_rollo"] = "laminadora_bopp_rollo";
+    PlantillaMaquinariaDto["redondeadora_puntas"] = "redondeadora_puntas";
+    PlantillaMaquinariaDto["perforadora"] = "perforadora";
     PlantillaMaquinariaDto["impresora_3d"] = "impresora_3d";
     PlantillaMaquinariaDto["impresora_dtf"] = "impresora_dtf";
     PlantillaMaquinariaDto["impresora_dtf_uv"] = "impresora_dtf_uv";
@@ -40,27 +44,24 @@ var EstadoConfiguracionProcesoDto;
 })(EstadoConfiguracionProcesoDto || (exports.EstadoConfiguracionProcesoDto = EstadoConfiguracionProcesoDto = {}));
 var TipoOperacionProcesoDto;
 (function (TipoOperacionProcesoDto) {
-    TipoOperacionProcesoDto["preflight"] = "preflight";
     TipoOperacionProcesoDto["preprensa"] = "preprensa";
-    TipoOperacionProcesoDto["impresion"] = "impresion";
-    TipoOperacionProcesoDto["corte"] = "corte";
-    TipoOperacionProcesoDto["mecanizado"] = "mecanizado";
-    TipoOperacionProcesoDto["grabado"] = "grabado";
-    TipoOperacionProcesoDto["terminacion"] = "terminacion";
-    TipoOperacionProcesoDto["curado"] = "curado";
-    TipoOperacionProcesoDto["laminado"] = "laminado";
-    TipoOperacionProcesoDto["transferencia"] = "transferencia";
-    TipoOperacionProcesoDto["control_calidad"] = "control_calidad";
-    TipoOperacionProcesoDto["empaque"] = "empaque";
-    TipoOperacionProcesoDto["logistica"] = "logistica";
-    TipoOperacionProcesoDto["tercerizado"] = "tercerizado";
-    TipoOperacionProcesoDto["otro"] = "otro";
+    TipoOperacionProcesoDto["prensa"] = "prensa";
+    TipoOperacionProcesoDto["postprensa"] = "postprensa";
+    TipoOperacionProcesoDto["acabado"] = "acabado";
+    TipoOperacionProcesoDto["servicio"] = "servicio";
+    TipoOperacionProcesoDto["instalacion"] = "instalacion";
 })(TipoOperacionProcesoDto || (exports.TipoOperacionProcesoDto = TipoOperacionProcesoDto = {}));
 var ModoProductividadProcesoDto;
 (function (ModoProductividadProcesoDto) {
     ModoProductividadProcesoDto["fija"] = "fija";
     ModoProductividadProcesoDto["variable"] = "variable";
 })(ModoProductividadProcesoDto || (exports.ModoProductividadProcesoDto = ModoProductividadProcesoDto = {}));
+var ModoProductividadNivelDto;
+(function (ModoProductividadNivelDto) {
+    ModoProductividadNivelDto["fija"] = "fija";
+    ModoProductividadNivelDto["variable_manual"] = "variable_manual";
+    ModoProductividadNivelDto["variable_perfil"] = "variable_perfil";
+})(ModoProductividadNivelDto || (exports.ModoProductividadNivelDto = ModoProductividadNivelDto = {}));
 var UnidadProcesoDto;
 (function (UnidadProcesoDto) {
     UnidadProcesoDto["ninguna"] = "ninguna";
@@ -72,6 +73,7 @@ var UnidadProcesoDto;
     UnidadProcesoDto["m2"] = "m2";
     UnidadProcesoDto["metro_lineal"] = "metro_lineal";
     UnidadProcesoDto["pieza"] = "pieza";
+    UnidadProcesoDto["corte"] = "corte";
     UnidadProcesoDto["ciclo"] = "ciclo";
     UnidadProcesoDto["unidad"] = "unidad";
     UnidadProcesoDto["kg"] = "kg";
@@ -100,7 +102,7 @@ class ProcesoOperacionItemDto {
     reglaVelocidad;
     reglaMerma;
     detalle;
-    requiresProductoAdicionalId;
+    niveles;
     activo;
 }
 exports.ProcesoOperacionItemDto = ProcesoOperacionItemDto;
@@ -219,13 +221,107 @@ __decorate([
 ], ProcesoOperacionItemDto.prototype, "detalle", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsUUID)(),
-    __metadata("design:type", String)
-], ProcesoOperacionItemDto.prototype, "requiresProductoAdicionalId", void 0);
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ValidateNested)({ each: true }),
+    (0, class_transformer_1.Type)(() => ProcesoOperacionNivelDto),
+    __metadata("design:type", Array)
+], ProcesoOperacionItemDto.prototype, "niveles", void 0);
 __decorate([
     (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)
 ], ProcesoOperacionItemDto.prototype, "activo", void 0);
+class ProcesoOperacionNivelDto {
+    id;
+    nombre;
+    orden;
+    activo;
+    modoProductividadNivel;
+    tiempoFijoMin;
+    productividadBase;
+    unidadSalida;
+    unidadTiempo;
+    maquinaId;
+    perfilOperativoId;
+    setupMin;
+    cleanupMin;
+    detalle;
+}
+exports.ProcesoOperacionNivelDto = ProcesoOperacionNivelDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MinLength)(1),
+    __metadata("design:type", String)
+], ProcesoOperacionNivelDto.prototype, "id", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MinLength)(1),
+    __metadata("design:type", String)
+], ProcesoOperacionNivelDto.prototype, "nombre", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Number)
+], ProcesoOperacionNivelDto.prototype, "orden", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], ProcesoOperacionNivelDto.prototype, "activo", void 0);
+__decorate([
+    (0, class_validator_1.IsEnum)(ModoProductividadNivelDto),
+    __metadata("design:type", String)
+], ProcesoOperacionNivelDto.prototype, "modoProductividadNivel", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Number)
+], ProcesoOperacionNivelDto.prototype, "tiempoFijoMin", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Number)
+], ProcesoOperacionNivelDto.prototype, "productividadBase", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(UnidadProcesoDto),
+    __metadata("design:type", String)
+], ProcesoOperacionNivelDto.prototype, "unidadSalida", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(UnidadProcesoDto),
+    __metadata("design:type", String)
+], ProcesoOperacionNivelDto.prototype, "unidadTiempo", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], ProcesoOperacionNivelDto.prototype, "maquinaId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], ProcesoOperacionNivelDto.prototype, "perfilOperativoId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Number)
+], ProcesoOperacionNivelDto.prototype, "setupMin", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Number)
+], ProcesoOperacionNivelDto.prototype, "cleanupMin", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsObject)(),
+    __metadata("design:type", Object)
+], ProcesoOperacionNivelDto.prototype, "detalle", void 0);
 class UpsertProcesoDto {
     codigo;
     nombre;

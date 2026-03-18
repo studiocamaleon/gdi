@@ -80,6 +80,27 @@ export enum ReglaCostoAdicionalEfectoDto {
   tiempo_extra_min = 'tiempo_extra_min',
 }
 
+export enum TipoChecklistPreguntaDto {
+  binaria = 'binaria',
+  single_select = 'single_select',
+}
+
+export enum TipoChecklistAccionReglaDto {
+  activar_paso = 'activar_paso',
+  seleccionar_variante_paso = 'seleccionar_variante_paso',
+  costo_extra = 'costo_extra',
+  material_extra = 'material_extra',
+  set_atributo_tecnico = 'set_atributo_tecnico',
+}
+
+export enum ReglaCostoChecklistDto {
+  tiempo_min = 'tiempo_min',
+  flat = 'flat',
+  por_unidad = 'por_unidad',
+  por_pliego = 'por_pliego',
+  porcentaje_sobre_total = 'porcentaje_sobre_total',
+}
+
 
 export class UpsertVarianteOpcionProductivaDimensionDto {
   @IsEnum(DimensionOpcionProductivaDto)
@@ -137,6 +158,10 @@ export class UpsertProductoAdicionalRouteEffectPasoDto {
   perfilOperativoId?: string;
 
   @IsOptional()
+  @IsBoolean()
+  usarMaquinariaTerminacion?: boolean;
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
@@ -159,6 +184,16 @@ export class UpsertProductoAdicionalRouteEffectPasoDto {
   @IsNumber()
   @Min(0)
   tiempoFijoMin?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  tiempoFijoMinFallback?: number;
+
+  @IsOptional()
+  @IsObject()
+  overridesProductividad?: Record<string, unknown>;
 }
 
 export class UpsertProductoAdicionalRouteEffectDto {
@@ -518,6 +553,52 @@ export class AssignVarianteRutaDto {
   procesoDefinicionId?: string;
 }
 
+export class UpsertProductoRutaBaseMatchingItemDto {
+  @IsOptional()
+  @IsEnum(TipoImpresionProductoVarianteDto)
+  tipoImpresion?: TipoImpresionProductoVarianteDto | null;
+
+  @IsOptional()
+  @IsEnum(CarasProductoVarianteDto)
+  caras?: CarasProductoVarianteDto | null;
+
+  @IsUUID()
+  pasoPlantillaId: string;
+
+  @IsUUID()
+  perfilOperativoId: string;
+}
+
+export class UpsertProductoRutaBaseMatchingVarianteDto {
+  @IsUUID()
+  varianteId: string;
+
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => UpsertProductoRutaBaseMatchingItemDto)
+  matching: UpsertProductoRutaBaseMatchingItemDto[];
+}
+
+export class UpsertProductoRutaPasoFijoItemDto {
+  @IsUUID()
+  pasoPlantillaId: string;
+
+  @IsUUID()
+  perfilOperativoId: string;
+}
+
+export class UpsertProductoRutaPasoFijoVarianteDto {
+  @IsUUID()
+  varianteId: string;
+
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => UpsertProductoRutaPasoFijoItemDto)
+  pasos: UpsertProductoRutaPasoFijoItemDto[];
+}
+
 export class UpdateProductoRutaPolicyDto {
   @IsBoolean()
   usarRutaComunVariantes: boolean;
@@ -525,6 +606,26 @@ export class UpdateProductoRutaPolicyDto {
   @IsOptional()
   @IsUUID()
   procesoDefinicionDefaultId?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsEnum(DimensionOpcionProductivaDto, { each: true })
+  dimensionesBaseConsumidas?: DimensionOpcionProductivaDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => UpsertProductoRutaBaseMatchingVarianteDto)
+  matchingBasePorVariante?: UpsertProductoRutaBaseMatchingVarianteDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => UpsertProductoRutaPasoFijoVarianteDto)
+  pasosFijosPorVariante?: UpsertProductoRutaPasoFijoVarianteDto[];
 }
 
 export class AssignProductoVariantesRutaMasivaDto {
@@ -565,6 +666,205 @@ export class CotizarAddonConfigDto {
   nivelId?: string;
 }
 
+export class CotizarChecklistRespuestaDto {
+  @IsUUID()
+  preguntaId: string;
+
+  @IsUUID()
+  respuestaId: string;
+}
+
+export class CotizarSeleccionBaseDto {
+  @IsEnum(DimensionOpcionProductivaDto)
+  dimension: DimensionOpcionProductivaDto;
+
+  @IsEnum(ValorOpcionProductivaDto)
+  valor: ValorOpcionProductivaDto;
+}
+
+export class UpsertChecklistReglaNivelDto {
+  @IsOptional()
+  @IsUUID()
+  id?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  nombreNivel: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  orden?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  activo?: boolean;
+
+  @IsOptional()
+  @IsEnum(ReglaCostoChecklistDto)
+  costoRegla?: ReglaCostoChecklistDto;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  costoValor?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  tiempoMin?: number;
+}
+
+export class UpsertChecklistReglaDto {
+  @IsOptional()
+  @IsUUID()
+  id?: string;
+
+  @IsEnum(TipoChecklistAccionReglaDto)
+  accion: TipoChecklistAccionReglaDto;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  orden?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  activo?: boolean;
+
+  @IsOptional()
+  @IsUUID()
+  pasoPlantillaId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  variantePasoId?: string;
+
+  @IsOptional()
+  @IsEnum(DimensionOpcionProductivaDto)
+  atributoTecnicoDimension?: DimensionOpcionProductivaDto;
+
+  @IsOptional()
+  @IsEnum(ValorOpcionProductivaDto)
+  atributoTecnicoValor?: ValorOpcionProductivaDto;
+
+  @IsOptional()
+  @IsEnum(ReglaCostoChecklistDto)
+  costoRegla?: ReglaCostoChecklistDto;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  costoValor?: number;
+
+  @IsOptional()
+  @IsUUID()
+  costoCentroCostoId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  materiaPrimaVarianteId?: string;
+
+  @IsOptional()
+  @IsEnum(TipoConsumoAdicionalMaterialDto)
+  tipoConsumo?: TipoConsumoAdicionalMaterialDto;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  factorConsumo?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  mermaPct?: number;
+
+  @IsOptional()
+  @IsObject()
+  detalle?: Record<string, unknown>;
+
+}
+
+export class UpsertChecklistRespuestaDto {
+  @IsOptional()
+  @IsUUID()
+  id?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  texto: string;
+
+  @IsOptional()
+  @IsString()
+  codigo?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  orden?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  activo?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(30)
+  @ValidateNested({ each: true })
+  @Type(() => UpsertChecklistReglaDto)
+  reglas?: UpsertChecklistReglaDto[];
+}
+
+export class UpsertChecklistPreguntaDto {
+  @IsOptional()
+  @IsUUID()
+  id?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  texto: string;
+
+  @IsOptional()
+  @IsEnum(TipoChecklistPreguntaDto)
+  tipoPregunta?: TipoChecklistPreguntaDto;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  orden?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  activo?: boolean;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => UpsertChecklistRespuestaDto)
+  respuestas: UpsertChecklistRespuestaDto[];
+}
+
+export class UpsertProductoChecklistDto {
+  @IsOptional()
+  @IsBoolean()
+  activo?: boolean;
+
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => UpsertChecklistPreguntaDto)
+  preguntas: UpsertChecklistPreguntaDto[];
+}
+
 export class CotizarProductoVarianteDto {
   @IsNumber()
   @Min(1)
@@ -577,16 +877,17 @@ export class CotizarProductoVarianteDto {
 
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(50)
-  @IsUUID(undefined, { each: true })
-  addonsSeleccionados?: string[];
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => CotizarChecklistRespuestaDto)
+  checklistRespuestas?: CotizarChecklistRespuestaDto[];
 
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(50)
+  @ArrayMaxSize(10)
   @ValidateNested({ each: true })
-  @Type(() => CotizarAddonConfigDto)
-  addonsConfig?: CotizarAddonConfigDto[];
+  @Type(() => CotizarSeleccionBaseDto)
+  seleccionesBase?: CotizarSeleccionBaseDto[];
 }
 
 export class PreviewImposicionProductoVarianteDto {
