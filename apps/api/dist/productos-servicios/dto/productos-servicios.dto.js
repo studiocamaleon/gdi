@@ -9,8 +9,8 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UpsertChecklistReglaNivelDto = exports.CotizarSeleccionBaseDto = exports.CotizarChecklistRespuestaDto = exports.CotizarAddonConfigDto = exports.UpsertVarianteMotorOverrideDto = exports.UpsertProductoMotorConfigDto = exports.AssignProductoMotorDto = exports.AssignProductoVariantesRutaMasivaDto = exports.UpdateProductoRutaPolicyDto = exports.UpsertProductoRutaPasoFijoVarianteDto = exports.UpsertProductoRutaPasoFijoItemDto = exports.UpsertProductoRutaBaseMatchingVarianteDto = exports.UpsertProductoRutaBaseMatchingItemDto = exports.AssignVarianteRutaDto = exports.UpdateProductoVarianteDto = exports.CreateProductoVarianteDto = exports.UpsertProductoServicioDto = exports.UpsertSubfamiliaProductoDto = exports.UpsertFamiliaProductoDto = exports.SetVarianteAdicionalRestrictionDto = exports.AssignProductoAdicionalDto = exports.UpsertProductoAdicionalServicioPricingDto = exports.UpsertProductoAdicionalServicioReglaCostoDto = exports.UpsertProductoAdicionalServicioNivelDto = exports.UpsertProductoAdicionalDto = exports.UpsertProductoAdicionalMaterialDto = exports.UpsertProductoAdicionalEfectoDto = exports.UpsertProductoAdicionalMaterialEffectDto = exports.UpsertProductoAdicionalCostEffectDto = exports.UpsertProductoAdicionalRouteEffectDto = exports.UpsertProductoAdicionalRouteInsertionDto = exports.UpsertProductoAdicionalRouteEffectPasoDto = exports.UpsertProductoAdicionalEfectoScopeDto = exports.UpsertVarianteOpcionesProductivasDto = exports.UpsertVarianteOpcionProductivaDimensionDto = exports.ReglaCostoChecklistDto = exports.TipoChecklistAccionReglaDto = exports.TipoChecklistPreguntaDto = exports.ReglaCostoAdicionalEfectoDto = exports.TipoInsercionRouteEffectDto = exports.TipoProductoAdicionalEfectoDto = exports.ValorOpcionProductivaDto = exports.DimensionOpcionProductivaDto = exports.TipoConsumoAdicionalMaterialDto = exports.MetodoCostoProductoAdicionalDto = exports.TipoProductoAdicionalDto = exports.CarasProductoVarianteDto = exports.TipoImpresionProductoVarianteDto = exports.EstadoProductoServicioDto = exports.TipoProductoServicioDto = void 0;
-exports.PreviewImposicionProductoVarianteDto = exports.CotizarProductoVarianteDto = exports.UpsertProductoChecklistDto = exports.UpsertChecklistPreguntaDto = exports.UpsertChecklistRespuestaDto = exports.UpsertChecklistReglaDto = void 0;
+exports.UpsertVarianteMotorOverrideDto = exports.UpsertProductoMotorConfigDto = exports.UpdateProductoPrecioEspecialClientesDto = exports.UpdateProductoPrecioDto = exports.AssignProductoMotorDto = exports.AssignProductoVariantesRutaMasivaDto = exports.UpdateProductoRutaPolicyDto = exports.UpsertProductoRutaPasoFijoVarianteDto = exports.UpsertProductoRutaPasoFijoItemDto = exports.UpsertProductoRutaBaseMatchingVarianteDto = exports.UpsertProductoRutaBaseMatchingItemDto = exports.AssignVarianteRutaDto = exports.UpdateProductoVarianteDto = exports.CreateProductoVarianteDto = exports.UpsertProductoServicioDto = exports.UpsertSubfamiliaProductoDto = exports.UpsertProductoImpuestoDto = exports.UpsertFamiliaProductoDto = exports.SetVarianteAdicionalRestrictionDto = exports.AssignProductoAdicionalDto = exports.UpsertProductoAdicionalServicioPricingDto = exports.UpsertProductoAdicionalServicioReglaCostoDto = exports.UpsertProductoAdicionalServicioNivelDto = exports.UpsertProductoAdicionalDto = exports.UpsertProductoAdicionalMaterialDto = exports.UpsertProductoAdicionalEfectoDto = exports.UpsertProductoAdicionalMaterialEffectDto = exports.UpsertProductoAdicionalCostEffectDto = exports.UpsertProductoAdicionalRouteEffectDto = exports.UpsertProductoAdicionalRouteInsertionDto = exports.UpsertProductoAdicionalRouteEffectPasoDto = exports.UpsertProductoAdicionalEfectoScopeDto = exports.UpsertVarianteOpcionesProductivasDto = exports.UpsertVarianteOpcionProductivaDimensionDto = exports.MetodoCalculoPrecioProductoDto = exports.ReglaCostoChecklistDto = exports.TipoChecklistAccionReglaDto = exports.TipoChecklistPreguntaDto = exports.ReglaCostoAdicionalEfectoDto = exports.TipoInsercionRouteEffectDto = exports.TipoProductoAdicionalEfectoDto = exports.ValorOpcionProductivaDto = exports.DimensionOpcionProductivaDto = exports.TipoConsumoAdicionalMaterialDto = exports.MetodoCostoProductoAdicionalDto = exports.TipoProductoAdicionalDto = exports.CarasProductoVarianteDto = exports.TipoImpresionProductoVarianteDto = exports.EstadoProductoServicioDto = exports.TipoProductoServicioDto = void 0;
+exports.PreviewImposicionProductoVarianteDto = exports.CotizarProductoVarianteDto = exports.UpsertProductoChecklistDto = exports.UpsertChecklistPreguntaDto = exports.UpsertChecklistRespuestaDto = exports.UpsertChecklistReglaDto = exports.UpsertChecklistReglaNivelDto = exports.CotizarSeleccionBaseDto = exports.CotizarChecklistRespuestaDto = exports.CotizarAddonConfigDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 var TipoProductoServicioDto;
@@ -102,6 +102,16 @@ var ReglaCostoChecklistDto;
     ReglaCostoChecklistDto["por_pliego"] = "por_pliego";
     ReglaCostoChecklistDto["porcentaje_sobre_total"] = "porcentaje_sobre_total";
 })(ReglaCostoChecklistDto || (exports.ReglaCostoChecklistDto = ReglaCostoChecklistDto = {}));
+var MetodoCalculoPrecioProductoDto;
+(function (MetodoCalculoPrecioProductoDto) {
+    MetodoCalculoPrecioProductoDto["margen_variable"] = "margen_variable";
+    MetodoCalculoPrecioProductoDto["por_margen"] = "por_margen";
+    MetodoCalculoPrecioProductoDto["precio_fijo"] = "precio_fijo";
+    MetodoCalculoPrecioProductoDto["fijado_por_cantidad"] = "fijado_por_cantidad";
+    MetodoCalculoPrecioProductoDto["fijo_con_margen_variable"] = "fijo_con_margen_variable";
+    MetodoCalculoPrecioProductoDto["variable_por_cantidad"] = "variable_por_cantidad";
+    MetodoCalculoPrecioProductoDto["precio_fijo_para_margen_minimo"] = "precio_fijo_para_margen_minimo";
+})(MetodoCalculoPrecioProductoDto || (exports.MetodoCalculoPrecioProductoDto = MetodoCalculoPrecioProductoDto = {}));
 class UpsertVarianteOpcionProductivaDimensionDto {
     dimension;
     valores;
@@ -584,6 +594,39 @@ __decorate([
     (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)
 ], UpsertFamiliaProductoDto.prototype, "activo", void 0);
+class UpsertProductoImpuestoDto {
+    codigo;
+    nombre;
+    porcentaje;
+    detalle;
+    activo;
+}
+exports.UpsertProductoImpuestoDto = UpsertProductoImpuestoDto;
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], UpsertProductoImpuestoDto.prototype, "codigo", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], UpsertProductoImpuestoDto.prototype, "nombre", void 0);
+__decorate([
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpsertProductoImpuestoDto.prototype, "porcentaje", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsObject)(),
+    __metadata("design:type", Object)
+], UpsertProductoImpuestoDto.prototype, "detalle", void 0);
+__decorate([
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], UpsertProductoImpuestoDto.prototype, "activo", void 0);
 class UpsertSubfamiliaProductoDto {
     familiaProductoId;
     codigo;
@@ -928,6 +971,40 @@ __decorate([
     (0, class_validator_1.Min)(1),
     __metadata("design:type", Number)
 ], AssignProductoMotorDto.prototype, "motorVersion", void 0);
+class UpdateProductoPrecioDto {
+    metodoCalculo;
+    measurementUnit;
+    detalle;
+    impuestos;
+}
+exports.UpdateProductoPrecioDto = UpdateProductoPrecioDto;
+__decorate([
+    (0, class_validator_1.IsEnum)(MetodoCalculoPrecioProductoDto),
+    __metadata("design:type", String)
+], UpdateProductoPrecioDto.prototype, "metodoCalculo", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", Object)
+], UpdateProductoPrecioDto.prototype, "measurementUnit", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsObject)(),
+    __metadata("design:type", Object)
+], UpdateProductoPrecioDto.prototype, "detalle", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsObject)(),
+    __metadata("design:type", Object)
+], UpdateProductoPrecioDto.prototype, "impuestos", void 0);
+class UpdateProductoPrecioEspecialClientesDto {
+    items;
+}
+exports.UpdateProductoPrecioEspecialClientesDto = UpdateProductoPrecioEspecialClientesDto;
+__decorate([
+    (0, class_validator_1.IsArray)(),
+    __metadata("design:type", Array)
+], UpdateProductoPrecioEspecialClientesDto.prototype, "items", void 0);
 class UpsertProductoMotorConfigDto {
     parametros;
 }

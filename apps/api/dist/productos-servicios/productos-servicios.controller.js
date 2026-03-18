@@ -67,6 +67,15 @@ let ProductosServiciosController = class ProductosServiciosController {
     createFamilia(auth, payload) {
         return this.service.createFamilia(auth, payload);
     }
+    getImpuestos(auth) {
+        return this.service.findImpuestos(auth);
+    }
+    createImpuesto(auth, payload) {
+        return this.service.createImpuesto(auth, payload);
+    }
+    updateImpuesto(auth, id, payload) {
+        return this.service.updateImpuesto(auth, id, payload);
+    }
     updateFamilia(auth, id, payload) {
         return this.service.updateFamilia(auth, id, payload);
     }
@@ -93,6 +102,12 @@ let ProductosServiciosController = class ProductosServiciosController {
     }
     assignProductoMotor(auth, id, payload) {
         return this.service.assignProductoMotor(auth, id, payload);
+    }
+    updateProductoPrecio(auth, id, payload) {
+        return this.service.updateProductoPrecio(auth, id, payload);
+    }
+    updateProductoPrecioEspecialClientes(auth, id, payload) {
+        return this.service.updateProductoPrecioEspecialClientes(auth, id, payload);
     }
     getProductoMotorConfig(auth, id) {
         return this.service.getProductoMotorConfig(auth, id);
@@ -290,6 +305,30 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], ProductosServiciosController.prototype, "createFamilia", null);
 __decorate([
+    (0, common_1.Get)('impuestos'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "getImpuestos", null);
+__decorate([
+    (0, common_1.Post)('impuestos'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, productos_servicios_dto_1.UpsertProductoImpuestoDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "createImpuesto", null);
+__decorate([
+    (0, common_1.Put)('impuestos/:id'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.UpsertProductoImpuestoDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "updateImpuesto", null);
+__decorate([
     (0, common_1.Put)('familias/:id'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),
     __param(1, (0, common_1.Param)('id')),
@@ -364,6 +403,24 @@ __decorate([
     __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.AssignProductoMotorDto]),
     __metadata("design:returntype", void 0)
 ], ProductosServiciosController.prototype, "assignProductoMotor", null);
+__decorate([
+    (0, common_1.Put)(':id/precio'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.UpdateProductoPrecioDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "updateProductoPrecio", null);
+__decorate([
+    (0, common_1.Put)(':id/precio-especial-clientes'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.UpdateProductoPrecioEspecialClientesDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "updateProductoPrecioEspecialClientes", null);
 __decorate([
     (0, common_1.Get)(':id/motor-config'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),

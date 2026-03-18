@@ -107,6 +107,16 @@ export enum ReglaCostoChecklistDto {
   porcentaje_sobre_total = 'porcentaje_sobre_total',
 }
 
+export enum MetodoCalculoPrecioProductoDto {
+  margen_variable = 'margen_variable',
+  por_margen = 'por_margen',
+  precio_fijo = 'precio_fijo',
+  fijado_por_cantidad = 'fijado_por_cantidad',
+  fijo_con_margen_variable = 'fijo_con_margen_variable',
+  variable_por_cantidad = 'variable_por_cantidad',
+  precio_fijo_para_margen_minimo = 'precio_fijo_para_margen_minimo',
+}
+
 
 export class UpsertVarianteOpcionProductivaDimensionDto {
   @IsEnum(DimensionOpcionProductivaDto)
@@ -437,6 +447,28 @@ export class UpsertFamiliaProductoDto {
   activo: boolean;
 }
 
+export class UpsertProductoImpuestoDto {
+  @IsString()
+  @IsNotEmpty()
+  codigo: string;
+
+  @IsString()
+  @IsNotEmpty()
+  nombre: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  porcentaje: number;
+
+  @IsOptional()
+  @IsObject()
+  detalle?: Record<string, unknown>;
+
+  @IsBoolean()
+  activo: boolean;
+}
+
 export class UpsertSubfamiliaProductoDto {
   @IsUUID()
   familiaProductoId: string;
@@ -665,6 +697,28 @@ export class AssignProductoMotorDto {
   @IsNumber()
   @Min(1)
   motorVersion: number;
+}
+
+export class UpdateProductoPrecioDto {
+  @IsEnum(MetodoCalculoPrecioProductoDto)
+  metodoCalculo: MetodoCalculoPrecioProductoDto;
+
+  @IsOptional()
+  @IsString()
+  measurementUnit?: string | null;
+
+  @IsOptional()
+  @IsObject()
+  detalle?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsObject()
+  impuestos?: Record<string, unknown>;
+}
+
+export class UpdateProductoPrecioEspecialClientesDto {
+  @IsArray()
+  items: Record<string, unknown>[];
 }
 
 export class UpsertProductoMotorConfigDto {

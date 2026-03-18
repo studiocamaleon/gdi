@@ -2,12 +2,14 @@ import { notFound, redirect } from "next/navigation";
 
 import { ProductoServicioFichaTabs } from "@/components/productos-servicios/producto-servicio-ficha-tabs";
 import { ApiError } from "@/lib/api";
+import { getClientes } from "@/lib/clientes-api";
 import { getMaquinas } from "@/lib/maquinaria-api";
 import { getMateriasPrimas } from "@/lib/materias-primas-api";
 import { getProcesoOperacionPlantillas, getProcesos } from "@/lib/procesos-api";
 import {
   getFamiliasProducto,
   getMotoresCostoCatalogo,
+  getProductoImpuestosCatalogo,
   getProductoChecklist,
   getProductoServicio,
   getProductoVariantes,
@@ -28,7 +30,7 @@ export default async function ProductoServicioDetallePage({
   const { productoId } = await params;
 
   try {
-    const [producto, variantes, procesos, plantillasPaso, materiasPrimas, familias, subfamilias, motores, checklist, maquinas] = await Promise.all([
+    const [producto, variantes, procesos, plantillasPaso, materiasPrimas, familias, subfamilias, motores, checklist, maquinas, impuestosCatalogo, clientes] = await Promise.all([
       getProductoServicio(productoId),
       getProductoVariantes(productoId),
       getProcesos(),
@@ -39,6 +41,8 @@ export default async function ProductoServicioDetallePage({
       getMotoresCostoCatalogo(),
       getProductoChecklist(productoId),
       getMaquinas(),
+      getProductoImpuestosCatalogo(),
+      getClientes(),
     ]);
 
     return (
@@ -54,6 +58,8 @@ export default async function ProductoServicioDetallePage({
           motores={motores}
           checklist={checklist}
           maquinas={maquinas}
+          initialImpuestosCatalogo={impuestosCatalogo}
+          initialClientes={clientes}
         />
       </section>
     );

@@ -13,11 +13,13 @@ import {
   PencilIcon,
   PlusIcon,
   SaveIcon,
+  Settings2Icon,
   Trash2Icon,
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 
+import type { ClienteDetalle } from "@/lib/clientes";
 import type { MateriaPrima } from "@/lib/materias-primas";
 import type { Maquina } from "@/lib/maquinaria";
 import type { Proceso } from "@/lib/procesos";
@@ -44,7 +46,10 @@ import {
   getProductoMotorConfig,
   getVarianteMotorOverride,
   previewImposicionProductoVariante,
+  updateProductoImpuesto,
   updateProductoRutaPolicy,
+  updateProductoPrecio,
+  updateProductoPrecioEspecialClientes,
   upsertVarianteMotorOverride,
   updateProductoServicio,
   updateProductoVariante,
@@ -53,11 +58,19 @@ import {
 import type {
   DimensionOpcionProductiva,
   FamiliaProducto,
+  MetodoCalculoPrecioProducto,
   MotorCostoCatalogItem,
   PliegoImpresionCatalogItem,
   CotizacionProductoSnapshotResumen,
   CotizacionProductoVariante,
   ProductoChecklist,
+  ProductoPrecioConfig,
+  ProductoPrecioEspecialCliente,
+  ProductoImpuestoCatalogo,
+  ProductoPrecioFilaCantidadMargen,
+  ProductoPrecioFilaCantidadPrecio,
+  ProductoPrecioFilaRangoMargen,
+  ProductoPrecioFilaRangoPrecio,
   ProductoRutaBaseMatchingVariante,
   ProductoServicio,
   ProductoVariante,
@@ -117,6 +130,8 @@ type PapelOption = {
 type ProductoServicioFichaTabsProps = {
   producto: ProductoServicio;
   initialVariantes: ProductoVariante[];
+  initialClientes: ClienteDetalle[];
+  initialImpuestosCatalogo: ProductoImpuestoCatalogo[];
   procesos: Proceso[];
   plantillasPaso: ProcesoOperacionPlantilla[];
   materiasPrimas: MateriaPrima[];
@@ -142,6 +157,10 @@ type VarianteEditDraft = VarianteDraft;
 type VarianteConfirmAction =
   | { type: "delete"; variante: ProductoVariante }
   | { type: "toggle"; variante: ProductoVariante; nextActive: boolean };
+type PrecioEspecialClienteConfirmDelete = {
+  id: string;
+  clienteNombre: string;
+};
 
 type RouteOperationDraft = ProcesoOperacionPayload & {
   id: string;
@@ -157,6 +176,20 @@ type RutaBaseMatchingDraft = {
 type RutaBasePasoFijoDraft = {
   pasoPlantillaId: string;
   perfilOperativoId: string;
+};
+
+type PrecioEspecialClienteDraft = {
+  id: string;
+  clienteId: string;
+  clienteNombre: string;
+  descripcion: string;
+  activo: boolean;
+  createdAt: string;
+  updatedAt: string;
+  metodoCalculo: MetodoCalculoPrecioProducto;
+  measurementUnit: string | null;
+  impuestos: ProductoPrecioConfig["impuestos"];
+  detalle: Record<string, unknown>;
 };
 
 const dimensionBaseLabelByValue: Record<DimensionOpcionProductiva, string> = {
@@ -182,6 +215,180 @@ const carasPermitidasSelectItems = [
   { value: "doble_faz", label: "Solo doble faz", values: ["doble_faz"] as Array<"simple_faz" | "doble_faz"> },
   { value: "simple_doble", label: "Simple y doble faz", values: ["simple_faz", "doble_faz"] as Array<"simple_faz" | "doble_faz"> },
 ];
+
+const metodoCalculoPrecioLabels: Record<MetodoCalculoPrecioProducto, string> = {
+  margen_variable: "Cantidad libre por margen variable",
+  por_margen: "Precio fijo por margen fijo",
+  precio_fijo: "Precio fijo",
+  fijado_por_cantidad: "Cantidades fijas con precio fijo",
+  fijo_con_margen_variable: "Cantidades fijas con margen variable",
+  variable_por_cantidad: "Rangos de precio con precio fijo",
+  precio_fijo_para_margen_minimo: "Precio fijo para margen mínimo",
+};
+
+const metodoCalculoPrecioItems: Array<{ value: MetodoCalculoPrecioProducto; label: string }> = [
+  { value: "margen_variable", label: metodoCalculoPrecioLabels.margen_variable },
+  { value: "por_margen", label: metodoCalculoPrecioLabels.por_margen },
+  { value: "precio_fijo", label: metodoCalculoPrecioLabels.precio_fijo },
+  { value: "fijado_por_cantidad", label: metodoCalculoPrecioLabels.fijado_por_cantidad },
+  { value: "fijo_con_margen_variable", label: metodoCalculoPrecioLabels.fijo_con_margen_variable },
+  { value: "variable_por_cantidad", label: metodoCalculoPrecioLabels.variable_por_cantidad },
+];
+
+function buildDefaultPrecioDetalle(metodoCalculo: MetodoCalculoPrecioProducto) {
+  if (metodoCalculo === "por_margen") {
+    return { marginPct: 0, minimumMarginPct: 0 };
+  }
+  if (metodoCalculo === "precio_fijo") {
+    return { price: 0, minimumPrice: 0 };
+  }
+  if (metodoCalculo === "precio_fijo_para_margen_minimo") {
+    return { price: 0, minimumPrice: 0, minimumMarginPct: 0 };
+  }
+  if (metodoCalculo === "fijado_por_cantidad") {
+    return { tiers: [{ quantity: 1, price: 0 }] as ProductoPrecioFilaCantidadPrecio[] };
+  }
+  if (metodoCalculo === "fijo_con_margen_variable") {
+    return { tiers: [{ quantity: 1, marginPct: 0 }] as ProductoPrecioFilaCantidadMargen[] };
+  }
+  if (metodoCalculo === "variable_por_cantidad") {
+    return { tiers: [{ quantityUntil: 1, price: 0 }] as ProductoPrecioFilaRangoPrecio[] };
+  }
+  return { tiers: [{ quantityUntil: 1, marginPct: 0 }] as ProductoPrecioFilaRangoMargen[] };
+}
+
+function buildDefaultPrecioImpuestos() {
+  return {
+    esquemaId: null,
+    esquemaNombre: "",
+    items: [],
+    porcentajeTotal: 0,
+  };
+}
+
+function buildPrecioConfigDraft(
+  precio: ProductoPrecioConfig | null | undefined,
+  measurementUnitFallback: string,
+): ProductoPrecioConfig {
+  const metodoCalculo = precio?.metodoCalculo ?? "margen_variable";
+  return {
+    metodoCalculo,
+    measurementUnit: precio?.measurementUnit ?? measurementUnitFallback,
+    impuestos: precio?.impuestos ?? buildDefaultPrecioImpuestos(),
+    detalle: precio?.detalle ?? buildDefaultPrecioDetalle(metodoCalculo),
+  } as ProductoPrecioConfig;
+}
+
+function buildPrecioConfigForMethod(
+  metodoCalculo: MetodoCalculoPrecioProducto,
+  measurementUnit: string | null,
+): ProductoPrecioConfig {
+  return {
+    metodoCalculo,
+    measurementUnit,
+    impuestos: buildDefaultPrecioImpuestos(),
+    detalle: buildDefaultPrecioDetalle(metodoCalculo),
+  } as ProductoPrecioConfig;
+}
+
+function buildPrecioEspecialClienteDraft(
+  item: ProductoPrecioEspecialCliente | null | undefined,
+  measurementUnitFallback: string,
+): PrecioEspecialClienteDraft {
+  const precio = buildPrecioConfigDraft(item, measurementUnitFallback);
+  const now = new Date().toISOString();
+  return {
+    id: item?.id ?? crypto.randomUUID(),
+    clienteId: item?.clienteId ?? "",
+    clienteNombre: item?.clienteNombre ?? "",
+    descripcion: item?.descripcion ?? "",
+    activo: item?.activo ?? true,
+    createdAt: item?.createdAt ?? now,
+    updatedAt: item?.updatedAt ?? now,
+    ...precio,
+  } as PrecioEspecialClienteDraft;
+}
+
+function getPrecioEspecialClienteResumen(item: ProductoPrecioEspecialCliente | PrecioEspecialClienteDraft) {
+  if (item.metodoCalculo === "por_margen") {
+    const detail = item.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "por_margen" }>["detalle"];
+    return `${detail.marginPct}%`;
+  }
+  if (item.metodoCalculo === "precio_fijo") {
+    const detail = item.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo" }>["detalle"];
+    return `${detail.price}`;
+  }
+  if (item.metodoCalculo === "fijado_por_cantidad") {
+    const detail = item.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>["detalle"];
+    return detail.tiers.map((tier: ProductoPrecioFilaCantidadPrecio) => tier.quantity).join(", ");
+  }
+  if (item.metodoCalculo === "fijo_con_margen_variable") {
+    const detail = item.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>["detalle"];
+    return detail.tiers.map((tier: ProductoPrecioFilaCantidadMargen) => `${tier.quantity}: ${tier.marginPct}%`).join(", ");
+  }
+  if (item.metodoCalculo === "variable_por_cantidad") {
+    const detail = item.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>["detalle"];
+    return detail.tiers.map((tier: ProductoPrecioFilaRangoPrecio) => `Hasta ${tier.quantityUntil}`).join(", ");
+  }
+  if (item.metodoCalculo === "margen_variable") {
+    const detail = item.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>["detalle"];
+    return detail.tiers
+      .map((tier: ProductoPrecioFilaRangoMargen) => `Hasta ${tier.quantityUntil}: ${tier.marginPct}%`)
+      .join(", ");
+  }
+  return "";
+}
+
+function buildPrecioEspecialClienteFromDraft(
+  draft: PrecioEspecialClienteDraft,
+  clienteNombre: string,
+  updatedAt: string,
+): ProductoPrecioEspecialCliente {
+  return {
+    id: draft.id,
+    clienteId: draft.clienteId,
+    clienteNombre,
+    descripcion: draft.descripcion,
+    activo: draft.activo,
+    createdAt: draft.createdAt,
+    updatedAt,
+    metodoCalculo: draft.metodoCalculo,
+    measurementUnit: draft.measurementUnit,
+    impuestos: draft.impuestos,
+    detalle: draft.detalle,
+  } as ProductoPrecioEspecialCliente;
+}
+
+function getPrecioMethodLabel(value: MetodoCalculoPrecioProducto) {
+  return metodoCalculoPrecioLabels[value] ?? value;
+}
+
+function getPrecioMethodDescription(value: MetodoCalculoPrecioProducto) {
+  if (value === "margen_variable") {
+    return "Define márgenes por tramos para vender en cualquier cantidad.";
+  }
+  if (value === "por_margen") {
+    return "El precio de venta se calcula desde el costo usando un margen fijo.";
+  }
+  if (value === "precio_fijo") {
+    return "El precio de venta se define manualmente como un valor fijo único.";
+  }
+  if (value === "fijado_por_cantidad") {
+    return "Define cantidades exactas habilitadas y un precio fijo para cada una.";
+  }
+  if (value === "fijo_con_margen_variable") {
+    return "Define cantidades exactas habilitadas y un margen variable para cada una.";
+  }
+  if (value === "variable_por_cantidad") {
+    return "Define rangos de cantidad con un precio fijo para cada tramo.";
+  }
+  return "Define los parámetros comerciales del método seleccionado.";
+}
+
+function getVariableRangeLabel(index: number, quantityUntil: number) {
+  if (index === 0) return `Hasta ${quantityUntil}`;
+  return `Hasta ${quantityUntil}`;
+}
 
 const tipoCorteItems = [
   { value: "sin_demasia", label: "Sin demasía", help: "Corte al borde de la pieza, sin separación interna." },
@@ -736,6 +943,8 @@ function getUnidadProductividadCompuestaLabel(unidadSalida: string, unidadTiempo
 export function ProductoServicioFichaTabs({
   producto,
   initialVariantes,
+  initialClientes,
+  initialImpuestosCatalogo,
   procesos,
   plantillasPaso,
   materiasPrimas,
@@ -745,7 +954,17 @@ export function ProductoServicioFichaTabs({
   checklist,
   maquinas,
 }: ProductoServicioFichaTabsProps) {
+  const measurementUnitFallback = producto.unidadComercial?.trim() || "unidad";
   const [productoState, setProductoState] = React.useState(producto);
+  const clientesOptions = React.useMemo(
+    () => [...initialClientes].sort((a, b) => a.nombre.localeCompare(b.nombre)),
+    [initialClientes],
+  );
+  const [impuestosCatalogo, setImpuestosCatalogo] = React.useState(initialImpuestosCatalogo);
+  const impuestosCatalogoActivos = React.useMemo(
+    () => impuestosCatalogo.filter((item) => item.activo).sort((a, b) => a.nombre.localeCompare(b.nombre)),
+    [impuestosCatalogo],
+  );
   const [generalForm, setGeneralForm] = React.useState<{
     nombre: string;
     descripcion: string;
@@ -761,7 +980,28 @@ export function ProductoServicioFichaTabs({
     motorCodigo: producto.motorCodigo,
     motorVersion: producto.motorVersion,
   });
+  const [precioForm, setPrecioForm] = React.useState<ProductoPrecioConfig>(() =>
+    buildPrecioConfigDraft(producto.precio, measurementUnitFallback),
+  );
   const [isSavingGeneral, startSavingGeneral] = React.useTransition();
+  const [isSavingPrecio, startSavingPrecio] = React.useTransition();
+  const [precioEditorOpen, setPrecioEditorOpen] = React.useState(false);
+  const [precioEditorDraft, setPrecioEditorDraft] = React.useState<ProductoPrecioConfig>(() =>
+    buildPrecioConfigDraft(producto.precio, measurementUnitFallback),
+  );
+  const [precioEspecialClientesForm, setPrecioEspecialClientesForm] = React.useState<ProductoPrecioEspecialCliente[]>(
+    () => producto.precioEspecialClientes ?? [],
+  );
+  const [isSavingPrecioEspecialClientes, startSavingPrecioEspecialClientes] = React.useTransition();
+  const [precioEspecialClienteToDelete, setPrecioEspecialClienteToDelete] =
+    React.useState<PrecioEspecialClienteConfirmDelete | null>(null);
+  const [precioEspecialClienteEditorOpen, setPrecioEspecialClienteEditorOpen] = React.useState(false);
+  const [precioEspecialClienteEditorDraft, setPrecioEspecialClienteEditorDraft] = React.useState<PrecioEspecialClienteDraft>(
+    () => buildPrecioEspecialClienteDraft(null, measurementUnitFallback),
+  );
+  const [impuestosEditorOpen, setImpuestosEditorOpen] = React.useState(false);
+  const [isSavingImpuestosCatalogo, startSavingImpuestosCatalogo] = React.useTransition();
+  const [impuestosEditorDraft, setImpuestosEditorDraft] = React.useState<ProductoImpuestoCatalogo | null>(null);
 
   const papeles = React.useMemo<PapelOption[]>(() => {
     const items: PapelOption[] = [];
@@ -880,6 +1120,10 @@ export function ProductoServicioFichaTabs({
       motorCodigo: producto.motorCodigo,
       motorVersion: producto.motorVersion,
     });
+    const nextPrecio = buildPrecioConfigDraft(producto.precio, producto.unidadComercial?.trim() || "unidad");
+    setPrecioForm(nextPrecio);
+    setPrecioEditorDraft(nextPrecio);
+    setPrecioEspecialClientesForm(producto.precioEspecialClientes ?? []);
   }, [producto, checklist]);
 
   React.useEffect(() => {
@@ -1272,7 +1516,7 @@ export function ProductoServicioFichaTabs({
               motorVersion: generalForm.motorVersion,
             })
           : updated;
-        setProductoState(withMotor);
+        syncProductoCommercialState(withMotor);
         setGeneralForm((prev) => ({
           ...prev,
           nombre: withMotor.nombre,
@@ -1284,6 +1528,375 @@ export function ProductoServicioFichaTabs({
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "No se pudo actualizar el producto.");
       }
+    });
+  };
+
+  const syncProductoCommercialState = (updated: ProductoServicio) => {
+    setProductoState(updated);
+    const persistedPrecio = buildPrecioConfigDraft(
+      updated.precio,
+      updated.unidadComercial?.trim() || "unidad",
+    );
+    setPrecioForm(persistedPrecio);
+    setPrecioEditorDraft(persistedPrecio);
+    setPrecioEspecialClientesForm(updated.precioEspecialClientes ?? []);
+  };
+
+  const handleSavePrecio = (draftPrecio: ProductoPrecioConfig = precioForm, closeEditor = false) => {
+    startSavingPrecio(async () => {
+      try {
+        const updated = await updateProductoPrecio(productoState.id, {
+          metodoCalculo: draftPrecio.metodoCalculo,
+          measurementUnit: draftPrecio.measurementUnit,
+          impuestos: draftPrecio.impuestos,
+          detalle: draftPrecio.detalle as Record<string, unknown>,
+        });
+        syncProductoCommercialState(updated);
+        if (closeEditor) {
+          setPrecioEditorOpen(false);
+        }
+        toast.success("Configuración de precio actualizada.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "No se pudo guardar la configuración de precio.");
+      }
+    });
+  };
+
+  const handleChangeMetodoCalculoPrecio = (metodoCalculo: MetodoCalculoPrecioProducto) => {
+    const nextMeasurementUnit =
+      precioForm.measurementUnit ?? productoState.unidadComercial?.trim() ?? "unidad";
+    const next = {
+      ...buildPrecioConfigForMethod(
+        metodoCalculo,
+        nextMeasurementUnit,
+      ),
+      impuestos: precioForm.impuestos,
+    } as ProductoPrecioConfig;
+    setPrecioForm(next);
+    setPrecioEditorDraft(next);
+  };
+
+  const handleChangeImpuestoEsquema = (esquemaId: string | null) => {
+    const esquema = impuestosCatalogoActivos.find((item) => item.id === esquemaId) ?? null;
+    const impuestos = esquema
+      ? {
+          esquemaId: esquema.id,
+          esquemaNombre: esquema.nombre,
+          items: esquema.detalle.items,
+          porcentajeTotal: esquema.porcentaje,
+        }
+      : buildDefaultPrecioImpuestos();
+    setPrecioForm((current) => ({ ...current, impuestos }));
+    setPrecioEditorDraft((current) => ({ ...current, impuestos }));
+  };
+
+  const handleOpenImpuestosEditor = () => {
+    const current = impuestosCatalogo.find((item) => item.id === precioForm.impuestos.esquemaId) ?? impuestosCatalogoActivos[0] ?? null;
+    setImpuestosEditorDraft(current ? { ...current, detalle: { items: current.detalle.items.map((item) => ({ ...item })) } } : null);
+    setImpuestosEditorOpen(true);
+  };
+
+  const handleSaveImpuestosEditor = () => {
+    if (!impuestosEditorDraft) {
+      toast.error("Selecciona un esquema impositivo.");
+      return;
+    }
+    const porcentaje = Number(
+      impuestosEditorDraft.detalle.items.reduce((sum, item) => sum + Number(item.porcentaje || 0), 0).toFixed(4),
+    );
+    startSavingImpuestosCatalogo(async () => {
+      try {
+        const updated = await updateProductoImpuesto(impuestosEditorDraft.id, {
+          codigo: impuestosEditorDraft.codigo,
+          nombre: impuestosEditorDraft.nombre,
+          porcentaje,
+          detalle: {
+            items: impuestosEditorDraft.detalle.items.map((item) => ({
+              nombre: item.nombre,
+              porcentaje: Number(item.porcentaje || 0),
+            })),
+          },
+          activo: impuestosEditorDraft.activo,
+        });
+        setImpuestosCatalogo((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+        setImpuestosEditorDraft(updated);
+        if (precioForm.impuestos.esquemaId === updated.id) {
+          handleChangeImpuestoEsquema(updated.id);
+        }
+        setImpuestosEditorOpen(false);
+        toast.success("Impuestos actualizados.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "No se pudo guardar el esquema impositivo.");
+      }
+    });
+  };
+
+  const handleOpenPrecioEditor = () => {
+    setPrecioEditorDraft(precioForm);
+    setPrecioEditorOpen(true);
+  };
+
+  const handleCancelPrecioEditor = () => {
+    setPrecioEditorDraft(precioForm);
+    setPrecioEditorOpen(false);
+  };
+
+  const handleSavePrecioFromEditor = () => {
+    setPrecioForm(precioEditorDraft);
+    handleSavePrecio(precioEditorDraft, true);
+  };
+
+  const handleOpenPrecioEspecialClienteEditor = (item?: ProductoPrecioEspecialCliente) => {
+    setPrecioEspecialClienteEditorDraft(
+      buildPrecioEspecialClienteDraft(item, productoState.unidadComercial?.trim() || "unidad"),
+    );
+    setPrecioEspecialClienteEditorOpen(true);
+  };
+
+  const handleChangeMetodoCalculoPrecioEspecialCliente = (metodoCalculo: MetodoCalculoPrecioProducto) => {
+    const nextMeasurementUnit =
+      precioEspecialClienteEditorDraft.measurementUnit ?? productoState.unidadComercial?.trim() ?? "unidad";
+    updatePrecioEspecialClienteEditorDraft((current) => ({
+      ...current,
+      ...buildPrecioConfigForMethod(metodoCalculo, nextMeasurementUnit),
+      clienteId: current.clienteId,
+      clienteNombre: current.clienteNombre,
+      descripcion: current.descripcion,
+      activo: current.activo,
+      id: current.id,
+      createdAt: current.createdAt,
+      updatedAt: current.updatedAt,
+    }));
+  };
+
+  const persistPrecioEspecialClientes = (
+    nextItems: ProductoPrecioEspecialCliente[],
+    options?: { successMessage?: string; onSuccess?: (updated: ProductoServicio) => void },
+  ) => {
+    startSavingPrecioEspecialClientes(async () => {
+      try {
+        const updated = await updateProductoPrecioEspecialClientes(productoState.id, {
+          items: nextItems.map((item) => ({
+            id: item.id,
+            clienteId: item.clienteId,
+            clienteNombre: item.clienteNombre,
+            descripcion: item.descripcion,
+            activo: item.activo,
+            metodoCalculo: item.metodoCalculo,
+            measurementUnit: item.measurementUnit,
+            detalle: item.detalle as Record<string, unknown>,
+          })),
+        });
+        syncProductoCommercialState(updated);
+        options?.onSuccess?.(updated);
+        toast.success(options?.successMessage ?? "Precios especiales guardados.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "No se pudieron guardar los precios especiales.");
+      }
+    });
+  };
+
+  const handleSavePrecioEspecialClienteDraft = () => {
+    if (!precioEspecialClienteEditorDraft.clienteId) {
+      toast.error("Selecciona un cliente.");
+      return;
+    }
+    const selectedCliente = clientesOptions.find((item) => item.id === precioEspecialClienteEditorDraft.clienteId);
+    if (!selectedCliente) {
+      toast.error("El cliente seleccionado no existe.");
+      return;
+    }
+    const nextItem = buildPrecioEspecialClienteFromDraft(
+      precioEspecialClienteEditorDraft,
+      selectedCliente.nombre,
+      new Date().toISOString(),
+    );
+    const nextItems = precioEspecialClientesForm.some((item) => item.id === nextItem.id)
+      ? precioEspecialClientesForm.map((item) => (item.id === nextItem.id ? nextItem : item))
+      : [...precioEspecialClientesForm, nextItem];
+    persistPrecioEspecialClientes(nextItems, {
+      successMessage: "Precio especial guardado.",
+      onSuccess: () => setPrecioEspecialClienteEditorOpen(false),
+    });
+  };
+
+  const handleTogglePrecioEspecialCliente = (itemId: string, activo: boolean) => {
+    const nextItems = precioEspecialClientesForm.map((item) =>
+      item.id === itemId
+        ? {
+            ...item,
+            activo,
+            updatedAt: new Date().toISOString(),
+          }
+        : item,
+    );
+    persistPrecioEspecialClientes(nextItems, {
+      successMessage: "Estado del precio especial actualizado.",
+    });
+  };
+
+  const handleDeletePrecioEspecialCliente = (itemId: string) => {
+    const nextItems = precioEspecialClientesForm.filter((item) => item.id !== itemId);
+    persistPrecioEspecialClientes(nextItems, {
+      successMessage: "Precio especial eliminado.",
+    });
+  };
+
+  const updatePrecioEspecialClienteEditorDraft = (
+    updater: (current: PrecioEspecialClienteDraft) => PrecioEspecialClienteDraft,
+  ) => {
+    setPrecioEspecialClienteEditorDraft((current) => updater(current));
+  };
+
+  const addPrecioEspecialClienteTierRow = () => {
+    updatePrecioEspecialClienteEditorDraft((current) => {
+      if (current.metodoCalculo === "fijado_por_cantidad") {
+        const draft = current as PrecioEspecialClienteDraft & {
+          detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>["detalle"];
+        };
+        return {
+          ...draft,
+          detalle: {
+            tiers: [...draft.detalle.tiers, { quantity: 1, price: 0 }].sort((a, b) => a.quantity - b.quantity),
+          },
+        };
+      }
+      if (current.metodoCalculo === "fijo_con_margen_variable") {
+        const draft = current as PrecioEspecialClienteDraft & {
+          detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>["detalle"];
+        };
+        return {
+          ...draft,
+          detalle: {
+            tiers: [...draft.detalle.tiers, { quantity: 1, marginPct: 0 }].sort((a, b) => a.quantity - b.quantity),
+          },
+        };
+      }
+      if (current.metodoCalculo === "variable_por_cantidad") {
+        const draft = current as PrecioEspecialClienteDraft & {
+          detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>["detalle"];
+        };
+        return {
+          ...draft,
+          detalle: {
+            tiers: [...draft.detalle.tiers, { quantityUntil: 1, price: 0 }].sort(
+              (a, b) => a.quantityUntil - b.quantityUntil,
+            ),
+          },
+        };
+      }
+      if (current.metodoCalculo === "margen_variable") {
+        const draft = current as PrecioEspecialClienteDraft & {
+          detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>["detalle"];
+        };
+        return {
+          ...draft,
+          detalle: {
+            tiers: [...draft.detalle.tiers, { quantityUntil: 1, marginPct: 0 }].sort(
+              (a, b) => a.quantityUntil - b.quantityUntil,
+            ),
+          },
+        };
+      }
+      return current;
+    });
+  };
+
+  const removePrecioEspecialClienteTierRow = (index: number) => {
+    updatePrecioEspecialClienteEditorDraft((current) => {
+      if (current.metodoCalculo === "fijado_por_cantidad") {
+        const draft = current as PrecioEspecialClienteDraft & {
+          detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>["detalle"];
+        };
+        return draft.detalle.tiers.length > 1
+          ? { ...draft, detalle: { tiers: draft.detalle.tiers.filter((_, rowIndex) => rowIndex !== index) } }
+          : current;
+      }
+      if (current.metodoCalculo === "fijo_con_margen_variable") {
+        const draft = current as PrecioEspecialClienteDraft & {
+          detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>["detalle"];
+        };
+        return draft.detalle.tiers.length > 1
+          ? { ...draft, detalle: { tiers: draft.detalle.tiers.filter((_, rowIndex) => rowIndex !== index) } }
+          : current;
+      }
+      if (current.metodoCalculo === "variable_por_cantidad") {
+        const draft = current as PrecioEspecialClienteDraft & {
+          detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>["detalle"];
+        };
+        return draft.detalle.tiers.length > 1
+          ? { ...draft, detalle: { tiers: draft.detalle.tiers.filter((_, rowIndex) => rowIndex !== index) } }
+          : current;
+      }
+      if (current.metodoCalculo === "margen_variable") {
+        const draft = current as PrecioEspecialClienteDraft & {
+          detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>["detalle"];
+        };
+        return draft.detalle.tiers.length > 1
+          ? { ...draft, detalle: { tiers: draft.detalle.tiers.filter((_, rowIndex) => rowIndex !== index) } }
+          : current;
+      }
+      return current;
+    });
+  };
+
+  const updatePrecioEditorDraft = (updater: (current: ProductoPrecioConfig) => ProductoPrecioConfig) => {
+    setPrecioEditorDraft((current) => updater(current));
+  };
+
+  const addPrecioTierRow = () => {
+    updatePrecioEditorDraft((current) => {
+      if (current.metodoCalculo === "fijado_por_cantidad") {
+        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>;
+        const tiers = [...draft.detalle.tiers, { quantity: 1, price: 0 }].sort((a, b) => a.quantity - b.quantity);
+        return { ...draft, detalle: { tiers } };
+      }
+      if (current.metodoCalculo === "fijo_con_margen_variable") {
+        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>;
+        const tiers = [...draft.detalle.tiers, { quantity: 1, marginPct: 0 }].sort((a, b) => a.quantity - b.quantity);
+        return { ...draft, detalle: { tiers } };
+      }
+      if (current.metodoCalculo === "variable_por_cantidad") {
+        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>;
+        const tiers = [...draft.detalle.tiers, { quantityUntil: 1, price: 0 }].sort(
+          (a, b) => a.quantityUntil - b.quantityUntil,
+        );
+        return { ...draft, detalle: { tiers } };
+      }
+      if (current.metodoCalculo === "margen_variable") {
+        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>;
+        const tiers = [...draft.detalle.tiers, { quantityUntil: 1, marginPct: 0 }].sort(
+          (a, b) => a.quantityUntil - b.quantityUntil,
+        );
+        return { ...draft, detalle: { tiers } };
+      }
+      return current;
+    });
+  };
+
+  const removePrecioTierRow = (index: number) => {
+    updatePrecioEditorDraft((current) => {
+      if (current.metodoCalculo === "fijado_por_cantidad") {
+        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>;
+        const tiers = draft.detalle.tiers.filter((_, rowIndex) => rowIndex !== index);
+        return draft.detalle.tiers.length > 1 ? { ...draft, detalle: { tiers } } : current;
+      }
+      if (current.metodoCalculo === "fijo_con_margen_variable") {
+        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>;
+        const tiers = draft.detalle.tiers.filter((_, rowIndex) => rowIndex !== index);
+        return draft.detalle.tiers.length > 1 ? { ...draft, detalle: { tiers } } : current;
+      }
+      if (current.metodoCalculo === "variable_por_cantidad") {
+        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>;
+        const tiers = draft.detalle.tiers.filter((_, rowIndex) => rowIndex !== index);
+        return draft.detalle.tiers.length > 1 ? { ...draft, detalle: { tiers } } : current;
+      }
+      if (current.metodoCalculo === "margen_variable") {
+        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>;
+        const tiers = draft.detalle.tiers.filter((_, rowIndex) => rowIndex !== index);
+        return draft.detalle.tiers.length > 1 ? { ...draft, detalle: { tiers } } : current;
+      }
+      return current;
     });
   };
 
@@ -1918,6 +2531,11 @@ export function ProductoServicioFichaTabs({
     (generalForm.subfamiliaProductoId || "") !== (productoState.subfamiliaProductoId || "") ||
     generalForm.motorCodigo !== productoState.motorCodigo ||
     generalForm.motorVersion !== productoState.motorVersion;
+  const persistedPrecio = React.useMemo(
+    () => buildPrecioConfigDraft(productoState.precio, productoState.unidadComercial?.trim() || "unidad"),
+    [productoState],
+  );
+  const isPrecioDirty = JSON.stringify(precioForm) !== JSON.stringify(persistedPrecio);
 
   return (
     <div className="flex flex-col gap-6">
@@ -1946,7 +2564,8 @@ export function ProductoServicioFichaTabs({
           <TabsTrigger value="produccion" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Ruta base</TabsTrigger>
           <TabsTrigger value="checklist" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Ruta de opcionales</TabsTrigger>
           <TabsTrigger value="imposicion" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Imposición</TabsTrigger>
-          <TabsTrigger value="cotizador" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Simulador pricing</TabsTrigger>
+          <TabsTrigger value="cotizador" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Costos</TabsTrigger>
+          <TabsTrigger value="precio" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Precio</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general">
@@ -3179,10 +3798,187 @@ export function ProductoServicioFichaTabs({
           </Card>
         </TabsContent>
 
+        <TabsContent value="precio">
+          <Card>
+            <CardHeader>
+              <CardTitle>Precio</CardTitle>
+              <CardDescription>Configura el método de cálculo comercial del producto.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-lg border p-4">
+                <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                  <div className="grid gap-3 md:min-w-[360px]">
+                    <Field>
+                      <FieldLabel>Método de cálculo</FieldLabel>
+                      <Select
+                        value={precioForm.metodoCalculo}
+                        onValueChange={(value) =>
+                          handleChangeMetodoCalculoPrecio(
+                            (value as MetodoCalculoPrecioProducto) ?? "margen_variable",
+                          )
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona método">
+                            {getPrecioMethodLabel(precioForm.metodoCalculo)}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {metodoCalculoPrecioItems.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <p className="text-xs text-muted-foreground">
+                      Unidad comercial: {precioForm.measurementUnit?.trim() || productoState.unidadComercial || "unidad"}
+                    </p>
+                  </div>
+                  <Button type="button" variant="outline" onClick={handleOpenPrecioEditor}>
+                    <InfoIcon className="size-4" />
+                    Ver detalle
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-4">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">Impuestos</p>
+                      <p className="text-xs text-muted-foreground">
+                        Selecciona el esquema impositivo que aplica a este producto.
+                      </p>
+                    </div>
+                    <Button type="button" variant="outline" onClick={handleOpenImpuestosEditor}>
+                      <Settings2Icon className="size-4" />
+                      Administrar impuestos
+                    </Button>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+                    <Field>
+                      <FieldLabel>Impuestos</FieldLabel>
+                      <Select
+                        value={precioForm.impuestos.esquemaId ?? "__none__"}
+                        onValueChange={(value) => handleChangeImpuestoEsquema(value === "__none__" ? null : value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione">
+                            {precioForm.impuestos.esquemaNombre || "Seleccione"}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Seleccione</SelectItem>
+                          {impuestosCatalogoActivos.map((item) => (
+                            <SelectItem key={item.id} value={item.id}>
+                              {item.nombre}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field>
+                      <FieldLabel>Impuestos Totales</FieldLabel>
+                      <Input value={formatNumber(precioForm.impuestos.porcentajeTotal)} disabled />
+                    </Field>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">Precio especial para clientes</p>
+                    <p className="text-xs text-muted-foreground">
+                      Define reglas comerciales especiales por cliente.
+                    </p>
+                  </div>
+                  <Button type="button" variant="outline" onClick={() => handleOpenPrecioEspecialClienteEditor()}>
+                    <PlusIcon className="size-4" />
+                    Agregar
+                  </Button>
+                </div>
+
+                <div className="mt-4 overflow-hidden rounded-lg border">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead>Cliente</TableHead>
+                        <TableHead>Método de cálculo</TableHead>
+                        <TableHead>Descripción</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead className="w-[140px] text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {precioEspecialClientesForm.length ? (
+                        precioEspecialClientesForm.map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell className="font-medium">{item.clienteNombre}</TableCell>
+                            <TableCell>{getPrecioMethodLabel(item.metodoCalculo)}</TableCell>
+                            <TableCell>{item.descripcion || getPrecioEspecialClienteResumen(item) || "-"}</TableCell>
+                            <TableCell>{item.activo ? "Activa" : "Inactiva"}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  disabled={isSavingPrecioEspecialClientes}
+                                  onClick={() => handleOpenPrecioEspecialClienteEditor(item)}
+                                >
+                                  <PencilIcon className="size-4" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  disabled={isSavingPrecioEspecialClientes}
+                                  onClick={() =>
+                                    setPrecioEspecialClienteToDelete({
+                                      id: item.id,
+                                      clienteNombre: item.clienteNombre,
+                                    })
+                                  }
+                                >
+                                  <Trash2Icon className="size-4" />
+                                </Button>
+                                <Switch
+                                  checked={item.activo}
+                                  disabled={isSavingPrecioEspecialClientes}
+                                  onCheckedChange={(checked) => handleTogglePrecioEspecialCliente(item.id, Boolean(checked))}
+                                />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                            No hay elementos registrados.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+
+              </div>
+
+              <Button type="button" onClick={() => handleSavePrecio()} disabled={isSavingPrecio || !isPrecioDirty}>
+                {isSavingPrecio ? <Loader2Icon className="animate-spin" /> : <SaveIcon />}
+                Guardar configuración de precio
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="cotizador">
           <Card>
             <CardHeader>
-              <CardTitle>Cotizador</CardTitle>
+              <CardTitle>Costos</CardTitle>
               <CardDescription>Ejecuta el motor de costo y guarda snapshots por variante.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -3545,6 +4341,891 @@ export function ProductoServicioFichaTabs({
           </Card>
         </TabsContent>
       </Tabs>
+      <Sheet open={precioEditorOpen} onOpenChange={(open) => (open ? setPrecioEditorOpen(true) : handleCancelPrecioEditor())}>
+        <SheetContent
+          side="right"
+          className="overflow-y-auto px-4 py-6 data-[side=right]:w-[96vw] data-[side=right]:max-w-none sm:px-6 sm:data-[side=right]:w-[72vw] sm:data-[side=right]:max-w-none lg:px-8 lg:data-[side=right]:w-[30vw] lg:data-[side=right]:min-w-[540px] lg:data-[side=right]:max-w-none"
+        >
+          <SheetHeader className="border-b pb-4">
+            <SheetTitle>Detalle de precio</SheetTitle>
+            <SheetDescription>
+              {getPrecioMethodDescription(precioEditorDraft.metodoCalculo)}
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-6 space-y-5">
+            <Field>
+              <FieldLabel>Unidad comercial</FieldLabel>
+              <Input value={precioEditorDraft.measurementUnit?.trim() || productoState.unidadComercial || "unidad"} disabled />
+            </Field>
+
+            {precioEditorDraft.metodoCalculo === "por_margen" ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Precio fijo por margen fijo: el precio se calcula a partir del costo y del margen definido aquí.
+                </p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Field>
+                    <FieldLabel>Margen (%)</FieldLabel>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={precioEditorDraft.detalle.marginPct}
+                      onChange={(e) =>
+                        updatePrecioEditorDraft((current) => {
+                          const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "por_margen" }>;
+                          return {
+                            ...draft,
+                            detalle: {
+                              ...draft.detalle,
+                              marginPct: Number(e.target.value || 0),
+                            },
+                          };
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Margen mínimo (%)</FieldLabel>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={precioEditorDraft.detalle.minimumMarginPct}
+                      onChange={(e) =>
+                        updatePrecioEditorDraft((current) => {
+                          const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "por_margen" }>;
+                          return {
+                            ...draft,
+                            detalle: {
+                              ...draft.detalle,
+                              minimumMarginPct: Number(e.target.value || 0),
+                            },
+                          };
+                        })
+                      }
+                    />
+                  </Field>
+                </div>
+              </div>
+            ) : null}
+
+            {precioEditorDraft.metodoCalculo === "precio_fijo" ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Precio fijo: ingresás manualmente el precio final de venta, sin calcularlo desde un margen.
+                </p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Field>
+                    <FieldLabel>Precio</FieldLabel>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={precioEditorDraft.detalle.price}
+                      onChange={(e) =>
+                        updatePrecioEditorDraft((current) => {
+                          const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo" }>;
+                          return { ...draft, detalle: { ...draft.detalle, price: Number(e.target.value || 0) } };
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Precio mínimo</FieldLabel>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={precioEditorDraft.detalle.minimumPrice}
+                      onChange={(e) =>
+                        updatePrecioEditorDraft((current) => {
+                          const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo" }>;
+                          return {
+                            ...draft,
+                            detalle: { ...draft.detalle, minimumPrice: Number(e.target.value || 0) },
+                          };
+                        })
+                      }
+                    />
+                  </Field>
+                </div>
+              </div>
+            ) : null}
+
+            {precioEditorDraft.metodoCalculo === "precio_fijo_para_margen_minimo" ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <Field>
+                  <FieldLabel>Precio</FieldLabel>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={precioEditorDraft.detalle.price}
+                    onChange={(e) =>
+                      updatePrecioEditorDraft((current) => {
+                        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo_para_margen_minimo" }>;
+                        return { ...draft, detalle: { ...draft.detalle, price: Number(e.target.value || 0) } };
+                      })
+                    }
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>Precio mínimo</FieldLabel>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={precioEditorDraft.detalle.minimumPrice}
+                    onChange={(e) =>
+                      updatePrecioEditorDraft((current) => {
+                        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo_para_margen_minimo" }>;
+                        return {
+                          ...draft,
+                          detalle: { ...draft.detalle, minimumPrice: Number(e.target.value || 0) },
+                        };
+                      })
+                    }
+                  />
+                </Field>
+                <Field className="md:col-span-2">
+                  <FieldLabel>Margen mínimo (%)</FieldLabel>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={precioEditorDraft.detalle.minimumMarginPct}
+                    onChange={(e) =>
+                      updatePrecioEditorDraft((current) => {
+                        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo_para_margen_minimo" }>;
+                        return {
+                          ...draft,
+                          detalle: { ...draft.detalle, minimumMarginPct: Number(e.target.value || 0) },
+                        };
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+            ) : null}
+
+            {precioEditorDraft.metodoCalculo === "fijado_por_cantidad" ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Cantidades fijas con precio fijo: sólo se podrán vender las cantidades definidas en esta tabla.
+                </p>
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead className="min-w-[120px]">Cantidad</TableHead>
+                        <TableHead className="min-w-[140px]">Precio</TableHead>
+                        <TableHead className="w-[90px] text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {precioEditorDraft.detalle.tiers.map((tier, index) => (
+                        <TableRow key={`precio-cantidad-${index}`}>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={tier.quantity}
+                              onChange={(e) =>
+                                updatePrecioEditorDraft((current) => {
+                                  const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>;
+                                  return {
+                                    ...draft,
+                                    detalle: {
+                                      tiers: draft.detalle.tiers
+                                        .map((item, rowIndex) =>
+                                          rowIndex === index ? { ...item, quantity: Number(e.target.value || 1) } : item,
+                                        )
+                                        .sort((a, b) => a.quantity - b.quantity),
+                                    },
+                                  };
+                                })
+                              }
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={tier.price}
+                              onChange={(e) =>
+                                updatePrecioEditorDraft((current) => {
+                                  const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>;
+                                  return {
+                                    ...draft,
+                                    detalle: {
+                                      tiers: draft.detalle.tiers.map((item, rowIndex) =>
+                                        rowIndex === index ? { ...item, price: Number(e.target.value || 0) } : item,
+                                      ),
+                                    },
+                                  };
+                                })
+                              }
+                            />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => removePrecioTierRow(index)}>
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Button type="button" variant="outline" onClick={addPrecioTierRow}>
+                  <PlusIcon className="size-4" />
+                  Agregar cantidad
+                </Button>
+              </div>
+            ) : null}
+
+            {precioEditorDraft.metodoCalculo === "fijo_con_margen_variable" ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Cantidades fijas con margen variable: sólo se podrán vender las cantidades definidas en esta tabla y cada cantidad usa su propio margen.
+                </p>
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead className="min-w-[120px]">Cantidad</TableHead>
+                        <TableHead className="min-w-[140px]">Margen (%)</TableHead>
+                        <TableHead className="w-[90px] text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {precioEditorDraft.detalle.tiers.map((tier, index) => (
+                        <TableRow key={`margen-fijo-cantidad-${index}`}>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={tier.quantity}
+                              onChange={(e) =>
+                                updatePrecioEditorDraft((current) => {
+                                  const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>;
+                                  return {
+                                    ...draft,
+                                    detalle: {
+                                      tiers: draft.detalle.tiers
+                                        .map((item, rowIndex) =>
+                                          rowIndex === index ? { ...item, quantity: Number(e.target.value || 1) } : item,
+                                        )
+                                        .sort((a, b) => a.quantity - b.quantity),
+                                    },
+                                  };
+                                })
+                              }
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={tier.marginPct}
+                              onChange={(e) =>
+                                updatePrecioEditorDraft((current) => {
+                                  const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>;
+                                  return {
+                                    ...draft,
+                                    detalle: {
+                                      tiers: draft.detalle.tiers.map((item, rowIndex) =>
+                                        rowIndex === index ? { ...item, marginPct: Number(e.target.value || 0) } : item,
+                                      ),
+                                    },
+                                  };
+                                })
+                              }
+                            />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => removePrecioTierRow(index)}>
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Button type="button" variant="outline" onClick={addPrecioTierRow}>
+                  <PlusIcon className="size-4" />
+                  Agregar cantidad
+                </Button>
+              </div>
+            ) : null}
+
+            {precioEditorDraft.metodoCalculo === "variable_por_cantidad" ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Rangos de precio con precio fijo: cada tramo define hasta qué cantidad aplica ese precio.
+                </p>
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead className="min-w-[110px]">Rango</TableHead>
+                        <TableHead className="min-w-[130px]">Hasta cantidad</TableHead>
+                        <TableHead className="min-w-[130px]">Precio</TableHead>
+                        <TableHead className="w-[90px] text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {precioEditorDraft.detalle.tiers.map((tier, index) => (
+                        <TableRow key={`precio-rango-${index}`}>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {getVariableRangeLabel(index, tier.quantityUntil)}
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={tier.quantityUntil}
+                              onChange={(e) =>
+                                updatePrecioEditorDraft((current) => {
+                                  const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>;
+                                  return {
+                                    ...draft,
+                                    detalle: {
+                                      tiers: draft.detalle.tiers
+                                        .map((item, rowIndex) =>
+                                          rowIndex === index
+                                            ? { ...item, quantityUntil: Number(e.target.value || 1) }
+                                            : item,
+                                        )
+                                        .sort((a, b) => a.quantityUntil - b.quantityUntil),
+                                    },
+                                  };
+                                })
+                              }
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={tier.price}
+                              onChange={(e) =>
+                                updatePrecioEditorDraft((current) => {
+                                  const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>;
+                                  return {
+                                    ...draft,
+                                    detalle: {
+                                      tiers: draft.detalle.tiers.map((item, rowIndex) =>
+                                        rowIndex === index ? { ...item, price: Number(e.target.value || 0) } : item,
+                                      ),
+                                    },
+                                  };
+                                })
+                              }
+                            />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => removePrecioTierRow(index)}>
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Button type="button" variant="outline" onClick={addPrecioTierRow}>
+                  <PlusIcon className="size-4" />
+                  Agregar rango
+                </Button>
+              </div>
+            ) : null}
+
+            {precioEditorDraft.metodoCalculo === "margen_variable" ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Cantidad libre por margen variable: cada tramo define hasta qué cantidad aplica ese margen.
+                </p>
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead className="min-w-[110px]">Rango</TableHead>
+                        <TableHead className="min-w-[130px]">Hasta cantidad</TableHead>
+                        <TableHead className="min-w-[130px]">Margen (%)</TableHead>
+                        <TableHead className="w-[90px] text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {precioEditorDraft.detalle.tiers.map((tier, index) => (
+                        <TableRow key={`margen-rango-${index}`}>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {getVariableRangeLabel(index, tier.quantityUntil)}
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={tier.quantityUntil}
+                              onChange={(e) =>
+                                updatePrecioEditorDraft((current) => {
+                                  const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>;
+                                  return {
+                                    ...draft,
+                                    detalle: {
+                                      tiers: draft.detalle.tiers
+                                        .map((item, rowIndex) =>
+                                          rowIndex === index
+                                            ? { ...item, quantityUntil: Number(e.target.value || 1) }
+                                            : item,
+                                        )
+                                        .sort((a, b) => a.quantityUntil - b.quantityUntil),
+                                    },
+                                  };
+                                })
+                              }
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={tier.marginPct}
+                              onChange={(e) =>
+                                updatePrecioEditorDraft((current) => {
+                                  const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>;
+                                  return {
+                                    ...draft,
+                                    detalle: {
+                                      tiers: draft.detalle.tiers.map((item, rowIndex) =>
+                                        rowIndex === index ? { ...item, marginPct: Number(e.target.value || 0) } : item,
+                                      ),
+                                    },
+                                  };
+                                })
+                              }
+                            />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => removePrecioTierRow(index)}>
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Button type="button" variant="outline" onClick={addPrecioTierRow}>
+                  <PlusIcon className="size-4" />
+                  Agregar rango
+                </Button>
+              </div>
+            ) : null}
+
+            <div className="flex items-center justify-end gap-2 border-t pt-4">
+              <Button type="button" variant="outline" onClick={handleCancelPrecioEditor}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={handleSavePrecioFromEditor} disabled={isSavingPrecio}>
+                {isSavingPrecio ? <Loader2Icon className="animate-spin" data-icon="inline-start" /> : null}
+                Guardar
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+      <Sheet open={precioEspecialClienteEditorOpen} onOpenChange={setPrecioEspecialClienteEditorOpen}>
+        <SheetContent
+          side="right"
+          className="overflow-y-auto px-4 py-6 data-[side=right]:w-[96vw] data-[side=right]:max-w-none sm:px-6 sm:data-[side=right]:w-[72vw] sm:data-[side=right]:max-w-none lg:px-8 lg:data-[side=right]:w-[32vw] lg:data-[side=right]:min-w-[560px] lg:data-[side=right]:max-w-none"
+        >
+          <SheetHeader className="border-b pb-4">
+            <SheetTitle>{precioEspecialClienteEditorDraft.clienteId ? "Editar precio especial" : "Añadir precio especial"}</SheetTitle>
+            <SheetDescription>
+              Define una regla comercial especial para un cliente.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-6 space-y-5">
+            <Field>
+              <FieldLabel>Cliente</FieldLabel>
+              <Select
+                value={precioEspecialClienteEditorDraft.clienteId || "__none__"}
+                onValueChange={(value) => {
+                  const nextValue = value ?? "__none__";
+                  const cliente = clientesOptions.find((item) => item.id === nextValue);
+                  updatePrecioEspecialClienteEditorDraft((current) => ({
+                    ...current,
+                    clienteId: nextValue === "__none__" ? "" : nextValue,
+                    clienteNombre: nextValue === "__none__" ? "" : (cliente?.nombre ?? ""),
+                  }));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona cliente">
+                    {precioEspecialClienteEditorDraft.clienteNombre || "Selecciona cliente"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Selecciona cliente</SelectItem>
+                  {clientesOptions.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field>
+                <FieldLabel>Método de cálculo</FieldLabel>
+                <Select
+                  value={precioEspecialClienteEditorDraft.metodoCalculo}
+                  onValueChange={(value) =>
+                    handleChangeMetodoCalculoPrecioEspecialCliente(
+                      (value as MetodoCalculoPrecioProducto) ?? "margen_variable",
+                    )
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona método">
+                      {getPrecioMethodLabel(precioEspecialClienteEditorDraft.metodoCalculo)}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {metodoCalculoPrecioItems.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel>Unidad comercial</FieldLabel>
+                <Input value={precioEspecialClienteEditorDraft.measurementUnit?.trim() || productoState.unidadComercial || "unidad"} disabled />
+              </Field>
+            </div>
+
+            <Field>
+              <FieldLabel>Descripción</FieldLabel>
+              <Input
+                value={precioEspecialClienteEditorDraft.descripcion}
+                onChange={(e) =>
+                  updatePrecioEspecialClienteEditorDraft((current) => ({
+                    ...current,
+                    descripcion: e.target.value,
+                  }))
+                }
+                placeholder="Opcional"
+              />
+            </Field>
+
+            {precioEspecialClienteEditorDraft.metodoCalculo === "por_margen" ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                {(() => {
+                  const draft = precioEspecialClienteEditorDraft as PrecioEspecialClienteDraft & {
+                    detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "por_margen" }>["detalle"];
+                  };
+                  return (
+                    <>
+                <Field>
+                  <FieldLabel>Margen (%)</FieldLabel>
+                  <Input type="number" min="0" step="0.01" value={draft.detalle.marginPct} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { ...(current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "por_margen" }>["detalle"]), marginPct: Number(e.target.value || 0) } }))} />
+                </Field>
+                <Field>
+                  <FieldLabel>Margen mínimo (%)</FieldLabel>
+                  <Input type="number" min="0" step="0.01" value={draft.detalle.minimumMarginPct} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { ...(current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "por_margen" }>["detalle"]), minimumMarginPct: Number(e.target.value || 0) } }))} />
+                </Field>
+                    </>
+                  );
+                })()}
+              </div>
+            ) : null}
+
+            {precioEspecialClienteEditorDraft.metodoCalculo === "precio_fijo" ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                {(() => {
+                  const draft = precioEspecialClienteEditorDraft as PrecioEspecialClienteDraft & {
+                    detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo" }>["detalle"];
+                  };
+                  return (
+                    <>
+                <Field>
+                  <FieldLabel>Precio</FieldLabel>
+                  <Input type="number" min="0" step="0.01" value={draft.detalle.price} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { ...(current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo" }>["detalle"]), price: Number(e.target.value || 0) } }))} />
+                </Field>
+                <Field>
+                  <FieldLabel>Precio mínimo</FieldLabel>
+                  <Input type="number" min="0" step="0.01" value={draft.detalle.minimumPrice} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { ...(current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo" }>["detalle"]), minimumPrice: Number(e.target.value || 0) } }))} />
+                </Field>
+                    </>
+                  );
+                })()}
+              </div>
+            ) : null}
+
+            {precioEspecialClienteEditorDraft.metodoCalculo === "fijado_por_cantidad" ? (
+              <div className="space-y-3">
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead>Cantidad</TableHead>
+                        <TableHead>Precio</TableHead>
+                        <TableHead className="w-[90px] text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(precioEspecialClienteEditorDraft.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>["detalle"]).tiers.map((tier, index) => (
+                        <TableRow key={`especial-precio-${index}`}>
+                          <TableCell>
+                            <Input type="number" min="1" step="1" value={tier.quantity} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, quantity: Number(e.target.value || 1) } : item).sort((a, b) => a.quantity - b.quantity) } }))} />
+                          </TableCell>
+                          <TableCell>
+                            <Input type="number" min="0" step="0.01" value={tier.price} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, price: Number(e.target.value || 0) } : item) } }))} />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => removePrecioEspecialClienteTierRow(index)}>
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Button type="button" variant="outline" onClick={addPrecioEspecialClienteTierRow}>
+                  <PlusIcon className="size-4" />
+                  Agregar cantidad
+                </Button>
+              </div>
+            ) : null}
+
+            {precioEspecialClienteEditorDraft.metodoCalculo === "fijo_con_margen_variable" ? (
+              <div className="space-y-3">
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead>Cantidad</TableHead>
+                        <TableHead>Margen (%)</TableHead>
+                        <TableHead className="w-[90px] text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(precioEspecialClienteEditorDraft.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>["detalle"]).tiers.map((tier, index) => (
+                        <TableRow key={`especial-margen-fijo-${index}`}>
+                          <TableCell>
+                            <Input type="number" min="1" step="1" value={tier.quantity} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, quantity: Number(e.target.value || 1) } : item).sort((a, b) => a.quantity - b.quantity) } }))} />
+                          </TableCell>
+                          <TableCell>
+                            <Input type="number" min="0" step="0.01" value={tier.marginPct} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, marginPct: Number(e.target.value || 0) } : item) } }))} />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => removePrecioEspecialClienteTierRow(index)}>
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Button type="button" variant="outline" onClick={addPrecioEspecialClienteTierRow}>
+                  <PlusIcon className="size-4" />
+                  Agregar cantidad
+                </Button>
+              </div>
+            ) : null}
+
+            {precioEspecialClienteEditorDraft.metodoCalculo === "variable_por_cantidad" ? (
+              <div className="space-y-3">
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead>Rango</TableHead>
+                        <TableHead>Hasta cantidad</TableHead>
+                        <TableHead>Precio</TableHead>
+                        <TableHead className="w-[90px] text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(precioEspecialClienteEditorDraft.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>["detalle"]).tiers.map((tier, index) => (
+                        <TableRow key={`especial-rango-precio-${index}`}>
+                          <TableCell className="text-sm text-muted-foreground">{getVariableRangeLabel(index, tier.quantityUntil)}</TableCell>
+                          <TableCell>
+                            <Input type="number" min="1" step="1" value={tier.quantityUntil} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, quantityUntil: Number(e.target.value || 1) } : item).sort((a, b) => a.quantityUntil - b.quantityUntil) } }))} />
+                          </TableCell>
+                          <TableCell>
+                            <Input type="number" min="0" step="0.01" value={tier.price} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, price: Number(e.target.value || 0) } : item) } }))} />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => removePrecioEspecialClienteTierRow(index)}>
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Button type="button" variant="outline" onClick={addPrecioEspecialClienteTierRow}>
+                  <PlusIcon className="size-4" />
+                  Agregar rango
+                </Button>
+              </div>
+            ) : null}
+
+            {precioEspecialClienteEditorDraft.metodoCalculo === "margen_variable" ? (
+              <div className="space-y-3">
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead>Rango</TableHead>
+                        <TableHead>Hasta cantidad</TableHead>
+                        <TableHead>Margen (%)</TableHead>
+                        <TableHead className="w-[90px] text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(precioEspecialClienteEditorDraft.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>["detalle"]).tiers.map((tier, index) => (
+                        <TableRow key={`especial-rango-margen-${index}`}>
+                          <TableCell className="text-sm text-muted-foreground">{getVariableRangeLabel(index, tier.quantityUntil)}</TableCell>
+                          <TableCell>
+                            <Input type="number" min="1" step="1" value={tier.quantityUntil} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, quantityUntil: Number(e.target.value || 1) } : item).sort((a, b) => a.quantityUntil - b.quantityUntil) } }))} />
+                          </TableCell>
+                          <TableCell>
+                            <Input type="number" min="0" step="0.01" value={tier.marginPct} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, marginPct: Number(e.target.value || 0) } : item) } }))} />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => removePrecioEspecialClienteTierRow(index)}>
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Button type="button" variant="outline" onClick={addPrecioEspecialClienteTierRow}>
+                  <PlusIcon className="size-4" />
+                  Agregar rango
+                </Button>
+              </div>
+            ) : null}
+
+            <div className="flex items-center justify-end gap-2 border-t pt-4">
+              <Button type="button" variant="outline" onClick={() => setPrecioEspecialClienteEditorOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={handleSavePrecioEspecialClienteDraft} disabled={isSavingPrecioEspecialClientes}>
+                {isSavingPrecioEspecialClientes ? <Loader2Icon className="animate-spin" data-icon="inline-start" /> : null}
+                Guardar
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+      <Sheet open={impuestosEditorOpen} onOpenChange={setImpuestosEditorOpen}>
+        <SheetContent
+          side="right"
+          className="overflow-y-auto px-4 py-6 data-[side=right]:w-[96vw] data-[side=right]:max-w-none sm:px-6 sm:data-[side=right]:w-[52vw] sm:data-[side=right]:max-w-none lg:px-8 lg:data-[side=right]:w-[30vw] lg:data-[side=right]:min-w-[440px] lg:data-[side=right]:max-w-none"
+        >
+          <SheetHeader className="border-b pb-4">
+            <SheetTitle>Administrar impuestos</SheetTitle>
+            <SheetDescription>
+              Edita el detalle del esquema impositivo seleccionado.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-6 space-y-5">
+            <Field>
+              <FieldLabel>Esquema</FieldLabel>
+              <Select
+                value={impuestosEditorDraft?.id ?? "__none__"}
+                onValueChange={(value) =>
+                  setImpuestosEditorDraft(
+                    impuestosCatalogoActivos.find((item) => item.id === value) ?? null,
+                  )
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona esquema">
+                    {impuestosEditorDraft?.nombre || "Selecciona esquema"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {impuestosCatalogoActivos.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+
+            {impuestosEditorDraft ? (
+              <div className="space-y-3">
+                {impuestosEditorDraft.detalle.items.map((item, index) => (
+                  <Field key={`${impuestosEditorDraft.id}-${item.nombre}-${index}`}>
+                    <FieldLabel>{item.nombre}</FieldLabel>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={item.porcentaje}
+                      onChange={(e) =>
+                        setImpuestosEditorDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                detalle: {
+                                  items: current.detalle.items.map((entry, itemIndex) =>
+                                    itemIndex === index
+                                      ? { ...entry, porcentaje: Number(e.target.value || 0) }
+                                      : entry,
+                                  ),
+                                },
+                              }
+                            : current,
+                        )
+                      }
+                    />
+                  </Field>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No hay un esquema impositivo disponible para editar.</p>
+            )}
+
+            <div className="flex items-center justify-end gap-2 border-t pt-4">
+              <Button type="button" variant="outline" onClick={() => setImpuestosEditorOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={handleSaveImpuestosEditor} disabled={isSavingImpuestosCatalogo || !impuestosEditorDraft}>
+                {isSavingImpuestosCatalogo ? <Loader2Icon className="animate-spin" data-icon="inline-start" /> : null}
+                Aplicar
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
       <Sheet open={routeEditorOpen} onOpenChange={setRouteEditorOpen}>
         <SheetContent side="right" className="w-full overflow-y-auto px-6 sm:max-w-6xl sm:px-8">
           <SheetHeader>
@@ -3780,6 +5461,34 @@ export function ProductoServicioFichaTabs({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmVarianteAction}>
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={Boolean(precioEspecialClienteToDelete)}
+        onOpenChange={(open) => (!open ? setPrecioEspecialClienteToDelete(null) : null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar precio especial</AlertDialogTitle>
+            <AlertDialogDescription>
+              {precioEspecialClienteToDelete
+                ? `Vas a eliminar el precio especial de "${precioEspecialClienteToDelete.clienteNombre}". Esta acción no se puede deshacer.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSavingPrecioEspecialClientes}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isSavingPrecioEspecialClientes}
+              onClick={() => {
+                if (!precioEspecialClienteToDelete) return;
+                handleDeletePrecioEspecialCliente(precioEspecialClienteToDelete.id);
+                setPrecioEspecialClienteToDelete(null);
+              }}
+            >
               Confirmar
             </AlertDialogAction>
           </AlertDialogFooter>

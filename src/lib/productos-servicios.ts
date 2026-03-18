@@ -16,6 +16,134 @@ export type ReglaCostoChecklist =
   | 'por_unidad'
   | 'por_pliego'
   | 'porcentaje_sobre_total';
+export type MetodoCalculoPrecioProducto =
+  | 'margen_variable'
+  | 'por_margen'
+  | 'precio_fijo'
+  | 'fijado_por_cantidad'
+  | 'fijo_con_margen_variable'
+  | 'variable_por_cantidad'
+  | 'precio_fijo_para_margen_minimo';
+
+export type ProductoImpuestoCatalogo = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  porcentaje: number;
+  detalle: {
+    items: Array<{
+      nombre: string;
+      porcentaje: number;
+    }>;
+  };
+  activo: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ProductoPrecioImpuestoItem = {
+  nombre: string;
+  porcentaje: number;
+};
+
+export type ProductoPrecioImpuestosConfig = {
+  esquemaId: string | null;
+  esquemaNombre: string;
+  items: ProductoPrecioImpuestoItem[];
+  porcentajeTotal: number;
+};
+
+export type ProductoPrecioFilaCantidadPrecio = {
+  quantity: number;
+  price: number;
+};
+
+export type ProductoPrecioFilaRangoPrecio = {
+  quantityUntil: number;
+  price: number;
+};
+
+export type ProductoPrecioFilaRangoMargen = {
+  quantityUntil: number;
+  marginPct: number;
+};
+
+export type ProductoPrecioFilaCantidadMargen = {
+  quantity: number;
+  marginPct: number;
+};
+
+export type ProductoPrecioPorMargenConfig = {
+  marginPct: number;
+  minimumMarginPct: number;
+};
+
+export type ProductoPrecioFijoConfig = {
+  price: number;
+  minimumPrice: number;
+};
+
+export type ProductoPrecioFijoMargenMinimoConfig = {
+  price: number;
+  minimumPrice: number;
+  minimumMarginPct: number;
+};
+
+export type ProductoPrecioFijadoPorCantidadConfig = {
+  tiers: ProductoPrecioFilaCantidadPrecio[];
+};
+
+export type ProductoPrecioVariablePorCantidadConfig = {
+  tiers: ProductoPrecioFilaRangoPrecio[];
+};
+
+export type ProductoPrecioMargenVariableConfig = {
+  tiers: ProductoPrecioFilaRangoMargen[];
+};
+
+export type ProductoPrecioFijoConMargenVariableConfig = {
+  tiers: ProductoPrecioFilaCantidadMargen[];
+};
+
+export type ProductoPrecioDetalleMap = {
+  margen_variable: ProductoPrecioMargenVariableConfig;
+  por_margen: ProductoPrecioPorMargenConfig;
+  precio_fijo: ProductoPrecioFijoConfig;
+  fijado_por_cantidad: ProductoPrecioFijadoPorCantidadConfig;
+  fijo_con_margen_variable: ProductoPrecioFijoConMargenVariableConfig;
+  variable_por_cantidad: ProductoPrecioVariablePorCantidadConfig;
+  precio_fijo_para_margen_minimo: ProductoPrecioFijoMargenMinimoConfig;
+};
+
+export type ProductoPrecioConfig = {
+  [K in MetodoCalculoPrecioProducto]: {
+    metodoCalculo: K;
+    measurementUnit: string | null;
+    impuestos: ProductoPrecioImpuestosConfig;
+    detalle: ProductoPrecioDetalleMap[K];
+  }
+}[MetodoCalculoPrecioProducto];
+
+export type ProductoPrecioEspecialCliente = {
+  id: string;
+  clienteId: string;
+  clienteNombre: string;
+  descripcion: string;
+  activo: boolean;
+  createdAt: string;
+  updatedAt: string;
+} & ProductoPrecioConfig;
+
+export type ProductoPrecioEspecialClientePayload = {
+  id: string;
+  clienteId: string;
+  clienteNombre: string;
+  descripcion?: string;
+  activo: boolean;
+  metodoCalculo: MetodoCalculoPrecioProducto;
+  measurementUnit?: string | null;
+  detalle?: Record<string, unknown>;
+};
 
 export type FamiliaProducto = {
   id: string;
@@ -56,6 +184,9 @@ export type ProductoServicio = {
   familiaProductoNombre: string;
   subfamiliaProductoId: string | null;
   subfamiliaProductoNombre: string;
+  unidadComercial: string;
+  precio?: ProductoPrecioConfig | null;
+  precioEspecialClientes?: ProductoPrecioEspecialCliente[];
   dimensionesBaseConsumidas?: DimensionOpcionProductiva[];
   matchingBasePorVariante?: ProductoRutaBaseMatchingVariante[];
   pasosFijosPorVariante?: ProductoRutaPasoFijoVariante[];

@@ -8,7 +8,11 @@ import {
   CotizacionProductoVariante,
   EstadoProductoServicio,
   FamiliaProducto,
+  MetodoCalculoPrecioProducto,
   MotorCostoCatalogItem,
+  ProductoImpuestoCatalogo,
+  ProductoPrecioImpuestosConfig,
+  ProductoPrecioEspecialClientePayload,
   ProductoAdicionalAsignado,
   ProductoAdicionalEfecto,
   ProductoMotorConfig,
@@ -101,6 +105,76 @@ export async function getProductosServicios() {
 
 export async function getProductoServicio(productoId: string) {
   return apiRequest<ProductoServicio>(`/productos-servicios/${productoId}`);
+}
+
+export async function getProductoImpuestosCatalogo() {
+  return apiRequest<ProductoImpuestoCatalogo[]>('/productos-servicios/impuestos');
+}
+
+export async function createProductoImpuesto(payload: {
+  codigo: string;
+  nombre: string;
+  porcentaje: number;
+  detalle?: {
+    items: Array<{
+      nombre: string;
+      porcentaje: number;
+    }>;
+  };
+  activo: boolean;
+}) {
+  return apiRequest<ProductoImpuestoCatalogo>('/productos-servicios/impuestos', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateProductoImpuesto(
+  impuestoId: string,
+  payload: {
+    codigo: string;
+    nombre: string;
+    porcentaje: number;
+    detalle?: {
+      items: Array<{
+        nombre: string;
+        porcentaje: number;
+      }>;
+    };
+    activo: boolean;
+  },
+) {
+  return apiRequest<ProductoImpuestoCatalogo>(`/productos-servicios/impuestos/${impuestoId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateProductoPrecio(
+  productoId: string,
+  payload: {
+    metodoCalculo: MetodoCalculoPrecioProducto;
+    measurementUnit?: string | null;
+    impuestos?: ProductoPrecioImpuestosConfig;
+    detalle?: Record<string, unknown>;
+  },
+) {
+  return apiRequest<ProductoServicio>(`/productos-servicios/${productoId}/precio`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateProductoPrecioEspecialClientes(
+  productoId: string,
+  payload: {
+    items: ProductoPrecioEspecialClientePayload[];
+  },
+) {
+  return apiRequest<ProductoServicio>(`/productos-servicios/${productoId}/precio-especial-clientes`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function createProductoServicio(payload: {

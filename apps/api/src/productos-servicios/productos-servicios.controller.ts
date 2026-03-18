@@ -5,6 +5,8 @@ import {
   AssignProductoAdicionalDto,
   AssignProductoVariantesRutaMasivaDto,
   AssignProductoMotorDto,
+  UpdateProductoPrecioDto,
+  UpdateProductoPrecioEspecialClientesDto,
   AssignVarianteRutaDto,
   CotizarProductoVarianteDto,
   CreateProductoVarianteDto,
@@ -20,6 +22,7 @@ import {
   UpsertVarianteMotorOverrideDto,
   UpdateProductoVarianteDto,
   UpsertFamiliaProductoDto,
+  UpsertProductoImpuestoDto,
   UpsertProductoServicioDto,
   UpsertSubfamiliaProductoDto,
 } from './dto/productos-servicios.dto';
@@ -144,6 +147,28 @@ export class ProductosServiciosController {
     return this.service.createFamilia(auth, payload);
   }
 
+  @Get('impuestos')
+  getImpuestos(@CurrentSession() auth: CurrentAuth) {
+    return this.service.findImpuestos(auth);
+  }
+
+  @Post('impuestos')
+  createImpuesto(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: UpsertProductoImpuestoDto,
+  ) {
+    return this.service.createImpuesto(auth, payload);
+  }
+
+  @Put('impuestos/:id')
+  updateImpuesto(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: UpsertProductoImpuestoDto,
+  ) {
+    return this.service.updateImpuesto(auth, id, payload);
+  }
+
   @Put('familias/:id')
   updateFamilia(
     @CurrentSession() auth: CurrentAuth,
@@ -212,6 +237,24 @@ export class ProductosServiciosController {
     @Body() payload: AssignProductoMotorDto,
   ) {
     return this.service.assignProductoMotor(auth, id, payload);
+  }
+
+  @Put(':id/precio')
+  updateProductoPrecio(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: UpdateProductoPrecioDto,
+  ) {
+    return this.service.updateProductoPrecio(auth, id, payload);
+  }
+
+  @Put(':id/precio-especial-clientes')
+  updateProductoPrecioEspecialClientes(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: UpdateProductoPrecioEspecialClientesDto,
+  ) {
+    return this.service.updateProductoPrecioEspecialClientes(auth, id, payload);
   }
 
   @Get(':id/motor-config')

@@ -1,5 +1,5 @@
 import type { CurrentAuth } from '../auth/auth.types';
-import { AssignProductoAdicionalDto, AssignProductoVariantesRutaMasivaDto, AssignProductoMotorDto, AssignVarianteRutaDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, UpsertProductoChecklistDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, UpsertProductoAdicionalDto, PreviewImposicionProductoVarianteDto, UpdateProductoRutaPolicyDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
+import { AssignProductoAdicionalDto, AssignProductoVariantesRutaMasivaDto, AssignProductoMotorDto, UpdateProductoPrecioDto, UpdateProductoPrecioEspecialClientesDto, AssignVarianteRutaDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, UpsertProductoChecklistDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, UpsertProductoAdicionalDto, PreviewImposicionProductoVarianteDto, UpdateProductoRutaPolicyDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoImpuestoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
 import { ProductosServiciosService } from './productos-servicios.service';
 export declare class ProductosServiciosController {
     private readonly service;
@@ -480,6 +480,51 @@ export declare class ProductosServiciosController {
         createdAt: string;
         updatedAt: string;
     }>;
+    getImpuestos(auth: CurrentAuth): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        porcentaje: number;
+        detalle: {
+            items: {
+                nombre: string;
+                porcentaje: number;
+            }[];
+        };
+        activo: boolean;
+        createdAt: string;
+        updatedAt: string;
+    }[]>;
+    createImpuesto(auth: CurrentAuth, payload: UpsertProductoImpuestoDto): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        porcentaje: number;
+        detalle: {
+            items: {
+                nombre: string;
+                porcentaje: number;
+            }[];
+        };
+        activo: boolean;
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    updateImpuesto(auth: CurrentAuth, id: string, payload: UpsertProductoImpuestoDto): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        porcentaje: number;
+        detalle: {
+            items: {
+                nombre: string;
+                porcentaje: number;
+            }[];
+        };
+        activo: boolean;
+        createdAt: string;
+        updatedAt: string;
+    }>;
     updateFamilia(auth: CurrentAuth, id: string, payload: UpsertFamiliaProductoDto): Promise<{
         id: string;
         codigo: string;
@@ -540,6 +585,43 @@ export declare class ProductosServiciosController {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        unidadComercial: string;
+        precio: {
+            metodoCalculo: import("./dto/productos-servicios.dto").MetodoCalculoPrecioProductoDto;
+            measurementUnit: string | null;
+            impuestos: {
+                esquemaId: string | null;
+                esquemaNombre: string;
+                items: Array<{
+                    nombre: string;
+                    porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            detalle: Record<string, unknown>;
+        } | null;
+        precioEspecialClientes: ({
+            metodoCalculo: import("./dto/productos-servicios.dto").MetodoCalculoPrecioProductoDto;
+            measurementUnit: string | null;
+            impuestos: {
+                esquemaId: string | null;
+                esquemaNombre: string;
+                items: Array<{
+                    nombre: string;
+                    porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            detalle: Record<string, unknown>;
+        } & {
+            id: string;
+            clienteId: string;
+            clienteNombre: string;
+            descripcion: string;
+            activo: boolean;
+            createdAt: string;
+            updatedAt: string;
+        })[];
         dimensionesBaseConsumidas: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
@@ -581,6 +663,43 @@ export declare class ProductosServiciosController {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        unidadComercial: string;
+        precio: {
+            metodoCalculo: import("./dto/productos-servicios.dto").MetodoCalculoPrecioProductoDto;
+            measurementUnit: string | null;
+            impuestos: {
+                esquemaId: string | null;
+                esquemaNombre: string;
+                items: Array<{
+                    nombre: string;
+                    porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            detalle: Record<string, unknown>;
+        } | null;
+        precioEspecialClientes: ({
+            metodoCalculo: import("./dto/productos-servicios.dto").MetodoCalculoPrecioProductoDto;
+            measurementUnit: string | null;
+            impuestos: {
+                esquemaId: string | null;
+                esquemaNombre: string;
+                items: Array<{
+                    nombre: string;
+                    porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            detalle: Record<string, unknown>;
+        } & {
+            id: string;
+            clienteId: string;
+            clienteNombre: string;
+            descripcion: string;
+            activo: boolean;
+            createdAt: string;
+            updatedAt: string;
+        })[];
         dimensionesBaseConsumidas: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
@@ -622,6 +741,43 @@ export declare class ProductosServiciosController {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        unidadComercial: string;
+        precio: {
+            metodoCalculo: import("./dto/productos-servicios.dto").MetodoCalculoPrecioProductoDto;
+            measurementUnit: string | null;
+            impuestos: {
+                esquemaId: string | null;
+                esquemaNombre: string;
+                items: Array<{
+                    nombre: string;
+                    porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            detalle: Record<string, unknown>;
+        } | null;
+        precioEspecialClientes: ({
+            metodoCalculo: import("./dto/productos-servicios.dto").MetodoCalculoPrecioProductoDto;
+            measurementUnit: string | null;
+            impuestos: {
+                esquemaId: string | null;
+                esquemaNombre: string;
+                items: Array<{
+                    nombre: string;
+                    porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            detalle: Record<string, unknown>;
+        } & {
+            id: string;
+            clienteId: string;
+            clienteNombre: string;
+            descripcion: string;
+            activo: boolean;
+            createdAt: string;
+            updatedAt: string;
+        })[];
         dimensionesBaseConsumidas: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
@@ -663,6 +819,43 @@ export declare class ProductosServiciosController {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        unidadComercial: string;
+        precio: {
+            metodoCalculo: import("./dto/productos-servicios.dto").MetodoCalculoPrecioProductoDto;
+            measurementUnit: string | null;
+            impuestos: {
+                esquemaId: string | null;
+                esquemaNombre: string;
+                items: Array<{
+                    nombre: string;
+                    porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            detalle: Record<string, unknown>;
+        } | null;
+        precioEspecialClientes: ({
+            metodoCalculo: import("./dto/productos-servicios.dto").MetodoCalculoPrecioProductoDto;
+            measurementUnit: string | null;
+            impuestos: {
+                esquemaId: string | null;
+                esquemaNombre: string;
+                items: Array<{
+                    nombre: string;
+                    porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            detalle: Record<string, unknown>;
+        } & {
+            id: string;
+            clienteId: string;
+            clienteNombre: string;
+            descripcion: string;
+            activo: boolean;
+            createdAt: string;
+            updatedAt: string;
+        })[];
         dimensionesBaseConsumidas: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
@@ -704,6 +897,199 @@ export declare class ProductosServiciosController {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        unidadComercial: string;
+        precio: {
+            metodoCalculo: import("./dto/productos-servicios.dto").MetodoCalculoPrecioProductoDto;
+            measurementUnit: string | null;
+            impuestos: {
+                esquemaId: string | null;
+                esquemaNombre: string;
+                items: Array<{
+                    nombre: string;
+                    porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            detalle: Record<string, unknown>;
+        } | null;
+        precioEspecialClientes: ({
+            metodoCalculo: import("./dto/productos-servicios.dto").MetodoCalculoPrecioProductoDto;
+            measurementUnit: string | null;
+            impuestos: {
+                esquemaId: string | null;
+                esquemaNombre: string;
+                items: Array<{
+                    nombre: string;
+                    porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            detalle: Record<string, unknown>;
+        } & {
+            id: string;
+            clienteId: string;
+            clienteNombre: string;
+            descripcion: string;
+            activo: boolean;
+            createdAt: string;
+            updatedAt: string;
+        })[];
+        dimensionesBaseConsumidas: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto[];
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    updateProductoPrecio(auth: CurrentAuth, id: string, payload: UpdateProductoPrecioDto): Promise<{
+        matchingBasePorVariante: {
+            varianteId: string;
+            matching: {
+                tipoImpresion: any;
+                caras: any;
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
+        pasosFijosPorVariante: {
+            varianteId: string;
+            pasos: {
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
+        id: string;
+        tipo: import("./dto/productos-servicios.dto").TipoProductoServicioDto;
+        codigo: string;
+        nombre: string;
+        descripcion: string;
+        motorCodigo: string;
+        motorVersion: number;
+        usarRutaComunVariantes: boolean;
+        procesoDefinicionDefaultId: string | null;
+        procesoDefinicionDefaultNombre: string;
+        estado: import("./dto/productos-servicios.dto").EstadoProductoServicioDto;
+        activo: boolean;
+        familiaProductoId: string;
+        familiaProductoNombre: string;
+        subfamiliaProductoId: string | null;
+        subfamiliaProductoNombre: string;
+        unidadComercial: string;
+        precio: {
+            metodoCalculo: import("./dto/productos-servicios.dto").MetodoCalculoPrecioProductoDto;
+            measurementUnit: string | null;
+            impuestos: {
+                esquemaId: string | null;
+                esquemaNombre: string;
+                items: Array<{
+                    nombre: string;
+                    porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            detalle: Record<string, unknown>;
+        } | null;
+        precioEspecialClientes: ({
+            metodoCalculo: import("./dto/productos-servicios.dto").MetodoCalculoPrecioProductoDto;
+            measurementUnit: string | null;
+            impuestos: {
+                esquemaId: string | null;
+                esquemaNombre: string;
+                items: Array<{
+                    nombre: string;
+                    porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            detalle: Record<string, unknown>;
+        } & {
+            id: string;
+            clienteId: string;
+            clienteNombre: string;
+            descripcion: string;
+            activo: boolean;
+            createdAt: string;
+            updatedAt: string;
+        })[];
+        dimensionesBaseConsumidas: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto[];
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    updateProductoPrecioEspecialClientes(auth: CurrentAuth, id: string, payload: UpdateProductoPrecioEspecialClientesDto): Promise<{
+        matchingBasePorVariante: {
+            varianteId: string;
+            matching: {
+                tipoImpresion: any;
+                caras: any;
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
+        pasosFijosPorVariante: {
+            varianteId: string;
+            pasos: {
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
+        id: string;
+        tipo: import("./dto/productos-servicios.dto").TipoProductoServicioDto;
+        codigo: string;
+        nombre: string;
+        descripcion: string;
+        motorCodigo: string;
+        motorVersion: number;
+        usarRutaComunVariantes: boolean;
+        procesoDefinicionDefaultId: string | null;
+        procesoDefinicionDefaultNombre: string;
+        estado: import("./dto/productos-servicios.dto").EstadoProductoServicioDto;
+        activo: boolean;
+        familiaProductoId: string;
+        familiaProductoNombre: string;
+        subfamiliaProductoId: string | null;
+        subfamiliaProductoNombre: string;
+        unidadComercial: string;
+        precio: {
+            metodoCalculo: import("./dto/productos-servicios.dto").MetodoCalculoPrecioProductoDto;
+            measurementUnit: string | null;
+            impuestos: {
+                esquemaId: string | null;
+                esquemaNombre: string;
+                items: Array<{
+                    nombre: string;
+                    porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            detalle: Record<string, unknown>;
+        } | null;
+        precioEspecialClientes: ({
+            metodoCalculo: import("./dto/productos-servicios.dto").MetodoCalculoPrecioProductoDto;
+            measurementUnit: string | null;
+            impuestos: {
+                esquemaId: string | null;
+                esquemaNombre: string;
+                items: Array<{
+                    nombre: string;
+                    porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            detalle: Record<string, unknown>;
+        } & {
+            id: string;
+            clienteId: string;
+            clienteNombre: string;
+            descripcion: string;
+            activo: boolean;
+            createdAt: string;
+            updatedAt: string;
+        })[];
         dimensionesBaseConsumidas: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
@@ -774,6 +1160,43 @@ export declare class ProductosServiciosController {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        unidadComercial: string;
+        precio: {
+            metodoCalculo: import("./dto/productos-servicios.dto").MetodoCalculoPrecioProductoDto;
+            measurementUnit: string | null;
+            impuestos: {
+                esquemaId: string | null;
+                esquemaNombre: string;
+                items: Array<{
+                    nombre: string;
+                    porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            detalle: Record<string, unknown>;
+        } | null;
+        precioEspecialClientes: ({
+            metodoCalculo: import("./dto/productos-servicios.dto").MetodoCalculoPrecioProductoDto;
+            measurementUnit: string | null;
+            impuestos: {
+                esquemaId: string | null;
+                esquemaNombre: string;
+                items: Array<{
+                    nombre: string;
+                    porcentaje: number;
+                }>;
+                porcentajeTotal: number;
+            };
+            detalle: Record<string, unknown>;
+        } & {
+            id: string;
+            clienteId: string;
+            clienteNombre: string;
+            descripcion: string;
+            activo: boolean;
+            createdAt: string;
+            updatedAt: string;
+        })[];
         dimensionesBaseConsumidas: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;

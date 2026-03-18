@@ -451,6 +451,55 @@ let ProductosServiciosService = class ProductosServiciosService {
             this.handleWriteError(error);
         }
     }
+    async findImpuestos(auth) {
+        await this.ensureCatalogoInicialImpuestos(auth);
+        const rows = await this.prisma.productoImpuestoCatalogo.findMany({
+            where: { tenantId: auth.tenantId },
+            orderBy: [{ nombre: 'asc' }],
+        });
+        return rows.map((item) => this.toImpuestoResponse(item));
+    }
+    async createImpuesto(auth, payload) {
+        try {
+            const created = await this.prisma.productoImpuestoCatalogo.create({
+                data: {
+                    tenantId: auth.tenantId,
+                    codigo: payload.codigo.trim().toUpperCase(),
+                    nombre: payload.nombre.trim(),
+                    porcentaje: Number(payload.porcentaje),
+                    detalleJson: this.toNullableJson(payload.detalle && typeof payload.detalle === 'object' && !Array.isArray(payload.detalle)
+                        ? payload.detalle
+                        : undefined),
+                    activo: payload.activo,
+                },
+            });
+            return this.toImpuestoResponse(created);
+        }
+        catch (error) {
+            this.handleWriteError(error);
+        }
+    }
+    async updateImpuesto(auth, id, payload) {
+        await this.findImpuestoOrThrow(auth, id, this.prisma);
+        try {
+            const updated = await this.prisma.productoImpuestoCatalogo.update({
+                where: { id },
+                data: {
+                    codigo: payload.codigo.trim().toUpperCase(),
+                    nombre: payload.nombre.trim(),
+                    porcentaje: Number(payload.porcentaje),
+                    detalleJson: this.toNullableJson(payload.detalle && typeof payload.detalle === 'object' && !Array.isArray(payload.detalle)
+                        ? payload.detalle
+                        : undefined),
+                    activo: payload.activo,
+                },
+            });
+            return this.toImpuestoResponse(updated);
+        }
+        catch (error) {
+            this.handleWriteError(error);
+        }
+    }
     async updateFamilia(auth, id, payload) {
         await this.findFamiliaOrThrow(auth, id, this.prisma);
         try {
@@ -622,6 +671,42 @@ let ProductosServiciosService = class ProductosServiciosService {
             },
         });
         return this.findProducto(auth, productoId);
+    }
+    async updateProductoPrecio(auth, productoId, payload) {
+        const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+        const currentPrecio = this.getProductoPrecioConfig(producto.detalleJson);
+        const measurementUnit = payload.measurementUnit?.trim() || currentPrecio?.measurementUnit || null;
+        const impuestos = await this.resolveProductoPrecioImpuestos(auth, payload.impuestos ?? currentPrecio?.impuestos ?? null);
+        const detalle = this.normalizeProductoPrecioDetalle(payload.metodoCalculo, payload.detalle ?? null, false);
+        const nextDetalle = this.mergeProductoDetalle(producto.detalleJson, {
+            precio: {
+                metodoCalculo: payload.metodoCalculo,
+                measurementUnit,
+                impuestos,
+                detalle,
+            },
+        });
+        await this.prisma.productoServicio.update({
+            where: { id: producto.id },
+            data: {
+                detalleJson: this.toNullableJson(nextDetalle),
+            },
+        });
+        return this.findProducto(auth, producto.id);
+    }
+    async updateProductoPrecioEspecialClientes(auth, productoId, payload) {
+        const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+        const items = await this.resolveProductoPrecioEspecialClientes(auth, payload.items ?? []);
+        const nextDetalle = this.mergeProductoDetalle(producto.detalleJson, {
+            precioEspecialClientes: items,
+        });
+        await this.prisma.productoServicio.update({
+            where: { id: producto.id },
+            data: {
+                detalleJson: this.toNullableJson(nextDetalle),
+            },
+        });
+        return this.findProducto(auth, producto.id);
     }
     async getProductoMotorConfig(auth, productoId) {
         const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
@@ -2852,6 +2937,18 @@ let ProductosServiciosService = class ProductosServiciosService {
         }
         return item;
     }
+    async findImpuestoOrThrow(auth, id, tx) {
+        const item = await tx.productoImpuestoCatalogo.findFirst({
+            where: {
+                tenantId: auth.tenantId,
+                id,
+            },
+        });
+        if (!item) {
+            throw new common_1.NotFoundException('Impuesto no encontrado.');
+        }
+        return item;
+    }
     async findProductoOrThrow(auth, id, tx) {
         const item = await tx.productoServicio.findFirst({
             where: {
@@ -3984,6 +4081,18 @@ let ProductosServiciosService = class ProductosServiciosService {
             updatedAt: item.updatedAt.toISOString(),
         };
     }
+    toImpuestoResponse(item) {
+        return {
+            id: item.id,
+            codigo: item.codigo,
+            nombre: item.nombre,
+            porcentaje: Number(item.porcentaje),
+            detalle: this.parseImpuestoDetalle(item.detalleJson ?? null),
+            activo: item.activo,
+            createdAt: item.createdAt.toISOString(),
+            updatedAt: item.updatedAt.toISOString(),
+        };
+    }
     toFamiliaResponse(item) {
         return {
             id: item.id,
@@ -4025,6 +4134,9 @@ let ProductosServiciosService = class ProductosServiciosService {
             familiaProductoNombre: item.familiaProducto.nombre,
             subfamiliaProductoId: item.subfamiliaProductoId,
             subfamiliaProductoNombre: item.subfamiliaProducto?.nombre ?? '',
+            unidadComercial: item.subfamiliaProducto?.unidadComercial?.trim() || 'unidad',
+            precio: this.getProductoPrecioConfig(item.detalleJson),
+            precioEspecialClientes: this.getProductoPrecioEspecialClientes(item.detalleJson),
             dimensionesBaseConsumidas: this.getProductoDimensionesBaseConsumidas(item.detalleJson).map((dimension) => this.fromDimensionOpcionProductiva(dimension)),
             createdAt: item.createdAt.toISOString(),
             updatedAt: item.updatedAt.toISOString(),
@@ -4036,6 +4148,331 @@ let ProductosServiciosService = class ProductosServiciosService {
             ...current,
             ...patch,
         };
+    }
+    getProductoPrecioConfig(detalleJson) {
+        const detalle = this.asObject(detalleJson);
+        const raw = detalle.precio && typeof detalle.precio === 'object' && !Array.isArray(detalle.precio)
+            ? detalle.precio
+            : null;
+        if (!raw) {
+            return null;
+        }
+        const metodoCalculo = this.normalizeMetodoCalculoPrecioProducto(raw.metodoCalculo);
+        if (!metodoCalculo) {
+            return null;
+        }
+        const measurementUnit = typeof raw.measurementUnit === 'string' && raw.measurementUnit.trim().length
+            ? raw.measurementUnit.trim()
+            : null;
+        const impuestos = this.normalizeProductoPrecioImpuestos(raw.impuestos && typeof raw.impuestos === 'object' && !Array.isArray(raw.impuestos)
+            ? raw.impuestos
+            : null);
+        const detallePrecio = this.normalizeProductoPrecioDetalle(metodoCalculo, raw.detalle && typeof raw.detalle === 'object' && !Array.isArray(raw.detalle)
+            ? raw.detalle
+            : null, true);
+        return { metodoCalculo, measurementUnit, impuestos, detalle: detallePrecio };
+    }
+    getProductoPrecioEspecialClientes(detalleJson) {
+        const detalle = this.asObject(detalleJson);
+        const rawItems = Array.isArray(detalle.precioEspecialClientes) ? detalle.precioEspecialClientes : [];
+        return rawItems
+            .map((item) => this.normalizeProductoPrecioEspecialClienteStored(item))
+            .filter((item) => Boolean(item));
+    }
+    normalizeProductoPrecioImpuestos(value) {
+        const raw = value && typeof value === 'object' && !Array.isArray(value)
+            ? value
+            : {};
+        const esquemaId = typeof raw.esquemaId === 'string' && raw.esquemaId.trim().length ? raw.esquemaId : null;
+        const esquemaNombre = typeof raw.esquemaNombre === 'string' ? raw.esquemaNombre : '';
+        const items = Array.isArray(raw.items)
+            ? raw.items
+                .map((item) => {
+                if (!item || typeof item !== 'object' || Array.isArray(item)) {
+                    return null;
+                }
+                const row = item;
+                if (typeof row.nombre !== 'string') {
+                    return null;
+                }
+                return {
+                    nombre: row.nombre,
+                    porcentaje: this.toSafeNumber(row.porcentaje, 0),
+                };
+            })
+                .filter((item) => Boolean(item))
+            : [];
+        return {
+            esquemaId,
+            esquemaNombre,
+            items,
+            porcentajeTotal: items.length
+                ? Number(items.reduce((sum, item) => sum + item.porcentaje, 0).toFixed(4))
+                : 0,
+        };
+    }
+    normalizeProductoPrecioEspecialClienteStored(value) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+            return null;
+        }
+        const raw = value;
+        if (typeof raw.id !== 'string' ||
+            typeof raw.clienteId !== 'string' ||
+            typeof raw.clienteNombre !== 'string') {
+            return null;
+        }
+        const metodoCalculo = this.normalizeMetodoCalculoPrecioProducto(raw.metodoCalculo);
+        if (!metodoCalculo) {
+            return null;
+        }
+        const measurementUnit = typeof raw.measurementUnit === 'string' && raw.measurementUnit.trim().length
+            ? raw.measurementUnit.trim()
+            : null;
+        const detalle = this.normalizeProductoPrecioDetalle(metodoCalculo, raw.detalle && typeof raw.detalle === 'object' && !Array.isArray(raw.detalle)
+            ? raw.detalle
+            : null, true);
+        return {
+            id: raw.id,
+            clienteId: raw.clienteId,
+            clienteNombre: raw.clienteNombre,
+            descripcion: typeof raw.descripcion === 'string' ? raw.descripcion : '',
+            activo: raw.activo !== false,
+            createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
+            updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date().toISOString(),
+            metodoCalculo,
+            measurementUnit,
+            impuestos: this.normalizeProductoPrecioImpuestos(null),
+            detalle,
+        };
+    }
+    async resolveProductoPrecioEspecialClientes(auth, items) {
+        const rows = Array.isArray(items) ? items : [];
+        const clienteIds = Array.from(new Set(rows
+            .map((item) => item && typeof item === 'object' && !Array.isArray(item) && typeof item.clienteId === 'string'
+            ? item.clienteId
+            : null)
+            .filter((item) => Boolean(item))));
+        const clientes = clienteIds.length
+            ? await this.prisma.cliente.findMany({
+                where: {
+                    tenantId: auth.tenantId,
+                    id: { in: clienteIds },
+                },
+                select: {
+                    id: true,
+                    nombre: true,
+                },
+            })
+            : [];
+        const clienteMap = new Map(clientes.map((item) => [item.id, item]));
+        const activosByCliente = new Set();
+        return rows.map((item, index) => {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) {
+                throw new common_1.BadRequestException(`La regla especial #${index + 1} es inválida.`);
+            }
+            const raw = item;
+            const id = typeof raw.id === 'string' && raw.id.trim().length ? raw.id : (0, node_crypto_1.randomUUID)();
+            const clienteId = typeof raw.clienteId === 'string' ? raw.clienteId : '';
+            const cliente = clienteMap.get(clienteId);
+            if (!cliente) {
+                throw new common_1.BadRequestException(`La regla especial #${index + 1} referencia un cliente inexistente.`);
+            }
+            const activo = raw.activo !== false;
+            if (activo) {
+                if (activosByCliente.has(clienteId)) {
+                    throw new common_1.BadRequestException('No puede haber más de un precio especial activo para el mismo cliente.');
+                }
+                activosByCliente.add(clienteId);
+            }
+            const metodoCalculo = this.normalizeMetodoCalculoPrecioProducto(raw.metodoCalculo);
+            if (!metodoCalculo) {
+                throw new common_1.BadRequestException(`La regla especial de "${cliente.nombre}" tiene un método inválido.`);
+            }
+            const measurementUnit = typeof raw.measurementUnit === 'string' && raw.measurementUnit.trim().length
+                ? raw.measurementUnit.trim()
+                : null;
+            const detalle = this.normalizeProductoPrecioDetalle(metodoCalculo, raw.detalle && typeof raw.detalle === 'object' && !Array.isArray(raw.detalle)
+                ? raw.detalle
+                : null, false);
+            const createdAt = typeof raw.createdAt === 'string' && raw.createdAt.trim().length ? raw.createdAt : new Date().toISOString();
+            return {
+                id,
+                clienteId: cliente.id,
+                clienteNombre: cliente.nombre,
+                descripcion: typeof raw.descripcion === 'string' ? raw.descripcion.trim() : '',
+                activo,
+                createdAt,
+                updatedAt: new Date().toISOString(),
+                metodoCalculo,
+                measurementUnit,
+                impuestos: this.normalizeProductoPrecioImpuestos(null),
+                detalle,
+            };
+        });
+    }
+    async resolveProductoPrecioImpuestos(auth, value) {
+        const normalized = this.normalizeProductoPrecioImpuestos(value && typeof value === 'object' && !Array.isArray(value)
+            ? value
+            : null);
+        if (!normalized.esquemaId) {
+            return {
+                esquemaId: null,
+                esquemaNombre: '',
+                items: [],
+                porcentajeTotal: 0,
+            };
+        }
+        const row = await this.prisma.productoImpuestoCatalogo.findFirst({
+            where: { tenantId: auth.tenantId, id: normalized.esquemaId, activo: true },
+        });
+        if (!row) {
+            throw new common_1.BadRequestException('El esquema impositivo seleccionado es inválido o está inactivo.');
+        }
+        const detalle = this.parseImpuestoDetalle(row.detalleJson);
+        const items = detalle.items;
+        return {
+            esquemaId: row.id,
+            esquemaNombre: row.nombre,
+            items,
+            porcentajeTotal: Number(row.porcentaje),
+        };
+    }
+    parseImpuestoDetalle(value) {
+        const raw = value && typeof value === 'object' && !Array.isArray(value)
+            ? value
+            : {};
+        const items = Array.isArray(raw.items)
+            ? raw.items
+                .map((item) => {
+                if (!item || typeof item !== 'object' || Array.isArray(item)) {
+                    return null;
+                }
+                const row = item;
+                if (typeof row.nombre !== 'string') {
+                    return null;
+                }
+                return {
+                    nombre: row.nombre,
+                    porcentaje: this.toSafeNumber(row.porcentaje, 0),
+                };
+            })
+                .filter((item) => Boolean(item))
+            : [];
+        return { items };
+    }
+    normalizeMetodoCalculoPrecioProducto(value) {
+        return value === productos_servicios_dto_1.MetodoCalculoPrecioProductoDto.margen_variable ||
+            value === productos_servicios_dto_1.MetodoCalculoPrecioProductoDto.por_margen ||
+            value === productos_servicios_dto_1.MetodoCalculoPrecioProductoDto.precio_fijo ||
+            value === productos_servicios_dto_1.MetodoCalculoPrecioProductoDto.fijado_por_cantidad ||
+            value === productos_servicios_dto_1.MetodoCalculoPrecioProductoDto.fijo_con_margen_variable ||
+            value === productos_servicios_dto_1.MetodoCalculoPrecioProductoDto.variable_por_cantidad ||
+            value === productos_servicios_dto_1.MetodoCalculoPrecioProductoDto.precio_fijo_para_margen_minimo
+            ? value
+            : null;
+    }
+    normalizeProductoPrecioDetalle(metodoCalculo, value, allowEmpty) {
+        const detalle = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+        if (metodoCalculo === productos_servicios_dto_1.MetodoCalculoPrecioProductoDto.por_margen) {
+            return {
+                marginPct: this.toSafeNumber(detalle.marginPct, 0),
+                minimumMarginPct: this.toSafeNumber(detalle.minimumMarginPct, 0),
+            };
+        }
+        if (metodoCalculo === productos_servicios_dto_1.MetodoCalculoPrecioProductoDto.precio_fijo) {
+            return {
+                price: this.toSafeNumber(detalle.price, 0),
+                minimumPrice: this.toSafeNumber(detalle.minimumPrice, 0),
+            };
+        }
+        if (metodoCalculo === productos_servicios_dto_1.MetodoCalculoPrecioProductoDto.precio_fijo_para_margen_minimo) {
+            return {
+                price: this.toSafeNumber(detalle.price, 0),
+                minimumPrice: this.toSafeNumber(detalle.minimumPrice, 0),
+                minimumMarginPct: this.toSafeNumber(detalle.minimumMarginPct, 0),
+            };
+        }
+        if (metodoCalculo === productos_servicios_dto_1.MetodoCalculoPrecioProductoDto.fijado_por_cantidad) {
+            return {
+                tiers: this.normalizeProductoPrecioTierRows(detalle.tiers, 'exact', allowEmpty),
+            };
+        }
+        if (metodoCalculo === productos_servicios_dto_1.MetodoCalculoPrecioProductoDto.fijo_con_margen_variable) {
+            return {
+                tiers: this.normalizeProductoPrecioTierRows(detalle.tiers, 'exact_margin', allowEmpty),
+            };
+        }
+        if (metodoCalculo === productos_servicios_dto_1.MetodoCalculoPrecioProductoDto.variable_por_cantidad) {
+            return {
+                tiers: this.normalizeProductoPrecioTierRows(detalle.tiers, 'until', allowEmpty),
+            };
+        }
+        return {
+            tiers: this.normalizeProductoPrecioTierRows(detalle.tiers, 'margin', allowEmpty),
+        };
+    }
+    normalizeProductoPrecioTierRows(value, mode, allowEmpty) {
+        const rows = Array.isArray(value) ? value : [];
+        const normalized = rows
+            .map((item) => {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) {
+                return null;
+            }
+            const row = item;
+            if (mode === 'exact' || mode === 'exact_margin') {
+                const quantity = Math.trunc(this.toSafeNumber(row.quantity, NaN));
+                const valueKey = mode === 'exact_margin' ? 'marginPct' : 'price';
+                const amount = this.toSafeNumber(row[valueKey], NaN);
+                if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(amount) || amount < 0) {
+                    return null;
+                }
+                return mode === 'exact_margin' ? { quantity, marginPct: amount } : { quantity, price: amount };
+            }
+            const quantityUntil = Math.trunc(this.toSafeNumber(row.quantityUntil, NaN));
+            const valueKey = mode === 'margin' ? 'marginPct' : 'price';
+            const amount = this.toSafeNumber(row[valueKey], NaN);
+            if (!Number.isFinite(quantityUntil) || quantityUntil <= 0 || !Number.isFinite(amount) || amount < 0) {
+                return null;
+            }
+            return mode === 'margin'
+                ? { quantityUntil, marginPct: amount }
+                : { quantityUntil, price: amount };
+        })
+            .filter((item) => item !== null)
+            .sort((a, b) => Number(('quantity' in a ? a.quantity : a.quantityUntil) ?? 0) - Number(('quantity' in b ? b.quantity : b.quantityUntil) ?? 0));
+        const seen = new Set();
+        for (const row of normalized) {
+            const key = Number(('quantity' in row ? row.quantity : row.quantityUntil) ?? 0);
+            if (seen.has(key)) {
+                throw new common_1.BadRequestException('La configuración de precio contiene cantidades duplicadas.');
+            }
+            seen.add(key);
+        }
+        if (normalized.length === 0) {
+            if (allowEmpty) {
+                if (mode === 'exact') {
+                    return [{ quantity: 1, price: 0 }];
+                }
+                if (mode === 'exact_margin') {
+                    return [{ quantity: 1, marginPct: 0 }];
+                }
+                if (mode === 'until') {
+                    return [{ quantityUntil: 1, price: 0 }];
+                }
+                return [{ quantityUntil: 1, marginPct: 0 }];
+            }
+            if (mode === 'exact') {
+                throw new common_1.BadRequestException('Debes definir al menos una cantidad para precio fijado por cantidad.');
+            }
+            if (mode === 'exact_margin') {
+                throw new common_1.BadRequestException('Debes definir al menos una cantidad para fijo con margen variable.');
+            }
+            if (mode === 'until') {
+                throw new common_1.BadRequestException('Debes definir al menos un rango para precio variable por cantidad.');
+            }
+            throw new common_1.BadRequestException('Debes definir al menos un rango para margen variable.');
+        }
+        return normalized;
     }
     getProductoDimensionesBaseConsumidas(detalleJson) {
         const detalle = this.asObject(detalleJson);
@@ -4353,6 +4790,52 @@ let ProductosServiciosService = class ProductosServiciosService {
                     },
                 });
             }
+        });
+    }
+    async ensureCatalogoInicialImpuestos(auth) {
+        const rows = await this.prisma.productoImpuestoCatalogo.findMany({
+            where: { tenantId: auth.tenantId },
+        });
+        const hasProfiles = rows.some((item) => item.codigo === 'SERVICIOS' || item.codigo === 'PRODUCTO');
+        if (hasProfiles) {
+            return;
+        }
+        if (rows.length > 0) {
+            await this.prisma.productoImpuestoCatalogo.deleteMany({
+                where: { tenantId: auth.tenantId },
+            });
+        }
+        await this.prisma.productoImpuestoCatalogo.createMany({
+            data: [
+                {
+                    tenantId: auth.tenantId,
+                    codigo: 'SERVICIOS',
+                    nombre: 'Prestación de servicios',
+                    porcentaje: 25.7,
+                    detalleJson: {
+                        items: [
+                            { nombre: 'IVA', porcentaje: 21 },
+                            { nombre: 'IIBB', porcentaje: 3.5 },
+                            { nombre: 'Cred/Deb', porcentaje: 1.2 },
+                        ],
+                    },
+                    activo: true,
+                },
+                {
+                    tenantId: auth.tenantId,
+                    codigo: 'PRODUCTO',
+                    nombre: 'Venta de producto',
+                    porcentaje: 22.7,
+                    detalleJson: {
+                        items: [
+                            { nombre: 'IVA', porcentaje: 21 },
+                            { nombre: 'IIBB', porcentaje: 1.2 },
+                            { nombre: 'Cred/Deb', porcentaje: 0.5 },
+                        ],
+                    },
+                    activo: true,
+                },
+            ],
         });
     }
     resolveMotorOrThrow(code, version) {

@@ -56,9 +56,12 @@ import {
   UpsertProductoAdicionalDto,
   UpsertProductoChecklistDto,
   PreviewImposicionProductoVarianteDto,
+  MetodoCalculoPrecioProductoDto,
   ReglaCostoChecklistDto,
   TipoChecklistPreguntaDto,
   TipoChecklistAccionReglaDto,
+  UpdateProductoPrecioDto,
+  UpdateProductoPrecioEspecialClientesDto,
   UpdateProductoRutaPolicyDto,
   EstadoProductoServicioDto,
   TipoImpresionProductoVarianteDto,
@@ -68,6 +71,7 @@ import {
   UpsertVarianteMotorOverrideDto,
   UpdateProductoVarianteDto,
   UpsertFamiliaProductoDto,
+  UpsertProductoImpuestoDto,
   UpsertProductoServicioDto,
   UpsertSubfamiliaProductoDto,
 } from './dto/productos-servicios.dto';
@@ -87,6 +91,26 @@ type ServicioPricingRegla = {
 type ServicioPricingConfig = {
   niveles: ServicioPricingNivel[];
   reglas: ServicioPricingRegla[];
+};
+type ProductoPrecioConfig = {
+  metodoCalculo: MetodoCalculoPrecioProductoDto;
+  measurementUnit: string | null;
+  impuestos: {
+    esquemaId: string | null;
+    esquemaNombre: string;
+    items: Array<{ nombre: string; porcentaje: number }>;
+    porcentajeTotal: number;
+  };
+  detalle: Record<string, unknown>;
+};
+type ProductoPrecioEspecialClienteConfig = ProductoPrecioConfig & {
+  id: string;
+  clienteId: string;
+  clienteNombre: string;
+  descripcion: string;
+  activo: boolean;
+  createdAt: string;
+  updatedAt: string;
 };
 type RouteEffectInsertionMode = 'append' | 'before_step' | 'after_step';
 type RouteEffectInsertionConfig = {
@@ -592,6 +616,64 @@ export class ProductosServiciosService {
     }
   }
 
+  async findImpuestos(auth: CurrentAuth) {
+    await this.ensureCatalogoInicialImpuestos(auth);
+    const rows = await this.prisma.productoImpuestoCatalogo.findMany({
+      where: { tenantId: auth.tenantId },
+      orderBy: [{ nombre: 'asc' }],
+    });
+    return rows.map((item) => this.toImpuestoResponse(item));
+  }
+
+  async createImpuesto(auth: CurrentAuth, payload: UpsertProductoImpuestoDto) {
+    try {
+      const created = await this.prisma.productoImpuestoCatalogo.create({
+        data: {
+          tenantId: auth.tenantId,
+          codigo: payload.codigo.trim().toUpperCase(),
+          nombre: payload.nombre.trim(),
+          porcentaje: Number(payload.porcentaje),
+          detalleJson: this.toNullableJson(
+            payload.detalle && typeof payload.detalle === 'object' && !Array.isArray(payload.detalle)
+              ? payload.detalle
+              : undefined,
+          ),
+          activo: payload.activo,
+        },
+      });
+      return this.toImpuestoResponse(created);
+    } catch (error) {
+      this.handleWriteError(error);
+    }
+  }
+
+  async updateImpuesto(
+    auth: CurrentAuth,
+    id: string,
+    payload: UpsertProductoImpuestoDto,
+  ) {
+    await this.findImpuestoOrThrow(auth, id, this.prisma);
+    try {
+      const updated = await this.prisma.productoImpuestoCatalogo.update({
+        where: { id },
+        data: {
+          codigo: payload.codigo.trim().toUpperCase(),
+          nombre: payload.nombre.trim(),
+          porcentaje: Number(payload.porcentaje),
+          detalleJson: this.toNullableJson(
+            payload.detalle && typeof payload.detalle === 'object' && !Array.isArray(payload.detalle)
+              ? payload.detalle
+              : undefined,
+          ),
+          activo: payload.activo,
+        },
+      });
+      return this.toImpuestoResponse(updated);
+    } catch (error) {
+      this.handleWriteError(error);
+    }
+  }
+
   async updateFamilia(
     auth: CurrentAuth,
     id: string,
@@ -806,6 +888,59 @@ export class ProductosServiciosService {
       },
     });
     return this.findProducto(auth, productoId);
+  }
+
+  async updateProductoPrecio(
+    auth: CurrentAuth,
+    productoId: string,
+    payload: UpdateProductoPrecioDto,
+  ) {
+    const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+    const currentPrecio = this.getProductoPrecioConfig(producto.detalleJson);
+    const measurementUnit = payload.measurementUnit?.trim() || currentPrecio?.measurementUnit || null;
+    const impuestos = await this.resolveProductoPrecioImpuestos(
+      auth,
+      payload.impuestos ?? currentPrecio?.impuestos ?? null,
+    );
+    const detalle = this.normalizeProductoPrecioDetalle(payload.metodoCalculo, payload.detalle ?? null, false);
+    const nextDetalle = this.mergeProductoDetalle(producto.detalleJson, {
+      precio: {
+        metodoCalculo: payload.metodoCalculo,
+        measurementUnit,
+        impuestos,
+        detalle,
+      },
+    });
+
+    await this.prisma.productoServicio.update({
+      where: { id: producto.id },
+      data: {
+        detalleJson: this.toNullableJson(nextDetalle),
+      },
+    });
+
+    return this.findProducto(auth, producto.id);
+  }
+
+  async updateProductoPrecioEspecialClientes(
+    auth: CurrentAuth,
+    productoId: string,
+    payload: UpdateProductoPrecioEspecialClientesDto,
+  ) {
+    const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+    const items = await this.resolveProductoPrecioEspecialClientes(auth, payload.items ?? []);
+    const nextDetalle = this.mergeProductoDetalle(producto.detalleJson, {
+      precioEspecialClientes: items,
+    });
+
+    await this.prisma.productoServicio.update({
+      where: { id: producto.id },
+      data: {
+        detalleJson: this.toNullableJson(nextDetalle),
+      },
+    });
+
+    return this.findProducto(auth, producto.id);
   }
 
   async getProductoMotorConfig(auth: CurrentAuth, productoId: string) {
@@ -3439,6 +3574,25 @@ export class ProductosServiciosService {
     return item;
   }
 
+  private async findImpuestoOrThrow(
+    auth: CurrentAuth,
+    id: string,
+    tx: PrismaService | Prisma.TransactionClient,
+  ) {
+    const item = await tx.productoImpuestoCatalogo.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        id,
+      },
+    });
+
+    if (!item) {
+      throw new NotFoundException('Impuesto no encontrado.');
+    }
+
+    return item;
+  }
+
   private async findProductoOrThrow(
     auth: CurrentAuth,
     id: string,
@@ -4969,6 +5123,28 @@ export class ProductosServiciosService {
     };
   }
 
+  private toImpuestoResponse(item: {
+    id: string;
+    codigo: string;
+    nombre: string;
+    porcentaje: number;
+    detalleJson?: Prisma.JsonValue | null;
+    activo: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
+    return {
+      id: item.id,
+      codigo: item.codigo,
+      nombre: item.nombre,
+      porcentaje: Number(item.porcentaje),
+      detalle: this.parseImpuestoDetalle(item.detalleJson ?? null),
+      activo: item.activo,
+      createdAt: item.createdAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString(),
+    };
+  }
+
   private toFamiliaResponse(item: {
     id: string;
     codigo: string;
@@ -5029,7 +5205,7 @@ export class ProductosServiciosService {
     familiaProductoId: string;
     familiaProducto: { nombre: string };
     subfamiliaProductoId: string | null;
-    subfamiliaProducto?: { nombre: string } | null;
+    subfamiliaProducto?: { nombre: string; unidadComercial?: string | null } | null;
     procesoDefinicionDefault?: { nombre: string } | null;
     createdAt: Date;
     updatedAt: Date;
@@ -5051,6 +5227,9 @@ export class ProductosServiciosService {
       familiaProductoNombre: item.familiaProducto.nombre,
       subfamiliaProductoId: item.subfamiliaProductoId,
       subfamiliaProductoNombre: item.subfamiliaProducto?.nombre ?? '',
+      unidadComercial: item.subfamiliaProducto?.unidadComercial?.trim() || 'unidad',
+      precio: this.getProductoPrecioConfig(item.detalleJson),
+      precioEspecialClientes: this.getProductoPrecioEspecialClientes(item.detalleJson),
       dimensionesBaseConsumidas: this.getProductoDimensionesBaseConsumidas(item.detalleJson).map((dimension) =>
         this.fromDimensionOpcionProductiva(dimension),
       ),
@@ -5068,6 +5247,398 @@ export class ProductosServiciosService {
       ...current,
       ...patch,
     };
+  }
+
+  private getProductoPrecioConfig(
+    detalleJson: Prisma.JsonValue | Record<string, unknown> | null | undefined,
+  ): ProductoPrecioConfig | null {
+    const detalle = this.asObject(detalleJson);
+    const raw =
+      detalle.precio && typeof detalle.precio === 'object' && !Array.isArray(detalle.precio)
+        ? (detalle.precio as Record<string, unknown>)
+        : null;
+    if (!raw) {
+      return null;
+    }
+    const metodoCalculo = this.normalizeMetodoCalculoPrecioProducto(raw.metodoCalculo);
+    if (!metodoCalculo) {
+      return null;
+    }
+    const measurementUnit =
+      typeof raw.measurementUnit === 'string' && raw.measurementUnit.trim().length
+        ? raw.measurementUnit.trim()
+        : null;
+    const impuestos = this.normalizeProductoPrecioImpuestos(
+      raw.impuestos && typeof raw.impuestos === 'object' && !Array.isArray(raw.impuestos)
+        ? (raw.impuestos as Record<string, unknown>)
+        : null,
+    );
+    const detallePrecio = this.normalizeProductoPrecioDetalle(
+      metodoCalculo,
+      raw.detalle && typeof raw.detalle === 'object' && !Array.isArray(raw.detalle)
+        ? (raw.detalle as Record<string, unknown>)
+        : null,
+      true,
+    );
+    return { metodoCalculo, measurementUnit, impuestos, detalle: detallePrecio };
+  }
+
+  private getProductoPrecioEspecialClientes(
+    detalleJson: Prisma.JsonValue | Record<string, unknown> | null | undefined,
+  ): ProductoPrecioEspecialClienteConfig[] {
+    const detalle = this.asObject(detalleJson);
+    const rawItems = Array.isArray(detalle.precioEspecialClientes) ? detalle.precioEspecialClientes : [];
+    return rawItems
+      .map((item) => this.normalizeProductoPrecioEspecialClienteStored(item))
+      .filter((item): item is ProductoPrecioEspecialClienteConfig => Boolean(item));
+  }
+
+  private normalizeProductoPrecioImpuestos(value: Record<string, unknown> | null) {
+    const raw =
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? value
+        : {};
+    const esquemaId = typeof raw.esquemaId === 'string' && raw.esquemaId.trim().length ? raw.esquemaId : null;
+    const esquemaNombre = typeof raw.esquemaNombre === 'string' ? raw.esquemaNombre : '';
+    const items = Array.isArray(raw.items)
+      ? raw.items
+          .map((item) => {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) {
+              return null;
+            }
+            const row = item as Record<string, unknown>;
+            if (typeof row.nombre !== 'string') {
+              return null;
+            }
+            return {
+              nombre: row.nombre,
+              porcentaje: this.toSafeNumber(row.porcentaje, 0),
+            };
+          })
+          .filter(
+            (
+              item,
+            ): item is { impuestoId: string; codigo: string; nombre: string; porcentaje: number } => Boolean(item),
+          )
+      : [];
+    return {
+      esquemaId,
+      esquemaNombre,
+      items,
+      porcentajeTotal: items.length
+        ? Number(items.reduce((sum, item) => sum + item.porcentaje, 0).toFixed(4))
+        : 0,
+    };
+  }
+
+  private normalizeProductoPrecioEspecialClienteStored(value: unknown): ProductoPrecioEspecialClienteConfig | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null;
+    }
+    const raw = value as Record<string, unknown>;
+    if (
+      typeof raw.id !== 'string' ||
+      typeof raw.clienteId !== 'string' ||
+      typeof raw.clienteNombre !== 'string'
+    ) {
+      return null;
+    }
+    const metodoCalculo = this.normalizeMetodoCalculoPrecioProducto(raw.metodoCalculo);
+    if (!metodoCalculo) {
+      return null;
+    }
+    const measurementUnit =
+      typeof raw.measurementUnit === 'string' && raw.measurementUnit.trim().length
+        ? raw.measurementUnit.trim()
+        : null;
+    const detalle = this.normalizeProductoPrecioDetalle(
+      metodoCalculo,
+      raw.detalle && typeof raw.detalle === 'object' && !Array.isArray(raw.detalle)
+        ? (raw.detalle as Record<string, unknown>)
+        : null,
+      true,
+    );
+    return {
+      id: raw.id,
+      clienteId: raw.clienteId,
+      clienteNombre: raw.clienteNombre,
+      descripcion: typeof raw.descripcion === 'string' ? raw.descripcion : '',
+      activo: raw.activo !== false,
+      createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
+      updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date().toISOString(),
+      metodoCalculo,
+      measurementUnit,
+      impuestos: this.normalizeProductoPrecioImpuestos(null),
+      detalle,
+    };
+  }
+
+  private async resolveProductoPrecioEspecialClientes(
+    auth: CurrentAuth,
+    items: Record<string, unknown>[],
+  ): Promise<ProductoPrecioEspecialClienteConfig[]> {
+    const rows = Array.isArray(items) ? items : [];
+    const clienteIds = Array.from(
+      new Set(
+        rows
+          .map((item) =>
+            item && typeof item === 'object' && !Array.isArray(item) && typeof item.clienteId === 'string'
+              ? item.clienteId
+              : null,
+          )
+          .filter((item): item is string => Boolean(item)),
+      ),
+    );
+    const clientes = clienteIds.length
+      ? await this.prisma.cliente.findMany({
+          where: {
+            tenantId: auth.tenantId,
+            id: { in: clienteIds },
+          },
+          select: {
+            id: true,
+            nombre: true,
+          },
+        })
+      : [];
+    const clienteMap = new Map(clientes.map((item) => [item.id, item]));
+    const activosByCliente = new Set<string>();
+
+    return rows.map((item, index) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        throw new BadRequestException(`La regla especial #${index + 1} es inválida.`);
+      }
+      const raw = item as Record<string, unknown>;
+      const id = typeof raw.id === 'string' && raw.id.trim().length ? raw.id : randomUUID();
+      const clienteId = typeof raw.clienteId === 'string' ? raw.clienteId : '';
+      const cliente = clienteMap.get(clienteId);
+      if (!cliente) {
+        throw new BadRequestException(`La regla especial #${index + 1} referencia un cliente inexistente.`);
+      }
+      const activo = raw.activo !== false;
+      if (activo) {
+        if (activosByCliente.has(clienteId)) {
+          throw new BadRequestException('No puede haber más de un precio especial activo para el mismo cliente.');
+        }
+        activosByCliente.add(clienteId);
+      }
+      const metodoCalculo = this.normalizeMetodoCalculoPrecioProducto(raw.metodoCalculo);
+      if (!metodoCalculo) {
+        throw new BadRequestException(`La regla especial de "${cliente.nombre}" tiene un método inválido.`);
+      }
+      const measurementUnit =
+        typeof raw.measurementUnit === 'string' && raw.measurementUnit.trim().length
+          ? raw.measurementUnit.trim()
+          : null;
+      const detalle = this.normalizeProductoPrecioDetalle(
+        metodoCalculo,
+        raw.detalle && typeof raw.detalle === 'object' && !Array.isArray(raw.detalle)
+          ? (raw.detalle as Record<string, unknown>)
+          : null,
+        false,
+      );
+      const createdAt =
+        typeof raw.createdAt === 'string' && raw.createdAt.trim().length ? raw.createdAt : new Date().toISOString();
+      return {
+        id,
+        clienteId: cliente.id,
+        clienteNombre: cliente.nombre,
+        descripcion: typeof raw.descripcion === 'string' ? raw.descripcion.trim() : '',
+        activo,
+        createdAt,
+        updatedAt: new Date().toISOString(),
+        metodoCalculo,
+        measurementUnit,
+        impuestos: this.normalizeProductoPrecioImpuestos(null),
+        detalle,
+      };
+    });
+  }
+
+  private async resolveProductoPrecioImpuestos(auth: CurrentAuth, value: unknown) {
+    const normalized = this.normalizeProductoPrecioImpuestos(
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : null,
+    );
+    if (!normalized.esquemaId) {
+      return {
+        esquemaId: null,
+        esquemaNombre: '',
+        items: [],
+        porcentajeTotal: 0,
+      };
+    }
+    const row = await this.prisma.productoImpuestoCatalogo.findFirst({
+      where: { tenantId: auth.tenantId, id: normalized.esquemaId, activo: true },
+    });
+    if (!row) {
+      throw new BadRequestException('El esquema impositivo seleccionado es inválido o está inactivo.');
+    }
+    const detalle = this.parseImpuestoDetalle(row.detalleJson);
+    const items = detalle.items;
+    return {
+      esquemaId: row.id,
+      esquemaNombre: row.nombre,
+      items,
+      porcentajeTotal: Number(row.porcentaje),
+    };
+  }
+
+  private parseImpuestoDetalle(value: Prisma.JsonValue | null | undefined) {
+    const raw =
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : {};
+    const items = Array.isArray(raw.items)
+      ? raw.items
+          .map((item) => {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) {
+              return null;
+            }
+            const row = item as Record<string, unknown>;
+            if (typeof row.nombre !== 'string') {
+              return null;
+            }
+            return {
+              nombre: row.nombre,
+              porcentaje: this.toSafeNumber(row.porcentaje, 0),
+            };
+          })
+          .filter((item): item is { nombre: string; porcentaje: number } => Boolean(item))
+      : [];
+    return { items };
+  }
+
+  private normalizeMetodoCalculoPrecioProducto(value: unknown): MetodoCalculoPrecioProductoDto | null {
+    return value === MetodoCalculoPrecioProductoDto.margen_variable ||
+      value === MetodoCalculoPrecioProductoDto.por_margen ||
+      value === MetodoCalculoPrecioProductoDto.precio_fijo ||
+      value === MetodoCalculoPrecioProductoDto.fijado_por_cantidad ||
+      value === MetodoCalculoPrecioProductoDto.fijo_con_margen_variable ||
+      value === MetodoCalculoPrecioProductoDto.variable_por_cantidad ||
+      value === MetodoCalculoPrecioProductoDto.precio_fijo_para_margen_minimo
+      ? value
+      : null;
+  }
+
+  private normalizeProductoPrecioDetalle(
+    metodoCalculo: MetodoCalculoPrecioProductoDto,
+    value: Record<string, unknown> | null,
+    allowEmpty: boolean,
+  ) {
+    const detalle = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    if (metodoCalculo === MetodoCalculoPrecioProductoDto.por_margen) {
+      return {
+        marginPct: this.toSafeNumber(detalle.marginPct, 0),
+        minimumMarginPct: this.toSafeNumber(detalle.minimumMarginPct, 0),
+      };
+    }
+    if (metodoCalculo === MetodoCalculoPrecioProductoDto.precio_fijo) {
+      return {
+        price: this.toSafeNumber(detalle.price, 0),
+        minimumPrice: this.toSafeNumber(detalle.minimumPrice, 0),
+      };
+    }
+    if (metodoCalculo === MetodoCalculoPrecioProductoDto.precio_fijo_para_margen_minimo) {
+      return {
+        price: this.toSafeNumber(detalle.price, 0),
+        minimumPrice: this.toSafeNumber(detalle.minimumPrice, 0),
+        minimumMarginPct: this.toSafeNumber(detalle.minimumMarginPct, 0),
+      };
+    }
+    if (metodoCalculo === MetodoCalculoPrecioProductoDto.fijado_por_cantidad) {
+      return {
+        tiers: this.normalizeProductoPrecioTierRows(detalle.tiers, 'exact', allowEmpty),
+      };
+    }
+    if (metodoCalculo === MetodoCalculoPrecioProductoDto.fijo_con_margen_variable) {
+      return {
+        tiers: this.normalizeProductoPrecioTierRows(detalle.tiers, 'exact_margin', allowEmpty),
+      };
+    }
+    if (metodoCalculo === MetodoCalculoPrecioProductoDto.variable_por_cantidad) {
+      return {
+        tiers: this.normalizeProductoPrecioTierRows(detalle.tiers, 'until', allowEmpty),
+      };
+    }
+    return {
+      tiers: this.normalizeProductoPrecioTierRows(detalle.tiers, 'margin', allowEmpty),
+    };
+  }
+
+  private normalizeProductoPrecioTierRows(
+    value: unknown,
+    mode: 'exact' | 'exact_margin' | 'until' | 'margin',
+    allowEmpty: boolean,
+  ) {
+    type PrecioTierRow =
+      | { quantity: number; price: number }
+      | { quantity: number; marginPct: number }
+      | { quantityUntil: number; price: number }
+      | { quantityUntil: number; marginPct: number };
+    const rows = Array.isArray(value) ? value : [];
+    const normalized = rows
+      .map((item) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) {
+          return null;
+        }
+        const row = item as Record<string, unknown>;
+        if (mode === 'exact' || mode === 'exact_margin') {
+          const quantity = Math.trunc(this.toSafeNumber(row.quantity, NaN));
+          const valueKey = mode === 'exact_margin' ? 'marginPct' : 'price';
+          const amount = this.toSafeNumber(row[valueKey], NaN);
+          if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(amount) || amount < 0) {
+            return null;
+          }
+          return mode === 'exact_margin' ? { quantity, marginPct: amount } : { quantity, price: amount };
+        }
+        const quantityUntil = Math.trunc(this.toSafeNumber(row.quantityUntil, NaN));
+        const valueKey = mode === 'margin' ? 'marginPct' : 'price';
+        const amount = this.toSafeNumber(row[valueKey], NaN);
+        if (!Number.isFinite(quantityUntil) || quantityUntil <= 0 || !Number.isFinite(amount) || amount < 0) {
+          return null;
+        }
+        return mode === 'margin'
+          ? { quantityUntil, marginPct: amount }
+          : { quantityUntil, price: amount };
+      })
+      .filter((item): item is PrecioTierRow => item !== null)
+      .sort((a, b) => Number(('quantity' in a ? a.quantity : a.quantityUntil) ?? 0) - Number(('quantity' in b ? b.quantity : b.quantityUntil) ?? 0));
+
+    const seen = new Set<number>();
+    for (const row of normalized) {
+      const key = Number(('quantity' in row ? row.quantity : row.quantityUntil) ?? 0);
+      if (seen.has(key)) {
+        throw new BadRequestException('La configuración de precio contiene cantidades duplicadas.');
+      }
+      seen.add(key);
+    }
+    if (normalized.length === 0) {
+      if (allowEmpty) {
+        if (mode === 'exact') {
+          return [{ quantity: 1, price: 0 }];
+        }
+        if (mode === 'exact_margin') {
+          return [{ quantity: 1, marginPct: 0 }];
+        }
+        if (mode === 'until') {
+          return [{ quantityUntil: 1, price: 0 }];
+        }
+        return [{ quantityUntil: 1, marginPct: 0 }];
+      }
+      if (mode === 'exact') {
+        throw new BadRequestException('Debes definir al menos una cantidad para precio fijado por cantidad.');
+      }
+      if (mode === 'exact_margin') {
+        throw new BadRequestException('Debes definir al menos una cantidad para fijo con margen variable.');
+      }
+      if (mode === 'until') {
+        throw new BadRequestException('Debes definir al menos un rango para precio variable por cantidad.');
+      }
+      throw new BadRequestException('Debes definir al menos un rango para margen variable.');
+    }
+    return normalized;
   }
 
   private getProductoDimensionesBaseConsumidas(
@@ -5491,6 +6062,53 @@ export class ProductosServiciosService {
           },
         });
       }
+    });
+  }
+
+  private async ensureCatalogoInicialImpuestos(auth: CurrentAuth) {
+    const rows = await this.prisma.productoImpuestoCatalogo.findMany({
+      where: { tenantId: auth.tenantId },
+    });
+    const hasProfiles = rows.some((item) => item.codigo === 'SERVICIOS' || item.codigo === 'PRODUCTO');
+    if (hasProfiles) {
+      return;
+    }
+    if (rows.length > 0) {
+      await this.prisma.productoImpuestoCatalogo.deleteMany({
+        where: { tenantId: auth.tenantId },
+      });
+    }
+    await this.prisma.productoImpuestoCatalogo.createMany({
+      data: [
+        {
+          tenantId: auth.tenantId,
+          codigo: 'SERVICIOS',
+          nombre: 'Prestación de servicios',
+          porcentaje: 25.7,
+          detalleJson: {
+            items: [
+              { nombre: 'IVA', porcentaje: 21 },
+              { nombre: 'IIBB', porcentaje: 3.5 },
+              { nombre: 'Cred/Deb', porcentaje: 1.2 },
+            ],
+          },
+          activo: true,
+        },
+        {
+          tenantId: auth.tenantId,
+          codigo: 'PRODUCTO',
+          nombre: 'Venta de producto',
+          porcentaje: 22.7,
+          detalleJson: {
+            items: [
+              { nombre: 'IVA', porcentaje: 21 },
+              { nombre: 'IIBB', porcentaje: 1.2 },
+              { nombre: 'Cred/Deb', porcentaje: 0.5 },
+            ],
+          },
+          activo: true,
+        },
+      ],
     });
   }
 

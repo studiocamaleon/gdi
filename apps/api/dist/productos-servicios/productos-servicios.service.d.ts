@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
-import { AssignProductoVariantesRutaMasivaDto, AssignProductoAdicionalDto, AssignProductoMotorDto, AssignVarianteRutaDto, DimensionOpcionProductivaDto, CarasProductoVarianteDto, ReglaCostoAdicionalEfectoDto, MetodoCostoProductoAdicionalDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, TipoProductoAdicionalEfectoDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, TipoConsumoAdicionalMaterialDto, TipoProductoAdicionalDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, UpsertProductoAdicionalDto, UpsertProductoChecklistDto, PreviewImposicionProductoVarianteDto, ReglaCostoChecklistDto, TipoChecklistPreguntaDto, TipoChecklistAccionReglaDto, UpdateProductoRutaPolicyDto, EstadoProductoServicioDto, TipoImpresionProductoVarianteDto, TipoProductoServicioDto, ValorOpcionProductivaDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
+import { AssignProductoVariantesRutaMasivaDto, AssignProductoAdicionalDto, AssignProductoMotorDto, AssignVarianteRutaDto, DimensionOpcionProductivaDto, CarasProductoVarianteDto, ReglaCostoAdicionalEfectoDto, MetodoCostoProductoAdicionalDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, TipoProductoAdicionalEfectoDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, TipoConsumoAdicionalMaterialDto, TipoProductoAdicionalDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, UpsertProductoAdicionalDto, UpsertProductoChecklistDto, PreviewImposicionProductoVarianteDto, MetodoCalculoPrecioProductoDto, ReglaCostoChecklistDto, TipoChecklistPreguntaDto, TipoChecklistAccionReglaDto, UpdateProductoPrecioDto, UpdateProductoPrecioEspecialClientesDto, UpdateProductoRutaPolicyDto, EstadoProductoServicioDto, TipoImpresionProductoVarianteDto, TipoProductoServicioDto, ValorOpcionProductivaDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoImpuestoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
 type ServicioPricingNivel = {
     id: string;
     nombre: string;
@@ -16,6 +16,29 @@ type ServicioPricingRegla = {
 type ServicioPricingConfig = {
     niveles: ServicioPricingNivel[];
     reglas: ServicioPricingRegla[];
+};
+type ProductoPrecioConfig = {
+    metodoCalculo: MetodoCalculoPrecioProductoDto;
+    measurementUnit: string | null;
+    impuestos: {
+        esquemaId: string | null;
+        esquemaNombre: string;
+        items: Array<{
+            nombre: string;
+            porcentaje: number;
+        }>;
+        porcentajeTotal: number;
+    };
+    detalle: Record<string, unknown>;
+};
+type ProductoPrecioEspecialClienteConfig = ProductoPrecioConfig & {
+    id: string;
+    clienteId: string;
+    clienteNombre: string;
+    descripcion: string;
+    activo: boolean;
+    createdAt: string;
+    updatedAt: string;
 };
 type RouteEffectInsertionMode = 'append' | 'before_step' | 'after_step';
 type RouteEffectInsertionConfig = {
@@ -304,6 +327,51 @@ export declare class ProductosServiciosService {
         createdAt: string;
         updatedAt: string;
     }>;
+    findImpuestos(auth: CurrentAuth): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        porcentaje: number;
+        detalle: {
+            items: {
+                nombre: string;
+                porcentaje: number;
+            }[];
+        };
+        activo: boolean;
+        createdAt: string;
+        updatedAt: string;
+    }[]>;
+    createImpuesto(auth: CurrentAuth, payload: UpsertProductoImpuestoDto): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        porcentaje: number;
+        detalle: {
+            items: {
+                nombre: string;
+                porcentaje: number;
+            }[];
+        };
+        activo: boolean;
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    updateImpuesto(auth: CurrentAuth, id: string, payload: UpsertProductoImpuestoDto): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        porcentaje: number;
+        detalle: {
+            items: {
+                nombre: string;
+                porcentaje: number;
+            }[];
+        };
+        activo: boolean;
+        createdAt: string;
+        updatedAt: string;
+    }>;
     updateFamilia(auth: CurrentAuth, id: string, payload: UpsertFamiliaProductoDto): Promise<{
         id: string;
         codigo: string;
@@ -364,6 +432,9 @@ export declare class ProductosServiciosService {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        unidadComercial: string;
+        precio: ProductoPrecioConfig | null;
+        precioEspecialClientes: ProductoPrecioEspecialClienteConfig[];
         dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
@@ -405,6 +476,9 @@ export declare class ProductosServiciosService {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        unidadComercial: string;
+        precio: ProductoPrecioConfig | null;
+        precioEspecialClientes: ProductoPrecioEspecialClienteConfig[];
         dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
@@ -446,6 +520,9 @@ export declare class ProductosServiciosService {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        unidadComercial: string;
+        precio: ProductoPrecioConfig | null;
+        precioEspecialClientes: ProductoPrecioEspecialClienteConfig[];
         dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
@@ -487,6 +564,9 @@ export declare class ProductosServiciosService {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        unidadComercial: string;
+        precio: ProductoPrecioConfig | null;
+        precioEspecialClientes: ProductoPrecioEspecialClienteConfig[];
         dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
@@ -528,6 +608,97 @@ export declare class ProductosServiciosService {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        unidadComercial: string;
+        precio: ProductoPrecioConfig | null;
+        precioEspecialClientes: ProductoPrecioEspecialClienteConfig[];
+        dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    updateProductoPrecio(auth: CurrentAuth, productoId: string, payload: UpdateProductoPrecioDto): Promise<{
+        matchingBasePorVariante: {
+            varianteId: string;
+            matching: {
+                tipoImpresion: any;
+                caras: any;
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
+        pasosFijosPorVariante: {
+            varianteId: string;
+            pasos: {
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
+        id: string;
+        tipo: TipoProductoServicioDto;
+        codigo: string;
+        nombre: string;
+        descripcion: string;
+        motorCodigo: string;
+        motorVersion: number;
+        usarRutaComunVariantes: boolean;
+        procesoDefinicionDefaultId: string | null;
+        procesoDefinicionDefaultNombre: string;
+        estado: EstadoProductoServicioDto;
+        activo: boolean;
+        familiaProductoId: string;
+        familiaProductoNombre: string;
+        subfamiliaProductoId: string | null;
+        subfamiliaProductoNombre: string;
+        unidadComercial: string;
+        precio: ProductoPrecioConfig | null;
+        precioEspecialClientes: ProductoPrecioEspecialClienteConfig[];
+        dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    updateProductoPrecioEspecialClientes(auth: CurrentAuth, productoId: string, payload: UpdateProductoPrecioEspecialClientesDto): Promise<{
+        matchingBasePorVariante: {
+            varianteId: string;
+            matching: {
+                tipoImpresion: any;
+                caras: any;
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
+        pasosFijosPorVariante: {
+            varianteId: string;
+            pasos: {
+                pasoPlantillaId: any;
+                pasoPlantillaNombre: string;
+                perfilOperativoId: any;
+                perfilOperativoNombre: string;
+            }[];
+        }[];
+        id: string;
+        tipo: TipoProductoServicioDto;
+        codigo: string;
+        nombre: string;
+        descripcion: string;
+        motorCodigo: string;
+        motorVersion: number;
+        usarRutaComunVariantes: boolean;
+        procesoDefinicionDefaultId: string | null;
+        procesoDefinicionDefaultNombre: string;
+        estado: EstadoProductoServicioDto;
+        activo: boolean;
+        familiaProductoId: string;
+        familiaProductoNombre: string;
+        subfamiliaProductoId: string | null;
+        subfamiliaProductoNombre: string;
+        unidadComercial: string;
+        precio: ProductoPrecioConfig | null;
+        precioEspecialClientes: ProductoPrecioEspecialClienteConfig[];
         dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
@@ -536,7 +707,7 @@ export declare class ProductosServiciosService {
         productoId: string;
         motorCodigo: "impresion_digital_laser";
         motorVersion: 1;
-        parametros: string | number | boolean | {
+        parametros: string | number | boolean | Prisma.JsonObject | Prisma.JsonArray | {
             tipoCorte: string;
             demasiaCorteMm: number;
             lineaCorteMm: number;
@@ -547,7 +718,7 @@ export declare class ProductosServiciosService {
                 altoMm: number;
             };
             mermaAdicionalPct: number;
-        } | Prisma.JsonObject | Prisma.JsonArray;
+        };
         versionConfig: number;
         activo: boolean;
         updatedAt: string | null;
@@ -598,6 +769,9 @@ export declare class ProductosServiciosService {
         familiaProductoNombre: string;
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
+        unidadComercial: string;
+        precio: ProductoPrecioConfig | null;
+        precioEspecialClientes: ProductoPrecioEspecialClienteConfig[];
         dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
@@ -1361,6 +1535,7 @@ export declare class ProductosServiciosService {
     private validateProductoRelations;
     private findFamiliaOrThrow;
     private findSubfamiliaOrThrow;
+    private findImpuestoOrThrow;
     private findProductoOrThrow;
     private findVarianteOrThrow;
     private findPapelVarianteOrThrow;
@@ -1394,10 +1569,21 @@ export declare class ProductosServiciosService {
     private validateAndNormalizePasosFijosRutaBase;
     private toVarianteOpcionesProductivasResponse;
     private toAdicionalCatalogoResponse;
+    private toImpuestoResponse;
     private toFamiliaResponse;
     private toSubfamiliaResponse;
     private toProductoResponseBase;
     private mergeProductoDetalle;
+    private getProductoPrecioConfig;
+    private getProductoPrecioEspecialClientes;
+    private normalizeProductoPrecioImpuestos;
+    private normalizeProductoPrecioEspecialClienteStored;
+    private resolveProductoPrecioEspecialClientes;
+    private resolveProductoPrecioImpuestos;
+    private parseImpuestoDetalle;
+    private normalizeMetodoCalculoPrecioProducto;
+    private normalizeProductoPrecioDetalle;
+    private normalizeProductoPrecioTierRows;
     private getProductoDimensionesBaseConsumidas;
     private getProductoMatchingBaseByVariante;
     private getProductoPasosFijosByVariante;
@@ -1411,6 +1597,7 @@ export declare class ProductosServiciosService {
     private generateProductoCodigo;
     private generateAdicionalCodigo;
     private ensureCatalogoInicialImprentaDigital;
+    private ensureCatalogoInicialImpuestos;
     private resolveMotorOrThrow;
     private getDefaultMotorConfig;
     private mergeMotorConfig;

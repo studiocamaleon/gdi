@@ -72,6 +72,15 @@ export declare enum ReglaCostoChecklistDto {
     por_pliego = "por_pliego",
     porcentaje_sobre_total = "porcentaje_sobre_total"
 }
+export declare enum MetodoCalculoPrecioProductoDto {
+    margen_variable = "margen_variable",
+    por_margen = "por_margen",
+    precio_fijo = "precio_fijo",
+    fijado_por_cantidad = "fijado_por_cantidad",
+    fijo_con_margen_variable = "fijo_con_margen_variable",
+    variable_por_cantidad = "variable_por_cantidad",
+    precio_fijo_para_margen_minimo = "precio_fijo_para_margen_minimo"
+}
 export declare class UpsertVarianteOpcionProductivaDimensionDto {
     dimension: DimensionOpcionProductivaDto;
     valores: ValorOpcionProductivaDto[];
@@ -174,6 +183,13 @@ export declare class UpsertFamiliaProductoDto {
     nombre: string;
     activo: boolean;
 }
+export declare class UpsertProductoImpuestoDto {
+    codigo: string;
+    nombre: string;
+    porcentaje: number;
+    detalle?: Record<string, unknown>;
+    activo: boolean;
+}
 export declare class UpsertSubfamiliaProductoDto {
     familiaProductoId: string;
     codigo: string;
@@ -248,6 +264,15 @@ export declare class AssignProductoVariantesRutaMasivaDto {
 export declare class AssignProductoMotorDto {
     motorCodigo: string;
     motorVersion: number;
+}
+export declare class UpdateProductoPrecioDto {
+    metodoCalculo: MetodoCalculoPrecioProductoDto;
+    measurementUnit?: string | null;
+    detalle?: Record<string, unknown>;
+    impuestos?: Record<string, unknown>;
+}
+export declare class UpdateProductoPrecioEspecialClientesDto {
+    items: Record<string, unknown>[];
 }
 export declare class UpsertProductoMotorConfigDto {
     parametros: Record<string, unknown>;
