@@ -20,6 +20,11 @@ export type SimulacionComercialResultado = {
   cargosTotalesMonto: number | null;
   margenRealMonto: number | null;
   margenRealPct: number | null;
+  valorComercial: number | null;
+  beneficioMonto: number | null;
+  beneficioPct: number | null;
+  vmcMonto: number | null;
+  icmPct: number | null;
   descripcion: string | null;
 };
 
@@ -78,6 +83,11 @@ function buildNoCalculable(
     cargosTotalesMonto: null,
     margenRealMonto: null,
     margenRealPct: null,
+    valorComercial: null,
+    beneficioMonto: null,
+    beneficioPct: null,
+    vmcMonto: null,
+    icmPct: null,
     descripcion: null,
   };
 }
@@ -101,6 +111,11 @@ function buildFromFinalPrice(
     margenObjetivoPct != null ? roundMoney(precioFinal * (margenObjetivoPct / 100)) : null;
   const margenRealMonto = roundMoney(baseObjetivo - costoTotal);
   const margenRealPct = precioFinal > 0 ? roundMoney((margenRealMonto / precioFinal) * 100) : 0;
+  const valorComercial = roundMoney(precioFinal);
+  const beneficioMonto = margenRealMonto;
+  const beneficioPct = margenRealPct;
+  const vmcMonto = roundMoney(precioFinal - costoTotal);
+  const icmPct = precioFinal > 0 ? roundMoney((vmcMonto / precioFinal) * 100) : 0;
 
   return {
     status: "disponible",
@@ -120,6 +135,11 @@ function buildFromFinalPrice(
     cargosTotalesMonto,
     margenRealMonto,
     margenRealPct,
+    valorComercial,
+    beneficioMonto,
+    beneficioPct,
+    vmcMonto,
+    icmPct,
     descripcion,
   };
 }
@@ -148,6 +168,11 @@ export function simularPrecioComercial({
       cargosTotalesMonto: null,
       margenRealMonto: null,
       margenRealPct: null,
+      valorComercial: null,
+      beneficioMonto: null,
+      beneficioPct: null,
+      vmcMonto: null,
+      icmPct: null,
       descripcion: null,
     };
   }

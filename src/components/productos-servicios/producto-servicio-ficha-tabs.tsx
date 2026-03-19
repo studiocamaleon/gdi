@@ -289,17 +289,80 @@ function buildDefaultPrecioComisiones() {
   };
 }
 
+function clonePrecioDetalle(
+  metodoCalculo: MetodoCalculoPrecioProducto,
+  detalle: ProductoPrecioConfig["detalle"],
+): ProductoPrecioConfig["detalle"] {
+  if (metodoCalculo === "por_margen") {
+    const current = detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "por_margen" }>["detalle"];
+    return {
+      marginPct: current.marginPct,
+      minimumMarginPct: current.minimumMarginPct,
+    };
+  }
+  if (metodoCalculo === "precio_fijo") {
+    const current = detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo" }>["detalle"];
+    return {
+      price: current.price,
+      minimumPrice: current.minimumPrice,
+    };
+  }
+  if (metodoCalculo === "precio_fijo_para_margen_minimo") {
+    const current = detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo_para_margen_minimo" }>["detalle"];
+    return {
+      price: current.price,
+      minimumPrice: current.minimumPrice,
+      minimumMarginPct: current.minimumMarginPct,
+    };
+  }
+  if (metodoCalculo === "fijado_por_cantidad") {
+    const current = detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>["detalle"];
+    return {
+      tiers: current.tiers.map((tier) => ({ ...tier })),
+    };
+  }
+  if (metodoCalculo === "fijo_con_margen_variable") {
+    const current = detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>["detalle"];
+    return {
+      tiers: current.tiers.map((tier) => ({ ...tier })),
+    };
+  }
+  if (metodoCalculo === "variable_por_cantidad") {
+    const current = detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>["detalle"];
+    return {
+      tiers: current.tiers.map((tier) => ({ ...tier })),
+    };
+  }
+  const current = detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>["detalle"];
+  return {
+    tiers: current.tiers.map((tier) => ({ ...tier })),
+  };
+}
+
 function buildPrecioConfigDraft(
   precio: ProductoPrecioConfig | null | undefined,
   measurementUnitFallback: string,
 ): ProductoPrecioConfig {
   const metodoCalculo = precio?.metodoCalculo ?? "margen_variable";
+  const detalle = precio?.detalle ?? buildDefaultPrecioDetalle(metodoCalculo);
   return {
     metodoCalculo,
     measurementUnit: precio?.measurementUnit ?? measurementUnitFallback,
-    impuestos: precio?.impuestos ?? buildDefaultPrecioImpuestos(),
-    comisiones: precio?.comisiones ?? buildDefaultPrecioComisiones(),
-    detalle: precio?.detalle ?? buildDefaultPrecioDetalle(metodoCalculo),
+    impuestos: precio?.impuestos
+      ? {
+          esquemaId: precio.impuestos.esquemaId,
+          esquemaNombre: precio.impuestos.esquemaNombre,
+          items: precio.impuestos.items.map((item) => ({ ...item })),
+          porcentajeTotal: precio.impuestos.porcentajeTotal,
+        }
+      : buildDefaultPrecioImpuestos(),
+    comisiones: precio?.comisiones
+      ? {
+          items: precio.comisiones.items.map((item) => ({ ...item })),
+          porcentajeTotal: precio.comisiones.porcentajeTotal,
+        }
+      : buildDefaultPrecioComisiones(),
+    detalle: clonePrecioDetalle(metodoCalculo, detalle),
   } as ProductoPrecioConfig;
 }
 
@@ -1144,9 +1207,24 @@ export function ProductoServicioFichaTabs({
   const [svgZoom, setSvgZoom] = React.useState({ active: false, x: 50, y: 50 });
 
   React.useEffect(() => {
-    setProductoState(producto);
     setProductoChecklist(checklist);
     setCotizacionChecklistRespuestas({});
+  }, [checklist]);
+
+  React.useEffect(() => {
+    const sameProduct = producto.id === productoState.id;
+    const incomingUpdatedAt = Date.parse(producto.updatedAt ?? "");
+    const currentUpdatedAt = Date.parse(productoState.updatedAt ?? "");
+    if (
+      sameProduct &&
+      Number.isFinite(incomingUpdatedAt) &&
+      Number.isFinite(currentUpdatedAt) &&
+      incomingUpdatedAt <= currentUpdatedAt
+    ) {
+      return;
+    }
+
+    setProductoState(producto);
     setDimensionesBaseConsumidasDraft(buildDimensionesBaseConsumidasDraft(producto));
     setRutaBaseMatchingDraft(buildRutaBaseMatchingDraft(producto, initialVariantes));
     setRutaBasePasosFijosDraft(buildRutaBasePasosFijosDraft(producto, initialVariantes));
@@ -1164,7 +1242,7 @@ export function ProductoServicioFichaTabs({
     setPrecioForm(nextPrecio);
     setPrecioEditorDraft(nextPrecio);
     setPrecioEspecialClientesForm(producto.precioEspecialClientes ?? []);
-  }, [producto, checklist]);
+  }, [producto, initialVariantes, productoState.id, productoState.updatedAt]);
 
   React.useEffect(() => {
     if (!selectedVariante) {
@@ -1651,16 +1729,23 @@ export function ProductoServicioFichaTabs({
 
   const handleChangeMetodoCalculoPrecio = (metodoCalculo: MetodoCalculoPrecioProducto) => {
     const nextMeasurementUnit =
-      precioForm.measurementUnit ?? productoState.unidadComercial?.trim() ?? "unidad";
+      precioEditorDraft.measurementUnit ?? productoState.unidadComercial?.trim() ?? "unidad";
     const next = {
       ...buildPrecioConfigForMethod(
         metodoCalculo,
         nextMeasurementUnit,
       ),
-      impuestos: precioForm.impuestos,
-      comisiones: precioForm.comisiones,
+      impuestos: {
+        esquemaId: precioEditorDraft.impuestos.esquemaId,
+        esquemaNombre: precioEditorDraft.impuestos.esquemaNombre,
+        items: precioEditorDraft.impuestos.items.map((item) => ({ ...item })),
+        porcentajeTotal: precioEditorDraft.impuestos.porcentajeTotal,
+      },
+      comisiones: {
+        items: precioEditorDraft.comisiones.items.map((item) => ({ ...item })),
+        porcentajeTotal: precioEditorDraft.comisiones.porcentajeTotal,
+      },
     } as ProductoPrecioConfig;
-    setPrecioForm(next);
     setPrecioEditorDraft(next);
   };
 
@@ -1793,18 +1878,19 @@ export function ProductoServicioFichaTabs({
   };
 
   const handleOpenPrecioEditor = () => {
-    setPrecioEditorDraft(precioForm);
+    setPrecioEditorDraft(buildPrecioConfigDraft(precioForm, productoState.unidadComercial?.trim() || "unidad"));
     setPrecioEditorOpen(true);
   };
 
   const handleCancelPrecioEditor = () => {
-    setPrecioEditorDraft(precioForm);
+    setPrecioEditorDraft(buildPrecioConfigDraft(precioForm, productoState.unidadComercial?.trim() || "unidad"));
     setPrecioEditorOpen(false);
   };
 
   const handleSavePrecioFromEditor = () => {
-    setPrecioForm(precioEditorDraft);
-    handleSavePrecio(precioEditorDraft, true);
+    const nextPrecio = buildPrecioConfigDraft(precioEditorDraft, productoState.unidadComercial?.trim() || "unidad");
+    setPrecioForm(nextPrecio);
+    handleSavePrecio(nextPrecio, true);
   };
 
   const handleOpenPrecioEspecialClienteEditor = (item?: ProductoPrecioEspecialCliente) => {
@@ -1918,7 +2004,7 @@ export function ProductoServicioFichaTabs({
         return {
           ...draft,
           detalle: {
-            tiers: [...draft.detalle.tiers, { quantity: 1, price: 0 }].sort((a, b) => a.quantity - b.quantity),
+            tiers: [...draft.detalle.tiers, { quantity: 1, price: 0 }],
           },
         };
       }
@@ -1929,7 +2015,7 @@ export function ProductoServicioFichaTabs({
         return {
           ...draft,
           detalle: {
-            tiers: [...draft.detalle.tiers, { quantity: 1, marginPct: 0 }].sort((a, b) => a.quantity - b.quantity),
+            tiers: [...draft.detalle.tiers, { quantity: 1, marginPct: 0 }],
           },
         };
       }
@@ -1940,9 +2026,7 @@ export function ProductoServicioFichaTabs({
         return {
           ...draft,
           detalle: {
-            tiers: [...draft.detalle.tiers, { quantityUntil: 1, price: 0 }].sort(
-              (a, b) => a.quantityUntil - b.quantityUntil,
-            ),
+            tiers: [...draft.detalle.tiers, { quantityUntil: 1, price: 0 }],
           },
         };
       }
@@ -1953,9 +2037,7 @@ export function ProductoServicioFichaTabs({
         return {
           ...draft,
           detalle: {
-            tiers: [...draft.detalle.tiers, { quantityUntil: 1, marginPct: 0 }].sort(
-              (a, b) => a.quantityUntil - b.quantityUntil,
-            ),
+            tiers: [...draft.detalle.tiers, { quantityUntil: 1, marginPct: 0 }],
           },
         };
       }
@@ -2009,26 +2091,22 @@ export function ProductoServicioFichaTabs({
     updatePrecioEditorDraft((current) => {
       if (current.metodoCalculo === "fijado_por_cantidad") {
         const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>;
-        const tiers = [...draft.detalle.tiers, { quantity: 1, price: 0 }].sort((a, b) => a.quantity - b.quantity);
+        const tiers = [...draft.detalle.tiers, { quantity: 1, price: 0 }];
         return { ...draft, detalle: { tiers } };
       }
       if (current.metodoCalculo === "fijo_con_margen_variable") {
         const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>;
-        const tiers = [...draft.detalle.tiers, { quantity: 1, marginPct: 0 }].sort((a, b) => a.quantity - b.quantity);
+        const tiers = [...draft.detalle.tiers, { quantity: 1, marginPct: 0 }];
         return { ...draft, detalle: { tiers } };
       }
       if (current.metodoCalculo === "variable_por_cantidad") {
         const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>;
-        const tiers = [...draft.detalle.tiers, { quantityUntil: 1, price: 0 }].sort(
-          (a, b) => a.quantityUntil - b.quantityUntil,
-        );
+        const tiers = [...draft.detalle.tiers, { quantityUntil: 1, price: 0 }];
         return { ...draft, detalle: { tiers } };
       }
       if (current.metodoCalculo === "margen_variable") {
         const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>;
-        const tiers = [...draft.detalle.tiers, { quantityUntil: 1, marginPct: 0 }].sort(
-          (a, b) => a.quantityUntil - b.quantityUntil,
-        );
+        const tiers = [...draft.detalle.tiers, { quantityUntil: 1, marginPct: 0 }];
         return { ...draft, detalle: { tiers } };
       }
       return current;
@@ -4265,7 +4343,101 @@ export function ProductoServicioFichaTabs({
               </div>
 
               {simulacionComercial.status === "disponible" ? (
-                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="space-y-4">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                    <div className="rounded-lg border bg-muted/20 p-4 text-center">
+                      <p className="text-3xl font-semibold">
+                        {simulacionComercial.valorComercial != null
+                          ? formatCurrency(simulacionComercial.valorComercial)
+                          : "-"}
+                      </p>
+                      <div className="mt-1 flex items-center justify-center gap-1 text-sm text-muted-foreground">
+                        <span>Valor comercial</span>
+                        <Tooltip>
+                          <TooltipTrigger className="inline-flex items-center text-muted-foreground">
+                            <InfoIcon className="size-3.5" />
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs text-xs">
+                            Es el precio final que vería el cliente.
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </div>
+                    <div className="rounded-lg border bg-muted/20 p-4 text-center">
+                      <p className="text-3xl font-semibold">
+                        {simulacionComercial.vmcMonto != null
+                          ? formatCurrency(simulacionComercial.vmcMonto)
+                          : "-"}
+                      </p>
+                      <div className="mt-1 flex items-center justify-center gap-1 text-sm text-muted-foreground">
+                        <span>VMC</span>
+                        <Tooltip>
+                          <TooltipTrigger className="inline-flex items-center text-muted-foreground">
+                            <InfoIcon className="size-3.5" />
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs text-xs">
+                            Es la plata que queda de la venta después de cubrir el costo de producción.
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </div>
+                    <div className="rounded-lg border bg-muted/20 p-4 text-center">
+                      <p className="text-3xl font-semibold">
+                        {simulacionComercial.icmPct != null
+                          ? `${formatNumber(simulacionComercial.icmPct)}%`
+                          : "-"}
+                      </p>
+                      <div className="mt-1 flex items-center justify-center gap-1 text-sm text-muted-foreground">
+                        <span>ICM</span>
+                        <Tooltip>
+                          <TooltipTrigger className="inline-flex items-center text-muted-foreground">
+                            <InfoIcon className="size-3.5" />
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs text-xs">
+                            Muestra qué parte de la venta queda disponible después de cubrir el costo de producción.
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </div>
+                    <div className="rounded-lg border bg-muted/20 p-4 text-center">
+                      <p className="text-3xl font-semibold">
+                        {simulacionComercial.beneficioMonto != null
+                          ? formatCurrency(simulacionComercial.beneficioMonto)
+                          : "-"}
+                      </p>
+                      <div className="mt-1 flex items-center justify-center gap-1 text-sm text-muted-foreground">
+                        <span>Beneficio</span>
+                        <Tooltip>
+                          <TooltipTrigger className="inline-flex items-center text-muted-foreground">
+                            <InfoIcon className="size-3.5" />
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs text-xs">
+                            Es la plata que queda después de cubrir costo, impuestos y comisiones.
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </div>
+                    <div className="rounded-lg border bg-muted/20 p-4 text-center">
+                      <p className="text-3xl font-semibold">
+                        {simulacionComercial.beneficioPct != null
+                          ? `${formatNumber(simulacionComercial.beneficioPct)}%`
+                          : "-"}
+                      </p>
+                      <div className="mt-1 flex items-center justify-center gap-1 text-sm text-muted-foreground">
+                        <span>Beneficio</span>
+                        <Tooltip>
+                          <TooltipTrigger className="inline-flex items-center text-muted-foreground">
+                            <InfoIcon className="size-3.5" />
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs text-xs">
+                            Es el porcentaje del precio de venta que realmente te queda.
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
                   <div className="overflow-hidden rounded-lg border">
                     <Table>
                       <TableHeader className="bg-muted/50">
@@ -4364,6 +4536,7 @@ export function ProductoServicioFichaTabs({
                       </div>
                     </div>
                   </div>
+                </div>
                 </div>
               ) : (
                 <div className="rounded-lg border border-dashed p-8 text-center">
@@ -4946,11 +5119,9 @@ export function ProductoServicioFichaTabs({
                                   return {
                                     ...draft,
                                     detalle: {
-                                      tiers: draft.detalle.tiers
-                                        .map((item, rowIndex) =>
-                                          rowIndex === index ? { ...item, quantity: Number(e.target.value || 1) } : item,
-                                        )
-                                        .sort((a, b) => a.quantity - b.quantity),
+                                      tiers: draft.detalle.tiers.map((item, rowIndex) =>
+                                        rowIndex === index ? { ...item, quantity: Number(e.target.value || 1) } : item,
+                                      ),
                                     },
                                   };
                                 })
@@ -5024,11 +5195,9 @@ export function ProductoServicioFichaTabs({
                                   return {
                                     ...draft,
                                     detalle: {
-                                      tiers: draft.detalle.tiers
-                                        .map((item, rowIndex) =>
-                                          rowIndex === index ? { ...item, quantity: Number(e.target.value || 1) } : item,
-                                        )
-                                        .sort((a, b) => a.quantity - b.quantity),
+                                      tiers: draft.detalle.tiers.map((item, rowIndex) =>
+                                        rowIndex === index ? { ...item, quantity: Number(e.target.value || 1) } : item,
+                                      ),
                                     },
                                   };
                                 })
@@ -5106,13 +5275,11 @@ export function ProductoServicioFichaTabs({
                                   return {
                                     ...draft,
                                     detalle: {
-                                      tiers: draft.detalle.tiers
-                                        .map((item, rowIndex) =>
-                                          rowIndex === index
-                                            ? { ...item, quantityUntil: Number(e.target.value || 1) }
-                                            : item,
-                                        )
-                                        .sort((a, b) => a.quantityUntil - b.quantityUntil),
+                                      tiers: draft.detalle.tiers.map((item, rowIndex) =>
+                                        rowIndex === index
+                                          ? { ...item, quantityUntil: Number(e.target.value || 1) }
+                                          : item,
+                                      ),
                                     },
                                   };
                                 })
@@ -5190,13 +5357,11 @@ export function ProductoServicioFichaTabs({
                                   return {
                                     ...draft,
                                     detalle: {
-                                      tiers: draft.detalle.tiers
-                                        .map((item, rowIndex) =>
-                                          rowIndex === index
-                                            ? { ...item, quantityUntil: Number(e.target.value || 1) }
-                                            : item,
-                                        )
-                                        .sort((a, b) => a.quantityUntil - b.quantityUntil),
+                                      tiers: draft.detalle.tiers.map((item, rowIndex) =>
+                                        rowIndex === index
+                                          ? { ...item, quantityUntil: Number(e.target.value || 1) }
+                                          : item,
+                                      ),
                                     },
                                   };
                                 })
@@ -5400,7 +5565,7 @@ export function ProductoServicioFichaTabs({
                       {(precioEspecialClienteEditorDraft.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>["detalle"]).tiers.map((tier, index) => (
                         <TableRow key={`especial-precio-${index}`}>
                           <TableCell>
-                            <Input type="number" min="1" step="1" value={tier.quantity} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, quantity: Number(e.target.value || 1) } : item).sort((a, b) => a.quantity - b.quantity) } }))} />
+                            <Input type="number" min="1" step="1" value={tier.quantity} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, quantity: Number(e.target.value || 1) } : item) } }))} />
                           </TableCell>
                           <TableCell>
                             <Input type="number" min="0" step="0.01" value={tier.price} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, price: Number(e.target.value || 0) } : item) } }))} />
@@ -5437,7 +5602,7 @@ export function ProductoServicioFichaTabs({
                       {(precioEspecialClienteEditorDraft.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>["detalle"]).tiers.map((tier, index) => (
                         <TableRow key={`especial-margen-fijo-${index}`}>
                           <TableCell>
-                            <Input type="number" min="1" step="1" value={tier.quantity} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, quantity: Number(e.target.value || 1) } : item).sort((a, b) => a.quantity - b.quantity) } }))} />
+                            <Input type="number" min="1" step="1" value={tier.quantity} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, quantity: Number(e.target.value || 1) } : item) } }))} />
                           </TableCell>
                           <TableCell>
                             <Input type="number" min="0" step="0.01" value={tier.marginPct} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, marginPct: Number(e.target.value || 0) } : item) } }))} />
@@ -5476,7 +5641,7 @@ export function ProductoServicioFichaTabs({
                         <TableRow key={`especial-rango-precio-${index}`}>
                           <TableCell className="text-sm text-muted-foreground">{getVariableRangeLabel(index, tier.quantityUntil)}</TableCell>
                           <TableCell>
-                            <Input type="number" min="1" step="1" value={tier.quantityUntil} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, quantityUntil: Number(e.target.value || 1) } : item).sort((a, b) => a.quantityUntil - b.quantityUntil) } }))} />
+                            <Input type="number" min="1" step="1" value={tier.quantityUntil} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, quantityUntil: Number(e.target.value || 1) } : item) } }))} />
                           </TableCell>
                           <TableCell>
                             <Input type="number" min="0" step="0.01" value={tier.price} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, price: Number(e.target.value || 0) } : item) } }))} />
@@ -5515,7 +5680,7 @@ export function ProductoServicioFichaTabs({
                         <TableRow key={`especial-rango-margen-${index}`}>
                           <TableCell className="text-sm text-muted-foreground">{getVariableRangeLabel(index, tier.quantityUntil)}</TableCell>
                           <TableCell>
-                            <Input type="number" min="1" step="1" value={tier.quantityUntil} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, quantityUntil: Number(e.target.value || 1) } : item).sort((a, b) => a.quantityUntil - b.quantityUntil) } }))} />
+                            <Input type="number" min="1" step="1" value={tier.quantityUntil} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, quantityUntil: Number(e.target.value || 1) } : item) } }))} />
                           </TableCell>
                           <TableCell>
                             <Input type="number" min="0" step="0.01" value={tier.marginPct} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, marginPct: Number(e.target.value || 0) } : item) } }))} />
