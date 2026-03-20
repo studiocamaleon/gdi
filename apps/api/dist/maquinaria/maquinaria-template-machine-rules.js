@@ -21,7 +21,7 @@ const RULES = {
         requiredMachineKeys: ['altoBocaMm'],
     },
     [upsert_maquina_dto_1.PlantillaMaquinariaDto.laminadora_bopp_rollo]: {
-        requiredMachineKeys: ['anchoRolloMm', 'velocidadMMin', 'mermaArranqueMm', 'mermaCierreMm'],
+        requiredMachineKeys: ['anchoRolloMm', 'velocidadMmSeg', 'mermaArranqueMm', 'mermaCierreMm'],
     },
     [upsert_maquina_dto_1.PlantillaMaquinariaDto.redondeadora_puntas]: {
         requiredMachineKeys: ['golpesMinNominal', 'maxEspesorPilaMm'],

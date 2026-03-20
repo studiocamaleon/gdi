@@ -43,6 +43,12 @@ const carasPerfilOptions = [
   option("doble_faz", "Doble faz"),
 ];
 
+const laminadoModeOptions = [
+  option("una_cara", "Una cara"),
+  option("dos_caras_simultaneo", "Dos caras simultaneo"),
+  option("dos_caras_dos_pasadas", "Dos caras en dos pasadas"),
+];
+
 const guillotinaPaperPresetOptions = [
   option("obra_90", "Obra 90 g"),
   option("ilustracion_150", "Ilustración 150 g"),
@@ -2361,6 +2367,13 @@ function buildLaminadoraBoppSections(): MaquinariaTemplateSection[] {
           description: "Ancho util del rollo BOPP.",
           placeholder: "330",
         }),
+        field({
+          key: "soportaDobleRollo",
+          label: "Soporta doble rollo",
+          scope: "maquina",
+          kind: "boolean",
+          description: "Indica si la maquina puede laminar ambas caras al mismo tiempo con dos rollos.",
+        }),
       ],
     }),
     section({
@@ -2369,13 +2382,21 @@ function buildLaminadoraBoppSections(): MaquinariaTemplateSection[] {
       description: "Velocidad y mermas base de laminado.",
       fields: [
         field({
-          key: "velocidadMMin",
-          label: "Velocidad (m/min)",
+          key: "velocidadMmSeg",
+          label: "Velocidad (mm/seg)",
           scope: "maquina",
           kind: "number",
           required: true,
-          description: "Velocidad lineal nominal del laminado.",
-          placeholder: "20",
+          description: "Velocidad lineal nominal del equipo segun ficha tecnica.",
+          placeholder: "333",
+        }),
+        field({
+          key: "velocidadDobleRolloMmSeg",
+          label: "Velocidad doble rollo (mm/seg)",
+          scope: "maquina",
+          kind: "number",
+          description: "Velocidad lineal cuando la maquina lamina ambas caras al mismo tiempo. Si no se completa, se usa la velocidad normal.",
+          placeholder: "280",
         }),
         field({
           key: "mermaArranqueMm",
@@ -2402,7 +2423,7 @@ function buildLaminadoraBoppSections(): MaquinariaTemplateSection[] {
     section({
       id: "perfiles_operativos",
       title: "Perfiles operativos",
-      description: "Perfiles de laminado por material y tolerancias.",
+      description: "Perfiles operativos simples para laminado.",
       fields: [
         field({
           key: "nombre",
@@ -2412,6 +2433,31 @@ function buildLaminadoraBoppSections(): MaquinariaTemplateSection[] {
           required: true,
           description: "Nombre del perfil operativo.",
           placeholder: "BOPP brillo estandar",
+        }),
+        field({
+          key: "modoLaminado",
+          label: "Modo de laminado",
+          scope: "perfil_operativo",
+          kind: "select",
+          required: true,
+          description: "Define si el perfil lamina una cara, ambas en simultaneo o ambas en dos pasadas.",
+          options: laminadoModeOptions,
+        }),
+        field({
+          key: "velocidadTrabajoMmSeg",
+          label: "Velocidad trabajo (mm/seg)",
+          scope: "perfil_operativo",
+          kind: "number",
+          description: "Velocidad real de trabajo para este perfil. Si no se completa, se usa la velocidad nominal de la maquina.",
+          placeholder: "300",
+        }),
+        field({
+          key: "velocidadDobleRolloTrabajoMmSeg",
+          label: "Velocidad doble rollo (mm/seg)",
+          scope: "perfil_operativo",
+          kind: "number",
+          description: "Velocidad real cuando este perfil trabaja con doble rollo. Si no se completa, se usa la velocidad de doble rollo de la maquina o la normal.",
+          placeholder: "250",
         }),
         field({
           key: "gapEntreHojasMm",
@@ -2424,33 +2470,6 @@ function buildLaminadoraBoppSections(): MaquinariaTemplateSection[] {
           placeholder: "6",
         }),
         field({
-          key: "margenLatIzqMm",
-          label: "Margen lateral izq (mm)",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "mm",
-          description: "Desperdicio lateral izquierdo.",
-          placeholder: "4",
-        }),
-        field({
-          key: "margenLatDerMm",
-          label: "Margen lateral der (mm)",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "mm",
-          description: "Desperdicio lateral derecho.",
-          placeholder: "4",
-        }),
-        field({
-          key: "colaCorteMm",
-          label: "Cola de corte (mm)",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "mm",
-          description: "Reserva longitudinal adicional para corte final.",
-          placeholder: "2",
-        }),
-        field({
           key: "warmupMin",
           label: "Warmup (min)",
           scope: "perfil_operativo",
@@ -2458,14 +2477,6 @@ function buildLaminadoraBoppSections(): MaquinariaTemplateSection[] {
           unit: "min",
           description: "Tiempo de calentamiento adicional.",
           placeholder: "4",
-        }),
-        field({
-          key: "factorVelocidad",
-          label: "Factor velocidad",
-          scope: "perfil_operativo",
-          kind: "number",
-          description: "Ajuste multiplicador sobre velocidad nominal (1 = normal).",
-          placeholder: "1",
         }),
       ],
     }),
@@ -2749,9 +2760,10 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     sections: buildLaminadoraBoppSections(),
     help: {
       summary:
-        "Usa esta plantilla para laminado térmico/BOPP donde existen mermas longitudinales y laterales del film.",
+        "Usa esta plantilla para laminado térmico/BOPP en rollo, contemplando mermas longitudinales y trabajo a una o dos caras.",
       tips: [
-        "Configura gap y márgenes laterales para costear consumo real del film.",
+        "Define si la maquina soporta doble rollo y, si aplica, carga una velocidad especifica para ese modo.",
+        "Usa perfiles distintos para una cara, dos caras simultaneo o dos caras en dos pasadas.",
         "Carga warmup cuando la máquina requiere estabilización térmica.",
       ],
       examples: ["Laminadora BOPP para tarjetas y folletería en hoja"],

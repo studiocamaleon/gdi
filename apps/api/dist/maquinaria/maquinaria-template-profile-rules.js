@@ -141,14 +141,13 @@ const RULES = {
     }),
     [upsert_maquina_dto_1.PlantillaMaquinariaDto.laminadora_bopp_rollo]: buildRule({
         profileFieldKeys: [
+            'modoLaminado',
+            'velocidadTrabajoMmSeg',
+            'velocidadDobleRolloTrabajoMmSeg',
             'gapEntreHojasMm',
-            'margenLatIzqMm',
-            'margenLatDerMm',
-            'colaCorteMm',
-            'factorVelocidad',
             'warmupMin',
         ],
-        requiredFieldKeys: ['nombre', 'gapEntreHojasMm'],
+        requiredFieldKeys: ['nombre', 'modoLaminado', 'gapEntreHojasMm'],
     }),
     [upsert_maquina_dto_1.PlantillaMaquinariaDto.redondeadora_puntas]: buildRule({
         profileFieldKeys: [

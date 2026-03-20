@@ -860,10 +860,399 @@ function getMaterialTipoLabel(tipo: unknown) {
   const raw = String(tipo ?? "").trim().toUpperCase();
   if (raw === "PAPEL") return "Papel";
   if (raw === "TONER") return "Tóner";
+  if (raw === "FILM") return "Film";
   if (raw === "DESGASTE") return "Desgaste";
   if (raw === "CONSUMIBLE_FILM") return "Consumibles de terminación";
   if (raw === "ADDITIONAL_MATERIAL_EFFECT") return "Material adicional";
   return raw || "-";
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function formatPdfCurrency(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return "-";
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatPdfNumber(value: number | null | undefined, maximumFractionDigits = 2) {
+  if (value == null || !Number.isFinite(value)) return "-";
+  return new Intl.NumberFormat("es-AR", {
+    maximumFractionDigits,
+  }).format(value);
+}
+
+type LaminadoTraceView = {
+  key: string;
+  codigo: string;
+  nombre: string;
+  modoLaminado: string;
+  pasadasLaminado: number;
+  filmFactor: number;
+  pliegosTotales: number;
+  hojasTotales: number;
+  orientacionEntrada: string;
+  pliegoOriginalAnchoMm: number;
+  pliegoOriginalAltoMm: number;
+  anchoRolloMm: number;
+  anchoHojaMm: number;
+  altoHojaMm: number;
+  gapEntreHojasMm: number;
+  mermaArranqueMm: number;
+  mermaCierreMm: number;
+  pasoLinealMm: number;
+  largoConsumidoMm: number;
+  velocidadMmSegEfectiva: number;
+};
+
+type ImposicionPreviewView = {
+  hojaW: number;
+  hojaH: number;
+  piezaW: number;
+  piezaH: number;
+  printableW: number;
+  printableH: number;
+  utilW: number;
+  utilH: number;
+  effectiveW: number;
+  effectiveH: number;
+  orientacion: "normal" | "rotada";
+  cols: number;
+  rows: number;
+  cortesGuillotina: number;
+  piezasPorPliego: number;
+  pliegosPorSustrato: number | null;
+  orientacionSustrato: "normal" | "rotada" | null;
+  sustratoAnchoMm: number | null;
+  sustratoAltoMm: number | null;
+  margins: {
+    leftMm: number;
+    rightMm: number;
+    topMm: number;
+    bottomMm: number;
+  };
+};
+
+function buildImposicionPdfSvgMarkup(
+  previewImposicion: ImposicionPreviewView,
+  lineaCorteMm: number,
+) {
+  const canvasW = 800;
+  const canvasH = 520;
+  const pad = 30;
+  const scale = Math.min(
+    (canvasW - pad * 2) / previewImposicion.hojaW,
+    (canvasH - pad * 2) / previewImposicion.hojaH,
+  );
+  const sheetW = previewImposicion.hojaW * scale;
+  const sheetH = previewImposicion.hojaH * scale;
+  const ox = (canvasW - sheetW) / 2;
+  const oy = (canvasH - sheetH) / 2;
+  const marginLeft = previewImposicion.margins.leftMm * scale;
+  const marginRight = previewImposicion.margins.rightMm * scale;
+  const marginTop = previewImposicion.margins.topMm * scale;
+  const marginBottom = previewImposicion.margins.bottomMm * scale;
+  const printableX = ox + marginLeft;
+  const printableY = oy + marginTop;
+  const printableW = Math.max(0, sheetW - marginLeft - marginRight);
+  const printableH = Math.max(0, sheetH - marginTop - marginBottom);
+  const lineCut = previewImposicion.piezaW > 0 ? lineaCorteMm * scale : 0;
+  const utilX = printableX + lineCut;
+  const utilY = printableY + lineCut;
+  const utilW = Math.max(0, printableW - lineCut * 2);
+  const utilH = Math.max(0, printableH - lineCut * 2);
+  const effectivePieceW =
+    (previewImposicion.orientacion === "rotada"
+      ? previewImposicion.effectiveH
+      : previewImposicion.effectiveW) * scale;
+  const effectivePieceH =
+    (previewImposicion.orientacion === "rotada"
+      ? previewImposicion.effectiveW
+      : previewImposicion.effectiveH) * scale;
+  const gridW = previewImposicion.cols * effectivePieceW;
+  const gridH = previewImposicion.rows * effectivePieceH;
+  const centeredGridX = utilX + Math.max(0, (utilW - gridW) / 2);
+  const centeredGridY = utilY + Math.max(0, (utilH - gridH) / 2);
+
+  let cells = "";
+  for (let r = 0; r < previewImposicion.rows; r += 1) {
+    for (let c = 0; c < previewImposicion.cols; c += 1) {
+      const x = centeredGridX + c * effectivePieceW;
+      const y = centeredGridY + r * effectivePieceH;
+      cells += `<rect x="${x}" y="${y}" width="${effectivePieceW}" height="${effectivePieceH}" fill="#dcfce7" stroke="#16a34a" stroke-width="0.8" />`;
+    }
+  }
+
+  return `
+    <svg viewBox="0 0 800 520" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+      <rect x="${ox}" y="${oy}" width="${sheetW}" height="${sheetH}" fill="#fecaca" stroke="#7f1d1d" stroke-width="1.6" />
+      <rect x="${printableX}" y="${printableY}" width="${printableW}" height="${printableH}" fill="#fff" stroke="#b91c1c" stroke-width="0.9" />
+      <rect x="${utilX}" y="${utilY}" width="${utilW}" height="${utilH}" fill="#ecfccb" fill-opacity="0.4" />
+      ${cells}
+    </svg>
+  `;
+}
+
+function buildFilmPdfSvgMarkup(trace: LaminadoTraceView) {
+  const totalPliegos = Math.max(1, trace.pliegosTotales || trace.hojasTotales || 1);
+  const total = trace.largoConsumidoMm;
+  const startPct = total > 0 ? (trace.mermaArranqueMm / total) * 100 : 0;
+  const endPct = total > 0 ? (trace.mermaCierreMm / total) * 100 : 0;
+  const maxExplicitPliegos = 10;
+  const headCount = totalPliegos > maxExplicitPliegos ? 5 : totalPliegos;
+  const tailCount = totalPliegos > maxExplicitPliegos ? 5 : 0;
+  const omittedPliegos = Math.max(0, totalPliegos - headCount - tailCount);
+  const trackTop = 20;
+  const trackLeft = 80;
+  const trackWidth = 120;
+  const bodyContentPadding = 16;
+  const minSheetHeight = totalPliegos <= maxExplicitPliegos ? 12 : 28;
+  const minGapHeight = trace.gapEntreHojasMm > 0 ? (totalPliegos <= maxExplicitPliegos ? 2 : 8) : 0;
+  const explicitCount = headCount + tailCount;
+  const explicitGapCount = Math.max(0, explicitCount - 1 + (omittedPliegos > 0 ? 2 : 0));
+  const requiredBodyContentHeight =
+    explicitCount * minSheetHeight +
+    explicitGapCount * minGapHeight +
+    (omittedPliegos > 0 ? 44 : 0);
+  const baseTrackHeight = 700;
+  const baseStartHeight = Math.max(10, (startPct / 100) * baseTrackHeight);
+  const baseEndHeight = Math.max(10, (endPct / 100) * baseTrackHeight);
+  const baseBodyHeight = Math.max(180, baseTrackHeight - baseStartHeight - baseEndHeight);
+  const baseBodyContentHeight = Math.max(120, baseBodyHeight - bodyContentPadding * 2);
+  const trackHeight =
+    totalPliegos <= maxExplicitPliegos && baseBodyContentHeight < requiredBodyContentHeight
+      ? baseTrackHeight + (requiredBodyContentHeight - baseBodyContentHeight) + 12
+      : baseTrackHeight;
+  const startHeight = Math.max(10, (startPct / 100) * trackHeight);
+  const endHeight = Math.max(10, (endPct / 100) * trackHeight);
+  const bodyTop = trackTop + startHeight;
+  const bodyHeight = Math.max(180, trackHeight - startHeight - endHeight);
+  const bodyContentTop = bodyTop + bodyContentPadding;
+  const bodyContentHeight = Math.max(requiredBodyContentHeight, bodyHeight - bodyContentPadding * 2);
+  const explicitBlocksMm =
+    (headCount + tailCount) * trace.altoHojaMm +
+    Math.max(0, headCount + tailCount - 1) * trace.gapEntreHojasMm;
+  const omittedBlockMm =
+    omittedPliegos > 0
+      ? omittedPliegos * trace.altoHojaMm + Math.max(0, omittedPliegos - 1) * trace.gapEntreHojasMm
+      : 0;
+  const totalDisplayedBodyMm = Math.max(1, explicitBlocksMm + omittedBlockMm);
+  const pxPerBodyMm = bodyContentHeight / totalDisplayedBodyMm;
+  const explicitSheetHeight = Math.max(minSheetHeight, trace.altoHojaMm * pxPerBodyMm);
+  const explicitGapHeight =
+    trace.gapEntreHojasMm > 0 ? Math.max(minGapHeight, trace.gapEntreHojasMm * pxPerBodyMm) : 0;
+  const omittedHeight =
+    omittedPliegos > 0
+      ? Math.max(
+          44,
+          bodyContentHeight -
+            (headCount + tailCount) * explicitSheetHeight -
+            Math.max(0, headCount + tailCount - 1) * explicitGapHeight,
+        )
+      : 0;
+  const clipId = `film-pdf-${trace.key.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+  const blockEntries: Array<
+    | { kind: "pliego"; label: string; y: number; height: number }
+    | { kind: "resumen"; label: string; y: number; height: number }
+    | { kind: "gap"; y: number; height: number }
+  > = [];
+  let cursor = bodyContentTop;
+  const pushPliego = (label: string) => {
+    blockEntries.push({ kind: "pliego", label, y: cursor, height: explicitSheetHeight });
+    cursor += explicitSheetHeight;
+  };
+  const pushGap = () => {
+    if (explicitGapHeight > 0) {
+      blockEntries.push({ kind: "gap", y: cursor, height: explicitGapHeight });
+      cursor += explicitGapHeight;
+    }
+  };
+  for (let index = 0; index < headCount; index += 1) {
+    pushPliego(`P${index + 1}`);
+    if (index < headCount - 1 || omittedPliegos > 0 || tailCount > 0) pushGap();
+  }
+  if (omittedPliegos > 0) {
+    blockEntries.push({
+      kind: "resumen",
+      label: `+ ${omittedPliegos} pliegos`,
+      y: cursor,
+      height: omittedHeight,
+    });
+    cursor += omittedHeight;
+    if (tailCount > 0) pushGap();
+  }
+  for (let index = 0; index < tailCount; index += 1) {
+    pushPliego(`P${totalPliegos - tailCount + index + 1}`);
+    if (index < tailCount - 1) pushGap();
+  }
+  const viewBoxHeight = trackTop + trackHeight + 60;
+  const legendY = 28;
+
+  return `
+    <svg viewBox="0 0 280 ${viewBoxHeight}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;max-width:240px;">
+      <defs>
+        <clipPath id="${clipId}">
+          <rect x="96" y="${bodyContentTop}" width="88" height="${bodyContentHeight}" rx="0" />
+        </clipPath>
+      </defs>
+      <rect x="${trackLeft}" y="${trackTop}" width="${trackWidth}" height="${trackHeight}" rx="26" fill="#f5efe8" stroke="#d6c4b2" />
+      <rect x="${trackLeft}" y="${trackTop}" width="${trackWidth}" height="${startHeight}" fill="#f4d7c8" />
+      <rect x="${trackLeft}" y="${trackTop + trackHeight - endHeight}" width="${trackWidth}" height="${endHeight}" fill="#f4d7c8" />
+      <rect x="96" y="${bodyContentTop}" width="88" height="${bodyContentHeight}" fill="#fcf7f0" stroke="#dcc6b0" stroke-dasharray="4 3" />
+      <line x1="${trackLeft}" y1="${bodyTop}" x2="${trackLeft + trackWidth}" y2="${bodyTop}" stroke="#c89e7b" stroke-width="2" />
+      <line x1="${trackLeft}" y1="${bodyTop + bodyHeight}" x2="${trackLeft + trackWidth}" y2="${bodyTop + bodyHeight}" stroke="#c89e7b" stroke-width="2" />
+      <g clip-path="url(#${clipId})">
+        ${blockEntries
+          .map((block) => {
+            if (block.kind === "pliego") {
+              return `
+                <rect x="96" y="${block.y}" width="88" height="${block.height}" fill="#fef8ee" stroke="#c9aa8a" />
+                <text x="140" y="${block.y + block.height / 2 + 5}" text-anchor="middle" font-size="14" fill="#6d4a2d">${block.label}</text>
+              `;
+            }
+            if (block.kind === "resumen") {
+              return `
+                <rect x="101" y="${block.y}" width="78" height="${block.height}" fill="#f1e0cf" stroke="#d0b49a" stroke-dasharray="6 4" />
+                <text x="140" y="${block.y + block.height / 2 - 4}" text-anchor="middle" font-size="14" fill="#7b4b2a">...</text>
+                <text x="140" y="${block.y + block.height / 2 + 14}" text-anchor="middle" font-size="11" fill="#7b4b2a">${block.label}</text>
+              `;
+            }
+            return `
+              <rect x="110" y="${block.y}" width="60" height="${block.height}" fill="#f97316" opacity="0.12" />
+              <line x1="108" y1="${block.y + block.height / 2}" x2="172" y2="${block.y + block.height / 2}" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="3 2" />
+            `;
+          })
+          .join("")}
+      </g>
+      <g transform="translate(24, ${legendY})">
+        <rect x="0" y="0" width="22" height="12" fill="#f4d7c8" />
+        <text x="30" y="10" font-size="10" fill="#6b7280">Merma</text>
+        <line x1="0" y1="24" x2="22" y2="24" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="3 2" />
+        <text x="30" y="28" font-size="10" fill="#6b7280">Gap</text>
+        <rect x="0" y="40" width="22" height="12" fill="#fcf7f0" stroke="#dcc6b0" />
+        <text x="30" y="50" font-size="10" fill="#6b7280">Tramo útil</text>
+      </g>
+    </svg>
+  `;
+}
+
+async function svgMarkupToPngDataUrl(svgMarkup: string, width: number, height: number) {
+  return await new Promise<string>((resolve, reject) => {
+    const blob = new Blob([svgMarkup], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const image = new Image();
+
+    image.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        if (!context) {
+          URL.revokeObjectURL(url);
+          reject(new Error("No se pudo preparar el canvas del PDF."));
+          return;
+        }
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, width, height);
+        context.drawImage(image, 0, 0, width, height);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL("image/png"));
+      } catch (error) {
+        URL.revokeObjectURL(url);
+        reject(error);
+      }
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("No se pudo rasterizar el SVG para el PDF."));
+    };
+
+    image.src = url;
+  });
+}
+
+async function imageUrlToDataUrl(url: string) {
+  return await new Promise<string>((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = image.naturalWidth || image.width;
+        canvas.height = image.naturalHeight || image.height;
+        const context = canvas.getContext("2d");
+        if (!context) {
+          reject(new Error("No se pudo preparar el logo para el PDF."));
+          return;
+        }
+        context.drawImage(image, 0, 0);
+        resolve(canvas.toDataURL("image/png"));
+      } catch (error) {
+        reject(error);
+      }
+    };
+    image.onerror = () => reject(new Error("No se pudo cargar el logo del PDF."));
+    image.src = url;
+  });
+}
+
+function asPositiveNumber(value: unknown) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function getLaminadoTraceView(
+  proceso: CotizacionProductoVariante["bloques"]["procesos"][number],
+): LaminadoTraceView | null {
+  const detalle = (proceso.detalleTecnico ?? null) as Record<string, unknown> | null;
+  if (!detalle || String(detalle.tipo ?? "") !== "laminadora_bopp_rollo") {
+    return null;
+  }
+
+  const largoConsumidoMm = asPositiveNumber(detalle.largoConsumidoMm);
+  const anchoRolloMm = asPositiveNumber(detalle.anchoRolloMm ?? detalle.anchoConsumidoMm);
+  const anchoHojaMm = asPositiveNumber(detalle.anchoHojaMm);
+  const altoHojaMm = asPositiveNumber(detalle.altoHojaMm);
+  const pasoLinealMm = asPositiveNumber(detalle.pasoLinealMm);
+
+  if (!largoConsumidoMm || !anchoRolloMm || !anchoHojaMm || !altoHojaMm || !pasoLinealMm) {
+    return null;
+  }
+
+  return {
+    key: `${proceso.codigo}-${proceso.nombre}`,
+    codigo: proceso.codigo,
+    nombre: proceso.nombre,
+    modoLaminado: String(detalle.modoLaminado ?? "una_cara"),
+    pasadasLaminado: Number(detalle.pasadasLaminado ?? 1) || 1,
+    filmFactor: Number(detalle.filmFactor ?? 1) || 1,
+    pliegosTotales: Number(detalle.pliegosTotales ?? 0) || 0,
+    hojasTotales: Number(detalle.hojasTotales ?? 0) || 0,
+    orientacionEntrada: String(detalle.orientacionEntrada ?? "normal"),
+    pliegoOriginalAnchoMm: Number(detalle.pliegoOriginalAnchoMm ?? anchoHojaMm) || anchoHojaMm,
+    pliegoOriginalAltoMm: Number(detalle.pliegoOriginalAltoMm ?? altoHojaMm) || altoHojaMm,
+    anchoRolloMm,
+    anchoHojaMm,
+    altoHojaMm,
+    gapEntreHojasMm: Number(detalle.gapEntreHojasMm ?? 0) || 0,
+    mermaArranqueMm: Number(detalle.mermaArranqueMm ?? 0) || 0,
+    mermaCierreMm: Number(detalle.mermaCierreMm ?? 0) || 0,
+    pasoLinealMm,
+    largoConsumidoMm,
+    velocidadMmSegEfectiva: Number(detalle.velocidadMmSegEfectiva ?? 0) || 0,
+  };
 }
 
 function formatDetalleTecnico(detalle: Record<string, unknown> | null | undefined) {
@@ -1535,7 +1924,7 @@ export function ProductoServicioFichaTabs({
     const rotCols = Math.max(0, Math.floor(utilW / effectiveH));
     const rotRows = Math.max(0, Math.floor(utilH / effectiveW));
     const rotada = rotCols * rotRows;
-    const orientacion =
+    const orientacion: "normal" | "rotada" =
       String(serverImposicion?.orientacion ?? "") === "rotada" || (rotada > normal && !serverImposicion)
         ? "rotada"
         : "normal";
@@ -2754,6 +3143,11 @@ export function ProductoServicioFichaTabs({
   }, [materialesCotizados]);
   const [materialesOpen, setMaterialesOpen] = React.useState<Record<string, boolean>>({});
   const [materialesMermaOpen, setMaterialesMermaOpen] = React.useState<Record<string, boolean>>({});
+  const [filmTraceSheetOpen, setFilmTraceSheetOpen] = React.useState(false);
+  const filmTraceViews = React.useMemo(
+    () => procesosCotizados.map((item) => getLaminadoTraceView(item)).filter((item): item is LaminadoTraceView => Boolean(item)),
+    [procesosCotizados],
+  );
   const totalCentroCostos = procesosCotizados.reduce((acc, item) => {
     const costo = Number(item.costo ?? 0);
     return Number.isFinite(costo) ? acc + costo : acc;
@@ -2772,6 +3166,308 @@ export function ProductoServicioFichaTabs({
       }),
     [precioForm, cotizacion, totalCostoGeneral, cotizacionCantidad],
   );
+  const handleDescargarPdfCotizacion = React.useCallback(async () => {
+    if (!cotizacion || !selectedVariante) return;
+
+    try {
+      const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+      ]);
+
+      const doc = new jsPDF({ unit: "mm", format: "a4" });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 14;
+      const contentWidth = pageWidth - margin * 2;
+      let cursorY = margin;
+      const docWithTable = doc as typeof doc & { lastAutoTable?: { finalY: number } };
+
+      const ensureSpace = (heightNeeded: number) => {
+        if (cursorY + heightNeeded > pageHeight - margin) {
+          doc.addPage();
+          cursorY = margin;
+        }
+      };
+
+      const addSectionTitle = (title: string, subtitle?: string) => {
+        ensureSpace(subtitle ? 18 : 10);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(15);
+        doc.text(title, margin, cursorY);
+        cursorY += 6;
+        if (subtitle) {
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(10);
+          doc.setTextColor(90, 90, 90);
+          doc.text(subtitle, margin, cursorY);
+          doc.setTextColor(20, 20, 20);
+          cursorY += 6;
+        }
+        cursorY += 2;
+      };
+
+      const runTable = (options: Record<string, unknown>) => {
+        autoTable(doc, {
+          startY: cursorY,
+          margin: { left: margin, right: margin },
+          theme: "grid",
+          styles: { fontSize: 9, cellPadding: 2.4, textColor: [31, 41, 55] },
+          headStyles: { fillColor: [248, 250, 252], textColor: [31, 41, 55], fontStyle: "bold" },
+          bodyStyles: { valign: "middle" },
+          ...options,
+        });
+        cursorY = (docWithTable.lastAutoTable?.finalY ?? cursorY) + 6;
+      };
+
+      try {
+        const logoDataUrl = await imageUrlToDataUrl(new URL("/brand/logo-saas.png", window.location.origin).toString());
+        const logoW = 34;
+        const logoH = 18;
+        doc.addImage(logoDataUrl, "PNG", margin, cursorY, logoW, logoH);
+      } catch {
+        // Si falla el logo, seguimos igual con el PDF.
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("Cotización técnica y comercial", margin + 40, cursorY + 7);
+      cursorY += 22;
+
+      runTable({
+        body: [
+          ["Producto", productoState.nombre, "Variante", selectedVariante.nombre],
+          ["Cantidad", String(cotizacion.cantidad), "Período tarifa", cotizacion.periodo],
+        ],
+        columnStyles: {
+          0: { cellWidth: 28, fontStyle: "bold", fillColor: [248, 250, 252] },
+          1: { cellWidth: 63 },
+          2: { cellWidth: 32, fontStyle: "bold", fillColor: [248, 250, 252] },
+          3: { cellWidth: "auto" },
+        },
+      });
+
+      addSectionTitle("Desglose de costos");
+
+      runTable({
+        head: [["#", "Paso", "Centro", "Origen", "Minutos", "Tarifa/h", "Costo"]],
+        body: [
+          ...procesosCotizados.map((item) => [
+            String(item.orden ?? ""),
+            item.nombre,
+            item.centroCostoNombre,
+            formatOrigenProcesoLabel(item.origen, null),
+            formatNumber(item.totalMin),
+            formatCurrency(item.tarifaHora),
+            formatCurrency(item.costo),
+          ]),
+          ["", "", "", "", "", "Total centro de costos", formatCurrency(totalCentroCostos)],
+        ],
+        columnStyles: {
+          0: { cellWidth: 10, halign: "right" },
+          4: { halign: "right" },
+          5: { halign: "right" },
+          6: { halign: "right", fontStyle: "bold" },
+        },
+      });
+
+      for (const grupo of materialesAgrupados) {
+        ensureSpace(14);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.text(grupo.label, margin, cursorY);
+        cursorY += 3;
+        runTable({
+          head: [["Componente", "Origen", "Cantidad", "Costo unitario", "Costo"]],
+          body: [
+            ...grupo.items.map((item) => {
+              const nombre = String(item.nombre ?? "Componente");
+              const canal = item.canal ? ` (${String(item.canal).toUpperCase()})` : "";
+              const sku = item.sku ? ` · ${String(item.sku)}` : "";
+              return [
+                `${nombre}${canal}${sku}`,
+                formatOrigenProcesoLabel(item.origen, null),
+                formatNumber(Number(item.cantidad ?? 0)),
+                formatNumber(Number(item.costoUnitario ?? 0)),
+                formatNumber(Number(item.costo ?? 0)),
+              ];
+            }),
+            ...grupo.mermaOperativa.map((item) => {
+              const nombre = String(item.nombre ?? "Componente");
+              const canal = item.canal ? ` (${String(item.canal).toUpperCase()})` : "";
+              const sku = item.sku ? ` · ${String(item.sku)}` : "";
+              return [
+                `${nombre}${canal}${sku}`,
+                "Merma operativa",
+                formatNumber(Number(item.cantidad ?? 0)),
+                formatNumber(Number(item.costoUnitario ?? 0)),
+                formatNumber(Number(item.costo ?? 0)),
+              ];
+            }),
+            ["", "", "", `Total ${grupo.label}`, formatCurrency(grupo.totalCosto)],
+          ],
+          columnStyles: {
+            2: { halign: "right" },
+            3: { halign: "right" },
+            4: { halign: "right", fontStyle: "bold" },
+          },
+        });
+      }
+
+      runTable({
+        body: [
+          ["Total materiales", formatCurrency(totalMaterialesCosto)],
+          ["Total general", formatCurrency(totalCostoGeneral)],
+        ],
+        columnStyles: {
+          0: { fontStyle: "bold", fillColor: [248, 250, 252] },
+          1: { halign: "right", fontStyle: "bold" },
+        },
+      });
+
+      addSectionTitle(
+        "Simulación comercial",
+        simulacionComercial.descripcion ?? simulacionComercial.reason ?? undefined,
+      );
+
+      runTable({
+        head: [["Concepto", "Valor", "%"]],
+        body:
+          simulacionComercial.status === "disponible"
+            ? [
+                [
+                  "Costo total",
+                  formatCurrency(simulacionComercial.costoTotal),
+                  `${formatNumber(
+                    simulacionComercial.precioFinal
+                      ? (simulacionComercial.costoTotal / simulacionComercial.precioFinal) * 100
+                      : 0,
+                  )}%`,
+                ],
+                [
+                  "Impuestos",
+                  formatCurrency(simulacionComercial.impuestosMonto ?? 0),
+                  `${formatNumber(simulacionComercial.impuestosPct)}%`,
+                ],
+                [
+                  "Comisiones",
+                  formatCurrency(simulacionComercial.comisionesMonto ?? 0),
+                  `${formatNumber(simulacionComercial.comisionesPct)}%`,
+                ],
+                [
+                  "Precio final al cliente",
+                  formatCurrency(simulacionComercial.precioFinal ?? 0),
+                  "100%",
+                ],
+                [
+                  "Margen real",
+                  formatCurrency(simulacionComercial.margenRealMonto ?? 0),
+                  `${formatNumber(simulacionComercial.margenRealPct ?? 0)}%`,
+                ],
+              ]
+            : [[simulacionComercial.reason ?? "La simulación comercial no está disponible.", "", ""]],
+        columnStyles: {
+          1: { halign: "right" },
+          2: { halign: "right" },
+        },
+      });
+
+      if (previewImposicion) {
+        const imposicionPng = await svgMarkupToPngDataUrl(
+          buildImposicionPdfSvgMarkup(previewImposicion, lineaCorteMm),
+          800,
+          520,
+        );
+        const imageWidth = contentWidth;
+        const imageHeight = (520 / 800) * imageWidth;
+        const imposicionTableHeight = 42;
+        ensureSpace(imageHeight + imposicionTableHeight + 20);
+        addSectionTitle("Imposición");
+        ensureSpace(imageHeight + 12);
+        doc.addImage(imposicionPng, "PNG", margin, cursorY, imageWidth, imageHeight);
+        cursorY += imageHeight + 5;
+        runTable({
+          body: [
+            ["Pliego de impresión", `${formatNumber(previewImposicion.hojaW)} x ${formatNumber(previewImposicion.hojaH)} mm`],
+            ["Área útil", `${formatNumber(previewImposicion.utilW)} x ${formatNumber(previewImposicion.utilH)} mm`],
+            ["Orientación", previewImposicion.orientacion === "rotada" ? "Rotada" : "Normal"],
+            ["Piezas por pliego", String(previewImposicion.piezasPorPliego)],
+            ["Cortes de guillotina", String(previewImposicion.cortesGuillotina)],
+          ],
+          columnStyles: {
+            0: { fontStyle: "bold", fillColor: [248, 250, 252], cellWidth: 45 },
+            1: { cellWidth: "auto" },
+          },
+        });
+      }
+
+      if (filmTraceViews.length) {
+        const firstFilmImageHeight = (760 / 280) * 42;
+        ensureSpace(firstFilmImageHeight + 80);
+        addSectionTitle("Cálculo visual del film");
+        for (const trace of filmTraceViews) {
+          const filmPng = await svgMarkupToPngDataUrl(buildFilmPdfSvgMarkup(trace), 280, 760);
+          const imageWidth = 42;
+          const imageHeight = (760 / 280) * imageWidth;
+          const metaRows = [
+            ["Paso", `${trace.codigo} · ${trace.nombre}`],
+            ["Pliegos", String(trace.pliegosTotales || trace.hojasTotales || 1)],
+            ["Pliego impreso", `${formatNumber(trace.pliegoOriginalAnchoMm)} x ${formatNumber(trace.pliegoOriginalAltoMm)} mm`],
+            ["Entrada en laminadora", `${formatNumber(trace.anchoHojaMm)} x ${formatNumber(trace.altoHojaMm)} mm`],
+            ["Merma arranque", `${formatNumber(trace.mermaArranqueMm)} mm`],
+            ["Merma cierre", `${formatNumber(trace.mermaCierreMm)} mm`],
+            ["Largo total", `${formatNumber(trace.largoConsumidoMm / 1000)} m`],
+          ];
+          const tableApproxHeight = 10 + metaRows.length * 8;
+          const blockHeight = Math.max(imageHeight, tableApproxHeight);
+          ensureSpace(blockHeight + 10);
+
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(11);
+          doc.text(`${trace.codigo} · ${trace.nombre}`, margin, cursorY);
+          cursorY += 4;
+
+          const topY = cursorY;
+          doc.addImage(filmPng, "PNG", margin, topY, imageWidth, imageHeight);
+
+          autoTable(doc, {
+            startY: topY,
+            margin: { left: margin + imageWidth + 8, right: margin },
+            theme: "grid",
+            styles: { fontSize: 9, cellPadding: 2.2, textColor: [31, 41, 55] },
+            body: metaRows,
+            columnStyles: {
+              0: { fontStyle: "bold", fillColor: [248, 250, 252], cellWidth: 40 },
+              1: { cellWidth: "auto" },
+            },
+          });
+
+          cursorY = Math.max(topY + imageHeight, docWithTable.lastAutoTable?.finalY ?? topY) + 8;
+        }
+      }
+
+      const filename = `cotizacion-${productoState.nombre}-${selectedVariante.nombre}`
+        .toLowerCase()
+        .replace(/[^a-z0-9-_]+/gi, "-");
+      doc.save(`${filename}.pdf`);
+    } catch (error) {
+      console.error(error);
+      toast.error("No se pudo generar el PDF.");
+    }
+  }, [
+    cotizacion,
+    filmTraceViews,
+    lineaCorteMm,
+    materialesAgrupados,
+    previewImposicion,
+    procesosCotizados,
+    productoState.nombre,
+    selectedVariante,
+    simulacionComercial,
+    totalCentroCostos,
+    totalCostoGeneral,
+    totalMaterialesCosto,
+  ]);
   const isGeneralDirty =
     generalForm.nombre.trim() !== (productoState.nombre ?? "").trim() ||
     generalForm.descripcion.trim() !== (productoState.descripcion ?? "").trim() ||
@@ -4305,10 +5001,22 @@ export function ProductoServicioFichaTabs({
         <TabsContent value="simulacion-comercial">
           <Card>
             <CardHeader>
-              <CardTitle>Simulación comercial</CardTitle>
-              <CardDescription>
-                Estima el precio final de venta a partir de la última cotización de costos y la configuración comercial del producto.
-              </CardDescription>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle>Simulación comercial</CardTitle>
+                  <CardDescription>
+                    Estima el precio final de venta a partir de la última cotización de costos y la configuración comercial del producto.
+                  </CardDescription>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleDescargarPdfCotizacion}
+                  disabled={!cotizacion}
+                >
+                  Descargar PDF
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="rounded-lg border p-4">
@@ -4601,32 +5309,63 @@ export function ProductoServicioFichaTabs({
                     ? dimensionesBaseConsumidasDraft.map((dimension) => {
                         const values = getValoresOpcionesBase(selectedVariante, dimension);
                         const selectedValue = cotizacionSeleccionesBase[dimension];
+                        const useMiniCards = values.length > 0 && values.length <= 4;
                         return (
                           <Field key={`base-select-${dimension}`}>
                             <FieldLabel>{dimensionBaseLabelByValue[dimension]}</FieldLabel>
-                            <Select
-                              value={selectedValue ?? "__none__"}
-                              onValueChange={(value) =>
-                                setCotizacionSeleccionesBase((prev) => ({
-                                  ...prev,
-                                  [dimension]: value === "__none__" ? undefined : (value as ValorOpcionProductiva),
-                                }))
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecciona una opción">
-                                  {selectedValue ? valorOpcionBaseLabelByValue[selectedValue] : "Selecciona una opción"}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                {values.length > 1 ? <SelectItem value="__none__">Selecciona una opción</SelectItem> : null}
-                                {values.map((value) => (
-                                  <SelectItem key={`${dimension}-${value}`} value={value}>
-                                    {valorOpcionBaseLabelByValue[value]}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            {useMiniCards ? (
+                              <div className="flex flex-wrap gap-2">
+                                {values.map((value) => {
+                                  const isSelected = selectedValue === value;
+                                  return (
+                                    <button
+                                      key={`${dimension}-${value}`}
+                                      type="button"
+                                      onClick={() =>
+                                        setCotizacionSeleccionesBase((prev) => ({
+                                          ...prev,
+                                          [dimension]: isSelected ? undefined : value,
+                                        }))
+                                      }
+                                      className={cn(
+                                        "inline-flex min-h-9 items-center rounded-full border px-3 py-1.5 text-sm transition-colors",
+                                        isSelected
+                                          ? "border-primary bg-primary/10 text-foreground"
+                                          : "border-border bg-background hover:border-primary/40 hover:bg-muted/50",
+                                      )}
+                                    >
+                                      <span className="font-medium">
+                                        {valorOpcionBaseLabelByValue[value]}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <Select
+                                value={selectedValue ?? "__none__"}
+                                onValueChange={(value) =>
+                                  setCotizacionSeleccionesBase((prev) => ({
+                                    ...prev,
+                                    [dimension]: value === "__none__" ? undefined : (value as ValorOpcionProductiva),
+                                  }))
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecciona una opción">
+                                    {selectedValue ? valorOpcionBaseLabelByValue[selectedValue] : "Selecciona una opción"}
+                                  </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {values.length > 1 ? <SelectItem value="__none__">Selecciona una opción</SelectItem> : null}
+                                  {values.map((value) => (
+                                    <SelectItem key={`${dimension}-${value}`} value={value}>
+                                      {valorOpcionBaseLabelByValue[value]}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
                           </Field>
                         );
                       })
@@ -4739,31 +5478,48 @@ export function ProductoServicioFichaTabs({
                           }
                         >
                           <div className="rounded-lg border">
-                            <CollapsibleTrigger className="flex w-full cursor-pointer items-center justify-between px-3 py-3 text-left transition-colors hover:bg-muted/60">
-                              <div className="grid flex-1 gap-1 md:grid-cols-[minmax(0,1fr)_140px_140px] md:items-center">
-                                <div>
-                                  <p className="font-medium">{grupo.label}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {grupo.items.length} componente{grupo.items.length === 1 ? "" : "s"}
-                                  </p>
+                            <div className="flex items-center gap-2 px-3 py-3 transition-colors hover:bg-muted/60">
+                              <CollapsibleTrigger className="flex w-full cursor-pointer items-center justify-between text-left">
+                                <div className="grid flex-1 gap-1 md:grid-cols-[minmax(0,1fr)_140px_140px] md:items-center">
+                                  <div>
+                                    <p className="font-medium">{grupo.label}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {grupo.items.length} componente{grupo.items.length === 1 ? "" : "s"}
+                                    </p>
+                                  </div>
+                                  <div className="text-left md:text-right">
+                                    <p className="text-xs text-muted-foreground">Cantidad total</p>
+                                    <p className="tabular-nums">{formatNumber(grupo.totalCantidad)}</p>
+                                  </div>
+                                  <div className="text-left md:text-right">
+                                    <p className="text-xs text-muted-foreground">Costo total</p>
+                                    <p className="font-medium tabular-nums">{formatCurrency(grupo.totalCosto)}</p>
+                                  </div>
                                 </div>
-                                <div className="text-left md:text-right">
-                                  <p className="text-xs text-muted-foreground">Cantidad total</p>
-                                  <p className="tabular-nums">{formatNumber(grupo.totalCantidad)}</p>
-                                </div>
-                                <div className="text-left md:text-right">
-                                  <p className="text-xs text-muted-foreground">Costo total</p>
-                                  <p className="font-medium tabular-nums">{formatCurrency(grupo.totalCosto)}</p>
-                                </div>
-                              </div>
-                              <span className="ml-3 inline-flex items-center text-muted-foreground">
-                                {materialesOpen[grupo.tipo] ? (
-                                  <ChevronDownIcon className="size-4" />
-                                ) : (
-                                  <ChevronRightIcon className="size-4" />
-                                )}
-                              </span>
-                            </CollapsibleTrigger>
+                                <span className="ml-3 inline-flex items-center text-muted-foreground">
+                                  {materialesOpen[grupo.tipo] ? (
+                                    <ChevronDownIcon className="size-4" />
+                                  ) : (
+                                    <ChevronRightIcon className="size-4" />
+                                  )}
+                                </span>
+                              </CollapsibleTrigger>
+                              {grupo.tipo === "FILM" && filmTraceViews.length > 0 ? (
+                                <button
+                                  type="button"
+                                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                  title="Ver cómo se calcularon los metros lineales del film"
+                                  aria-label="Ver cómo se calcularon los metros lineales del film"
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    setFilmTraceSheetOpen(true);
+                                  }}
+                                >
+                                  <InfoIcon className="size-4" />
+                                </button>
+                              ) : null}
+                            </div>
                             <CollapsibleContent>
                               <div className="border-t">
                                 <Table>
@@ -4921,6 +5677,342 @@ export function ProductoServicioFichaTabs({
           </Card>
         </TabsContent>
       </Tabs>
+      <Sheet open={filmTraceSheetOpen} onOpenChange={setFilmTraceSheetOpen}>
+        <SheetContent
+          side="right"
+          className="overflow-y-auto px-4 py-6 data-[side=right]:w-[96vw] data-[side=right]:max-w-none sm:px-6 sm:data-[side=right]:w-[82vw] sm:data-[side=right]:max-w-none lg:px-8 lg:data-[side=right]:w-[44vw] lg:data-[side=right]:min-w-[720px] lg:data-[side=right]:max-w-none"
+        >
+          <SheetHeader className="border-b pb-4">
+            <SheetTitle>Cálculo visual del film</SheetTitle>
+            <SheetDescription>
+              Muestra cómo el sistema armó los metros lineales del laminado usando pliegos, separación entre pliegos y mermas de arranque/cierre.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-6 space-y-6">
+            {filmTraceViews.map((trace) => {
+              const total = trace.largoConsumidoMm;
+              const startPct = total > 0 ? (trace.mermaArranqueMm / total) * 100 : 0;
+              const endPct = total > 0 ? (trace.mermaCierreMm / total) * 100 : 0;
+              const totalPliegos = Math.max(1, trace.pliegosTotales || trace.hojasTotales || 1);
+              const modeLabel =
+                trace.modoLaminado === "dos_caras_simultaneo"
+                  ? "Ambas caras en una pasada"
+                  : trace.modoLaminado === "dos_caras_dos_pasadas"
+                    ? "Ambas caras en dos pasadas"
+                    : "Una cara";
+              const orientacionLabel =
+                trace.orientacionEntrada === "rotada"
+                  ? "Se ingresó rotado para usar menos largo"
+                  : "Se ingresó en orientación normal";
+              const clipId = `film-tramo-util-${trace.key.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+              const maxExplicitPliegos = 10;
+              const headCount = totalPliegos > maxExplicitPliegos ? 5 : totalPliegos;
+              const tailCount = totalPliegos > maxExplicitPliegos ? 5 : 0;
+              const omittedPliegos = Math.max(0, totalPliegos - headCount - tailCount);
+              const trackTop = 20;
+              const trackLeft = 80;
+              const trackWidth = 120;
+              const bodyContentPadding = 16;
+              const minSheetHeight = totalPliegos <= maxExplicitPliegos ? 12 : 28;
+              const minGapHeight = trace.gapEntreHojasMm > 0 ? (totalPliegos <= maxExplicitPliegos ? 2 : 8) : 0;
+              const explicitCount = headCount + tailCount;
+              const explicitGapCount = Math.max(0, explicitCount - 1 + (omittedPliegos > 0 ? 2 : 0));
+              const requiredBodyContentHeight =
+                explicitCount * minSheetHeight +
+                explicitGapCount * minGapHeight +
+                (omittedPliegos > 0 ? 44 : 0);
+              const baseTrackHeight = 700;
+              const baseStartHeight = Math.max(10, (startPct / 100) * baseTrackHeight);
+              const baseEndHeight = Math.max(10, (endPct / 100) * baseTrackHeight);
+              const baseBodyHeight = Math.max(180, baseTrackHeight - baseStartHeight - baseEndHeight);
+              const baseBodyContentHeight = Math.max(120, baseBodyHeight - bodyContentPadding * 2);
+              const trackHeight =
+                totalPliegos <= maxExplicitPliegos && baseBodyContentHeight < requiredBodyContentHeight
+                  ? baseTrackHeight + (requiredBodyContentHeight - baseBodyContentHeight) + 12
+                  : baseTrackHeight;
+              const viewBoxHeight = trackTop + trackHeight + 60;
+              const svgHeightClass = "h-[560px]";
+              const startHeight = Math.max(10, (startPct / 100) * trackHeight);
+              const endHeight = Math.max(10, (endPct / 100) * trackHeight);
+              const bodyTop = trackTop + startHeight;
+              const bodyHeight = Math.max(180, trackHeight - startHeight - endHeight);
+              const bodyContentTop = bodyTop + bodyContentPadding;
+              const bodyContentHeight = Math.max(requiredBodyContentHeight, bodyHeight - bodyContentPadding * 2);
+              const explicitBlocksMm =
+                (headCount + tailCount) * trace.altoHojaMm +
+                Math.max(0, headCount + tailCount - 1) * trace.gapEntreHojasMm;
+              const omittedBlockMm =
+                omittedPliegos > 0
+                  ? omittedPliegos * trace.altoHojaMm + Math.max(0, omittedPliegos - 1) * trace.gapEntreHojasMm
+                  : 0;
+              const totalDisplayedBodyMm = Math.max(1, explicitBlocksMm + omittedBlockMm);
+              const pxPerBodyMm = bodyContentHeight / totalDisplayedBodyMm;
+              const explicitSheetHeight = Math.max(minSheetHeight, trace.altoHojaMm * pxPerBodyMm);
+              const explicitGapHeight =
+                trace.gapEntreHojasMm > 0 ? Math.max(minGapHeight, trace.gapEntreHojasMm * pxPerBodyMm) : 0;
+              const omittedHeight =
+                omittedPliegos > 0
+                  ? Math.max(
+                      44,
+                      bodyContentHeight -
+                        (headCount + tailCount) * explicitSheetHeight -
+                        Math.max(0, headCount + tailCount - 1) * explicitGapHeight,
+                    )
+                  : 0;
+              const blockEntries: Array<
+                | { kind: "pliego"; label: string; y: number; height: number }
+                | { kind: "resumen"; label: string; y: number; height: number }
+                | { kind: "gap"; y: number; height: number }
+              > = [];
+              let cursor = bodyContentTop;
+              const pushPliego = (label: string) => {
+                blockEntries.push({ kind: "pliego", label, y: cursor, height: explicitSheetHeight });
+                cursor += explicitSheetHeight;
+              };
+              const pushGap = () => {
+                if (explicitGapHeight > 0) {
+                  blockEntries.push({ kind: "gap", y: cursor, height: explicitGapHeight });
+                  cursor += explicitGapHeight;
+                }
+              };
+
+              for (let index = 0; index < headCount; index += 1) {
+                pushPliego(`P${index + 1}`);
+                if (index < headCount - 1 || omittedPliegos > 0 || tailCount > 0) {
+                  pushGap();
+                }
+              }
+
+              if (omittedPliegos > 0) {
+                blockEntries.push({
+                  kind: "resumen",
+                  label: `+ ${omittedPliegos} pliegos`,
+                  y: cursor,
+                  height: omittedHeight,
+                });
+                cursor += omittedHeight;
+                if (tailCount > 0) {
+                  pushGap();
+                }
+              }
+
+              for (let index = 0; index < tailCount; index += 1) {
+                pushPliego(`P${totalPliegos - tailCount + index + 1}`);
+                if (index < tailCount - 1) {
+                  pushGap();
+                }
+              }
+
+              return (
+                <Card key={trace.key}>
+                  <CardHeader>
+                    <CardTitle className="text-base">
+                      {trace.codigo} · {trace.nombre}
+                    </CardTitle>
+                    <CardDescription>
+                      {modeLabel}. {totalPliegos} pliego{totalPliegos === 1 ? "" : "s"} · {formatNumber(trace.largoConsumidoMm / 1000)} m lineales · {trace.filmFactor} film
+                      {trace.filmFactor === 1 ? "" : "s"}.
+                    </CardDescription>
+                    <p className="text-sm text-muted-foreground">{orientacionLabel}</p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
+                      <div className="rounded-xl border bg-muted/20 p-4">
+                        <div className="mb-3 flex items-start justify-between gap-4">
+                          <div className="grid shrink-0 gap-1.5 text-[11px] text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex h-3 w-6 rounded-sm bg-[#f4d7c8]" />
+                              <span>Merma</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex h-0 w-6 border-t-[1.5px] border-dashed border-red-600" />
+                              <span>Gap entre pliegos</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex h-3 w-6 rounded-sm border border-[#dcc6b0] bg-[#fcf7f0]" />
+                              <span>Tramo útil</span>
+                            </div>
+                          </div>
+                        </div>
+                        <svg viewBox={`0 0 280 ${viewBoxHeight}`} className={cn("mx-auto w-full max-w-[260px]", svgHeightClass)}>
+                          <defs>
+                            <clipPath id={clipId}>
+                              <rect x="96" y={bodyContentTop} width="88" height={bodyContentHeight} rx="10" />
+                            </clipPath>
+                          </defs>
+                          <rect x={trackLeft} y={trackTop} width={trackWidth} height={trackHeight} rx="26" fill="#f5efe8" stroke="#d6c4b2" />
+                          <rect x={trackLeft} y={trackTop} width={trackWidth} height={startHeight} fill="#f4d7c8" />
+                          <rect
+                            x={trackLeft}
+                            y={trackTop + trackHeight - endHeight}
+                            width={trackWidth}
+                            height={endHeight}
+                            fill="#f4d7c8"
+                          />
+                          <rect
+                            x="96"
+                            y={bodyContentTop}
+                            width="88"
+                            height={bodyContentHeight}
+                            rx="10"
+                            fill="#fcf7f0"
+                            stroke="#dcc6b0"
+                            strokeDasharray="4 3"
+                          />
+                          <line
+                            x1={trackLeft}
+                            y1={bodyTop}
+                            x2={trackLeft + trackWidth}
+                            y2={bodyTop}
+                            stroke="#c89e7b"
+                            strokeWidth="2"
+                          />
+                          <line
+                            x1={trackLeft}
+                            y1={bodyTop + bodyHeight}
+                            x2={trackLeft + trackWidth}
+                            y2={bodyTop + bodyHeight}
+                            stroke="#c89e7b"
+                            strokeWidth="2"
+                          />
+                          <g clipPath={`url(#${clipId})`}>
+                            {blockEntries.map((block, index) => (
+                              <React.Fragment key={`${block.kind}-${index}-${"label" in block ? block.label : ""}`}>
+                              {block.kind === "pliego" ? (
+                                <>
+                                  <rect
+                                    x="96"
+                                    y={block.y}
+                                    width="88"
+                                    height={block.height}
+                                    fill="#fef8ee"
+                                    stroke="#c9aa8a"
+                                  />
+                                  <text
+                                    x="140"
+                                    y={block.y + block.height / 2 + 5}
+                                    textAnchor="middle"
+                                    fontSize="14"
+                                    fill="#6d4a2d"
+                                  >
+                                    {block.label}
+                                  </text>
+                                </>
+                              ) : null}
+                              {block.kind === "resumen" ? (
+                                <>
+                                  <rect
+                                    x="101"
+                                    y={block.y}
+                                    width="78"
+                                    height={block.height}
+                                    rx="12"
+                                    fill="#f1e0cf"
+                                    stroke="#d0b49a"
+                                    strokeDasharray="6 4"
+                                  />
+                                  <text
+                                    x="140"
+                                    y={block.y + block.height / 2 - 4}
+                                    textAnchor="middle"
+                                    fontSize="14"
+                                    fill="#7b4b2a"
+                                  >
+                                    ...
+                                  </text>
+                                  <text
+                                    x="140"
+                                    y={block.y + block.height / 2 + 14}
+                                    textAnchor="middle"
+                                    fontSize="12"
+                                    fill="#7b4b2a"
+                                  >
+                                    {block.label}
+                                  </text>
+                                </>
+                              ) : null}
+                              {block.kind === "gap" ? (
+                                <>
+                                  <rect
+                                    x="110"
+                                    y={block.y}
+                                    width="60"
+                                    height={block.height}
+                                    fill="#f97316"
+                                    opacity="0.2"
+                                  />
+                                  <line
+                                    x1="108"
+                                    y1={block.y + block.height / 2}
+                                    x2="172"
+                                    y2={block.y + block.height / 2}
+                                    stroke="#dc2626"
+                                    strokeWidth="1.5"
+                                    strokeDasharray="3 2"
+                                  />
+                                </>
+                              ) : null}
+                              </React.Fragment>
+                            ))}
+                          </g>
+                          <line x1="210" y1={bodyTop} x2="210" y2={bodyTop + bodyHeight} stroke="#b4977b" strokeDasharray="4 4" />
+                        </svg>
+                      </div>
+                      <div className="flex min-w-0 flex-col gap-2">
+                        <div className="rounded-lg border px-4 py-3">
+                          <p className="text-xs text-muted-foreground">Pliegos calculados</p>
+                          <p className="font-medium">{formatNumber(totalPliegos)}</p>
+                        </div>
+                        <div className="rounded-lg border px-4 py-3">
+                          <p className="text-xs text-muted-foreground">Ancho del rollo</p>
+                          <p className="font-medium">{formatNumber(trace.anchoRolloMm)} mm</p>
+                        </div>
+                        <div className="rounded-lg border px-4 py-3">
+                          <p className="text-xs text-muted-foreground">Pliego impreso</p>
+                          <p className="font-medium">
+                            {formatNumber(trace.pliegoOriginalAnchoMm)} × {formatNumber(trace.pliegoOriginalAltoMm)} mm
+                          </p>
+                        </div>
+                        <div className="rounded-lg border px-4 py-3">
+                          <p className="text-xs text-muted-foreground">Entrada en laminadora</p>
+                          <p className="font-medium">
+                            {formatNumber(trace.anchoHojaMm)} × {formatNumber(trace.altoHojaMm)} mm
+                          </p>
+                        </div>
+                        <div className="rounded-lg border px-4 py-3">
+                          <p className="text-xs text-muted-foreground">Separación entre pliegos</p>
+                          <p className="font-medium">{formatNumber(trace.gapEntreHojasMm)} mm</p>
+                        </div>
+                        <div className="rounded-lg border px-4 py-3">
+                          <p className="text-xs text-muted-foreground">Paso lineal por pliego</p>
+                          <p className="font-medium">{formatNumber(trace.pasoLinealMm)} mm</p>
+                        </div>
+                        <div className="rounded-lg border px-4 py-3">
+                          <p className="text-xs text-muted-foreground">Velocidad usada</p>
+                          <p className="font-medium">{formatNumber(trace.velocidadMmSegEfectiva)} mm/seg</p>
+                        </div>
+                        <div className="rounded-lg border px-4 py-3">
+                          <p className="text-xs text-muted-foreground">Merma de arranque</p>
+                          <p className="font-medium">{formatNumber(trace.mermaArranqueMm)} mm</p>
+                        </div>
+                        <div className="rounded-lg border px-4 py-3">
+                          <p className="text-xs text-muted-foreground">Merma de cierre</p>
+                          <p className="font-medium">{formatNumber(trace.mermaCierreMm)} mm</p>
+                        </div>
+                        <div className="rounded-lg border px-4 py-3">
+                          <p className="text-xs text-muted-foreground">Largo total calculado</p>
+                          <p className="font-medium">{formatNumber(trace.largoConsumidoMm / 1000)} m</p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </SheetContent>
+      </Sheet>
+
       <Sheet open={precioEditorOpen} onOpenChange={(open) => (open ? setPrecioEditorOpen(true) : handleCancelPrecioEditor())}>
         <SheetContent
           side="right"

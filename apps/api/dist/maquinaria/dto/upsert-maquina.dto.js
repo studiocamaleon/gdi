@@ -79,6 +79,7 @@ var TipoPerfilOperativoMaquinaDto;
 (function (TipoPerfilOperativoMaquinaDto) {
     TipoPerfilOperativoMaquinaDto["impresion"] = "impresion";
     TipoPerfilOperativoMaquinaDto["corte"] = "corte";
+    TipoPerfilOperativoMaquinaDto["laminado"] = "laminado";
     TipoPerfilOperativoMaquinaDto["mecanizado"] = "mecanizado";
     TipoPerfilOperativoMaquinaDto["grabado"] = "grabado";
     TipoPerfilOperativoMaquinaDto["fabricacion"] = "fabricacion";

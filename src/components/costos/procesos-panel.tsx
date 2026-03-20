@@ -723,6 +723,10 @@ function resolveMachineProfile(
   }
 
   const detalle = perfil.detalle ?? {};
+  const velocidadTrabajoMmSeg =
+    typeof detalle.velocidadTrabajoMmSeg === "number" && Number.isFinite(detalle.velocidadTrabajoMmSeg)
+      ? detalle.velocidadTrabajoMmSeg
+      : undefined;
   const setupExtras = collectExtraSetupFromDetalle(detalle);
   const setupMin =
     (typeof perfil.setupMin === "number" && Number.isFinite(perfil.setupMin) ? perfil.setupMin : 0) +
@@ -734,8 +738,12 @@ function resolveMachineProfile(
   const productivityValue =
     typeof perfil.productivityValue === "number" && Number.isFinite(perfil.productivityValue)
       ? perfil.productivityValue
-      : undefined;
-  const productivityUnit = perfil.productivityUnit || maquina?.unidadProduccionPrincipal || "";
+      : maquina?.plantilla === "laminadora_bopp_rollo"
+        ? velocidadTrabajoMmSeg
+        : undefined;
+  const productivityUnit =
+    perfil.productivityUnit ||
+    (maquina?.plantilla === "laminadora_bopp_rollo" ? "metro_lineal" : maquina?.unidadProduccionPrincipal || "");
   const extraResolvedFields: Array<{ label: string; value: string }> = [];
 
   if (maquina?.plantilla === "guillotina") {
@@ -776,6 +784,27 @@ function resolveMachineProfile(
       extraResolvedFields.push({
         label: "Caras",
         value: perfil.printSides === "doble_faz" ? "Doble faz" : "Simple faz",
+      });
+    }
+  }
+
+  if (maquina?.plantilla === "laminadora_bopp_rollo") {
+    if (typeof velocidadTrabajoMmSeg === "number") {
+      extraResolvedFields.push({
+        label: "Velocidad trabajo",
+        value: `${velocidadTrabajoMmSeg} mm/seg`,
+      });
+    }
+    if (typeof detalle.velocidadDobleRolloTrabajoMmSeg === "number") {
+      extraResolvedFields.push({
+        label: "Velocidad doble rollo",
+        value: `${detalle.velocidadDobleRolloTrabajoMmSeg} mm/seg`,
+      });
+    }
+    if (typeof detalle.modoLaminado === "string" && detalle.modoLaminado.trim().length > 0) {
+      extraResolvedFields.push({
+        label: "Modo de laminado",
+        value: formatTechnicalValue(detalle.modoLaminado),
       });
     }
   }
@@ -1516,7 +1545,10 @@ export function ProcesosPanel({
           );
           return null;
         }
-      } else if (!operacion.productividadBase || operacion.productividadBase <= 0) {
+      } else if (
+        !operacion.perfilOperativoId &&
+        (!operacion.productividadBase || operacion.productividadBase <= 0)
+      ) {
         toast.error(
           `La operacion ${index + 1} en modo variable requiere Productividad base mayor a 0.`,
         );
@@ -1829,7 +1861,11 @@ export function ProcesosPanel({
       } else {
         modoProductividad = "variable";
         tiempoFijoMin = undefined;
-        if (!productividadBase || productividadBase <= 0) {
+        if (
+          !bibliotecaForm.usaNiveles &&
+          (!bibliotecaForm.perfilOperativoId || !bibliotecaForm.maquinaId) &&
+          (!productividadBase || productividadBase <= 0)
+        ) {
           toast.error("Para modo variable debes definir un valor de productividad mayor a 0.");
           return null;
         }

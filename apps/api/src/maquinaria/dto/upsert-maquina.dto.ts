@@ -79,6 +79,7 @@ export enum UnidadProduccionMaquinaDto {
 export enum TipoPerfilOperativoMaquinaDto {
   impresion = 'impresion',
   corte = 'corte',
+  laminado = 'laminado',
   mecanizado = 'mecanizado',
   grabado = 'grabado',
   fabricacion = 'fabricacion',

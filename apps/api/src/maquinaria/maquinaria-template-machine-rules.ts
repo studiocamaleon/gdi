@@ -24,7 +24,7 @@ const RULES: Record<PlantillaMaquinariaDto, MachineTemplateRule> = {
     requiredMachineKeys: ['altoBocaMm'],
   },
   [PlantillaMaquinariaDto.laminadora_bopp_rollo]: {
-    requiredMachineKeys: ['anchoRolloMm', 'velocidadMMin', 'mermaArranqueMm', 'mermaCierreMm'],
+    requiredMachineKeys: ['anchoRolloMm', 'velocidadMmSeg', 'mermaArranqueMm', 'mermaCierreMm'],
   },
   [PlantillaMaquinariaDto.redondeadora_puntas]: {
     requiredMachineKeys: ['golpesMinNominal', 'maxEspesorPilaMm'],

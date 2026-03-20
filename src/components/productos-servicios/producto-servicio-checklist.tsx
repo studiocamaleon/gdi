@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
+  GitBranchIcon,
   GripVerticalIcon,
   Loader2Icon,
   PlusIcon,
@@ -38,6 +39,18 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 const tipoPreguntaItems: Array<{ value: TipoChecklistPregunta; label: string }> = [
@@ -231,6 +244,7 @@ function buildDefaultRespuesta(texto: string, codigo: string): ProductoChecklist
     codigo,
     orden: 1,
     activo: true,
+    preguntaSiguienteId: null,
     reglas: [],
   };
 }
@@ -244,6 +258,186 @@ function buildDefaultPregunta(): ProductoChecklistPregunta {
     activo: true,
     respuestas: [buildDefaultRespuesta("Sí", "si"), buildDefaultRespuesta("No", "no")],
   };
+}
+
+function getPreguntaTitulo(pregunta: ProductoChecklistPregunta, index?: number) {
+  const texto = pregunta.texto.trim();
+  if (texto.length > 0) return texto;
+  if (typeof index === "number") return `Pregunta ${index + 1}`;
+  return "Pregunta sin texto";
+}
+
+function buildChecklistQuestionGraph(checklist: ProductoChecklist) {
+  const graph = new Map<string, Set<string>>();
+  for (const pregunta of checklist.preguntas) {
+    for (const respuesta of pregunta.respuestas) {
+      if (!respuesta.activo || !respuesta.preguntaSiguienteId) continue;
+      const set = graph.get(pregunta.id) ?? new Set<string>();
+      set.add(respuesta.preguntaSiguienteId);
+      graph.set(pregunta.id, set);
+    }
+  }
+  return graph;
+}
+
+function wouldCreateChecklistCycle(
+  checklist: ProductoChecklist,
+  preguntaId: string,
+  preguntaSiguienteId: string,
+) {
+  if (preguntaId === preguntaSiguienteId) return true;
+  const graph = buildChecklistQuestionGraph(checklist);
+  const visited = new Set<string>();
+  const stack = [preguntaSiguienteId];
+
+  while (stack.length > 0) {
+    const currentId = stack.pop();
+    if (!currentId || visited.has(currentId)) continue;
+    if (currentId === preguntaId) return true;
+    visited.add(currentId);
+    for (const nextId of graph.get(currentId) ?? []) {
+      stack.push(nextId);
+    }
+  }
+
+  return false;
+}
+
+function resolveReachableChecklistQuestionIds(checklist: ProductoChecklist) {
+  const activeQuestions = checklist.preguntas.filter((pregunta) => pregunta.activo);
+  const questionMap = new Map(activeQuestions.map((pregunta) => [pregunta.id, pregunta]));
+  const referencedQuestionIds = new Set<string>();
+
+  for (const pregunta of activeQuestions) {
+    for (const respuesta of pregunta.respuestas) {
+      if (!respuesta.activo || !respuesta.preguntaSiguienteId) continue;
+      if (questionMap.has(respuesta.preguntaSiguienteId)) {
+        referencedQuestionIds.add(respuesta.preguntaSiguienteId);
+      }
+    }
+  }
+
+  const queue = activeQuestions.filter((pregunta) => !referencedQuestionIds.has(pregunta.id));
+  const reachable = new Set<string>();
+
+  while (queue.length > 0) {
+    const pregunta = queue.shift();
+    if (!pregunta || reachable.has(pregunta.id)) continue;
+    reachable.add(pregunta.id);
+    for (const respuesta of pregunta.respuestas) {
+      if (!respuesta.activo || !respuesta.preguntaSiguienteId) continue;
+      const child = questionMap.get(respuesta.preguntaSiguienteId);
+      if (child && !reachable.has(child.id)) {
+        queue.push(child);
+      }
+    }
+  }
+
+  return reachable;
+}
+
+function collectChecklistDescendantQuestionIds(
+  checklist: ProductoChecklist,
+  preguntaId: string,
+) {
+  const questionMap = new Map(checklist.preguntas.map((pregunta) => [pregunta.id, pregunta]));
+  const descendants = new Set<string>();
+  const queue = [preguntaId];
+
+  while (queue.length > 0) {
+    const currentId = queue.shift();
+    if (!currentId) continue;
+    const pregunta = questionMap.get(currentId);
+    if (!pregunta) continue;
+    for (const respuesta of pregunta.respuestas) {
+      const childId = respuesta.preguntaSiguienteId;
+      if (!childId || descendants.has(childId)) continue;
+      descendants.add(childId);
+      queue.push(childId);
+    }
+  }
+
+  return descendants;
+}
+
+function resolveVisibleChecklistQuestionIds(
+  checklist: ProductoChecklist,
+  value: Record<string, { respuestaId: string }>,
+) {
+  const activeQuestions = checklist.preguntas.filter((pregunta) => pregunta.activo);
+  const questionMap = new Map(activeQuestions.map((pregunta) => [pregunta.id, pregunta]));
+  const referencedQuestionIds = new Set<string>();
+
+  for (const pregunta of activeQuestions) {
+    for (const respuesta of pregunta.respuestas) {
+      if (!respuesta.activo || !respuesta.preguntaSiguienteId) continue;
+      if (questionMap.has(respuesta.preguntaSiguienteId)) {
+        referencedQuestionIds.add(respuesta.preguntaSiguienteId);
+      }
+    }
+  }
+
+  const queue = activeQuestions.filter((pregunta) => !referencedQuestionIds.has(pregunta.id));
+  const visible = new Set<string>();
+
+  while (queue.length > 0) {
+    const pregunta = queue.shift();
+    if (!pregunta || visible.has(pregunta.id)) continue;
+    visible.add(pregunta.id);
+    const selectedRespuestaId = value[pregunta.id]?.respuestaId;
+    if (!selectedRespuestaId) continue;
+    const selectedRespuesta = pregunta.respuestas.find(
+      (respuesta) => respuesta.id === selectedRespuestaId && respuesta.activo,
+    );
+    if (!selectedRespuesta?.preguntaSiguienteId) continue;
+    const child = questionMap.get(selectedRespuesta.preguntaSiguienteId);
+    if (child && !visible.has(child.id)) {
+      queue.push(child);
+    }
+  }
+
+  return visible;
+}
+
+function pruneChecklistSelections(
+  checklist: ProductoChecklist,
+  value: Record<string, { respuestaId: string }>,
+) {
+  const visibleQuestionIds = resolveVisibleChecklistQuestionIds(checklist, value);
+  const nextEntries = Object.entries(value).filter(([preguntaId]) => visibleQuestionIds.has(preguntaId));
+  if (nextEntries.length === Object.keys(value).length) {
+    return value;
+  }
+  return Object.fromEntries(nextEntries);
+}
+
+function buildChecklistQuestionDependencyMeta(checklist: ProductoChecklist) {
+  const meta = new Map<
+    string,
+    {
+      parentQuestionId: string;
+      parentQuestionTitle: string;
+      parentResponseText: string;
+    }
+  >();
+
+  for (const pregunta of checklist.preguntas) {
+    const parentQuestionTitle = getPreguntaTitulo(
+      pregunta,
+      checklist.preguntas.findIndex((item) => item.id === pregunta.id),
+    );
+    for (const respuesta of pregunta.respuestas) {
+      const childId = respuesta.preguntaSiguienteId;
+      if (!childId || meta.has(childId)) continue;
+      meta.set(childId, {
+        parentQuestionId: pregunta.id,
+        parentQuestionTitle,
+        parentResponseText: respuesta.texto.trim() || getRespuestaTitulo(pregunta, respuesta, 0),
+      });
+    }
+  }
+
+  return meta;
 }
 
 function buildReglaActivarPasoPorVariante(
@@ -293,6 +487,7 @@ function buildPreguntaRespuestasPorVariantes(
       codigo: buildCodigoRespuesta(variante.nombre || `opcion_${index + 1}`),
       orden: index + 1,
       activo: true,
+      preguntaSiguienteId: null,
       reglas: [buildReglaActivarPasoPorVariante(selected, variante)],
     })),
   };
@@ -320,6 +515,7 @@ function normalizeChecklistForSave(checklist: ProductoChecklist) {
         codigo: respuesta.codigo?.trim() || undefined,
         orden: respuestaIndex + 1,
         activo: respuesta.activo,
+        preguntaSiguienteId: respuesta.preguntaSiguienteId || undefined,
         reglas: respuesta.reglas.map((regla, reglaIndex) => ({
           id: regla.id,
           accion: regla.accion,
@@ -412,6 +608,72 @@ function patchReglaRouteInsertion(
   };
 }
 
+function sanitizeRouteInsertionForStep(
+  stepId: string,
+  insertion: { modo: RouteInsertionMode; pasoPlantillaId: string | null; orden: number | null },
+) {
+  if (
+    (insertion.modo === "before_step" || insertion.modo === "after_step") &&
+    insertion.pasoPlantillaId === stepId
+  ) {
+    return {
+      modo: "append" as RouteInsertionMode,
+      pasoPlantillaId: null,
+      orden: insertion.orden,
+    };
+  }
+  return insertion;
+}
+
+function normalizeChecklistRouteInsertions(checklist: ProductoChecklist) {
+  const canonicalByStepId = new Map<
+    string,
+    { modo: RouteInsertionMode; pasoPlantillaId: string | null; orden: number | null }
+  >();
+
+  for (const pregunta of checklist.preguntas) {
+    for (const respuesta of pregunta.respuestas) {
+      for (const regla of respuesta.reglas) {
+        if (!isStepRule(regla) || !regla.pasoPlantillaId) continue;
+        const candidate = sanitizeRouteInsertionForStep(
+          regla.pasoPlantillaId,
+          getReglaRouteInsertion(regla),
+        );
+        const current = canonicalByStepId.get(regla.pasoPlantillaId);
+        if (!current) {
+          canonicalByStepId.set(regla.pasoPlantillaId, candidate);
+          continue;
+        }
+        const currentOrden = current.orden ?? Number.MAX_SAFE_INTEGER;
+        const candidateOrden = candidate.orden ?? Number.MAX_SAFE_INTEGER;
+        if (candidateOrden < currentOrden) {
+          canonicalByStepId.set(regla.pasoPlantillaId, candidate);
+        }
+      }
+    }
+  }
+
+  return {
+    ...checklist,
+    preguntas: checklist.preguntas.map((pregunta) => ({
+      ...pregunta,
+      respuestas: pregunta.respuestas.map((respuesta) => ({
+        ...respuesta,
+        reglas: respuesta.reglas.map((regla) => {
+          if (!isStepRule(regla) || !regla.pasoPlantillaId) {
+            return regla;
+          }
+          const canonical = canonicalByStepId.get(regla.pasoPlantillaId);
+          if (!canonical) {
+            return regla;
+          }
+          return patchReglaRouteInsertion(regla, canonical);
+        }),
+      })),
+    })),
+  };
+}
+
 function isStepRule(regla: ProductoChecklistRegla) {
   return regla.accion === "activar_paso" || regla.accion === "seleccionar_variante_paso";
 }
@@ -428,14 +690,15 @@ export function ProductoServicioChecklistEditor({
   const [isSaving, startSaving] = React.useTransition();
   const [preguntasAbiertas, setPreguntasAbiertas] = React.useState<Record<string, boolean>>({});
   const [reglasAbiertas, setReglasAbiertas] = React.useState<Record<string, boolean>>({});
-  const [draggedRouteStepId, setDraggedRouteStepId] = React.useState<string | null>(null);
+  const [draggedRouteItemKey, setDraggedRouteItemKey] = React.useState<string | null>(null);
+  const [pointerDraggingRouteItemKey, setPointerDraggingRouteItemKey] = React.useState<string | null>(null);
   const [routeDropIndicator, setRouteDropIndicator] = React.useState<{
     targetKey: string;
     position: "before" | "after";
   } | null>(null);
 
   React.useEffect(() => {
-    setDraft(initialChecklist);
+    setDraft(normalizeChecklistRouteInsertions(initialChecklist));
     setPreguntasAbiertas(
       Object.fromEntries(initialChecklist.preguntas.map((pregunta) => [pregunta.id, true])),
     );
@@ -484,6 +747,12 @@ export function ProductoServicioChecklistEditor({
     [draft, initialChecklist],
   );
 
+  const reachableQuestionIds = React.useMemo(() => resolveReachableChecklistQuestionIds(draft), [draft]);
+  const questionDependencyMeta = React.useMemo(
+    () => buildChecklistQuestionDependencyMeta(draft),
+    [draft],
+  );
+
   const updatePregunta = (preguntaId: string, updater: (pregunta: ProductoChecklistPregunta) => ProductoChecklistPregunta) => {
     setDraft((prev) => ({
       ...prev,
@@ -523,12 +792,55 @@ export function ProductoServicioChecklistEditor({
     }));
   };
 
+  const createChildQuestion = (preguntaId: string, respuestaId: string) => {
+    const nuevaPregunta = {
+      ...buildDefaultPregunta(),
+      texto: "Nueva pregunta hija",
+    };
+
+    setDraft((prev) => {
+      const parentIndex = prev.preguntas.findIndex((item) => item.id === preguntaId);
+      const preguntas = [...prev.preguntas];
+      const insertIndex = parentIndex >= 0 ? parentIndex + 1 : preguntas.length;
+      preguntas.splice(insertIndex, 0, nuevaPregunta);
+
+      return {
+        ...prev,
+        preguntas: preguntas.map((pregunta, index) => {
+          if (pregunta.id !== preguntaId) {
+            return { ...pregunta, orden: index + 1 };
+          }
+          return {
+            ...pregunta,
+            orden: index + 1,
+            respuestas: pregunta.respuestas.map((respuesta) =>
+              respuesta.id === respuestaId
+                ? { ...respuesta, preguntaSiguienteId: nuevaPregunta.id }
+                : respuesta,
+            ),
+          };
+        }),
+      };
+    });
+
+    setPreguntasAbiertas((prev) => ({
+      ...prev,
+      [preguntaId]: true,
+      [nuevaPregunta.id]: true,
+    }));
+  };
+
   const handleSave = () => {
     startSaving(async () => {
       try {
-        const saved = await upsertProductoChecklist(productoId, normalizeChecklistForSave(draft));
-        setDraft(saved);
-        onSaved(saved);
+        const normalizedDraft = normalizeChecklistRouteInsertions(draft);
+        const saved = await upsertProductoChecklist(
+          productoId,
+          normalizeChecklistForSave(normalizedDraft),
+        );
+        const normalizedSaved = normalizeChecklistRouteInsertions(saved);
+        setDraft(normalizedSaved);
+        onSaved(normalizedSaved);
         toast.success("Configurador guardado.");
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "No se pudo guardar el configurador.");
@@ -542,6 +854,7 @@ export function ProductoServicioChecklistEditor({
       Extract<ChecklistRoutePreviewItem, { kind: "optional" }>
     >();
     for (const pregunta of draft.preguntas) {
+      if (!reachableQuestionIds.has(pregunta.id)) continue;
       for (const respuesta of pregunta.respuestas) {
         for (const regla of respuesta.reglas) {
           if (!isStepRule(regla) || !regla.pasoPlantillaId) continue;
@@ -607,7 +920,7 @@ export function ProductoServicioChecklistEditor({
     }
 
     return ordered;
-  }, [draft.preguntas, operaciones, routeStepOptions]);
+  }, [draft.preguntas, operaciones, reachableQuestionIds, routeStepOptions]);
 
   const applyPreviewOrder = (nextPreviewItems: ChecklistRoutePreviewItem[]) => {
     const nextConfigs = new Map<
@@ -666,17 +979,17 @@ export function ProductoServicioChecklistEditor({
   };
 
   const moveRoutePreviewItem = (
-    draggedStepId: string,
+    draggedItemKey: string,
     targetKey: string,
     position: "before" | "after",
   ) => {
     const currentOptional = routePreviewItems.find(
       (item): item is Extract<ChecklistRoutePreviewItem, { kind: "optional" }> =>
-        item.kind === "optional" && item.stepId === draggedStepId,
+        item.kind === "optional" && item.key === draggedItemKey,
     );
     if (!currentOptional) return;
     const withoutDragged = routePreviewItems.filter(
-      (item) => !(item.kind === "optional" && item.stepId === draggedStepId),
+      (item) => item.key !== draggedItemKey,
     );
     const targetIndex = withoutDragged.findIndex((item) => item.key === targetKey);
     if (targetIndex === -1) return;
@@ -685,6 +998,49 @@ export function ProductoServicioChecklistEditor({
     next.splice(insertIndex, 0, currentOptional);
     applyPreviewOrder(next);
   };
+
+  const getPreviewPointerPosition = (
+    event: React.PointerEvent<HTMLDivElement>,
+  ): "before" | "after" => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return event.clientY - bounds.top < bounds.height / 2 ? "before" : "after";
+  };
+
+  React.useEffect(() => {
+    if (!pointerDraggingRouteItemKey) return;
+    const clear = () => {
+      if (
+        pointerDraggingRouteItemKey &&
+        routeDropIndicator &&
+        routeDropIndicator.targetKey !== "__end__"
+      ) {
+        moveRoutePreviewItem(
+          pointerDraggingRouteItemKey,
+          routeDropIndicator.targetKey,
+          routeDropIndicator.position,
+        );
+      } else if (pointerDraggingRouteItemKey && routeDropIndicator?.targetKey === "__end__") {
+        const withoutDragged = routePreviewItems.filter(
+          (item) => item.key !== pointerDraggingRouteItemKey,
+        );
+        const draggedItem = routePreviewItems.find(
+          (item): item is Extract<ChecklistRoutePreviewItem, { kind: "optional" }> =>
+            item.kind === "optional" && item.key === pointerDraggingRouteItemKey,
+        );
+        if (draggedItem) {
+          applyPreviewOrder([...withoutDragged, draggedItem]);
+        }
+      }
+      setPointerDraggingRouteItemKey(null);
+      setRouteDropIndicator(null);
+    };
+    window.addEventListener("pointerup", clear);
+    window.addEventListener("pointercancel", clear);
+    return () => {
+      window.removeEventListener("pointerup", clear);
+      window.removeEventListener("pointercancel", clear);
+    };
+  }, [applyPreviewOrder, moveRoutePreviewItem, pointerDraggingRouteItemKey, routeDropIndicator, routePreviewItems]);
 
   const renderRuleControls = (
     pregunta: ProductoChecklistPregunta,
@@ -981,8 +1337,26 @@ export function ProductoServicioChecklistEditor({
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
       <div className="space-y-4">
-        {draft.preguntas.map((pregunta, preguntaIndex) => (
-        <div key={pregunta.id} className="overflow-hidden rounded-lg border">
+        {draft.preguntas.map((pregunta, preguntaIndex) => {
+        const dependencyMeta = questionDependencyMeta.get(pregunta.id) ?? null;
+        return (
+        <div
+          key={pregunta.id}
+          className={cn("relative", dependencyMeta ? "ml-8 pl-6" : "")}
+        >
+          {dependencyMeta ? (
+            <>
+              <div className="absolute left-2 top-0 bottom-5 w-px rounded-full bg-orange-200" />
+              <div className="absolute left-2 top-10 h-px w-4 bg-orange-200" />
+              <div className="absolute left-0 top-8 size-4 rounded-full border-2 border-orange-500 bg-background shadow-sm" />
+            </>
+          ) : null}
+        <div
+          className={cn(
+            "overflow-hidden rounded-lg border",
+            dependencyMeta ? "border-orange-200 bg-orange-50/20" : "",
+          )}
+        >
           <div className="flex items-center justify-between gap-3 border-b bg-muted/30 px-4 py-3">
             <button
               type="button"
@@ -995,10 +1369,22 @@ export function ProductoServicioChecklistEditor({
                 <ChevronRightIcon className="size-4 text-muted-foreground" />
               )}
               <div>
-                <p className="text-sm font-medium">Pregunta {preguntaIndex + 1}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium">Pregunta {preguntaIndex + 1}</p>
+                  {dependencyMeta ? (
+                    <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-medium text-orange-700">
+                      Pregunta hija
+                    </span>
+                  ) : null}
+                </div>
                 <p className="text-xs text-muted-foreground">
                   {pregunta.texto.trim() || "Sin texto todavía"}
                 </p>
+                {dependencyMeta ? (
+                  <p className="mt-1 text-[11px] text-orange-700/90">
+                    Se muestra si: {dependencyMeta.parentQuestionTitle} → {dependencyMeta.parentResponseText}
+                  </p>
+                ) : null}
               </div>
             </button>
             <div className="flex items-center gap-3">
@@ -1007,10 +1393,23 @@ export function ProductoServicioChecklistEditor({
                 variant="destructive"
                 size="icon"
                 onClick={() =>
-                  setDraft((prev) => ({
-                    ...prev,
-                    preguntas: prev.preguntas.filter((item) => item.id !== pregunta.id),
-                  }))
+                  setDraft((prev) => {
+                    const descendantIds = collectChecklistDescendantQuestionIds(prev, pregunta.id);
+                    const idsToRemove = new Set([pregunta.id, ...descendantIds]);
+                    return {
+                      ...prev,
+                      preguntas: prev.preguntas
+                        .filter((item) => !idsToRemove.has(item.id))
+                        .map((item) => ({
+                          ...item,
+                          respuestas: item.respuestas.map((respuesta) =>
+                            respuesta.preguntaSiguienteId && idsToRemove.has(respuesta.preguntaSiguienteId)
+                              ? { ...respuesta, preguntaSiguienteId: null }
+                              : respuesta,
+                          ),
+                        })),
+                    };
+                  })
                 }
               >
                 <Trash2Icon className="size-4" />
@@ -1075,6 +1474,11 @@ export function ProductoServicioChecklistEditor({
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium">Respuestas</p>
+                    {!reachableQuestionIds.has(pregunta.id) ? (
+                      <p className="text-xs text-muted-foreground">
+                        Esta pregunta no se activa desde ninguna respuesta anterior.
+                      </p>
+                    ) : null}
                   </div>
                   {pregunta.tipoPregunta === "single_select" ? (
                     <Button
@@ -1113,6 +1517,17 @@ export function ProductoServicioChecklistEditor({
                   {pregunta.respuestas.map((respuesta, respuestaIndex) => {
                       const reglaPrincipal = respuesta.reglas[0] ?? null;
                       const reglasSecundarias = respuesta.reglas.slice(1);
+                      const childQuestion = respuesta.preguntaSiguienteId
+                        ? draft.preguntas.find((item) => item.id === respuesta.preguntaSiguienteId) ?? null
+                        : null;
+                      const childQuestionOptions = draft.preguntas
+                        .filter((item) => item.id !== pregunta.id)
+                        .filter(
+                          (item) =>
+                            item.id === respuesta.preguntaSiguienteId ||
+                            !wouldCreateChecklistCycle(draft, pregunta.id, item.id),
+                        )
+                        .sort((a, b) => a.orden - b.orden);
                       return (
                       <React.Fragment key={respuesta.id}>
                         <TableRow className="hover:bg-transparent">
@@ -1161,14 +1576,87 @@ export function ProductoServicioChecklistEditor({
                             )}
                           </TableCell>
                           <TableCell className="align-top">
-                            {reglaPrincipal ? (
-                              <div>{renderRuleControls(pregunta, respuesta, reglaPrincipal, true)}</div>
-                            ) : (
-                              <div className="flex h-10 items-center text-sm text-muted-foreground">Sin acción principal</div>
-                            )}
+                            <div className="space-y-2">
+                              {reglaPrincipal ? (
+                                <div>{renderRuleControls(pregunta, respuesta, reglaPrincipal, true)}</div>
+                              ) : (
+                                <div className="flex h-10 items-center text-sm text-muted-foreground">
+                                  Sin acción principal
+                                </div>
+                              )}
+                              {childQuestion ? (
+                                <p className="text-[11px] text-muted-foreground">
+                                  Abre:{" "}
+                                  {getPreguntaTitulo(
+                                    childQuestion,
+                                    draft.preguntas.findIndex((item) => item.id === childQuestion.id),
+                                  )}
+                                </p>
+                              ) : null}
+                            </div>
                           </TableCell>
                           <TableCell className="align-top">
                             <div className="flex items-start justify-end gap-1">
+                              <DropdownMenu>
+                                <Tooltip>
+                                  <TooltipTrigger render={
+                                    <DropdownMenuTrigger
+                                      render={
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          aria-label="Configurar pregunta hija"
+                                          title="Configurar pregunta hija"
+                                          className={cn(
+                                            childQuestion ? "text-orange-600" : "text-muted-foreground",
+                                          )}
+                                        >
+                                          <GitBranchIcon className="size-4" />
+                                        </Button>
+                                      }
+                                    />
+                                  } />
+                                  <TooltipContent>
+                                    {childQuestion ? "Editar pregunta hija" : "Vincular pregunta hija"}
+                                  </TooltipContent>
+                                </Tooltip>
+                                <DropdownMenuContent align="end" className="w-72">
+                                  <DropdownMenuGroup>
+                                    <DropdownMenuLabel>Pregunta siguiente</DropdownMenuLabel>
+                                  </DropdownMenuGroup>
+                                  <DropdownMenuItem
+                                    onClick={() => createChildQuestion(pregunta.id, respuesta.id)}
+                                  >
+                                    Crear pregunta hija
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuGroup>
+                                    <DropdownMenuLabel>Vincular pregunta existente</DropdownMenuLabel>
+                                  </DropdownMenuGroup>
+                                  <DropdownMenuRadioGroup
+                                    value={respuesta.preguntaSiguienteId ?? "__none__"}
+                                    onValueChange={(value) =>
+                                      updateRespuesta(pregunta.id, respuesta.id, (current) => ({
+                                        ...current,
+                                        preguntaSiguienteId: value === "__none__" ? null : value,
+                                      }))
+                                    }
+                                  >
+                                    <DropdownMenuRadioItem value="__none__">
+                                      Sin pregunta hija
+                                    </DropdownMenuRadioItem>
+                                    {childQuestionOptions.map((item) => (
+                                      <DropdownMenuRadioItem key={item.id} value={item.id}>
+                                        {getPreguntaTitulo(
+                                          item,
+                                          draft.preguntas.findIndex((entry) => entry.id === item.id),
+                                        )}
+                                      </DropdownMenuRadioItem>
+                                    ))}
+                                  </DropdownMenuRadioGroup>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                               <Button
                                 type="button"
                                 variant="ghost"
@@ -1304,7 +1792,8 @@ export function ProductoServicioChecklistEditor({
             </div>
           ) : null}
         </div>
-      ))}
+        </div>
+      )})}
 
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -1343,7 +1832,9 @@ export function ProductoServicioChecklistEditor({
             <>
               {routePreviewItems.map((item) => {
                 const isOptional = item.kind === "optional";
-                const isDragged = isOptional && draggedRouteStepId === item.stepId;
+                const isDragged =
+                  isOptional &&
+                  (draggedRouteItemKey === item.key || pointerDraggingRouteItemKey === item.key);
                 const dropBefore = routeDropIndicator?.targetKey === item.key && routeDropIndicator.position === "before";
                 const dropAfter = routeDropIndicator?.targetKey === item.key && routeDropIndicator.position === "after";
 
@@ -1352,41 +1843,71 @@ export function ProductoServicioChecklistEditor({
                     {dropBefore ? <div className="h-1 rounded-full bg-orange-500" /> : null}
                     <div
                       className={cn(
-                        "rounded-md border bg-background px-3 py-2",
-                        isOptional ? "cursor-grab" : "border-dashed bg-muted/20",
-                        isDragged && "opacity-50",
+                        "rounded-md border bg-background px-3 py-2 transition-transform transition-shadow",
+                        isOptional ? "cursor-grab touch-none select-none" : "border-dashed bg-muted/20",
+                        isDragged && "scale-[1.01] border-orange-300 shadow-lg ring-2 ring-orange-200",
                       )}
                       draggable={isOptional}
-                      onDragStart={() => {
+                      onPointerDown={(event) => {
                         if (!isOptional) return;
-                        setDraggedRouteStepId(item.stepId);
+                        event.preventDefault();
+                        setPointerDraggingRouteItemKey(item.key);
+                        setDraggedRouteItemKey(null);
+                      }}
+                      onPointerMove={(event) => {
+                        if (!pointerDraggingRouteItemKey || pointerDraggingRouteItemKey === item.key) return;
+                        setRouteDropIndicator({
+                          targetKey: item.key,
+                          position: getPreviewPointerPosition(event),
+                        });
+                      }}
+                      onPointerUp={(event) => {
+                        if (!pointerDraggingRouteItemKey || pointerDraggingRouteItemKey === item.key) return;
+                        moveRoutePreviewItem(
+                          pointerDraggingRouteItemKey,
+                          item.key,
+                          getPreviewPointerPosition(event),
+                        );
+                        setPointerDraggingRouteItemKey(null);
+                        setRouteDropIndicator(null);
+                      }}
+                      onDragStart={(event) => {
+                        if (!isOptional) return;
+                        event.dataTransfer.setData("text/plain", item.key);
+                        event.dataTransfer.effectAllowed = "move";
+                        setDraggedRouteItemKey(item.key);
                       }}
                       onDragEnd={() => {
-                        setDraggedRouteStepId(null);
+                        setDraggedRouteItemKey(null);
                         setRouteDropIndicator(null);
                       }}
                       onDragOver={(event) => {
-                        if (!draggedRouteStepId || draggedRouteStepId === item.stepId) return;
+                        if (!draggedRouteItemKey || draggedRouteItemKey === item.key) return;
                         event.preventDefault();
+                        event.dataTransfer.dropEffect = "move";
                         const bounds = event.currentTarget.getBoundingClientRect();
                         const position =
                           event.clientY - bounds.top < bounds.height / 2 ? "before" : "after";
                         setRouteDropIndicator({ targetKey: item.key, position });
                       }}
                       onDrop={(event) => {
-                        if (!draggedRouteStepId || draggedRouteStepId === item.stepId) return;
+                        if (!draggedRouteItemKey || draggedRouteItemKey === item.key) return;
                         event.preventDefault();
                         const bounds = event.currentTarget.getBoundingClientRect();
                         const position =
                           event.clientY - bounds.top < bounds.height / 2 ? "before" : "after";
-                        moveRoutePreviewItem(draggedRouteStepId, item.key, position);
-                        setDraggedRouteStepId(null);
+                        moveRoutePreviewItem(draggedRouteItemKey, item.key, position);
+                        setDraggedRouteItemKey(null);
                         setRouteDropIndicator(null);
                       }}
                     >
                       <div className="flex items-start gap-3">
                         <div className="pt-0.5 text-muted-foreground">
-                          {isOptional ? <GripVerticalIcon className="size-4" /> : <span className="block size-4 rounded-full bg-muted-foreground/30" />}
+                          {isOptional ? (
+                            <GripVerticalIcon className={cn("size-4", isDragged && "text-orange-600")} />
+                          ) : (
+                            <span className="block size-4 rounded-full bg-muted-foreground/30" />
+                          )}
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
@@ -1420,24 +1941,43 @@ export function ProductoServicioChecklistEditor({
               })}
               <div
                 className="rounded-md border border-dashed px-3 py-2 text-center text-xs text-muted-foreground"
-                onDragOver={(event) => {
-                  if (!draggedRouteStepId) return;
-                  event.preventDefault();
+                onPointerMove={() => {
+                  if (!pointerDraggingRouteItemKey) return;
                   setRouteDropIndicator({ targetKey: "__end__", position: "after" });
                 }}
-                onDrop={(event) => {
-                  if (!draggedRouteStepId) return;
-                  event.preventDefault();
+                onPointerUp={() => {
+                  if (!pointerDraggingRouteItemKey) return;
                   const withoutDragged = routePreviewItems.filter(
-                    (item) => !(item.kind === "optional" && item.stepId === draggedRouteStepId),
+                    (item) => item.key !== pointerDraggingRouteItemKey,
                   );
                   const draggedItem = routePreviewItems.find(
                     (item): item is Extract<ChecklistRoutePreviewItem, { kind: "optional" }> =>
-                      item.kind === "optional" && item.stepId === draggedRouteStepId,
+                      item.kind === "optional" && item.key === pointerDraggingRouteItemKey,
                   );
                   if (!draggedItem) return;
                   applyPreviewOrder([...withoutDragged, draggedItem]);
-                  setDraggedRouteStepId(null);
+                  setPointerDraggingRouteItemKey(null);
+                  setRouteDropIndicator(null);
+                }}
+                onDragOver={(event) => {
+                  if (!draggedRouteItemKey) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  setRouteDropIndicator({ targetKey: "__end__", position: "after" });
+                }}
+                onDrop={(event) => {
+                  if (!draggedRouteItemKey) return;
+                  event.preventDefault();
+                  const withoutDragged = routePreviewItems.filter(
+                    (item) => item.key !== draggedRouteItemKey,
+                  );
+                  const draggedItem = routePreviewItems.find(
+                    (item): item is Extract<ChecklistRoutePreviewItem, { kind: "optional" }> =>
+                      item.kind === "optional" && item.key === draggedRouteItemKey,
+                  );
+                  if (!draggedItem) return;
+                  applyPreviewOrder([...withoutDragged, draggedItem]);
+                  setDraggedRouteItemKey(null);
                   setRouteDropIndicator(null);
                 }}
               >
@@ -1462,6 +2002,22 @@ export function ProductoServicioChecklistCotizador({
   value,
   onChange,
 }: ChecklistCotizadorProps) {
+  const questionDependencyMeta = React.useMemo(
+    () => buildChecklistQuestionDependencyMeta(checklist),
+    [checklist],
+  );
+  const visibleQuestionIds = React.useMemo(
+    () => resolveVisibleChecklistQuestionIds(checklist, value),
+    [checklist, value],
+  );
+
+  React.useEffect(() => {
+    const nextValue = pruneChecklistSelections(checklist, value);
+    if (JSON.stringify(nextValue) !== JSON.stringify(value)) {
+      onChange(nextValue);
+    }
+  }, [checklist, onChange, value]);
+
   if (!checklist.activo || checklist.preguntas.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -1470,51 +2026,112 @@ export function ProductoServicioChecklistCotizador({
     );
   }
 
+  const visiblePreguntas = checklist.preguntas
+        .filter((pregunta) => pregunta.activo && visibleQuestionIds.has(pregunta.id))
+        .sort((a, b) => a.orden - b.orden);
+
   return (
-    <div className="grid gap-3 md:grid-cols-2">
-      {checklist.preguntas
-        .filter((pregunta) => pregunta.activo)
-        .sort((a, b) => a.orden - b.orden)
-        .map((pregunta) => {
+    <div className="space-y-3">
+      {visiblePreguntas.map((pregunta) => {
+          const dependencyMeta = questionDependencyMeta.get(pregunta.id) ?? null;
           const selected = value[pregunta.id];
+          const respuestasActivas = pregunta.respuestas
+            .filter((respuesta) => respuesta.activo)
+            .sort((a, b) => a.orden - b.orden);
+          const useMiniCards = respuestasActivas.length > 0 && respuestasActivas.length <= 4;
           const selectedLabel =
-            pregunta.respuestas.find((respuesta) => respuesta.id === selected?.respuestaId)?.texto ??
+            respuestasActivas.find((respuesta) => respuesta.id === selected?.respuestaId)?.texto ??
             "Sin seleccionar";
+          const handleSelectRespuesta = (respuestaId: string | null) => {
+            const next = { ...value };
+            if (!respuestaId) {
+              delete next[pregunta.id];
+            } else {
+              next[pregunta.id] = { respuestaId };
+            }
+            onChange(next);
+          };
           return (
-            <div key={pregunta.id} className="space-y-3 rounded-md border p-3">
+            <div
+              key={pregunta.id}
+              className={cn("relative", dependencyMeta ? "ml-5 pl-5" : "")}
+            >
+              {dependencyMeta ? (
+                <>
+                  <div className="absolute left-1 top-0 bottom-4 w-px rounded-full bg-orange-200" />
+                  <div className="absolute left-1 top-8 h-px w-3 bg-orange-200" />
+                  <div className="absolute -left-1 top-6 size-3 rounded-full border-2 border-orange-500 bg-background" />
+                </>
+              ) : null}
+              <div
+                className={cn(
+                  "space-y-2 rounded-md border p-3",
+                  dependencyMeta ? "border-orange-200 bg-orange-50/20" : "",
+                )}
+              >
               <Field>
-                <FieldLabel>{pregunta.texto}</FieldLabel>
-                <Select
-                  value={selected?.respuestaId ?? "__none__"}
-                  onValueChange={(respuestaId) => {
-                    const next = { ...value };
-                    const respuestaIdSafe = respuestaId ?? "__none__";
-                    if (respuestaIdSafe === "__none__") {
-                      delete next[pregunta.id];
-                    } else {
-                      next[pregunta.id] = { respuestaId: respuestaIdSafe };
-                    }
-                    onChange(next);
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona una respuesta">
-                      {selectedLabel}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Sin seleccionar</SelectItem>
-                    {pregunta.respuestas
-                      .filter((respuesta) => respuesta.activo)
-                      .sort((a, b) => a.orden - b.orden)
-                      .map((respuesta) => (
+                <FieldLabel>
+                  <span className="inline-flex items-center gap-2">
+                    <span>{pregunta.texto}</span>
+                    {dependencyMeta ? (
+                      <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700">
+                        Hija
+                      </span>
+                    ) : null}
+                  </span>
+                </FieldLabel>
+                {dependencyMeta ? (
+                  <p className="mb-2 text-[11px] text-orange-700/90">
+                    Depende de: {dependencyMeta.parentQuestionTitle} → {dependencyMeta.parentResponseText}
+                  </p>
+                ) : null}
+                {useMiniCards ? (
+                  <div className="flex flex-wrap gap-2">
+                    {respuestasActivas.map((respuesta) => {
+                      const isSelected = selected?.respuestaId === respuesta.id;
+                      return (
+                        <button
+                          key={respuesta.id}
+                          type="button"
+                          onClick={() => handleSelectRespuesta(isSelected ? null : respuesta.id)}
+                          className={cn(
+                            "inline-flex min-h-9 items-center rounded-full border px-3 py-1.5 text-sm transition-colors",
+                            isSelected
+                              ? "border-primary bg-primary/10 text-foreground"
+                              : "border-border bg-background hover:border-primary/40 hover:bg-muted/50",
+                          )}
+                        >
+                          <span className="font-medium">{respuesta.texto}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <Select
+                    value={selected?.respuestaId ?? "__none__"}
+                    onValueChange={(respuestaId) => {
+                      handleSelectRespuesta(
+                        respuestaId && respuestaId !== "__none__" ? respuestaId : null,
+                      );
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona una respuesta">
+                        {selectedLabel}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Sin seleccionar</SelectItem>
+                      {respuestasActivas.map((respuesta) => (
                         <SelectItem key={respuesta.id} value={respuesta.id}>
                           {respuesta.texto}
                         </SelectItem>
                       ))}
-                  </SelectContent>
-                </Select>
+                    </SelectContent>
+                    </Select>
+                )}
               </Field>
+              </div>
             </div>
           );
         })}

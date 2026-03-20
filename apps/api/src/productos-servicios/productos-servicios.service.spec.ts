@@ -25,6 +25,30 @@ describe('ProductosServiciosService V1 adicionales', () => {
     varianteAltoMm: number;
     overridesProductividad?: Record<string, unknown>;
   }) => { runMin: number; trace: Record<string, unknown> } | null;
+  let calculateLaminadoraFilmConsumables: (input: {
+    operation: {
+      maquinaId: string | null;
+      perfilOperativoId: string | null;
+      maquina: {
+        plantilla: string;
+      } | null;
+    };
+    consumiblesFilm: Array<{
+      maquinaId: string;
+      perfilOperativoId: string | null;
+      unidad: string;
+      consumoBase: number | null;
+      materiaPrimaVariante: {
+        sku: string;
+        precioReferencia: number | null;
+        materiaPrima: {
+          nombre: string;
+        };
+      };
+    }>;
+    timingOverride: { trace?: Record<string, unknown> | null } | null;
+    warnings: string[];
+  }) => { materiales: Array<Record<string, unknown>>; costo: number };
   let buildOperacionesCotizadasOrdenadas: (
     operacionesBase: Array<{ orden: number; nombre: string; detalleJson?: unknown }>,
     routeEffects: Array<{
@@ -108,6 +132,28 @@ describe('ProductosServiciosService V1 adicionales', () => {
     patch: Record<string, unknown>,
   ) => Record<string, unknown>;
   let toProductoResponseBase: (item: Record<string, unknown>) => Record<string, unknown>;
+  let validateProductoChecklistPayload: (payload: {
+    preguntas: Array<{
+      id?: string;
+      texto: string;
+      tipoPregunta: string;
+      orden?: number;
+      respuestas: Array<{
+        texto: string;
+        preguntaSiguienteId?: string | null;
+        orden?: number;
+        reglas?: Array<Record<string, unknown>>;
+      }>;
+    }>;
+  }) => void;
+  let resolveChecklistPreguntaIdsActivas: (
+    preguntas: Array<{
+      id: string;
+      activo: boolean;
+      respuestas: Array<{ id: string; activo: boolean; preguntaSiguienteId: string | null }>;
+    }>,
+    selectedByPreguntaId: Map<string, string>,
+  ) => Set<string>;
 
   beforeEach(() => {
     service = new ProductosServiciosService({} as never);
@@ -119,6 +165,10 @@ describe('ProductosServiciosService V1 adicionales', () => {
       service as unknown as Record<string, unknown>,
       'calculateTerminatingOperationTiming',
     ) as typeof calculateTerminatingOperationTiming;
+    calculateLaminadoraFilmConsumables = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'calculateLaminadoraFilmConsumables',
+    ) as typeof calculateLaminadoraFilmConsumables;
     buildOperacionesCotizadasOrdenadas = Reflect.get(
       service as unknown as Record<string, unknown>,
       'buildOperacionesCotizadasOrdenadas',
@@ -143,6 +193,14 @@ describe('ProductosServiciosService V1 adicionales', () => {
       service as unknown as Record<string, unknown>,
       'toProductoResponseBase',
     ) as typeof toProductoResponseBase;
+    validateProductoChecklistPayload = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'validateProductoChecklistPayload',
+    ) as typeof validateProductoChecklistPayload;
+    resolveChecklistPreguntaIdsActivas = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'resolveChecklistPreguntaIdsActivas',
+    ) as typeof resolveChecklistPreguntaIdsActivas;
   });
 
   it('usa la ruta completa para márgenes de imposición aunque haya filtros por addon', () => {
@@ -247,7 +305,7 @@ describe('ProductosServiciosService V1 adicionales', () => {
           plantilla: 'LAMINADORA_BOPP_ROLLO',
           parametrosTecnicosJson: {
             anchoRolloMm: 330,
-            velocidadMMin: 20,
+            velocidadMmSeg: 333,
             mermaArranqueMm: 500,
             mermaCierreMm: 300,
           },
@@ -255,9 +313,6 @@ describe('ProductosServiciosService V1 adicionales', () => {
         perfilOperativo: {
           detalleJson: {
             gapEntreHojasMm: 6,
-            margenLatIzqMm: 4,
-            margenLatDerMm: 4,
-            colaCorteMm: 2,
           },
         },
       },
@@ -274,6 +329,209 @@ describe('ProductosServiciosService V1 adicionales', () => {
     expect(result).not.toBeNull();
     expect(result?.runMin).toBeGreaterThan(0);
     expect(Number(result?.trace?.areaConsumidaM2 ?? 0)).toBeGreaterThan(0);
+  });
+
+  it('duplica el consumo de film en laminado dos caras simultaneo', () => {
+    const timing = calculateTerminatingOperationTiming.call(service, {
+      operacion: {
+        maquina: {
+          plantilla: 'LAMINADORA_BOPP_ROLLO',
+          parametrosTecnicosJson: {
+            anchoRolloMm: 330,
+            velocidadMmSeg: 333,
+            velocidadDobleRolloMmSeg: 250,
+            soportaDobleRollo: true,
+            mermaArranqueMm: 500,
+            mermaCierreMm: 300,
+          },
+        },
+        perfilOperativo: {
+          detalleJson: {
+            modoLaminado: 'dos_caras_simultaneo',
+            gapEntreHojasMm: 6,
+          },
+        },
+      },
+      cantidad: 1000,
+      pliegos: 1000,
+      setupMinBase: 3,
+      cleanupMinBase: 1,
+      tiempoFijoMinBase: 0,
+      cantidadObjetivoSalida: 1000,
+      varianteAnchoMm: 210,
+      varianteAltoMm: 297,
+    });
+
+    const result = calculateLaminadoraFilmConsumables.call(service, {
+      operation: {
+        maquinaId: 'maq-1',
+        perfilOperativoId: 'perfil-1',
+        maquina: { plantilla: 'LAMINADORA_BOPP_ROLLO' },
+      },
+      consumiblesFilm: [
+        {
+          maquinaId: 'maq-1',
+          perfilOperativoId: 'perfil-1',
+          unidad: 'METRO_LINEAL',
+          consumoBase: 1,
+          materiaPrimaVariante: {
+            sku: 'FILM-330',
+            precioReferencia: 2,
+            materiaPrima: { nombre: 'Film BOPP brillo' },
+          },
+        },
+      ],
+      timingOverride: timing,
+      warnings: [],
+    });
+
+    const cantidad = Number(result.materiales[0]?.cantidad ?? 0);
+    expect(Number(timing?.trace?.filmFactor ?? 0)).toBe(2);
+    expect(cantidad).toBeGreaterThan(0);
+    expect(result.costo).toBeCloseTo(cantidad * 2, 6);
+  });
+
+  it('prioriza la velocidad del perfil de laminadora en el costeo', () => {
+    const result = calculateTerminatingOperationTiming.call(service, {
+      operacion: {
+        maquina: {
+          plantilla: 'LAMINADORA_BOPP_ROLLO',
+          parametrosTecnicosJson: {
+            anchoRolloMm: 330,
+            velocidadMmSeg: 333,
+            mermaArranqueMm: 500,
+            mermaCierreMm: 300,
+          },
+        },
+        perfilOperativo: {
+          detalleJson: {
+            modoLaminado: 'una_cara',
+            velocidadTrabajoMmSeg: 200,
+            gapEntreHojasMm: 6,
+          },
+        },
+      },
+      cantidad: 1000,
+      pliegos: 1000,
+      setupMinBase: 3,
+      cleanupMinBase: 1,
+      tiempoFijoMinBase: 0,
+      cantidadObjetivoSalida: 1000,
+      varianteAnchoMm: 210,
+      varianteAltoMm: 297,
+    });
+
+    expect(result).not.toBeNull();
+    expect(Number(result?.trace?.velocidadTrabajoMmSeg ?? 0)).toBe(200);
+    expect(Number(result?.trace?.velocidadMmSegEfectiva ?? 0)).toBe(200);
+    expect(result?.runMin).toBeGreaterThan(0);
+  });
+
+  it('rechaza perfil de doble rollo cuando la maquina no lo soporta', () => {
+    expect(() =>
+      calculateTerminatingOperationTiming.call(service, {
+        operacion: {
+          maquina: {
+            plantilla: 'LAMINADORA_BOPP_ROLLO',
+            parametrosTecnicosJson: {
+              anchoRolloMm: 330,
+              velocidadMmSeg: 333,
+              mermaArranqueMm: 500,
+              mermaCierreMm: 300,
+            },
+          },
+          perfilOperativo: {
+            detalleJson: {
+              modoLaminado: 'dos_caras_simultaneo',
+              gapEntreHojasMm: 6,
+            },
+          },
+        },
+        cantidad: 1000,
+        pliegos: 1000,
+        setupMinBase: 3,
+        cleanupMinBase: 1,
+        tiempoFijoMinBase: 0,
+        cantidadObjetivoSalida: 1000,
+        varianteAnchoMm: 210,
+        varianteAltoMm: 297,
+      }),
+    ).toThrow('La laminadora no soporta doble rollo');
+  });
+
+  it('rechaza ciclos entre preguntas del configurador', () => {
+    expect(() =>
+      validateProductoChecklistPayload.call(service, {
+        preguntas: [
+          {
+            id: 'preg-1',
+            texto: 'Incluye laminado',
+            tipoPregunta: 'binaria',
+            respuestas: [
+              {
+                texto: 'Si',
+                preguntaSiguienteId: 'preg-2',
+                reglas: [],
+              },
+              {
+                texto: 'No',
+                reglas: [],
+              },
+            ],
+          },
+          {
+            id: 'preg-2',
+            texto: 'Una cara o ambas caras',
+            tipoPregunta: 'single_select',
+            respuestas: [
+              {
+                texto: 'Una cara',
+                preguntaSiguienteId: 'preg-1',
+                reglas: [],
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow('El configurador no puede contener ciclos entre preguntas.');
+  });
+
+  it('activa preguntas hijas solo cuando la respuesta padre las abre', () => {
+    const preguntas = [
+      {
+        id: 'preg-1',
+        activo: true,
+        respuestas: [
+          { id: 'resp-1a', activo: true, preguntaSiguienteId: 'preg-2' },
+          { id: 'resp-1b', activo: true, preguntaSiguienteId: null },
+        ],
+      },
+      {
+        id: 'preg-2',
+        activo: true,
+        respuestas: [{ id: 'resp-2a', activo: true, preguntaSiguienteId: null }],
+      },
+    ];
+
+    expect(
+      Array.from(
+        resolveChecklistPreguntaIdsActivas.call(
+          service,
+          preguntas,
+          new Map<string, string>([['preg-1', 'resp-1b']]),
+        ),
+      ),
+    ).toEqual(['preg-1']);
+
+    expect(
+      Array.from(
+        resolveChecklistPreguntaIdsActivas.call(
+          service,
+          preguntas,
+          new Map<string, string>([['preg-1', 'resp-1a']]),
+        ),
+      ),
+    ).toEqual(['preg-1', 'preg-2']);
   });
 
   it('calcula redondeadora por golpes totales', () => {

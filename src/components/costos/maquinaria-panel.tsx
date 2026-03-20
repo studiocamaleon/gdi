@@ -1132,18 +1132,6 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
       { contenido: string; rendimiento: string; coberturaIsoFabricante: string; cobertura: string }
     >
   >({});
-  const showPrinterConsumiblesStep = React.useMemo(
-    () => supportsPrinterInkConsumption(form.plantilla),
-    [form.plantilla],
-  );
-  const requiredPrinterChannels = React.useMemo(
-    () =>
-      showPrinterConsumiblesStep
-        ? getRequiredPrinterChannels(form.parametrosTecnicos, form.plantilla)
-        : [],
-    [form.parametrosTecnicos, form.plantilla, showPrinterConsumiblesStep],
-  );
-
   const getConsumibleCalculatorDraft = React.useCallback(
     (consumibleId: string) =>
       consumibleCalculatorDraftById[consumibleId] ?? {
@@ -1257,6 +1245,18 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
         ?.fields.filter((fieldItem) => fieldItem.scope === "consumible") ?? [],
     [templateInfo],
   );
+  const showConsumiblesStep = consumibleTemplateFields.length > 0;
+  const showPrinterConsumiblesStep = React.useMemo(
+    () => showConsumiblesStep && supportsPrinterInkConsumption(form.plantilla),
+    [form.plantilla, showConsumiblesStep],
+  );
+  const requiredPrinterChannels = React.useMemo(
+    () =>
+      showPrinterConsumiblesStep
+        ? getRequiredPrinterChannels(form.parametrosTecnicos, form.plantilla)
+        : [],
+    [form.parametrosTecnicos, form.plantilla, showPrinterConsumiblesStep],
+  );
   const desgasteTemplateFields = React.useMemo(
     () =>
       templateInfo?.sections
@@ -1321,19 +1321,16 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
             .filter((variante) => variante.activo)
             .map((variante) => ({
               value: variante.id,
-              label: `${materiaPrima.nombre} - ${getVariantFunctionalName(
-                variante.nombreVariante,
-                variante.atributosVariante,
-              )}`,
+              label: getMateriaPrimaVarianteLabel(materiaPrima, variante, { maxDimensiones: 5 }),
               sku: variante.sku,
               precioReferencia: variante.precioReferencia,
               unidadStock: materiaPrima.unidadStock,
               nombre: materiaPrima.nombre,
-              nombreVariante: getVariantFunctionalName(
-                variante.nombreVariante,
-                variante.atributosVariante,
-              ),
+              nombreVariante: getMateriaPrimaVarianteLabel(materiaPrima, variante, {
+                maxDimensiones: 5,
+              }),
               subfamilia: materiaPrima.subfamilia,
+              ancho: toFiniteNumberOrUndefined(String(variante.atributosVariante?.ancho ?? "")),
             })),
         )
         .sort((a, b) => a.label.localeCompare(b.label)),
@@ -1397,8 +1394,21 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
     return mapped;
   }, [perfilTemplateProductividadField?.unit]);
   const isGuillotinaTemplate = form.plantilla === "guillotina";
+  const isLaminadoraTemplate = form.plantilla === "laminadora_bopp_rollo";
+  const anchoRolloLaminadoraMm = React.useMemo(
+    () => getNumericParamValue(form.parametrosTecnicos ?? undefined, "anchoRolloMm"),
+    [form.parametrosTecnicos],
+  );
   const altoBocaMm = React.useMemo(
     () => getNumericParamValue(form.parametrosTecnicos ?? undefined, "altoBocaMm"),
+    [form.parametrosTecnicos],
+  );
+  const velocidadLaminadoraMmSeg = React.useMemo(
+    () => getNumericParamValue(form.parametrosTecnicos ?? undefined, "velocidadMmSeg"),
+    [form.parametrosTecnicos],
+  );
+  const velocidadLaminadoraDobleRolloMmSeg = React.useMemo(
+    () => getNumericParamValue(form.parametrosTecnicos ?? undefined, "velocidadDobleRolloMmSeg"),
     [form.parametrosTecnicos],
   );
   const defaultPerfilUnidadProductividad = React.useMemo(() => {
@@ -1815,6 +1825,13 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
     showPrinterConsumiblesStep,
   ]);
 
+  React.useEffect(() => {
+    if (!showConsumiblesStep || showPrinterConsumiblesStep || !sameConsumptionAllProfiles) {
+      return;
+    }
+    setSameConsumptionAllProfiles(false);
+  }, [sameConsumptionAllProfiles, showConsumiblesStep, showPrinterConsumiblesStep]);
+
   const resetEditor = React.useCallback(() => {
     setEditingId(null);
     setForm(createMaquinaForm(plantas[0]?.id ?? ""));
@@ -1864,12 +1881,14 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
   }, []);
 
   const handleTemplateChange = React.useCallback((value: PlantillaMaquinaria) => {
-    const nextSupportsPrinterConsumibles = supportsPrinterInkConsumption(value);
     const template = getMaquinariaTemplate(value);
     const nextConsumibleFields =
       template?.sections
         .find((sectionItem) => sectionItem.id === "consumibles")
         ?.fields.filter((fieldItem) => fieldItem.scope === "consumible") ?? [];
+    const nextHasConsumiblesStep = nextConsumibleFields.length > 0;
+    const nextSupportsPrinterConsumibles =
+      nextHasConsumiblesStep && supportsPrinterInkConsumption(value);
     const nextDesgasteFields =
       template?.sections
         .find((sectionItem) => sectionItem.id === "desgaste_repuestos")
@@ -1913,7 +1932,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
       };
     });
     setConsumibles((current) => {
-      if (!nextSupportsPrinterConsumibles) {
+      if (!nextHasConsumiblesStep) {
         return [];
       }
       return current.map((item) => ({
@@ -1943,7 +1962,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
     setModeloSearch("");
     setIsFabricanteOtro(false);
     setIsModeloOtro(false);
-    if (!nextSupportsPrinterConsumibles) {
+    if (!nextHasConsumiblesStep) {
       setSelectedConsumiblePerfilId(null);
       setSameConsumptionAllProfiles(true);
     }
@@ -2019,10 +2038,9 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
       }
     }
 
-    if (showPrinterConsumiblesStep) {
+    if (showConsumiblesStep) {
       for (const consumible of consumibles) {
         const consumibleLabel = consumible.nombre.trim() || "sin nombre";
-        const color = String(consumible.detalle?.color ?? "").trim();
 
         const perfilOperativoNombre =
           (consumible.perfilOperativoLocalId
@@ -2032,7 +2050,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
           toast.error(`Completa perfil operativo en el consumible ${consumibleLabel}.`);
           return;
         }
-        if (!color) {
+        if (showPrinterConsumiblesStep && !String(consumible.detalle?.color ?? "").trim()) {
           toast.error(`Completa canal/color en el consumible ${consumibleLabel}.`);
           return;
         }
@@ -2040,7 +2058,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
           toast.error(`Selecciona una variante valida en el consumible ${consumibleLabel}.`);
           return;
         }
-        if (!varianteConsumibleImpresionById.has(consumible.materiaPrimaVarianteId)) {
+        if (!varianteConsumibleById.has(consumible.materiaPrimaVarianteId)) {
           toast.error(
             `El consumible ${consumibleLabel} referencia una variante inexistente o inactiva.`,
           );
@@ -2123,7 +2141,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
     const payload = toPayload(
       form,
       perfiles,
-      showPrinterConsumiblesStep ? consumibles : [],
+      showConsumiblesStep ? consumibles : [],
       desgastes,
     );
 
@@ -2155,9 +2173,10 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
     perfilTemplateFields,
     perfiles,
     resetEditor,
+    showConsumiblesStep,
     showPrinterConsumiblesStep,
     templateMachineFields,
-    varianteConsumibleImpresionById,
+    varianteConsumibleById,
     varianteRepuestoById,
   ]);
 
@@ -2322,6 +2341,15 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
           pesoMaximo: false,
         };
       case "rollo":
+        if (form.plantilla === "laminadora_bopp_rollo") {
+          return {
+            anchoUtil: false,
+            largoUtil: false,
+            altoUtil: false,
+            espesorMaximo: true,
+            pesoMaximo: false,
+          };
+        }
         return {
           anchoUtil: true,
           largoUtil: false,
@@ -2410,14 +2438,13 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
 
     const consumiblesTotal = consumibles.length * 4;
     const consumiblesDone = consumibles.reduce((acc, consumible) => {
-      const color = String(consumible.detalle?.color ?? "").trim();
       const perfilAsignado = consumible.perfilOperativoLocalId || consumible.perfilOperativoNombre?.trim();
       return (
         acc +
         Number(Boolean(perfilAsignado)) +
         Number(Boolean(consumible.materiaPrimaVarianteId)) +
         Number(consumible.consumoBase !== undefined && !Number.isNaN(consumible.consumoBase)) +
-        Number(Boolean(color))
+        Number(showPrinterConsumiblesStep ? Boolean(String(consumible.detalle?.color ?? "").trim()) : Boolean(consumible.nombre.trim()))
       );
     }, 0);
     const consumiblesProgress =
@@ -2447,7 +2474,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
       desgaste: desgasteProgress,
       total,
     };
-  }, [consumibles, desgastes, form.codigo, form.estado, form.nombre, form.plantaId, form.plantilla, form.unidadProduccionPrincipal, perfiles]);
+  }, [consumibles, desgastes, form.codigo, form.estado, form.nombre, form.plantaId, form.plantilla, form.unidadProduccionPrincipal, perfiles, showPrinterConsumiblesStep]);
 
   const isPresetParamField = React.useCallback(
     (fieldKey: string) => presetAppliedParamKeys.has(fieldKey),
@@ -2925,10 +2952,13 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
             next.materiaPrimaVarianteId = nextId;
             const selected = varianteConsumibleById.get(nextId);
             if (selected) {
-              next.nombre = selected.nombre;
+              next.nombre = selected.label;
               const mappedUnit = mapUnidadMateriaPrimaToConsumo(selected.unidadStock);
               if (mappedUnit) {
                 next.unidad = mappedUnit;
+              }
+              if (isLaminadoraTemplate) {
+                next.tipo = "film";
               }
             }
           } else if (fieldItem.key === "nombre") {
@@ -2987,7 +3017,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
         }),
       );
     },
-    [perfiles, varianteConsumibleById],
+    [isLaminadoraTemplate, perfiles, varianteConsumibleById],
   );
 
   const setDesgasteTemplateFieldValue = React.useCallback(
@@ -3457,7 +3487,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                     <Progress value={progressByTab.perfiles} />
                     <p className="text-xs">{progressByTab.perfiles}%</p>
                   </div>
-                  {showPrinterConsumiblesStep ? (
+                  {showConsumiblesStep ? (
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">Consumibles</p>
                       <Progress value={progressByTab.consumibles} />
@@ -3476,11 +3506,11 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
             <TabsList className="mx-auto w-full max-w-5xl justify-start overflow-x-auto">
               <TabsTrigger value="general">1. Datos base</TabsTrigger>
               <TabsTrigger value="perfiles">2. Perfiles operativos</TabsTrigger>
-              {showPrinterConsumiblesStep ? (
+              {showConsumiblesStep ? (
                 <TabsTrigger value="consumibles">3. Consumibles</TabsTrigger>
               ) : null}
               <TabsTrigger value="desgaste">
-                {showPrinterConsumiblesStep ? "4. Desgaste y repuestos" : "3. Desgaste y repuestos"}
+                {showConsumiblesStep ? "4. Desgaste y repuestos" : "3. Desgaste y repuestos"}
               </TabsTrigger>
             </TabsList>
 
@@ -4020,6 +4050,9 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                   </CardHeader>
                   <CardContent>
                     <FieldGroup className="grid gap-4 md:grid-cols-4">
+                      {form.plantilla === "laminadora_bopp_rollo"
+                        ? templateCapacityFields.map((entry) => renderTemplateMachineField(entry))
+                        : null}
                       {visibleCapacityFields.anchoUtil ? (
                         <Field>
                           <FieldLabel>
@@ -4095,7 +4128,9 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                       {visibleCapacityFields.espesorMaximo ? (
                         <Field>
                           <FieldLabel>
-                            Espesor maximo (mm)
+                            {form.plantilla === "laminadora_bopp_rollo"
+                              ? "Espesor maximo (micrones)"
+                              : "Espesor maximo (mm)"}
                             {renderRequiredAsterisk(requiredTemplateMachineKeySet.has("espesorMaximo"))}
                           </FieldLabel>
                           <Input
@@ -4130,7 +4165,9 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                           />
                         </Field>
                       ) : null}
-                      {templateCapacityFields.map((entry) => renderTemplateMachineField(entry))}
+                      {form.plantilla !== "laminadora_bopp_rollo"
+                        ? templateCapacityFields.map((entry) => renderTemplateMachineField(entry))
+                        : null}
                     </FieldGroup>
                   </CardContent>
                 </Card>
@@ -4219,7 +4256,12 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                       const nextPerfil = createPerfilOperativo({
                         productivityUnit:
                           form.plantilla === "guillotina" ? undefined : defaultPerfilUnidadProductividad,
-                        tipoPerfil: form.plantilla === "guillotina" ? "corte" : "impresion",
+                        tipoPerfil:
+                          form.plantilla === "guillotina"
+                            ? "corte"
+                            : form.plantilla === "laminadora_bopp_rollo"
+                              ? "laminado"
+                              : "impresion",
                         detalle:
                           form.plantilla === "guillotina" && altoBocaMm && altoBocaMm > 0
                             ? { maxBatchHeightMm: altoBocaMm }
@@ -4255,10 +4297,14 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             ) : (
                               <>
                                 <TableHead className="min-w-32">
-                                  {perfilTemplateProductividadField?.label || "Productividad"}
+                                  {isLaminadoraTemplate
+                                    ? "Velocidad trabajo"
+                                    : perfilTemplateProductividadField?.label || "Productividad"}
                                 </TableHead>
                                 <TableHead className="min-w-40">Unidad</TableHead>
-                                <TableHead className="min-w-40">Modo trabajo</TableHead>
+                                <TableHead className="min-w-40">
+                                  {isLaminadoraTemplate ? "Modo laminado" : "Modo trabajo"}
+                                </TableHead>
                               </>
                             )}
                             <TableHead className="w-24">Activo</TableHead>
@@ -4347,68 +4393,93 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                               ) : (
                                 <>
                                   <TableCell>
-                                    <Input
-                                      type="number"
-                                      value={perfil.productivityValue ?? ""}
-                                      onChange={(event) =>
-                                        setPerfiles((current) =>
-                                          current.map((item) =>
-                                            item.id === perfil.id
-                                              ? {
-                                                  ...item,
-                                                  productivityValue: toFiniteNumberOrUndefined(event.target.value),
-                                                }
-                                              : item,
-                                          ),
-                                        )
-                                      }
-                                    />
+                                    {isLaminadoraTemplate ? (
+                                      <p className="text-sm">
+                                        {typeof perfil.detalle?.velocidadTrabajoMmSeg === "number"
+                                          ? perfil.detalle.velocidadTrabajoMmSeg
+                                          : "Usa velocidad de la maquina"}
+                                      </p>
+                                    ) : (
+                                      <Input
+                                        type="number"
+                                        value={perfil.productivityValue ?? ""}
+                                        onChange={(event) =>
+                                          setPerfiles((current) =>
+                                            current.map((item) =>
+                                              item.id === perfil.id
+                                                ? {
+                                                    ...item,
+                                                    productivityValue: toFiniteNumberOrUndefined(event.target.value),
+                                                  }
+                                                : item,
+                                            ),
+                                          )
+                                        }
+                                      />
+                                    )}
                                   </TableCell>
                                   <TableCell>
-                                    <Select
-                                      value={perfil.productivityUnit || defaultPerfilUnidadProductividad}
-                                      disabled={Boolean(templatePerfilProductivityUnit)}
-                                      onValueChange={(value) =>
-                                        setPerfiles((current) =>
-                                          current.map((item) =>
-                                            item.id === perfil.id
-                                              ? {
-                                                  ...item,
-                                                  productivityUnit:
-                                                    value as LocalPerfilOperativo["productivityUnit"],
-                                                }
-                                              : item,
-                                          ),
-                                        )
-                                      }
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue>
-                                          {unidadProductividadItems.find(
-                                            (item) =>
-                                              item.value ===
-                                              (perfil.productivityUnit || defaultPerfilUnidadProductividad),
-                                          )?.label ??
-                                            formatTechnicalValue(
-                                              perfil.productivityUnit || defaultPerfilUnidadProductividad,
-                                            )}
-                                        </SelectValue>
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectGroup>
-                                          {unidadProductividadItems.map((item) => (
-                                            <SelectItem key={item.value} value={item.value}>
-                                              {item.label}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectGroup>
-                                      </SelectContent>
-                                    </Select>
+                                    {isLaminadoraTemplate ? (
+                                      <p className="text-sm">mm/seg</p>
+                                    ) : (
+                                      <Select
+                                        value={perfil.productivityUnit || defaultPerfilUnidadProductividad}
+                                        disabled={Boolean(templatePerfilProductivityUnit)}
+                                        onValueChange={(value) =>
+                                          setPerfiles((current) =>
+                                            current.map((item) =>
+                                              item.id === perfil.id
+                                                ? {
+                                                    ...item,
+                                                    productivityUnit:
+                                                      value as LocalPerfilOperativo["productivityUnit"],
+                                                  }
+                                                : item,
+                                            ),
+                                          )
+                                        }
+                                      >
+                                        <SelectTrigger>
+                                          <SelectValue>
+                                            {unidadProductividadItems.find(
+                                              (item) =>
+                                                item.value ===
+                                                (perfil.productivityUnit || defaultPerfilUnidadProductividad),
+                                            )?.label ??
+                                              formatTechnicalValue(
+                                                perfil.productivityUnit || defaultPerfilUnidadProductividad,
+                                              )}
+                                          </SelectValue>
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectGroup>
+                                            {unidadProductividadItems.map((item) => (
+                                              <SelectItem key={item.value} value={item.value}>
+                                                {item.label}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectGroup>
+                                        </SelectContent>
+                                      </Select>
+                                    )}
                                   </TableCell>
                                   <TableCell>
-                                    <p className="text-sm text-muted-foreground">
-                                      {perfil.operationMode || "Definido por parametros del perfil"}
-                                    </p>
+                                    {isLaminadoraTemplate ? (
+                                      <p className="text-sm text-muted-foreground">
+                                        {(() => {
+                                          const value = String(perfil.detalle?.modoLaminado ?? "").trim();
+                                          const field = perfilTemplateFields.find((item) => item.key === "modoLaminado");
+                                          return (
+                                            field?.options?.find((option) => option.value === value)?.label ??
+                                            "Sin definir"
+                                          );
+                                        })()}
+                                      </p>
+                                    ) : (
+                                      <p className="text-sm text-muted-foreground">
+                                        {perfil.operationMode || "Definido por parametros del perfil"}
+                                      </p>
+                                    )}
                                   </TableCell>
                                 </>
                               )}
@@ -4607,6 +4678,22 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             const inputType = fieldItem.kind === "number" ? "number" : "text";
                             const inputValue = String(rawValue ?? "");
                             const unitLabel = getUnitLabel(fieldItem.unit);
+                            const inheritsMachineSpeed =
+                              isLaminadoraTemplate &&
+                              (fieldItem.key === "velocidadTrabajoMmSeg" ||
+                                fieldItem.key === "velocidadDobleRolloTrabajoMmSeg");
+                            const machineSpeedDefault =
+                              fieldItem.key === "velocidadDobleRolloTrabajoMmSeg"
+                                ? velocidadLaminadoraDobleRolloMmSeg
+                                : velocidadLaminadoraMmSeg;
+                            const inheritedMachineSpeedText =
+                              inheritsMachineSpeed && machineSpeedDefault && machineSpeedDefault > 0
+                                ? `Si lo dejas vacio, usa ${machineSpeedDefault} mm/seg de la maquina.`
+                                : null;
+                            const inputPlaceholder =
+                              inheritsMachineSpeed && machineSpeedDefault && machineSpeedDefault > 0
+                                ? String(machineSpeedDefault)
+                                : getPerfilFieldPlaceholder(fieldItem);
 
                             return (
                               <Field key={`${selectedPerfil.id}-${fieldItem.key}`}>
@@ -4627,9 +4714,12 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                                       event.target.value,
                                     )
                                   }
-                                  placeholder={getPerfilFieldPlaceholder(fieldItem)}
+                                  placeholder={inputPlaceholder}
                                 />
                                 {unitLabel ? <p className="mt-1 text-xs text-muted-foreground">{unitLabel}</p> : null}
+                                {inheritedMachineSpeedText ? (
+                                  <p className="mt-1 text-xs text-muted-foreground">{inheritedMachineSpeedText}</p>
+                                ) : null}
                               </Field>
                             );
                           })}
@@ -4690,374 +4780,666 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
               </Card>
             </TabsContent>
 
-            {showPrinterConsumiblesStep ? (
+            {showConsumiblesStep ? (
               <TabsContent value="consumibles" className="m-0">
                 <Card className="mx-auto w-full max-w-5xl">
-                <CardHeader className="flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <CardTitle className="text-base">Consumibles por perfil</CardTitle>
-                    <FieldDescription>
-                      Define consumo por canal en {getUnidadMateriaPrimaLabel("ml")}/m2 o{" "}
-                      {getUnidadMateriaPrimaLabel("gramo")}/m2 segun el insumo vinculado.
-                    </FieldDescription>
-                    <FieldDescription>
-                      Los canales se generan automaticamente desde el Paso 1 (Datos base), usando:{" "}
-                      {printerChannelSourceHelpText}.
-                    </FieldDescription>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-2 rounded-md border px-3 py-1.5">
-                      <span className="text-xs text-muted-foreground">
-                        Mismo consumo en todos los perfiles
-                      </span>
-                      <Switch
-                        checked={sameConsumptionAllProfiles}
-                        onCheckedChange={(checked) => {
-                          setSameConsumptionAllProfiles(checked);
-                          if (!checked) {
-                            return;
-                          }
-                          const perfilesValidos = perfiles
-                            .map((perfil) => ({
-                              id: perfil.id,
-                              nombre: perfil.nombre.trim(),
-                            }))
-                            .filter((perfil) => perfil.nombre);
-                          if (perfilesValidos.length === 0) {
-                            return;
-                          }
-                          const perfilAncla = perfilesValidos[0];
-                          const baseRows = consumibles.filter(
-                            (item) => item.perfilOperativoLocalId === perfilAncla.id,
-                          );
-                          if (baseRows.length === 0) {
-                            return;
-                          }
-                          setConsumibles(
-                            perfilesValidos.flatMap((perfil) =>
-                              baseRows.map((row) => ({
-                                ...row,
-                                id:
-                                  perfil.id === perfilAncla.id ? row.id : createLocalId(),
-                                perfilOperativoLocalId: perfil.id,
-                                perfilOperativoNombre: perfil.nombre,
-                                detalle: {
-                                  ...(row.detalle ?? {}),
-                                  syncKey:
-                                    String(row.detalle?.syncKey ?? "") || createLocalId(),
-                                },
-                              })),
-                            ),
-                          );
-                        }}
-                      />
+                  <CardHeader className="flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <CardTitle className="text-base">Consumibles por perfil</CardTitle>
+                      {showPrinterConsumiblesStep ? (
+                        <>
+                          <FieldDescription>
+                            Define consumo por canal en {getUnidadMateriaPrimaLabel("ml")}/m2 o{" "}
+                            {getUnidadMateriaPrimaLabel("gramo")}/m2 segun el insumo vinculado.
+                          </FieldDescription>
+                          <FieldDescription>
+                            Los canales se generan automaticamente desde el Paso 1 (Datos base), usando:{" "}
+                            {printerChannelSourceHelpText}.
+                          </FieldDescription>
+                        </>
+                      ) : (
+                        <FieldDescription>
+                          Vincula el consumible principal de cada perfil y define el consumo base por unidad de trabajo. Para laminadora, aqui debes cargar el film.
+                        </FieldDescription>
+                      )}
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {!sameConsumptionAllProfiles ? (
-                    <Field className="max-w-sm">
-                      <FieldLabel>Perfil operativo</FieldLabel>
-                      <Select
-                        value={selectedConsumiblePerfilId || EMPTY_SELECT_VALUE}
-                        onValueChange={(value) =>
-                          setSelectedConsumiblePerfilId(
-                            value === EMPTY_SELECT_VALUE ? null : value,
-                          )
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar perfil">
-                            {selectedConsumiblePerfil?.nombre?.trim() || "Seleccionar perfil"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            <SelectItem value={EMPTY_SELECT_VALUE}>Sin seleccionar</SelectItem>
-                            {perfiles.map((perfil) => (
-                              <SelectItem key={perfil.id} value={perfil.id}>
-                                {perfil.nombre || "Perfil sin nombre"}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  ) : null}
-
-                    {consumiblesPerfilActual.length === 0 ? (
-                      <div className="rounded-md border border-dashed p-4">
-                        <p className="text-sm text-muted-foreground">
-                          {requiredPrinterChannels.length === 0
-                            ? `No hay canales de consumibles para mostrar. Configura primero ${printerChannelSourceHelpText} en el Paso 1.`
-                            : perfiles.length === 0
-                              ? "No hay perfiles operativos. Crea al menos un perfil en el Paso 2 para cargar consumibles."
-                              : "Aun no hay filas de consumibles para este perfil. Revisa la configuracion en pasos anteriores."}
-                        </p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {requiredPrinterChannels.length === 0 ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setActiveConfigTab("general")}
-                            >
-                              Ir al Paso 1 (Datos base)
-                            </Button>
-                          ) : null}
-                          {perfiles.length === 0 ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setActiveConfigTab("perfiles")}
-                            >
-                              Ir al Paso 2 (Perfiles)
-                            </Button>
-                          ) : null}
+                    {showPrinterConsumiblesStep ? (
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 rounded-md border px-3 py-1.5">
+                          <span className="text-xs text-muted-foreground">
+                            Mismo consumo en todos los perfiles
+                          </span>
+                          <Switch
+                            checked={sameConsumptionAllProfiles}
+                            onCheckedChange={(checked) => {
+                              setSameConsumptionAllProfiles(checked);
+                              if (!checked) {
+                                return;
+                              }
+                              const perfilesValidos = perfiles
+                                .map((perfil) => ({
+                                  id: perfil.id,
+                                  nombre: perfil.nombre.trim(),
+                                }))
+                                .filter((perfil) => perfil.nombre);
+                              if (perfilesValidos.length === 0) {
+                                return;
+                              }
+                              const perfilAncla = perfilesValidos[0];
+                              const baseRows = consumibles.filter(
+                                (item) => item.perfilOperativoLocalId === perfilAncla.id,
+                              );
+                              if (baseRows.length === 0) {
+                                return;
+                              }
+                              setConsumibles(
+                                perfilesValidos.flatMap((perfil) =>
+                                  baseRows.map((row) => ({
+                                    ...row,
+                                    id:
+                                      perfil.id === perfilAncla.id ? row.id : createLocalId(),
+                                    perfilOperativoLocalId: perfil.id,
+                                    perfilOperativoNombre: perfil.nombre,
+                                    detalle: {
+                                      ...(row.detalle ?? {}),
+                                      syncKey:
+                                        String(row.detalle?.syncKey ?? "") || createLocalId(),
+                                    },
+                                  })),
+                                ),
+                              );
+                            }}
+                          />
                         </div>
                       </div>
                     ) : (
-                      <div className="rounded-md border">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Canal</TableHead>
-                              <TableHead>Consumo</TableHead>
-                              <TableHead>Unidad</TableHead>
-                              <TableHead>Material vinculado</TableHead>
-                              <TableHead>Activo</TableHead>
-                              <TableHead className="text-right">Acciones</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {consumiblesPerfilActual.map((consumible) => {
-                              const color = String(consumible.detalle?.color ?? "cian");
-                              const availableChannelOptions =
-                                requiredPrinterChannels.length > 0
-                                  ? requiredPrinterChannels
-                                      .map((value) => PRINTER_CHANNEL_OPTION_BY_VALUE.get(value))
-                                      .filter(
-                                        (item): item is { value: string; label: string } => Boolean(item),
-                                      )
-                                  : PRINTER_CHANNEL_OPTIONS;
-                              const canalMeta =
-                                PRINTER_CHANNEL_META[color] ?? {
-                                  label: formatTechnicalValue(color),
-                                  dotClassName: "bg-muted",
-                                };
-                              const variante = varianteConsumibleImpresionById.get(
-                                consumible.materiaPrimaVarianteId,
-                              );
-                              const unidadConsumo = consumible.unidad || "ml";
-                              const varianteDisplay = variante
-                                ? variante.label
-                                : consumible.materiaPrimaVarianteId
-                                  ? "Material no disponible"
-                                  : "Seleccionar variante";
-                              return (
-                                <TableRow key={consumible.id}>
-                                  <TableCell>
-                                    <Select
-                                      value={color}
-                                      onValueChange={(value) => {
-                                        const tipo =
-                                          value === "barniz"
-                                            ? "barniz"
-                                            : variante?.subfamilia === "toner"
-                                              ? "toner"
-                                              : "tinta";
-                                        updatePrinterConsumibleRow(
-                                          consumible.id,
-                                          {
-                                            tipo,
-                                            nombre: `${tipo === "barniz" ? "Barniz" : "Tinta"} ${value}`,
-                                          },
-                                          { color: value },
-                                        );
-                                      }}
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue>
-                                          <span className="inline-flex items-center gap-2">
-                                            <span
-                                              className={`inline-block size-3 rounded-full ${canalMeta.dotClassName}`}
-                                            />
-                                            {canalMeta.label}
-                                          </span>
-                                        </SelectValue>
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectGroup>
-                                          {availableChannelOptions.map((item) => (
-                                            <SelectItem key={item.value} value={item.value}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const perfilId = selectedConsumiblePerfil?.id ?? perfiles[0]?.id ?? null;
+                          const perfilNombre =
+                            selectedConsumiblePerfil?.nombre?.trim() || perfiles[0]?.nombre?.trim() || "";
+                          if (!perfilId || !perfilNombre) {
+                            setActiveConfigTab("perfiles");
+                            return;
+                          }
+                          setConsumibles((current) => [
+                            ...current,
+                            {
+                              ...createConsumible(consumibleTemplateFields),
+                              perfilOperativoLocalId: perfilId,
+                              perfilOperativoNombre: perfilNombre,
+                            },
+                          ]);
+                        }}
+                      >
+                        <PlusIcon data-icon="inline-start" />
+                        Agregar consumible
+                      </Button>
+                    )}
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {showPrinterConsumiblesStep ? (
+                      <>
+                        {!sameConsumptionAllProfiles ? (
+                          <Field className="max-w-sm">
+                            <FieldLabel>Perfil operativo</FieldLabel>
+                            <Select
+                              value={selectedConsumiblePerfilId || EMPTY_SELECT_VALUE}
+                              onValueChange={(value) =>
+                                setSelectedConsumiblePerfilId(
+                                  value === EMPTY_SELECT_VALUE ? null : value,
+                                )
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Seleccionar perfil">
+                                  {selectedConsumiblePerfil?.nombre?.trim() || "Seleccionar perfil"}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectGroup>
+                                  <SelectItem value={EMPTY_SELECT_VALUE}>Sin seleccionar</SelectItem>
+                                  {perfiles.map((perfil) => (
+                                    <SelectItem key={perfil.id} value={perfil.id}>
+                                      {perfil.nombre || "Perfil sin nombre"}
+                                    </SelectItem>
+                                  ))}
+                                </SelectGroup>
+                              </SelectContent>
+                            </Select>
+                          </Field>
+                        ) : null}
+
+                        {consumiblesPerfilActual.length === 0 ? (
+                          <div className="rounded-md border border-dashed p-4">
+                            <p className="text-sm text-muted-foreground">
+                              {requiredPrinterChannels.length === 0
+                                ? `No hay canales de consumibles para mostrar. Configura primero ${printerChannelSourceHelpText} en el Paso 1.`
+                                : perfiles.length === 0
+                                  ? "No hay perfiles operativos. Crea al menos un perfil en el Paso 2 para cargar consumibles."
+                                  : "Aun no hay filas de consumibles para este perfil. Revisa la configuracion en pasos anteriores."}
+                            </p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {requiredPrinterChannels.length === 0 ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setActiveConfigTab("general")}
+                                >
+                                  Ir al Paso 1 (Datos base)
+                                </Button>
+                              ) : null}
+                              {perfiles.length === 0 ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setActiveConfigTab("perfiles")}
+                                >
+                                  Ir al Paso 2 (Perfiles)
+                                </Button>
+                              ) : null}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="rounded-md border">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Canal</TableHead>
+                                  <TableHead>Consumo</TableHead>
+                                  <TableHead>Unidad</TableHead>
+                                  <TableHead>Material vinculado</TableHead>
+                                  <TableHead>Activo</TableHead>
+                                  <TableHead className="text-right">Acciones</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {consumiblesPerfilActual.map((consumible) => {
+                                  const color = String(consumible.detalle?.color ?? "cian");
+                                  const availableChannelOptions =
+                                    requiredPrinterChannels.length > 0
+                                      ? requiredPrinterChannels
+                                          .map((value) => PRINTER_CHANNEL_OPTION_BY_VALUE.get(value))
+                                          .filter(
+                                            (item): item is { value: string; label: string } => Boolean(item),
+                                          )
+                                      : PRINTER_CHANNEL_OPTIONS;
+                                  const canalMeta =
+                                    PRINTER_CHANNEL_META[color] ?? {
+                                      label: formatTechnicalValue(color),
+                                      dotClassName: "bg-muted",
+                                    };
+                                  const variante = varianteConsumibleImpresionById.get(
+                                    consumible.materiaPrimaVarianteId,
+                                  );
+                                  const unidadConsumo = consumible.unidad || "ml";
+                                  const varianteDisplay = variante
+                                    ? variante.label
+                                    : consumible.materiaPrimaVarianteId
+                                      ? "Material no disponible"
+                                      : "Seleccionar variante";
+                                  return (
+                                    <TableRow key={consumible.id}>
+                                      <TableCell>
+                                        <Select
+                                          value={color}
+                                          onValueChange={(value) => {
+                                            const tipo =
+                                              value === "barniz"
+                                                ? "barniz"
+                                                : variante?.subfamilia === "toner"
+                                                  ? "toner"
+                                                  : "tinta";
+                                            updatePrinterConsumibleRow(
+                                              consumible.id,
+                                              {
+                                                tipo,
+                                                nombre: `${tipo === "barniz" ? "Barniz" : "Tinta"} ${value}`,
+                                              },
+                                              { color: value },
+                                            );
+                                          }}
+                                        >
+                                          <SelectTrigger>
+                                            <SelectValue>
                                               <span className="inline-flex items-center gap-2">
                                                 <span
-                                                  className={`inline-block size-3 rounded-full ${PRINTER_CHANNEL_META[item.value]?.dotClassName ?? "bg-muted"}`}
+                                                  className={`inline-block size-3 rounded-full ${canalMeta.dotClassName}`}
                                                 />
-                                                {item.label}
+                                                {canalMeta.label}
                                               </span>
-                                            </SelectItem>
-                                          ))}
-                                        </SelectGroup>
-                                      </SelectContent>
-                                    </Select>
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className="flex items-center gap-2">
-                                      <Input
-                                        type="number"
-                                        value={consumible.consumoBase ?? ""}
-                                        onChange={(event) =>
-                                          updatePrinterConsumibleRow(consumible.id, {
-                                            consumoBase: toFiniteNumberOrUndefined(event.target.value),
-                                          })
-                                        }
-                                      />
-                                      <Button
-                                        type="button"
-                                        size="icon"
-                                        variant="outline"
-                                        className="shrink-0"
-                                        onClick={() =>
-                                          setOpenConsumibleCalculatorId((current) =>
-                                            current === consumible.id ? null : consumible.id,
+                                            </SelectValue>
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectGroup>
+                                              {availableChannelOptions.map((item) => (
+                                                <SelectItem key={item.value} value={item.value}>
+                                                  <span className="inline-flex items-center gap-2">
+                                                    <span
+                                                      className={`inline-block size-3 rounded-full ${PRINTER_CHANNEL_META[item.value]?.dotClassName ?? "bg-muted"}`}
+                                                    />
+                                                    {item.label}
+                                                  </span>
+                                                </SelectItem>
+                                              ))}
+                                            </SelectGroup>
+                                          </SelectContent>
+                                        </Select>
+                                      </TableCell>
+                                      <TableCell>
+                                        <div className="flex items-center gap-2">
+                                          <Input
+                                            type="number"
+                                            value={consumible.consumoBase ?? ""}
+                                            onChange={(event) =>
+                                              updatePrinterConsumibleRow(consumible.id, {
+                                                consumoBase: toFiniteNumberOrUndefined(event.target.value),
+                                              })
+                                            }
+                                          />
+                                          <Button
+                                            type="button"
+                                            size="icon"
+                                            variant="outline"
+                                            className="shrink-0"
+                                            onClick={() =>
+                                              setOpenConsumibleCalculatorId((current) =>
+                                                current === consumible.id ? null : consumible.id,
+                                              )
+                                            }
+                                            title="Abrir calculadora de consumo"
+                                          >
+                                            <CalculatorIcon />
+                                          </Button>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-sm text-muted-foreground">
+                                        {unidadConsumo}/m2
+                                      </TableCell>
+                                      <TableCell>
+                                        <Select
+                                          value={consumible.materiaPrimaVarianteId || EMPTY_SELECT_VALUE}
+                                          onValueChange={(value) => {
+                                            const safeValue = String(value ?? "");
+                                            const nextId =
+                                              safeValue === EMPTY_SELECT_VALUE ? "" : safeValue;
+                                            const nextVariante =
+                                              varianteConsumibleImpresionById.get(nextId);
+                                            const mappedUnit =
+                                              mapUnidadMateriaPrimaToConsumo(
+                                                nextVariante?.unidadStock,
+                                              ) ?? "ml";
+                                            const tipo =
+                                              nextVariante?.subfamilia === "toner"
+                                                ? "toner"
+                                                : color === "barniz"
+                                                  ? "barniz"
+                                                  : "tinta";
+                                            updatePrinterConsumibleRow(consumible.id, {
+                                              materiaPrimaVarianteId: nextId,
+                                              unidad: mappedUnit,
+                                              tipo,
+                                              nombre:
+                                                nextVariante?.nombre ??
+                                                `${tipo === "barniz" ? "Barniz" : "Tinta"} ${color}`,
+                                            });
+                                          }}
+                                        >
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Seleccionar variante">
+                                              {varianteDisplay}
+                                            </SelectValue>
+                                          </SelectTrigger>
+                                          <SelectContent className="min-w-[224px] md:min-w-[280px]">
+                                            <SelectGroup>
+                                              <SelectItem value={EMPTY_SELECT_VALUE}>
+                                                Sin seleccionar
+                                              </SelectItem>
+                                              {variantesConsumibleImpresion.map((item) => (
+                                                <SelectItem key={item.value} value={item.value}>
+                                                  {item.label}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectGroup>
+                                          </SelectContent>
+                                        </Select>
+                                      </TableCell>
+                                      <TableCell>
+                                        <Switch
+                                          checked={consumible.activo}
+                                          onCheckedChange={(checked) =>
+                                            updatePrinterConsumibleRow(consumible.id, {
+                                              activo: checked,
+                                            })
+                                          }
+                                        />
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        <div className="flex justify-end gap-2">
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => {
+                                              const syncKey = createLocalId();
+                                              if (sameConsumptionAllProfiles) {
+                                                const perfilesValidos = perfiles
+                                                  .map((perfil) => ({
+                                                    id: perfil.id,
+                                                    nombre: perfil.nombre.trim(),
+                                                  }))
+                                                  .filter((perfil) => perfil.nombre);
+                                                setConsumibles((current) => [
+                                                  ...current,
+                                                  ...perfilesValidos.map((perfil) => ({
+                                                    ...consumible,
+                                                    id: createLocalId(),
+                                                    perfilOperativoLocalId: perfil.id,
+                                                    perfilOperativoNombre: perfil.nombre,
+                                                    detalle: {
+                                                      ...(consumible.detalle ?? {}),
+                                                      syncKey,
+                                                    },
+                                                  })),
+                                                ]);
+                                                return;
+                                              }
+                                              const perfilNombre =
+                                                selectedConsumiblePerfil?.nombre?.trim() || "";
+                                              if (!perfilNombre || !selectedConsumiblePerfil?.id) {
+                                                return;
+                                              }
+                                              setConsumibles((current) => [
+                                                ...current,
+                                                {
+                                                  ...consumible,
+                                                  id: createLocalId(),
+                                                  perfilOperativoLocalId: selectedConsumiblePerfil.id,
+                                                  perfilOperativoNombre: perfilNombre,
+                                                },
+                                              ]);
+                                            }}
+                                          >
+                                            <PlusIcon data-icon="inline-start" />
+                                            Duplicar
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => removePrinterConsumibleRow(consumible.id)}
+                                          >
+                                            <Trash2Icon data-icon="inline-start" />
+                                            Quitar
+                                          </Button>
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <Field className="max-w-sm">
+                          <FieldLabel>Perfil operativo</FieldLabel>
+                          <Select
+                            value={selectedConsumiblePerfilId || EMPTY_SELECT_VALUE}
+                            onValueChange={(value) =>
+                              setSelectedConsumiblePerfilId(value === EMPTY_SELECT_VALUE ? null : value)
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar perfil">
+                                {selectedConsumiblePerfil?.nombre?.trim() || "Seleccionar perfil"}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectGroup>
+                                <SelectItem value={EMPTY_SELECT_VALUE}>Sin seleccionar</SelectItem>
+                                {perfiles.map((perfil) => (
+                                  <SelectItem key={perfil.id} value={perfil.id}>
+                                    {perfil.nombre || "Perfil sin nombre"}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                        </Field>
+
+                        {perfiles.length === 0 ? (
+                          <div className="rounded-md border border-dashed p-4">
+                            <p className="text-sm text-muted-foreground">
+                              No hay perfiles operativos. Crea al menos un perfil en el Paso 2 para poder vincular consumibles.
+                            </p>
+                            <div className="mt-3">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setActiveConfigTab("perfiles")}
+                              >
+                                Ir al Paso 2 (Perfiles)
+                              </Button>
+                            </div>
+                          </div>
+                        ) : consumiblesPerfilActual.length === 0 ? (
+                          <div className="rounded-md border border-dashed p-4">
+                            <p className="text-sm text-muted-foreground">
+                              Aun no hay consumibles cargados para este perfil. Agrega el material principal que usa la máquina, por ejemplo el film de laminado.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {consumiblesPerfilActual.map((consumible) => {
+                              const variantesCompatibles = variantesConsumibleDisponibles.filter((item) => {
+                                if (!isLaminadoraTemplate) {
+                                  return true;
+                                }
+                                if (item.subfamilia !== "laminado_film") {
+                                  return false;
+                                }
+                                if (
+                                  typeof anchoRolloLaminadoraMm === "number" &&
+                                  anchoRolloLaminadoraMm > 0 &&
+                                  typeof item.ancho === "number" &&
+                                  item.ancho > anchoRolloLaminadoraMm
+                                ) {
+                                  return false;
+                                }
+                                return true;
+                              });
+                              const varianteSeleccionada = consumible.materiaPrimaVarianteId
+                                ? varianteConsumibleById.get(consumible.materiaPrimaVarianteId)
+                                : undefined;
+                              return (
+                                <div key={consumible.id} className="rounded-lg border p-4">
+                                  <div className="mb-3 flex items-center justify-between">
+                                    <p className="text-sm font-medium">Consumible</p>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() =>
+                                        setConsumibles((current) =>
+                                          current.filter((item) => item.id !== consumible.id),
+                                        )
+                                      }
+                                    >
+                                      <Trash2Icon data-icon="inline-start" />
+                                      Quitar
+                                    </Button>
+                                  </div>
+                                  <FieldGroup className="grid gap-3 md:grid-cols-12">
+                                    <Field className="md:col-span-12">
+                                      <FieldLabel>Material</FieldLabel>
+                                      <Select
+                                        value={consumible.materiaPrimaVarianteId || EMPTY_SELECT_VALUE}
+                                        onValueChange={(value) =>
+                                          setConsumibleTemplateFieldValue(
+                                            consumible.id,
+                                            consumibleTemplateFieldByKey.get("materiaPrimaVarianteId") ?? {
+                                              key: "materiaPrimaVarianteId",
+                                              label: "Material",
+                                              scope: "consumible",
+                                              kind: "select",
+                                              description: "",
+                                            },
+                                            value === EMPTY_SELECT_VALUE ? "" : value,
                                           )
                                         }
-                                        title="Abrir calculadora de consumo"
                                       >
-                                        <CalculatorIcon />
-                                      </Button>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="text-sm text-muted-foreground">
-                                    {unidadConsumo}/m2
-                                  </TableCell>
-                                  <TableCell>
-                                    <Select
-                                      value={consumible.materiaPrimaVarianteId || EMPTY_SELECT_VALUE}
-                                      onValueChange={(value) => {
-                                        const safeValue = String(value ?? "");
-                                        const nextId =
-                                          safeValue === EMPTY_SELECT_VALUE ? "" : safeValue;
-                                        const nextVariante =
-                                          varianteConsumibleImpresionById.get(nextId);
-                                        const mappedUnit =
-                                          mapUnidadMateriaPrimaToConsumo(
-                                            nextVariante?.unidadStock,
-                                          ) ?? "ml";
-                                        const tipo =
-                                          nextVariante?.subfamilia === "toner"
-                                            ? "toner"
-                                            : color === "barniz"
-                                              ? "barniz"
-                                              : "tinta";
-                                        updatePrinterConsumibleRow(consumible.id, {
-                                          materiaPrimaVarianteId: nextId,
-                                          unidad: mappedUnit,
-                                          tipo,
-                                          nombre:
-                                            nextVariante?.nombre ??
-                                            `${tipo === "barniz" ? "Barniz" : "Tinta"} ${color}`,
-                                        });
-                                      }}
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Seleccionar variante">
-                                          {varianteDisplay}
-                                        </SelectValue>
-                                      </SelectTrigger>
-                                      <SelectContent className="min-w-[224px] md:min-w-[280px]">
-                                        <SelectGroup>
-                                          <SelectItem value={EMPTY_SELECT_VALUE}>
-                                            Sin seleccionar
-                                          </SelectItem>
-                                          {variantesConsumibleImpresion.map((item) => (
-                                            <SelectItem key={item.value} value={item.value}>
-                                              {item.label}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectGroup>
-                                      </SelectContent>
-                                    </Select>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Switch
-                                      checked={consumible.activo}
-                                      onCheckedChange={(checked) =>
-                                        updatePrinterConsumibleRow(consumible.id, {
-                                          activo: checked,
-                                        })
-                                      }
-                                    />
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    <div className="flex justify-end gap-2">
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => {
-                                          const syncKey = createLocalId();
-                                          if (sameConsumptionAllProfiles) {
-                                            const perfilesValidos = perfiles
-                                              .map((perfil) => ({
-                                                id: perfil.id,
-                                                nombre: perfil.nombre.trim(),
-                                              }))
-                                              .filter((perfil) => perfil.nombre);
-                                            setConsumibles((current) => [
-                                              ...current,
-                                              ...perfilesValidos.map((perfil) => ({
-                                                ...consumible,
-                                                id: createLocalId(),
-                                                perfilOperativoLocalId: perfil.id,
-                                                perfilOperativoNombre: perfil.nombre,
-                                                detalle: {
-                                                  ...(consumible.detalle ?? {}),
-                                                  syncKey,
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Seleccionar material compatible">
+                                            {varianteSeleccionada?.label ?? "Seleccionar material compatible"}
+                                          </SelectValue>
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectGroup>
+                                            <SelectItem value={EMPTY_SELECT_VALUE}>Sin seleccionar</SelectItem>
+                                            {variantesCompatibles.map((item) => (
+                                              <SelectItem key={item.value} value={item.value}>
+                                                {item.label}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectGroup>
+                                        </SelectContent>
+                                      </Select>
+                                      {isLaminadoraTemplate ? (
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                          Solo se muestran films compatibles con la laminadora segun el ancho del rollo configurado.
+                                        </p>
+                                      ) : null}
+                                      {consumible.materiaPrimaVarianteId ? (
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                          Costo ref.: $
+                                          {Number(varianteSeleccionada?.precioReferencia ?? 0).toFixed(2)} por{" "}
+                                          {getUnidadMateriaPrimaLabel(varianteSeleccionada?.unidadStock)}
+                                        </p>
+                                      ) : null}
+                                    </Field>
+                                    <Field className="md:col-span-4">
+                                      <FieldLabel>Activo</FieldLabel>
+                                      <div className="flex h-10 items-center rounded-md border px-3">
+                                        <Switch
+                                          checked={consumible.activo}
+                                          onCheckedChange={(checked) =>
+                                            setConsumibleTemplateFieldValue(
+                                              consumible.id,
+                                              consumibleTemplateFieldByKey.get("activo") ?? {
+                                                key: "activo",
+                                                label: "Activo",
+                                                scope: "consumible",
+                                                kind: "boolean",
+                                                description: "",
+                                              },
+                                              checked,
+                                            )
+                                          }
+                                        />
+                                      </div>
+                                    </Field>
+                                    {!isLaminadoraTemplate ? (
+                                      <>
+                                        <Field className="md:col-span-4">
+                                          <FieldLabel>Tipo</FieldLabel>
+                                          <Select
+                                            value={consumible.tipo}
+                                            onValueChange={(value) =>
+                                              setConsumibleTemplateFieldValue(
+                                                consumible.id,
+                                                consumibleTemplateFieldByKey.get("tipo") ?? {
+                                                  key: "tipo",
+                                                  label: "Tipo",
+                                                  scope: "consumible",
+                                                  kind: "select",
+                                                  description: "",
                                                 },
-                                              })),
-                                            ]);
-                                            return;
-                                          }
-                                          const perfilNombre =
-                                            selectedConsumiblePerfil?.nombre?.trim() || "";
-                                          if (!perfilNombre || !selectedConsumiblePerfil?.id) {
-                                            return;
-                                          }
-                                          setConsumibles((current) => [
-                                            ...current,
-                                            {
-                                              ...consumible,
-                                              id: createLocalId(),
-                                              perfilOperativoLocalId: selectedConsumiblePerfil.id,
-                                              perfilOperativoNombre: perfilNombre,
-                                            },
-                                          ]);
-                                        }}
-                                      >
-                                        <PlusIcon data-icon="inline-start" />
-                                        Duplicar
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => removePrinterConsumibleRow(consumible.id)}
-                                      >
-                                        <Trash2Icon data-icon="inline-start" />
-                                        Quitar
-                                      </Button>
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                                
+                                                value,
+                                              )
+                                            }
+                                          >
+                                            <SelectTrigger>
+                                              <SelectValue placeholder="Seleccionar tipo" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectGroup>
+                                                {consumibleTipoOptions.map((item) => (
+                                                  <SelectItem key={item.value} value={item.value}>
+                                                    {item.label}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectGroup>
+                                            </SelectContent>
+                                          </Select>
+                                        </Field>
+                                        <Field className="md:col-span-4">
+                                          <FieldLabel>Consumo base</FieldLabel>
+                                          <Input
+                                            type="number"
+                                            value={consumible.consumoBase ?? ""}
+                                            onChange={(event) =>
+                                              setConsumibleTemplateFieldValue(
+                                                consumible.id,
+                                                consumibleTemplateFieldByKey.get("consumoBase") ?? {
+                                                  key: "consumoBase",
+                                                  label: "Consumo base",
+                                                  scope: "consumible",
+                                                  kind: "number",
+                                                  description: "",
+                                                },
+                                                event.target.value,
+                                              )
+                                            }
+                                          />
+                                        </Field>
+                                        <Field className="md:col-span-4">
+                                          <FieldLabel>Unidad</FieldLabel>
+                                          <Select
+                                            value={consumible.unidad}
+                                            onValueChange={(value) =>
+                                              setConsumibleTemplateFieldValue(
+                                                consumible.id,
+                                                consumibleTemplateFieldByKey.get("unidad") ?? {
+                                                  key: "unidad",
+                                                  label: "Unidad",
+                                                  scope: "consumible",
+                                                  kind: "select",
+                                                  description: "",
+                                                },
+                                                value,
+                                              )
+                                            }
+                                          >
+                                            <SelectTrigger>
+                                              <SelectValue placeholder="Seleccionar unidad" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectGroup>
+                                                {consumibleUnidadOptions.map((item) => (
+                                                  <SelectItem key={item.value} value={item.value}>
+                                                    {item.label}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectGroup>
+                                            </SelectContent>
+                                          </Select>
+                                        </Field>
+                                      </>
+                                    ) : null}
+                                  </FieldGroup>
+                                </div>
                               );
                             })}
-                          </TableBody>
-                        </Table>
-                      </div>
+                          </div>
+                        )}
+                      </>
                     )}
-                  {activeConsumibleCalculator ? (
+                    {showPrinterConsumiblesStep && activeConsumibleCalculator ? (
                     (() => {
                       const calculatorDraft = getConsumibleCalculatorDraft(activeConsumibleCalculator.id);
                       const coveragePercent =

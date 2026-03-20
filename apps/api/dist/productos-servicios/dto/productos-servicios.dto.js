@@ -1229,6 +1229,7 @@ class UpsertChecklistRespuestaDto {
     codigo;
     orden;
     activo;
+    preguntaSiguienteId;
     reglas;
 }
 exports.UpsertChecklistRespuestaDto = UpsertChecklistRespuestaDto;
@@ -1259,6 +1260,11 @@ __decorate([
     (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)
 ], UpsertChecklistRespuestaDto.prototype, "activo", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UpsertChecklistRespuestaDto.prototype, "preguntaSiguienteId", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsArray)(),

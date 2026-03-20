@@ -893,6 +893,10 @@ export class UpsertChecklistRespuestaDto {
   activo?: boolean;
 
   @IsOptional()
+  @IsUUID()
+  preguntaSiguienteId?: string;
+
+  @IsOptional()
   @IsArray()
   @ArrayMaxSize(30)
   @ValidateNested({ each: true })

@@ -910,6 +910,7 @@ export declare class ProductosServiciosService {
                 id: string;
                 texto: string;
                 codigo: string | null;
+                preguntaSiguienteId: string | null;
                 orden: number;
                 activo: boolean;
                 reglas: {
@@ -986,6 +987,7 @@ export declare class ProductosServiciosService {
                 id: string;
                 texto: string;
                 codigo: string | null;
+                preguntaSiguienteId: string | null;
                 orden: number;
                 activo: boolean;
                 reglas: {
@@ -1572,6 +1574,7 @@ export declare class ProductosServiciosService {
     private toAdicionalEfectoResponse;
     private isPlantillaTerminacionSoportada;
     private validateProductoChecklistPayload;
+    private resolveChecklistPreguntaIdsActivas;
     private toProductoChecklistResponse;
     private validateOpcionesProductivasPayload;
     private normalizeOpcionesProductivasPayload;

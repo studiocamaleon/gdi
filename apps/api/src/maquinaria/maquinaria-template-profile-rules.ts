@@ -155,14 +155,13 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   }),
   [PlantillaMaquinariaDto.laminadora_bopp_rollo]: buildRule({
     profileFieldKeys: [
+      'modoLaminado',
+      'velocidadTrabajoMmSeg',
+      'velocidadDobleRolloTrabajoMmSeg',
       'gapEntreHojasMm',
-      'margenLatIzqMm',
-      'margenLatDerMm',
-      'colaCorteMm',
-      'factorVelocidad',
       'warmupMin',
     ],
-    requiredFieldKeys: ['nombre', 'gapEntreHojasMm'],
+    requiredFieldKeys: ['nombre', 'modoLaminado', 'gapEntreHojasMm'],
   }),
   [PlantillaMaquinariaDto.redondeadora_puntas]: buildRule({
     profileFieldKeys: [

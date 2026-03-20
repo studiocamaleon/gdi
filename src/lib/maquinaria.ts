@@ -61,6 +61,7 @@ export type UnidadProduccionMaquina =
 export type TipoPerfilOperativoMaquina =
   | "impresion"
   | "corte"
+  | "laminado"
   | "mecanizado"
   | "grabado"
   | "fabricacion"
@@ -286,6 +287,7 @@ export const tipoPerfilOperativoMaquinaItems: Array<{
 }> = [
   { label: "Impresion", value: "impresion" },
   { label: "Corte", value: "corte" },
+  { label: "Laminado", value: "laminado" },
   { label: "Mecanizado", value: "mecanizado" },
   { label: "Grabado", value: "grabado" },
   { label: "Fabricacion", value: "fabricacion" },

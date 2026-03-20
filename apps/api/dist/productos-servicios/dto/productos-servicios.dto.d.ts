@@ -326,6 +326,7 @@ export declare class UpsertChecklistRespuestaDto {
     codigo?: string;
     orden?: number;
     activo?: boolean;
+    preguntaSiguienteId?: string;
     reglas?: UpsertChecklistReglaDto[];
 }
 export declare class UpsertChecklistPreguntaDto {

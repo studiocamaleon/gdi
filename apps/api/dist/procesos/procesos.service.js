@@ -727,6 +727,13 @@ let ProcesosService = class ProcesosService {
         const perfil = payload.perfilOperativoId
             ? (references.perfilesById.get(payload.perfilOperativoId) ?? null)
             : null;
+        const perfilDetalle = perfil?.detalleJson && typeof perfil.detalleJson === 'object' && !Array.isArray(perfil.detalleJson)
+            ? perfil.detalleJson
+            : null;
+        const velocidadTrabajoMmSegPerfil = typeof perfilDetalle?.velocidadTrabajoMmSeg === 'number' &&
+            Number.isFinite(perfilDetalle.velocidadTrabajoMmSeg)
+            ? perfilDetalle.velocidadTrabajoMmSeg
+            : null;
         const machineUnit = this.mapProfileProductivityUnitToProceso(perfil?.productivityUnit ?? maquina?.unidadProduccionPrincipal ?? null);
         const explicitUnidadSalida = this.toPrismaEnum(payload.unidadSalida ?? upsert_proceso_dto_1.UnidadProcesoDto.ninguna);
         const explicitUnidadTiempo = this.toPrismaEnum(payload.unidadTiempo ?? upsert_proceso_dto_1.UnidadProcesoDto.minuto);
@@ -745,6 +752,10 @@ let ProcesosService = class ProcesosService {
             null;
         const productividadBase = this.toDecimal(payload.productividadBase) ??
             perfil?.productivityValue ??
+            (maquina?.plantilla === client_1.PlantillaMaquinaria.LAMINADORA_BOPP_ROLLO &&
+                velocidadTrabajoMmSegPerfil !== null
+                ? new client_1.Prisma.Decimal(velocidadTrabajoMmSegPerfil)
+                : null) ??
             null;
         return {
             perfil,
@@ -756,6 +767,15 @@ let ProcesosService = class ProcesosService {
         };
     }
     deriveOperationDefaultsFromPersisted(operacion) {
+        const perfilDetalle = operacion.perfilOperativo?.detalleJson &&
+            typeof operacion.perfilOperativo.detalleJson === 'object' &&
+            !Array.isArray(operacion.perfilOperativo.detalleJson)
+            ? operacion.perfilOperativo.detalleJson
+            : null;
+        const velocidadTrabajoMmSegPerfil = typeof perfilDetalle?.velocidadTrabajoMmSeg === 'number' &&
+            Number.isFinite(perfilDetalle.velocidadTrabajoMmSeg)
+            ? perfilDetalle.velocidadTrabajoMmSeg
+            : null;
         const machineUnit = this.mapProfileProductivityUnitToProceso(operacion.perfilOperativo?.productivityUnit ??
             operacion.maquina?.unidadProduccionPrincipal ??
             null);
@@ -768,14 +788,21 @@ let ProcesosService = class ProcesosService {
             : operacion.unidadTiempo;
         const productividadBase = operacion.productividadBase ??
             operacion.perfilOperativo?.productivityValue ??
+            (operacion.maquina?.plantilla === client_1.PlantillaMaquinaria.LAMINADORA_BOPP_ROLLO &&
+                velocidadTrabajoMmSegPerfil !== null
+                ? new client_1.Prisma.Decimal(velocidadTrabajoMmSegPerfil)
+                : null) ??
             null;
         const fallbackSetup = this.getSetupFromPerfilPersisted(operacion.perfilOperativo);
         const setupMin = operacion.setupMin ?? fallbackSetup ?? null;
         const cleanupMin = operacion.cleanupMin ?? operacion.perfilOperativo?.cleanupMin ?? null;
         const absorptionWarnings = [];
         if (!operacion.productividadBase &&
-            operacion.perfilOperativo?.productivityValue) {
-            absorptionWarnings.push(`Se uso productividad del perfil operativo ${operacion.perfilOperativo.nombre}.`);
+            (operacion.perfilOperativo?.productivityValue ||
+                (operacion.maquina?.plantilla === client_1.PlantillaMaquinaria.LAMINADORA_BOPP_ROLLO &&
+                    velocidadTrabajoMmSegPerfil !== null &&
+                    velocidadTrabajoMmSegPerfil > 0))) {
+            absorptionWarnings.push(`Se uso productividad del perfil operativo ${operacion.perfilOperativo?.nombre ?? 'sin nombre'}.`);
         }
         if (operacion.setupMin === null &&
             fallbackSetup !== null &&

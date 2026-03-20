@@ -303,6 +303,7 @@ export async function upsertProductoChecklist(
         id?: string;
         texto: string;
         codigo?: string;
+        preguntaSiguienteId?: string;
         orden?: number;
         activo?: boolean;
         reglas?: Array<{

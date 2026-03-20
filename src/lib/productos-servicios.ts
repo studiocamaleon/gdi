@@ -516,6 +516,7 @@ export type ProductoChecklistRespuesta = {
   codigo: string | null;
   orden: number;
   activo: boolean;
+  preguntaSiguienteId: string | null;
   reglas: ProductoChecklistRegla[];
 };
 

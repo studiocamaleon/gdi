@@ -1403,6 +1403,7 @@ export declare class ProductosServiciosController {
                 id: string;
                 texto: string;
                 codigo: string | null;
+                preguntaSiguienteId: string | null;
                 orden: number;
                 activo: boolean;
                 reglas: {
@@ -1479,6 +1480,7 @@ export declare class ProductosServiciosController {
                 id: string;
                 texto: string;
                 codigo: string | null;
+                preguntaSiguienteId: string | null;
                 orden: number;
                 activo: boolean;
                 reglas: {

@@ -1141,24 +1141,43 @@ let ProductosServiciosService = class ProductosServiciosService {
                     },
                 });
             }
-            for (let indexPregunta = 0; indexPregunta < payload.preguntas.length; indexPregunta += 1) {
-                const pregunta = payload.preguntas[indexPregunta];
+            const preguntasNormalizadas = payload.preguntas.map((pregunta, indexPregunta) => ({
+                payload: pregunta,
+                id: pregunta.id?.trim() || (0, node_crypto_1.randomUUID)(),
+                orden: pregunta.orden ?? indexPregunta + 1,
+            }));
+            const preguntaRows = new Map();
+            for (const preguntaNormalizada of preguntasNormalizadas) {
+                const pregunta = preguntaNormalizada.payload;
                 const preguntaRow = await tx.productoChecklistPregunta.create({
                     data: {
+                        id: preguntaNormalizada.id,
                         tenantId: auth.tenantId,
                         productoChecklistId: checklist.id,
                         texto: pregunta.texto.trim(),
                         tipoPregunta: this.toTipoChecklistPregunta(pregunta.tipoPregunta ?? productos_servicios_dto_1.TipoChecklistPreguntaDto.binaria),
-                        orden: pregunta.orden ?? indexPregunta + 1,
+                        orden: preguntaNormalizada.orden,
                         activo: pregunta.activo ?? true,
                     },
                 });
+                preguntaRows.set(preguntaNormalizada.id, { id: preguntaRow.id });
+            }
+            for (const preguntaNormalizada of preguntasNormalizadas) {
+                const pregunta = preguntaNormalizada.payload;
+                const preguntaRow = preguntaRows.get(preguntaNormalizada.id);
+                if (!preguntaRow) {
+                    throw new common_1.BadRequestException('No se pudo reconstruir el configurador de preguntas.');
+                }
                 for (let indexRespuesta = 0; indexRespuesta < pregunta.respuestas.length; indexRespuesta += 1) {
                     const respuesta = pregunta.respuestas[indexRespuesta];
+                    const respuestaId = respuesta.id?.trim() || (0, node_crypto_1.randomUUID)();
+                    const preguntaSiguienteId = respuesta.preguntaSiguienteId?.trim() || null;
                     const respuestaRow = await tx.productoChecklistRespuesta.create({
                         data: {
+                            id: respuestaId,
                             tenantId: auth.tenantId,
                             productoChecklistPreguntaId: preguntaRow.id,
+                            preguntaSiguienteId,
                             texto: respuesta.texto.trim(),
                             codigo: respuesta.codigo?.trim() || null,
                             orden: respuesta.orden ?? indexRespuesta + 1,
@@ -1524,6 +1543,8 @@ let ProductosServiciosService = class ProductosServiciosService {
         });
         const checklistPasoPlantillaById = await this.getChecklistPasoPlantillasMap(auth, checklist);
         const checklistPreguntaById = new Map((checklist?.preguntas ?? []).map((pregunta) => [pregunta.id, pregunta]));
+        const checklistSelectedByPreguntaId = new Map(checklistRespuestasInput.map((item) => [item.preguntaId, item.respuestaId]));
+        const checklistPreguntaIdsActivas = this.resolveChecklistPreguntaIdsActivas(checklist?.preguntas ?? [], checklistSelectedByPreguntaId);
         const checklistAplicadoTrace = [];
         const checklistReglasActivas = [];
         const opcionesProductivasPermitidas = this.resolveEffectiveOptionValues(variante);
@@ -1634,6 +1655,9 @@ let ProductosServiciosService = class ProductosServiciosService {
             const pregunta = checklistPreguntaById.get(selected.preguntaId);
             if (!pregunta) {
                 throw new common_1.BadRequestException('Una respuesta del configurador referencia una pregunta inválida.');
+            }
+            if (!checklistPreguntaIdsActivas.has(pregunta.id)) {
+                continue;
             }
             const respuesta = pregunta.respuestas.find((item) => item.id === selected.respuestaId);
             if (!respuesta) {
@@ -1910,9 +1934,12 @@ let ProductosServiciosService = class ProductosServiciosService {
         const areaPliegoM2 = (pliegoImpresion.anchoMm / 1000) * (pliegoImpresion.altoMm / 1000);
         const a4EqFactor = areaPliegoM2 / ProductosServiciosService_1.DEFAULT_A4_AREA_M2;
         const carasFactor = carasSeleccionadas === client_1.CarasProductoVariante.DOBLE_FAZ ? 2 : 1;
-        const machineIds = Array.from(new Set(operacionesCotizadas
-            .map((op) => op.maquinaId)
-            .filter((item) => Boolean(item))));
+        const machineIds = Array.from(new Set([
+            ...operacionesCotizadas
+                .map((op) => op.maquinaId)
+                .filter((item) => Boolean(item)),
+            ...checklistNivelMachineIds,
+        ]));
         const [consumibles, consumiblesFilm, desgastes] = await Promise.all([
             this.prisma.maquinaConsumible.findMany({
                 where: {
@@ -1995,6 +2022,8 @@ let ProductosServiciosService = class ProductosServiciosService {
                     rows: imposicion.rows,
                     tipoCorte: imposicion.tipoCorte,
                 },
+                pliegoAnchoMm: pliegoImpresion.anchoMm,
+                pliegoAltoMm: pliegoImpresion.altoMm,
                 varianteAnchoMm: Number(variante.anchoMm),
                 varianteAltoMm: Number(variante.altoMm),
                 overridesProductividad: this.asObject(pasoDetalle.overridesProductividad),
@@ -2410,6 +2439,9 @@ let ProductosServiciosService = class ProductosServiciosService {
             let tiempoFijoMin = 0;
             let runMin = 0;
             let sourceProductividad = 'nivel_fijo';
+            let maquinaNivel = null;
+            let perfilNivel = null;
+            let timingOverrideNivel = null;
             let detalleTecnico = {
                 sourceProductividad,
                 variantePasoId: nivel.id,
@@ -2451,14 +2483,15 @@ let ProductosServiciosService = class ProductosServiciosService {
                 warnings.push(...productividad.warnings.map((warning) => `${item.label} ${item.pasoPlantilla?.nombre ?? item.reglaId} (${nivel.nombre}): ${warning}`));
             }
             else {
-                const maquina = nivel.maquinaId ? checklistNivelMaquinaById.get(nivel.maquinaId) ?? null : null;
-                const perfil = nivel.perfilOperativoId ? checklistNivelPerfilById.get(nivel.perfilOperativoId) ?? null : null;
-                const setupBase = Number(nivel.setupMin ?? this.getSetupFromPerfilOperativo(perfil) ?? 0);
+                maquinaNivel = nivel.maquinaId ? checklistNivelMaquinaById.get(nivel.maquinaId) ?? null : null;
+                perfilNivel =
+                    nivel.perfilOperativoId ? checklistNivelPerfilById.get(nivel.perfilOperativoId) ?? null : null;
+                const setupBase = Number(nivel.setupMin ?? this.getSetupFromPerfilOperativo(perfilNivel) ?? 0);
                 const cleanupBase = Number(nivel.cleanupMin ?? 0);
-                const timingOverride = this.calculateTerminatingOperationTiming({
+                timingOverrideNivel = this.calculateTerminatingOperationTiming({
                     operacion: {
-                        maquina,
-                        perfilOperativo: perfil,
+                        maquina: maquinaNivel,
+                        perfilOperativo: perfilNivel,
                     },
                     cantidad,
                     pliegos,
@@ -2466,29 +2499,31 @@ let ProductosServiciosService = class ProductosServiciosService {
                     cleanupMinBase: cleanupBase,
                     tiempoFijoMinBase: 0,
                     cantidadObjetivoSalida: quantityByUnidad,
+                    pliegoAnchoMm: pliegoImpresion.anchoMm,
+                    pliegoAltoMm: pliegoImpresion.altoMm,
                     varianteAnchoMm: Number(variante.anchoMm),
                     varianteAltoMm: Number(variante.altoMm),
                 });
-                if (timingOverride) {
-                    setupMin = timingOverride.setupMin;
-                    cleanupMin = timingOverride.cleanupMin;
-                    tiempoFijoMin = timingOverride.tiempoFijoMin;
-                    runMin = timingOverride.runMin;
+                if (timingOverrideNivel) {
+                    setupMin = timingOverrideNivel.setupMin;
+                    cleanupMin = timingOverrideNivel.cleanupMin;
+                    tiempoFijoMin = timingOverrideNivel.tiempoFijoMin;
+                    runMin = timingOverrideNivel.runMin;
                     sourceProductividad = 'nivel_variable_perfil';
                     detalleTecnico = {
                         ...detalleTecnico,
                         sourceProductividad,
-                        maquina: maquina?.nombre ?? null,
-                        perfilOperativo: perfil?.nombre ?? null,
-                        ...(timingOverride.trace ?? {}),
+                        maquina: maquinaNivel?.nombre ?? null,
+                        perfilOperativo: perfilNivel?.nombre ?? null,
+                        ...(timingOverrideNivel.trace ?? {}),
                     };
-                    if (timingOverride.warnings?.length) {
-                        warnings.push(...timingOverride.warnings.map((warning) => `${item.label} ${item.pasoPlantilla?.nombre ?? item.reglaId} (${nivel.nombre}): ${warning}`));
+                    if (timingOverrideNivel.warnings?.length) {
+                        warnings.push(...timingOverrideNivel.warnings.map((warning) => `${item.label} ${item.pasoPlantilla?.nombre ?? item.reglaId} (${nivel.nombre}): ${warning}`));
                     }
                 }
                 else {
-                    const productividadBase = perfil?.productivityValue
-                        ? Number(perfil.productivityValue)
+                    const productividadBase = perfilNivel?.productivityValue
+                        ? Number(perfilNivel.productivityValue)
                         : item.pasoPlantilla?.productividadBase
                             ? Number(item.pasoPlantilla.productividadBase)
                             : 0;
@@ -2518,13 +2553,49 @@ let ProductosServiciosService = class ProductosServiciosService {
                         detalleTecnico = {
                             ...detalleTecnico,
                             sourceProductividad,
-                            maquina: maquina?.nombre ?? null,
-                            perfilOperativo: perfil?.nombre ?? null,
+                            maquina: maquinaNivel?.nombre ?? null,
+                            perfilOperativo: perfilNivel?.nombre ?? null,
                             cantidadObjetivoSalida: quantityByUnidad,
                             productividadAplicada: productividad.productividadAplicada,
                         };
                     }
                 }
+            }
+            if (maquinaNivel?.id) {
+                const tonerAndWear = this.calculateMachineConsumables({
+                    operation: {
+                        maquinaId: maquinaNivel.id,
+                        perfilOperativoId: perfilNivel?.id ?? null,
+                        productividadBase: perfilNivel?.productivityValue ??
+                            (nivel.productividadBase === null || nivel.productividadBase === undefined
+                                ? null
+                                : new client_1.Prisma.Decimal(nivel.productividadBase)),
+                    },
+                    tipoImpresion: tipoImpresionSeleccionado,
+                    carasFactor,
+                    pliegos,
+                    pliegosEfectivos: pliegos,
+                    areaPliegoM2,
+                    a4EqFactor,
+                    warnings,
+                    consumibles,
+                    desgastes,
+                });
+                costoToner += tonerAndWear.costoToner;
+                costoDesgaste += tonerAndWear.costoDesgaste;
+                materiales.push(...tonerAndWear.materiales);
+                const laminadoFilm = this.calculateLaminadoraFilmConsumables({
+                    operation: {
+                        maquinaId: maquinaNivel.id,
+                        perfilOperativoId: perfilNivel?.id ?? null,
+                        maquina: maquinaNivel,
+                    },
+                    consumiblesFilm,
+                    timingOverride: timingOverrideNivel,
+                    warnings,
+                });
+                materiales.push(...laminadoFilm.materiales);
+                costoConsumiblesTerminacion += laminadoFilm.costo;
             }
             const totalMin = Number((setupMin + runMin + cleanupMin + tiempoFijoMin).toFixed(4));
             if (totalMin <= 0) {
@@ -3591,9 +3662,12 @@ let ProductosServiciosService = class ProductosServiciosService {
         return ProductosServiciosService_1.TERMINACION_PLANTILLAS_SOPORTADAS.has(plantilla);
     }
     validateProductoChecklistPayload(payload) {
+        const preguntaRefById = new Map();
+        const respuestaRefs = [];
         const preguntaOrdenes = new Set();
         for (const [preguntaIndex, pregunta] of payload.preguntas.entries()) {
             const ordenPregunta = pregunta.orden ?? preguntaIndex + 1;
+            const preguntaId = pregunta.id?.trim() || `pregunta-${preguntaIndex + 1}`;
             if (preguntaOrdenes.has(ordenPregunta)) {
                 throw new common_1.BadRequestException('Hay preguntas con orden duplicado en el checklist.');
             }
@@ -3601,6 +3675,7 @@ let ProductosServiciosService = class ProductosServiciosService {
             if (!pregunta.texto.trim()) {
                 throw new common_1.BadRequestException('El texto de cada pregunta es obligatorio.');
             }
+            preguntaRefById.set(preguntaId, { texto: pregunta.texto.trim(), orden: ordenPregunta });
             if (pregunta.tipoPregunta === productos_servicios_dto_1.TipoChecklistPreguntaDto.binaria && pregunta.respuestas.length !== 2) {
                 throw new common_1.BadRequestException('Las preguntas binarias deben tener exactamente dos respuestas.');
             }
@@ -3614,6 +3689,7 @@ let ProductosServiciosService = class ProductosServiciosService {
                 if (!respuesta.texto.trim()) {
                     throw new common_1.BadRequestException('El texto de cada respuesta es obligatorio.');
                 }
+                respuestaRefs.push({ preguntaId, preguntaTexto: pregunta.texto.trim(), respuesta });
                 const reglas = respuesta.reglas ?? [];
                 const reglaOrdenes = new Set();
                 for (const [reglaIndex, regla] of reglas.entries()) {
@@ -3650,6 +3726,71 @@ let ProductosServiciosService = class ProductosServiciosService {
                 }
             }
         }
+        const questionGraph = new Map();
+        for (const { preguntaId, preguntaTexto, respuesta } of respuestaRefs) {
+            const preguntaSiguienteId = respuesta.preguntaSiguienteId?.trim() || null;
+            if (!preguntaSiguienteId)
+                continue;
+            if (!preguntaRefById.has(preguntaSiguienteId)) {
+                throw new common_1.BadRequestException(`La respuesta "${respuesta.texto.trim()}" de "${preguntaTexto}" referencia una pregunta inexistente.`);
+            }
+            if (preguntaSiguienteId === preguntaId) {
+                throw new common_1.BadRequestException('Una respuesta no puede activar la misma pregunta.');
+            }
+            const set = questionGraph.get(preguntaId) ?? new Set();
+            set.add(preguntaSiguienteId);
+            questionGraph.set(preguntaId, set);
+        }
+        const visiting = new Set();
+        const visited = new Set();
+        const visit = (preguntaId) => {
+            if (visiting.has(preguntaId)) {
+                throw new common_1.BadRequestException('El configurador no puede contener ciclos entre preguntas.');
+            }
+            if (visited.has(preguntaId))
+                return;
+            visiting.add(preguntaId);
+            for (const nextId of questionGraph.get(preguntaId) ?? []) {
+                visit(nextId);
+            }
+            visiting.delete(preguntaId);
+            visited.add(preguntaId);
+        };
+        for (const preguntaId of questionGraph.keys()) {
+            visit(preguntaId);
+        }
+    }
+    resolveChecklistPreguntaIdsActivas(preguntas, selectedByPreguntaId) {
+        const referencedQuestionIds = new Set();
+        for (const pregunta of preguntas) {
+            for (const respuesta of pregunta.respuestas) {
+                if (!respuesta.activo || !respuesta.preguntaSiguienteId)
+                    continue;
+                referencedQuestionIds.add(respuesta.preguntaSiguienteId);
+            }
+        }
+        const preguntasRaiz = preguntas
+            .filter((pregunta) => pregunta.activo && !referencedQuestionIds.has(pregunta.id))
+            .sort((a, b) => 0);
+        const activeQuestionIds = new Set();
+        const queue = [...preguntasRaiz];
+        while (queue.length > 0) {
+            const pregunta = queue.shift();
+            if (!pregunta || activeQuestionIds.has(pregunta.id))
+                continue;
+            activeQuestionIds.add(pregunta.id);
+            const selectedRespuestaId = selectedByPreguntaId.get(pregunta.id);
+            if (!selectedRespuestaId)
+                continue;
+            const respuesta = pregunta.respuestas.find((item) => item.id === selectedRespuestaId && item.activo);
+            if (!respuesta?.preguntaSiguienteId)
+                continue;
+            const preguntaHija = preguntas.find((item) => item.id === respuesta.preguntaSiguienteId && item.activo);
+            if (preguntaHija) {
+                queue.push(preguntaHija);
+            }
+        }
+        return activeQuestionIds;
     }
     toProductoChecklistResponse(item, plantillasById = new Map()) {
         return {
@@ -3666,6 +3807,7 @@ let ProductosServiciosService = class ProductosServiciosService {
                     id: respuesta.id,
                     texto: respuesta.texto,
                     codigo: respuesta.codigo,
+                    preguntaSiguienteId: respuesta.preguntaSiguienteId,
                     orden: respuesta.orden,
                     activo: respuesta.activo,
                     reglas: respuesta.reglas
@@ -5203,6 +5345,11 @@ let ProductosServiciosService = class ProductosServiciosService {
                 : this.toSafeNumber(overrides[key], fallback);
             return value;
         };
+        const resolveOverrideString = (key, fallback) => {
+            const source = hasPerfil ? profileDetail : overrides;
+            const raw = source[key];
+            return typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : fallback;
+        };
         const resolveProfileNumber = (directValue, detailKey, fallback) => {
             if (input.operacion.perfilOperativo && directValue !== undefined && directValue !== null) {
                 return this.toSafeNumber(directValue, fallback);
@@ -5255,22 +5402,59 @@ let ProductosServiciosService = class ProductosServiciosService {
         }
         if (plantilla === client_1.PlantillaMaquinaria.LAMINADORA_BOPP_ROLLO) {
             const anchoRolloMm = Math.max(1, this.toSafeNumber(machineParams.anchoRolloMm, 0));
-            const velocidadMMin = Math.max(0, this.toSafeNumber(machineParams.velocidadMMin, 0));
+            const velocidadMmSegMaquina = Math.max(0, this.toSafeNumber(machineParams.velocidadMmSeg, 0));
+            const velocidadTrabajoMmSeg = Math.max(0, resolveOverrideNumber('velocidadTrabajoMmSeg', velocidadMmSegMaquina));
+            const velocidadDobleRolloMmSegMaquina = Math.max(0, this.toSafeNumber(machineParams.velocidadDobleRolloMmSeg, velocidadTrabajoMmSeg));
+            const velocidadDobleRolloTrabajoMmSeg = Math.max(0, resolveOverrideNumber('velocidadDobleRolloTrabajoMmSeg', velocidadDobleRolloMmSegMaquina));
+            const soportaDobleRollo = Boolean(machineParams.soportaDobleRollo);
             const mermaArranqueMm = Math.max(0, this.toSafeNumber(machineParams.mermaArranqueMm, 0));
             const mermaCierreMm = Math.max(0, this.toSafeNumber(machineParams.mermaCierreMm, 0));
+            const modoLaminadoRaw = resolveOverrideString('modoLaminado', 'una_cara');
+            const modoLaminado = modoLaminadoRaw === 'dos_caras_simultaneo' || modoLaminadoRaw === 'dos_caras_dos_pasadas'
+                ? modoLaminadoRaw
+                : 'una_cara';
             const gapEntreHojasMm = Math.max(0, resolveOverrideNumber('gapEntreHojasMm', 0));
-            const margenLatIzqMm = Math.max(0, resolveOverrideNumber('margenLatIzqMm', 0));
-            const margenLatDerMm = Math.max(0, resolveOverrideNumber('margenLatDerMm', 0));
-            const colaCorteMm = Math.max(0, resolveOverrideNumber('colaCorteMm', 0));
             const warmupMin = Math.max(0, resolveOverrideNumber('warmupMin', 0));
-            const anchoHojaMm = Math.max(1, input.varianteAnchoMm);
-            const altoHojaMm = Math.max(1, input.varianteAltoMm);
-            const hojasTotales = Math.max(1, input.cantidadObjetivoSalida);
-            const anchoConsumidoMm = Math.min(anchoRolloMm, anchoHojaMm + margenLatIzqMm + margenLatDerMm);
-            const pasoLinealMm = altoHojaMm + gapEntreHojasMm + colaCorteMm;
-            const largoConsumidoMm = hojasTotales * pasoLinealMm + mermaArranqueMm + mermaCierreMm;
-            const velocidadMMinEfectiva = Math.max(0.01, velocidadMMin * factorVelocidad);
-            const runMin = Number(((largoConsumidoMm / 1000) / velocidadMMinEfectiva).toFixed(4));
+            const pliegoAnchoMm = Math.max(1, input.pliegoAnchoMm ?? input.varianteAnchoMm);
+            const pliegoAltoMm = Math.max(1, input.pliegoAltoMm ?? input.varianteAltoMm);
+            const pliegosTotales = Math.max(1, input.pliegos);
+            const hojasTotales = pliegosTotales;
+            if (modoLaminado === 'dos_caras_simultaneo' && !soportaDobleRollo) {
+                throw new common_1.BadRequestException('La laminadora no soporta doble rollo y el perfil exige laminado de dos caras simultaneo.');
+            }
+            const orientaciones = [
+                {
+                    orientacionEntrada: 'normal',
+                    anchoEntradaMm: pliegoAnchoMm,
+                    largoEntradaMm: pliegoAltoMm,
+                },
+                {
+                    orientacionEntrada: 'rotada',
+                    anchoEntradaMm: pliegoAltoMm,
+                    largoEntradaMm: pliegoAnchoMm,
+                },
+            ].filter((item) => item.anchoEntradaMm <= anchoRolloMm);
+            if (!orientaciones.length) {
+                throw new common_1.BadRequestException('La laminadora no puede costear el trabajo porque el pliego supera el ancho del rollo en cualquier orientación.');
+            }
+            orientaciones.sort((a, b) => {
+                if (a.largoEntradaMm !== b.largoEntradaMm) {
+                    return a.largoEntradaMm - b.largoEntradaMm;
+                }
+                return b.anchoEntradaMm - a.anchoEntradaMm;
+            });
+            const orientacionSeleccionada = orientaciones[0];
+            const anchoHojaMm = orientacionSeleccionada.anchoEntradaMm;
+            const altoHojaMm = orientacionSeleccionada.largoEntradaMm;
+            const anchoConsumidoMm = anchoRolloMm;
+            const pasoLinealMm = altoHojaMm + gapEntreHojasMm;
+            const largoPliegosMm = pliegosTotales * altoHojaMm + Math.max(0, pliegosTotales - 1) * gapEntreHojasMm;
+            const largoConsumidoMm = largoPliegosMm + mermaArranqueMm + mermaCierreMm;
+            const pasadasLaminado = modoLaminado === 'dos_caras_dos_pasadas' ? 2 : 1;
+            const filmFactor = modoLaminado === 'una_cara' ? 1 : 2;
+            const velocidadModoMmSeg = modoLaminado === 'dos_caras_simultaneo' ? velocidadDobleRolloTrabajoMmSeg : velocidadTrabajoMmSeg;
+            const velocidadMmSegEfectiva = Math.max(0.01, velocidadModoMmSeg);
+            const runMin = Number(((largoConsumidoMm * pasadasLaminado) / velocidadMmSegEfectiva / 60).toFixed(4));
             const areaConsumidaM2 = Number(((anchoConsumidoMm / 1000) * (Math.max(0, largoConsumidoMm) / 1000)).toFixed(6));
             const setupMin = Number((input.setupMinBase + warmupMin).toFixed(4));
             const cleanupMin = Number(input.cleanupMinBase.toFixed(4));
@@ -5281,14 +5465,32 @@ let ProductosServiciosService = class ProductosServiciosService {
                 runMin,
                 trace: {
                     tipo: 'laminadora_bopp_rollo',
+                    modoLaminado,
+                    pasadasLaminado,
+                    filmFactor,
+                    soportaDobleRollo,
+                    pliegosTotales,
                     hojasTotales,
+                    orientacionEntrada: orientacionSeleccionada.orientacionEntrada,
+                    pliegoOriginalAnchoMm: Number(pliegoAnchoMm.toFixed(2)),
+                    pliegoOriginalAltoMm: Number(pliegoAltoMm.toFixed(2)),
+                    anchoRolloMm: Number(anchoRolloMm.toFixed(2)),
+                    anchoHojaMm: Number(anchoHojaMm.toFixed(2)),
+                    altoHojaMm: Number(altoHojaMm.toFixed(2)),
+                    gapEntreHojasMm: Number(gapEntreHojasMm.toFixed(2)),
+                    mermaArranqueMm: Number(mermaArranqueMm.toFixed(2)),
+                    mermaCierreMm: Number(mermaCierreMm.toFixed(2)),
+                    pasoLinealMm: Number(pasoLinealMm.toFixed(2)),
+                    largoPliegosMm: Number(largoPliegosMm.toFixed(2)),
                     anchoConsumidoMm: Number(anchoConsumidoMm.toFixed(2)),
                     largoConsumidoMm: Number(largoConsumidoMm.toFixed(2)),
                     areaConsumidaM2,
-                    velocidadMMinEfectiva: Number(velocidadMMinEfectiva.toFixed(4)),
+                    velocidadTrabajoMmSeg: Number(velocidadTrabajoMmSeg.toFixed(4)),
+                    velocidadDobleRolloTrabajoMmSeg: Number(velocidadDobleRolloTrabajoMmSeg.toFixed(4)),
+                    velocidadMmSegEfectiva: Number(velocidadMmSegEfectiva.toFixed(4)),
                 },
                 sourceProductividad,
-                warnings: velocidadMMin <= 0 ? ['velocidadMMin debe ser mayor a 0.'] : [],
+                warnings: velocidadModoMmSeg <= 0 ? ['La velocidad de la laminadora debe ser mayor a 0.'] : [],
             };
         }
         if (plantilla === client_1.PlantillaMaquinaria.REDONDEADORA_PUNTAS) {
@@ -5349,6 +5551,7 @@ let ProductosServiciosService = class ProductosServiciosService {
         const trace = input.timingOverride?.trace ?? null;
         const areaConsumidaM2 = this.toSafeNumber(trace?.areaConsumidaM2, 0);
         const largoConsumidoMm = this.toSafeNumber(trace?.largoConsumidoMm, 0);
+        const filmFactor = Math.max(1, this.toSafeNumber(trace?.filmFactor, 1));
         if (areaConsumidaM2 <= 0 && largoConsumidoMm <= 0) {
             return { materiales: [], costo: 0 };
         }
@@ -5368,11 +5571,11 @@ let ProductosServiciosService = class ProductosServiciosService {
             let cantidad = 0;
             let unidad = '';
             if (item.unidad === client_1.UnidadConsumoMaquina.M2) {
-                cantidad = areaConsumidaM2 * factor;
+                cantidad = areaConsumidaM2 * factor * filmFactor;
                 unidad = 'm2';
             }
             else if (item.unidad === client_1.UnidadConsumoMaquina.METRO_LINEAL) {
-                cantidad = (largoConsumidoMm / 1000) * factor;
+                cantidad = (largoConsumidoMm / 1000) * factor * filmFactor;
                 unidad = 'm';
             }
             else {
