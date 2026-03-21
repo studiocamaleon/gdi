@@ -18,6 +18,7 @@ import {
   UsersIcon,
   WorkflowIcon,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { type CurrentUser } from "@/lib/auth";
 import { NavLink } from "@/components/navigation/nav-link";
@@ -542,41 +543,52 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
       </SidebarContent>
 
       <SidebarFooter className="gap-3 border-t border-sidebar-border/70 p-3">
-        <Card
-          size="sm"
-          className="overflow-hidden rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.18),_transparent_32%),linear-gradient(145deg,_rgba(33,33,37,0.98)_0%,_rgba(11,11,12,0.98)_42%,_rgba(22,22,25,0.98)_100%)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_18px_40px_rgba(0,0,0,0.24)] ring-0 transition-all hover:border-white/14 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_22px_44px_rgba(0,0,0,0.28)] group-data-[collapsible=icon]:hidden"
+        <button
+          type="button"
+          onClick={() => toast.info("Administración de suscripción disponible próximamente.")}
+          className="group relative cursor-pointer rounded-2xl text-left outline-none transition-transform duration-200 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary/40 group-data-[collapsible=icon]:hidden"
         >
-          <CardHeader className="gap-3 p-4">
-            <div className="space-y-0.5">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">
-                Plan actual
+          <Card
+            size="sm"
+            className="relative overflow-hidden rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.18),_transparent_32%),linear-gradient(145deg,_rgba(33,33,37,0.98)_0%,_rgba(11,11,12,0.98)_42%,_rgba(22,22,25,0.98)_100%)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_18px_40px_rgba(0,0,0,0.24)] ring-0 transition-all duration-300 group-hover:border-white/18 group-hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_22px_44px_rgba(0,0,0,0.28)]"
+          >
+            <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+              <div className="absolute -left-1/3 top-0 h-full w-1/3 bg-gradient-to-r from-cyan-400/0 via-cyan-400/22 to-cyan-400/0 blur-xl transition-transform duration-500 group-hover:translate-x-[260%]" />
+              <div className="absolute -left-1/3 top-0 h-full w-1/3 bg-gradient-to-r from-fuchsia-500/0 via-fuchsia-500/18 to-fuchsia-500/0 blur-xl transition-transform delay-75 duration-500 group-hover:translate-x-[290%]" />
+              <div className="absolute -left-1/3 top-0 h-full w-1/3 bg-gradient-to-r from-amber-300/0 via-amber-300/20 to-amber-300/0 blur-xl transition-transform delay-150 duration-500 group-hover:translate-x-[320%]" />
+            </div>
+            <CardHeader className="relative gap-3 p-4">
+              <div className="space-y-0.5">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">
+                  Plan actual
+                </p>
+                <div className="flex items-center gap-2">
+                  <GemIcon className="size-4 text-cyan-300 transition-transform duration-300 group-hover:scale-110" />
+                  <CardTitle className="truncate text-lg font-semibold tracking-[-0.03em] text-white">
+                    {planNombre}
+                  </CardTitle>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-300 transition-[width] duration-500"
+                    style={{ width: `${suscripcionProgress}%` }}
+                  />
+                </div>
+                <div className="flex items-center gap-2 text-sm text-white/72">
+                  <CalendarClockIcon className="size-3.5 text-white/42" />
+                  <span>{suscripcionEstado}</span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="relative border-t border-white/8 bg-white/[0.03] px-4 py-2.5">
+              <p className="text-center text-[10px] uppercase tracking-[0.18em] text-white/38 transition-colors duration-300 group-hover:text-white/60">
+                Administrar
               </p>
-              <div className="flex items-center gap-2">
-                <GemIcon className="size-4 text-cyan-300" />
-                <CardTitle className="truncate text-lg font-semibold tracking-[-0.03em] text-white">
-                  {planNombre}
-                </CardTitle>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-300 transition-[width] duration-500"
-                  style={{ width: `${suscripcionProgress}%` }}
-                />
-              </div>
-              <div className="flex items-center gap-2 text-sm text-white/72">
-                <CalendarClockIcon className="size-3.5 text-white/42" />
-                <span>{suscripcionEstado}</span>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="border-t border-white/8 bg-white/[0.03] px-4 py-2.5">
-            <p className="text-center text-[10px] uppercase tracking-[0.18em] text-white/38">
-              Administrar
-            </p>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </button>
       </SidebarFooter>
 
       <SidebarRail />

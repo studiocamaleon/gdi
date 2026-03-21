@@ -746,6 +746,7 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
 
             {direcciones.map((direccion, index) => (
               <TabsContent key={direccion.id} value={direccion.id}>
+                {activeDireccionId === direccion.id ? (
                 <Card className="rounded-xl border-border/70 shadow-none">
                   <CardHeader className="gap-4 border-b border-border/70">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -943,6 +944,7 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
                     </FieldGroup>
                   </CardContent>
                 </Card>
+                ) : null}
               </TabsContent>
             ))}
           </Tabs>
