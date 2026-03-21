@@ -4,7 +4,6 @@ import * as React from "react";
 import {
   CalculatorIcon,
   InfoIcon,
-  LoaderCircleIcon,
   PencilIcon,
   PlusIcon,
   RefreshCcwIcon,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import {
   createMaquina,
   getMaquinas,
@@ -3169,7 +3169,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={reload} disabled={isReloading}>
-            {isReloading ? <LoaderCircleIcon className="animate-spin" data-icon="inline-start" /> : <RefreshCcwIcon data-icon="inline-start" />}
+            {isReloading ? <GdiSpinner className="size-4" data-icon="inline-start" /> : <RefreshCcwIcon data-icon="inline-start" />}
             Actualizar
           </Button>
           <Button onClick={openCreate}>
@@ -3423,7 +3423,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                           disabled={isTogglingId === maquina.id}
                         >
                           {isTogglingId === maquina.id ? (
-                            <LoaderCircleIcon className="animate-spin" data-icon="inline-start" />
+                            <GdiSpinner className="size-4" data-icon="inline-start" />
                           ) : (
                             <Trash2Icon data-icon="inline-start" />
                           )}
@@ -5713,7 +5713,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
             </Button>
             <Button onClick={handleSave} disabled={isSaving}>
               {isSaving ? (
-                <LoaderCircleIcon className="animate-spin" data-icon="inline-start" />
+                <GdiSpinner className="size-4" data-icon="inline-start" />
               ) : null}
               {editingId ? "Guardar cambios" : "Crear maquina"}
             </Button>

@@ -9,7 +9,6 @@ import {
   ChevronRightIcon,
   GripVerticalIcon,
   InfoIcon,
-  Loader2Icon,
   PencilIcon,
   PlusIcon,
   SaveIcon,
@@ -19,6 +18,7 @@ import {
 import Link from "next/link";
 import { toast } from "sonner";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import type { ClienteDetalle } from "@/lib/clientes";
 import type { MateriaPrima } from "@/lib/materias-primas";
 import type { Maquina } from "@/lib/maquinaria";
@@ -2117,24 +2117,26 @@ export function ProductoServicioFichaTabs({
   };
 
   const handleChangeMetodoCalculoPrecio = (metodoCalculo: MetodoCalculoPrecioProducto) => {
+    const basePrecio = buildPrecioConfigDraft(precioForm, productoState.unidadComercial?.trim() || "unidad");
     const nextMeasurementUnit =
-      precioEditorDraft.measurementUnit ?? productoState.unidadComercial?.trim() ?? "unidad";
+      basePrecio.measurementUnit ?? productoState.unidadComercial?.trim() ?? "unidad";
     const next = {
       ...buildPrecioConfigForMethod(
         metodoCalculo,
         nextMeasurementUnit,
       ),
       impuestos: {
-        esquemaId: precioEditorDraft.impuestos.esquemaId,
-        esquemaNombre: precioEditorDraft.impuestos.esquemaNombre,
-        items: precioEditorDraft.impuestos.items.map((item) => ({ ...item })),
-        porcentajeTotal: precioEditorDraft.impuestos.porcentajeTotal,
+        esquemaId: basePrecio.impuestos.esquemaId,
+        esquemaNombre: basePrecio.impuestos.esquemaNombre,
+        items: basePrecio.impuestos.items.map((item) => ({ ...item })),
+        porcentajeTotal: basePrecio.impuestos.porcentajeTotal,
       },
       comisiones: {
-        items: precioEditorDraft.comisiones.items.map((item) => ({ ...item })),
-        porcentajeTotal: precioEditorDraft.comisiones.porcentajeTotal,
+        items: basePrecio.comisiones.items.map((item) => ({ ...item })),
+        porcentajeTotal: basePrecio.comisiones.porcentajeTotal,
       },
     } as ProductoPrecioConfig;
+    setPrecioForm(next);
     setPrecioEditorDraft(next);
   };
 
@@ -3632,7 +3634,7 @@ export function ProductoServicioFichaTabs({
                   onClick={handleSaveGeneral}
                   disabled={isSavingGeneral || !isGeneralDirty}
                 >
-                  {isSavingGeneral ? <Loader2Icon className="animate-spin" /> : <SaveIcon />}
+                  {isSavingGeneral ? <GdiSpinner className="size-4" /> : <SaveIcon />}
                   Guardar datos generales
                 </Button>
               </div>
@@ -3667,7 +3669,7 @@ export function ProductoServicioFichaTabs({
                   </div>
                   {isSavingRutaBaseRules ? (
                     <div className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      <Loader2Icon className="size-3 animate-spin" />
+                      <GdiSpinner className="size-3" />
                       Guardando...
                     </div>
                   ) : null}
@@ -3889,12 +3891,12 @@ export function ProductoServicioFichaTabs({
                 <div className="mt-3 flex items-center gap-2">
                   {isEditingVariante ? (
                     <Button type="button" onClick={handleSaveEditVariante} disabled={isUpdatingVariante}>
-                      {isUpdatingVariante ? <Loader2Icon className="animate-spin" data-icon="inline-start" /> : <SaveIcon data-icon="inline-start" />}
+                      {isUpdatingVariante ? <GdiSpinner className="size-4" data-icon="inline-start" /> : <SaveIcon data-icon="inline-start" />}
                       Guardar cambios
                     </Button>
                   ) : (
                     <Button type="button" onClick={handleCreateVariante} disabled={isSavingVariante}>
-                      {isSavingVariante ? <Loader2Icon className="animate-spin" data-icon="inline-start" /> : <PlusIcon data-icon="inline-start" />}
+                      {isSavingVariante ? <GdiSpinner className="size-4" data-icon="inline-start" /> : <PlusIcon data-icon="inline-start" />}
                       Crear variante
                     </Button>
                   )}
@@ -4052,7 +4054,7 @@ export function ProductoServicioFichaTabs({
                           </Field>
                           {savingVarianteId === item.id ? (
                             <div className="mb-2 inline-flex items-center gap-1 text-xs text-muted-foreground">
-                              <Loader2Icon className="size-3 animate-spin" />
+                              <GdiSpinner className="size-3" />
                               Guardando...
                             </div>
                           ) : null}
@@ -4100,7 +4102,7 @@ export function ProductoServicioFichaTabs({
                   </div>
                   {isSavingRutaBaseRules ? (
                     <div className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      <Loader2Icon className="size-3 animate-spin" />
+                      <GdiSpinner className="size-3" />
                       Guardando...
                     </div>
                   ) : null}
@@ -4215,7 +4217,10 @@ export function ProductoServicioFichaTabs({
                                         handleRutaBaseMatchingChange(
                                           variante.id,
                                           { tipoImpresion: row.tipoImpresion, caras: row.caras },
-                                          { perfilOperativoId: next === "__none__" ? "" : (next ?? "") },
+                                          {
+                                            pasoPlantillaId: row.pasoPlantillaId,
+                                            perfilOperativoId: next === "__none__" ? "" : (next ?? ""),
+                                          },
                                         )
                                       }
                                       disabled={!plantilla?.maquinaId}
@@ -4736,7 +4741,7 @@ export function ProductoServicioFichaTabs({
               ) : null}
 
               <Button type="button" onClick={handleSaveConfig} disabled={isSavingConfig || !selectedVariante}>
-                {isSavingConfig ? <Loader2Icon className="animate-spin" data-icon="inline-start" /> : <SaveIcon data-icon="inline-start" />}
+                {isSavingConfig ? <GdiSpinner className="size-4" data-icon="inline-start" /> : <SaveIcon data-icon="inline-start" />}
                 Guardar imposición
               </Button>
             </CardContent>
@@ -4991,7 +4996,7 @@ export function ProductoServicioFichaTabs({
               </div>
 
               <Button type="button" onClick={() => handleSavePrecio()} disabled={isSavingPrecio || !isPrecioDirty}>
-                {isSavingPrecio ? <Loader2Icon className="animate-spin" /> : <SaveIcon />}
+                {isSavingPrecio ? <GdiSpinner className="size-4" /> : <SaveIcon />}
                 Guardar configuración de precio
               </Button>
             </CardContent>
@@ -5296,7 +5301,7 @@ export function ProductoServicioFichaTabs({
                 </Field>
                 <div className="flex items-end">
                   <Button type="button" onClick={handleCotizar} disabled={isCotizando || !selectedVariante}>
-                    {isCotizando ? <Loader2Icon className="animate-spin" data-icon="inline-start" /> : null}
+                    {isCotizando ? <GdiSpinner className="size-4" data-icon="inline-start" /> : null}
                     Cotizar
                   </Button>
                 </div>
@@ -6503,7 +6508,7 @@ export function ProductoServicioFichaTabs({
                 Cancelar
               </Button>
               <Button type="button" onClick={handleSavePrecioFromEditor} disabled={isSavingPrecio}>
-                {isSavingPrecio ? <Loader2Icon className="animate-spin" data-icon="inline-start" /> : null}
+                {isSavingPrecio ? <GdiSpinner className="size-4" data-icon="inline-start" /> : null}
                 Guardar
               </Button>
             </div>
@@ -6799,7 +6804,7 @@ export function ProductoServicioFichaTabs({
                 Cancelar
               </Button>
               <Button type="button" onClick={handleSavePrecioEspecialClienteDraft} disabled={isSavingPrecioEspecialClientes}>
-                {isSavingPrecioEspecialClientes ? <Loader2Icon className="animate-spin" data-icon="inline-start" /> : null}
+                {isSavingPrecioEspecialClientes ? <GdiSpinner className="size-4" data-icon="inline-start" /> : null}
                 Guardar
               </Button>
             </div>
@@ -6977,7 +6982,7 @@ export function ProductoServicioFichaTabs({
                 Cancelar
               </Button>
               <Button type="button" onClick={handleSaveImpuestosEditor} disabled={isSavingImpuestosCatalogo || !impuestosEditorDraft}>
-                {isSavingImpuestosCatalogo ? <Loader2Icon className="animate-spin" data-icon="inline-start" /> : null}
+                {isSavingImpuestosCatalogo ? <GdiSpinner className="size-4" data-icon="inline-start" /> : null}
                 Aplicar
               </Button>
             </div>
@@ -7196,7 +7201,7 @@ export function ProductoServicioFichaTabs({
               Cancelar
             </Button>
             <Button type="button" onClick={handleSaveRouteEditor} disabled={isSavingRouteEditor}>
-              {isSavingRouteEditor ? <Loader2Icon className="animate-spin" data-icon="inline-start" /> : <SaveIcon data-icon="inline-start" />}
+              {isSavingRouteEditor ? <GdiSpinner className="size-4" data-icon="inline-start" /> : <SaveIcon data-icon="inline-start" />}
               Guardar ruta
             </Button>
           </div>

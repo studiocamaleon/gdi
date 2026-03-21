@@ -6,13 +6,13 @@ import {
   ChevronRightIcon,
   GitBranchIcon,
   GripVerticalIcon,
-  Loader2Icon,
   PlusIcon,
   SaveIcon,
   Trash2Icon,
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import type { MateriaPrima } from "@/lib/materias-primas";
 import type { ProcesoOperacionPlantilla } from "@/lib/procesos";
 import { upsertProductoChecklist } from "@/lib/productos-servicios-api";
@@ -1810,7 +1810,7 @@ export function ProductoServicioChecklistEditor({
             Agregar pregunta
           </Button>
           <Button type="button" onClick={handleSave} disabled={isSaving || !isDirty}>
-            {isSaving ? <Loader2Icon className="animate-spin" /> : <SaveIcon />}
+            {isSaving ? <GdiSpinner className="size-4" /> : <SaveIcon />}
             Guardar configurador
           </Button>
         </div>

@@ -4,7 +4,6 @@ import * as React from "react";
 import {
   Building2Icon,
   FolderTreeIcon,
-  LoaderCircleIcon,
   PencilIcon,
   PlusIcon,
   RefreshCcwIcon,
@@ -12,6 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import {
   createAreaCosto,
   createCentroCosto,
@@ -459,7 +459,7 @@ export function CostosPanel({
 
                     <div className="flex gap-2">
                       <Button type="submit" variant="brand">
-                        {isSaving ? <LoaderCircleIcon className="animate-spin" /> : <PlusIcon />}
+                        {isSaving ? <GdiSpinner className="size-4" /> : <PlusIcon />}
                         {editingPlantaId ? "Guardar cambios" : "Nueva planta"}
                       </Button>
                       {editingPlantaId ? (
@@ -624,7 +624,7 @@ export function CostosPanel({
 
                     <div className="flex gap-2">
                       <Button type="submit" variant="brand">
-                        {isSaving ? <LoaderCircleIcon className="animate-spin" /> : <PlusIcon />}
+                        {isSaving ? <GdiSpinner className="size-4" /> : <PlusIcon />}
                         {editingAreaId ? "Guardar cambios" : "Nueva area"}
                       </Button>
                       {editingAreaId ? (
@@ -1070,7 +1070,7 @@ export function CostosPanel({
 
                     <div className="flex gap-2">
                       <Button type="submit" variant="brand">
-                        {isSaving ? <LoaderCircleIcon className="animate-spin" /> : <PlusIcon />}
+                        {isSaving ? <GdiSpinner className="size-4" /> : <PlusIcon />}
                         {editingCentroId ? "Guardar cambios" : "Nuevo centro"}
                       </Button>
                       {editingCentroId ? (

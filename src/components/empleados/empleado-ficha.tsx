@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
-  LoaderCircleIcon,
   MapPinHouseIcon,
   PercentIcon,
   PlusIcon,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import {
   createEmpleado,
   inviteEmpleadoAccess,
@@ -467,7 +467,7 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
 
         <Button variant="brand" onClick={handleSave} disabled={isSaving}>
           {isSaving ? (
-            <LoaderCircleIcon className="animate-spin" data-icon="inline-start" />
+            <GdiSpinner className="size-4" data-icon="inline-start" />
           ) : (
             <SaveIcon data-icon="inline-start" />
           )}
@@ -970,7 +970,7 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
                   onClick={handleInviteAccess}
                 >
                   {isInviting ? (
-                    <LoaderCircleIcon className="animate-spin" />
+                    <GdiSpinner className="size-4" />
                   ) : (
                     <ShieldCheckIcon />
                   )}

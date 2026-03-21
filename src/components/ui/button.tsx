@@ -3,8 +3,8 @@
 import * as React from "react"
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
-import { LoaderCircleIcon } from "lucide-react"
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
@@ -71,7 +71,7 @@ function Button({
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     >
-      {loading ? <LoaderCircleIcon className="animate-spin" data-icon="inline-start" /> : null}
+      {loading ? <GdiSpinner className="size-4" data-icon="inline-start" /> : null}
       {loading && loadingText ? loadingText : children}
     </ButtonPrimitive>
   )
