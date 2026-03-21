@@ -7,11 +7,17 @@ export type TenantSummary = {
   nombre: string;
   slug: string;
   rol: MembershipRole;
+  suscripcion?: {
+    planNombre?: string | null;
+    diasRestantes?: number | null;
+    venceEl?: string | null;
+  } | null;
 };
 
 export type CurrentUser = {
   id: string;
   email: string;
+  nombreCompleto?: string | null;
   tenantActual: TenantSummary;
   tenants: TenantSummary[];
 };

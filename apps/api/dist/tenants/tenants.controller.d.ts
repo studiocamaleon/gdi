@@ -10,6 +10,7 @@ export declare class TenantsController {
         currentUser: {
             id: string;
             email: string;
+            nombreCompleto: string | null;
             tenantActual: {
                 id: string;
                 nombre: string;
@@ -30,6 +31,7 @@ export declare class TenantsController {
         currentUser: {
             id: string;
             email: string;
+            nombreCompleto: string | null;
             tenantActual: {
                 id: string;
                 nombre: string;

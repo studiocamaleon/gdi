@@ -69,7 +69,13 @@ export class AuthService {
       throw new UnauthorizedException('El usuario no tiene empresas activas.');
     }
 
-    return this.createSessionResponse(user.id, user.email, membership);
+    return this.createSessionResponse(
+      user.id,
+      user.email,
+      membership,
+      this.prisma,
+      user.nombreCompleto ?? null,
+    );
   }
 
   async logout(auth: CurrentAuth) {
@@ -167,7 +173,13 @@ export class AuthService {
         },
       });
 
-      return this.createSessionResponse(user.id, user.email, membership, tx);
+      return this.createSessionResponse(
+        user.id,
+        user.email,
+        membership,
+        tx,
+        user.nombreCompleto ?? null,
+      );
     });
   }
 
@@ -210,6 +222,7 @@ export class AuthService {
       auth.sessionId,
       user.id,
       user.email,
+      user.nombreCompleto ?? null,
       currentMembership,
       user.memberships,
       null,
@@ -266,10 +279,16 @@ export class AuthService {
       email: auth.email,
     });
 
+    const user = await this.prisma.user.findUnique({
+      where: { id: auth.userId },
+      select: { nombreCompleto: true },
+    });
+
     return this.buildAuthResponse(
       auth.sessionId,
       auth.userId,
       auth.email,
+      user?.nombreCompleto ?? null,
       membership,
       allMemberships,
       token,
@@ -449,6 +468,7 @@ export class AuthService {
     email: string,
     membership: MembershipWithTenant,
     db: PrismaService | Prisma.TransactionClient = this.prisma,
+    nombreCompleto: string | null = null,
   ) {
     const session = await db.authSession.create({
       data: {
@@ -488,6 +508,7 @@ export class AuthService {
       session.id,
       userId,
       email,
+      nombreCompleto,
       membership,
       memberships,
       token,
@@ -531,6 +552,7 @@ export class AuthService {
     sessionId: string,
     userId: string,
     email: string,
+    nombreCompleto: string | null,
     currentMembership: MembershipWithTenant,
     memberships: MembershipWithTenant[],
     accessToken: string | null,
@@ -541,6 +563,7 @@ export class AuthService {
       currentUser: {
         id: userId,
         email,
+        nombreCompleto,
         tenantActual: {
           id: currentMembership.tenant.id,
           nombre: currentMembership.tenant.nombre,

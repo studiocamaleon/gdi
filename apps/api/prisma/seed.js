@@ -45,7 +45,7 @@ async function main() {
 
   const tenant = await prisma.tenant.create({
     data: {
-      nombre: "GDI Demo",
+      nombre: "Grafica Corporearte",
       slug: "gdi-demo",
       activo: true,
     },
@@ -54,7 +54,7 @@ async function main() {
   const adminUser = await prisma.user.create({
     data: {
       email: "admin@gdi-demo.local",
-      nombreCompleto: "Administrador Demo",
+      nombreCompleto: "Lucas German Gomez",
       passwordHash: bcrypt.hashSync("Admin123!", 10),
       activo: true,
     },
@@ -570,7 +570,7 @@ async function main() {
   });
 
   console.info("Seed completado.");
-  console.info("Tenant demo: GDI Demo");
+  console.info("Tenant demo: Grafica Corporearte");
   console.info("Usuario admin: admin@gdi-demo.local");
   console.info("Clave admin: Admin123!");
 }
