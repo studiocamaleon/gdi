@@ -1,0 +1,35 @@
+-- RenameIndex
+ALTER INDEX "CotizacionProductoSnapshot_tenantId_motorCodigo_motorVersion_cr" RENAME TO "CotizacionProductoSnapshot_tenantId_motorCodigo_motorVersio_idx";
+
+-- RenameIndex
+ALTER INDEX "ProductoAdicionalMaterial_tenantId_materiaPrimaVarianteId_activ" RENAME TO "ProductoAdicionalMaterial_tenantId_materiaPrimaVarianteId_a_idx";
+
+-- RenameIndex
+ALTER INDEX "ProductoAdicionalMaterial_tenantId_productoAdicionalId_activo_i" RENAME TO "ProductoAdicionalMaterial_tenantId_productoAdicionalId_acti_idx";
+
+-- RenameIndex
+ALTER INDEX "ProductoMotorConfig_tenantId_productoServicioId_motorCodigo_mot" RENAME TO "ProductoMotorConfig_tenantId_productoServicioId_motorCodigo_key";
+
+-- RenameIndex
+ALTER INDEX "ProductoServicioAdicional_tenantId_productoAdicionalId_activo_i" RENAME TO "ProductoServicioAdicional_tenantId_productoAdicionalId_acti_idx";
+
+-- RenameIndex
+ALTER INDEX "ProductoServicioAdicional_tenantId_productoServicioId_activo_id" RENAME TO "ProductoServicioAdicional_tenantId_productoServicioId_activ_idx";
+
+-- RenameIndex
+ALTER INDEX "ProductoServicioAdicional_tenantId_productoServicioId_productoA" RENAME TO "ProductoServicioAdicional_tenantId_productoServicioId_produ_key";
+
+-- RenameIndex
+ALTER INDEX "PVAR_ADIC_RESTR_idx_tenant_adic" RENAME TO "ProductoVarianteAdicionalRestriction_tenantId_productoAdici_idx";
+
+-- RenameIndex
+ALTER INDEX "PVAR_ADIC_RESTR_idx_tenant_var" RENAME TO "ProductoVarianteAdicionalRestriction_tenantId_productoVaria_idx";
+
+-- RenameIndex
+ALTER INDEX "PVAR_ADIC_RESTR_uq_tenant_var_adic" RENAME TO "ProductoVarianteAdicionalRestriction_tenantId_productoVaria_key";
+
+-- RenameIndex
+ALTER INDEX "ProductoVarianteMotorOverride_tenantId_productoVarianteId_activ" RENAME TO "ProductoVarianteMotorOverride_tenantId_productoVarianteId_a_idx";
+
+-- RenameIndex
+ALTER INDEX "ProductoVarianteMotorOverride_tenantId_productoVarianteId_motor" RENAME TO "ProductoVarianteMotorOverride_tenantId_productoVarianteId_m_key";

@@ -15,6 +15,10 @@ import {
 export enum PlantillaMaquinariaDto {
   router_cnc = 'router_cnc',
   corte_laser = 'corte_laser',
+  guillotina = 'guillotina',
+  laminadora_bopp_rollo = 'laminadora_bopp_rollo',
+  redondeadora_puntas = 'redondeadora_puntas',
+  perforadora = 'perforadora',
   impresora_3d = 'impresora_3d',
   impresora_dtf = 'impresora_dtf',
   impresora_dtf_uv = 'impresora_dtf_uv',
@@ -39,27 +43,23 @@ export enum EstadoConfiguracionProcesoDto {
 }
 
 export enum TipoOperacionProcesoDto {
-  preflight = 'preflight',
   preprensa = 'preprensa',
-  impresion = 'impresion',
-  corte = 'corte',
-  mecanizado = 'mecanizado',
-  grabado = 'grabado',
-  terminacion = 'terminacion',
-  curado = 'curado',
-  laminado = 'laminado',
-  transferencia = 'transferencia',
-  control_calidad = 'control_calidad',
-  empaque = 'empaque',
-  logistica = 'logistica',
-  tercerizado = 'tercerizado',
-  otro = 'otro',
+  prensa = 'prensa',
+  postprensa = 'postprensa',
+  acabado = 'acabado',
+  servicio = 'servicio',
+  instalacion = 'instalacion',
 }
 
 export enum ModoProductividadProcesoDto {
   fija = 'fija',
-  formula = 'formula',
-  tabla = 'tabla',
+  variable = 'variable',
+}
+
+export enum ModoProductividadNivelDto {
+  fija = 'fija',
+  variable_manual = 'variable_manual',
+  variable_perfil = 'variable_perfil',
 }
 
 export enum UnidadProcesoDto {
@@ -72,6 +72,7 @@ export enum UnidadProcesoDto {
   m2 = 'm2',
   metro_lineal = 'metro_lineal',
   pieza = 'pieza',
+  corte = 'corte',
   ciclo = 'ciclo',
   unidad = 'unidad',
   kg = 'kg',
@@ -172,8 +173,77 @@ export class ProcesoOperacionItemDto {
   @IsObject()
   detalle?: Record<string, unknown>;
 
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProcesoOperacionNivelDto)
+  niveles?: ProcesoOperacionNivelDto[];
+
   @IsBoolean()
   activo: boolean;
+}
+
+export class ProcesoOperacionNivelDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  id?: string;
+
+  @IsString()
+  @MinLength(1)
+  nombre: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  orden?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  activo?: boolean;
+
+  @IsEnum(ModoProductividadNivelDto)
+  modoProductividadNivel: ModoProductividadNivelDto;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  tiempoFijoMin?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  productividadBase?: number;
+
+  @IsOptional()
+  @IsEnum(UnidadProcesoDto)
+  unidadSalida?: UnidadProcesoDto;
+
+  @IsOptional()
+  @IsEnum(UnidadProcesoDto)
+  unidadTiempo?: UnidadProcesoDto;
+
+  @IsOptional()
+  @IsUUID()
+  maquinaId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  perfilOperativoId?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  setupMin?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  cleanupMin?: number;
+
+  @IsOptional()
+  @IsObject()
+  detalle?: Record<string, unknown>;
 }
 
 export class UpsertProcesoDto {

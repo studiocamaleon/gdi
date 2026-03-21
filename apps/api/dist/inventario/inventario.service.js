@@ -119,15 +119,21 @@ let InventarioService = class InventarioService {
                         atributosTecnicosJson: this.toInputJson(normalized.atributosTecnicos),
                     },
                 });
-                await tx.materiaPrimaVariante.deleteMany({
+                const existentes = await tx.materiaPrimaVariante.findMany({
                     where: {
                         tenantId: auth.tenantId,
                         materiaPrimaId: id,
                     },
+                    select: {
+                        id: true,
+                        sku: true,
+                    },
                 });
+                const existenteBySku = new Map(existentes.map((variante) => [variante.sku, variante]));
+                const incomingSkus = new Set(normalized.variantes.map((item) => item.sku));
                 if (normalized.variantes.length > 0) {
-                    await Promise.all(normalized.variantes.map((variante) => tx.materiaPrimaVariante.create({
-                        data: {
+                    await Promise.all(normalized.variantes.map((variante) => {
+                        const data = {
                             tenantId: auth.tenantId,
                             materiaPrimaId: id,
                             sku: variante.sku,
@@ -143,8 +149,30 @@ let InventarioService = class InventarioService {
                             precioReferencia: variante.precioReferencia,
                             moneda: variante.moneda,
                             proveedorReferenciaId: variante.proveedorReferenciaId,
+                        };
+                        const existente = existenteBySku.get(variante.sku);
+                        if (existente) {
+                            return tx.materiaPrimaVariante.update({
+                                where: { id: existente.id },
+                                data,
+                            });
+                        }
+                        return tx.materiaPrimaVariante.create({ data });
+                    }));
+                }
+                const deleteIds = existentes
+                    .filter((variante) => !incomingSkus.has(variante.sku))
+                    .map((variante) => variante.id);
+                if (deleteIds.length > 0) {
+                    await tx.materiaPrimaVariante.deleteMany({
+                        where: {
+                            tenantId: auth.tenantId,
+                            materiaPrimaId: id,
+                            id: {
+                                in: deleteIds,
+                            },
                         },
-                    })));
+                    });
                 }
             });
             const item = await this.findMateriaPrimaOrThrow(auth, id, this.prisma);
@@ -764,7 +792,11 @@ let InventarioService = class InventarioService {
             ...variante,
             sku: variante.sku.trim(),
             nombreVariante: variante.nombreVariante?.trim() || null,
+            precioReferencia: variante.precioReferencia === undefined || variante.precioReferencia === null
+                ? null
+                : this.toDecimal(this.roundToScale(variante.precioReferencia, 6)),
             moneda: variante.moneda?.trim().toUpperCase() || null,
+            proveedorReferenciaId: variante.proveedorReferenciaId || null,
         }));
         return {
             codigo: payload.codigo.trim(),
@@ -838,6 +870,9 @@ let InventarioService = class InventarioService {
         if (error instanceof library_1.PrismaClientKnownRequestError) {
             if (error.code === 'P2002') {
                 throw new common_1.ConflictException('Ya existe un registro con uno de los identificadores unicos cargados.');
+            }
+            if (error.code === 'P2003') {
+                throw new common_1.BadRequestException('No se puede eliminar una variante que está vinculada a maquinaria, stock o productos.');
             }
         }
         throw error;

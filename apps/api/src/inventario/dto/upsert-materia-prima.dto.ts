@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
@@ -122,6 +122,16 @@ export class MateriaPrimaVarianteItemDto {
   unidadCompra?: UnidadMateriaPrimaDto;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      const normalized = value.replace(',', '.').trim();
+      if (!normalized) {
+        return undefined;
+      }
+      return Number(normalized);
+    }
+    return value;
+  })
   @Type(() => Number)
   @IsNumber()
   @Min(0)

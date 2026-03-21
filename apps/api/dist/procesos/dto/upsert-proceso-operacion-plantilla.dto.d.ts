@@ -1,4 +1,4 @@
-import { ModoProductividadProcesoDto, TipoOperacionProcesoDto, UnidadProcesoDto } from './upsert-proceso.dto';
+import { ModoProductividadProcesoDto, ProcesoOperacionNivelDto, TipoOperacionProcesoDto, UnidadProcesoDto } from './upsert-proceso.dto';
 export declare class UpsertProcesoOperacionPlantillaDto {
     nombre: string;
     tipoOperacion: TipoOperacionProcesoDto;
@@ -7,6 +7,7 @@ export declare class UpsertProcesoOperacionPlantillaDto {
     perfilOperativoId?: string;
     setupMin?: number;
     cleanupMin?: number;
+    tiempoFijoMin?: number;
     modoProductividad?: ModoProductividadProcesoDto;
     productividadBase?: number;
     unidadEntrada?: UnidadProcesoDto;
@@ -16,5 +17,6 @@ export declare class UpsertProcesoOperacionPlantillaDto {
     reglaVelocidad?: Record<string, unknown>;
     reglaMerma?: Record<string, unknown>;
     observaciones?: string;
+    niveles?: ProcesoOperacionNivelDto[];
     activo: boolean;
 }

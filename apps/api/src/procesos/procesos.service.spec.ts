@@ -35,10 +35,10 @@ type ReferenceShape = {
       id: string;
       nombre: string;
       maquinaId: string;
-      productividad: Prisma.Decimal | null;
-      unidadProductividad: UnidadProduccionMaquina | null;
-      tiempoPreparacionMin: Prisma.Decimal | null;
-      tiempoRipMin?: Prisma.Decimal | null;
+      productivityValue: Prisma.Decimal | null;
+      productivityUnit: UnidadProduccionMaquina | null;
+      setupMin: Prisma.Decimal | null;
+      cleanupMin?: Prisma.Decimal | null;
     }
   >;
 };
@@ -54,6 +54,7 @@ describe('ProcesosService business rules', () => {
     references: ReferenceShape,
   ) => {
     setupMin: Prisma.Decimal | null;
+    cleanupMin: Prisma.Decimal | null;
   };
 
   beforeEach(() => {
@@ -68,10 +69,10 @@ describe('ProcesosService business rules', () => {
     ) as (
       payload: UpsertProcesoDto['operaciones'][number],
       references: ReferenceShape,
-    ) => { setupMin: Prisma.Decimal | null };
+    ) => { setupMin: Prisma.Decimal | null; cleanupMin: Prisma.Decimal | null };
   });
 
-  it('rechaza modo formula sin regla de velocidad', () => {
+  it('acepta modo variable con productividad base', () => {
     const payload: UpsertProcesoDto = {
       nombre: 'Proceso prueba',
       plantillaMaquinaria: PlantillaMaquinariaDto.impresora_laser,
@@ -81,7 +82,7 @@ describe('ProcesosService business rules', () => {
           nombre: 'Operacion 1',
           tipoOperacion: TipoOperacionProcesoDto.impresion,
           centroCostoId: 'centro-1',
-          modoProductividad: ModoProductividadProcesoDto.formula,
+          modoProductividad: ModoProductividadProcesoDto.variable,
           productividadBase: 100,
           unidadSalida: UnidadProcesoDto.hoja,
           unidadTiempo: UnidadProcesoDto.minuto,
@@ -107,7 +108,7 @@ describe('ProcesosService business rules', () => {
 
     expect(() =>
       validateBusinessRules.call(service, payload, references),
-    ).toThrow(BadRequestException);
+    ).not.toThrow();
   });
 
   it('rechaza incompatibilidad unidad centro-operacion', () => {
@@ -149,7 +150,7 @@ describe('ProcesosService business rules', () => {
     ).toThrow(BadRequestException);
   });
 
-  it('acepta modo fija sin productividad manual cuando el perfil aporta productividad', () => {
+  it('acepta modo variable cuando el perfil aporta productividad', () => {
     const payload: UpsertProcesoDto = {
       nombre: 'Proceso perfil',
       plantillaMaquinaria: PlantillaMaquinariaDto.impresora_laser,
@@ -161,7 +162,7 @@ describe('ProcesosService business rules', () => {
           centroCostoId: 'centro-1',
           maquinaId: 'maq-1',
           perfilOperativoId: 'perfil-1',
-          modoProductividad: ModoProductividadProcesoDto.fija,
+          modoProductividad: ModoProductividadProcesoDto.variable,
           unidadSalida: UnidadProcesoDto.ninguna,
           unidadTiempo: UnidadProcesoDto.minuto,
           activo: true,
@@ -199,9 +200,9 @@ describe('ProcesosService business rules', () => {
             id: 'perfil-1',
             nombre: 'Perfil rapido',
             maquinaId: 'maq-1',
-            productividad: new Prisma.Decimal(120),
-            unidadProductividad: 'M2_H',
-            tiempoPreparacionMin: new Prisma.Decimal(15),
+            productivityValue: new Prisma.Decimal(120),
+            productivityUnit: 'M2_H',
+            setupMin: new Prisma.Decimal(15),
           },
         ],
       ]),
@@ -263,7 +264,7 @@ describe('ProcesosService business rules', () => {
     ).not.toThrow();
   });
 
-  it('deriva setup desde RIP cuando el perfil no tiene tiempoPreparacionMin', () => {
+  it('deriva cleanup desde el perfil cuando la operación no lo define', () => {
     const references: ReferenceShape = {
       centrosById: new Map(),
       maquinasById: new Map([
@@ -285,10 +286,10 @@ describe('ProcesosService business rules', () => {
             id: 'perfil-1',
             nombre: 'Perfil laser',
             maquinaId: 'maq-1',
-            productividad: new Prisma.Decimal(35),
-            unidadProductividad: UnidadProduccionMaquina.PPM,
-            tiempoPreparacionMin: null,
-            tiempoRipMin: new Prisma.Decimal(3),
+            productivityValue: new Prisma.Decimal(35),
+            productivityUnit: UnidadProduccionMaquina.PPM,
+            setupMin: null,
+            cleanupMin: new Prisma.Decimal(3),
           },
         ],
       ]),
@@ -309,10 +310,11 @@ describe('ProcesosService business rules', () => {
       references,
     );
 
-    expect(Number(derived.setupMin)).toBe(3);
+    expect(derived.setupMin).toBeNull();
+    expect(Number(derived.cleanupMin)).toBe(3);
   });
 
-  it('fuerza modo fija cuando hay perfil operativo aunque el payload pida formula', () => {
+  it('permite modo variable cuando hay perfil operativo', () => {
     const payload: UpsertProcesoDto = {
       nombre: 'Proceso con perfil forzado',
       plantillaMaquinaria: PlantillaMaquinariaDto.impresora_laser,
@@ -324,7 +326,7 @@ describe('ProcesosService business rules', () => {
           centroCostoId: 'centro-1',
           maquinaId: 'maq-1',
           perfilOperativoId: 'perfil-1',
-          modoProductividad: ModoProductividadProcesoDto.formula,
+          modoProductividad: ModoProductividadProcesoDto.variable,
           unidadSalida: UnidadProcesoDto.ninguna,
           unidadTiempo: UnidadProcesoDto.minuto,
           activo: true,
@@ -362,9 +364,9 @@ describe('ProcesosService business rules', () => {
             id: 'perfil-1',
             nombre: 'Perfil rapido',
             maquinaId: 'maq-1',
-            productividad: new Prisma.Decimal(100),
-            unidadProductividad: UnidadProduccionMaquina.PPM,
-            tiempoPreparacionMin: new Prisma.Decimal(4),
+            productivityValue: new Prisma.Decimal(100),
+            productivityUnit: UnidadProduccionMaquina.PPM,
+            setupMin: new Prisma.Decimal(4),
           },
         ],
       ]),

@@ -15,13 +15,18 @@ import {
   SearchIcon,
   Settings2Icon,
   ToggleLeftIcon,
+  Trash2Icon,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { getCentrosCosto } from "@/lib/costos-api";
 import type { CentroCosto } from "@/lib/costos";
 import { getMaquinas } from "@/lib/maquinaria-api";
-import type { Maquina, PlantillaMaquinaria } from "@/lib/maquinaria";
+import {
+  getUnidadProduccionMaquinaLabel,
+  type Maquina,
+  type PlantillaMaquinaria,
+} from "@/lib/maquinaria";
 import {
   getPlantillaMaquinariaLabel,
   plantillaMaquinariaItems,
@@ -46,6 +51,7 @@ import {
   estadoConfiguracionProcesoItems,
   modoProductividadProcesoItems,
   type Proceso,
+  type ProcesoOperacionNivelPayload,
   type ProcesoOperacionPlantilla,
   type ProcesoOperacionPlantillaPayload,
   type ProcesoOperacionPayload,
@@ -95,8 +101,8 @@ type ProcesosPanelProps = {
 
 type LocalOperacion = ProcesoOperacionPayload & {
   id: string;
-  reglaVelocidadTexto?: string;
-  advancedMode?: boolean;
+  niveles: ProcesoOperacionNivelPayload[];
+  productividadModoUi?: ProductividadModoUi;
   mermaRuleMode?: "fija" | "por_tirada";
   mermaTiers?: Array<{
     id: string;
@@ -116,20 +122,27 @@ type FormState = {
   operaciones: LocalOperacion[];
 };
 
+type ProductividadModoUi = "manual" | "variable";
+type ModoProductividadNivelUi = "fija" | "variable_manual" | "variable_perfil";
+
 type BibliotecaFormState = {
   nombre: string;
   tipoOperacion: ProcesoOperacionPayload["tipoOperacion"];
+  usaNiveles: boolean;
   centroCostoId: string;
   maquinaId: string;
   perfilOperativoId: string;
   setupMin?: number;
   cleanupMin?: number;
+  tiempoFijoMin?: number;
+  productividadModoUi: ProductividadModoUi;
   modoProductividad: ProcesoOperacionPayload["modoProductividad"];
   productividadBase?: number;
   unidadEntrada: ProcesoOperacionPayload["unidadEntrada"];
   unidadSalida: ProcesoOperacionPayload["unidadSalida"];
   unidadTiempo: ProcesoOperacionPayload["unidadTiempo"];
   mermaRunPct?: number;
+  niveles: ProcesoOperacionNivelPayload[];
   activo: boolean;
   observaciones: string;
 };
@@ -137,24 +150,85 @@ type BibliotecaFormState = {
 const EMPTY_SELECT_VALUE = "__none__";
 const DEFAULT_PLANTILLA: PlantillaMaquinaria = "impresora_laser";
 
+function formatTechnicalValue(value: string) {
+  return value
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 function buildSystemOperacionCodigo(index: number) {
   return `OP-${String(index + 1).padStart(3, "0")}`;
+}
+
+function buildDefaultNivel(index = 0): ProcesoOperacionNivelPayload {
+  return {
+    id: crypto.randomUUID(),
+    nombre: "",
+    orden: index + 1,
+    activo: true,
+    modoProductividadNivel: "fija",
+    tiempoFijoMin: undefined,
+    productividadBase: undefined,
+    unidadSalida: "ninguna",
+    unidadTiempo: "minuto",
+    maquinaId: undefined,
+    perfilOperativoId: undefined,
+    setupMin: undefined,
+    cleanupMin: undefined,
+    detalle: undefined,
+  };
+}
+
+function normalizeNiveles(
+  niveles: Array<{
+    id: string;
+    nombre: string;
+    orden: number;
+    activo: boolean;
+    modoProductividadNivel: ModoProductividadNivelUi;
+    tiempoFijoMin: number | null;
+    productividadBase: number | null;
+    unidadSalida: ProcesoOperacionPayload["unidadSalida"] | null;
+    unidadTiempo: ProcesoOperacionPayload["unidadTiempo"] | null;
+    maquinaId: string | null;
+    perfilOperativoId: string | null;
+    setupMin: number | null;
+    cleanupMin: number | null;
+    detalle: Record<string, unknown> | null;
+  }> = [],
+): ProcesoOperacionNivelPayload[] {
+  return niveles.map((nivel, index) => ({
+    id: nivel.id,
+    nombre: nivel.nombre,
+    orden: nivel.orden ?? index + 1,
+    activo: nivel.activo,
+    modoProductividadNivel: nivel.modoProductividadNivel ?? "fija",
+    tiempoFijoMin: nivel.tiempoFijoMin ?? undefined,
+    productividadBase: nivel.productividadBase ?? undefined,
+    unidadSalida: nivel.unidadSalida ?? "ninguna",
+    unidadTiempo: nivel.unidadTiempo ?? "minuto",
+    maquinaId: nivel.maquinaId ?? undefined,
+    perfilOperativoId: nivel.perfilOperativoId ?? undefined,
+    setupMin: nivel.setupMin ?? undefined,
+    cleanupMin: nivel.cleanupMin ?? undefined,
+    detalle: nivel.detalle ?? undefined,
+  }));
 }
 
 function buildDefaultOperacion(index = 0): LocalOperacion {
   return {
     id: crypto.randomUUID(),
     nombre: "",
-    tipoOperacion: "impresion",
+    tipoOperacion: "prensa",
     centroCostoId: "",
-    modoProductividad: "fija",
+    modoProductividad: "variable",
+    productividadModoUi: "variable",
     unidadEntrada: "ninguna",
     unidadSalida: "ninguna",
     unidadTiempo: "minuto",
-    reglaVelocidadTexto: "",
-    advancedMode: false,
     mermaRuleMode: "fija",
     mermaTiers: [],
+    niveles: [],
     activo: true,
     orden: index + 1,
   };
@@ -167,18 +241,18 @@ function buildOperacionFromTemplate(
   return {
     id: crypto.randomUUID(),
     nombre: templateOperation.nombre || "",
-    tipoOperacion: templateOperation.tipoOperacion || "impresion",
+    tipoOperacion: templateOperation.tipoOperacion || "prensa",
     centroCostoId: "",
     maquinaId: undefined,
     perfilOperativoId: undefined,
     modoProductividad: templateOperation.modoProductividad || "fija",
+    productividadModoUi: "variable",
     unidadEntrada: templateOperation.unidadEntrada || "ninguna",
     unidadSalida: templateOperation.unidadSalida || "ninguna",
     unidadTiempo: "minuto",
-    reglaVelocidadTexto: "",
-    advancedMode: false,
     mermaRuleMode: "fija",
     mermaTiers: [],
+    niveles: [],
     activo: templateOperation.activo ?? true,
     orden: index + 1,
   };
@@ -195,9 +269,8 @@ function buildOperacionFromBiblioteca(
   const perfil = template.perfilOperativoId
     ? maquina?.perfilesOperativos.find((item) => item.id === template.perfilOperativoId)
     : null;
-  const mappedUnit = mapMachineUnitToProceso(
-    perfil?.unidadProductividad || maquina?.unidadProduccionPrincipal || "",
-  );
+  const resolvedProfile = resolveMachineProfile(perfil, maquina);
+  const mappedUnit = resolvedProfile.processUnitMapping;
   const unidadSalida =
     template.unidadSalida !== "ninguna"
       ? template.unidadSalida
@@ -206,8 +279,13 @@ function buildOperacionFromBiblioteca(
     template.unidadTiempo !== "minuto" || template.unidadSalida !== "ninguna"
       ? template.unidadTiempo
       : (mappedUnit?.unidadTiempo ?? template.unidadTiempo);
-  const setupMin = template.setupMin ?? getSetupFromPerfil(perfil);
-  const productividadBase = template.productividadBase ?? (perfil?.productividad ?? undefined);
+  const setupMin = template.setupMin ?? resolvedProfile.setupMin;
+  const cleanupMin = template.cleanupMin ?? resolvedProfile.cleanupMin;
+  const productividadBase = template.productividadBase ?? resolvedProfile.productivityValue;
+  const productividadModoUi: ProductividadModoUi =
+    template.tiempoFijoMin && template.tiempoFijoMin > 0
+        ? "manual"
+        : "variable";
 
   return {
     id: crypto.randomUUID(),
@@ -216,18 +294,19 @@ function buildOperacionFromBiblioteca(
     centroCostoId: maquina?.centroCostoPrincipalId ?? template.centroCostoId ?? "",
     maquinaId: template.maquinaId ?? undefined,
     perfilOperativoId: template.perfilOperativoId ?? undefined,
-    modoProductividad: template.perfilOperativoId ? "fija" : template.modoProductividad,
+    modoProductividad: template.perfilOperativoId ? "variable" : template.modoProductividad,
+    productividadModoUi,
     setupMin,
-    cleanupMin: template.cleanupMin ?? undefined,
+    cleanupMin,
+    tiempoFijoMin: template.tiempoFijoMin ?? undefined,
     productividadBase,
     unidadEntrada: template.unidadEntrada || "ninguna",
     unidadSalida,
     unidadTiempo,
     mermaRunPct: template.mermaRunPct ?? undefined,
-    reglaVelocidadTexto: toPrettyJson(template.reglaVelocidad ?? undefined),
     mermaRuleMode: "fija",
     mermaTiers: [],
-    advancedMode: false,
+    niveles: normalizeNiveles(template.niveles ?? []),
     activo: template.activo,
     orden: index + 1,
   };
@@ -237,11 +316,6 @@ function createEmptyForm(
   plantilla: PlantillaMaquinaria = DEFAULT_PLANTILLA,
 ): FormState {
   const plantillaMaquinaria = plantilla;
-  const template = getProcesoTemplateBase(plantillaMaquinaria);
-  const operaciones =
-    template?.operations.map((operation, index) =>
-      buildOperacionFromTemplate(operation, index),
-    ) ?? [buildDefaultOperacion()];
 
   return {
     codigo: "",
@@ -250,21 +324,25 @@ function createEmptyForm(
     plantillaMaquinaria,
     activo: true,
     observaciones: "",
-    operaciones,
+    operaciones: [],
   };
 }
 
 function createEmptyBibliotecaForm(): BibliotecaFormState {
   return {
     nombre: "",
-    tipoOperacion: "impresion",
+    tipoOperacion: "prensa",
+    usaNiveles: false,
     centroCostoId: "",
     maquinaId: "",
     perfilOperativoId: "",
-    modoProductividad: "fija",
+    modoProductividad: "variable",
+    productividadModoUi: "variable",
     unidadEntrada: "ninguna",
     unidadSalida: "ninguna",
     unidadTiempo: "minuto",
+    tiempoFijoMin: undefined,
+    niveles: [],
     activo: true,
     observaciones: "",
   };
@@ -311,6 +389,87 @@ function getUnidadProcesoLabel(value: ProcesoOperacionPayload["unidadEntrada"]) 
   return unidadProcesoItems.find((item) => item.value === value)?.label ?? value;
 }
 
+const productividadUnidadItems: Array<{
+  value: string;
+  label: string;
+  unidadSalida: ProcesoOperacionPayload["unidadSalida"];
+  unidadTiempo: ProcesoOperacionPayload["unidadTiempo"];
+}> = [
+  { value: "copia/minuto", label: "Páginas por minuto (pag/min)", unidadSalida: "copia", unidadTiempo: "minuto" },
+  { value: "hoja/minuto", label: "Hojas por minuto (hoja/min)", unidadSalida: "hoja", unidadTiempo: "minuto" },
+  { value: "corte/minuto", label: "Cortes por minuto (corte/min)", unidadSalida: "corte", unidadTiempo: "minuto" },
+  { value: "m2/hora", label: "Metros cuadrados por hora (m2/h)", unidadSalida: "m2", unidadTiempo: "hora" },
+  {
+    value: "metro_lineal/hora",
+    label: "Metros lineales por hora (ml/h)",
+    unidadSalida: "metro_lineal",
+    unidadTiempo: "hora",
+  },
+  { value: "pieza/hora", label: "Piezas por hora (pieza/h)", unidadSalida: "pieza", unidadTiempo: "hora" },
+  { value: "unidad/hora", label: "Unidades por hora (unidad/h)", unidadSalida: "unidad", unidadTiempo: "hora" },
+];
+
+
+function toProductividadUnidadValue(
+  unidadSalida: ProcesoOperacionPayload["unidadSalida"],
+  unidadTiempo: ProcesoOperacionPayload["unidadTiempo"],
+) {
+  return `${unidadSalida ?? "ninguna"}/${unidadTiempo ?? "minuto"}`;
+}
+
+function getProductividadUnidadLabel(
+  unidadSalida: ProcesoOperacionPayload["unidadSalida"],
+  unidadTiempo: ProcesoOperacionPayload["unidadTiempo"],
+) {
+  const value = toProductividadUnidadValue(unidadSalida, unidadTiempo);
+  const item = productividadUnidadItems.find((entry) => entry.value === value);
+  if (item) {
+    return item.label;
+  }
+  return `${getUnidadProcesoLabel(unidadSalida)} por ${getUnidadProcesoLabel(unidadTiempo)}`;
+}
+
+function getProductividadModoUiLabel(value: ProductividadModoUi) {
+  return value === "manual" ? "Fija (tiempo total)" : "Variable (valor + unidad)";
+}
+
+const modoProductividadNivelItems: Array<{
+  value: ModoProductividadNivelUi;
+  label: string;
+}> = [
+  { value: "fija", label: "Fija" },
+  { value: "variable_manual", label: "Variable manual" },
+  { value: "variable_perfil", label: "Variable por perfil" },
+];
+
+function getModoProductividadNivelLabel(value: ModoProductividadNivelUi) {
+  return (
+    modoProductividadNivelItems.find((item) => item.value === value)?.label ?? value
+  );
+}
+
+function buildNivelResumen(
+  nivel: ProcesoOperacionNivelPayload,
+  maquinas: Maquina[],
+) {
+  if (nivel.modoProductividadNivel === "fija") {
+    return `${nivel.nombre || "Variante"} · Fija · ${nivel.tiempoFijoMin ?? 0} min`;
+  }
+  if (nivel.modoProductividadNivel === "variable_manual") {
+    return `${nivel.nombre || "Variante"} · Variable manual · ${nivel.productividadBase ?? 0} ${getProductividadUnidadLabel(
+      nivel.unidadSalida ?? "ninguna",
+      nivel.unidadTiempo ?? "minuto",
+    )}`;
+  }
+  const maquina = nivel.maquinaId
+    ? maquinas.find((item) => item.id === nivel.maquinaId)
+    : null;
+  const perfil = nivel.perfilOperativoId
+    ? maquina?.perfilesOperativos.find((item) => item.id === nivel.perfilOperativoId)
+    : null;
+  return `${nivel.nombre || "Variante"} · Variable por perfil${perfil ? ` · ${perfil.nombre}` : ""}`;
+}
+
 function buildProductividadBaseExample(
   unidadSalida: ProcesoOperacionPayload["unidadSalida"],
   unidadTiempo: ProcesoOperacionPayload["unidadTiempo"],
@@ -335,27 +494,6 @@ function getCurrentPeriodo() {
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   return `${year}-${month}`;
-}
-
-function toPrettyJson(value: Record<string, unknown> | undefined) {
-  if (!value) {
-    return "";
-  }
-
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return "";
-  }
-}
-
-function parseOptionalJson(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-
-  return JSON.parse(trimmed) as Record<string, unknown>;
 }
 
 function buildEmptyMermaTier() {
@@ -475,49 +613,9 @@ function buildMermaRuleFromBuilder(
   } as Record<string, unknown>;
 }
 
-function getVelocidadRuleExample(
-  mode: ProcesoOperacionPayload["modoProductividad"],
-): Record<string, unknown> {
-  if (mode === "tabla") {
-    return {
-      tipo: "tabla_v1",
-      ejes: [
-        { key: "tirada", type: "number_range" },
-        { key: "calidad", type: "enum" },
-      ],
-      filas: [
-        {
-          tirada: { min: 1, max: 200 },
-          calidad: "alta",
-          productividad: 85,
-        },
-        {
-          tirada: { min: 201, max: 5000 },
-          calidad: "alta",
-          productividad: 140,
-        },
-      ],
-      fallback: { type: "productividad_base" },
-    };
-  }
-
-  return {
-    tipo: "formula_v1",
-    expresion: {
-      op: "mul",
-      args: [{ var: "PB" }, { var: "factor_material" }, { var: "factor_calidad" }],
-    },
-    variables: {
-      factor_material: { source: "context", key: "material.factor", default: 1 },
-      factor_calidad: { source: "context", key: "calidad.factor", default: 1 },
-    },
-    bounds: { min: 0.0001 },
-  };
-}
-
 function mapMachineUnitToProceso(
   unidad:
-    | Maquina["perfilesOperativos"][number]["unidadProductividad"]
+    | Maquina["perfilesOperativos"][number]["productivityUnit"]
     | Maquina["unidadProduccionPrincipal"]
     | "",
 ) {
@@ -533,16 +631,26 @@ function mapMachineUnitToProceso(
     return { unidadSalida: "pieza" as const, unidadTiempo: "hora" as const };
   }
 
+  if (unidad === "cortes_min") {
+    return { unidadSalida: "corte" as const, unidadTiempo: "minuto" as const };
+  }
+
+  if (unidad === "golpes_min") {
+    return { unidadSalida: "ciclo" as const, unidadTiempo: "minuto" as const };
+  }
+
+  if (unidad === "pliegos_min") {
+    return { unidadSalida: "hoja" as const, unidadTiempo: "minuto" as const };
+  }
+
+  if (unidad === "m_min") {
+    return { unidadSalida: "metro_lineal" as const, unidadTiempo: "minuto" as const };
+  }
+
   return null;
 }
 
-function getSetupFromPerfil(
-  perfil: Maquina["perfilesOperativos"][number] | null | undefined,
-) {
-  if (!perfil) {
-    return undefined;
-  }
-
+function collectExtraSetupFromDetalle(detalle: Record<string, unknown>) {
   const parseFiniteNumber = (value: unknown) => {
     if (typeof value === "number" && Number.isFinite(value)) {
       return value;
@@ -556,28 +664,159 @@ function getSetupFromPerfil(
     return undefined;
   };
 
+  const extras: number[] = [];
+  const objectCandidates = [
+    detalle.setupComponentesMin,
+    detalle.setupExtraComponentesMin,
+    detalle.tiemposSetupExtraMin,
+  ];
+  for (const candidate of objectCandidates) {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      continue;
+    }
+    for (const value of Object.values(candidate as Record<string, unknown>)) {
+      const parsed = parseFiniteNumber(value);
+      if (parsed !== undefined && parsed > 0) {
+        extras.push(parsed);
+      }
+    }
+  }
+
+  const arrayCandidates = [detalle.setupExtrasMin, detalle.tiemposExtraSetupMin];
+  for (const candidate of arrayCandidates) {
+    if (!Array.isArray(candidate)) {
+      continue;
+    }
+    for (const value of candidate) {
+      const parsed = parseFiniteNumber(value);
+      if (parsed !== undefined && parsed > 0) {
+        extras.push(parsed);
+      }
+    }
+  }
+
+  return extras;
+}
+
+type ResolvedMachineProfile = {
+  setupMin?: number;
+  cleanupMin?: number;
+  productivityValue?: number;
+  productivityUnit?: Maquina["perfilesOperativos"][number]["productivityUnit"] | "";
+  processUnitMapping: ReturnType<typeof mapMachineUnitToProceso>;
+  extraResolvedFields: Array<{ label: string; value: string }>;
+};
+
+function resolveMachineProfile(
+  perfil: Maquina["perfilesOperativos"][number] | null | undefined,
+  maquina: Maquina | null | undefined,
+) {
+  if (!perfil) {
+    return {
+      setupMin: undefined,
+      cleanupMin: undefined,
+      productivityValue: undefined,
+      productivityUnit: maquina?.unidadProduccionPrincipal || "",
+      processUnitMapping: mapMachineUnitToProceso(maquina?.unidadProduccionPrincipal || ""),
+      extraResolvedFields: [],
+    } satisfies ResolvedMachineProfile;
+  }
+
   const detalle = perfil.detalle ?? {};
-  const setupFromPreparacion =
-    parseFiniteNumber(perfil.setupEstimadoMin) ??
-    parseFiniteNumber(perfil.tiempoPreparacionMin) ??
-    parseFiniteNumber(detalle.tiempoPreparacionMin) ??
-    parseFiniteNumber(detalle.tiempoSetupMin) ??
-    parseFiniteNumber(detalle.setupMin) ??
-    parseFiniteNumber(detalle.setup);
-  if (setupFromPreparacion !== undefined) {
-    return setupFromPreparacion;
+  const velocidadTrabajoMmSeg =
+    typeof detalle.velocidadTrabajoMmSeg === "number" && Number.isFinite(detalle.velocidadTrabajoMmSeg)
+      ? detalle.velocidadTrabajoMmSeg
+      : undefined;
+  const setupExtras = collectExtraSetupFromDetalle(detalle);
+  const setupMin =
+    (typeof perfil.setupMin === "number" && Number.isFinite(perfil.setupMin) ? perfil.setupMin : 0) +
+    setupExtras.reduce((acc, value) => acc + value, 0);
+  const cleanupMin =
+    typeof perfil.cleanupMin === "number" && Number.isFinite(perfil.cleanupMin)
+      ? perfil.cleanupMin
+      : undefined;
+  const productivityValue =
+    typeof perfil.productivityValue === "number" && Number.isFinite(perfil.productivityValue)
+      ? perfil.productivityValue
+      : maquina?.plantilla === "laminadora_bopp_rollo"
+        ? velocidadTrabajoMmSeg
+        : undefined;
+  const productivityUnit =
+    perfil.productivityUnit ||
+    (maquina?.plantilla === "laminadora_bopp_rollo" ? "metro_lineal" : maquina?.unidadProduccionPrincipal || "");
+  const extraResolvedFields: Array<{ label: string; value: string }> = [];
+
+  if (maquina?.plantilla === "guillotina") {
+    if (perfil.feedReloadMin !== null && perfil.feedReloadMin !== undefined) {
+      extraResolvedFields.push({
+        label: "Recarga de tanda",
+        value: `${perfil.feedReloadMin} min`,
+      });
+    }
+    if (perfil.materialPreset) {
+      extraResolvedFields.push({
+        label: "Papel / gramaje",
+        value: formatTechnicalValue(perfil.materialPreset),
+      });
+    }
+    if (perfil.sheetThicknessMm !== null && perfil.sheetThicknessMm !== undefined) {
+      extraResolvedFields.push({
+        label: "Espesor",
+        value: `${perfil.sheetThicknessMm} mm`,
+      });
+    }
+    if (perfil.maxBatchHeightMm !== null && perfil.maxBatchHeightMm !== undefined) {
+      extraResolvedFields.push({
+        label: "Altura máxima de tanda",
+        value: `${perfil.maxBatchHeightMm} mm`,
+      });
+    }
   }
 
-  const setupParts = [
-    parseFiniteNumber(perfil.tiempoRipMin) ?? parseFiniteNumber(detalle.tiempoRipMin),
-  ].filter((value): value is number => value !== undefined);
-
-  if (!setupParts.length) {
-    return undefined;
+  if (maquina?.plantilla === "impresora_laser") {
+    if (perfil.printMode) {
+      extraResolvedFields.push({
+        label: "Modo de impresión",
+        value: perfil.printMode === "cmyk" ? "CMYK" : "K",
+      });
+    }
+    if (perfil.printSides) {
+      extraResolvedFields.push({
+        label: "Caras",
+        value: perfil.printSides === "doble_faz" ? "Doble faz" : "Simple faz",
+      });
+    }
   }
 
-  const total = setupParts.reduce((acc, value) => acc + value, 0);
-  return Number.isFinite(total) ? total : undefined;
+  if (maquina?.plantilla === "laminadora_bopp_rollo") {
+    if (typeof velocidadTrabajoMmSeg === "number") {
+      extraResolvedFields.push({
+        label: "Velocidad trabajo",
+        value: `${velocidadTrabajoMmSeg} mm/seg`,
+      });
+    }
+    if (typeof detalle.velocidadDobleRolloTrabajoMmSeg === "number") {
+      extraResolvedFields.push({
+        label: "Velocidad doble rollo",
+        value: `${detalle.velocidadDobleRolloTrabajoMmSeg} mm/seg`,
+      });
+    }
+    if (typeof detalle.modoLaminado === "string" && detalle.modoLaminado.trim().length > 0) {
+      extraResolvedFields.push({
+        label: "Modo de laminado",
+        value: formatTechnicalValue(detalle.modoLaminado),
+      });
+    }
+  }
+
+  return {
+    setupMin: setupMin > 0 ? setupMin : undefined,
+    cleanupMin,
+    productivityValue,
+    productivityUnit,
+    processUnitMapping: mapMachineUnitToProceso(productivityUnit),
+    extraResolvedFields,
+  } satisfies ResolvedMachineProfile;
 }
 
 function renderTooltipIcon(text?: string) {
@@ -601,6 +840,14 @@ function renderTooltipIcon(text?: string) {
       </TooltipContent>
     </Tooltip>
   );
+}
+
+function renderProfileAutofillHint(enabled: boolean, label = "Tomado del perfil operativo") {
+  if (!enabled) {
+    return null;
+  }
+
+  return <p className="mt-1 text-xs text-muted-foreground">{label}</p>;
 }
 
 export function ProcesosPanel({
@@ -739,6 +986,11 @@ export function ProcesosPanel({
   const bibliotecaCentroBloqueado = Boolean(
     bibliotecaForm.maquinaId && bibliotecaMaquinaSeleccionada?.centroCostoPrincipalId,
   );
+  const bibliotecaUsaProductividadPerfil = Boolean(bibliotecaPerfilSeleccionado);
+  const bibliotecaPerfilResuelto = React.useMemo(
+    () => resolveMachineProfile(bibliotecaPerfilSeleccionado, bibliotecaMaquinaSeleccionada),
+    [bibliotecaMaquinaSeleccionada, bibliotecaPerfilSeleccionado],
+  );
 
   const operationTemplateItems = React.useMemo(
     () => bibliotecaOperaciones.filter((item) => item.activo),
@@ -809,11 +1061,11 @@ export function ProcesosPanel({
       return;
     }
 
-    const mappedUnit = mapMachineUnitToProceso(
-      bibliotecaPerfilSeleccionado?.unidadProductividad ||
-        bibliotecaMaquinaSeleccionada.unidadProduccionPrincipal ||
-        "",
+    const resolvedProfile = resolveMachineProfile(
+      bibliotecaPerfilSeleccionado,
+      bibliotecaMaquinaSeleccionada,
     );
+    const mappedUnit = resolvedProfile.processUnitMapping;
     const shouldSetUnitSalida =
       !bibliotecaForm.unidadSalida || bibliotecaForm.unidadSalida === "ninguna";
     const shouldSetUnitTiempo =
@@ -821,21 +1073,28 @@ export function ProcesosPanel({
       (bibliotecaForm.unidadTiempo === "minuto" && shouldSetUnitSalida);
 
     setBibliotecaForm((prev) => {
-      const setupFromPerfil = getSetupFromPerfil(bibliotecaPerfilSeleccionado);
       const next = {
         ...prev,
         centroCostoId:
           bibliotecaMaquinaSeleccionada.centroCostoPrincipalId ?? prev.centroCostoId,
         setupMin:
           prev.perfilOperativoId && bibliotecaPerfilSeleccionado
-            ? setupFromPerfil
+            ? resolvedProfile.setupMin
             : prev.setupMin,
+        cleanupMin:
+          prev.perfilOperativoId && bibliotecaPerfilSeleccionado
+            ? resolvedProfile.cleanupMin
+            : prev.cleanupMin,
         productividadBase:
           prev.perfilOperativoId && bibliotecaPerfilSeleccionado
-            ? (bibliotecaPerfilSeleccionado.productividad ?? prev.productividadBase)
+            ? (resolvedProfile.productivityValue ?? prev.productividadBase)
             : prev.productividadBase,
+        productividadModoUi:
+          prev.perfilOperativoId && bibliotecaPerfilSeleccionado
+            ? ("variable" satisfies ProductividadModoUi)
+            : prev.productividadModoUi,
         modoProductividad:
-          prev.perfilOperativoId ? "fija" : prev.modoProductividad,
+          prev.perfilOperativoId ? "variable" : prev.modoProductividad,
         unidadSalida:
           shouldSetUnitSalida && mappedUnit ? mappedUnit.unidadSalida : prev.unidadSalida,
         unidadTiempo:
@@ -845,7 +1104,9 @@ export function ProcesosPanel({
       if (
         next.centroCostoId === prev.centroCostoId &&
         next.setupMin === prev.setupMin &&
+        next.cleanupMin === prev.cleanupMin &&
         next.productividadBase === prev.productividadBase &&
+        next.productividadModoUi === prev.productividadModoUi &&
         next.modoProductividad === prev.modoProductividad &&
         next.unidadSalida === prev.unidadSalida &&
         next.unidadTiempo === prev.unidadTiempo
@@ -938,14 +1199,10 @@ export function ProcesosPanel({
             ? allMaquinas.find((item) => item.id === operacion.maquinaId)
             : null;
           const mermaBuilder = parseMermaRuleToBuilder(operacion.reglaMerma ?? undefined);
-          const isAdvancedConfigured =
-            Boolean(operacion.cleanupMin) ||
-            operacion.modoProductividad !== "fija" ||
-            Boolean(operacion.reglaVelocidad) ||
-            Boolean(operacion.reglaMerma) ||
-            operacion.unidadEntrada !== "ninguna" ||
-            operacion.unidadSalida !== "ninguna" ||
-            operacion.unidadTiempo !== "minuto";
+          const productividadModoUi: ProductividadModoUi =
+            operacion.tiempoFijoMin && operacion.tiempoFijoMin > 0
+                ? "manual"
+                : "variable";
 
           return {
             id: operacion.id || crypto.randomUUID(),
@@ -960,16 +1217,17 @@ export function ProcesosPanel({
             orden: operacion.orden ?? index + 1,
             setupMin: operacion.setupMin ?? undefined,
             cleanupMin: operacion.cleanupMin ?? undefined,
+            tiempoFijoMin: operacion.tiempoFijoMin ?? undefined,
             modoProductividad: operacion.modoProductividad,
+            productividadModoUi,
             productividadBase: operacion.productividadBase ?? undefined,
             unidadEntrada: operacion.unidadEntrada || "ninguna",
             unidadSalida: operacion.unidadSalida || "ninguna",
             unidadTiempo: operacion.unidadTiempo || "minuto",
             mermaRunPct: operacion.mermaRunPct ?? undefined,
-            reglaVelocidadTexto: toPrettyJson(operacion.reglaVelocidad ?? undefined),
             mermaRuleMode: mermaBuilder.mode,
             mermaTiers: mermaBuilder.tiers,
-            advancedMode: isAdvancedConfigured,
+            niveles: normalizeNiveles(operacion.niveles ?? []),
             activo: operacion.activo,
           };
         }),
@@ -1016,17 +1274,6 @@ export function ProcesosPanel({
       return {
         ...prev,
         operaciones: nextOperaciones,
-      };
-    });
-  }, []);
-
-  const addOperacion = React.useCallback(() => {
-    setForm((prev) => {
-      const nextOperacion = buildDefaultOperacion(prev.operaciones.length);
-      setExpandedOperacionId(nextOperacion.id);
-      return {
-        ...prev,
-        operaciones: [...prev.operaciones, nextOperacion],
       };
     });
   }, []);
@@ -1171,6 +1418,7 @@ export function ProcesosPanel({
       orden: index + 1,
       setupMin: operacion.setupMin,
       cleanupMin: operacion.cleanupMin,
+      tiempoFijoMin: operacion.tiempoFijoMin,
       modoProductividad: operacion.modoProductividad,
       productividadBase: operacion.productividadBase,
       unidadEntrada: operacion.unidadEntrada || "ninguna",
@@ -1179,6 +1427,7 @@ export function ProcesosPanel({
       mermaRunPct: operacion.mermaRunPct,
       reglaVelocidad: undefined as Record<string, unknown> | undefined,
       reglaMerma: undefined as Record<string, unknown> | undefined,
+      niveles: operacion.niveles,
       activo: operacion.activo,
     }));
 
@@ -1186,9 +1435,8 @@ export function ProcesosPanel({
       const source = form.operaciones[index];
       const perfil = getPerfilOperativo(operacion.maquinaId, operacion.perfilOperativoId);
       const maquina = getMaquina(operacion.maquinaId);
-      const mappedUnit = mapMachineUnitToProceso(
-        perfil?.unidadProductividad || maquina?.unidadProduccionPrincipal || "",
-      );
+      const resolvedProfile = resolveMachineProfile(perfil, maquina);
+      const mappedUnit = resolvedProfile.processUnitMapping;
 
       if (operacion.maquinaId) {
         if (!maquina?.centroCostoPrincipalId) {
@@ -1200,16 +1448,23 @@ export function ProcesosPanel({
         operacion.centroCostoId = maquina.centroCostoPrincipalId;
       }
 
-      if (operacion.productividadBase === undefined && perfil?.productividad !== null) {
-        operacion.productividadBase = perfil?.productividad ?? undefined;
+      if (
+        operacion.productividadBase === undefined &&
+        resolvedProfile.productivityValue !== undefined
+      ) {
+        operacion.productividadBase = resolvedProfile.productivityValue;
       }
 
       if (operacion.setupMin === undefined) {
-        operacion.setupMin = getSetupFromPerfil(perfil);
+        operacion.setupMin = resolvedProfile.setupMin;
+      }
+
+      if (operacion.cleanupMin === undefined) {
+        operacion.cleanupMin = resolvedProfile.cleanupMin;
       }
 
       if (operacion.perfilOperativoId) {
-        operacion.modoProductividad = "fija";
+        operacion.modoProductividad = "variable";
       }
 
       if ((operacion.unidadSalida === "ninguna" || !operacion.unidadSalida) && mappedUnit) {
@@ -1224,11 +1479,29 @@ export function ProcesosPanel({
         operacion.unidadTiempo = mappedUnit.unidadTiempo;
       }
 
-      try {
-        operacion.reglaVelocidad = parseOptionalJson(source.reglaVelocidadTexto || "");
-      } catch {
-        toast.error(`La regla de velocidad de la operacion ${index + 1} no es JSON valido.`);
-        return null;
+      const productivityMode = source.productividadModoUi ?? "variable";
+      if (!operacion.perfilOperativoId) {
+        if (productivityMode === "manual") {
+          operacion.modoProductividad = "fija";
+          operacion.productividadBase = undefined;
+          operacion.reglaVelocidad = undefined;
+          if (!operacion.tiempoFijoMin || operacion.tiempoFijoMin <= 0) {
+            toast.error(
+              `La operacion ${index + 1} en modo manual requiere Tiempo total (min) mayor a 0.`,
+            );
+            return null;
+          }
+        } else {
+          operacion.modoProductividad = "variable";
+          operacion.tiempoFijoMin = undefined;
+          operacion.reglaVelocidad = undefined;
+          if (!operacion.productividadBase || operacion.productividadBase <= 0) {
+            toast.error(
+              `La operacion ${index + 1} en modo variable requiere un valor de productividad mayor a 0.`,
+            );
+            return null;
+          }
+        }
       }
 
       if (!operacion.nombre) {
@@ -1249,30 +1522,35 @@ export function ProcesosPanel({
         return null;
       }
 
+      if (
+        operacion.tiempoFijoMin !== undefined &&
+        operacion.tiempoFijoMin < 0
+      ) {
+        toast.error("Tiempo fijo no puede ser negativo.");
+        return null;
+      }
+
       if (operacion.productividadBase !== undefined && operacion.productividadBase < 0) {
         toast.error("Productividad base no puede ser negativa.");
         return null;
       }
 
       if (operacion.modoProductividad === "fija") {
-        if (!operacion.productividadBase || operacion.productividadBase <= 0) {
+        const hasTiempoFijo = Boolean(
+          operacion.tiempoFijoMin !== undefined && operacion.tiempoFijoMin > 0,
+        );
+        if (!hasTiempoFijo) {
           toast.error(
-            `La operacion ${index + 1} en modo fija requiere Productividad base mayor a 0 (manual o absorbida del perfil).`,
+            `La operacion ${index + 1} en modo fija requiere Tiempo fijo (min) mayor a 0.`,
           );
           return null;
         }
-      }
-
-      if (operacion.modoProductividad === "formula" && !operacion.reglaVelocidad) {
+      } else if (
+        !operacion.perfilOperativoId &&
+        (!operacion.productividadBase || operacion.productividadBase <= 0)
+      ) {
         toast.error(
-          `La operacion ${index + 1} en modo formula requiere una regla de velocidad.`,
-        );
-        return null;
-      }
-
-      if (operacion.modoProductividad === "tabla" && !operacion.reglaVelocidad) {
-        toast.error(
-          `La operacion ${index + 1} en modo tabla requiere una regla de velocidad.`,
+          `La operacion ${index + 1} en modo variable requiere Productividad base mayor a 0.`,
         );
         return null;
       }
@@ -1456,21 +1734,29 @@ export function ProcesosPanel({
 
   const openEditBibliotecaSheet = React.useCallback(
     (item: ProcesoOperacionPlantilla) => {
+      const productividadModoUi: ProductividadModoUi =
+        item.tiempoFijoMin && item.tiempoFijoMin > 0
+            ? "manual"
+            : "variable";
       setEditingBibliotecaId(item.id);
       setBibliotecaForm({
         nombre: item.nombre,
         tipoOperacion: item.tipoOperacion,
+        usaNiveles: (item.niveles?.length ?? 0) > 0,
         centroCostoId: item.centroCostoId ?? "",
         maquinaId: item.maquinaId ?? "",
         perfilOperativoId: item.perfilOperativoId ?? "",
         setupMin: item.setupMin ?? undefined,
         cleanupMin: item.cleanupMin ?? undefined,
+        tiempoFijoMin: item.tiempoFijoMin ?? undefined,
+        productividadModoUi,
         modoProductividad: item.modoProductividad,
         productividadBase: item.productividadBase ?? undefined,
         unidadEntrada: item.unidadEntrada,
         unidadSalida: item.unidadSalida,
         unidadTiempo: item.unidadTiempo,
         mermaRunPct: item.mermaRunPct ?? undefined,
+        niveles: normalizeNiveles(item.niveles ?? []),
         activo: item.activo,
         observaciones: item.observaciones,
       });
@@ -1493,6 +1779,14 @@ export function ProcesosPanel({
 
       if (bibliotecaForm.cleanupMin !== undefined && bibliotecaForm.cleanupMin < 0) {
         toast.error("Cleanup no puede ser negativo.");
+        return null;
+      }
+
+      if (
+        bibliotecaForm.tiempoFijoMin !== undefined &&
+        bibliotecaForm.tiempoFijoMin < 0
+      ) {
+        toast.error("Tiempo fijo no puede ser negativo.");
         return null;
       }
 
@@ -1522,6 +1816,61 @@ export function ProcesosPanel({
         return null;
       }
 
+      for (const nivel of bibliotecaForm.usaNiveles ? bibliotecaForm.niveles : []) {
+        if (!nivel.nombre.trim()) {
+          toast.error("Todas las variantes requieren nombre.");
+          return null;
+        }
+        if (nivel.modoProductividadNivel === "fija") {
+          if (!nivel.tiempoFijoMin || nivel.tiempoFijoMin <= 0) {
+            toast.error(`El nivel ${nivel.nombre} debe definir Tiempo total (min).`);
+            return null;
+          }
+        }
+        if (nivel.modoProductividadNivel === "variable_manual") {
+          if (!nivel.productividadBase || nivel.productividadBase <= 0) {
+            toast.error(`El nivel ${nivel.nombre} debe definir Valor productividad.`);
+            return null;
+          }
+          if (!nivel.unidadSalida || nivel.unidadSalida === "ninguna") {
+            toast.error(`El nivel ${nivel.nombre} debe definir Unidad de productividad.`);
+            return null;
+          }
+        }
+        if (nivel.modoProductividadNivel === "variable_perfil") {
+          if (!nivel.maquinaId || !nivel.perfilOperativoId) {
+            toast.error(`El nivel ${nivel.nombre} debe definir máquina y perfil operativo.`);
+            return null;
+          }
+        }
+      }
+
+      let modoProductividad: ProcesoOperacionPayload["modoProductividad"] = "variable";
+      let productividadBase = bibliotecaForm.productividadBase;
+      let tiempoFijoMin = bibliotecaForm.tiempoFijoMin;
+
+      if (bibliotecaUsaProductividadPerfil) {
+        modoProductividad = "variable";
+      } else if (bibliotecaForm.productividadModoUi === "manual") {
+        modoProductividad = "fija";
+        productividadBase = undefined;
+        if (!tiempoFijoMin || tiempoFijoMin <= 0) {
+          toast.error("Para modo manual debes definir Tiempo total (min) mayor a 0.");
+          return null;
+        }
+      } else {
+        modoProductividad = "variable";
+        tiempoFijoMin = undefined;
+        if (
+          !bibliotecaForm.usaNiveles &&
+          (!bibliotecaForm.perfilOperativoId || !bibliotecaForm.maquinaId) &&
+          (!productividadBase || productividadBase <= 0)
+        ) {
+          toast.error("Para modo variable debes definir un valor de productividad mayor a 0.");
+          return null;
+        }
+      }
+
       return {
         nombre: bibliotecaForm.nombre.trim(),
         tipoOperacion: bibliotecaForm.tipoOperacion,
@@ -1530,17 +1879,20 @@ export function ProcesosPanel({
         perfilOperativoId: bibliotecaForm.perfilOperativoId || undefined,
         setupMin: bibliotecaForm.setupMin,
         cleanupMin: bibliotecaForm.cleanupMin,
-        modoProductividad: bibliotecaForm.modoProductividad,
-        productividadBase: bibliotecaForm.productividadBase,
+        tiempoFijoMin,
+        modoProductividad,
+        productividadBase,
         unidadEntrada: bibliotecaForm.unidadEntrada,
         unidadSalida: bibliotecaForm.unidadSalida,
         unidadTiempo: bibliotecaForm.unidadTiempo,
         mermaRunPct: bibliotecaForm.mermaRunPct,
+        niveles: bibliotecaForm.usaNiveles ? bibliotecaForm.niveles : [],
+        reglaVelocidad: undefined,
         observaciones: bibliotecaForm.observaciones.trim() || undefined,
         activo: bibliotecaForm.activo,
       };
     },
-    [bibliotecaForm],
+    [bibliotecaForm, bibliotecaUsaProductividadPerfil],
   );
 
   const handleSaveBiblioteca = React.useCallback(() => {
@@ -1957,9 +2309,9 @@ export function ProcesosPanel({
                   <Card className="relative z-20 overflow-visible">
                     <CardContent className="grid gap-3 overflow-visible p-3">
                       <p className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                        Anadir paso
+                        Agregar paso desde biblioteca
                         {renderTooltipIcon(
-                          "Se copia la plantilla seleccionada y luego puedes editarla sin afectar la biblioteca.",
+                          "Las rutas solo consumen pasos existentes de la Biblioteca. La definición del paso se edita únicamente allí.",
                         )}
                       </p>
 
@@ -2027,47 +2379,27 @@ export function ProcesosPanel({
                           disabled={!selectedOperacionTemplate}
                         >
                           <PlusIcon />
-                          Anadir paso desde biblioteca
+                          Agregar paso
                         </Button>
-                        <Button variant="outline" size="sm" onClick={addOperacion}>
-                          <PlusIcon />
-                          Crear paso en blanco
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={applyTemplateOperations}
+                          aria-label="Cargar pasos base"
+                          title="Cargar pasos base"
+                        >
+                          <ListRestartIcon className="h-4 w-4" />
                         </Button>
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <span>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={applyTemplateOperations}
-                                aria-label="Cargar pasos base"
-                              >
-                                <ListRestartIcon className="h-4 w-4" />
-                              </Button>
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent side="top">
-                            Cargar pasos base
-                          </TooltipContent>
-                        </Tooltip>
                         {!editingProcesoId ? (
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <span>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  onClick={clearTemplateOperations}
-                                  aria-label="Vaciar pasos de plantilla"
-                                >
-                                  <EraserIcon className="h-4 w-4" />
-                                </Button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              Vaciar pasos de plantilla
-                            </TooltipContent>
-                          </Tooltip>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={clearTemplateOperations}
+                            aria-label="Vaciar pasos de plantilla"
+                            title="Vaciar pasos de plantilla"
+                          >
+                            <EraserIcon className="h-4 w-4" />
+                          </Button>
                         ) : null}
                       </div>
                     </CardContent>
@@ -2077,6 +2409,21 @@ export function ProcesosPanel({
                     const maquinaSeleccionada = operacion.maquinaId
                       ? allMaquinas.find((maquina) => maquina.id === operacion.maquinaId)
                       : null;
+                    const perfilSeleccionado =
+                      operacion.perfilOperativoId && maquinaSeleccionada
+                        ? maquinaSeleccionada.perfilesOperativos.find(
+                            (perfil) => perfil.id === operacion.perfilOperativoId,
+                          ) ?? null
+                        : null;
+                    const perfilResuelto = resolveMachineProfile(
+                      perfilSeleccionado,
+                      maquinaSeleccionada,
+                    );
+                    const usaProductividadPerfil = Boolean(perfilSeleccionado);
+                    const productivityModeUi = usaProductividadPerfil
+                      ? "variable"
+                      : (operacion.productividadModoUi ?? "variable");
+                    const usaTiempoFijoManual = productivityModeUi === "manual";
                     const isExpanded = expandedOperacionId === operacion.id;
                     const centroLabel = operacion.centroCostoId
                       ? (() => {
@@ -2118,6 +2465,9 @@ export function ProcesosPanel({
                                 <ChevronRightIcon className="h-4 w-4" />
                               )}
                               <CardTitle className="text-sm">Paso #{index + 1}</CardTitle>
+                              <Badge variant="outline" className="ml-2">
+                                {operacion.niveles.length} variante{operacion.niveles.length === 1 ? "" : "s"}
+                              </Badge>
                             </span>
                           </Button>
                           <div className="flex items-center gap-2">
@@ -2162,7 +2512,11 @@ export function ProcesosPanel({
                           </div>
                         </CardHeader>
                         {isExpanded ? (
-                          <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                          <CardContent className="space-y-3">
+                          <div className="rounded-md border border-dashed px-3 py-3 text-sm text-muted-foreground">
+                            La ruta consume este paso desde la Biblioteca. Aquí solo puedes revisar la configuración y ordenar la secuencia.
+                          </div>
+                          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 pointer-events-none opacity-80">
                           <Field>
                             <FieldLabel>Codigo</FieldLabel>
                             <Input value={buildSystemOperacionCodigo(index)} readOnly disabled />
@@ -2208,6 +2562,46 @@ export function ProcesosPanel({
                                 ))}
                               </SelectContent>
                             </Select>
+                          </Field>
+
+                          <Field className="md:col-span-2 xl:col-span-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <FieldLabel>Variantes del paso</FieldLabel>
+                                <FieldDescription>
+                                  Las variantes se definen en la Biblioteca de pasos y la ruta solo las consume.
+                                </FieldDescription>
+                              </div>
+                              <Badge variant="outline">
+                                {operacion.niveles.length} variante{operacion.niveles.length === 1 ? "" : "s"}
+                              </Badge>
+                            </div>
+                            {operacion.niveles.length ? (
+                              <div className="mt-3 space-y-2">
+                                {operacion.niveles.map((nivel, nivelIndex) => (
+                                  <div
+                                    key={nivel.id}
+                                    className="grid gap-3 rounded-md border border-dashed p-3 md:grid-cols-[1fr_auto]"
+                                  >
+                                    <Field>
+                                      <FieldLabel>Resumen</FieldLabel>
+                                      <Input
+                                        value={buildNivelResumen(nivel, allMaquinas)}
+                                        readOnly
+                                        disabled
+                                      />
+                                    </Field>
+                                    <div className="flex items-end text-xs text-muted-foreground">
+                                      Variante {nivelIndex + 1}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="mt-3 rounded-md border border-dashed px-3 py-4 text-sm text-muted-foreground">
+                                Este paso no tiene variantes configuradas en la biblioteca.
+                              </div>
+                            )}
                           </Field>
 
                           <Field>
@@ -2333,8 +2727,11 @@ export function ProcesosPanel({
                                       (item) => item.id === nextPerfilId,
                                     ) ?? null
                                   : null;
-                                const setupFromPerfil = getSetupFromPerfil(perfilSeleccionado);
-                                if (nextPerfilId && setupFromPerfil === undefined) {
+                                const resolvedProfile = resolveMachineProfile(
+                                  perfilSeleccionado,
+                                  maquinaSeleccionada,
+                                );
+                                if (nextPerfilId && resolvedProfile.setupMin === undefined) {
                                   toast.warning(
                                     `El perfil ${perfilSeleccionado?.nombre ?? ""} no tiene setup configurado.`,
                                   );
@@ -2342,11 +2739,11 @@ export function ProcesosPanel({
 
                                 updateOperacion(operacion.id, (prev) => {
                                   const perfil = getPerfilOperativo(prev.maquinaId, nextPerfilId);
-                                  const mappedUnit = mapMachineUnitToProceso(
-                                    perfil?.unidadProductividad ||
-                                      maquinaSeleccionada?.unidadProduccionPrincipal ||
-                                      "",
+                                  const nextResolvedProfile = resolveMachineProfile(
+                                    perfil,
+                                    maquinaSeleccionada,
                                   );
+                                  const mappedUnit = nextResolvedProfile.processUnitMapping;
                                   const shouldSetUnitSalida =
                                     !prev.unidadSalida || prev.unidadSalida === "ninguna";
                                   const shouldSetUnitTiempo =
@@ -2356,12 +2753,17 @@ export function ProcesosPanel({
                                   return {
                                     ...prev,
                                     perfilOperativoId: nextPerfilId,
-                                    modoProductividad: nextPerfilId ? "fija" : prev.modoProductividad,
+                                    modoProductividad: nextPerfilId ? "variable" : prev.modoProductividad,
+                                    productividadModoUi: nextPerfilId
+                                      ? "variable"
+                                      : prev.productividadModoUi,
                                     productividadBase:
                                       nextPerfilId
-                                        ? (perfil?.productividad ?? prev.productividadBase)
+                                        ? (nextResolvedProfile.productivityValue ?? prev.productividadBase)
                                         : prev.productividadBase,
-                                    setupMin: nextPerfilId ? setupFromPerfil : prev.setupMin,
+                                    setupMin: nextPerfilId ? nextResolvedProfile.setupMin : prev.setupMin,
+                                    cleanupMin:
+                                      nextPerfilId ? nextResolvedProfile.cleanupMin : prev.cleanupMin,
                                     unidadSalida:
                                       shouldSetUnitSalida && mappedUnit
                                         ? mappedUnit.unidadSalida
@@ -2398,6 +2800,26 @@ export function ProcesosPanel({
                             </Select>
                           </Field>
 
+                          {usaProductividadPerfil && perfilResuelto.extraResolvedFields.length > 0 ? (
+                            <div className="md:col-span-2 xl:col-span-3 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+                              <p className="font-medium text-foreground">Datos absorbidos del perfil</p>
+                              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                                {perfilResuelto.extraResolvedFields.map((field) => (
+                                  <span key={`${operacion.id}-${field.label}`}>
+                                    {field.label}: <span className="font-medium">{field.value}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {operacion.maquinaId && !usaProductividadPerfil ? (
+                            <p className="md:col-span-2 xl:col-span-3 text-xs text-muted-foreground">
+                              Este paso usa máquina. Para un costeo más preciso, selecciona un
+                              perfil operativo con productividad configurada.
+                            </p>
+                          ) : null}
+
                           {mismatchWarning ? (
                             <p className="md:col-span-2 xl:col-span-3 text-xs text-muted-foreground">
                               {mismatchWarning}
@@ -2418,31 +2840,129 @@ export function ProcesosPanel({
                                 }))
                               }
                             />
+                            {renderProfileAutofillHint(usaProductividadPerfil)}
                           </Field>
 
                           <Field>
-                            <FieldLabel className="inline-flex items-center gap-1">
-                              Productividad base
-                              {renderTooltipIcon(
-                                `Rendimiento nominal de la operacion. Se usa para estimar tiempo variable junto con el modo de productividad. ${buildProductividadBaseExample(
-                                  operacion.unidadSalida,
-                                  operacion.unidadTiempo,
-                                )}`,
-                              )}
-                            </FieldLabel>
+                            <FieldLabel>Cleanup (min)</FieldLabel>
                             <Input
                               type="number"
                               min={0}
-                              step="0.0001"
-                              value={operacion.productividadBase ?? ""}
+                              step="0.01"
+                              value={operacion.cleanupMin ?? ""}
                               onChange={(event) =>
                                 updateOperacion(operacion.id, (prev) => ({
                                   ...prev,
-                                  productividadBase: toOptionalNumber(event.target.value),
+                                  cleanupMin: toOptionalNumber(event.target.value),
                                 }))
                               }
                             />
+                            {renderProfileAutofillHint(usaProductividadPerfil)}
                           </Field>
+
+                          <Field>
+                            <FieldLabel>Modo productividad</FieldLabel>
+                            <Select
+                              value={productivityModeUi}
+                              onValueChange={(value) =>
+                                updateOperacion(operacion.id, (prev) => ({
+                                  ...prev,
+                                  productividadModoUi: value as ProductividadModoUi,
+                                }))
+                              }
+                              disabled={usaProductividadPerfil}
+                            >
+                              <SelectTrigger>
+                                <SelectValue>
+                                  {getProductividadModoUiLabel(productivityModeUi)}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="manual">Fija (tiempo total)</SelectItem>
+                                <SelectItem value="variable">Variable (valor + unidad)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </Field>
+
+                          {usaTiempoFijoManual ? (
+                            <Field>
+                              <FieldLabel>Tiempo total (min)</FieldLabel>
+                              <Input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={operacion.tiempoFijoMin ?? ""}
+                                onChange={(event) =>
+                                  updateOperacion(operacion.id, (prev) => ({
+                                    ...prev,
+                                    tiempoFijoMin: toOptionalNumber(event.target.value),
+                                  }))
+                                }
+                                disabled={usaProductividadPerfil}
+                              />
+                            </Field>
+                          ) : (
+                            <>
+                              <Field>
+                                <FieldLabel>Valor productividad</FieldLabel>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  step="0.0001"
+                                  value={operacion.productividadBase ?? ""}
+                                  onChange={(event) =>
+                                    updateOperacion(operacion.id, (prev) => ({
+                                      ...prev,
+                                      productividadBase: toOptionalNumber(event.target.value),
+                                    }))
+                                  }
+                                  disabled={usaProductividadPerfil}
+                                />
+                                {renderProfileAutofillHint(usaProductividadPerfil)}
+                              </Field>
+                              <Field>
+                                <FieldLabel>Unidad de productividad</FieldLabel>
+                                <Select
+                                  value={toProductividadUnidadValue(
+                                    operacion.unidadSalida || "ninguna",
+                                    operacion.unidadTiempo || "minuto",
+                                  )}
+                                  onValueChange={(value) => {
+                                    const option = productividadUnidadItems.find(
+                                      (item) => item.value === value,
+                                    );
+                                    if (!option) {
+                                      return;
+                                    }
+                                    updateOperacion(operacion.id, (prev) => ({
+                                      ...prev,
+                                      unidadSalida: option.unidadSalida,
+                                      unidadTiempo: option.unidadTiempo,
+                                    }));
+                                  }}
+                                  disabled={usaProductividadPerfil}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue>
+                                      {getProductividadUnidadLabel(
+                                        operacion.unidadSalida || "ninguna",
+                                        operacion.unidadTiempo || "minuto",
+                                      )}
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {productividadUnidadItems.map((item) => (
+                                      <SelectItem key={item.value} value={item.value}>
+                                        {item.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {renderProfileAutofillHint(usaProductividadPerfil)}
+                              </Field>
+                            </>
+                          )}
+
 
                           <Field>
                             <FieldLabel className="inline-flex items-center gap-1">
@@ -2465,417 +2985,7 @@ export function ProcesosPanel({
                               }
                             />
                           </Field>
-
-                          <Field className="md:col-span-2 xl:col-span-3">
-                            <FieldLabel>Modo avanzado</FieldLabel>
-                            <div className="flex h-9 items-center">
-                              <Switch
-                                checked={Boolean(operacion.advancedMode)}
-                                onCheckedChange={(checked) =>
-                                  updateOperacion(operacion.id, (prev) => ({
-                                    ...prev,
-                                    advancedMode: checked,
-                                  }))
-                                }
-                                aria-label={`Modo avanzado operacion ${index + 1}`}
-                              />
-                            </div>
-                          </Field>
-
-                          {operacion.advancedMode ? (
-                            <div className="md:col-span-2 xl:col-span-3 space-y-3 rounded-md border p-3">
-                              <p className="text-xs font-medium text-muted-foreground">
-                                Configuracion avanzada
-                              </p>
-                              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                                <Field>
-                                  <FieldLabel className="inline-flex items-center gap-1">
-                                    Modo productividad
-                                    {renderTooltipIcon(
-                                      "Como se calcula la velocidad del paso: fija (valor unico), formula (segun variables) o tabla (por tramos/condiciones).",
-                                    )}
-                                  </FieldLabel>
-                                  <Select
-                                    value={operacion.modoProductividad || "fija"}
-                                    onValueChange={(value) =>
-                                      updateOperacion(operacion.id, (prev) => ({
-                                        ...prev,
-                                        modoProductividad:
-                                          value as ProcesoOperacionPayload["modoProductividad"],
-                                      }))
-                                    }
-                                    disabled={Boolean(operacion.perfilOperativoId)}
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue>
-                                        {modoProductividadProcesoItems.find(
-                                          (item) =>
-                                            item.value ===
-                                            (operacion.modoProductividad || "fija"),
-                                        )?.label ?? operacion.modoProductividad}
-                                      </SelectValue>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {modoProductividadProcesoItems.map((item) => (
-                                        <SelectItem key={item.value} value={item.value}>
-                                          {item.label}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </Field>
-
-                                <Field>
-                                  <FieldLabel className="inline-flex items-center gap-1">
-                                    Cleanup (min)
-                                    {renderTooltipIcon(
-                                      "Minutos para cierre, limpieza y dejar el puesto listo al terminar el paso.",
-                                    )}
-                                  </FieldLabel>
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    step="0.01"
-                                    value={operacion.cleanupMin ?? ""}
-                                    onChange={(event) =>
-                                      updateOperacion(operacion.id, (prev) => ({
-                                        ...prev,
-                                        cleanupMin: toOptionalNumber(event.target.value),
-                                      }))
-                                    }
-                                  />
-                                </Field>
-
-                                <Field>
-                                  <FieldLabel className="inline-flex items-center gap-1">
-                                    Unidad entrada
-                                    {renderTooltipIcon(
-                                      "Unidad del insumo que consume este paso (ej.: hoja, m2, pieza). Puede quedar en No aplica si no interviene en el calculo.",
-                                    )}
-                                  </FieldLabel>
-                                  <Select
-                                    value={operacion.unidadEntrada || "ninguna"}
-                                    onValueChange={(value) =>
-                                      updateOperacion(operacion.id, (prev) => ({
-                                        ...prev,
-                                        unidadEntrada:
-                                          value as ProcesoOperacionPayload["unidadEntrada"],
-                                      }))
-                                    }
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue>
-                                        {unidadProcesoItems.find(
-                                          (item) =>
-                                            item.value ===
-                                            (operacion.unidadEntrada || "ninguna"),
-                                        )?.label ?? operacion.unidadEntrada}
-                                      </SelectValue>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {unidadProcesoItems.map((item) => (
-                                        <SelectItem key={item.value} value={item.value}>
-                                          {item.label}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </Field>
-
-                                <Field>
-                                  <FieldLabel className="inline-flex items-center gap-1">
-                                    Unidad salida
-                                    {renderTooltipIcon(
-                                      "Unidad de producto resultante del paso (ej.: copia, m2, pieza).",
-                                    )}
-                                  </FieldLabel>
-                                  <Select
-                                    value={operacion.unidadSalida || "ninguna"}
-                                    onValueChange={(value) =>
-                                      updateOperacion(operacion.id, (prev) => ({
-                                        ...prev,
-                                        unidadSalida:
-                                          value as ProcesoOperacionPayload["unidadSalida"],
-                                      }))
-                                    }
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue>
-                                        {unidadProcesoItems.find(
-                                          (item) =>
-                                            item.value ===
-                                            (operacion.unidadSalida || "ninguna"),
-                                        )?.label ?? operacion.unidadSalida}
-                                      </SelectValue>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {unidadProcesoItems.map((item) => (
-                                        <SelectItem key={item.value} value={item.value}>
-                                          {item.label}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </Field>
-
-                                <Field>
-                                  <FieldLabel className="inline-flex items-center gap-1">
-                                    Unidad tiempo
-                                    {renderTooltipIcon(
-                                      "Base temporal de la productividad. Ejemplo: minuto u hora.",
-                                    )}
-                                  </FieldLabel>
-                                  <Select
-                                    value={operacion.unidadTiempo || "minuto"}
-                                    onValueChange={(value) =>
-                                      updateOperacion(operacion.id, (prev) => ({
-                                        ...prev,
-                                        unidadTiempo:
-                                          value as ProcesoOperacionPayload["unidadTiempo"],
-                                      }))
-                                    }
-                                    disabled={Boolean(
-                                      mapMachineUnitToProceso(
-                                        getPerfilOperativo(
-                                          operacion.maquinaId,
-                                          operacion.perfilOperativoId,
-                                        )?.unidadProductividad ||
-                                          maquinaSeleccionada?.unidadProduccionPrincipal ||
-                                          "",
-                                      ),
-                                    )}
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue>
-                                        {unidadProcesoItems.find(
-                                          (item) =>
-                                            item.value ===
-                                            (operacion.unidadTiempo || "minuto"),
-                                        )?.label ?? operacion.unidadTiempo}
-                                      </SelectValue>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {unidadProcesoItems.map((item) => (
-                                        <SelectItem key={item.value} value={item.value}>
-                                          {item.label}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </Field>
-
-                                {(operacion.modoProductividad === "formula" ||
-                                  operacion.modoProductividad === "tabla") && (
-                                  <Field className="md:col-span-2 xl:col-span-3">
-                                    <FieldLabel className="inline-flex items-center gap-1">
-                                      Regla velocidad (JSON)
-                                      {renderTooltipIcon(
-                                        "Define como calcular la productividad en modo formula o tabla.",
-                                      )}
-                                    </FieldLabel>
-                                    <div className="mb-2 flex justify-end">
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() =>
-                                          updateOperacion(operacion.id, (prev) => ({
-                                            ...prev,
-                                            reglaVelocidadTexto: JSON.stringify(
-                                              getVelocidadRuleExample(prev.modoProductividad),
-                                              null,
-                                              2,
-                                            ),
-                                          }))
-                                        }
-                                      >
-                                        Cargar ejemplo
-                                      </Button>
-                                    </div>
-                                    <Textarea
-                                      value={operacion.reglaVelocidadTexto || ""}
-                                      onChange={(event) =>
-                                        updateOperacion(operacion.id, (prev) => ({
-                                          ...prev,
-                                          reglaVelocidadTexto: event.target.value,
-                                        }))
-                                      }
-                                      rows={8}
-                                      placeholder='{"tipo":"formula_v1"}'
-                                    />
-                                  </Field>
-                                )}
-
-                                <Field className="md:col-span-2 xl:col-span-3">
-                                  <FieldLabel className="inline-flex items-center gap-1">
-                                    Regla merma
-                                    {renderTooltipIcon(
-                                      "Define si la merma usa un valor fijo o tramos por tirada. La merma general (%) se usa como fallback.",
-                                    )}
-                                  </FieldLabel>
-                                  <div className="grid gap-3 md:grid-cols-[minmax(0,16rem)_auto] md:items-end">
-                                    <Field>
-                                      <FieldLabel>Estrategia</FieldLabel>
-                                      <Select
-                                        value={operacion.mermaRuleMode || "fija"}
-                                        onValueChange={(value) =>
-                                          updateOperacion(operacion.id, (prev) => ({
-                                            ...prev,
-                                            mermaRuleMode: value as "fija" | "por_tirada",
-                                            mermaTiers:
-                                              value === "por_tirada" &&
-                                              (!prev.mermaTiers || !prev.mermaTiers.length)
-                                                ? [buildEmptyMermaTier()]
-                                                : prev.mermaTiers,
-                                          }))
-                                        }
-                                      >
-                                        <SelectTrigger>
-                                          <SelectValue>
-                                            {(operacion.mermaRuleMode || "fija") === "por_tirada"
-                                              ? "Merma por tirada"
-                                              : "Merma fija"}
-                                          </SelectValue>
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="fija">Merma fija</SelectItem>
-                                          <SelectItem value="por_tirada">
-                                            Merma por tirada
-                                          </SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </Field>
-
-                                    {operacion.mermaRuleMode === "por_tirada" ? (
-                                      <div className="flex justify-start md:justify-end">
-                                        <Button
-                                          type="button"
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() =>
-                                            updateOperacion(operacion.id, (prev) => ({
-                                              ...prev,
-                                              mermaTiers: [
-                                                ...(prev.mermaTiers || []),
-                                                buildEmptyMermaTier(),
-                                              ],
-                                            }))
-                                          }
-                                        >
-                                          <PlusIcon className="h-4 w-4" />
-                                          Agregar tramo
-                                        </Button>
-                                      </div>
-                                    ) : null}
-                                  </div>
-
-                                  {operacion.mermaRuleMode === "por_tirada" ? (
-                                    <div className="mt-3 space-y-2 rounded-md border p-3">
-                                      {(operacion.mermaTiers || []).map((tier, tierIndex) => (
-                                        <div
-                                          key={tier.id}
-                                          className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"
-                                        >
-                                          <Input
-                                            type="number"
-                                            min={0}
-                                            step="1"
-                                            value={tier.minTirada ?? ""}
-                                            onChange={(event) =>
-                                              updateOperacion(operacion.id, (prev) => ({
-                                                ...prev,
-                                                mermaTiers: (prev.mermaTiers || []).map((item) =>
-                                                  item.id === tier.id
-                                                    ? {
-                                                        ...item,
-                                                        minTirada: toOptionalNumber(
-                                                          event.target.value,
-                                                        ),
-                                                      }
-                                                    : item,
-                                                ),
-                                              }))
-                                            }
-                                            placeholder={`Desde tirada (tramo ${tierIndex + 1})`}
-                                          />
-                                          <Input
-                                            type="number"
-                                            min={0}
-                                            step="1"
-                                            value={tier.maxTirada ?? ""}
-                                            onChange={(event) =>
-                                              updateOperacion(operacion.id, (prev) => ({
-                                                ...prev,
-                                                mermaTiers: (prev.mermaTiers || []).map((item) =>
-                                                  item.id === tier.id
-                                                    ? {
-                                                        ...item,
-                                                        maxTirada: toOptionalNumber(
-                                                          event.target.value,
-                                                        ),
-                                                      }
-                                                    : item,
-                                                ),
-                                              }))
-                                            }
-                                            placeholder={`Hasta tirada (tramo ${tierIndex + 1})`}
-                                          />
-                                          <Input
-                                            type="number"
-                                            min={0}
-                                            max={100}
-                                            step="0.0001"
-                                            value={tier.mermaPct ?? ""}
-                                            onChange={(event) =>
-                                              updateOperacion(operacion.id, (prev) => ({
-                                                ...prev,
-                                                mermaTiers: (prev.mermaTiers || []).map((item) =>
-                                                  item.id === tier.id
-                                                    ? {
-                                                        ...item,
-                                                        mermaPct: toOptionalNumber(
-                                                          event.target.value,
-                                                        ),
-                                                      }
-                                                    : item,
-                                                ),
-                                              }))
-                                            }
-                                            placeholder="Merma (%)"
-                                          />
-                                          <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() =>
-                                              updateOperacion(operacion.id, (prev) => ({
-                                                ...prev,
-                                                mermaTiers: (prev.mermaTiers || []).filter(
-                                                  (item) => item.id !== tier.id,
-                                                ),
-                                              }))
-                                            }
-                                          >
-                                            Quitar
-                                          </Button>
-                                        </div>
-                                      ))}
-
-                                      {!(operacion.mermaTiers || []).length ? (
-                                        <p className="text-xs text-muted-foreground">
-                                          Agrega al menos un tramo para usar merma por tirada.
-                                        </p>
-                                      ) : null}
-                                    </div>
-                                  ) : (
-                                    <p className="mt-2 text-xs text-muted-foreground">
-                                      Se aplica la merma general (%) definida en esta operacion.
-                                    </p>
-                                  )}
-                                </Field>
-                              </div>
-                            </div>
-                          ) : null}
+                          </div>
                           </CardContent>
                         ) : (
                           <CardContent className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
@@ -3013,7 +3123,11 @@ export function ProcesosPanel({
                                 <TableCell>
                                   {operacion.codigo} - {operacion.nombre}
                                 </TableCell>
-                                <TableCell>{operacion.modoProductividad}</TableCell>
+                                <TableCell>
+                                  {modoProductividadProcesoItems.find(
+                                    (mode) => mode.value === operacion.modoProductividad,
+                                  )?.label ?? operacion.modoProductividad}
+                                </TableCell>
                                 <TableCell>{operacion.runMin.toFixed(2)}</TableCell>
                                 <TableCell>
                                   {operacion.productividadAplicada !== null
@@ -3121,6 +3235,507 @@ export function ProcesosPanel({
                     </Select>
                   </Field>
 
+                  <Field data-disabled={bibliotecaCentroBloqueado}>
+                    <FieldLabel>Centro de costo</FieldLabel>
+                    <Select
+                      value={bibliotecaForm.centroCostoId || EMPTY_SELECT_VALUE}
+                      onValueChange={(value) =>
+                        setBibliotecaForm((prev) => ({
+                          ...prev,
+                          centroCostoId:
+                            !value || value === EMPTY_SELECT_VALUE ? "" : value,
+                        }))
+                      }
+                      disabled={bibliotecaCentroBloqueado}
+                    >
+                      <SelectTrigger>
+                        <SelectValue>
+                          {bibliotecaForm.centroCostoId
+                            ? (() => {
+                                const centro = allCentrosCosto.find(
+                                  (item) => item.id === bibliotecaForm.centroCostoId,
+                                );
+                                return centro
+                                  ? `${centro.codigo} - ${centro.nombre}`
+                                  : "Centro no disponible";
+                              })()
+                            : "Selecciona centro"}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={EMPTY_SELECT_VALUE}>Sin seleccionar</SelectItem>
+                        {allCentrosCosto.map((centro) => (
+                          <SelectItem key={centro.id} value={centro.id}>
+                            {centro.codigo} - {centro.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+
+                  <Field className="md:col-span-2">
+                    <div className="flex items-center justify-between rounded-md border px-3 py-3">
+                      <div>
+                        <FieldLabel>Usa variantes</FieldLabel>
+                        <FieldDescription>
+                          Actívalo cuando este paso necesite variantes como Básico, Estándar o Avanzado.
+                        </FieldDescription>
+                      </div>
+                      <Switch
+                        checked={bibliotecaForm.usaNiveles}
+                        onCheckedChange={(checked) =>
+                          setBibliotecaForm((prev) => ({
+                            ...prev,
+                            usaNiveles: checked,
+                            niveles:
+                              checked && prev.niveles.length === 0
+                                ? [buildDefaultNivel(0)]
+                                : prev.niveles,
+                          }))
+                        }
+                        aria-label="Usar variantes"
+                      />
+                    </div>
+                  </Field>
+
+                  {bibliotecaForm.usaNiveles ? (
+                  <Field className="md:col-span-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <FieldLabel>Variantes del paso</FieldLabel>
+                        <FieldDescription>
+                          Configúralas acá para reutilizarlas luego desde rutas y checklist.
+                        </FieldDescription>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setBibliotecaForm((prev) => ({
+                            ...prev,
+                            niveles: [...prev.niveles, buildDefaultNivel(prev.niveles.length)],
+                          }))
+                        }
+                      >
+                        <PlusIcon className="size-4" />
+                        Agregar variante
+                      </Button>
+                    </div>
+                    {bibliotecaForm.niveles.length ? (
+                      <div className="mt-3 space-y-2">
+                        {bibliotecaForm.niveles.map((nivel, nivelIndex) => (
+                          <div
+                            key={nivel.id ?? `${nivel.nombre}-${nivelIndex}`}
+                            className="space-y-3 rounded-md border border-dashed p-3"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-medium">
+                                  {nivel.nombre || `Variante ${nivelIndex + 1}`}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {buildNivelResumen(nivel, allMaquinas)}
+                                </p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() =>
+                                  setBibliotecaForm((prev) => ({
+                                    ...prev,
+                                    niveles: prev.niveles
+                                      .filter((item) => item.id !== nivel.id)
+                                      .map((item, index) => ({ ...item, orden: index + 1 })),
+                                  }))
+                                }
+                                aria-label={`Quitar variante ${nivelIndex + 1}`}
+                              >
+                                <Trash2Icon className="size-4" />
+                              </Button>
+                            </div>
+
+                            <div className="grid gap-3 md:grid-cols-2">
+                              <Field>
+                                <FieldLabel>Nombre de la variante</FieldLabel>
+                                <Input
+                                  value={nivel.nombre}
+                                  onChange={(event) =>
+                                    setBibliotecaForm((prev) => ({
+                                      ...prev,
+                                      niveles: prev.niveles.map((item) =>
+                                        item.id === nivel.id
+                                          ? { ...item, nombre: event.target.value, orden: nivelIndex + 1 }
+                                          : item,
+                                      ),
+                                    }))
+                                  }
+                                  placeholder="Ej. Básico"
+                                />
+                              </Field>
+                              <Field>
+                                <FieldLabel>Modo productividad</FieldLabel>
+                                <Select
+                                  value={nivel.modoProductividadNivel}
+                                  onValueChange={(value) =>
+                                    setBibliotecaForm((prev) => ({
+                                      ...prev,
+                                      niveles: prev.niveles.map((item) =>
+                                        item.id === nivel.id
+                                          ? {
+                                              ...item,
+                                              modoProductividadNivel: value as ModoProductividadNivelUi,
+                                              tiempoFijoMin:
+                                                value === "fija" ? item.tiempoFijoMin : undefined,
+                                              productividadBase:
+                                                value === "variable_manual"
+                                                  ? item.productividadBase
+                                                  : undefined,
+                                              unidadSalida:
+                                                value === "variable_manual"
+                                                  ? item.unidadSalida ?? "ninguna"
+                                                  : "ninguna",
+                                              unidadTiempo:
+                                                value === "variable_manual"
+                                                  ? item.unidadTiempo ?? "minuto"
+                                                  : "minuto",
+                                              maquinaId:
+                                                value === "variable_perfil" ? item.maquinaId : undefined,
+                                              perfilOperativoId:
+                                                value === "variable_perfil"
+                                                  ? item.perfilOperativoId
+                                                  : undefined,
+                                            }
+                                          : item,
+                                      ),
+                                    }))
+                                  }
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue>
+                                      {getModoProductividadNivelLabel(nivel.modoProductividadNivel)}
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {modoProductividadNivelItems.map((item) => (
+                                      <SelectItem key={item.value} value={item.value}>
+                                        {item.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </Field>
+                            </div>
+
+                            {nivel.modoProductividadNivel === "fija" ? (
+                              <Field>
+                                <FieldLabel>Tiempo total (min)</FieldLabel>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={nivel.tiempoFijoMin ?? ""}
+                                  onChange={(event) =>
+                                    setBibliotecaForm((prev) => ({
+                                      ...prev,
+                                      niveles: prev.niveles.map((item) =>
+                                        item.id === nivel.id
+                                          ? {
+                                              ...item,
+                                              tiempoFijoMin: event.target.value
+                                                ? Number(event.target.value)
+                                                : undefined,
+                                            }
+                                          : item,
+                                      ),
+                                    }))
+                                  }
+                                />
+                              </Field>
+                            ) : null}
+
+                            {nivel.modoProductividadNivel === "variable_manual" ? (
+                              <div className="grid gap-3 md:grid-cols-2">
+                                <Field>
+                                  <FieldLabel>Valor productividad</FieldLabel>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    step="0.0001"
+                                    value={nivel.productividadBase ?? ""}
+                                    onChange={(event) =>
+                                      setBibliotecaForm((prev) => ({
+                                        ...prev,
+                                        niveles: prev.niveles.map((item) =>
+                                          item.id === nivel.id
+                                            ? {
+                                                ...item,
+                                                productividadBase: event.target.value
+                                                  ? Number(event.target.value)
+                                                  : undefined,
+                                              }
+                                            : item,
+                                        ),
+                                      }))
+                                    }
+                                  />
+                                </Field>
+                                <Field>
+                                  <FieldLabel>Unidad de productividad</FieldLabel>
+                                  <Select
+                                    value={toProductividadUnidadValue(
+                                      nivel.unidadSalida ?? "ninguna",
+                                      nivel.unidadTiempo ?? "minuto",
+                                    )}
+                                    onValueChange={(value) => {
+                                      const option = productividadUnidadItems.find(
+                                        (item) => item.value === value,
+                                      );
+                                      if (!option) {
+                                        return;
+                                      }
+                                      setBibliotecaForm((prev) => ({
+                                        ...prev,
+                                        niveles: prev.niveles.map((item) =>
+                                          item.id === nivel.id
+                                            ? {
+                                                ...item,
+                                                unidadSalida: option.unidadSalida,
+                                                unidadTiempo: option.unidadTiempo,
+                                              }
+                                            : item,
+                                        ),
+                                      }));
+                                    }}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue>
+                                        {getProductividadUnidadLabel(
+                                          nivel.unidadSalida ?? "ninguna",
+                                          nivel.unidadTiempo ?? "minuto",
+                                        )}
+                                      </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {productividadUnidadItems.map((item) => (
+                                        <SelectItem key={item.value} value={item.value}>
+                                          {item.label}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </Field>
+                                <Field>
+                                  <FieldLabel>Setup (min)</FieldLabel>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    value={nivel.setupMin ?? ""}
+                                    onChange={(event) =>
+                                      setBibliotecaForm((prev) => ({
+                                        ...prev,
+                                        niveles: prev.niveles.map((item) =>
+                                          item.id === nivel.id
+                                            ? {
+                                                ...item,
+                                                setupMin: event.target.value
+                                                  ? Number(event.target.value)
+                                                  : undefined,
+                                              }
+                                            : item,
+                                        ),
+                                      }))
+                                    }
+                                  />
+                                </Field>
+                                <Field>
+                                  <FieldLabel>Cleanup (min)</FieldLabel>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    value={nivel.cleanupMin ?? ""}
+                                    onChange={(event) =>
+                                      setBibliotecaForm((prev) => ({
+                                        ...prev,
+                                        niveles: prev.niveles.map((item) =>
+                                          item.id === nivel.id
+                                            ? {
+                                                ...item,
+                                                cleanupMin: event.target.value
+                                                  ? Number(event.target.value)
+                                                  : undefined,
+                                              }
+                                            : item,
+                                        ),
+                                      }))
+                                    }
+                                  />
+                                </Field>
+                              </div>
+                            ) : null}
+
+                            {nivel.modoProductividadNivel === "variable_perfil" ? (
+                              <div className="grid gap-3 md:grid-cols-2">
+                                <Field>
+                                  <FieldLabel>Máquina</FieldLabel>
+                                  <Select
+                                    value={nivel.maquinaId ?? EMPTY_SELECT_VALUE}
+                                    onValueChange={(value) =>
+                                      setBibliotecaForm((prev) => ({
+                                        ...prev,
+                                        niveles: prev.niveles.map((item) =>
+                                          item.id === nivel.id
+                                            ? {
+                                                ...item,
+                                                maquinaId:
+                                                  !value || value === EMPTY_SELECT_VALUE
+                                                    ? undefined
+                                                    : value,
+                                                perfilOperativoId: undefined,
+                                              }
+                                            : item,
+                                        ),
+                                      }))
+                                    }
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Selecciona máquina">
+                                        {nivel.maquinaId
+                                          ? (() => {
+                                              const maquina = allMaquinas.find(
+                                                (item) => item.id === nivel.maquinaId,
+                                              );
+                                              return maquina
+                                                ? `${maquina.codigo} - ${maquina.nombre}`
+                                                : "Máquina no disponible";
+                                            })()
+                                          : "Selecciona máquina"}
+                                      </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value={EMPTY_SELECT_VALUE}>Sin máquina</SelectItem>
+                                      {allMaquinas.map((item) => (
+                                        <SelectItem key={item.id} value={item.id}>
+                                          {item.codigo} - {item.nombre}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </Field>
+                                <Field>
+                                  <FieldLabel>Perfil operativo</FieldLabel>
+                                  <Select
+                                    value={nivel.perfilOperativoId ?? EMPTY_SELECT_VALUE}
+                                    onValueChange={(value) =>
+                                      setBibliotecaForm((prev) => ({
+                                        ...prev,
+                                        niveles: prev.niveles.map((item) =>
+                                          item.id === nivel.id
+                                            ? {
+                                                ...item,
+                                                perfilOperativoId:
+                                                  !value || value === EMPTY_SELECT_VALUE
+                                                    ? undefined
+                                                    : value,
+                                              }
+                                            : item,
+                                        ),
+                                      }))
+                                    }
+                                    disabled={!nivel.maquinaId}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Selecciona perfil">
+                                        {nivel.perfilOperativoId
+                                          ? (() => {
+                                              const maquina = allMaquinas.find(
+                                                (item) => item.id === nivel.maquinaId,
+                                              );
+                                              const perfil = maquina?.perfilesOperativos.find(
+                                                (item) => item.id === nivel.perfilOperativoId,
+                                              );
+                                              return perfil?.nombre ?? "Perfil no disponible";
+                                            })()
+                                          : "Selecciona perfil"}
+                                      </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value={EMPTY_SELECT_VALUE}>Sin perfil</SelectItem>
+                                      {(allMaquinas.find((item) => item.id === nivel.maquinaId)
+                                        ?.perfilesOperativos ?? []
+                                      ).map((perfil) => (
+                                        <SelectItem key={perfil.id} value={perfil.id}>
+                                          {perfil.nombre}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </Field>
+                                <Field>
+                                  <FieldLabel>Setup (min)</FieldLabel>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    value={nivel.setupMin ?? ""}
+                                    onChange={(event) =>
+                                      setBibliotecaForm((prev) => ({
+                                        ...prev,
+                                        niveles: prev.niveles.map((item) =>
+                                          item.id === nivel.id
+                                            ? {
+                                                ...item,
+                                                setupMin: event.target.value
+                                                  ? Number(event.target.value)
+                                                  : undefined,
+                                              }
+                                            : item,
+                                        ),
+                                      }))
+                                    }
+                                  />
+                                </Field>
+                                <Field>
+                                  <FieldLabel>Cleanup (min)</FieldLabel>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    value={nivel.cleanupMin ?? ""}
+                                    onChange={(event) =>
+                                      setBibliotecaForm((prev) => ({
+                                        ...prev,
+                                        niveles: prev.niveles.map((item) =>
+                                          item.id === nivel.id
+                                            ? {
+                                                ...item,
+                                                cleanupMin: event.target.value
+                                                  ? Number(event.target.value)
+                                                  : undefined,
+                                              }
+                                            : item,
+                                        ),
+                                      }))
+                                    }
+                                  />
+                                </Field>
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-3 rounded-md border border-dashed px-3 py-4 text-sm text-muted-foreground">
+                        Esta plantilla no tiene variantes configuradas.
+                      </div>
+                    )}
+                  </Field>
+                  ) : null}
+
+                  {!bibliotecaForm.usaNiveles ? (
                   <Field>
                     <FieldLabel>Maquina</FieldLabel>
                     <Select
@@ -3163,45 +3778,10 @@ export function ProcesosPanel({
                       </SelectContent>
                     </Select>
                   </Field>
+                  ) : null}
 
-                  <Field data-disabled={bibliotecaCentroBloqueado}>
-                    <FieldLabel>Centro de costo</FieldLabel>
-                    <Select
-                      value={bibliotecaForm.centroCostoId || EMPTY_SELECT_VALUE}
-                      onValueChange={(value) =>
-                        setBibliotecaForm((prev) => ({
-                          ...prev,
-                          centroCostoId:
-                            !value || value === EMPTY_SELECT_VALUE ? "" : value,
-                        }))
-                      }
-                      disabled={bibliotecaCentroBloqueado}
-                    >
-                      <SelectTrigger>
-                        <SelectValue>
-                          {bibliotecaForm.centroCostoId
-                            ? (() => {
-                                const centro = allCentrosCosto.find(
-                                  (item) => item.id === bibliotecaForm.centroCostoId,
-                                );
-                                return centro
-                                  ? `${centro.codigo} - ${centro.nombre}`
-                                  : "Centro no disponible";
-                              })()
-                            : "Selecciona centro"}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={EMPTY_SELECT_VALUE}>Sin seleccionar</SelectItem>
-                        {allCentrosCosto.map((centro) => (
-                          <SelectItem key={centro.id} value={centro.id}>
-                            {centro.codigo} - {centro.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-
+                  {!bibliotecaForm.usaNiveles ? (
+                  <>
                   <Field data-disabled={!bibliotecaMaquinaSeleccionada}>
                     <FieldLabel>Perfil operativo (opcional)</FieldLabel>
                     <Select
@@ -3214,8 +3794,12 @@ export function ProcesosPanel({
                               (item) => item.id === nextPerfilId,
                             ) ?? null
                           : null;
-                        const setupFromPerfil = getSetupFromPerfil(perfil);
-                        if (nextPerfilId && setupFromPerfil === undefined) {
+                        const resolvedProfile = resolveMachineProfile(
+                          perfil,
+                          bibliotecaMaquinaSeleccionada,
+                        );
+                        const mappedUnit = resolvedProfile.processUnitMapping;
+                        if (nextPerfilId && resolvedProfile.setupMin === undefined) {
                           toast.warning(
                             `El perfil ${perfil?.nombre ?? ""} no tiene setup configurado.`,
                           );
@@ -3223,11 +3807,17 @@ export function ProcesosPanel({
                         setBibliotecaForm((prev) => ({
                           ...prev,
                           perfilOperativoId: nextPerfilId,
-                          setupMin: nextPerfilId ? setupFromPerfil : prev.setupMin,
+                          setupMin: nextPerfilId ? resolvedProfile.setupMin : prev.setupMin,
+                          cleanupMin: nextPerfilId ? resolvedProfile.cleanupMin : prev.cleanupMin,
                           productividadBase: nextPerfilId
-                            ? (perfil?.productividad ?? prev.productividadBase)
+                            ? (resolvedProfile.productivityValue ?? prev.productividadBase)
                             : prev.productividadBase,
-                          modoProductividad: nextPerfilId ? "fija" : prev.modoProductividad,
+                          unidadSalida:
+                            nextPerfilId && mappedUnit ? mappedUnit.unidadSalida : prev.unidadSalida,
+                          unidadTiempo:
+                            nextPerfilId && mappedUnit ? mappedUnit.unidadTiempo : prev.unidadTiempo,
+                          productividadModoUi: nextPerfilId ? "variable" : prev.productividadModoUi,
+                          modoProductividad: nextPerfilId ? "variable" : prev.modoProductividad,
                         }));
                       }}
                       disabled={!bibliotecaMaquinaSeleccionada}
@@ -3252,6 +3842,20 @@ export function ProcesosPanel({
                     </Select>
                   </Field>
 
+                  {bibliotecaUsaProductividadPerfil &&
+                  bibliotecaPerfilResuelto.extraResolvedFields.length > 0 ? (
+                    <div className="md:col-span-2 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+                      <p className="font-medium text-foreground">Datos absorbidos del perfil</p>
+                      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                        {bibliotecaPerfilResuelto.extraResolvedFields.map((field) => (
+                          <span key={`biblioteca-${field.label}`}>
+                            {field.label}: <span className="font-medium">{field.value}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
                   <Field>
                     <FieldLabel className="inline-flex items-center gap-1">
                       Setup (min)
@@ -3271,6 +3875,7 @@ export function ProcesosPanel({
                         }))
                       }
                     />
+                    {renderProfileAutofillHint(bibliotecaUsaProductividadPerfil)}
                   </Field>
 
                   <Field>
@@ -3287,151 +3892,130 @@ export function ProcesosPanel({
                         }))
                       }
                     />
+                    {renderProfileAutofillHint(bibliotecaUsaProductividadPerfil)}
                   </Field>
 
                   <Field>
                     <FieldLabel className="inline-flex items-center gap-1">
                       Modo productividad
                       {renderTooltipIcon(
-                        "Como se calcula la velocidad del paso: fija (valor unico), formula (segun variables) o tabla (por tramos/condiciones).",
+                        "Define cómo se calcula la duración del paso: fija con tiempo total o variable con valor y unidad de productividad.",
                       )}
                     </FieldLabel>
                     <Select
-                      value={bibliotecaForm.modoProductividad}
+                      value={
+                        bibliotecaUsaProductividadPerfil
+                          ? "variable"
+                          : bibliotecaForm.productividadModoUi
+                      }
                       onValueChange={(value) =>
                         setBibliotecaForm((prev) => ({
                           ...prev,
-                          modoProductividad:
-                            value as ProcesoOperacionPayload["modoProductividad"],
+                          productividadModoUi: value as ProductividadModoUi,
                         }))
                       }
-                      disabled={Boolean(bibliotecaForm.perfilOperativoId)}
+                      disabled={bibliotecaUsaProductividadPerfil}
                     >
                       <SelectTrigger>
                         <SelectValue>
-                          {modoProductividadProcesoItems.find(
-                            (item) => item.value === bibliotecaForm.modoProductividad,
-                          )?.label ?? bibliotecaForm.modoProductividad}
+                          {getProductividadModoUiLabel(
+                            bibliotecaUsaProductividadPerfil
+                              ? "variable"
+                              : bibliotecaForm.productividadModoUi,
+                          )}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        {modoProductividadProcesoItems.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
+                        <SelectItem value="manual">Fija (tiempo total)</SelectItem>
+                        <SelectItem value="variable">Variable (valor + unidad)</SelectItem>
                       </SelectContent>
                     </Select>
                   </Field>
 
-                  <Field>
-                    <FieldLabel>Productividad base</FieldLabel>
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.0001"
-                      value={bibliotecaForm.productividadBase ?? ""}
-                      onChange={(event) =>
+                  {bibliotecaForm.productividadModoUi === "manual" ? (
+                    <Field>
+                      <FieldLabel>Tiempo total (min)</FieldLabel>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={bibliotecaForm.tiempoFijoMin ?? ""}
+                        onChange={(event) =>
+                          setBibliotecaForm((prev) => ({
+                            ...prev,
+                            tiempoFijoMin: toOptionalNumber(event.target.value),
+                          }))
+                        }
+                        disabled={bibliotecaUsaProductividadPerfil}
+                      />
+                    </Field>
+                  ) : (
+                    <>
+                      <Field>
+                        <FieldLabel>Valor productividad</FieldLabel>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.0001"
+                          value={bibliotecaForm.productividadBase ?? ""}
+                          onChange={(event) =>
                         setBibliotecaForm((prev) => ({
                           ...prev,
                           productividadBase: toOptionalNumber(event.target.value),
                         }))
                       }
+                      disabled={bibliotecaUsaProductividadPerfil}
                     />
+                    {renderProfileAutofillHint(bibliotecaUsaProductividadPerfil)}
                   </Field>
 
-                  <Field>
-                    <FieldLabel className="inline-flex items-center gap-1">
-                      Unidad tiempo
-                      {renderTooltipIcon(
-                        "Base temporal de la productividad. Ejemplo: minuto u hora.",
-                      )}
-                    </FieldLabel>
-                    <Select
-                      value={bibliotecaForm.unidadTiempo}
-                      onValueChange={(value) =>
-                        setBibliotecaForm((prev) => ({
-                          ...prev,
-                          unidadTiempo: value as ProcesoOperacionPayload["unidadTiempo"],
-                        }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue>
-                          {getUnidadProcesoLabel(bibliotecaForm.unidadTiempo)}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {unidadProcesoItems.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-
-                  <Field>
-                    <FieldLabel className="inline-flex items-center gap-1">
-                      Unidad entrada
-                      {renderTooltipIcon(
-                        "Unidad del insumo que consume este paso (ej.: hoja, m2, pieza). Puede quedar en No aplica si no interviene en el calculo.",
-                      )}
-                    </FieldLabel>
-                    <Select
-                      value={bibliotecaForm.unidadEntrada}
-                      onValueChange={(value) =>
-                        setBibliotecaForm((prev) => ({
-                          ...prev,
-                          unidadEntrada: value as ProcesoOperacionPayload["unidadEntrada"],
-                        }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue>
-                          {getUnidadProcesoLabel(bibliotecaForm.unidadEntrada)}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {unidadProcesoItems.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-
-                  <Field>
-                    <FieldLabel className="inline-flex items-center gap-1">
-                      Unidad salida
-                      {renderTooltipIcon(
-                        "Unidad de producto resultante del paso (ej.: copia, m2, pieza).",
-                      )}
-                    </FieldLabel>
-                    <Select
-                      value={bibliotecaForm.unidadSalida}
-                      onValueChange={(value) =>
-                        setBibliotecaForm((prev) => ({
-                          ...prev,
-                          unidadSalida: value as ProcesoOperacionPayload["unidadSalida"],
-                        }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue>
-                          {getUnidadProcesoLabel(bibliotecaForm.unidadSalida)}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {unidadProcesoItems.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
+                      <Field>
+                        <FieldLabel className="inline-flex items-center gap-1">
+                          Unidad de productividad
+                          {renderTooltipIcon(
+                            "Define la productividad como unidad compuesta, por ejemplo pag/min, m2/h o unidad/h.",
+                          )}
+                        </FieldLabel>
+                        <Select
+                          value={toProductividadUnidadValue(
+                            bibliotecaForm.unidadSalida,
+                            bibliotecaForm.unidadTiempo,
+                          )}
+                          onValueChange={(value) => {
+                            const option = productividadUnidadItems.find(
+                              (item) => item.value === value,
+                            );
+                            if (!option) {
+                              return;
+                            }
+                            setBibliotecaForm((prev) => ({
+                              ...prev,
+                              unidadSalida: option.unidadSalida,
+                              unidadTiempo: option.unidadTiempo,
+                            }));
+                          }}
+                          disabled={bibliotecaUsaProductividadPerfil}
+                        >
+                          <SelectTrigger>
+                            <SelectValue>
+                              {getProductividadUnidadLabel(
+                                bibliotecaForm.unidadSalida,
+                                bibliotecaForm.unidadTiempo,
+                              )}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {productividadUnidadItems.map((item) => (
+                              <SelectItem key={item.value} value={item.value}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {renderProfileAutofillHint(bibliotecaUsaProductividadPerfil)}
+                      </Field>
+                    </>
+                  )}
 
                   <Field>
                     <FieldLabel className="inline-flex items-center gap-1">
@@ -3454,6 +4038,12 @@ export function ProcesosPanel({
                       }
                     />
                   </Field>
+                  </>
+                  ) : (
+                    <div className="md:col-span-2 rounded-md border border-dashed px-3 py-4 text-sm text-muted-foreground">
+                      Este paso usa variantes. Define la productividad dentro de cada variante y usa esta configuración base solo cuando el paso no tenga variantes.
+                    </div>
+                  )}
 
                   <Field>
                     <FieldLabel>Activa</FieldLabel>

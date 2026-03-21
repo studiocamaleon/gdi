@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
-  LoaderCircleIcon,
   MapPinHouseIcon,
   PlusIcon,
   SaveIcon,
@@ -14,6 +13,7 @@ import {
   UserRoundPlusIcon,
 } from "lucide-react";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { createProveedor, updateProveedor } from "@/lib/proveedores-api";
 import {
   ProveedorContacto,
@@ -398,7 +398,7 @@ export function ProveedorFicha({ proveedor, mode }: ProveedorFichaProps) {
 
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="brand" onClick={handleSave} disabled={isSaving}>
-            {isSaving ? <LoaderCircleIcon className="animate-spin" data-icon="inline-start" /> : <SaveIcon data-icon="inline-start" />}
+            {isSaving ? <GdiSpinner className="size-4" data-icon="inline-start" /> : <SaveIcon data-icon="inline-start" />}
             {mode === "create" ? "Crear proveedor" : "Guardar cambios"}
           </Button>
         </div>

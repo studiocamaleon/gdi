@@ -16,6 +16,10 @@ import {
 export enum PlantillaMaquinariaDto {
   router_cnc = 'router_cnc',
   corte_laser = 'corte_laser',
+  guillotina = 'guillotina',
+  laminadora_bopp_rollo = 'laminadora_bopp_rollo',
+  redondeadora_puntas = 'redondeadora_puntas',
+  perforadora = 'perforadora',
   impresora_3d = 'impresora_3d',
   impresora_dtf = 'impresora_dtf',
   impresora_dtf_uv = 'impresora_dtf_uv',
@@ -66,15 +70,30 @@ export enum UnidadProduccionMaquinaDto {
   piezas_h = 'piezas_h',
   pieza = 'pieza',
   ciclo = 'ciclo',
+  cortes_min = 'cortes_min',
+  golpes_min = 'golpes_min',
+  pliegos_min = 'pliegos_min',
+  m_min = 'm_min',
 }
 
 export enum TipoPerfilOperativoMaquinaDto {
   impresion = 'impresion',
   corte = 'corte',
+  laminado = 'laminado',
   mecanizado = 'mecanizado',
   grabado = 'grabado',
   fabricacion = 'fabricacion',
   mixto = 'mixto',
+}
+
+export enum ModoImpresionPerfilDto {
+  cmyk = 'cmyk',
+  k = 'k',
+}
+
+export enum CarasPerfilDto {
+  simple_faz = 'simple_faz',
+  doble_faz = 'doble_faz',
 }
 
 export enum TipoConsumibleMaquinaDto {
@@ -138,6 +157,10 @@ export enum UnidadDesgasteMaquinaDto {
 }
 
 export class MaquinaPerfilOperativoItemDto {
+  @IsOptional()
+  @IsUUID()
+  id?: string;
+
   @IsString()
   @MinLength(1)
   nombre: string;
@@ -160,26 +183,53 @@ export class MaquinaPerfilOperativoItemDto {
 
   @IsOptional()
   @IsString()
-  modoTrabajo?: string;
+  operationMode?: string;
+
+  @IsOptional()
+  @IsEnum(ModoImpresionPerfilDto)
+  printMode?: ModoImpresionPerfilDto;
+
+  @IsOptional()
+  @IsEnum(CarasPerfilDto)
+  printSides?: CarasPerfilDto;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  productividad?: number;
+  productivityValue?: number;
 
   @IsOptional()
   @IsEnum(UnidadProduccionMaquinaDto)
-  unidadProductividad?: UnidadProduccionMaquinaDto;
+  productivityUnit?: UnidadProduccionMaquinaDto;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  tiempoPreparacionMin?: number;
+  setupMin?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  tiempoRipMin?: number;
+  cleanupMin?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  feedReloadMin?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  sheetThicknessMm?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  maxBatchHeightMm?: number;
+
+  @IsOptional()
+  @IsString()
+  materialPreset?: string;
 
   @IsOptional()
   @Type(() => Number)
@@ -196,6 +246,10 @@ export class MaquinaPerfilOperativoItemDto {
 }
 
 export class MaquinaConsumibleItemDto {
+  @IsOptional()
+  @IsUUID()
+  id?: string;
+
   @IsUUID(undefined, {
     message: 'Selecciona una variante valida para el consumible.',
   })
@@ -222,8 +276,8 @@ export class MaquinaConsumibleItemDto {
   consumoBase?: number;
 
   @IsOptional()
-  @IsString()
-  perfilOperativoNombre?: string;
+  @IsUUID()
+  perfilOperativoId?: string;
 
   @IsBoolean()
   activo: boolean;
@@ -238,6 +292,10 @@ export class MaquinaConsumibleItemDto {
 }
 
 export class MaquinaComponenteDesgasteItemDto {
+  @IsOptional()
+  @IsUUID()
+  id?: string;
+
   @IsUUID(undefined, {
     message: 'Selecciona una variante valida para el componente de desgaste.',
   })

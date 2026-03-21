@@ -11,6 +11,8 @@ import {
   GeometriaTrabajoMaquina,
   PlantillaMaquinaria,
   Prisma,
+  TipoImpresionProductoVariante,
+  CarasProductoVariante,
   TipoComponenteDesgasteMaquina,
   TipoConsumibleMaquina,
   TipoPerfilOperativoMaquina,
@@ -76,6 +78,7 @@ type MaquinaCompleta = Prisma.MaquinaGetPayload<{
 type TemplateCatalogRule = {
   geometry: GeometriaTrabajoMaquinaDto;
   defaultProductionUnit: UnidadProduccionMaquinaDto;
+  allowedProductionUnits?: UnidadProduccionMaquinaDto[];
 };
 
 const TEMPLATE_CATALOG_RULES: Record<
@@ -89,6 +92,26 @@ const TEMPLATE_CATALOG_RULES: Record<
   corte_laser: {
     geometry: GeometriaTrabajoMaquinaDto.plano,
     defaultProductionUnit: UnidadProduccionMaquinaDto.hora,
+  },
+  guillotina: {
+    geometry: GeometriaTrabajoMaquinaDto.pliego,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.cortes_min,
+    allowedProductionUnits: [
+      UnidadProduccionMaquinaDto.cortes_min,
+      UnidadProduccionMaquinaDto.ciclo,
+    ],
+  },
+  laminadora_bopp_rollo: {
+    geometry: GeometriaTrabajoMaquinaDto.rollo,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.metro_lineal,
+  },
+  redondeadora_puntas: {
+    geometry: GeometriaTrabajoMaquinaDto.pliego,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.pieza,
+  },
+  perforadora: {
+    geometry: GeometriaTrabajoMaquinaDto.pliego,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.hoja,
   },
   impresora_3d: {
     geometry: GeometriaTrabajoMaquinaDto.volumen,
@@ -230,6 +253,38 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
   'anguloConicidadMaxima',
   'anchoImprimibleMaximo',
   'altoImprimibleMaximo',
+  'altoBocaMm',
+  'anchoRolloMm',
+  'soportaDobleRollo',
+  'velocidadMmSeg',
+  'velocidadDobleRolloMmSeg',
+  'mermaArranqueMm',
+  'mermaCierreMm',
+  'golpesMinNominal',
+  'maxEspesorPilaMm',
+  'pliegosMinNominal',
+  'lineasPorPasadaMax',
+  'operationMode',
+  'printMode',
+  'printSides',
+  'productivityValue',
+  'productivityUnit',
+  'setupMin',
+  'cleanupMin',
+  'feedReloadMin',
+  'sheetThicknessMm',
+  'maxBatchHeightMm',
+  'materialPreset',
+  'ripMin',
+  'gapEntreHojasMm',
+  'modoLaminado',
+  'velocidadTrabajoMmSeg',
+  'velocidadDobleRolloTrabajoMmSeg',
+  'warmupMin',
+  'esquinasPorPieza',
+  'radio',
+  'lineasPerforado',
+  'tipoPerforado',
 ]);
 
 const ALLOWED_CONSUMABLE_DETAIL_KEYS = new Set(['dependePerfilOperativo', 'color']);
@@ -257,6 +312,10 @@ export class MaquinariaService {
       UnidadProduccionMaquinaDto.ppm,
       UnidadProduccionMaquinaDto.m2_h,
       UnidadProduccionMaquinaDto.piezas_h,
+      UnidadProduccionMaquinaDto.cortes_min,
+      UnidadProduccionMaquinaDto.golpes_min,
+      UnidadProduccionMaquinaDto.pliegos_min,
+      UnidadProduccionMaquinaDto.m_min,
     ]);
 
   constructor(private readonly prisma: PrismaService) {}
@@ -457,58 +516,136 @@ export class MaquinariaService {
     maquinaId: string,
     payload: UpsertMaquinaDto,
   ) {
-    await tx.maquinaConsumible.deleteMany({ where: { tenantId, maquinaId } });
-    await tx.maquinaComponenteDesgaste.deleteMany({
-      where: { tenantId, maquinaId },
-    });
-    await tx.maquinaPerfilOperativo.deleteMany({
-      where: { tenantId, maquinaId },
-    });
+    const [existingPerfiles, existingConsumibles, existingDesgastes] = await Promise.all([
+      tx.maquinaPerfilOperativo.findMany({
+        where: { tenantId, maquinaId },
+        select: { id: true },
+      }),
+      tx.maquinaConsumible.findMany({
+        where: { tenantId, maquinaId },
+        select: { id: true },
+      }),
+      tx.maquinaComponenteDesgaste.findMany({
+        where: { tenantId, maquinaId },
+        select: { id: true },
+      }),
+    ]);
 
-    const perfiles = await Promise.all(
-      payload.perfilesOperativos.map((perfil) =>
-        tx.maquinaPerfilOperativo.create({
+    const existingPerfilIds = new Set(existingPerfiles.map((item) => item.id));
+    const existingConsumibleIds = new Set(existingConsumibles.map((item) => item.id));
+    const existingDesgasteIds = new Set(existingDesgastes.map((item) => item.id));
+
+    const persistedPerfilIds = new Set<string>();
+    const perfilIdMap = new Map<string, string>();
+
+    for (const perfil of payload.perfilesOperativos) {
+      if (perfil.id && existingPerfilIds.has(perfil.id)) {
+        await tx.maquinaPerfilOperativo.update({
+          where: { id: perfil.id },
           data: this.buildPerfilData(tenantId, maquinaId, perfil),
-        }),
-      ),
-    );
+        });
+        persistedPerfilIds.add(perfil.id);
+        perfilIdMap.set(perfil.id, perfil.id);
+        continue;
+      }
 
-    const perfilIdByName = new Map(
-      perfiles.map((perfil) => [perfil.nombre, perfil.id]),
-    );
+      const created = await tx.maquinaPerfilOperativo.create({
+        data: this.buildPerfilData(tenantId, maquinaId, perfil),
+      });
+      persistedPerfilIds.add(created.id);
+      if (perfil.id) {
+        perfilIdMap.set(perfil.id, created.id);
+      }
+    }
 
+    const persistedConsumibleIds = new Set<string>();
     for (const consumible of payload.consumibles) {
-      const perfilOperativoId = consumible.perfilOperativoNombre
-        ? perfilIdByName.get(consumible.perfilOperativoNombre.trim())
-        : undefined;
+      const perfilOperativoId = consumible.perfilOperativoId
+        ? perfilIdMap.get(consumible.perfilOperativoId) ?? null
+        : null;
 
-      if (consumible.perfilOperativoNombre && !perfilOperativoId) {
+      if (consumible.perfilOperativoId && !perfilOperativoId) {
         throw new BadRequestException(
           `El consumible ${consumible.nombre.trim()} referencia un perfil operativo inexistente.`,
         );
       }
 
-      await tx.maquinaConsumible.create({
+      if (consumible.id && existingConsumibleIds.has(consumible.id)) {
+        await tx.maquinaConsumible.update({
+          where: { id: consumible.id },
+          data: this.buildConsumibleData(
+            tenantId,
+            maquinaId,
+            consumible,
+            perfilOperativoId ?? undefined,
+          ),
+        });
+        persistedConsumibleIds.add(consumible.id);
+        continue;
+      }
+
+      const created = await tx.maquinaConsumible.create({
         data: this.buildConsumibleData(
           tenantId,
           maquinaId,
           consumible,
-          perfilOperativoId,
+          perfilOperativoId ?? undefined,
         ),
       });
+      persistedConsumibleIds.add(created.id);
     }
 
-    await Promise.all(
-      payload.componentesDesgaste.map((componente) =>
-        tx.maquinaComponenteDesgaste.create({
+    const persistedDesgasteIds = new Set<string>();
+    for (const componente of payload.componentesDesgaste) {
+      if (componente.id && existingDesgasteIds.has(componente.id)) {
+        await tx.maquinaComponenteDesgaste.update({
+          where: { id: componente.id },
           data: this.buildComponenteDesgasteData(
             tenantId,
             maquinaId,
             componente,
           ),
-        }),
-      ),
-    );
+        });
+        persistedDesgasteIds.add(componente.id);
+        continue;
+      }
+
+      const created = await tx.maquinaComponenteDesgaste.create({
+        data: this.buildComponenteDesgasteData(
+          tenantId,
+          maquinaId,
+          componente,
+        ),
+      });
+      persistedDesgasteIds.add(created.id);
+    }
+
+    const consumiblesToDelete = existingConsumibles
+      .map((item) => item.id)
+      .filter((id) => !persistedConsumibleIds.has(id));
+    if (consumiblesToDelete.length) {
+      await tx.maquinaConsumible.deleteMany({
+        where: { tenantId, maquinaId, id: { in: consumiblesToDelete } },
+      });
+    }
+
+    const desgastesToDelete = existingDesgastes
+      .map((item) => item.id)
+      .filter((id) => !persistedDesgasteIds.has(id));
+    if (desgastesToDelete.length) {
+      await tx.maquinaComponenteDesgaste.deleteMany({
+        where: { tenantId, maquinaId, id: { in: desgastesToDelete } },
+      });
+    }
+
+    const perfilesToDelete = existingPerfiles
+      .map((item) => item.id)
+      .filter((id) => !persistedPerfilIds.has(id));
+    if (perfilesToDelete.length) {
+      await tx.maquinaPerfilOperativo.deleteMany({
+        where: { tenantId, maquinaId, id: { in: perfilesToDelete } },
+      });
+    }
   }
 
   private buildMaquinaWriteData(
@@ -573,15 +710,25 @@ export class MaquinariaService {
       activo: payload.activo,
       anchoAplicable: this.toDecimal(payload.anchoAplicable),
       altoAplicable: this.toDecimal(payload.altoAplicable),
-      modoTrabajo: payload.modoTrabajo?.trim() || null,
-      productividad: this.toDecimal(payload.productividad),
-      unidadProductividad: payload.unidadProductividad
+      operationMode: payload.operationMode?.trim() || null,
+      printMode: payload.printMode
+        ? this.toPrismaEnum<TipoImpresionProductoVariante>(payload.printMode)
+        : null,
+      printSides: payload.printSides
+        ? this.toPrismaEnum<CarasProductoVariante>(payload.printSides)
+        : null,
+      productivityValue: this.toDecimal(payload.productivityValue),
+      productivityUnit: payload.productivityUnit
         ? this.toPrismaEnum<UnidadProduccionMaquina>(
-            payload.unidadProductividad,
+            payload.productivityUnit,
           )
         : null,
-      tiempoPreparacionMin: this.toDecimal(payload.tiempoPreparacionMin),
-      tiempoRipMin: this.toDecimal(payload.tiempoRipMin),
+      setupMin: this.toDecimal(payload.setupMin),
+      cleanupMin: this.toDecimal(payload.cleanupMin),
+      feedReloadMin: this.toDecimal(payload.feedReloadMin),
+      sheetThicknessMm: this.toDecimal(payload.sheetThicknessMm),
+      maxBatchHeightMm: this.toDecimal(payload.maxBatchHeightMm),
+      materialPreset: payload.materialPreset?.trim() || null,
       cantidadPasadas:
         payload.cantidadPasadas !== undefined
           ? Math.round(payload.cantidadPasadas)
@@ -665,10 +812,25 @@ export class MaquinariaService {
 
   private hasCoreCostingData(payload: UpsertMaquinaDto) {
     const hasPerfilValido = payload.perfilesOperativos.some(
-      (perfil) =>
-        Boolean(perfil.nombre?.trim()) &&
-        perfil.productividad !== undefined &&
-        Boolean(perfil.unidadProductividad),
+      (perfil) => {
+        if (!perfil.nombre?.trim()) {
+          return false;
+        }
+        if (payload.plantilla === PlantillaMaquinariaDto.guillotina) {
+          const sheetThicknessMm = Number(perfil.sheetThicknessMm ?? 0);
+          const productivityValue = Number(perfil.productivityValue ?? 0);
+          return (
+            Number.isFinite(sheetThicknessMm) &&
+            sheetThicknessMm > 0 &&
+            Number.isFinite(productivityValue) &&
+            productivityValue > 0
+          );
+        }
+        return (
+          perfil.productivityValue !== undefined &&
+          Boolean(perfil.productivityUnit)
+        );
+      },
     );
     const requireConsumibles = PRINTER_TEMPLATES_WITH_INK_CONSUMPTION.has(
       payload.plantilla,
@@ -719,11 +881,12 @@ export class MaquinariaService {
       );
     }
 
-    if (
-      payload.unidadProduccionPrincipal !== templateRule.defaultProductionUnit
-    ) {
+    const allowedProductionUnits =
+      templateRule.allowedProductionUnits ?? [templateRule.defaultProductionUnit];
+
+    if (!allowedProductionUnits.includes(payload.unidadProduccionPrincipal)) {
       throw new BadRequestException(
-        `La unidad ${payload.unidadProduccionPrincipal} no coincide con la plantilla ${payload.plantilla}. Debe ser ${templateRule.defaultProductionUnit}.`,
+        `La unidad ${payload.unidadProduccionPrincipal} no coincide con la plantilla ${payload.plantilla}. Debe ser una de: ${allowedProductionUnits.join(', ')}.`,
       );
     }
 
@@ -776,6 +939,7 @@ export class MaquinariaService {
     }
 
     const normalizedPerfilNames = new Set<string>();
+    const payloadPerfilIds = new Set<string>();
     for (const perfil of payload.perfilesOperativos) {
       const key = perfil.nombre.trim().toLowerCase();
       if (normalizedPerfilNames.has(key)) {
@@ -783,16 +947,11 @@ export class MaquinariaService {
           `El perfil operativo ${perfil.nombre.trim()} esta duplicado.`,
         );
       }
-
-      if (
-        perfil.unidadProductividad &&
-        !MaquinariaService.COMBINED_PRODUCTIVITY_UNITS.has(
-          perfil.unidadProductividad,
-        )
-      ) {
-        throw new BadRequestException(
-          `El perfil operativo ${perfil.nombre.trim()} debe usar una unidad de productividad combinada (pag/min, m2/h o piezas/h).`,
-        );
+      if (perfil.id) {
+        if (payloadPerfilIds.has(perfil.id)) {
+          throw new BadRequestException(`El perfil operativo ${perfil.nombre.trim()} tiene un id duplicado.`);
+        }
+        payloadPerfilIds.add(perfil.id);
       }
 
       try {
@@ -854,6 +1013,14 @@ export class MaquinariaService {
       if (!variante.materiaPrima.esConsumible) {
         throw new BadRequestException(
           `La materia prima ${variante.materiaPrima.nombre} no esta habilitada como consumible.`,
+        );
+      }
+      if (
+        consumible.perfilOperativoId &&
+        !payloadPerfilIds.has(consumible.perfilOperativoId)
+      ) {
+        throw new BadRequestException(
+          `El consumible ${consumibleName} referencia un perfil operativo inexistente en la carga actual.`,
         );
       }
       for (const detailKey of Object.keys(consumible.detalle ?? {})) {
@@ -1066,15 +1233,25 @@ export class MaquinariaService {
         activo: perfil.activo,
         anchoAplicable: this.toNumber(perfil.anchoAplicable),
         altoAplicable: this.toNumber(perfil.altoAplicable),
-        modoTrabajo: perfil.modoTrabajo ?? '',
-        productividad: this.toNumber(perfil.productividad),
-        unidadProductividad: perfil.unidadProductividad
+        operationMode: perfil.operationMode ?? '',
+        printMode: perfil.printMode
+          ? (this.toApiEnum(perfil.printMode) as 'cmyk' | 'k')
+          : '',
+        printSides: perfil.printSides
+          ? (this.toApiEnum(perfil.printSides) as 'simple_faz' | 'doble_faz')
+          : '',
+        productivityValue: this.toNumber(perfil.productivityValue),
+        productivityUnit: perfil.productivityUnit
           ? (this.toApiEnum(
-              perfil.unidadProductividad,
+              perfil.productivityUnit,
             ) as UnidadProduccionMaquinaDto)
           : '',
-        tiempoPreparacionMin: this.toNumber(perfil.tiempoPreparacionMin),
-        tiempoRipMin: this.toNumber(perfil.tiempoRipMin),
+        setupMin: this.toNumber(perfil.setupMin),
+        cleanupMin: this.toNumber(perfil.cleanupMin),
+        feedReloadMin: this.toNumber(perfil.feedReloadMin),
+        sheetThicknessMm: this.toNumber(perfil.sheetThicknessMm),
+        maxBatchHeightMm: this.toNumber(perfil.maxBatchHeightMm),
+        materialPreset: perfil.materialPreset ?? '',
         setupEstimadoMin: this.computeSetupEstimadoPerfil(perfil),
         cantidadPasadas: perfil.cantidadPasadas ?? null,
         dobleFaz: perfil.dobleFaz,
@@ -1217,8 +1394,8 @@ export class MaquinariaService {
 
   private computeSetupEstimadoPerfil(
     perfil: {
-      tiempoPreparacionMin: Prisma.Decimal | null;
-      tiempoRipMin: Prisma.Decimal | null;
+      setupMin: Prisma.Decimal | null;
+      cleanupMin: Prisma.Decimal | null;
       detalleJson: Prisma.JsonValue | null;
     },
   ) {
@@ -1229,26 +1406,54 @@ export class MaquinariaService {
         ? (perfil.detalleJson as Record<string, unknown>)
         : {};
 
-    const setupDirecto =
-      this.toNumber(perfil.tiempoPreparacionMin) ??
-      this.parseFiniteNumber(detalle.tiempoPreparacionMin) ??
-      this.parseFiniteNumber(detalle.tiempoSetupMin) ??
-      this.parseFiniteNumber(detalle.setupMin) ??
-      this.parseFiniteNumber(detalle.setup);
-    if (setupDirecto !== null) {
-      return setupDirecto;
-    }
-
     const partes = [
-      this.toNumber(perfil.tiempoRipMin) ??
-        this.parseFiniteNumber(detalle.tiempoRipMin),
-    ].filter((value): value is number => value !== null);
+      this.toNumber(perfil.setupMin),
+      this.toNumber(perfil.cleanupMin),
+      ...this.collectExtraSetupMin(detalle),
+    ].filter((value): value is number => value !== null && value > 0);
 
     if (!partes.length) {
       return null;
     }
 
     return Number(partes.reduce((acc, item) => acc + item, 0).toFixed(4));
+  }
+
+  private collectExtraSetupMin(detalle: Record<string, unknown>) {
+    const extras: number[] = [];
+    const parseNumber = (value: unknown) => this.parseFiniteNumber(value);
+
+    const objectCandidates = [
+      detalle.setupComponentesMin,
+      detalle.setupExtraComponentesMin,
+      detalle.tiemposSetupExtraMin,
+    ];
+    for (const candidate of objectCandidates) {
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+        continue;
+      }
+      for (const value of Object.values(candidate as Record<string, unknown>)) {
+        const parsed = parseNumber(value);
+        if (parsed !== null && parsed > 0) {
+          extras.push(parsed);
+        }
+      }
+    }
+
+    const arrayCandidates = [detalle.setupExtrasMin, detalle.tiemposExtraSetupMin];
+    for (const candidate of arrayCandidates) {
+      if (!Array.isArray(candidate)) {
+        continue;
+      }
+      for (const value of candidate) {
+        const parsed = parseNumber(value);
+        if (parsed !== null && parsed > 0) {
+          extras.push(parsed);
+        }
+      }
+    }
+
+    return extras;
   }
 
   private normalizeString(value: unknown) {

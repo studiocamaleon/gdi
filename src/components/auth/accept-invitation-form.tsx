@@ -2,9 +2,10 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2Icon, LoaderCircleIcon } from "lucide-react";
+import { CheckCircle2Icon } from "lucide-react";
 
 import { acceptInvitation, type InvitationState } from "@/lib/auth";
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { setSessionToken } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import {
@@ -112,7 +113,7 @@ export function AcceptInvitationForm({
 
           <Button type="submit" variant="brand" className="w-full" disabled={isSubmitting}>
             {isSubmitting ? (
-              <LoaderCircleIcon className="animate-spin" />
+              <GdiSpinner className="size-4" />
             ) : (
               <CheckCircle2Icon />
             )}

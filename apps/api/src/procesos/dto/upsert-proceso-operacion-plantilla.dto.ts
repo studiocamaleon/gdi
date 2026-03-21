@@ -8,9 +8,11 @@ import {
   IsString,
   IsUUID,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
 import {
   ModoProductividadProcesoDto,
+  ProcesoOperacionNivelDto,
   TipoOperacionProcesoDto,
   UnidadProcesoDto,
 } from './upsert-proceso.dto';
@@ -44,6 +46,11 @@ export class UpsertProcesoOperacionPlantillaDto {
   @Type(() => Number)
   @IsNumber()
   cleanupMin?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  tiempoFijoMin?: number;
 
   @IsOptional()
   @IsEnum(ModoProductividadProcesoDto)
@@ -82,6 +89,11 @@ export class UpsertProcesoOperacionPlantillaDto {
   @IsOptional()
   @IsString()
   observaciones?: string;
+
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => ProcesoOperacionNivelDto)
+  niveles?: ProcesoOperacionNivelDto[];
 
   @IsBoolean()
   activo: boolean;

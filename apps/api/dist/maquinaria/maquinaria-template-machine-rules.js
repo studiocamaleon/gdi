@@ -17,6 +17,18 @@ const RULES = {
     [upsert_maquina_dto_1.PlantillaMaquinariaDto.corte_laser]: {
         requiredMachineKeys: ['ejeXUtil', 'ejeYUtil', 'tipoLaser'],
     },
+    [upsert_maquina_dto_1.PlantillaMaquinariaDto.guillotina]: {
+        requiredMachineKeys: ['altoBocaMm'],
+    },
+    [upsert_maquina_dto_1.PlantillaMaquinariaDto.laminadora_bopp_rollo]: {
+        requiredMachineKeys: ['anchoRolloMm', 'velocidadMmSeg', 'mermaArranqueMm', 'mermaCierreMm'],
+    },
+    [upsert_maquina_dto_1.PlantillaMaquinariaDto.redondeadora_puntas]: {
+        requiredMachineKeys: ['golpesMinNominal', 'maxEspesorPilaMm'],
+    },
+    [upsert_maquina_dto_1.PlantillaMaquinariaDto.perforadora]: {
+        requiredMachineKeys: ['pliegosMinNominal', 'lineasPorPasadaMax'],
+    },
     [upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_3d]: {
         requiredMachineKeys: ['volumenX', 'volumenY', 'volumenZ', 'tecnologia'],
     },

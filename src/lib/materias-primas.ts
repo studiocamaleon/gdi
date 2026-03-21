@@ -83,6 +83,10 @@ export type UnidadMateriaPrima =
 export type PlantillaMaquinaria =
   | "router_cnc"
   | "corte_laser"
+  | "guillotina"
+  | "laminadora_bopp_rollo"
+  | "redondeadora_puntas"
+  | "perforadora"
   | "impresora_3d"
   | "impresora_dtf"
   | "impresora_dtf_uv"

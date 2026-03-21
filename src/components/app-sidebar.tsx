@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -96,6 +95,11 @@ const costos = [
     href: "/costos/procesos",
     icon: WorkflowIcon,
   },
+  {
+    title: "Catalogo de productos",
+    href: "/costos/productos-servicios",
+    icon: BoxesIcon,
+  },
 ];
 
 const inventario = [
@@ -119,6 +123,95 @@ const inventario = [
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   currentUser: CurrentUser;
 };
+
+function SidebarBrandLogo({
+  className,
+}: {
+  className?: string;
+}) {
+  return (
+    <svg
+      width="677"
+      height="369"
+      viewBox="0 0 677 369"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+    >
+      <defs>
+        <linearGradient id="gdi-cyan-inline" x1="124" y1="57" x2="192" y2="153" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#28B8F2" />
+          <stop offset="1" stopColor="#1295D0" />
+        </linearGradient>
+        <linearGradient id="gdi-magenta-inline" x1="218" y1="56" x2="290" y2="151" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#FF0D96" />
+          <stop offset="1" stopColor="#DD007D" />
+        </linearGradient>
+        <linearGradient id="gdi-yellow-inline" x1="123" y1="151" x2="189" y2="252" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#FFF100" />
+          <stop offset="1" stopColor="#F5DD00" />
+        </linearGradient>
+        <linearGradient id="gdi-black-inline" x1="219" y1="153" x2="286" y2="247" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#1D1D1B" />
+          <stop offset="1" stopColor="#000000" />
+        </linearGradient>
+        <filter id="soft-shadow-inline" x="92" y="28" width="232" height="254" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB">
+          <feDropShadow dx="0" dy="4" stdDeviation="10" floodColor="#000000" floodOpacity="0.18" />
+        </filter>
+      </defs>
+
+      <g filter="url(#soft-shadow-inline)">
+        <g className="cmyk-bubbles">
+          <circle className="cmyk-bubble" cx="152.5" cy="96.5" r="49.5" fill="url(#gdi-cyan-inline)" />
+          <circle className="cmyk-bubble" cx="247.5" cy="96.5" r="49.5" fill="url(#gdi-magenta-inline)" />
+          <circle className="cmyk-bubble" cx="152.5" cy="191.5" r="49.5" fill="url(#gdi-yellow-inline)" />
+          <circle className="cmyk-bubble" cx="247.5" cy="191.5" r="49.5" fill="url(#gdi-black-inline)" />
+        </g>
+
+        <g className="core-bubbles">
+          <circle className="core-bubble" cx="200" cy="96.5" r="16" fill="#5F5F78" fillOpacity="0.26" />
+          <circle className="core-bubble" cx="200" cy="191.5" r="16" fill="#5F5F78" fillOpacity="0.26" />
+          <circle className="core-bubble" cx="152.5" cy="144" r="16" fill="#5F5F78" fillOpacity="0.18" />
+          <circle className="core-bubble" cx="247.5" cy="144" r="16" fill="#5F5F78" fillOpacity="0.18" />
+          <circle className="core-bubble" cx="200" cy="144" r="20" fill="#4A4A57" fillOpacity="0.18" />
+        </g>
+      </g>
+
+      <g fill="#FAFAF8">
+        <text
+          x="332"
+          y="161"
+          fontFamily="Montserrat, Avenir Next, Poppins, Arial, sans-serif"
+          fontSize="126"
+          fontWeight="700"
+          letterSpacing="0.5"
+        >
+          GDI
+        </text>
+        <text
+          x="334"
+          y="206"
+          fontFamily="Montserrat, Avenir Next, Poppins, Arial, sans-serif"
+          fontSize="40"
+          fontWeight="500"
+          letterSpacing="-0.2"
+        >
+          grafica digital
+        </text>
+        <text
+          x="334"
+          y="244"
+          fontFamily="Montserrat, Avenir Next, Poppins, Arial, sans-serif"
+          fontSize="40"
+          fontWeight="500"
+          letterSpacing="-0.2"
+        >
+          inteligente
+        </text>
+      </g>
+    </svg>
+  );
+}
 
 function matchesRoute(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -188,27 +281,116 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
 
   return (
     <Sidebar collapsible="icon" variant="inset" {...props}>
-      <SidebarHeader className="gap-3 border-b border-sidebar-border/70 px-2 py-3">
+      <SidebarHeader className="gap-1 border-b border-sidebar-border/70 px-2 py-2">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
               render={<Link href="/" />}
               size="lg"
               tooltip="GDI ERP"
-              className="h-auto min-h-32 justify-center bg-transparent px-0 py-0 hover:bg-transparent"
+              className="logo-hover-target h-auto min-h-32 justify-center bg-transparent px-1 py-0.5 hover:bg-transparent"
             >
-              <Image
-                src="/brand/logo-saas.svg"
-                alt="Logo del SaaS"
-                width={640}
-                height={168}
-                className="h-28 w-full max-w-[420px] object-contain object-center group-data-[collapsible=icon]:h-12 group-data-[collapsible=icon]:w-auto"
-                priority
+              <SidebarBrandLogo
+                className="sidebar-logo !block !h-34 !w-full max-w-[460px] object-contain object-center transition-transform duration-300 ease-out group-data-[collapsible=icon]:!h-16 group-data-[collapsible=icon]:!w-auto"
               />
               <span className="sr-only">Inicio</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+        <style jsx global>{`
+          .sidebar-logo .cmyk-bubble {
+            transform-box: fill-box;
+            transform-origin: center;
+          }
+          .sidebar-logo .core-bubbles {
+            transform-origin: 200px 144px;
+          }
+          .sidebar-logo .core-bubble {
+            transform-box: fill-box;
+            transform-origin: center;
+          }
+          .logo-hover-target:hover .sidebar-logo {
+            transform: translateY(-2px) scale(1.03);
+          }
+          .logo-hover-target:hover .sidebar-logo .cmyk-bubble {
+            animation-name: sidebar-cmyk-pulse;
+            animation-duration: 1.8s;
+            animation-timing-function: ease-in-out;
+            animation-iteration-count: infinite;
+          }
+          .logo-hover-target:hover .sidebar-logo .cmyk-bubble:nth-child(1) {
+            animation-delay: 0s;
+          }
+          .logo-hover-target:hover .sidebar-logo .cmyk-bubble:nth-child(2) {
+            animation-delay: 0.2s;
+          }
+          .logo-hover-target:hover .sidebar-logo .cmyk-bubble:nth-child(3) {
+            animation-delay: 0.35s;
+          }
+          .logo-hover-target:hover .sidebar-logo .cmyk-bubble:nth-child(4) {
+            animation-delay: 0.5s;
+          }
+          .logo-hover-target:hover .sidebar-logo .core-bubbles {
+            animation-name: sidebar-core-orbit-hover;
+            animation-duration: 1.4s;
+            animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+            animation-iteration-count: infinite;
+          }
+          .logo-hover-target:hover .sidebar-logo .core-bubble {
+            animation-name: sidebar-core-pulse;
+            animation-duration: 1.1s;
+            animation-timing-function: ease-in-out;
+            animation-iteration-count: infinite;
+          }
+          .logo-hover-target:hover .sidebar-logo .core-bubble:nth-child(1) {
+            animation-delay: 0s;
+          }
+          .logo-hover-target:hover .sidebar-logo .core-bubble:nth-child(2) {
+            animation-delay: 0.2s;
+          }
+          .logo-hover-target:hover .sidebar-logo .core-bubble:nth-child(3) {
+            animation-delay: 0.35s;
+          }
+          .logo-hover-target:hover .sidebar-logo .core-bubble:nth-child(4) {
+            animation-delay: 0.5s;
+          }
+          .logo-hover-target:hover .sidebar-logo .core-bubble:nth-child(5) {
+            animation-delay: 0.7s;
+          }
+          @keyframes sidebar-core-orbit-hover {
+            0% {
+              transform: rotate(0deg);
+            }
+            40% {
+              transform: rotate(16deg);
+            }
+            100% {
+              transform: rotate(0deg);
+            }
+          }
+          @keyframes sidebar-core-pulse {
+            0%,
+            100% {
+              opacity: 0.88;
+              transform: scale(1);
+            }
+            50% {
+              opacity: 1;
+              transform: scale(1.08);
+            }
+          }
+          @keyframes sidebar-cmyk-pulse {
+            0%,
+            100% {
+              transform: scale(1) translateY(0px);
+              filter: saturate(1);
+            }
+            50% {
+              transform: scale(1.1) translateY(-3px);
+              filter: saturate(1.2);
+            }
+          }
+        `}</style>
       </SidebarHeader>
 
       <SidebarContent className="gap-1 px-2 py-4">

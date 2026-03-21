@@ -2,8 +2,9 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { EyeIcon, EyeOffIcon, LoaderCircleIcon, LogInIcon } from "lucide-react";
+import { EyeIcon, EyeOffIcon, LogInIcon } from "lucide-react";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { login } from "@/lib/auth";
 import { setSessionToken } from "@/lib/session";
 import { CmykLoginTransition } from "@/components/auth/cmyk-login-transition";
@@ -134,7 +135,7 @@ export function LoginForm() {
           disabled={isSubmitting}
         >
           {isSubmitting ? (
-            <LoaderCircleIcon className="animate-spin" />
+            <GdiSpinner className="size-4" />
           ) : (
             <LogInIcon />
           )}

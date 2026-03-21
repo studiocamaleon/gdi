@@ -7,7 +7,6 @@ import {
   CalculatorIcon,
   CopyIcon,
   InfoIcon,
-  LoaderCircleIcon,
   PlusIcon,
   SaveIcon,
   SparklesIcon,
@@ -15,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import {
   calcularTarifaCentroCosto,
   getCentroCostoConfiguracion,
@@ -1334,7 +1334,7 @@ export function CentroCostoConfigurator({
             <SheetDescription>Cargando centro de costo...</SheetDescription>
           </SheetHeader>
           <div className="flex min-h-40 items-center justify-center">
-            <LoaderCircleIcon className="animate-spin" />
+            <GdiSpinner className="size-4" />
           </div>
         </SheetContent>
       </Sheet>
@@ -3292,7 +3292,7 @@ export function CentroCostoConfigurator({
 
           {isLoading ? (
             <div className="flex min-h-56 items-center justify-center">
-              <LoaderCircleIcon className="animate-spin" />
+              <GdiSpinner className="size-4" />
             </div>
           ) : (
             renderStepContent()
@@ -3349,7 +3349,7 @@ export function CentroCostoConfigurator({
                 onClick={handleSaveDraft}
                 disabled={isSaving}
               >
-                {isSaving ? <LoaderCircleIcon className="animate-spin" /> : <SaveIcon />}
+                {isSaving ? <GdiSpinner className="size-4" /> : <SaveIcon />}
                 Guardar borrador
               </Button>
               <Button
@@ -3359,7 +3359,7 @@ export function CentroCostoConfigurator({
                 disabled={isSaving}
               >
                 {isSaving ? (
-                  <LoaderCircleIcon className="animate-spin" />
+                  <GdiSpinner className="size-4" />
                 ) : (
                   <SparklesIcon />
                 )}
@@ -3400,7 +3400,7 @@ export function CentroCostoConfigurator({
                 disabled={isSaving}
               >
                 {isSaving ? (
-                  <LoaderCircleIcon className="animate-spin" />
+                  <GdiSpinner className="size-4" />
                 ) : (
                   <CalculatorIcon />
                 )}
