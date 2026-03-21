@@ -1,6 +1,8 @@
+import dynamicImport from "next/dynamic";
+import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 
-import { ProductoServicioFichaTabs } from "@/components/productos-servicios/producto-servicio-ficha-tabs";
+import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
 import { ApiError } from "@/lib/api";
 import { getClientes } from "@/lib/clientes-api";
 import { getMaquinas } from "@/lib/maquinaria-api";
@@ -16,6 +18,16 @@ import {
   getSubfamiliasProducto,
 } from "@/lib/productos-servicios-api";
 
+const ProductoServicioFichaTabs = dynamicImport(
+  () =>
+    import("@/components/productos-servicios/producto-servicio-ficha-tabs").then(
+      (module) => module.ProductoServicioFichaTabs,
+    ),
+  {
+    loading: () => <ModulePageSkeleton variant="detail" />,
+  },
+);
+
 export const dynamic = "force-dynamic";
 
 type ProductoServicioDetallePageProps = {
@@ -25,6 +37,16 @@ type ProductoServicioDetallePageProps = {
 };
 
 export default async function ProductoServicioDetallePage({
+  params,
+}: ProductoServicioDetallePageProps) {
+  return (
+    <Suspense fallback={<ModulePageSkeleton variant="detail" />}>
+      <ProductoServicioDetallePageContent params={params} />
+    </Suspense>
+  );
+}
+
+async function ProductoServicioDetallePageContent({
   params,
 }: ProductoServicioDetallePageProps) {
   const { productoId } = await params;

@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ChevronDownIcon,
@@ -11,6 +10,8 @@ import {
   Trash2Icon,
 } from "lucide-react";
 
+import { NavLink } from "@/components/navigation/nav-link";
+import { useNavigationFeedback } from "@/components/navigation/navigation-feedback";
 import { deleteProveedor } from "@/lib/proveedores-api";
 import { ProveedorDetalle } from "@/lib/proveedores";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,7 @@ function buildCsv(proveedores: ProveedorDetalle[]) {
 
 export function ProveedoresTable({ initialProveedores }: ProveedoresTableProps) {
   const router = useRouter();
+  const { startNavigation } = useNavigationFeedback();
   const [proveedores, setProveedores] = React.useState(initialProveedores);
   const [selectedProveedores, setSelectedProveedores] = React.useState<Set<string>>(
     new Set(),
@@ -98,6 +100,7 @@ export function ProveedoresTable({ initialProveedores }: ProveedoresTableProps) 
       return;
     }
 
+    startNavigation(`/proveedores/${selectedRows[0].id}`);
     router.push(`/proveedores/${selectedRows[0].id}`);
   };
 
@@ -200,7 +203,7 @@ export function ProveedoresTable({ initialProveedores }: ProveedoresTableProps) 
                 variant="brand"
                 className="w-full sm:w-auto"
                 nativeButton={false}
-                render={<Link href="/proveedores/nuevo" />}
+                render={<NavLink href="/proveedores/nuevo" />}
               >
                 <PlusIcon data-icon="inline-start" />
                 Nuevo proveedor
@@ -246,12 +249,12 @@ export function ProveedoresTable({ initialProveedores }: ProveedoresTableProps) 
                       />
                     </TableCell>
                     <TableCell className="font-medium">
-                      <Link
+                      <NavLink
                         href={`/proveedores/${proveedor.id}`}
                         className="underline-offset-4 hover:underline"
                       >
                         {proveedor.nombre}
-                      </Link>
+                      </NavLink>
                     </TableCell>
                     <TableCell>{proveedor.razonSocial}</TableCell>
                     <TableCell>{proveedor.contacto}</TableCell>

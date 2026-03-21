@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
@@ -14,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
+import { NavLink } from "@/components/navigation/nav-link";
 import { createProveedor, updateProveedor } from "@/lib/proveedores-api";
 import {
   ProveedorContacto,
@@ -375,7 +375,7 @@ export function ProveedorFicha({ proveedor, mode }: ProveedorFichaProps) {
             nativeButton={false}
             size="sm"
             className="w-fit"
-            render={<Link href="/proveedores" />}
+            render={<NavLink href="/proveedores" />}
           >
             <ArrowLeftIcon data-icon="inline-start" />
             Volver a proveedores

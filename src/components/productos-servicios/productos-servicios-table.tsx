@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { PlusIcon } from "lucide-react";
 import { toast } from "sonner";
 
+import { NavLink } from "@/components/navigation/nav-link";
+import { useNavigationFeedback } from "@/components/navigation/navigation-feedback";
 import { createProductoServicio } from "@/lib/productos-servicios-api";
 import type {
   EstadoProductoServicio,
@@ -91,6 +93,7 @@ export function ProductosServiciosTable({
   motores,
 }: ProductosServiciosTableProps) {
   const router = useRouter();
+  const { startNavigation } = useNavigationFeedback();
   const [productos, setProductos] = React.useState(initialProductos);
   const [openCreate, setOpenCreate] = React.useState(false);
   const [isSaving, startSaving] = React.useTransition();
@@ -165,6 +168,7 @@ export function ProductosServiciosTable({
         setProductos((prev) => [...prev, created].sort((a, b) => a.nombre.localeCompare(b.nombre)));
         setOpenCreate(false);
         toast.success("Producto creado.");
+        startNavigation(`/costos/productos-servicios/${created.id}`);
         router.push(`/costos/productos-servicios/${created.id}`);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "No se pudo crear el registro.");
@@ -181,7 +185,8 @@ export function ProductosServiciosTable({
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.push("/costos/productos-servicios/familias")}
+              nativeButton={false}
+              render={<NavLink href="/costos/productos-servicios/familias" />}
             >
               Editar familias
             </Button>
@@ -207,7 +212,10 @@ export function ProductosServiciosTable({
                 <TableRow
                   key={item.id}
                   className="cursor-pointer"
-                  onClick={() => router.push(`/costos/productos-servicios/${item.id}`)}
+                  onClick={() => {
+                    startNavigation(`/costos/productos-servicios/${item.id}`);
+                    router.push(`/costos/productos-servicios/${item.id}`);
+                  }}
                 >
                   <TableCell>{item.codigo}</TableCell>
                   <TableCell className="font-medium">{item.nombre}</TableCell>

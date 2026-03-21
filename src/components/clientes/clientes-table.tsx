@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ChevronDownIcon,
@@ -11,6 +10,8 @@ import {
   Trash2Icon,
 } from "lucide-react";
 
+import { NavLink } from "@/components/navigation/nav-link";
+import { useNavigationFeedback } from "@/components/navigation/navigation-feedback";
 import { deleteCliente } from "@/lib/clientes-api";
 import { ClienteDetalle } from "@/lib/clientes";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,7 @@ function buildCsv(clientes: ClienteDetalle[]) {
 
 export function ClientesTable({ initialClientes }: ClientesTableProps) {
   const router = useRouter();
+  const { startNavigation } = useNavigationFeedback();
   const [clientes, setClientes] = React.useState(initialClientes);
   const [selectedClientes, setSelectedClientes] = React.useState<Set<string>>(
     new Set(),
@@ -98,6 +100,7 @@ export function ClientesTable({ initialClientes }: ClientesTableProps) {
       return;
     }
 
+    startNavigation(`/clientes/${selectedRows[0].id}`);
     router.push(`/clientes/${selectedRows[0].id}`);
   };
 
@@ -200,7 +203,7 @@ export function ClientesTable({ initialClientes }: ClientesTableProps) {
                 variant="brand"
                 className="w-full sm:w-auto"
                 nativeButton={false}
-                render={<Link href="/clientes/nuevo" />}
+                render={<NavLink href="/clientes/nuevo" />}
               >
                 <PlusIcon data-icon="inline-start" />
                 Nuevo cliente
@@ -246,12 +249,12 @@ export function ClientesTable({ initialClientes }: ClientesTableProps) {
                       />
                     </TableCell>
                     <TableCell className="font-medium">
-                      <Link
+                      <NavLink
                         href={`/clientes/${cliente.id}`}
                         className="underline-offset-4 hover:underline"
                       >
                         {cliente.nombre}
-                      </Link>
+                      </NavLink>
                     </TableCell>
                     <TableCell>{cliente.razonSocial}</TableCell>
                     <TableCell>{cliente.contacto}</TableCell>

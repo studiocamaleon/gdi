@@ -1,4 +1,7 @@
+import { Suspense } from "react";
+
 import { ProductosServiciosTable } from '@/components/productos-servicios/productos-servicios-table';
+import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
 import {
   getFamiliasProducto,
   getMotoresCostoCatalogo,
@@ -8,7 +11,15 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-export default async function ProductosServiciosPage() {
+export default function ProductosServiciosPage() {
+  return (
+    <Suspense fallback={<ModulePageSkeleton variant="table" />}>
+      <ProductosServiciosPageContent />
+    </Suspense>
+  );
+}
+
+async function ProductosServiciosPageContent() {
   const [
     productos,
     familias,

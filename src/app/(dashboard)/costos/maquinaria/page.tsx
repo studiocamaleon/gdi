@@ -1,10 +1,31 @@
+import dynamicImport from "next/dynamic";
+import { Suspense } from "react";
+
 import { getCentrosCosto, getPlantas } from "@/lib/costos-api";
 import { getMaquinas } from "@/lib/maquinaria-api";
-import { MaquinariaPanel } from "@/components/costos/maquinaria-panel";
+import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
+
+const MaquinariaPanel = dynamicImport(
+  () =>
+    import("@/components/costos/maquinaria-panel").then(
+      (module) => module.MaquinariaPanel,
+    ),
+  {
+    loading: () => <ModulePageSkeleton variant="workspace" />,
+  },
+);
 
 export const dynamic = "force-dynamic";
 
-export default async function MaquinariaPage() {
+export default function MaquinariaPage() {
+  return (
+    <Suspense fallback={<ModulePageSkeleton variant="workspace" />}>
+      <MaquinariaPageContent />
+    </Suspense>
+  );
+}
+
+async function MaquinariaPageContent() {
   const [maquinas, plantas, centrosCosto] = await Promise.all([
     getMaquinas(),
     getPlantas(),

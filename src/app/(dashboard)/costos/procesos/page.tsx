@@ -1,11 +1,32 @@
+import dynamicImport from "next/dynamic";
+import { Suspense } from "react";
+
 import { getCentrosCosto } from "@/lib/costos-api";
 import { getMaquinas } from "@/lib/maquinaria-api";
 import { getProcesoOperacionPlantillas, getProcesos } from "@/lib/procesos-api";
-import { ProcesosPanel } from "@/components/costos/procesos-panel";
+import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
+
+const ProcesosPanel = dynamicImport(
+  () =>
+    import("@/components/costos/procesos-panel").then(
+      (module) => module.ProcesosPanel,
+    ),
+  {
+    loading: () => <ModulePageSkeleton variant="workspace" />,
+  },
+);
 
 export const dynamic = "force-dynamic";
 
-export default async function ProcesosPage() {
+export default function ProcesosPage() {
+  return (
+    <Suspense fallback={<ModulePageSkeleton variant="workspace" />}>
+      <ProcesosPageContent />
+    </Suspense>
+  );
+}
+
+async function ProcesosPageContent() {
   const [procesos, centrosCosto, maquinas] = await Promise.all([
     getProcesos(),
     getCentrosCosto(),

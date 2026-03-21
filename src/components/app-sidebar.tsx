@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ArrowLeftRightIcon,
@@ -21,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { type CurrentUser } from "@/lib/auth";
+import { NavLink } from "@/components/navigation/nav-link";
 import {
   Collapsible,
   CollapsibleContent,
@@ -295,7 +295,7 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              render={<Link href="/" />}
+              render={<NavLink href="/" />}
               size="lg"
               tooltip="GDI ERP"
               className="logo-hover-target h-auto min-h-32 justify-center bg-transparent px-1 py-0.5 hover:bg-transparent"
@@ -407,7 +407,7 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              render={<Link href="/" />}
+              render={<NavLink href="/" />}
               isActive={isDashboard}
               tooltip="Panel general"
               className="font-medium"
@@ -446,7 +446,7 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
                   {registros.map((item) => (
                     <SidebarMenuSubItem key={item.title}>
                       <SidebarMenuSubButton
-                        render={<Link href={item.href} />}
+                        render={<NavLink href={item.href} />}
                         isActive={matchesRoute(pathname, item.href)}
                       >
                         <item.icon />
@@ -486,7 +486,7 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
                   {costos.map((item) => (
                     <SidebarMenuSubItem key={item.title}>
                       <SidebarMenuSubButton
-                        render={<Link href={item.href} />}
+                        render={<NavLink href={item.href} />}
                         isActive={matchesRoute(pathname, item.href)}
                       >
                         <item.icon />
@@ -526,7 +526,7 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
                   {inventario.map((item) => (
                     <SidebarMenuSubItem key={item.title}>
                       <SidebarMenuSubButton
-                        render={<Link href={item.href} />}
+                        render={<NavLink href={item.href} />}
                         isActive={matchesRoute(pathname, item.href)}
                       >
                         <item.icon />

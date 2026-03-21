@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
@@ -16,6 +15,7 @@ import {
 import { toast } from "sonner";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
+import { NavLink } from "@/components/navigation/nav-link";
 import {
   createEmpleado,
   inviteEmpleadoAccess,
@@ -446,7 +446,7 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
             nativeButton={false}
             size="sm"
             className="w-fit"
-            render={<Link href="/empleados" />}
+            render={<NavLink href="/empleados" />}
           >
             <ArrowLeftIcon data-icon="inline-start" />
             Volver a empleados

@@ -1442,6 +1442,8 @@ export function ProductoServicioFichaTabs({
   maquinas,
 }: ProductoServicioFichaTabsProps) {
   const measurementUnitFallback = producto.unidadComercial?.trim() || "unidad";
+  const [activeTab, setActiveTab] = React.useState("general");
+  const [mountedTabs, setMountedTabs] = React.useState<string[]>(["general"]);
   const [productoState, setProductoState] = React.useState(producto);
   const clientesOptions = React.useMemo(
     () => [...initialClientes].sort((a, b) => a.nombre.localeCompare(b.nombre)),
@@ -1523,6 +1525,10 @@ export function ProductoServicioFichaTabs({
 
   const [variantes, setVariantes] = React.useState(initialVariantes);
   const [productoChecklist, setProductoChecklist] = React.useState(checklist);
+
+  React.useEffect(() => {
+    setMountedTabs((prev) => (prev.includes(activeTab) ? prev : [...prev, activeTab]));
+  }, [activeTab]);
   const [selectedVarianteId, setSelectedVarianteId] = React.useState(initialVariantes[0]?.id ?? "");
   const selectedVariante = React.useMemo(
     () => variantes.find((item) => item.id === selectedVarianteId) ?? null,
@@ -3503,7 +3509,7 @@ export function ProductoServicioFichaTabs({
         <Badge variant={productoState.estado === "activo" ? "default" : "secondary"}>{estadoProductoLabel}</Badge>
       </div>
 
-      <Tabs defaultValue="general" className="flex flex-col gap-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col gap-4">
         <TabsList className="h-auto gap-1 rounded-lg bg-muted/70 p-1.5">
           <TabsTrigger value="general" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">General</TabsTrigger>
           <TabsTrigger value="variantes" className="cursor-pointer rounded-md px-4 py-2.5 text-sm font-medium transition-transform duration-150 hover:scale-[1.02] data-active:scale-100 data-active:bg-orange-600 data-active:text-white data-active:font-bold data-active:hover:bg-orange-600 data-active:hover:text-white">Variantes</TabsTrigger>
@@ -3643,6 +3649,7 @@ export function ProductoServicioFichaTabs({
         </TabsContent>
 
         <TabsContent value="variantes">
+          {mountedTabs.includes("variantes") ? (
           <Card>
             <CardHeader>
               <CardTitle>Variantes del producto</CardTitle>
@@ -3909,9 +3916,11 @@ export function ProductoServicioFichaTabs({
               </div>
             </CardContent>
           </Card>
+          ) : null}
         </TabsContent>
 
         <TabsContent value="checklist">
+          {mountedTabs.includes("checklist") ? (
           <Card>
             <CardHeader>
               <CardTitle>Ruta de opcionales</CardTitle>
@@ -3928,9 +3937,11 @@ export function ProductoServicioFichaTabs({
               />
             </CardContent>
           </Card>
+          ) : null}
         </TabsContent>
 
         <TabsContent value="produccion">
+          {mountedTabs.includes("produccion") ? (
           <Card>
             <CardHeader>
               <CardTitle>Ruta base</CardTitle>
@@ -4377,9 +4388,11 @@ export function ProductoServicioFichaTabs({
               ) : null}
             </CardContent>
           </Card>
+          ) : null}
         </TabsContent>
 
         <TabsContent value="imposicion">
+          {mountedTabs.includes("imposicion") ? (
           <Card>
             <CardHeader>
               <CardTitle>Imposición</CardTitle>
@@ -4746,9 +4759,11 @@ export function ProductoServicioFichaTabs({
               </Button>
             </CardContent>
           </Card>
+          ) : null}
         </TabsContent>
 
         <TabsContent value="precio">
+          {mountedTabs.includes("precio") ? (
           <Card>
             <CardHeader>
               <CardTitle>Precio</CardTitle>
@@ -5001,9 +5016,11 @@ export function ProductoServicioFichaTabs({
               </Button>
             </CardContent>
           </Card>
+          ) : null}
         </TabsContent>
 
         <TabsContent value="simulacion-comercial">
+          {mountedTabs.includes("simulacion-comercial") ? (
           <Card>
             <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -5266,9 +5283,11 @@ export function ProductoServicioFichaTabs({
               )}
             </CardContent>
           </Card>
+          ) : null}
         </TabsContent>
 
         <TabsContent value="cotizador">
+          {mountedTabs.includes("cotizador") ? (
           <Card>
             <CardHeader>
               <CardTitle>Costos</CardTitle>
@@ -5680,6 +5699,7 @@ export function ProductoServicioFichaTabs({
               </Collapsible>
             </CardContent>
           </Card>
+          ) : null}
         </TabsContent>
       </Tabs>
       <Sheet open={filmTraceSheetOpen} onOpenChange={setFilmTraceSheetOpen}>

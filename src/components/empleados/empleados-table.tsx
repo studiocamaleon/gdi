@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ChevronDownIcon,
@@ -13,6 +12,8 @@ import {
 
 import { deleteEmpleado } from "@/lib/empleados-api";
 import { EmpleadoDetalle } from "@/lib/empleados";
+import { NavLink } from "@/components/navigation/nav-link";
+import { useNavigationFeedback } from "@/components/navigation/navigation-feedback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -71,6 +72,7 @@ function buildCsv(empleados: EmpleadoDetalle[]) {
 
 export function EmpleadosTable({ initialEmpleados }: EmpleadosTableProps) {
   const router = useRouter();
+  const { startNavigation } = useNavigationFeedback();
   const [empleados, setEmpleados] = React.useState(initialEmpleados);
   const [selectedEmpleados, setSelectedEmpleados] = React.useState<Set<string>>(
     new Set(),
@@ -109,6 +111,7 @@ export function EmpleadosTable({ initialEmpleados }: EmpleadosTableProps) {
       return;
     }
 
+    startNavigation(`/empleados/${selectedRows[0].id}`);
     router.push(`/empleados/${selectedRows[0].id}`);
   };
 
@@ -211,7 +214,7 @@ export function EmpleadosTable({ initialEmpleados }: EmpleadosTableProps) {
                 variant="brand"
                 className="w-full sm:w-auto"
                 nativeButton={false}
-                render={<Link href="/empleados/nuevo" />}
+                render={<NavLink href="/empleados/nuevo" />}
               >
                 <PlusIcon data-icon="inline-start" />
                 Nuevo empleado
@@ -258,12 +261,12 @@ export function EmpleadosTable({ initialEmpleados }: EmpleadosTableProps) {
                       />
                     </TableCell>
                     <TableCell className="font-medium">
-                      <Link
+                      <NavLink
                         href={`/empleados/${empleado.id}`}
                         className="underline-offset-4 hover:underline"
                       >
                         {empleado.nombreCompleto}
-                      </Link>
+                      </NavLink>
                     </TableCell>
                     <TableCell>{empleado.sector}</TableCell>
                     <TableCell>{empleado.ocupacion || "-"}</TableCell>
