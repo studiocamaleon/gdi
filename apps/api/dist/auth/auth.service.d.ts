@@ -14,6 +14,7 @@ export declare class AuthService {
         currentUser: {
             id: string;
             email: string;
+            nombreCompleto: string | null;
             tenantActual: {
                 id: string;
                 nombre: string;
@@ -41,6 +42,7 @@ export declare class AuthService {
         currentUser: {
             id: string;
             email: string;
+            nombreCompleto: string | null;
             tenantActual: {
                 id: string;
                 nombre: string;
@@ -61,6 +63,7 @@ export declare class AuthService {
         currentUser: {
             id: string;
             email: string;
+            nombreCompleto: string | null;
             tenantActual: {
                 id: string;
                 nombre: string;
@@ -81,6 +84,7 @@ export declare class AuthService {
         currentUser: {
             id: string;
             email: string;
+            nombreCompleto: string | null;
             tenantActual: {
                 id: string;
                 nombre: string;

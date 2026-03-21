@@ -2,26 +2,25 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   ArrowLeftRightIcon,
   Building2Icon,
+  CalendarClockIcon,
   CircleDollarSignIcon,
   ChevronRightIcon,
   CreditCardIcon,
   BoxesIcon,
+  GemIcon,
   FolderTreeIcon,
   IdCardIcon,
   LayoutDashboardIcon,
-  LogOutIcon,
   PrinterIcon,
-  Settings2Icon,
   UsersIcon,
   WorkflowIcon,
 } from "lucide-react";
 
-import { logout, switchTenant, type CurrentUser } from "@/lib/auth";
-import { clearSessionToken, setSessionToken } from "@/lib/session";
+import { type CurrentUser } from "@/lib/auth";
 import {
   Collapsible,
   CollapsibleContent,
@@ -30,22 +29,17 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import {
   Sidebar,
   SidebarContent,
@@ -217,13 +211,55 @@ function matchesRoute(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function buildInitials(email: string) {
-  const [localPart] = email.split("@");
-  return localPart.slice(0, 2).toUpperCase();
+function formatDiasSuscripcion(diasRestantes: number | null | undefined) {
+  if (diasRestantes == null) {
+    return "Sin vencimiento";
+  }
+
+  if (diasRestantes < 0) {
+    return "Vencida";
+  }
+
+  if (diasRestantes === 0) {
+    return "Vence hoy";
+  }
+
+  if (diasRestantes === 1) {
+    return "1 dia restante";
+  }
+
+  return `${diasRestantes} dias restantes`;
+}
+
+function getSuscripcionTone(diasRestantes: number | null | undefined) {
+  if (diasRestantes == null) {
+    return "outline";
+  }
+
+  if (diasRestantes <= 0) {
+    return "destructive";
+  }
+
+  if (diasRestantes <= 7) {
+    return "secondary";
+  }
+
+  return "outline";
+}
+
+function getSuscripcionProgress(diasRestantes: number | null | undefined) {
+  if (diasRestantes == null) {
+    return 100;
+  }
+
+  if (diasRestantes <= 0) {
+    return 0;
+  }
+
+  return Math.min(100, Math.max(8, Math.round((diasRestantes / 30) * 100)));
 }
 
 export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
-  const router = useRouter();
   const pathname = usePathname();
   const isDashboard = pathname === "/";
   const isRegistrosRoute = registros.some((item) =>
@@ -236,8 +272,10 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
   const [isRegistrosOpen, setIsRegistrosOpen] = React.useState(isRegistrosRoute);
   const [isCostosOpen, setIsCostosOpen] = React.useState(isCostosRoute);
   const [isInventarioOpen, setIsInventarioOpen] = React.useState(isInventarioRoute);
-  const [isSwitching, startSwitching] = React.useTransition();
-  const [isLoggingOut, startLogout] = React.useTransition();
+  const planNombre = currentUser.tenantActual.suscripcion?.planNombre?.trim() || "Plan diamante";
+  const diasRestantes = currentUser.tenantActual.suscripcion?.diasRestantes ?? 18;
+  const suscripcionEstado = formatDiasSuscripcion(diasRestantes);
+  const suscripcionProgress = getSuscripcionProgress(diasRestantes);
 
   React.useEffect(() => {
     setIsRegistrosOpen(isRegistrosRoute);
@@ -250,34 +288,6 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
   React.useEffect(() => {
     setIsInventarioOpen(isInventarioRoute);
   }, [isInventarioRoute]);
-
-  const handleTenantSwitch = (tenantId: string) => {
-    if (tenantId === currentUser.tenantActual.id) {
-      return;
-    }
-
-    startSwitching(async () => {
-      const response = await switchTenant(tenantId);
-
-      if (response.accessToken) {
-        setSessionToken(response.accessToken);
-      }
-
-      router.refresh();
-    });
-  };
-
-  const handleLogout = () => {
-    startLogout(async () => {
-      try {
-        await logout();
-      } finally {
-        clearSessionToken();
-        router.replace("/login");
-        router.refresh();
-      }
-    });
-  };
 
   return (
     <Sidebar collapsible="icon" variant="inset" {...props}>
@@ -534,125 +544,39 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
       <SidebarFooter className="gap-3 border-t border-sidebar-border/70 p-3">
         <Card
           size="sm"
-          className="rounded-2xl border border-white/8 bg-white/4 text-white shadow-none ring-0 group-data-[collapsible=icon]:hidden"
+          className="overflow-hidden rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.18),_transparent_32%),linear-gradient(145deg,_rgba(33,33,37,0.98)_0%,_rgba(11,11,12,0.98)_42%,_rgba(22,22,25,0.98)_100%)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_18px_40px_rgba(0,0,0,0.24)] ring-0 transition-all hover:border-white/14 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_22px_44px_rgba(0,0,0,0.28)] group-data-[collapsible=icon]:hidden"
         >
-          <CardHeader className="gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex size-8 items-center justify-center rounded-xl bg-white/8 text-amber-300 ring-1 ring-white/10">
-                <CreditCardIcon />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/45">
-                  Empresa activa
-                </p>
-                <CardTitle className="mt-1 text-sm font-semibold text-white">
-                  {currentUser.tenantActual.nombre}
+          <CardHeader className="gap-3 p-4">
+            <div className="space-y-0.5">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">
+                Plan actual
+              </p>
+              <div className="flex items-center gap-2">
+                <GemIcon className="size-4 text-cyan-300" />
+                <CardTitle className="truncate text-lg font-semibold tracking-[-0.03em] text-white">
+                  {planNombre}
                 </CardTitle>
               </div>
             </div>
-            <CardDescription className="text-white/65">
-              Rol actual: {currentUser.tenantActual.rol}
-            </CardDescription>
+            <div className="space-y-1.5">
+              <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-300 transition-[width] duration-500"
+                  style={{ width: `${suscripcionProgress}%` }}
+                />
+              </div>
+              <div className="flex items-center gap-2 text-sm text-white/72">
+                <CalendarClockIcon className="size-3.5 text-white/42" />
+                <span>{suscripcionEstado}</span>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
-            <Button variant="brand" size="sm" className="w-full" disabled>
-              <ArrowLeftRightIcon />
-              Selector en el menu
-            </Button>
+          <CardContent className="border-t border-white/8 bg-white/[0.03] px-4 py-2.5">
+            <p className="text-center text-[10px] uppercase tracking-[0.18em] text-white/38">
+              Administrar
+            </p>
           </CardContent>
         </Card>
-
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <SidebarMenuButton
-                    size="lg"
-                    tooltip={currentUser.email}
-                    className="h-auto min-h-14 rounded-2xl border border-white/8 bg-white/4 px-2.5 py-2 shadow-none hover:bg-white/7"
-                  />
-                }
-              >
-                <Avatar size="lg">
-                  <AvatarFallback className="bg-amber-400/20 font-medium text-amber-100">
-                    {buildInitials(currentUser.email)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold text-white">
-                    {currentUser.email}
-                  </span>
-                  <span className="truncate text-xs text-white/55">
-                    {currentUser.tenantActual.nombre}
-                  </span>
-                </div>
-                <Settings2Icon className="ml-auto text-white/45" />
-              </DropdownMenuTrigger>
-
-              <DropdownMenuContent align="end" sideOffset={8} className="min-w-72">
-                <DropdownMenuLabel>
-                  {currentUser.email}
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Empresa activa: {currentUser.tenantActual.nombre}
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel inset>Empresas disponibles</DropdownMenuLabel>
-                  <DropdownMenuRadioGroup
-                    value={currentUser.tenantActual.id}
-                    onValueChange={handleTenantSwitch}
-                  >
-                    {currentUser.tenants.map((tenant) => (
-                      <DropdownMenuRadioItem
-                        key={tenant.id}
-                        value={tenant.id}
-                        disabled={isSwitching}
-                      >
-                        <Building2Icon />
-                        {tenant.nombre}
-                        <span className="ml-auto text-xs text-muted-foreground">
-                          {tenant.rol}
-                        </span>
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarMenuItem>
-        </SidebarMenu>
-
-        <Button
-          type="button"
-          variant="link"
-          size="sm"
-          disabled={isLoggingOut}
-          onClick={handleLogout}
-          className="h-auto justify-start self-start px-2 text-primary group-data-[collapsible=icon]:hidden"
-        >
-          <LogOutIcon data-icon="inline-start" />
-          {isLoggingOut ? "Cerrando sesion..." : "Cerrar sesion"}
-        </Button>
-
-        <SidebarMenu className="hidden group-data-[collapsible=icon]:flex">
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              type="button"
-              size="default"
-              tooltip={isLoggingOut ? "Cerrando sesion..." : "Cerrar sesion"}
-              disabled={isLoggingOut}
-              onClick={handleLogout}
-              className="text-primary hover:text-primary"
-            >
-              <LogOutIcon />
-              <span className="sr-only">
-                {isLoggingOut ? "Cerrando sesion..." : "Cerrar sesion"}
-              </span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
       </SidebarFooter>
 
       <SidebarRail />

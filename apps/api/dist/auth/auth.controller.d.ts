@@ -12,6 +12,7 @@ export declare class AuthController {
         currentUser: {
             id: string;
             email: string;
+            nombreCompleto: string | null;
             tenantActual: {
                 id: string;
                 nombre: string;
@@ -39,6 +40,7 @@ export declare class AuthController {
         currentUser: {
             id: string;
             email: string;
+            nombreCompleto: string | null;
             tenantActual: {
                 id: string;
                 nombre: string;
@@ -59,6 +61,7 @@ export declare class AuthController {
         currentUser: {
             id: string;
             email: string;
+            nombreCompleto: string | null;
             tenantActual: {
                 id: string;
                 nombre: string;
@@ -79,6 +82,7 @@ export declare class AuthController {
         currentUser: {
             id: string;
             email: string;
+            nombreCompleto: string | null;
             tenantActual: {
                 id: string;
                 nombre: string;

@@ -9,6 +9,7 @@ export declare class TenantsService {
         currentUser: {
             id: string;
             email: string;
+            nombreCompleto: string | null;
             tenantActual: {
                 id: string;
                 nombre: string;
@@ -29,6 +30,7 @@ export declare class TenantsService {
         currentUser: {
             id: string;
             email: string;
+            nombreCompleto: string | null;
             tenantActual: {
                 id: string;
                 nombre: string;

@@ -87,7 +87,7 @@ let AuthService = class AuthService {
         if (!membership) {
             throw new common_1.UnauthorizedException('El usuario no tiene empresas activas.');
         }
-        return this.createSessionResponse(user.id, user.email, membership);
+        return this.createSessionResponse(user.id, user.email, membership, this.prisma, user.nombreCompleto ?? null);
     }
     async logout(auth) {
         await this.prisma.authSession.update({
@@ -169,7 +169,7 @@ let AuthService = class AuthService {
                     acceptedAt: new Date(),
                 },
             });
-            return this.createSessionResponse(user.id, user.email, membership, tx);
+            return this.createSessionResponse(user.id, user.email, membership, tx, user.nombreCompleto ?? null);
         });
     }
     async getCurrentContext(auth) {
@@ -199,7 +199,7 @@ let AuthService = class AuthService {
         if (!currentMembership) {
             throw new common_1.UnauthorizedException('La empresa seleccionada ya no esta disponible.');
         }
-        return this.buildAuthResponse(auth.sessionId, user.id, user.email, currentMembership, user.memberships, null);
+        return this.buildAuthResponse(auth.sessionId, user.id, user.email, user.nombreCompleto ?? null, currentMembership, user.memberships, null);
     }
     async switchTenant(auth, tenantId) {
         const membership = await this.prisma.membership.findUnique({
@@ -246,7 +246,11 @@ let AuthService = class AuthService {
             role: membership.rol,
             email: auth.email,
         });
-        return this.buildAuthResponse(auth.sessionId, auth.userId, auth.email, membership, allMemberships, token);
+        const user = await this.prisma.user.findUnique({
+            where: { id: auth.userId },
+            select: { nombreCompleto: true },
+        });
+        return this.buildAuthResponse(auth.sessionId, auth.userId, auth.email, user?.nombreCompleto ?? null, membership, allMemberships, token);
     }
     async provisionEmployeeAccess(auth, empleadoId, email, rol) {
         const empleado = await this.prisma.empleado.findFirst({
@@ -387,7 +391,7 @@ let AuthService = class AuthService {
             });
         });
     }
-    async createSessionResponse(userId, email, membership, db = this.prisma) {
+    async createSessionResponse(userId, email, membership, db = this.prisma, nombreCompleto = null) {
         const session = await db.authSession.create({
             data: {
                 userId,
@@ -419,7 +423,7 @@ let AuthService = class AuthService {
             role: membership.rol,
             email,
         });
-        return this.buildAuthResponse(session.id, userId, email, membership, memberships, token);
+        return this.buildAuthResponse(session.id, userId, email, nombreCompleto, membership, memberships, token);
     }
     async issueToken(payload) {
         return this.jwtService.signAsync(payload, {
@@ -447,13 +451,14 @@ let AuthService = class AuthService {
         }
         return invitation;
     }
-    buildAuthResponse(sessionId, userId, email, currentMembership, memberships, accessToken) {
+    buildAuthResponse(sessionId, userId, email, nombreCompleto, currentMembership, memberships, accessToken) {
         return {
             accessToken,
             sessionId,
             currentUser: {
                 id: userId,
                 email,
+                nombreCompleto,
                 tenantActual: {
                     id: currentMembership.tenant.id,
                     nombre: currentMembership.tenant.nombre,
