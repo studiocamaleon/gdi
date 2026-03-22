@@ -1,5 +1,7 @@
 export type TipoProductoServicio = 'producto' | 'servicio';
 export type EstadoProductoServicio = 'activo' | 'inactivo';
+export type MotorCategory = 'digital_sheet' | 'wide_format';
+export type TipoVentaGranFormato = 'm2' | 'metro_lineal';
 export type TipoImpresionProductoVariante = 'bn' | 'cmyk';
 export type CarasProductoVariante = 'simple_faz' | 'doble_faz';
 export type DimensionOpcionProductiva = 'tipo_impresion' | 'caras';
@@ -210,6 +212,25 @@ export type ProductoServicio = {
   updatedAt: string;
 };
 
+export type ProductoCore = Pick<
+  ProductoServicio,
+  | 'id'
+  | 'tipo'
+  | 'codigo'
+  | 'nombre'
+  | 'descripcion'
+  | 'motorCodigo'
+  | 'motorVersion'
+  | 'estado'
+  | 'activo'
+  | 'familiaProductoId'
+  | 'familiaProductoNombre'
+  | 'subfamiliaProductoId'
+  | 'subfamiliaProductoNombre'
+  | 'createdAt'
+  | 'updatedAt'
+>;
+
 export type ProductoRutaBaseMatchingItem = {
   tipoImpresion: TipoImpresionProductoVariante | null;
   caras: CarasProductoVariante | null;
@@ -270,12 +291,23 @@ export type VarianteOpcionesProductivas = {
   updatedAt?: string;
 };
 
+export type MotorCapabilities = {
+  hasProductConfig: boolean;
+  hasVariantOverride: boolean;
+  hasPreview: boolean;
+  hasQuote: boolean;
+};
+
 export type MotorCostoCatalogItem = {
   code: string;
   version: number;
   label: string;
+  category: MotorCategory;
+  capabilities: MotorCapabilities;
   schema: Record<string, unknown>;
 };
+
+export type MotorDefinition = MotorCostoCatalogItem;
 
 export type ProductoMotorConfig = {
   productoId: string;
@@ -286,6 +318,8 @@ export type ProductoMotorConfig = {
   activo: boolean;
   updatedAt: string | null;
 };
+
+export type MotorProductConfig = ProductoMotorConfig;
 
 export type ProductoRutaPolicy = {
   id: string;
@@ -305,6 +339,54 @@ export type VarianteMotorOverride = {
   versionConfig: number;
   activo: boolean;
   updatedAt: string | null;
+};
+
+export type MotorVariantOverride = VarianteMotorOverride;
+
+export type DigitalProductDetailModel = {
+  producto: ProductoServicio;
+  variantes: ProductoVariante[];
+  motores: MotorDefinition[];
+};
+
+export type GranFormatoConfig = {
+  productoId: string;
+  tipoVenta: TipoVentaGranFormato;
+  tecnologiasCompatibles: string[];
+  maquinasCompatibles: string[];
+  perfilesCompatibles: string[];
+  materialBaseId: string | null;
+  materialesCompatibles: string[];
+  updatedAt: string | null;
+};
+
+export type GranFormatoVariante = {
+  id: string;
+  productoServicioId: string;
+  nombre: string;
+  maquinaId: string;
+  maquinaNombre: string;
+  plantillaMaquina: string;
+  tecnologia: string;
+  geometriaTrabajo: string;
+  anchoUtilMaquina: number | null;
+  perfilOperativoId: string;
+  perfilOperativoNombre: string;
+  productivityValue: number | null;
+  productivityUnit: string;
+  cantidadPasadas: number | null;
+  materialPreset: string;
+  configuracionTintas: string;
+  materiaPrimaVarianteId: string;
+  materiaPrimaNombre: string;
+  materiaPrimaSku: string;
+  esDefault: boolean;
+  permiteOverrideEnCotizacion: boolean;
+  activo: boolean;
+  observaciones: string;
+  detalle: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type TipoProductoAdicional = "servicio" | "acabado";

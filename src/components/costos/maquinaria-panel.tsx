@@ -28,10 +28,13 @@ import {
   EstadoConfiguracionMaquina,
   estadoConfiguracionMaquinaItems,
   estadoMaquinaItems,
+  getMaquinaGeometriasCompatibles,
+  getMaquinaTecnologia,
   geometriaTrabajoMaquinaItems,
   Maquina,
   MaquinaPayload,
   PlantillaMaquinaria,
+  tecnologiaMaquinaItems,
   tipoComponenteDesgasteMaquinaItems,
   tipoConsumibleMaquinaItems,
   tipoPerfilOperativoMaquinaItems,
@@ -48,10 +51,12 @@ import {
 import { getCatalogoFabricantesPorPlantilla } from "@/lib/maquinaria-catalogos";
 import { getTechnicalPresetForMachine } from "@/lib/maquinaria-tech-presets";
 import { unidadMateriaPrimaItems, type MateriaPrima } from "@/lib/materias-primas";
+import { areUnitsCompatible, convertUnitPrice, type UnitCode } from "@/lib/unidades";
 import { CentroCosto, Planta } from "@/lib/costos";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Empty,
   EmptyDescription,
@@ -228,25 +233,55 @@ const PRINTER_TEMPLATES_WITH_INK_CONSUMPTION = new Set<PlantillaMaquinaria>([
   "impresora_sublimacion_gran_formato",
   "impresora_laser",
 ]);
+const WIDE_FORMAT_TECHNOLOGY_TEMPLATES = new Set<PlantillaMaquinaria>([
+  "impresora_dtf",
+  "impresora_dtf_uv",
+  "impresora_uv_mesa_extensora",
+  "impresora_uv_flatbed",
+  "impresora_uv_rollo",
+  "impresora_solvente",
+  "impresora_inyeccion_tinta",
+  "impresora_latex",
+  "impresora_sublimacion_gran_formato",
+]);
+const MACHINE_TECHNOLOGY_TEMPLATES = new Set<PlantillaMaquinaria>([
+  ...WIDE_FORMAT_TECHNOLOGY_TEMPLATES,
+  "impresora_laser",
+]);
 const PRINTER_CHANNEL_OPTIONS = [
-  { value: "cian", label: "Cian" },
-  { value: "magenta", label: "Magenta" },
-  { value: "amarillo", label: "Amarillo" },
-  { value: "negro", label: "Negro" },
-  { value: "blanco", label: "Blanco" },
-  { value: "barniz", label: "Barniz" },
+  { value: "cian", label: "C" },
+  { value: "magenta", label: "M" },
+  { value: "amarillo", label: "Y" },
+  { value: "negro", label: "K" },
+  { value: "blanco", label: "W" },
+  { value: "barniz", label: "V" },
 ];
 const PRINTER_CHANNEL_OPTION_BY_VALUE = new Map(
   PRINTER_CHANNEL_OPTIONS.map((item) => [item.value, item]),
 );
 const PRINTER_CHANNEL_META: Record<string, { label: string; dotClassName: string }> = {
-  cian: { label: "Cian", dotClassName: "bg-cyan-500" },
-  magenta: { label: "Magenta", dotClassName: "bg-fuchsia-500" },
-  amarillo: { label: "Amarillo", dotClassName: "bg-yellow-400" },
-  negro: { label: "Negro", dotClassName: "bg-black" },
-  blanco: { label: "Blanco", dotClassName: "bg-white border" },
-  barniz: { label: "Barniz", dotClassName: "bg-amber-100 border" },
+  cian: { label: "C", dotClassName: "bg-cyan-500" },
+  magenta: { label: "M", dotClassName: "bg-fuchsia-500" },
+  amarillo: { label: "Y", dotClassName: "bg-yellow-400" },
+  negro: { label: "K", dotClassName: "bg-black" },
+  blanco: { label: "W", dotClassName: "bg-white border" },
+  barniz: { label: "V", dotClassName: "bg-amber-100 border" },
 };
+
+function getPrinterChannelLabel(channel: string) {
+  return PRINTER_CHANNEL_META[channel]?.label ?? formatTechnicalValue(channel);
+}
+
+function getPrinterConsumibleDisplayName(tipo: LocalConsumible["tipo"], channel: string) {
+  const channelLabel = getPrinterChannelLabel(channel);
+  if (tipo === "barniz") {
+    return `Canal V (${channelLabel})`;
+  }
+  if (tipo === "toner") {
+    return `Toner ${channelLabel}`;
+  }
+  return `Tinta ${channelLabel}`;
+}
 const A4_AREA_M2 = 0.06237;
 const DEFAULT_FULL_COLOR_COVERAGE_PERCENT = 40;
 const GUILLOTINA_PAPER_PRESET_MM: Record<string, number> = {
@@ -314,7 +349,7 @@ function supportsPrinterInkConsumption(templateId: PlantillaMaquinaria) {
   return PRINTER_TEMPLATES_WITH_INK_CONSUMPTION.has(templateId);
 }
 
-function getRequiredPrinterChannels(
+function getMachineSupportedPrinterChannels(
   parametrosTecnicos?: Record<string, unknown>,
   templateId?: PlantillaMaquinaria,
 ) {
@@ -365,11 +400,85 @@ function getRequiredPrinterChannels(
   return PRINTER_CHANNEL_OPTIONS.map((item) => item.value).filter((value) => required.has(value));
 }
 
+function normalizeMachineChannelConfiguration(parametrosTecnicos?: Record<string, unknown>) {
+  const current = { ...(parametrosTecnicos ?? {}) };
+  const rawMode = String(current.configuracionCanales ?? "").trim().toLowerCase();
+  const normalizedMode =
+    rawMode === "cmyk_blanco_barniz_primer" ? "cmyk_blanco_barniz" : rawMode;
+  if (normalizedMode) {
+    current.configuracionCanales = normalizedMode;
+    current.blancoDisponible = normalizedMode.includes("blanco");
+    current.barnizDisponible = normalizedMode.includes("barniz");
+    if (rawMode.includes("primer")) {
+      current.primerDisponible = true;
+    }
+  }
+  return current;
+}
+
+function getProfileConfiguredChannelMode(perfil: LocalPerfilOperativo) {
+  const detailMode = toNormalizedString(perfil.detalle?.configuracionCanalesPerfil);
+  if (detailMode) {
+    return detailMode;
+  }
+  if (perfil.printMode) {
+    return toNormalizedString(perfil.printMode);
+  }
+  return perfil.operationMode?.trim().toLowerCase() === "blanco_negro" ? "k" : "";
+}
+
+function getChannelsFromMode(mode: string) {
+  const normalized = toNormalizedString(mode);
+  if (!normalized) {
+    return [] as string[];
+  }
+  if (normalized === "k" || normalized === "bn") {
+    return ["negro"];
+  }
+  const required = new Set<string>(["cian", "magenta", "amarillo", "negro"]);
+  if (normalized.includes("blanco") || normalized.includes("_w") || normalized.endsWith("w")) {
+    required.add("blanco");
+  }
+  if (normalized.includes("barniz") || normalized.includes("_v") || normalized.endsWith("v")) {
+    required.add("barniz");
+  }
+  return PRINTER_CHANNEL_OPTIONS.map((item) => item.value).filter((value) => required.has(value));
+}
+
+function getProfileRequiredPrinterChannels(
+  perfil: LocalPerfilOperativo,
+  machineSupportedChannels: string[],
+) {
+  const configuredMode = getProfileConfiguredChannelMode(perfil);
+  const configuredChannels = getChannelsFromMode(configuredMode);
+  if (configuredChannels.length === 0) {
+    return machineSupportedChannels;
+  }
+  const supported = new Set(machineSupportedChannels);
+  return configuredChannels.filter((channel) => supported.has(channel));
+}
+
 function getUnidadMateriaPrimaLabel(value?: string | null) {
   if (!value) {
     return "";
   }
   return unidadMateriaPrimaItems.find((item) => item.value === value)?.label ?? formatTechnicalValue(value);
+}
+
+function mapMachineConsumptionUnitToUnitCode(value?: string | null): UnitCode | null {
+  if (!value) {
+    return null;
+  }
+  const direct: Record<string, UnitCode> = {
+    ml: "ml",
+    litro: "litro",
+    gramo: "gramo",
+    kg: "kg",
+    unidad: "unidad",
+    m2: "m2",
+    metro_lineal: "metro_lineal",
+  };
+  return direct[value] ?? null;
 }
 
 function mapUnidadMateriaPrimaToConsumo(value?: string | null): LocalConsumible["unidad"] | null {
@@ -734,6 +843,9 @@ function getPerfilValueByTemplateField(
     case "operationMode":
       return perfil.operationMode || "";
     case "printMode":
+      if (typeof perfil.detalle?.configuracionCanalesPerfil === "string" && perfil.detalle.configuracionCanalesPerfil.trim()) {
+        return perfil.detalle.configuracionCanalesPerfil;
+      }
       if (perfil.printMode) return perfil.printMode;
       return perfil.operationMode?.trim().toLowerCase() === "blanco_negro" ? "k" : "";
     case "printSides":
@@ -934,6 +1046,14 @@ function createMaquinaForm(plantaId = ""): MaquinaPayload {
   };
 }
 
+function getEditableCompatibleGeometries(form: MaquinaPayload) {
+  return getMaquinaGeometriasCompatibles({
+    geometriaTrabajo: form.geometriaTrabajo,
+    plantilla: form.plantilla,
+    capacidadesAvanzadas: form.capacidadesAvanzadas ?? null,
+  });
+}
+
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value.trim(),
@@ -945,16 +1065,39 @@ function toPayload(
   perfiles: LocalPerfilOperativo[],
   consumibles: LocalConsumible[],
   desgastes: LocalDesgaste[],
+  options?: { asDraft?: boolean },
 ): MaquinaPayload {
   const derivedPrintableArea =
     form.plantilla.startsWith("impresora_")
       ? getDerivedPrintableAreaParams(form.parametrosTecnicos)
       : null;
+  const asDraft = options?.asDraft === true;
+  const perfilesPersistibles = asDraft
+    ? perfiles.filter((item) => item.nombre.trim().length > 0)
+    : perfiles;
+  const consumiblesPersistibles = asDraft
+    ? consumibles.filter(
+        (item) =>
+          item.nombre.trim().length > 0 &&
+          item.tipo.trim().length > 0 &&
+          item.unidad.trim().length > 0 &&
+          isUuid(item.materiaPrimaVarianteId),
+      )
+    : consumibles;
+  const desgastesPersistibles = asDraft
+    ? desgastes.filter(
+        (item) =>
+          item.nombre.trim().length > 0 &&
+          item.tipo.trim().length > 0 &&
+          item.unidadDesgaste.trim().length > 0 &&
+          isUuid(item.materiaPrimaVarianteId),
+      )
+    : desgastes;
 
   return {
     ...form,
     codigo: form.codigo?.trim() || undefined,
-    estadoConfiguracion: undefined,
+    estadoConfiguracion: asDraft ? "borrador" : undefined,
     anchoUtil:
       form.plantilla === "impresora_laser" && derivedPrintableArea
         ? derivedPrintableArea.anchoImprimible
@@ -971,7 +1114,7 @@ function toPayload(
     modelo: form.modelo?.trim() || undefined,
     numeroSerie: form.numeroSerie?.trim() || undefined,
     observaciones: form.observaciones?.trim() || undefined,
-    perfilesOperativos: perfiles.map(({ id, ...item }) => {
+    perfilesOperativos: perfilesPersistibles.map(({ id, ...item }) => {
       return {
         id,
         ...item,
@@ -979,7 +1122,7 @@ function toPayload(
         printSides: item.printSides || undefined,
       };
     }),
-    consumibles: consumibles.map(({ id, perfilOperativoLocalId, ...item }) => {
+    consumibles: consumiblesPersistibles.map(({ id, perfilOperativoLocalId, ...item }) => {
       const detalle = { ...(item.detalle ?? {}) } as Record<string, unknown>;
       if ("syncKey" in detalle) {
         delete detalle.syncKey;
@@ -991,7 +1134,7 @@ function toPayload(
         detalle: Object.keys(detalle).length > 0 ? detalle : undefined,
       };
     }),
-    componentesDesgaste: desgastes.map(({ id, ...item }) => {
+    componentesDesgaste: desgastesPersistibles.map(({ id, ...item }) => {
       return { id, ...item };
     }),
   };
@@ -1003,6 +1146,9 @@ function fromMaquina(maquina: Maquina): {
   consumibles: LocalConsumible[];
   desgastes: LocalDesgaste[];
 } {
+  const normalizedParametrosTecnicos = normalizeMachineChannelConfiguration(
+    maquina.parametrosTecnicos ?? undefined,
+  );
   return {
     form: {
       codigo: maquina.codigo,
@@ -1032,7 +1178,7 @@ function fromMaquina(maquina: Maquina): {
       fechaAlta: maquina.fechaAlta || undefined,
       activo: maquina.activo,
       observaciones: maquina.observaciones,
-      parametrosTecnicos: maquina.parametrosTecnicos ?? undefined,
+      parametrosTecnicos: normalizedParametrosTecnicos,
       capacidadesAvanzadas: maquina.capacidadesAvanzadas ?? undefined,
       perfilesOperativos: [],
       consumibles: [],
@@ -1250,13 +1396,27 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
     () => showConsumiblesStep && supportsPrinterInkConsumption(form.plantilla),
     [form.plantilla, showConsumiblesStep],
   );
+  const showLaserConsumibleCalculator = form.plantilla === "impresora_laser";
   const requiredPrinterChannels = React.useMemo(
     () =>
       showPrinterConsumiblesStep
-        ? getRequiredPrinterChannels(form.parametrosTecnicos, form.plantilla)
+        ? getMachineSupportedPrinterChannels(form.parametrosTecnicos, form.plantilla)
         : [],
     [form.parametrosTecnicos, form.plantilla, showPrinterConsumiblesStep],
   );
+  const supportedPrintModeValues = React.useMemo(() => {
+    if (requiredPrinterChannels.length === 0) {
+      return new Set<string>();
+    }
+    const supported = new Set(requiredPrinterChannels);
+    return new Set(
+      ["k", "cmyk", "cmyk_blanco", "cmyk_barniz", "cmyk_blanco_barniz"]
+        .filter((mode) => {
+          const channels = getChannelsFromMode(mode);
+          return channels.length > 0 && channels.every((channel) => supported.has(channel));
+        }),
+    );
+  }, [requiredPrinterChannels]);
   const desgasteTemplateFields = React.useMemo(
     () =>
       templateInfo?.sections
@@ -1324,7 +1484,8 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
               label: getMateriaPrimaVarianteLabel(materiaPrima, variante, { maxDimensiones: 5 }),
               sku: variante.sku,
               precioReferencia: variante.precioReferencia,
-              unidadStock: materiaPrima.unidadStock,
+              unidadStock: variante.unidadStock ?? materiaPrima.unidadStock,
+              unidadCompra: variante.unidadCompra ?? materiaPrima.unidadCompra,
               nombre: materiaPrima.nombre,
               nombreVariante: getMateriaPrimaVarianteLabel(materiaPrima, variante, {
                 maxDimensiones: 5,
@@ -1553,6 +1714,17 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
     () => perfiles.find((perfil) => perfil.nombre.trim())?.id ?? "",
     [perfiles],
   );
+  const visibleConsumiblePerfil = React.useMemo(() => {
+    const perfilId = sameConsumptionAllProfiles ? consumibleAnchorPerfilId : selectedConsumiblePerfil?.id ?? "";
+    return perfiles.find((perfil) => perfil.id === perfilId) ?? null;
+  }, [consumibleAnchorPerfilId, perfiles, sameConsumptionAllProfiles, selectedConsumiblePerfil?.id]);
+  const visibleConsumibleChannels = React.useMemo(
+    () =>
+      visibleConsumiblePerfil
+        ? getProfileRequiredPrinterChannels(visibleConsumiblePerfil, requiredPrinterChannels)
+        : [],
+    [requiredPrinterChannels, visibleConsumiblePerfil],
+  );
   const consumiblesPerfilActual = React.useMemo(() => {
     const perfilId = sameConsumptionAllProfiles
       ? consumibleAnchorPerfilId
@@ -1672,7 +1844,10 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
 
     setForm((current) => {
       const currentParams = current.parametrosTecnicos ?? {};
-      const nextParams = { ...currentParams, ...preset.parametrosTecnicos };
+      const nextParams = normalizeMachineChannelConfiguration({
+        ...currentParams,
+        ...preset.parametrosTecnicos,
+      });
       const derived = getDerivedPrintableAreaParams(nextParams);
 
       return {
@@ -1731,6 +1906,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
       .map((perfil) => ({
         id: perfil.id,
         nombre: perfil.nombre.trim(),
+        channels: getProfileRequiredPrinterChannels(perfil, requiredPrinterChannels),
       }))
       .filter((perfil) => perfil.nombre);
     if (perfilesValidos.length === 0 || requiredPrinterChannels.length === 0) {
@@ -1750,7 +1926,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
 
       const anchorPerfil = perfilesValidos[0];
       const anchorByCanal = new Map<string, LocalConsumible>();
-      requiredPrinterChannels.forEach((channel) => {
+      (anchorPerfil ? anchorPerfil.channels : []).forEach((channel) => {
         const anchor = currentByPerfilYCanal.get(`${anchorPerfil.id}::${channel}`);
         if (anchor) {
           anchorByCanal.set(channel, anchor);
@@ -1759,7 +1935,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
 
       const next: LocalConsumible[] = [];
       perfilesValidos.forEach((perfil) => {
-        requiredPrinterChannels.forEach((channel) => {
+        perfil.channels.forEach((channel) => {
           const existing = currentByPerfilYCanal.get(`${perfil.id}::${channel}`);
           const anchor = anchorByCanal.get(channel);
           const base = existing ?? anchor;
@@ -1789,7 +1965,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
           next.push({
             ...createConsumible(consumibleTemplateFields),
             id: createLocalId(),
-            nombre: `${tipo === "barniz" ? "Barniz" : tipo === "toner" ? "Toner" : "Tinta"} ${channel}`,
+            nombre: getPrinterConsumibleDisplayName(tipo, channel),
             tipo,
             unidad: "ml",
             perfilOperativoLocalId: perfil.id,
@@ -1928,7 +2104,19 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
         fabricante: value === current.plantilla ? current.fabricante : "",
         modelo: value === current.plantilla ? current.modelo : "",
         geometriaTrabajo: template?.geometry ?? current.geometriaTrabajo,
-      unidadProduccionPrincipal: nextUnidadProduccionPrincipal,
+        unidadProduccionPrincipal: nextUnidadProduccionPrincipal,
+        capacidadesAvanzadas:
+          value === "impresora_uv_mesa_extensora" || MACHINE_TECHNOLOGY_TEMPLATES.has(value)
+            ? {
+                ...(current.capacidadesAvanzadas ?? {}),
+                ...(value === "impresora_uv_mesa_extensora"
+                  ? { geometriasCompatibles: ["plano", "rollo"] }
+                  : {}),
+                tecnologiaMaquina:
+                  getMaquinaTecnologia({ plantilla: value, capacidadesAvanzadas: current.capacidadesAvanzadas }) ??
+                  current.capacidadesAvanzadas?.tecnologiaMaquina,
+              }
+            : current.capacidadesAvanzadas,
       };
     });
     setConsumibles((current) => {
@@ -1967,6 +2155,43 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
       setSameConsumptionAllProfiles(true);
     }
   }, []);
+
+  const persistMachine = React.useCallback((asDraft: boolean) => {
+    const payload = toPayload(
+      form,
+      perfiles,
+      showConsumiblesStep ? consumibles : [],
+      desgastes,
+      { asDraft },
+    );
+
+    startSaving(async () => {
+      try {
+        if (editingId) {
+          await updateMaquina(editingId, payload);
+          toast.success(asDraft ? "Borrador actualizado." : "Maquina actualizada.");
+        } else {
+          await createMaquina(payload);
+          toast.success(asDraft ? "Borrador guardado." : "Maquina creada.");
+        }
+
+        setIsSheetOpen(false);
+        resetEditor();
+        const next = await getMaquinas();
+        setMaquinas(next);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "No se pudo guardar la maquina.");
+      }
+    });
+  }, [
+    consumibles,
+    desgastes,
+    editingId,
+    form,
+    perfiles,
+    resetEditor,
+    showConsumiblesStep,
+  ]);
 
   const handleSave = React.useCallback(() => {
     if ((editingId && !(form.codigo ?? "").trim()) || !form.nombre.trim() || !form.plantaId) {
@@ -2138,31 +2363,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
       }
     }
 
-    const payload = toPayload(
-      form,
-      perfiles,
-      showConsumiblesStep ? consumibles : [],
-      desgastes,
-    );
-
-    startSaving(async () => {
-      try {
-        if (editingId) {
-          await updateMaquina(editingId, payload);
-          toast.success("Maquina actualizada.");
-        } else {
-          await createMaquina(payload);
-          toast.success("Maquina creada.");
-        }
-
-        setIsSheetOpen(false);
-        resetEditor();
-        const next = await getMaquinas();
-        setMaquinas(next);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "No se pudo guardar la maquina.");
-      }
-    });
+    persistMachine(false);
   }, [
     consumibleTemplateFields,
     consumibles,
@@ -2172,6 +2373,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
     form,
     perfilTemplateFields,
     perfiles,
+    persistMachine,
     resetEditor,
     showConsumiblesStep,
     showPrinterConsumiblesStep,
@@ -2331,6 +2533,15 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
   }, [derivedPrintableArea, form.plantilla]);
 
   const visibleCapacityFields = React.useMemo(() => {
+    if (form.plantilla === "impresora_uv_flatbed" || form.plantilla === "impresora_uv_mesa_extensora") {
+      return {
+        anchoUtil: false,
+        largoUtil: false,
+        altoUtil: false,
+        espesorMaximo: false,
+        pesoMaximo: false,
+      };
+    }
     switch (form.geometriaTrabajo) {
       case "pliego":
         return {
@@ -2403,6 +2614,10 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
 
     return new Map(sections.map((key, index) => [key, index + 1]));
   }, [templateEditableFields.length]);
+  const compatibleGeometries = React.useMemo(
+    () => getEditableCompatibleGeometries(form),
+    [form],
+  );
 
   const progressByTab = React.useMemo(() => {
     const generalChecks = [
@@ -2581,12 +2796,12 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
         return next;
       });
 
-      setForm((current) => {
-        const currentParams = current.parametrosTecnicos ?? {};
-        const nextParams: Record<string, unknown> = { ...currentParams };
+    setForm((current) => {
+      const currentParams = current.parametrosTecnicos ?? {};
+      const nextParams: Record<string, unknown> = { ...currentParams };
 
-        if (fieldItem.kind === "boolean") {
-          nextParams[fieldItem.key] = Boolean(value);
+      if (fieldItem.kind === "boolean") {
+        nextParams[fieldItem.key] = Boolean(value);
         } else if (fieldItem.kind === "number") {
           nextParams[fieldItem.key] = toFiniteNumberOrUndefined(String(value)) ?? null;
         } else if (fieldItem.kind === "multiselect") {
@@ -2594,13 +2809,18 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
             ? value.map((itemValue) => itemValue.trim()).filter(Boolean)
             : toTemplateMultiselectValue(value);
           nextParams[fieldItem.key] = normalized.length > 0 ? normalized : null;
-        } else {
-          const normalized = String(value).trim();
-          nextParams[fieldItem.key] = normalized || null;
-        }
+      } else {
+        const normalized = String(value).trim();
+        nextParams[fieldItem.key] = normalized || null;
+      }
 
-        return {
-          ...current,
+      if (fieldItem.key === "configuracionCanales") {
+        const normalized = normalizeMachineChannelConfiguration(nextParams);
+        Object.assign(nextParams, normalized);
+      }
+
+      return {
+        ...current,
           parametrosTecnicos:
             fieldItem.key === "anchoMaxHoja" ||
             fieldItem.key === "altoMaxHoja" ||
@@ -2845,8 +3065,16 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
             }
           } else if (fieldItem.key === "printMode") {
             const normalized = String(value || "").trim();
-            next.printMode =
-              (normalized ? (normalized as LocalPerfilOperativo["printMode"]) : undefined);
+            if (!normalized) {
+              next.printMode = undefined;
+              delete detail.configuracionCanalesPerfil;
+            } else if (normalized === "cmyk" || normalized === "k") {
+              next.printMode = normalized as LocalPerfilOperativo["printMode"];
+              detail.configuracionCanalesPerfil = normalized;
+            } else {
+              next.printMode = undefined;
+              detail.configuracionCanalesPerfil = normalized;
+            }
           } else if (fieldItem.key === "printSides") {
             const normalized = String(value || "").trim();
             next.printSides =
@@ -4218,6 +4446,105 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             </FieldGroup>
                           </section>
                         ))}
+                        {MACHINE_TECHNOLOGY_TEMPLATES.has(form.plantilla) ? (
+                          <section className="space-y-3">
+                            <div className="flex items-center gap-1">
+                              <h4 className="text-sm font-semibold">Tecnología</h4>
+                              {renderTooltipIcon(
+                                "Clasifica funcionalmente la máquina para filtros de productos y lógica futura de gran formato.",
+                              )}
+                            </div>
+                            <FieldGroup className="grid gap-4 md:grid-cols-2">
+                              <Field>
+                                <FieldLabel>Tecnología de impresión</FieldLabel>
+                                {(() => {
+                                  const tecnologiaValue =
+                                    (typeof form.capacidadesAvanzadas?.tecnologiaMaquina === "string"
+                                      ? form.capacidadesAvanzadas.tecnologiaMaquina
+                                      : getMaquinaTecnologia(form)) ?? EMPTY_SELECT_VALUE;
+                                  const tecnologiaLabel =
+                                    tecnologiaMaquinaItems.find((item) => item.value === tecnologiaValue)?.label ??
+                                    "Seleccionar tecnología";
+
+                                  return (
+                                <Select
+                                  value={tecnologiaValue}
+                                  onValueChange={(value) =>
+                                    setForm((current) => ({
+                                      ...current,
+                                      capacidadesAvanzadas: {
+                                        ...(current.capacidadesAvanzadas ?? {}),
+                                        tecnologiaMaquina:
+                                          value === EMPTY_SELECT_VALUE ? undefined : value,
+                                      },
+                                    }))
+                                  }
+                                >
+                                  <SelectTrigger className="max-w-sm">
+                                    <SelectValue placeholder="Seleccionar tecnología">{tecnologiaLabel}</SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value={EMPTY_SELECT_VALUE}>Seleccionar tecnología</SelectItem>
+                                    {tecnologiaMaquinaItems.map((item) => (
+                                      <SelectItem key={item.value} value={item.value}>
+                                        {item.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                  );
+                                })()}
+                              </Field>
+                            </FieldGroup>
+                          </section>
+                        ) : null}
+                        {form.plantilla === "impresora_uv_mesa_extensora" ? (
+                          <section className="space-y-3">
+                            <div className="flex items-center gap-1">
+                              <h4 className="text-sm font-semibold">Geometrías compatibles</h4>
+                              {renderTooltipIcon(
+                                "Define las geometrías reales que esta máquina híbrida puede trabajar. Se usa para filtrar equipos compatibles en productos de gran formato.",
+                              )}
+                            </div>
+                            <div className="grid gap-3 md:grid-cols-3">
+                              {geometriaTrabajoMaquinaItems
+                                .filter((item) => item.value === "plano" || item.value === "rollo")
+                                .map((item) => (
+                                  <label
+                                    key={item.value}
+                                    className="flex items-center gap-3 rounded-lg border p-3 text-sm"
+                                  >
+                                    <Checkbox
+                                      checked={compatibleGeometries.includes(item.value)}
+                                      onCheckedChange={(checked) =>
+                                        setForm((current) => {
+                                          const currentValues = getEditableCompatibleGeometries(current);
+                                          const nextValues = checked
+                                            ? Array.from(new Set([...currentValues, item.value]))
+                                            : currentValues.filter((value) => value !== item.value);
+                                          return {
+                                            ...current,
+                                            capacidadesAvanzadas: {
+                                              ...(current.capacidadesAvanzadas ?? {}),
+                                              geometriasCompatibles: nextValues,
+                                            },
+                                          };
+                                        })
+                                      }
+                                    />
+                                    <div>
+                                      <p className="font-medium">{item.label}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {item.value === "rollo"
+                                          ? "Permite usarla en productos de rollo flexible."
+                                          : "Permite usarla en trabajos sobre rígidos o cama plana."}
+                                      </p>
+                                    </div>
+                                  </label>
+                                ))}
+                            </div>
+                          </section>
+                        ) : null}
                       </div>
                     </CardContent>
                   </Card>
@@ -4571,6 +4898,12 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             }
 
                             if (fieldItem.kind === "select") {
+                              const fieldOptions =
+                                fieldItem.key === "printMode" && supportedPrintModeValues.size > 0
+                                  ? (fieldItem.options ?? []).filter((option) =>
+                                      supportedPrintModeValues.has(option.value),
+                                    )
+                                  : fieldItem.options ?? [];
                               return (
                                 <Field key={`${selectedPerfil.id}-${fieldItem.key}`}>
                                   <div className="flex min-h-10 items-start gap-1">
@@ -4593,7 +4926,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                                   >
                                     <SelectTrigger>
                                       <SelectValue placeholder={fieldItem.placeholder || "Seleccionar"}>
-                                        {fieldItem.options?.find((option) => option.value === currentSelectValue)?.label ??
+                                        {fieldOptions.find((option) => option.value === currentSelectValue)?.label ??
                                           (currentSelectValue !== EMPTY_SELECT_VALUE
                                             ? formatTechnicalValue(currentSelectValue)
                                             : fieldItem.placeholder || "Seleccionar")}
@@ -4602,7 +4935,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                                     <SelectContent>
                                       <SelectGroup>
                                         <SelectItem value={EMPTY_SELECT_VALUE}>Sin seleccionar</SelectItem>
-                                        {(fieldItem.options ?? []).map((option) => (
+                                        {fieldOptions.map((option) => (
                                           <SelectItem key={option.value} value={option.value}>
                                             {option.label}
                                           </SelectItem>
@@ -4917,6 +5250,8 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             <p className="text-sm text-muted-foreground">
                               {requiredPrinterChannels.length === 0
                                 ? `No hay canales de consumibles para mostrar. Configura primero ${printerChannelSourceHelpText} en el Paso 1.`
+                                : visibleConsumiblePerfil && visibleConsumibleChannels.length === 0
+                                  ? "El perfil seleccionado no tiene una configuración de canales compatible con la máquina."
                                 : perfiles.length === 0
                                   ? "No hay perfiles operativos. Crea al menos un perfil en el Paso 2 para cargar consumibles."
                                   : "Aun no hay filas de consumibles para este perfil. Revisa la configuracion en pasos anteriores."}
@@ -4961,8 +5296,8 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                                 {consumiblesPerfilActual.map((consumible) => {
                                   const color = String(consumible.detalle?.color ?? "cian");
                                   const availableChannelOptions =
-                                    requiredPrinterChannels.length > 0
-                                      ? requiredPrinterChannels
+                                    visibleConsumibleChannels.length > 0
+                                      ? visibleConsumibleChannels
                                           .map((value) => PRINTER_CHANNEL_OPTION_BY_VALUE.get(value))
                                           .filter(
                                             (item): item is { value: string; label: string } => Boolean(item),
@@ -4988,8 +5323,9 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                                         <Select
                                           value={color}
                                           onValueChange={(value) => {
+                                            const nextColor = typeof value === "string" ? value : "";
                                             const tipo =
-                                              value === "barniz"
+                                              nextColor === "barniz"
                                                 ? "barniz"
                                                 : variante?.subfamilia === "toner"
                                                   ? "toner"
@@ -4998,9 +5334,9 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                                               consumible.id,
                                               {
                                                 tipo,
-                                                nombre: `${tipo === "barniz" ? "Barniz" : "Tinta"} ${value}`,
+                                                nombre: getPrinterConsumibleDisplayName(tipo, nextColor),
                                               },
-                                              { color: value },
+                                              { color: nextColor },
                                             );
                                           }}
                                         >
@@ -5041,20 +5377,22 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                                               })
                                             }
                                           />
-                                          <Button
-                                            type="button"
-                                            size="icon"
-                                            variant="outline"
-                                            className="shrink-0"
-                                            onClick={() =>
-                                              setOpenConsumibleCalculatorId((current) =>
-                                                current === consumible.id ? null : consumible.id,
-                                              )
-                                            }
-                                            title="Abrir calculadora de consumo"
-                                          >
-                                            <CalculatorIcon />
-                                          </Button>
+                                          {showLaserConsumibleCalculator ? (
+                                            <Button
+                                              type="button"
+                                              size="icon"
+                                              variant="outline"
+                                              className="shrink-0"
+                                              onClick={() =>
+                                                setOpenConsumibleCalculatorId((current) =>
+                                                  current === consumible.id ? null : consumible.id,
+                                                )
+                                              }
+                                              title="Abrir calculadora de consumo"
+                                            >
+                                              <CalculatorIcon />
+                                            </Button>
+                                          ) : null}
                                         </div>
                                       </TableCell>
                                       <TableCell className="text-sm text-muted-foreground">
@@ -5085,7 +5423,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                                               tipo,
                                               nombre:
                                                 nextVariante?.nombre ??
-                                                `${tipo === "barniz" ? "Barniz" : "Tinta"} ${color}`,
+                                                getPrinterConsumibleDisplayName(tipo, color),
                                             });
                                           }}
                                         >
@@ -5257,6 +5595,25 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                               const varianteSeleccionada = consumible.materiaPrimaVarianteId
                                 ? varianteConsumibleById.get(consumible.materiaPrimaVarianteId)
                                 : undefined;
+                              const precioReferenciaConsumible = Number(
+                                varianteSeleccionada?.precioReferencia ?? 0,
+                              );
+                              const unidadCompraConsumible = varianteSeleccionada?.unidadCompra ?? null;
+                              const unidadStockConsumible = varianteSeleccionada?.unidadStock ?? null;
+                              const unidadObjetivoConsumible =
+                                mapMachineConsumptionUnitToUnitCode(consumible.unidad);
+                              const precioNormalizadoConsumible =
+                                unidadCompraConsumible &&
+                                unidadObjetivoConsumible &&
+                                Number.isFinite(precioReferenciaConsumible) &&
+                                precioReferenciaConsumible > 0 &&
+                                areUnitsCompatible(unidadCompraConsumible, unidadObjetivoConsumible)
+                                  ? convertUnitPrice(
+                                      precioReferenciaConsumible,
+                                      unidadCompraConsumible,
+                                      unidadObjetivoConsumible,
+                                    )
+                                  : null;
                               return (
                                 <div key={consumible.id} className="rounded-lg border p-4">
                                   <div className="mb-3 flex items-center justify-between">
@@ -5315,11 +5672,27 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                                         </p>
                                       ) : null}
                                       {consumible.materiaPrimaVarianteId ? (
-                                        <p className="mt-1 text-xs text-muted-foreground">
-                                          Costo ref.: $
-                                          {Number(varianteSeleccionada?.precioReferencia ?? 0).toFixed(2)} por{" "}
-                                          {getUnidadMateriaPrimaLabel(varianteSeleccionada?.unidadStock)}
-                                        </p>
+                                        <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                                          <p>
+                                            Precio cargado: $
+                                            {precioReferenciaConsumible.toFixed(2)} por{" "}
+                                            {getUnidadMateriaPrimaLabel(unidadCompraConsumible)}
+                                          </p>
+                                          {precioNormalizadoConsumible !== null &&
+                                          unidadObjetivoConsumible &&
+                                          unidadCompraConsumible !== unidadObjetivoConsumible ? (
+                                            <p>
+                                              Costo interno para este consumo: $
+                                              {precioNormalizadoConsumible.toFixed(4)} por{" "}
+                                              {getUnidadMateriaPrimaLabel(consumible.unidad)}
+                                            </p>
+                                          ) : unidadStockConsumible ? (
+                                            <p>
+                                              Unidad de stock de la variante:{" "}
+                                              {getUnidadMateriaPrimaLabel(unidadStockConsumible)}
+                                            </p>
+                                          ) : null}
+                                        </div>
                                       ) : null}
                                     </Field>
                                     <Field className="md:col-span-4">
@@ -5439,7 +5812,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                         )}
                       </>
                     )}
-                    {showPrinterConsumiblesStep && activeConsumibleCalculator ? (
+                    {showLaserConsumibleCalculator && showPrinterConsumiblesStep && activeConsumibleCalculator ? (
                     (() => {
                       const calculatorDraft = getConsumibleCalculatorDraft(activeConsumibleCalculator.id);
                       const coveragePercent =
@@ -5710,6 +6083,12 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
           <SheetFooter className="mt-6">
             <Button variant="outline" onClick={() => setIsSheetOpen(false)} disabled={isSaving}>
               Cancelar
+            </Button>
+            <Button variant="outline" onClick={() => persistMachine(true)} disabled={isSaving}>
+              {isSaving ? (
+                <GdiSpinner className="size-4" data-icon="inline-start" />
+              ) : null}
+              Guardar borrador
             </Button>
             <Button onClick={handleSave} disabled={isSaving}>
               {isSaving ? (

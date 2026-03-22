@@ -30,7 +30,7 @@ import {
   UpsertMateriaPrimaDto,
 } from './dto/upsert-materia-prima.dto';
 import { UpsertUbicacionDto } from './dto/upsert-ubicacion.dto';
-import { unitsAreCompatible } from './unidades-canonicas';
+import { convertUnitPrice, unitsAreCompatible, type UnitCode } from './unidades-canonicas';
 
 type MateriaPrimaEntity = Prisma.MateriaPrimaGetPayload<{
   include: {
@@ -504,9 +504,7 @@ export class InventarioService {
         tipo === TipoMovimientoStockMateriaPrima.INGRESO ||
         tipo === TipoMovimientoStockMateriaPrima.AJUSTE_ENTRADA
       ) {
-        const precioReferenciaVariante = variante.precioReferencia
-          ? this.roundToScale(this.decimalToNumber(variante.precioReferencia))
-          : null;
+        const precioReferenciaVariante = this.resolvePrecioReferenciaPorUnidadStock(variante);
         if ((unitCost === null || unitCost <= 0) && precioReferenciaVariante && precioReferenciaVariante > 0) {
           unitCost = precioReferenciaVariante;
         }
@@ -894,6 +892,15 @@ export class InventarioService {
         id: true,
         sku: true,
         precioReferencia: true,
+        unidadStock: true,
+        unidadCompra: true,
+        materiaPrima: {
+          select: {
+            nombre: true,
+            unidadStock: true,
+            unidadCompra: true,
+          },
+        },
       },
     });
 
@@ -921,6 +928,66 @@ export class InventarioService {
 
   private toDecimal(value: number) {
     return new Prisma.Decimal(value);
+  }
+
+  private toCanonicalUnitCode(value: unknown): UnitCode | null {
+    if (typeof value !== 'string' || !value.trim()) {
+      return null;
+    }
+    const normalized = value.trim().toLowerCase();
+    const supported: UnitCode[] = [
+      'unidad',
+      'pack',
+      'caja',
+      'kit',
+      'hoja',
+      'pliego',
+      'resma',
+      'rollo',
+      'pieza',
+      'par',
+      'metro_lineal',
+      'mm',
+      'cm',
+      'm2',
+      'm3',
+      'litro',
+      'ml',
+      'kg',
+      'gramo',
+    ];
+    return supported.includes(normalized as UnitCode) ? (normalized as UnitCode) : null;
+  }
+
+  private resolvePrecioReferenciaPorUnidadStock(variante: {
+    precioReferencia: Prisma.Decimal | null;
+    unidadStock: UnidadMateriaPrima | null;
+    unidadCompra: UnidadMateriaPrima | null;
+    materiaPrima: {
+      unidadStock: UnidadMateriaPrima;
+      unidadCompra: UnidadMateriaPrima;
+    };
+  }) {
+    const precio = variante.precioReferencia
+      ? this.roundToScale(this.decimalToNumber(variante.precioReferencia), 6)
+      : null;
+    if (!precio || precio <= 0) {
+      return null;
+    }
+    const sourceUnit =
+      this.toCanonicalUnitCode(variante.unidadCompra) ??
+      this.toCanonicalUnitCode(variante.unidadStock) ??
+      this.toCanonicalUnitCode(variante.materiaPrima.unidadCompra) ??
+      this.toCanonicalUnitCode(variante.materiaPrima.unidadStock);
+    const targetUnit =
+      this.toCanonicalUnitCode(variante.unidadStock) ??
+      this.toCanonicalUnitCode(variante.materiaPrima.unidadStock);
+
+    if (!sourceUnit || !targetUnit || !unitsAreCompatible(sourceUnit, targetUnit)) {
+      return precio;
+    }
+
+    return this.roundToScale(convertUnitPrice(precio, sourceUnit, targetUnit), 6);
   }
 
   private roundToScale(value: number, scale = 2) {

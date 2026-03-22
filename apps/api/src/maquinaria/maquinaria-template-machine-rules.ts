@@ -67,7 +67,6 @@ const RULES: Record<PlantillaMaquinariaDto, MachineTemplateRule> = {
       'anchoCama',
       'largoCama',
       'alturaMaximaObjeto',
-      'tipoMesa',
       'configuracionCanales',
     ],
   },

@@ -28,6 +28,11 @@ export enum EstadoProductoServicioDto {
   inactivo = 'inactivo',
 }
 
+export enum TipoVentaGranFormatoDto {
+  m2 = 'm2',
+  metro_lineal = 'metro_lineal',
+}
+
 export enum TipoImpresionProductoVarianteDto {
   bn = 'bn',
   cmyk = 'cmyk',
@@ -728,6 +733,97 @@ export class UpdateProductoPrecioEspecialClientesDto {
 export class UpsertProductoMotorConfigDto {
   @IsObject()
   parametros: Record<string, unknown>;
+}
+
+export class UpdateGranFormatoConfigDto {
+  @IsEnum(TipoVentaGranFormatoDto)
+  tipoVenta: TipoVentaGranFormatoDto;
+
+  @IsArray()
+  @IsString({ each: true })
+  tecnologiasCompatibles: string[];
+
+  @IsArray()
+  @IsUUID(undefined, { each: true })
+  maquinasCompatibles: string[];
+
+  @IsArray()
+  @IsUUID(undefined, { each: true })
+  perfilesCompatibles: string[];
+
+  @IsOptional()
+  @IsUUID()
+  materialBaseId?: string | null;
+
+  @IsArray()
+  @IsUUID(undefined, { each: true })
+  materialesCompatibles: string[];
+}
+
+export class CreateGranFormatoVarianteDto {
+  @IsString()
+  @IsNotEmpty()
+  nombre: string;
+
+  @IsUUID()
+  maquinaId: string;
+
+  @IsUUID()
+  perfilOperativoId: string;
+
+  @IsUUID()
+  materiaPrimaVarianteId: string;
+
+  @IsOptional()
+  @IsBoolean()
+  esDefault?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  permiteOverrideEnCotizacion?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  activo?: boolean;
+
+  @IsOptional()
+  @IsString()
+  observaciones?: string;
+}
+
+export class UpdateGranFormatoVarianteDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  nombre?: string;
+
+  @IsOptional()
+  @IsUUID()
+  maquinaId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  perfilOperativoId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  materiaPrimaVarianteId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  esDefault?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  permiteOverrideEnCotizacion?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  activo?: boolean;
+
+  @IsOptional()
+  @IsString()
+  observaciones?: string;
 }
 
 export class UpsertVarianteMotorOverrideDto {

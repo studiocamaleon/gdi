@@ -399,9 +399,7 @@ let InventarioService = class InventarioService {
             const costoPromedioPrevio = stockActual ? this.decimalToNumber(stockActual.costoPromedio) : 0;
             if (tipo === client_1.TipoMovimientoStockMateriaPrima.INGRESO ||
                 tipo === client_1.TipoMovimientoStockMateriaPrima.AJUSTE_ENTRADA) {
-                const precioReferenciaVariante = variante.precioReferencia
-                    ? this.roundToScale(this.decimalToNumber(variante.precioReferencia))
-                    : null;
+                const precioReferenciaVariante = this.resolvePrecioReferenciaPorUnidadStock(variante);
                 if ((unitCost === null || unitCost <= 0) && precioReferenciaVariante && precioReferenciaVariante > 0) {
                     unitCost = precioReferenciaVariante;
                 }
@@ -722,6 +720,15 @@ let InventarioService = class InventarioService {
                 id: true,
                 sku: true,
                 precioReferencia: true,
+                unidadStock: true,
+                unidadCompra: true,
+                materiaPrima: {
+                    select: {
+                        nombre: true,
+                        unidadStock: true,
+                        unidadCompra: true,
+                    },
+                },
             },
         });
         if (!item) {
@@ -740,6 +747,52 @@ let InventarioService = class InventarioService {
     }
     toDecimal(value) {
         return new client_1.Prisma.Decimal(value);
+    }
+    toCanonicalUnitCode(value) {
+        if (typeof value !== 'string' || !value.trim()) {
+            return null;
+        }
+        const normalized = value.trim().toLowerCase();
+        const supported = [
+            'unidad',
+            'pack',
+            'caja',
+            'kit',
+            'hoja',
+            'pliego',
+            'resma',
+            'rollo',
+            'pieza',
+            'par',
+            'metro_lineal',
+            'mm',
+            'cm',
+            'm2',
+            'm3',
+            'litro',
+            'ml',
+            'kg',
+            'gramo',
+        ];
+        return supported.includes(normalized) ? normalized : null;
+    }
+    resolvePrecioReferenciaPorUnidadStock(variante) {
+        const precio = variante.precioReferencia
+            ? this.roundToScale(this.decimalToNumber(variante.precioReferencia), 6)
+            : null;
+        if (!precio || precio <= 0) {
+            return null;
+        }
+        const sourceUnit = this.toCanonicalUnitCode(variante.unidadCompra) ??
+            this.toCanonicalUnitCode(variante.unidadStock) ??
+            this.toCanonicalUnitCode(variante.materiaPrima.unidadCompra) ??
+            this.toCanonicalUnitCode(variante.materiaPrima.unidadStock);
+        const targetUnit = this.toCanonicalUnitCode(variante.unidadStock) ??
+            this.toCanonicalUnitCode(variante.materiaPrima.unidadStock);
+        if (!sourceUnit || !targetUnit || !(0, unidades_canonicas_1.unitsAreCompatible)(sourceUnit, targetUnit)) {
+            return precio;
+        }
+        return this.roundToScale((0, unidades_canonicas_1.convertUnitPrice)(precio, sourceUnit, targetUnit), 6);
     }
     roundToScale(value, scale = 2) {
         return Number(value.toFixed(scale));

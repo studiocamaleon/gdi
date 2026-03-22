@@ -6,3 +6,5 @@ export declare const CANONICAL_UNITS: Record<UnitCode, {
     factorToBase: number;
 }>;
 export declare function unitsAreCompatible(from: UnitCode, to: UnitCode): boolean;
+export declare function convertUnitValue(value: number, from: UnitCode, to: UnitCode): number;
+export declare function convertUnitPrice(pricePerFromUnit: number, from: UnitCode, to: UnitCode): number;

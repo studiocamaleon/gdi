@@ -443,6 +443,7 @@ export declare class MaquinariaService {
     private buildConsumibleData;
     private buildComponenteDesgasteData;
     private getDerivedEstadoConfiguracion;
+    private resolvePersistedEstadoConfiguracion;
     private hasMinimumBaseData;
     private hasCoreCostingData;
     private hasTemplateSpecificData;

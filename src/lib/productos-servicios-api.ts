@@ -8,6 +8,8 @@ import {
   CotizacionProductoVariante,
   EstadoProductoServicio,
   FamiliaProducto,
+  GranFormatoConfig,
+  GranFormatoVariante,
   MetodoCalculoPrecioProducto,
   MotorCostoCatalogItem,
   ProductoImpuestoCatalogo,
@@ -21,6 +23,7 @@ import {
   ProductoVariante,
   ProductoServicio,
   SubfamiliaProducto,
+  TipoVentaGranFormato,
   VarianteOpcionesProductivas,
   ValorOpcionProductiva,
   TipoImpresionProductoVariante,
@@ -219,6 +222,78 @@ export async function updateProductoServicio(
 
 export async function getProductoVariantes(productoId: string) {
   return apiRequest<ProductoVariante[]>(`/productos-servicios/${productoId}/variantes`);
+}
+
+export async function getGranFormatoConfig(productoId: string) {
+  return apiRequest<GranFormatoConfig>(`/productos-servicios/${productoId}/gran-formato-config`);
+}
+
+export async function updateGranFormatoConfig(
+  productoId: string,
+  payload: {
+    tipoVenta: TipoVentaGranFormato;
+    tecnologiasCompatibles: string[];
+    maquinasCompatibles: string[];
+    perfilesCompatibles: string[];
+    materialBaseId?: string | null;
+    materialesCompatibles: string[];
+  },
+) {
+  return apiRequest<GranFormatoConfig>(`/productos-servicios/${productoId}/gran-formato-config`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getGranFormatoVariantes(productoId: string) {
+  return apiRequest<GranFormatoVariante[]>(`/productos-servicios/${productoId}/gran-formato-variantes`);
+}
+
+export async function createGranFormatoVariante(
+  productoId: string,
+  payload: {
+    nombre: string;
+    maquinaId: string;
+    perfilOperativoId: string;
+    materiaPrimaVarianteId: string;
+    esDefault?: boolean;
+    permiteOverrideEnCotizacion?: boolean;
+    activo?: boolean;
+    observaciones?: string;
+  },
+) {
+  return apiRequest<GranFormatoVariante>(`/productos-servicios/${productoId}/gran-formato-variantes`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateGranFormatoVariante(
+  varianteId: string,
+  payload: {
+    nombre?: string;
+    maquinaId?: string;
+    perfilOperativoId?: string;
+    materiaPrimaVarianteId?: string;
+    esDefault?: boolean;
+    permiteOverrideEnCotizacion?: boolean;
+    activo?: boolean;
+    observaciones?: string;
+  },
+) {
+  return apiRequest<GranFormatoVariante>(`/productos-servicios/gran-formato-variantes/${varianteId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteGranFormatoVariante(varianteId: string) {
+  return apiRequest<{ id: string; deleted: boolean }>(
+    `/productos-servicios/gran-formato-variantes/${varianteId}`,
+    {
+      method: 'DELETE',
+    },
+  );
 }
 
 export async function getProductoChecklist(productoId: string) {

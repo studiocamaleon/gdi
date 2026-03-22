@@ -360,6 +360,8 @@ export declare class InventarioService {
     private findVarianteOrThrow;
     private findStockRow;
     private toDecimal;
+    private toCanonicalUnitCode;
+    private resolvePrecioReferenciaPorUnidadStock;
     private roundToScale;
     private toMovimientoResponse;
     private findMateriaPrimaOrThrow;

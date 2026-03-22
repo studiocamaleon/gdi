@@ -6,6 +6,10 @@ export declare enum EstadoProductoServicioDto {
     activo = "activo",
     inactivo = "inactivo"
 }
+export declare enum TipoVentaGranFormatoDto {
+    m2 = "m2",
+    metro_lineal = "metro_lineal"
+}
 export declare enum TipoImpresionProductoVarianteDto {
     bn = "bn",
     cmyk = "cmyk"
@@ -277,6 +281,34 @@ export declare class UpdateProductoPrecioEspecialClientesDto {
 }
 export declare class UpsertProductoMotorConfigDto {
     parametros: Record<string, unknown>;
+}
+export declare class UpdateGranFormatoConfigDto {
+    tipoVenta: TipoVentaGranFormatoDto;
+    tecnologiasCompatibles: string[];
+    maquinasCompatibles: string[];
+    perfilesCompatibles: string[];
+    materialBaseId?: string | null;
+    materialesCompatibles: string[];
+}
+export declare class CreateGranFormatoVarianteDto {
+    nombre: string;
+    maquinaId: string;
+    perfilOperativoId: string;
+    materiaPrimaVarianteId: string;
+    esDefault?: boolean;
+    permiteOverrideEnCotizacion?: boolean;
+    activo?: boolean;
+    observaciones?: string;
+}
+export declare class UpdateGranFormatoVarianteDto {
+    nombre?: string;
+    maquinaId?: string;
+    perfilOperativoId?: string;
+    materiaPrimaVarianteId?: string;
+    esDefault?: boolean;
+    permiteOverrideEnCotizacion?: boolean;
+    activo?: boolean;
+    observaciones?: string;
 }
 export declare class UpsertVarianteMotorOverrideDto {
     parametros: Record<string, unknown>;

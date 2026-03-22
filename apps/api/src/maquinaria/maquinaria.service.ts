@@ -254,6 +254,7 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
   'anchoImprimibleMaximo',
   'altoImprimibleMaximo',
   'altoBocaMm',
+  'anchoBoca',
   'anchoRolloMm',
   'soportaDobleRollo',
   'velocidadMmSeg',
@@ -653,7 +654,7 @@ export class MaquinariaService {
     payload: UpsertMaquinaDto,
     forcedCodigo?: string,
   ) {
-    const estadoConfiguracion = this.getDerivedEstadoConfiguracion(payload);
+    const estadoConfiguracion = this.resolvePersistedEstadoConfiguracion(payload);
     const parametrosTecnicos = this.withDerivedTemplateParams(payload);
     const dimensionesDerivadas = this.getDerivedMachineDimensions(
       payload,
@@ -800,6 +801,15 @@ export class MaquinariaService {
     return EstadoConfiguracionMaquinaDto.lista;
   }
 
+  private resolvePersistedEstadoConfiguracion(
+    payload: UpsertMaquinaDto,
+  ): EstadoConfiguracionMaquinaDto {
+    if (payload.estadoConfiguracion === EstadoConfiguracionMaquinaDto.borrador) {
+      return EstadoConfiguracionMaquinaDto.borrador;
+    }
+    return this.getDerivedEstadoConfiguracion(payload);
+  }
+
   private hasMinimumBaseData(payload: UpsertMaquinaDto) {
     return Boolean(
       payload.nombre?.trim() &&
@@ -868,6 +878,9 @@ export class MaquinariaService {
     auth: CurrentAuth,
     payload: UpsertMaquinaDto,
   ) {
+    const isDraft =
+      this.resolvePersistedEstadoConfiguracion(payload) ===
+      EstadoConfiguracionMaquinaDto.borrador;
     const templateRule = TEMPLATE_CATALOG_RULES[payload.plantilla];
     if (!templateRule) {
       throw new BadRequestException(
@@ -891,14 +904,16 @@ export class MaquinariaService {
     }
 
     this.validateTechnicalPayload(payload);
-    try {
-      validateMachinePayloadByTemplate(payload);
-    } catch (error) {
-      throw new BadRequestException(
-        error instanceof Error
-          ? error.message
-          : `Maquina invalida para la plantilla ${payload.plantilla}.`,
-      );
+    if (!isDraft) {
+      try {
+        validateMachinePayloadByTemplate(payload);
+      } catch (error) {
+        throw new BadRequestException(
+          error instanceof Error
+            ? error.message
+            : `Maquina invalida para la plantilla ${payload.plantilla}.`,
+        );
+      }
     }
 
     const planta = await this.prisma.planta.findFirst({

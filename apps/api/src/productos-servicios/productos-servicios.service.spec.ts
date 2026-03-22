@@ -49,6 +49,22 @@ describe('ProductosServiciosService V1 adicionales', () => {
     timingOverride: { trace?: Record<string, unknown> | null } | null;
     warnings: string[];
   }) => { materiales: Array<Record<string, unknown>>; costo: number };
+  let resolveMateriaPrimaVariantUnitCost: (input: {
+    materiaPrimaVariante: {
+      sku: string;
+      precioReferencia: number | null;
+      unidadStock?: string | null;
+      unidadCompra?: string | null;
+      materiaPrima: {
+        nombre: string;
+        unidadStock?: string | null;
+        unidadCompra?: string | null;
+      };
+    };
+    targetUnit?: string | null;
+    warnings?: string[];
+    contextLabel?: string;
+  }) => number;
   let buildOperacionesCotizadasOrdenadas: (
     operacionesBase: Array<{ orden: number; nombre: string; detalleJson?: unknown }>,
     routeEffects: Array<{
@@ -169,6 +185,10 @@ describe('ProductosServiciosService V1 adicionales', () => {
       service as unknown as Record<string, unknown>,
       'calculateLaminadoraFilmConsumables',
     ) as typeof calculateLaminadoraFilmConsumables;
+    resolveMateriaPrimaVariantUnitCost = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'resolveMateriaPrimaVariantUnitCost',
+    ) as typeof resolveMateriaPrimaVariantUnitCost;
     buildOperacionesCotizadasOrdenadas = Reflect.get(
       service as unknown as Record<string, unknown>,
       'buildOperacionesCotizadasOrdenadas',
@@ -425,6 +445,30 @@ describe('ProductosServiciosService V1 adicionales', () => {
     expect(Number(result?.trace?.velocidadTrabajoMmSeg ?? 0)).toBe(200);
     expect(Number(result?.trace?.velocidadMmSegEfectiva ?? 0)).toBe(200);
     expect(result?.runMin).toBeGreaterThan(0);
+  });
+
+  it('convierte precio de referencia por litro a costo por ml para consumibles de maquinaria', () => {
+    const warnings: string[] = [];
+
+    const costoMl = resolveMateriaPrimaVariantUnitCost.call(service, {
+      materiaPrimaVariante: {
+        sku: 'TINTA-CMYK',
+        precioReferencia: 12000,
+        unidadCompra: 'LITRO',
+        unidadStock: 'ML',
+        materiaPrima: {
+          nombre: 'Tinta UV',
+          unidadCompra: 'LITRO',
+          unidadStock: 'ML',
+        },
+      },
+      targetUnit: 'ML',
+      warnings,
+      contextLabel: 'Consumible',
+    });
+
+    expect(costoMl).toBeCloseTo(12, 6);
+    expect(warnings).toEqual([]);
   });
 
   it('rechaza perfil de doble rollo cuando la maquina no lo soporta', () => {

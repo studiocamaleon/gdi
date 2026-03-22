@@ -260,6 +260,90 @@ export const geometriaTrabajoMaquinaItems: Array<{
   { label: "Volumen", value: "volumen" },
 ];
 
+export const tecnologiaMaquinaItems = [
+  { label: "Láser", value: "laser" },
+  { label: "Eco-solvente", value: "eco_solvente" },
+  { label: "Ultravioleta", value: "uv" },
+  { label: "Látex", value: "latex" },
+  { label: "Sublimación", value: "sublimacion" },
+  { label: "DTF textil", value: "dtf_textil" },
+  { label: "DTF UV", value: "dtf_uv" },
+  { label: "Inkjet", value: "inkjet" },
+] as const;
+
+export type TecnologiaMaquina = (typeof tecnologiaMaquinaItems)[number]["value"];
+
+function normalizeTecnologiaMaquinaValue(value: unknown) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (normalized === "solvente") {
+    return "eco_solvente";
+  }
+  return tecnologiaMaquinaItems.some((item) => item.value === normalized)
+    ? (normalized as TecnologiaMaquina)
+    : null;
+}
+
+export function getMaquinaGeometriasCompatibles(input: {
+  geometriaTrabajo: GeometriaTrabajoMaquina;
+  plantilla?: PlantillaMaquinaria;
+  capacidadesAvanzadas?: Record<string, unknown> | null;
+}) {
+  const raw =
+    input.capacidadesAvanzadas && Array.isArray(input.capacidadesAvanzadas.geometriasCompatibles)
+      ? input.capacidadesAvanzadas.geometriasCompatibles
+      : [];
+  const normalized = raw
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(
+      (item): item is GeometriaTrabajoMaquina =>
+        item === "pliego" ||
+        item === "rollo" ||
+        item === "plano" ||
+        item === "cilindrico" ||
+        item === "volumen",
+    );
+  if (normalized.length > 0) {
+    return Array.from(new Set(normalized));
+  }
+  if (input.plantilla === "impresora_uv_mesa_extensora") {
+    return ["plano", "rollo"] as GeometriaTrabajoMaquina[];
+  }
+  return [input.geometriaTrabajo];
+}
+
+export function getMaquinaTecnologia(input: {
+  plantilla?: PlantillaMaquinaria;
+  capacidadesAvanzadas?: Record<string, unknown> | null;
+}) {
+  const explicit = normalizeTecnologiaMaquinaValue(input.capacidadesAvanzadas?.tecnologiaMaquina);
+  if (explicit) {
+    return explicit;
+  }
+
+  switch (input.plantilla) {
+    case "impresora_uv_mesa_extensora":
+    case "impresora_uv_flatbed":
+    case "impresora_uv_rollo":
+      return "uv";
+    case "impresora_solvente":
+      return "eco_solvente";
+    case "impresora_latex":
+      return "latex";
+    case "impresora_sublimacion_gran_formato":
+      return "sublimacion";
+    case "impresora_dtf":
+      return "dtf_textil";
+    case "impresora_dtf_uv":
+      return "dtf_uv";
+    case "impresora_inyeccion_tinta":
+      return "inkjet";
+    case "impresora_laser":
+      return "laser";
+    default:
+      return null;
+  }
+}
+
 export const unidadProduccionMaquinaItems: Array<{
   label: string;
   value: UnidadProduccionMaquina;

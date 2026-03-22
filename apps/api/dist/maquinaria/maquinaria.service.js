@@ -188,6 +188,7 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
     'anchoImprimibleMaximo',
     'altoImprimibleMaximo',
     'altoBocaMm',
+    'anchoBoca',
     'anchoRolloMm',
     'soportaDobleRollo',
     'velocidadMmSeg',
@@ -517,7 +518,7 @@ let MaquinariaService = class MaquinariaService {
         }
     }
     buildMaquinaWriteData(auth, payload, forcedCodigo) {
-        const estadoConfiguracion = this.getDerivedEstadoConfiguracion(payload);
+        const estadoConfiguracion = this.resolvePersistedEstadoConfiguracion(payload);
         const parametrosTecnicos = this.withDerivedTemplateParams(payload);
         const dimensionesDerivadas = this.getDerivedMachineDimensions(payload, parametrosTecnicos);
         return {
@@ -623,6 +624,12 @@ let MaquinariaService = class MaquinariaService {
         }
         return upsert_maquina_dto_1.EstadoConfiguracionMaquinaDto.lista;
     }
+    resolvePersistedEstadoConfiguracion(payload) {
+        if (payload.estadoConfiguracion === upsert_maquina_dto_1.EstadoConfiguracionMaquinaDto.borrador) {
+            return upsert_maquina_dto_1.EstadoConfiguracionMaquinaDto.borrador;
+        }
+        return this.getDerivedEstadoConfiguracion(payload);
+    }
     hasMinimumBaseData(payload) {
         return Boolean(payload.nombre?.trim() &&
             payload.plantaId &&
@@ -665,6 +672,8 @@ let MaquinariaService = class MaquinariaService {
         return true;
     }
     async validateReferences(auth, payload) {
+        const isDraft = this.resolvePersistedEstadoConfiguracion(payload) ===
+            upsert_maquina_dto_1.EstadoConfiguracionMaquinaDto.borrador;
         const templateRule = TEMPLATE_CATALOG_RULES[payload.plantilla];
         if (!templateRule) {
             throw new common_1.BadRequestException(`La plantilla ${payload.plantilla} no existe en el catalogo del sistema.`);
@@ -677,13 +686,15 @@ let MaquinariaService = class MaquinariaService {
             throw new common_1.BadRequestException(`La unidad ${payload.unidadProduccionPrincipal} no coincide con la plantilla ${payload.plantilla}. Debe ser una de: ${allowedProductionUnits.join(', ')}.`);
         }
         this.validateTechnicalPayload(payload);
-        try {
-            (0, maquinaria_template_machine_rules_1.validateMachinePayloadByTemplate)(payload);
-        }
-        catch (error) {
-            throw new common_1.BadRequestException(error instanceof Error
-                ? error.message
-                : `Maquina invalida para la plantilla ${payload.plantilla}.`);
+        if (!isDraft) {
+            try {
+                (0, maquinaria_template_machine_rules_1.validateMachinePayloadByTemplate)(payload);
+            }
+            catch (error) {
+                throw new common_1.BadRequestException(error instanceof Error
+                    ? error.message
+                    : `Maquina invalida para la plantilla ${payload.plantilla}.`);
+            }
         }
         const planta = await this.prisma.planta.findFirst({
             where: {

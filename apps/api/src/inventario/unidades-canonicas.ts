@@ -51,3 +51,21 @@ export function unitsAreCompatible(from: UnitCode, to: UnitCode) {
   const right = CANONICAL_UNITS[to];
   return left.dimension === right.dimension && left.baseCode === right.baseCode;
 }
+
+export function convertUnitValue(value: number, from: UnitCode, to: UnitCode) {
+  if (!unitsAreCompatible(from, to)) {
+    throw new Error(`Units ${from} and ${to} are not compatible.`);
+  }
+  const fromFactor = CANONICAL_UNITS[from].factorToBase;
+  const toFactor = CANONICAL_UNITS[to].factorToBase;
+  return (value * fromFactor) / toFactor;
+}
+
+export function convertUnitPrice(pricePerFromUnit: number, from: UnitCode, to: UnitCode) {
+  if (!unitsAreCompatible(from, to)) {
+    throw new Error(`Units ${from} and ${to} are not compatible.`);
+  }
+  const fromFactor = CANONICAL_UNITS[from].factorToBase;
+  const toFactor = CANONICAL_UNITS[to].factorToBase;
+  return pricePerFromUnit * (toFactor / fromFactor);
+}

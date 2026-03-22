@@ -64,7 +64,6 @@ const RULES = {
             'anchoCama',
             'largoCama',
             'alturaMaximaObjeto',
-            'tipoMesa',
             'configuracionCanales',
         ],
     },

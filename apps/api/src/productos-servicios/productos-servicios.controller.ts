@@ -7,9 +7,11 @@ import {
   AssignProductoMotorDto,
   UpdateProductoPrecioDto,
   UpdateProductoPrecioEspecialClientesDto,
+  UpdateGranFormatoConfigDto,
   AssignVarianteRutaDto,
   CotizarProductoVarianteDto,
   CreateProductoVarianteDto,
+  CreateGranFormatoVarianteDto,
   UpsertProductoChecklistDto,
   UpsertProductoAdicionalServicioPricingDto,
   UpsertVarianteOpcionesProductivasDto,
@@ -21,6 +23,7 @@ import {
   UpsertProductoMotorConfigDto,
   UpsertVarianteMotorOverrideDto,
   UpdateProductoVarianteDto,
+  UpdateGranFormatoVarianteDto,
   UpsertFamiliaProductoDto,
   UpsertProductoImpuestoDto,
   UpsertProductoServicioDto,
@@ -272,6 +275,57 @@ export class ProductosServiciosController {
     @Body() payload: UpsertProductoMotorConfigDto,
   ) {
     return this.service.upsertProductoMotorConfig(auth, id, payload);
+  }
+
+  @Get(':id/gran-formato-config')
+  getGranFormatoConfig(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.service.getGranFormatoConfig(auth, id);
+  }
+
+  @Put(':id/gran-formato-config')
+  updateGranFormatoConfig(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: UpdateGranFormatoConfigDto,
+  ) {
+    return this.service.updateGranFormatoConfig(auth, id, payload);
+  }
+
+  @Get(':id/gran-formato-variantes')
+  getGranFormatoVariantes(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.service.findGranFormatoVariantes(auth, id);
+  }
+
+  @Post(':id/gran-formato-variantes')
+  createGranFormatoVariante(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: CreateGranFormatoVarianteDto,
+  ) {
+    return this.service.createGranFormatoVariante(auth, id, payload);
+  }
+
+  @Put('gran-formato-variantes/:varianteId')
+  updateGranFormatoVariante(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('varianteId') varianteId: string,
+    @Body() payload: UpdateGranFormatoVarianteDto,
+  ) {
+    return this.service.updateGranFormatoVariante(auth, varianteId, payload);
+  }
+
+  @Delete('gran-formato-variantes/:varianteId')
+  deleteGranFormatoVariante(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('varianteId') varianteId: string,
+  ) {
+    return this.service.deleteGranFormatoVariante(auth, varianteId);
   }
 
   @Put(':id/ruta-policy')

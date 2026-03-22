@@ -1,7 +1,8 @@
 import { Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
-import { AssignProductoVariantesRutaMasivaDto, AssignProductoAdicionalDto, AssignProductoMotorDto, AssignVarianteRutaDto, DimensionOpcionProductivaDto, CarasProductoVarianteDto, ReglaCostoAdicionalEfectoDto, MetodoCostoProductoAdicionalDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, TipoProductoAdicionalEfectoDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, TipoConsumoAdicionalMaterialDto, TipoProductoAdicionalDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, UpsertProductoAdicionalDto, UpsertProductoChecklistDto, PreviewImposicionProductoVarianteDto, MetodoCalculoPrecioProductoDto, ReglaCostoChecklistDto, TipoChecklistPreguntaDto, TipoChecklistAccionReglaDto, UpdateProductoPrecioDto, UpdateProductoPrecioEspecialClientesDto, UpdateProductoRutaPolicyDto, EstadoProductoServicioDto, TipoImpresionProductoVarianteDto, TipoProductoServicioDto, ValorOpcionProductivaDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoImpuestoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
+import { AssignProductoVariantesRutaMasivaDto, AssignProductoAdicionalDto, AssignProductoMotorDto, AssignVarianteRutaDto, DimensionOpcionProductivaDto, CarasProductoVarianteDto, ReglaCostoAdicionalEfectoDto, MetodoCostoProductoAdicionalDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, TipoProductoAdicionalEfectoDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, TipoConsumoAdicionalMaterialDto, TipoProductoAdicionalDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, UpsertProductoAdicionalDto, UpsertProductoChecklistDto, PreviewImposicionProductoVarianteDto, MetodoCalculoPrecioProductoDto, ReglaCostoChecklistDto, TipoChecklistPreguntaDto, TipoChecklistAccionReglaDto, UpdateProductoPrecioDto, UpdateProductoPrecioEspecialClientesDto, UpdateGranFormatoConfigDto, UpdateProductoRutaPolicyDto, EstadoProductoServicioDto, TipoVentaGranFormatoDto, TipoImpresionProductoVarianteDto, TipoProductoServicioDto, ValorOpcionProductivaDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, CreateGranFormatoVarianteDto, UpdateGranFormatoVarianteDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoImpuestoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
+import type { ProductMotorDefinition } from './motors/product-motor.contract';
 type ServicioPricingNivel = {
     id: string;
     nombre: string;
@@ -65,10 +66,13 @@ export declare class ProductosServiciosService {
     private static readonly SUBFAMILIA_BASE_CODIGO;
     private static readonly FAMILIA_BASE_CODIGO_LEGACY;
     private static readonly SUBFAMILIA_BASE_CODIGO_LEGACY;
-    private static readonly MOTOR_DEFAULT;
+    private static readonly DIGITAL_SHEET_MOTOR_DEFINITION;
+    private static readonly WIDE_FORMAT_MOTOR_DEFINITION;
     private static readonly DEFAULT_A4_AREA_M2;
     private static readonly TERMINACION_PLANTILLAS_SOPORTADAS;
+    private static readonly WIDE_FORMAT_MACHINE_TEMPLATES;
     private static readonly CANONICAL_PLIEGOS_MM;
+    private readonly motorRegistry;
     constructor(prisma: PrismaService);
     getCatalogoPliegosImpresion(): {
         label: string;
@@ -78,9 +82,14 @@ export declare class ProductosServiciosService {
         altoMm: number;
     }[];
     getMotoresCosto(): {
-        code: "impresion_digital_laser";
-        version: 1;
-        label: "Impresión digital laser · v1";
+        code: string;
+        version: number;
+        label: string;
+        category: import("./motors/product-motor.contract").MotorCategory;
+        capabilities: import("./motors/product-motor.contract").ProductMotorCapabilities;
+        schema: Record<string, unknown>;
+    }[];
+    getDigitalMotorDefinition(): {
         schema: {
             tipoCorte: string;
             demasiaCorteMm: number;
@@ -93,7 +102,14 @@ export declare class ProductosServiciosService {
             };
             mermaAdicionalPct: number;
         };
-    }[];
+        code: string;
+        version: number;
+        label: string;
+        category: import("./motors/product-motor.contract").MotorCategory;
+        capabilities: import("./motors/product-motor.contract").ProductMotorCapabilities;
+        exposedInCatalog: boolean;
+    };
+    getWideFormatMotorDefinition(): ProductMotorDefinition;
     findAdicionalesCatalogo(auth: CurrentAuth): Promise<{
         id: string;
         codigo: string;
@@ -713,10 +729,11 @@ export declare class ProductosServiciosService {
         createdAt: string;
         updatedAt: string;
     }>;
-    getProductoMotorConfig(auth: CurrentAuth, productoId: string): Promise<{
+    getProductoMotorConfig(auth: CurrentAuth, productoId: string): Promise<unknown>;
+    getDigitalProductMotorConfig(auth: CurrentAuth, productoId: string): Promise<{
         productoId: string;
-        motorCodigo: "impresion_digital_laser";
-        motorVersion: 1;
+        motorCodigo: string;
+        motorVersion: number;
         parametros: string | number | boolean | Prisma.JsonObject | Prisma.JsonArray | {
             tipoCorte: string;
             demasiaCorteMm: number;
@@ -733,14 +750,141 @@ export declare class ProductosServiciosService {
         activo: boolean;
         updatedAt: string | null;
     }>;
-    upsertProductoMotorConfig(auth: CurrentAuth, productoId: string, payload: UpsertProductoMotorConfigDto): Promise<{
+    upsertProductoMotorConfig(auth: CurrentAuth, productoId: string, payload: UpsertProductoMotorConfigDto): Promise<unknown>;
+    upsertDigitalProductMotorConfig(auth: CurrentAuth, productoId: string, payload: UpsertProductoMotorConfigDto): Promise<{
         productoId: string;
-        motorCodigo: "impresion_digital_laser";
-        motorVersion: 1;
+        motorCodigo: string;
+        motorVersion: number;
         parametros: Prisma.JsonValue;
         versionConfig: number;
         activo: boolean;
         updatedAt: string;
+    }>;
+    getWideFormatProductMotorConfig(auth: CurrentAuth, productoId: string): Promise<{
+        productoId: string;
+        motorCodigo: string;
+        motorVersion: number;
+        parametros: string | number | boolean | Prisma.JsonObject | Prisma.JsonArray;
+        versionConfig: number;
+        activo: boolean;
+        updatedAt: string | null;
+    }>;
+    upsertWideFormatProductMotorConfig(auth: CurrentAuth, productoId: string, payload: UpsertProductoMotorConfigDto): Promise<{
+        productoId: string;
+        motorCodigo: string;
+        motorVersion: number;
+        parametros: Prisma.JsonValue;
+        versionConfig: number;
+        activo: boolean;
+        updatedAt: string;
+    }>;
+    getGranFormatoConfig(auth: CurrentAuth, productoId: string): Promise<{
+        productoId: string;
+        tipoVenta: TipoVentaGranFormatoDto;
+        tecnologiasCompatibles: string[];
+        maquinasCompatibles: string[];
+        perfilesCompatibles: string[];
+        materialBaseId: string | null;
+        materialesCompatibles: string[];
+        updatedAt: string;
+    }>;
+    updateGranFormatoConfig(auth: CurrentAuth, productoId: string, payload: UpdateGranFormatoConfigDto): Promise<{
+        productoId: string;
+        tipoVenta: TipoVentaGranFormatoDto;
+        tecnologiasCompatibles: string[];
+        maquinasCompatibles: string[];
+        perfilesCompatibles: string[];
+        materialBaseId: string | null;
+        materialesCompatibles: string[];
+        updatedAt: string;
+    }>;
+    findGranFormatoVariantes(auth: CurrentAuth, productoId: string): Promise<{
+        id: string;
+        productoServicioId: string;
+        nombre: string;
+        maquinaId: string;
+        maquinaNombre: string;
+        plantillaMaquina: string;
+        tecnologia: string;
+        geometriaTrabajo: string;
+        anchoUtilMaquina: number | null;
+        perfilOperativoId: string;
+        perfilOperativoNombre: string;
+        productivityValue: number | null;
+        productivityUnit: string;
+        cantidadPasadas: number | null;
+        materialPreset: string;
+        configuracionTintas: string;
+        materiaPrimaVarianteId: string;
+        materiaPrimaNombre: string;
+        materiaPrimaSku: string;
+        esDefault: boolean;
+        permiteOverrideEnCotizacion: boolean;
+        activo: boolean;
+        observaciones: string;
+        detalle: Record<string, unknown>;
+        createdAt: string;
+        updatedAt: string;
+    }[]>;
+    createGranFormatoVariante(auth: CurrentAuth, productoId: string, payload: CreateGranFormatoVarianteDto): Promise<{
+        id: string;
+        productoServicioId: string;
+        nombre: string;
+        maquinaId: string;
+        maquinaNombre: string;
+        plantillaMaquina: string;
+        tecnologia: string;
+        geometriaTrabajo: string;
+        anchoUtilMaquina: number | null;
+        perfilOperativoId: string;
+        perfilOperativoNombre: string;
+        productivityValue: number | null;
+        productivityUnit: string;
+        cantidadPasadas: number | null;
+        materialPreset: string;
+        configuracionTintas: string;
+        materiaPrimaVarianteId: string;
+        materiaPrimaNombre: string;
+        materiaPrimaSku: string;
+        esDefault: boolean;
+        permiteOverrideEnCotizacion: boolean;
+        activo: boolean;
+        observaciones: string;
+        detalle: Record<string, unknown>;
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    updateGranFormatoVariante(auth: CurrentAuth, varianteId: string, payload: UpdateGranFormatoVarianteDto): Promise<{
+        id: string;
+        productoServicioId: string;
+        nombre: string;
+        maquinaId: string;
+        maquinaNombre: string;
+        plantillaMaquina: string;
+        tecnologia: string;
+        geometriaTrabajo: string;
+        anchoUtilMaquina: number | null;
+        perfilOperativoId: string;
+        perfilOperativoNombre: string;
+        productivityValue: number | null;
+        productivityUnit: string;
+        cantidadPasadas: number | null;
+        materialPreset: string;
+        configuracionTintas: string;
+        materiaPrimaVarianteId: string;
+        materiaPrimaNombre: string;
+        materiaPrimaSku: string;
+        esDefault: boolean;
+        permiteOverrideEnCotizacion: boolean;
+        activo: boolean;
+        observaciones: string;
+        detalle: Record<string, unknown>;
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    deleteGranFormatoVariante(auth: CurrentAuth, varianteId: string): Promise<{
+        id: string;
+        deleted: boolean;
     }>;
     updateProductoRutaPolicy(auth: CurrentAuth, productoId: string, payload: UpdateProductoRutaPolicyDto): Promise<{
         matchingBasePorVariante: {
@@ -1295,32 +1439,35 @@ export declare class ProductosServiciosService {
         createdAt: string;
         updatedAt: string;
     }>;
-    getVarianteMotorOverride(auth: CurrentAuth, varianteId: string): Promise<{
+    getVarianteMotorOverride(auth: CurrentAuth, varianteId: string): Promise<unknown>;
+    getDigitalVariantMotorOverride(auth: CurrentAuth, varianteId: string): Promise<{
         varianteId: string;
-        motorCodigo: "impresion_digital_laser";
-        motorVersion: 1;
+        motorCodigo: string;
+        motorVersion: number;
         parametros: string | number | boolean | Prisma.JsonObject | Prisma.JsonArray;
         versionConfig: number;
         activo: boolean;
         updatedAt: string | null;
     }>;
-    upsertVarianteMotorOverride(auth: CurrentAuth, varianteId: string, payload: UpsertVarianteMotorOverrideDto): Promise<{
+    upsertVarianteMotorOverride(auth: CurrentAuth, varianteId: string, payload: UpsertVarianteMotorOverrideDto): Promise<unknown>;
+    upsertDigitalVariantMotorOverride(auth: CurrentAuth, varianteId: string, payload: UpsertVarianteMotorOverrideDto): Promise<{
         varianteId: string;
-        motorCodigo: "impresion_digital_laser";
-        motorVersion: 1;
+        motorCodigo: string;
+        motorVersion: number;
         parametros: Prisma.JsonValue;
         versionConfig: number;
         activo: boolean;
         updatedAt: string;
     }>;
-    cotizarVariante(auth: CurrentAuth, varianteId: string, payload: CotizarProductoVarianteDto): Promise<{
+    cotizarVariante(auth: CurrentAuth, varianteId: string, payload: CotizarProductoVarianteDto): Promise<unknown>;
+    quoteDigitalVariant(auth: CurrentAuth, varianteId: string, payload: CotizarProductoVarianteDto): Promise<{
         createdAt: string;
         varianteId: string;
         productoServicioId: string;
         productoNombre: string;
         varianteNombre: string;
-        motorCodigo: "impresion_digital_laser";
-        motorVersion: 1;
+        motorCodigo: string;
+        motorVersion: number;
         periodo: string;
         cantidad: number;
         piezasPorPliego: number;
@@ -1456,7 +1603,8 @@ export declare class ProductosServiciosService {
         };
         snapshotId: string;
     }>;
-    previewVarianteImposicion(auth: CurrentAuth, varianteId: string, payload: PreviewImposicionProductoVarianteDto): Promise<{
+    previewVarianteImposicion(auth: CurrentAuth, varianteId: string, payload: PreviewImposicionProductoVarianteDto): Promise<unknown>;
+    previewDigitalVariant(auth: CurrentAuth, varianteId: string, payload: PreviewImposicionProductoVarianteDto): Promise<{
         varianteId: string;
         varianteNombre: string;
         pliegoImpresion: {
@@ -1551,6 +1699,7 @@ export declare class ProductosServiciosService {
     private findProductoOrThrow;
     private findVarianteOrThrow;
     private findPapelVarianteOrThrow;
+    private findGranFormatoVarianteOrThrow;
     private findProcesoOrThrow;
     private findProcesoOperacionOrThrow;
     private findBibliotecaOperacionOrThrow;
@@ -1581,12 +1730,18 @@ export declare class ProductosServiciosService {
     private validateAndNormalizeMatchingBase;
     private validateAndNormalizePasosFijosRutaBase;
     private toVarianteOpcionesProductivasResponse;
+    private toGranFormatoVarianteResponse;
     private toAdicionalCatalogoResponse;
     private toImpuestoResponse;
     private toFamiliaResponse;
     private toSubfamiliaResponse;
     private toProductoResponseBase;
     private mergeProductoDetalle;
+    private ensureWideFormatProducto;
+    private getGranFormatoDetalle;
+    private getGranFormatoTipoVenta;
+    private getGranFormatoStringArray;
+    private getGranFormatoNullableString;
     private getProductoPrecioConfig;
     private getProductoPrecioEspecialClientes;
     private normalizeProductoPrecioImpuestos;
@@ -1613,6 +1768,7 @@ export declare class ProductosServiciosService {
     private ensureCatalogoInicialImprentaDigital;
     private ensureCatalogoInicialImpuestos;
     private resolveMotorOrThrow;
+    private resolveProductMotorModule;
     private getDefaultMotorConfig;
     private mergeMotorConfig;
     private getEffectiveMotorConfig;
@@ -1632,6 +1788,10 @@ export declare class ProductosServiciosService {
     private calculateTerminatingOperationTiming;
     private calculateLaminadoraFilmConsumables;
     private asObject;
+    private decimalToNumber;
+    private toCanonicalUnitCode;
+    private resolveMateriaPrimaVariantUnitCost;
+    private enumToApiValue;
     private getProcesoOperacionNiveles;
     private toSafeNumber;
     private resolveChecklistCantidadObjetivo;
@@ -1655,6 +1815,15 @@ export declare class ProductosServiciosService {
     private toPrismaUnidadProceso;
     private calculateMachineConsumables;
     private normalizeColor;
+    private validateGranFormatoVarianteRelations;
+    private validateGranFormatoConfigPayload;
+    private isGranFormatoMachineCompatible;
+    private buildGranFormatoVarianteDetalle;
+    private deriveGranFormatoTecnologia;
+    private normalizeGranFormatoTecnologias;
+    private normalizeGranFormatoTecnologia;
+    private deriveGranFormatoConfiguracionTintas;
+    private normalizeGranFormatoTintas;
     private getSetupFromPerfilOperativo;
     private groupOpcionesProductivas;
     private resolveEffectiveOptionValues;

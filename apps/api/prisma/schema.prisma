@@ -528,6 +528,7 @@ model Tenant {
   subfamiliasProducto                    SubfamiliaProducto[]
   productosServicio                      ProductoServicio[]
   productosVariantes                     ProductoVariante[]
+  granFormatoVariantes                   GranFormatoVariante[]
   algoritmosCosto                        AlgoritmoCosto[]
   productosVariantesAlgoritmoConfig      ProductoVarianteAlgoritmoConfig[]
   productoMotorConfigs                   ProductoMotorConfig[]
@@ -1037,6 +1038,7 @@ model Maquina {
   procesosOperacion                    ProcesoOperacion[]                 @relation("ProcesoOperacionMaquina")
   procesosOperacionPlantilla           ProcesoOperacionPlantilla[]        @relation("ProcesoOperacionPlantillaMaquina")
   productosAdicionalesRouteEffectPasos ProductoAdicionalRouteEffectPaso[] @relation("ProductoAdicionalRouteEffectPasoMaquina")
+  granFormatoVariantes                 GranFormatoVariante[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, plantilla, activo])
@@ -1076,6 +1078,7 @@ model MaquinaPerfilOperativo {
   procesosOperacion                    ProcesoOperacion[]                 @relation("ProcesoOperacionPerfil")
   procesosOperacionPlantilla           ProcesoOperacionPlantilla[]        @relation("ProcesoOperacionPlantillaPerfil")
   productosAdicionalesRouteEffectPasos ProductoAdicionalRouteEffectPaso[] @relation("ProductoAdicionalRouteEffectPasoPerfil")
+  granFormatoVariantes                 GranFormatoVariante[]
 
   @@unique([tenantId, maquinaId, nombre])
   @@index([tenantId, maquinaId, activo])
@@ -1304,6 +1307,7 @@ model MateriaPrimaVariante {
   productosAdicionalesMateriales   ProductoAdicionalMaterial[]
   productoAdicionalMaterialEffects ProductoAdicionalMaterialEffect[]
   productoChecklistReglasMaterial  ProductoChecklistRegla[] @relation("ProductoChecklistReglaMateriaPrima")
+  granFormatoVariantes             GranFormatoVariante[]
 
   @@unique([tenantId, sku])
   @@index([tenantId, materiaPrimaId, activo])
@@ -1463,6 +1467,7 @@ model ProductoServicio {
   subfamiliaProducto         SubfamiliaProducto?         @relation(fields: [subfamiliaProductoId], references: [id], onDelete: SetNull)
   procesoDefinicionDefault   ProcesoDefinicion?          @relation(fields: [procesoDefinicionDefaultId], references: [id], onDelete: SetNull)
   variantes                  ProductoVariante[]
+  granFormatoVariantes       GranFormatoVariante[]
   motorConfigs               ProductoMotorConfig[]
   adicionalesAsignados       ProductoServicioAdicional[]
   checklist                  ProductoChecklist?
@@ -1502,6 +1507,34 @@ model ProductoVariante {
   @@unique([tenantId, productoServicioId, nombre])
   @@index([tenantId, productoServicioId, activo])
   @@index([tenantId, procesoDefinicionId])
+}
+
+model GranFormatoVariante {
+  id                          String                 @id @default(uuid()) @db.Uuid
+  tenantId                    String                 @db.Uuid
+  productoServicioId          String                 @db.Uuid
+  nombre                      String
+  maquinaId                   String                 @db.Uuid
+  perfilOperativoId           String                 @db.Uuid
+  materiaPrimaVarianteId      String                 @db.Uuid
+  esDefault                   Boolean                @default(false)
+  permiteOverrideEnCotizacion Boolean                @default(true)
+  activo                      Boolean                @default(true)
+  observaciones               String?
+  detalleJson                 Json?
+  createdAt                   DateTime               @default(now())
+  updatedAt                   DateTime               @updatedAt
+  tenant                      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productoServicio            ProductoServicio       @relation(fields: [productoServicioId], references: [id], onDelete: Cascade)
+  maquina                     Maquina                @relation(fields: [maquinaId], references: [id], onDelete: Cascade)
+  perfilOperativo             MaquinaPerfilOperativo @relation(fields: [perfilOperativoId], references: [id], onDelete: Cascade)
+  materiaPrimaVariante        MateriaPrimaVariante   @relation(fields: [materiaPrimaVarianteId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, productoServicioId, nombre])
+  @@index([tenantId, productoServicioId, activo])
+  @@index([tenantId, maquinaId, activo])
+  @@index([tenantId, perfilOperativoId, activo])
+  @@index([tenantId, materiaPrimaVarianteId, activo])
 }
 
 model ProductoAdicionalCatalogo {

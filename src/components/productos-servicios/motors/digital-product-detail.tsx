@@ -131,7 +131,7 @@ type PapelOption = {
   resumen: string;
 };
 
-type ProductoServicioFichaTabsProps = {
+export type DigitalProductDetailProps = {
   producto: ProductoServicio;
   initialVariantes: ProductoVariante[];
   initialClientes: ClienteDetalle[];
@@ -1440,7 +1440,7 @@ export function ProductoServicioFichaTabs({
   motores,
   checklist,
   maquinas,
-}: ProductoServicioFichaTabsProps) {
+}: DigitalProductDetailProps) {
   const measurementUnitFallback = producto.unidadComercial?.trim() || "unidad";
   const [activeTab, setActiveTab] = React.useState("general");
   const [mountedTabs, setMountedTabs] = React.useState<string[]>(["general"]);

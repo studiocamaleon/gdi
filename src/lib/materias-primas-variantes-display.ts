@@ -120,3 +120,40 @@ export function getMateriaPrimaVarianteLabel(
   const varianteNombre = getVarianteDisplayName(materiaPrima, variante, options);
   return `${materiaPrima.nombre} - ${varianteNombre}`;
 }
+
+export function getVarianteOptionChips(
+  materiaPrima: MateriaPrima,
+  variante: MateriaPrimaVariante,
+  options?: { maxDimensiones?: number },
+) {
+  const template = getMateriaPrimaTemplate(materiaPrima.templateId);
+  if (!template) {
+    return [] as Array<{ key: string; label: string; value: string }>;
+  }
+
+  const attrs = variante.atributosVariante ?? {};
+  const fieldByKey = new Map(template.camposTecnicos.map((field) => [field.key, field]));
+  const maxDimensiones = Math.max(1, options?.maxDimensiones ?? 5);
+  const chips: Array<{ key: string; label: string; value: string }> = [];
+
+  for (const key of template.dimensionesVariante) {
+    const rawValue = attrs[key];
+    const field = fieldByKey.get(key);
+    const value = field
+      ? formatFieldValue(key, rawValue, field.type, field.unit)
+      : asText(rawValue);
+    if (!value) {
+      continue;
+    }
+    chips.push({
+      key,
+      label: field?.label ?? key,
+      value,
+    });
+    if (chips.length >= maxDimensiones) {
+      break;
+    }
+  }
+
+  return chips;
+}
