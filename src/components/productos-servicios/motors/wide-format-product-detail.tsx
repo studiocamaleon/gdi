@@ -3,7 +3,7 @@
 import * as React from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { InfoIcon, PlusIcon, SaveIcon, Trash2Icon } from "lucide-react";
+import { PlusIcon, PrinterIcon, SaveIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
@@ -314,6 +314,37 @@ function buildDefaultPeriodo() {
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   return `${year}-${month}`;
+}
+
+function getPieceLetterLabel(index: number) {
+  let current = index;
+  let label = "";
+  do {
+    label = String.fromCharCode(65 + (current % 26)) + label;
+    current = Math.floor(current / 26) - 1;
+  } while (current >= 0);
+  return `Pieza ${label}`;
+}
+
+function renderGranFormatoMaterialDisplay(item: GranFormatoCostosResponse["materiasPrimas"][number]) {
+  if (item.variantChips?.length) {
+    return (
+      <div className="space-y-1">
+        <p>{item.nombre}</p>
+        <div className="flex flex-wrap gap-1">
+          {item.variantChips.map((chip) => (
+            <span key={`${item.nombre}-${chip.label}-${chip.value}`} className="rounded border px-2 py-0.5 text-xs text-muted-foreground">
+              {chip.label}: {chip.value}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (item.sku) {
+    return `${item.nombre} · ${item.sku}`;
+  }
+  return item.nombre;
 }
 
 function formatNumber(value: number | null | undefined, decimals = 2) {
@@ -1082,6 +1113,19 @@ export function WideFormatProductDetail({
       );
     return items.filter((profile, index, list) => list.findIndex((item) => item.id === profile.id) === index);
   }, [costosTechnology, perfilesCompatiblesIds, selectedMachines]);
+  const costosTechnologyLabel = React.useMemo(
+    () => technologyLabels[costosTechnology] ?? "Seleccionar tecnología",
+    [costosTechnology],
+  );
+  const costosPerfilOverrideLabel = React.useMemo(() => {
+    if (!costosPerfilOverrideId) {
+      return "Usar perfil default del producto";
+    }
+    return (
+      costosProfileOptions.find((item) => item.id === costosPerfilOverrideId)?.nombre ??
+      "Usar perfil default del producto"
+    );
+  }, [costosPerfilOverrideId, costosProfileOptions]);
   const checklistCotizadorGranFormato = React.useMemo(() => {
     if (aplicaChecklistATodasLasTecnologias) {
       return checklistComun;
@@ -1122,6 +1166,38 @@ export function WideFormatProductDetail({
       groups.set(tipo, current);
     }
     return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [costosPreview]);
+  const costos3dResumen = React.useMemo(() => {
+    if (!costosPreview?.nestingPreview) {
+      return null;
+    }
+    const tiempoImpresionMin =
+      costosPreview.centrosCosto
+        .filter((item) => /impres/i.test(item.paso) || /impres/i.test(item.centroCostoNombre))
+        .reduce((acc, item) => acc + item.minutos, 0) || null;
+
+    return [
+      {
+        label: "Ancho de rollo",
+        value: `${formatMmAsCm(costosPreview.resumenTecnico.anchoRolloMm)} cm`,
+      },
+      {
+        label: "Cantidad de piezas",
+        value: formatNumber(costosPreview.nestingPreview.pieces.length, 0),
+      },
+      {
+        label: "Desperdicio",
+        value: `${formatNumber(costosPreview.resumenTecnico.desperdicioPct, 2)}%`,
+      },
+      {
+        label: "M2 impresos",
+        value: `${formatNumber(costosPreview.resumenTecnico.areaUtilM2, 3)} m2`,
+      },
+      {
+        label: "Tiempo de impresión",
+        value: tiempoImpresionMin !== null ? `${formatNumber(tiempoImpresionMin, 2)} min` : "Sin dato",
+      },
+    ];
   }, [costosPreview]);
 
   React.useEffect(() => {
@@ -3098,7 +3174,7 @@ export function WideFormatProductDetail({
                       cx: Number((((item.centerXMm - imposicionBestCandidate.rollWidthMm / 2) / 10)).toFixed(2)),
                       cy: Number((item.centerYMm / 10).toFixed(2)),
                       color: ["#ff9f43", "#0abde3", "#1dd1a1", "#ff6b6b", "#f97316", "#22c55e"][index % 6],
-                      label: item.label,
+                      label: getPieceLetterLabel(index),
                       textColor: "#111111",
                     }))}
                   />
@@ -3142,16 +3218,30 @@ export function WideFormatProductDetail({
                       Esta vista corresponde al candidato efectivamente usado en el cálculo de costos.
                     </p>
                   </div>
-                  <PlotterSimulator
-                    key={`plotter-costos-${costosPreview.resumenTecnico.varianteId}-${isCostos3dOpen ? "open" : "closed"}`}
-                    rollWidth={costosPreview.nestingPreview.rollWidth}
-                    rollLength={costosPreview.nestingPreview.rollLength}
-                    marginLeft={costosPreview.nestingPreview.marginLeft}
-                    marginRight={costosPreview.nestingPreview.marginRight}
-                    marginStart={costosPreview.nestingPreview.marginStart}
-                    marginEnd={costosPreview.nestingPreview.marginEnd}
-                    pieces={costosPreview.nestingPreview.pieces}
-                  />
+                  <div className="relative">
+                    {costos3dResumen ? (
+                      <div className="pointer-events-none absolute left-4 top-4 z-10 w-[220px] rounded-xl border border-white/10 bg-zinc-950/75 p-3 text-white shadow-xl backdrop-blur-md">
+                        <div className="space-y-2">
+                          {costos3dResumen.map((item) => (
+                            <div key={item.label} className="flex items-start justify-between gap-3 text-sm">
+                              <span className="text-zinc-300">{item.label}</span>
+                              <span className="text-right font-medium tabular-nums text-white">{item.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    <PlotterSimulator
+                      key={`plotter-costos-${costosPreview.resumenTecnico.varianteId}-${isCostos3dOpen ? "open" : "closed"}`}
+                      rollWidth={costosPreview.nestingPreview.rollWidth}
+                      rollLength={costosPreview.nestingPreview.rollLength}
+                      marginLeft={costosPreview.nestingPreview.marginLeft}
+                      marginRight={costosPreview.nestingPreview.marginRight}
+                      marginStart={costosPreview.nestingPreview.marginStart}
+                      marginEnd={costosPreview.nestingPreview.marginEnd}
+                      pieces={costosPreview.nestingPreview.pieces}
+                    />
+                  </div>
                 </div>
               ) : (
                 <div className="flex h-[70vh] items-center justify-center rounded-xl border bg-muted/20 text-sm text-muted-foreground">
@@ -3172,7 +3262,7 @@ export function WideFormatProductDetail({
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1.3fr)_220px_220px_160px]">
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.95fr)]">
                   <div className="rounded-lg border p-3">
                     <div className="mb-3 flex items-center justify-between gap-2">
                       <p className="text-sm font-medium">Medidas del trabajo</p>
@@ -3273,43 +3363,54 @@ export function WideFormatProductDetail({
                     </div>
                   </div>
 
-                  <Field>
-                    <FieldLabel>Tecnología</FieldLabel>
-                    <Select value={costosTechnology} onValueChange={setCostosTecnologia}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar tecnología" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {costosTechnologies.map((item) => (
-                          <SelectItem key={item} value={item}>
-                            {technologyLabels[item] ?? item}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
+                  <div className="rounded-lg border p-3">
+                    <div className="space-y-3">
+                      <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                        <FieldLabel className="sm:mb-0">Tecnología</FieldLabel>
+                        <Select value={costosTechnology} onValueChange={setCostosTecnologia}>
+                          <SelectTrigger>
+                            <SelectValue>{costosTechnologyLabel}</SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {costosTechnologies.map((item) => (
+                              <SelectItem key={item} value={item}>
+                                {technologyLabels[item] ?? item}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-                  <Field>
-                    <FieldLabel>Perfil (override)</FieldLabel>
-                    <Select value={costosPerfilOverrideId || "__default__"} onValueChange={(value) => setCostosPerfilOverrideId(value === "__default__" ? "" : value)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Usar perfil default" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__default__">Usar perfil default</SelectItem>
-                        {costosProfileOptions.map((item) => (
-                          <SelectItem key={item.id} value={item.id}>
-                            {item.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
+                      <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                        <FieldLabel className="sm:mb-0">Perfil operativo</FieldLabel>
+                        <Select
+                          value={costosPerfilOverrideId || "__default__"}
+                          onValueChange={(value) => setCostosPerfilOverrideId(value === "__default__" ? "" : value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue>{costosPerfilOverrideLabel}</SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__default__">Usar perfil default del producto</SelectItem>
+                            {costosProfileOptions.map((item) => (
+                              <SelectItem key={item.id} value={item.id}>
+                                {item.nombre}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-                  <Field>
-                    <FieldLabel>Período tarifa</FieldLabel>
-                    <Input value={costosPeriodo} onChange={(event) => setCostosPeriodo(event.target.value)} />
-                  </Field>
+                      <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                        <FieldLabel className="sm:mb-0">Período tarifa</FieldLabel>
+                        <Input
+                          value={costosPeriodo}
+                          placeholder="YYYY-MM"
+                          onChange={(event) => setCostosPeriodo(event.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="rounded-lg border p-3">
@@ -3444,12 +3545,13 @@ export function WideFormatProductDetail({
                             {grupo.tipo === "SUSTRATO" && costosPreview.nestingPreview ? (
                               <Button
                                 type="button"
-                                variant="ghost"
-                                size="icon"
-                                title="Ver cómo se calculó el consumo del sustrato"
+                                size="sm"
+                                className="bg-[#f28a32] text-white hover:bg-[#d87422]"
+                                title="Ver nesting del sustrato"
                                 onClick={() => setIsCostos3dOpen(true)}
                               >
-                                <InfoIcon className="size-4" />
+                                <PrinterIcon className="size-4" />
+                                Ver nesting
                               </Button>
                             ) : null}
                             <div className="text-right">
@@ -3471,7 +3573,7 @@ export function WideFormatProductDetail({
                           <TableBody>
                             {grupo.items.map((item, index) => (
                               <TableRow key={`${grupo.tipo}-${index}`}>
-                                <TableCell>{item.nombre}{item.sku ? ` · ${item.sku}` : ""}</TableCell>
+                                <TableCell>{renderGranFormatoMaterialDisplay(item)}</TableCell>
                                 <TableCell>{item.origen}</TableCell>
                                 <TableCell className="text-right tabular-nums">
                                   {formatNumber(item.cantidad, 3)}{item.unidad ? ` ${item.unidad}` : ""}

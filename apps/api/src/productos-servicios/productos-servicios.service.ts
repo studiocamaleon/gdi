@@ -1891,6 +1891,7 @@ export class ProductosServiciosService {
       tipo: 'SUSTRATO',
       nombre: candidato.variant.materiaPrima.nombre,
       sku: candidato.variant.sku,
+      variantChips: this.buildMateriaPrimaVariantDisplayChips(candidato.variant),
       cantidad: Number(candidato.usefulAreaM2.toFixed(6)),
       costoUnitario:
         candidato.usefulAreaM2 > 0 ? Number((usefulCost / candidato.usefulAreaM2).toFixed(6)) : 0,
@@ -1906,6 +1907,7 @@ export class ProductosServiciosService {
       tipo: 'SUSTRATO',
       nombre: `${candidato.variant.materiaPrima.nombre} · Desperdicio`,
       sku: candidato.variant.sku,
+      variantChips: this.buildMateriaPrimaVariantDisplayChips(candidato.variant),
       cantidad: Number(candidato.wasteAreaM2.toFixed(6)),
       costoUnitario:
         candidato.wasteAreaM2 > 0 ? Number((wasteCost / candidato.wasteAreaM2).toFixed(6)) : 0,
@@ -1963,6 +1965,7 @@ export class ProductosServiciosService {
           tipo: 'CHECKLIST_MATERIAL',
           nombre: material.materiaPrima.nombre,
           sku: material.sku,
+          variantChips: this.buildMateriaPrimaVariantDisplayChips(material),
           cantidad,
           costoUnitario,
           costo: Number((cantidad * costoUnitario).toFixed(6)),
@@ -10519,6 +10522,44 @@ export class ProductosServiciosService {
     return chips;
   }
 
+  private buildMateriaPrimaVariantDisplayChips(variant: {
+    atributosVarianteJson?: Prisma.JsonValue | null;
+  }) {
+    const attrs = this.asObject(variant.atributosVarianteJson);
+    const chips = this.buildGranFormatoVariantChips(variant);
+    const color = typeof attrs.color === 'string' ? attrs.color.trim() : '';
+    const presentacion = this.readNumericValue(
+      attrs.volumenPresentacion ?? attrs.presentacionMl,
+    );
+    const tecnologiaCompatible =
+      typeof attrs.tecnologiaCompatible === 'string' ? attrs.tecnologiaCompatible.trim() : '';
+
+    if (color) {
+      chips.push({ label: 'Color', value: color.toUpperCase() });
+    }
+    if (presentacion && presentacion > 0) {
+      chips.push({ label: 'Presentación', value: `${presentacion} ml` });
+    }
+    if (tecnologiaCompatible) {
+      chips.push({ label: 'Tecnología', value: tecnologiaCompatible });
+    }
+
+    return chips.filter(
+      (chip, index, list) =>
+        list.findIndex((item) => item.label === chip.label && item.value === chip.value) === index,
+    );
+  }
+
+  private buildGranFormatoPieceLabel(index: number) {
+    let current = index;
+    let label = '';
+    do {
+      label = String.fromCharCode(65 + (current % 26)) + label;
+      current = Math.floor(current / 26) - 1;
+    } while (current >= 0);
+    return `Pieza ${label}`;
+  }
+
   private buildGranFormatoNestingPreview(candidate: GranFormatoCostosPreviewCandidate) {
     const palette = ['#ff9f43', '#0abde3', '#1dd1a1', '#ff6b6b', '#f97316', '#22c55e'];
     return {
@@ -10535,7 +10576,7 @@ export class ProductosServiciosService {
         cx: Number((((item.centerXMm - candidate.rollWidthMm / 2) / 10)).toFixed(2)),
         cy: Number((item.centerYMm / 10).toFixed(2)),
         color: palette[index % palette.length],
-        label: item.label,
+        label: this.buildGranFormatoPieceLabel(index),
         textColor: '#111111',
       })),
     };
@@ -10697,6 +10738,7 @@ export class ProductosServiciosService {
         tipo: 'TINTA',
         nombre: item.materiaPrimaVariante.materiaPrima.nombre,
         sku: item.materiaPrimaVariante.sku,
+        variantChips: this.buildMateriaPrimaVariantDisplayChips(item.materiaPrimaVariante),
         cantidad: cantidadBase,
         costoUnitario,
         costo: costoItem,

@@ -40,26 +40,34 @@ function NestedItem({ piece }: { piece: PlotterSimulatorPiece }) {
     <group position={[posX, -posY, 0.012]}>
       <mesh>
         <planeGeometry args={[Math.max(width, 0.01), Math.max(height, 0.01)]} />
-        <meshBasicMaterial color={piece.color} opacity={0.9} transparent depthWrite={false} polygonOffset polygonOffsetFactor={-4} />
+        <meshBasicMaterial color={piece.color} polygonOffset polygonOffsetFactor={-4} />
         <Edges color="#000000" opacity={0.2} transparent />
       </mesh>
       <Text
-        position={[0, 0.05, 0.01]}
+        position={[0, 0.05, 0.03]}
         fontSize={0.12}
         color={piece.textColor || "#111"}
         anchorX="center"
         anchorY="middle"
         fontWeight="bold"
+        renderOrder={10}
+        depthOffset={-10}
+        material-depthWrite={false}
+        material-depthTest={false}
       >
         {piece.label}
       </Text>
       <Text
-        position={[0, -0.08, 0.01]}
-        fontSize={0.08}
+        position={[0, -0.08, 0.03]}
+        fontSize={0.1}
         color={piece.textColor || "#111"}
         anchorX="center"
         anchorY="middle"
         opacity={0.8}
+        renderOrder={10}
+        depthOffset={-10}
+        material-depthWrite={false}
+        material-depthTest={false}
       >
         {piece.w}x{piece.h} cm
       </Text>
@@ -132,9 +140,20 @@ function Plotter({
         <boxGeometry args={[4.6, 0.4, 0.4]} />
         <meshStandardMaterial color="#d0d0d0" roughness={0.3} />
       </mesh>
-      <mesh position={[0, 2.45, 0.1]} castShadow>
+      <mesh position={[0, 2.45, 0.1]} renderOrder={2}>
         <boxGeometry args={[4.5, 0.3, 0.4]} />
-        <meshPhysicalMaterial color="#111" transparent opacity={0.6} roughness={0.1} metalness={0.8} clearcoat={1} />
+        <meshPhysicalMaterial
+          color="#111"
+          transparent
+          opacity={0.5}
+          roughness={0.12}
+          metalness={0.65}
+          clearcoat={1}
+          depthWrite={false}
+          polygonOffset
+          polygonOffsetFactor={-1}
+          side={THREE.DoubleSide}
+        />
       </mesh>
 
       <group position={[1.9, 2.4, 0.3]} rotation={[-Math.PI / 6, 0, 0]}>
@@ -245,7 +264,7 @@ function Plotter({
 
             <mesh position={[0, -(rollLength * SCALE) / 2, -0.002]}>
               <planeGeometry args={[rollWidth * SCALE, rollLength * SCALE, 16, 16]} />
-              <meshBasicMaterial color="#000000" wireframe opacity={0.04} transparent depthWrite={false} />
+              <meshBasicMaterial color="#000000" wireframe opacity={0.02} transparent depthWrite={false} />
             </mesh>
           </group>
         </mesh>
@@ -264,6 +283,7 @@ export default function PlotterSimulator({
   marginEnd = 0,
 }: PlotterSimulatorProps) {
   const [spacePressed, setSpacePressed] = useState(false);
+  const [pointerDown, setPointerDown] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -293,7 +313,15 @@ export default function PlotterSimulator({
   }, []);
 
   return (
-    <div className="relative h-full min-h-[600px] overflow-hidden rounded-xl border border-[#c46a2d]/30 bg-gradient-to-br from-[#2a1d17] via-[#181414] to-[#0f0f10] font-sans">
+    <div
+      className="relative h-full min-h-[600px] overflow-hidden rounded-xl border border-[#c46a2d]/30 bg-gradient-to-br from-[#2a1d17] via-[#181414] to-[#0f0f10] font-sans"
+      style={{
+        cursor: spacePressed ? (pointerDown ? "grabbing" : "grab") : "default",
+      }}
+      onPointerDown={() => setPointerDown(true)}
+      onPointerUp={() => setPointerDown(false)}
+      onPointerLeave={() => setPointerDown(false)}
+    >
       <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#ff7a1a]/18 via-[#ff7a1a]/6 to-transparent" />
 
       <div className="absolute inset-0">

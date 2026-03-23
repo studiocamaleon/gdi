@@ -779,6 +779,10 @@ export type GranFormatoCostosMaterialItem = {
   tipo: string;
   nombre: string;
   sku: string;
+  variantChips?: Array<{
+    label: string;
+    value: string;
+  }>;
   cantidad: number;
   costoUnitario: number;
   costo: number;

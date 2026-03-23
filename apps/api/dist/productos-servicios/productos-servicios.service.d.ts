@@ -2268,6 +2268,8 @@ export declare class ProductosServiciosService {
     private buildGranFormatoVarianteDetalle;
     private getDefaultTarifaPeriodo;
     private buildGranFormatoVariantChips;
+    private buildMateriaPrimaVariantDisplayChips;
+    private buildGranFormatoPieceLabel;
     private buildGranFormatoNestingPreview;
     private resolveGranFormatoCantidadObjetivoSalida;
     private calculateGranFormatoSustratoCost;

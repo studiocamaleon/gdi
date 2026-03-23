@@ -105,8 +105,30 @@ describe('proceso-productividad.engine', () => {
       contexto: {},
     });
 
-    expect(result.runMin).toBe(12);
-    expect(result.warnings.length).toBeGreaterThan(0);
+    expect(result.productividadAplicada).toBe(10);
+    expect(result.runMin).toBe(10);
+    expect(result.warnings).toContain(
+      'Regla de velocidad formula invalida. Se usa productividad base como fallback.',
+    );
+  });
+
+  it('usa productividad base sin warning cuando el modo variable no tiene regla avanzada', () => {
+    const result = evaluateProductividad({
+      modoProductividad: ModoProductividadProceso.FORMULA,
+      productividadBase: new Prisma.Decimal(8),
+      reglaVelocidadJson: null,
+      reglaMermaJson: null,
+      runMin: null,
+      unidadTiempo: UnidadProceso.MINUTO,
+      mermaRunPct: null,
+      mermaSetup: null,
+      cantidadObjetivoSalida: 40,
+      contexto: {},
+    });
+
+    expect(result.productividadAplicada).toBe(8);
+    expect(result.runMin).toBe(5);
+    expect(result.warnings).toEqual([]);
   });
 
   it('aplica regla de merma formula_v1', () => {
