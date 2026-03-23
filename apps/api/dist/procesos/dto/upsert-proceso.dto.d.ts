@@ -60,6 +60,12 @@ export declare enum UnidadProcesoDto {
     litro = "litro",
     lote = "lote"
 }
+export declare enum BaseCalculoProductividadDto {
+    cantidad = "cantidad",
+    area_total_m2 = "area_total_m2",
+    metro_lineal_total = "metro_lineal_total",
+    perimetro_total_ml = "perimetro_total_ml"
+}
 export declare class ProcesoOperacionItemDto {
     codigo?: string;
     nombre: string;
@@ -82,6 +88,7 @@ export declare class ProcesoOperacionItemDto {
     reglaVelocidad?: Record<string, unknown>;
     reglaMerma?: Record<string, unknown>;
     detalle?: Record<string, unknown>;
+    baseCalculoProductividad?: BaseCalculoProductividadDto;
     niveles?: ProcesoOperacionNivelDto[];
     activo: boolean;
 }

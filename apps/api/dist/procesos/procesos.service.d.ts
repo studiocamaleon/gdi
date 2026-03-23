@@ -48,6 +48,7 @@ export declare class ProcesosService {
             detalle: {
                 [x: string]: unknown;
             } | null;
+            baseCalculoProductividad: {} | null;
             niveles: {
                 id: string;
                 nombre: string;
@@ -94,6 +95,10 @@ export declare class ProcesosService {
         mermaRunPct: number | null;
         reglaVelocidad: Record<string, unknown> | null;
         reglaMerma: Record<string, unknown> | null;
+        detalle: {
+            [x: string]: unknown;
+        } | null;
+        baseCalculoProductividad: {} | null;
         observaciones: string;
         niveles: {
             id: string;
@@ -139,6 +144,10 @@ export declare class ProcesosService {
         mermaRunPct: number | null;
         reglaVelocidad: Record<string, unknown> | null;
         reglaMerma: Record<string, unknown> | null;
+        detalle: {
+            [x: string]: unknown;
+        } | null;
+        baseCalculoProductividad: {} | null;
         observaciones: string;
         niveles: {
             id: string;
@@ -184,6 +193,10 @@ export declare class ProcesosService {
         mermaRunPct: number | null;
         reglaVelocidad: Record<string, unknown> | null;
         reglaMerma: Record<string, unknown> | null;
+        detalle: {
+            [x: string]: unknown;
+        } | null;
+        baseCalculoProductividad: {} | null;
         observaciones: string;
         niveles: {
             id: string;
@@ -229,6 +242,10 @@ export declare class ProcesosService {
         mermaRunPct: number | null;
         reglaVelocidad: Record<string, unknown> | null;
         reglaMerma: Record<string, unknown> | null;
+        detalle: {
+            [x: string]: unknown;
+        } | null;
+        baseCalculoProductividad: {} | null;
         observaciones: string;
         niveles: {
             id: string;
@@ -292,6 +309,7 @@ export declare class ProcesosService {
             detalle: {
                 [x: string]: unknown;
             } | null;
+            baseCalculoProductividad: {} | null;
             niveles: {
                 id: string;
                 nombre: string;
@@ -435,6 +453,7 @@ export declare class ProcesosService {
             detalle: {
                 [x: string]: unknown;
             } | null;
+            baseCalculoProductividad: {} | null;
             niveles: {
                 id: string;
                 nombre: string;
@@ -499,6 +518,7 @@ export declare class ProcesosService {
             detalle: {
                 [x: string]: unknown;
             } | null;
+            baseCalculoProductividad: {} | null;
             niveles: {
                 id: string;
                 nombre: string;
@@ -563,6 +583,7 @@ export declare class ProcesosService {
             detalle: {
                 [x: string]: unknown;
             } | null;
+            baseCalculoProductividad: {} | null;
             niveles: {
                 id: string;
                 nombre: string;
@@ -599,6 +620,7 @@ export declare class ProcesosService {
     private getOperacionDetalle;
     private getOperacionNiveles;
     private validateBibliotecaOperacionPayload;
+    private validateBaseCalculoProductividad;
     private resolveModoProductividadFromPayload;
     private resolveModoProductividadFromBibliotecaPayload;
     private deriveOperationDefaultsFromPayload;

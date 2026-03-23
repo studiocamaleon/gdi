@@ -220,6 +220,8 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
   'margenFinalNoImprimible',
   'margenInferior',
   'margenInicioNoImprimible',
+  'margenLateralDerechoNoImprimible',
+  'margenLateralIzquierdoNoImprimible',
   'margenIzquierdo',
   'margenSuperior',
   'materialesCompatibles',
@@ -1202,6 +1204,12 @@ export class MaquinariaService {
   }
 
   private toMaquinaResponse(maquina: MaquinaCompleta) {
+    const parametrosTecnicos =
+      (maquina.parametrosTecnicosJson as Record<string, unknown> | null) ?? null;
+    const anchoImprimibleMaximo =
+      this.toNumeric(parametrosTecnicos?.anchoImprimibleMaximo) ??
+      this.toNumber(maquina.anchoUtil);
+
     return {
       id: maquina.id,
       codigo: maquina.codigo,
@@ -1225,7 +1233,7 @@ export class MaquinariaService {
       unidadProduccionPrincipal: this.toApiEnum(
         maquina.unidadProduccionPrincipal,
       ) as UnidadProduccionMaquinaDto,
-      anchoUtil: this.toNumber(maquina.anchoUtil),
+      anchoUtil: anchoImprimibleMaximo,
       largoUtil: this.toNumber(maquina.largoUtil),
       altoUtil: this.toNumber(maquina.altoUtil),
       espesorMaximo: this.toNumber(maquina.espesorMaximo),
@@ -1233,9 +1241,7 @@ export class MaquinariaService {
       fechaAlta: maquina.fechaAlta?.toISOString().slice(0, 10) ?? '',
       activo: maquina.activo,
       observaciones: maquina.observaciones ?? '',
-      parametrosTecnicos:
-        (maquina.parametrosTecnicosJson as Record<string, unknown> | null) ??
-        null,
+      parametrosTecnicos,
       capacidadesAvanzadas:
         (maquina.capacidadesAvanzadasJson as Record<string, unknown> | null) ??
         null,
@@ -1566,6 +1572,25 @@ export class MaquinariaService {
     payload: UpsertMaquinaDto,
     parametrosTecnicos?: Record<string, unknown>,
   ) {
+    if (
+      [
+        PlantillaMaquinariaDto.impresora_dtf,
+        PlantillaMaquinariaDto.impresora_dtf_uv,
+        PlantillaMaquinariaDto.impresora_uv_rollo,
+        PlantillaMaquinariaDto.impresora_solvente,
+        PlantillaMaquinariaDto.impresora_inyeccion_tinta,
+        PlantillaMaquinariaDto.impresora_latex,
+        PlantillaMaquinariaDto.impresora_sublimacion_gran_formato,
+      ].includes(payload.plantilla) &&
+      parametrosTecnicos
+    ) {
+      const ancho = this.toNumeric(parametrosTecnicos.anchoImprimibleMaximo);
+      return {
+        anchoUtil: ancho ?? payload.anchoUtil,
+        largoUtil: payload.largoUtil,
+      };
+    }
+
     if (
       payload.plantilla !== PlantillaMaquinariaDto.impresora_laser ||
       !parametrosTecnicos

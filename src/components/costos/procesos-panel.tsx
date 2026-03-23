@@ -48,8 +48,10 @@ import {
   updateProceso,
 } from "@/lib/procesos-api";
 import {
+  baseCalculoProductividadItems,
   estadoConfiguracionProcesoItems,
   modoProductividadProcesoItems,
+  type BaseCalculoProductividad,
   type Proceso,
   type ProcesoOperacionNivelPayload,
   type ProcesoOperacionPlantilla,
@@ -141,6 +143,7 @@ type BibliotecaFormState = {
   unidadEntrada: ProcesoOperacionPayload["unidadEntrada"];
   unidadSalida: ProcesoOperacionPayload["unidadSalida"];
   unidadTiempo: ProcesoOperacionPayload["unidadTiempo"];
+  baseCalculoProductividad: BaseCalculoProductividad;
   mermaRunPct?: number;
   niveles: ProcesoOperacionNivelPayload[];
   activo: boolean;
@@ -306,6 +309,10 @@ function buildOperacionFromBiblioteca(
     mermaRunPct: template.mermaRunPct ?? undefined,
     mermaRuleMode: "fija",
     mermaTiers: [],
+    detalle: {
+      ...(template.detalle ?? {}),
+      pasoPlantillaId: template.id,
+    },
     niveles: normalizeNiveles(template.niveles ?? []),
     activo: template.activo,
     orden: index + 1,
@@ -341,6 +348,7 @@ function createEmptyBibliotecaForm(): BibliotecaFormState {
     unidadEntrada: "ninguna",
     unidadSalida: "ninguna",
     unidadTiempo: "minuto",
+    baseCalculoProductividad: "cantidad",
     tiempoFijoMin: undefined,
     niveles: [],
     activo: true,
@@ -405,6 +413,12 @@ const productividadUnidadItems: Array<{
     unidadSalida: "metro_lineal",
     unidadTiempo: "hora",
   },
+  {
+    value: "metro_lineal/minuto",
+    label: "Metros lineales por minuto (ml/min)",
+    unidadSalida: "metro_lineal",
+    unidadTiempo: "minuto",
+  },
   { value: "pieza/hora", label: "Piezas por hora (pieza/h)", unidadSalida: "pieza", unidadTiempo: "hora" },
   { value: "unidad/hora", label: "Unidades por hora (unidad/h)", unidadSalida: "unidad", unidadTiempo: "hora" },
 ];
@@ -431,6 +445,24 @@ function getProductividadUnidadLabel(
 
 function getProductividadModoUiLabel(value: ProductividadModoUi) {
   return value === "manual" ? "Fija (tiempo total)" : "Variable (valor + unidad)";
+}
+
+function isBaseCalculoCompatible(
+  baseCalculo: BaseCalculoProductividad,
+  unidadSalida: ProcesoOperacionPayload["unidadSalida"],
+) {
+  if (
+    baseCalculo === "metro_lineal_total" ||
+    baseCalculo === "perimetro_total_ml"
+  ) {
+    return unidadSalida === "metro_lineal";
+  }
+
+  if (baseCalculo === "area_total_m2") {
+    return unidadSalida === "m2";
+  }
+
+  return true;
 }
 
 const modoProductividadNivelItems: Array<{
@@ -1224,6 +1256,7 @@ export function ProcesosPanel({
             unidadEntrada: operacion.unidadEntrada || "ninguna",
             unidadSalida: operacion.unidadSalida || "ninguna",
             unidadTiempo: operacion.unidadTiempo || "minuto",
+            detalle: operacion.detalle ?? undefined,
             mermaRunPct: operacion.mermaRunPct ?? undefined,
             mermaRuleMode: mermaBuilder.mode,
             mermaTiers: mermaBuilder.tiers,
@@ -1424,6 +1457,7 @@ export function ProcesosPanel({
       unidadEntrada: operacion.unidadEntrada || "ninguna",
       unidadSalida: operacion.unidadSalida || "ninguna",
       unidadTiempo: operacion.unidadTiempo || "minuto",
+      detalle: operacion.detalle,
       mermaRunPct: operacion.mermaRunPct,
       reglaVelocidad: undefined as Record<string, unknown> | undefined,
       reglaMerma: undefined as Record<string, unknown> | undefined,
@@ -1755,6 +1789,7 @@ export function ProcesosPanel({
         unidadEntrada: item.unidadEntrada,
         unidadSalida: item.unidadSalida,
         unidadTiempo: item.unidadTiempo,
+        baseCalculoProductividad: item.baseCalculoProductividad ?? "cantidad",
         mermaRunPct: item.mermaRunPct ?? undefined,
         niveles: normalizeNiveles(item.niveles ?? []),
         activo: item.activo,
@@ -1813,6 +1848,23 @@ export function ProcesosPanel({
 
       if (!bibliotecaForm.maquinaId && !bibliotecaForm.centroCostoId) {
         toast.error("Debes seleccionar centro de costo o maquina.");
+        return null;
+      }
+
+      if (
+        (bibliotecaForm.baseCalculoProductividad === "metro_lineal_total" ||
+          bibliotecaForm.baseCalculoProductividad === "perimetro_total_ml") &&
+        bibliotecaForm.unidadSalida !== "metro_lineal"
+      ) {
+        toast.error("La base de cálculo lineal requiere Unidad de productividad en metro lineal.");
+        return null;
+      }
+
+      if (
+        bibliotecaForm.baseCalculoProductividad === "area_total_m2" &&
+        bibliotecaForm.unidadSalida !== "m2"
+      ) {
+        toast.error("La base de cálculo por área requiere Unidad de productividad en m2.");
         return null;
       }
 
@@ -1885,6 +1937,7 @@ export function ProcesosPanel({
         unidadEntrada: bibliotecaForm.unidadEntrada,
         unidadSalida: bibliotecaForm.unidadSalida,
         unidadTiempo: bibliotecaForm.unidadTiempo,
+        baseCalculoProductividad: bibliotecaForm.baseCalculoProductividad,
         mermaRunPct: bibliotecaForm.mermaRunPct,
         niveles: bibliotecaForm.usaNiveles ? bibliotecaForm.niveles : [],
         reglaVelocidad: undefined,
@@ -3988,11 +4041,20 @@ export function ProcesosPanel({
                             if (!option) {
                               return;
                             }
-                            setBibliotecaForm((prev) => ({
-                              ...prev,
-                              unidadSalida: option.unidadSalida,
-                              unidadTiempo: option.unidadTiempo,
-                            }));
+                            setBibliotecaForm((prev) => {
+                              const nextUnidadSalida = option.unidadSalida;
+                              return {
+                                ...prev,
+                                unidadSalida: nextUnidadSalida,
+                                unidadTiempo: option.unidadTiempo,
+                                baseCalculoProductividad: isBaseCalculoCompatible(
+                                  prev.baseCalculoProductividad,
+                                  nextUnidadSalida,
+                                )
+                                  ? prev.baseCalculoProductividad
+                                  : "cantidad",
+                              };
+                            });
                           }}
                           disabled={bibliotecaUsaProductividadPerfil}
                         >
@@ -4013,6 +4075,50 @@ export function ProcesosPanel({
                           </SelectContent>
                         </Select>
                         {renderProfileAutofillHint(bibliotecaUsaProductividadPerfil)}
+                      </Field>
+
+                      <Field>
+                        <FieldLabel className="inline-flex items-center gap-1">
+                          Base de calculo
+                          {renderTooltipIcon(
+                            "Indica contra que magnitud se calcula la corrida del paso. Para refilado o corte perimetral usa Perimetro total.",
+                          )}
+                        </FieldLabel>
+                        <Select
+                          value={bibliotecaForm.baseCalculoProductividad}
+                          onValueChange={(value) =>
+                            setBibliotecaForm((prev) => ({
+                              ...prev,
+                              baseCalculoProductividad:
+                                value as BaseCalculoProductividad,
+                            }))
+                          }
+                          disabled={bibliotecaUsaProductividadPerfil}
+                        >
+                          <SelectTrigger>
+                            <SelectValue>
+                              {baseCalculoProductividadItems.find(
+                                (item) =>
+                                  item.value ===
+                                  bibliotecaForm.baseCalculoProductividad,
+                              )?.label ?? bibliotecaForm.baseCalculoProductividad}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {baseCalculoProductividadItems
+                              .filter((item) =>
+                                isBaseCalculoCompatible(
+                                  item.value,
+                                  bibliotecaForm.unidadSalida,
+                                ),
+                              )
+                              .map((item) => (
+                                <SelectItem key={item.value} value={item.value}>
+                                  {item.label}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
                       </Field>
                     </>
                   )}

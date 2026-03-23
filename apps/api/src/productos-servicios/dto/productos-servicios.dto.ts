@@ -33,6 +33,11 @@ export enum TipoVentaGranFormatoDto {
   metro_lineal = 'metro_lineal',
 }
 
+export enum GranFormatoImposicionCriterioOptimizacionDto {
+  menor_desperdicio = 'menor_desperdicio',
+  menor_largo_consumido = 'menor_largo_consumido',
+}
+
 export enum TipoImpresionProductoVarianteDto {
   bn = 'bn',
   cmyk = 'cmyk',
@@ -735,6 +740,108 @@ export class UpsertProductoMotorConfigDto {
   parametros: Record<string, unknown>;
 }
 
+export class GranFormatoImposicionMedidaDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  anchoMm?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  altoMm?: number | null;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  cantidad: number;
+}
+
+export class UpdateGranFormatoImposicionDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => GranFormatoImposicionMedidaDto)
+  medidas?: GranFormatoImposicionMedidaDto[];
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  piezaAnchoMm?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  piezaAltoMm?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  cantidadReferencia?: number;
+
+  @IsOptional()
+  @IsString()
+  tecnologiaDefault?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  maquinaDefaultId?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  perfilDefaultId?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  permitirRotacion?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  separacionHorizontalMm?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  separacionVerticalMm?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  margenLateralIzquierdoMmOverride?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  margenLateralDerechoMmOverride?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  margenInicioMmOverride?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  margenFinalMmOverride?: number | null;
+
+  @IsOptional()
+  @IsEnum(GranFormatoImposicionCriterioOptimizacionDto)
+  criterioOptimizacion?: GranFormatoImposicionCriterioOptimizacionDto;
+}
+
 export class UpdateGranFormatoConfigDto {
   @IsEnum(TipoVentaGranFormatoDto)
   tipoVenta: TipoVentaGranFormatoDto;
@@ -758,6 +865,40 @@ export class UpdateGranFormatoConfigDto {
   @IsArray()
   @IsUUID(undefined, { each: true })
   materialesCompatibles: string[];
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateGranFormatoImposicionDto)
+  imposicion?: UpdateGranFormatoImposicionDto;
+}
+
+export class UpsertGranFormatoRutaBaseReglaImpresionDto {
+  @IsString()
+  @IsNotEmpty()
+  tecnologia: string;
+
+  @IsOptional()
+  @IsUUID()
+  maquinaId?: string | null;
+
+  @IsUUID()
+  pasoPlantillaId: string;
+
+  @IsOptional()
+  @IsUUID()
+  perfilOperativoDefaultId?: string | null;
+}
+
+export class UpdateGranFormatoRutaBaseDto {
+  @IsOptional()
+  @IsUUID()
+  procesoDefinicionId?: string | null;
+
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => UpsertGranFormatoRutaBaseReglaImpresionDto)
+  reglasImpresion: UpsertGranFormatoRutaBaseReglaImpresionDto[];
 }
 
 export class CreateGranFormatoVarianteDto {
@@ -1041,6 +1182,33 @@ export class UpsertProductoChecklistDto {
   @ValidateNested({ each: true })
   @Type(() => UpsertChecklistPreguntaDto)
   preguntas: UpsertChecklistPreguntaDto[];
+}
+
+export class UpsertGranFormatoChecklistPorTecnologiaDto {
+  @IsString()
+  @IsNotEmpty()
+  tecnologia: string;
+
+  @ValidateNested()
+  @Type(() => UpsertProductoChecklistDto)
+  checklist: UpsertProductoChecklistDto;
+}
+
+export class UpdateGranFormatoChecklistDto {
+  @IsBoolean()
+  aplicaATodasLasTecnologias: boolean;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpsertProductoChecklistDto)
+  checklistComun?: UpsertProductoChecklistDto;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => UpsertGranFormatoChecklistPorTecnologiaDto)
+  checklistsPorTecnologia?: UpsertGranFormatoChecklistPorTecnologiaDto[];
 }
 
 export class CotizarProductoVarianteDto {

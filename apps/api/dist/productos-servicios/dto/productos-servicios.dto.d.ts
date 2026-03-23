@@ -10,6 +10,10 @@ export declare enum TipoVentaGranFormatoDto {
     m2 = "m2",
     metro_lineal = "metro_lineal"
 }
+export declare enum GranFormatoImposicionCriterioOptimizacionDto {
+    menor_desperdicio = "menor_desperdicio",
+    menor_largo_consumido = "menor_largo_consumido"
+}
 export declare enum TipoImpresionProductoVarianteDto {
     bn = "bn",
     cmyk = "cmyk"
@@ -282,6 +286,28 @@ export declare class UpdateProductoPrecioEspecialClientesDto {
 export declare class UpsertProductoMotorConfigDto {
     parametros: Record<string, unknown>;
 }
+export declare class GranFormatoImposicionMedidaDto {
+    anchoMm?: number | null;
+    altoMm?: number | null;
+    cantidad: number;
+}
+export declare class UpdateGranFormatoImposicionDto {
+    medidas?: GranFormatoImposicionMedidaDto[];
+    piezaAnchoMm?: number | null;
+    piezaAltoMm?: number | null;
+    cantidadReferencia?: number;
+    tecnologiaDefault?: string | null;
+    maquinaDefaultId?: string | null;
+    perfilDefaultId?: string | null;
+    permitirRotacion?: boolean;
+    separacionHorizontalMm?: number;
+    separacionVerticalMm?: number;
+    margenLateralIzquierdoMmOverride?: number | null;
+    margenLateralDerechoMmOverride?: number | null;
+    margenInicioMmOverride?: number | null;
+    margenFinalMmOverride?: number | null;
+    criterioOptimizacion?: GranFormatoImposicionCriterioOptimizacionDto;
+}
 export declare class UpdateGranFormatoConfigDto {
     tipoVenta: TipoVentaGranFormatoDto;
     tecnologiasCompatibles: string[];
@@ -289,6 +315,17 @@ export declare class UpdateGranFormatoConfigDto {
     perfilesCompatibles: string[];
     materialBaseId?: string | null;
     materialesCompatibles: string[];
+    imposicion?: UpdateGranFormatoImposicionDto;
+}
+export declare class UpsertGranFormatoRutaBaseReglaImpresionDto {
+    tecnologia: string;
+    maquinaId?: string | null;
+    pasoPlantillaId: string;
+    perfilOperativoDefaultId?: string | null;
+}
+export declare class UpdateGranFormatoRutaBaseDto {
+    procesoDefinicionId?: string | null;
+    reglasImpresion: UpsertGranFormatoRutaBaseReglaImpresionDto[];
 }
 export declare class CreateGranFormatoVarianteDto {
     nombre: string;
@@ -372,6 +409,15 @@ export declare class UpsertChecklistPreguntaDto {
 export declare class UpsertProductoChecklistDto {
     activo?: boolean;
     preguntas: UpsertChecklistPreguntaDto[];
+}
+export declare class UpsertGranFormatoChecklistPorTecnologiaDto {
+    tecnologia: string;
+    checklist: UpsertProductoChecklistDto;
+}
+export declare class UpdateGranFormatoChecklistDto {
+    aplicaATodasLasTecnologias: boolean;
+    checklistComun?: UpsertProductoChecklistDto;
+    checklistsPorTecnologia?: UpsertGranFormatoChecklistPorTecnologiaDto[];
 }
 export declare class CotizarProductoVarianteDto {
     cantidad: number;

@@ -30,6 +30,7 @@ class UpsertProcesoOperacionPlantillaDto {
     mermaRunPct;
     reglaVelocidad;
     reglaMerma;
+    baseCalculoProductividad;
     observaciones;
     niveles;
     activo;
@@ -119,6 +120,11 @@ __decorate([
     (0, class_validator_1.IsObject)(),
     __metadata("design:type", Object)
 ], UpsertProcesoOperacionPlantillaDto.prototype, "reglaMerma", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(upsert_proceso_dto_1.BaseCalculoProductividadDto),
+    __metadata("design:type", String)
+], UpsertProcesoOperacionPlantillaDto.prototype, "baseCalculoProductividad", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),

@@ -8,6 +8,8 @@ import {
   UpdateProductoPrecioDto,
   UpdateProductoPrecioEspecialClientesDto,
   UpdateGranFormatoConfigDto,
+  UpdateGranFormatoChecklistDto,
+  UpdateGranFormatoRutaBaseDto,
   AssignVarianteRutaDto,
   CotizarProductoVarianteDto,
   CreateProductoVarianteDto,
@@ -292,6 +294,40 @@ export class ProductosServiciosController {
     @Body() payload: UpdateGranFormatoConfigDto,
   ) {
     return this.service.updateGranFormatoConfig(auth, id, payload);
+  }
+
+  @Get(':id/gran-formato-ruta-base')
+  getGranFormatoRutaBase(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.service.getGranFormatoRutaBase(auth, id);
+  }
+
+  @Put(':id/gran-formato-ruta-base')
+  updateGranFormatoRutaBase(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: UpdateGranFormatoRutaBaseDto,
+  ) {
+    return this.service.updateGranFormatoRutaBase(auth, id, payload);
+  }
+
+  @Get(':id/gran-formato-checklist')
+  getGranFormatoChecklist(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.service.getGranFormatoChecklist(auth, id);
+  }
+
+  @Put(':id/gran-formato-checklist')
+  upsertGranFormatoChecklist(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: UpdateGranFormatoChecklistDto,
+  ) {
+    return this.service.updateGranFormatoChecklist(auth, id, payload);
   }
 
   @Get(':id/gran-formato-variantes')

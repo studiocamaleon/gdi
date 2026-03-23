@@ -5,10 +5,14 @@ import {
   PliegoImpresionCatalogItem,
   CotizacionProductoSnapshotResumen,
   ProductoChecklist,
+  ProductoChecklistPayload,
+  GranFormatoChecklistConfig,
+  GranFormatoImposicionConfig,
   CotizacionProductoVariante,
   EstadoProductoServicio,
   FamiliaProducto,
   GranFormatoConfig,
+  GranFormatoRutaBase,
   GranFormatoVariante,
   MetodoCalculoPrecioProducto,
   MotorCostoCatalogItem,
@@ -228,6 +232,10 @@ export async function getGranFormatoConfig(productoId: string) {
   return apiRequest<GranFormatoConfig>(`/productos-servicios/${productoId}/gran-formato-config`);
 }
 
+export async function getGranFormatoRutaBase(productoId: string) {
+  return apiRequest<GranFormatoRutaBase>(`/productos-servicios/${productoId}/gran-formato-ruta-base`);
+}
+
 export async function updateGranFormatoConfig(
   productoId: string,
   payload: {
@@ -237,9 +245,28 @@ export async function updateGranFormatoConfig(
     perfilesCompatibles: string[];
     materialBaseId?: string | null;
     materialesCompatibles: string[];
+    imposicion?: Partial<GranFormatoImposicionConfig>;
   },
 ) {
   return apiRequest<GranFormatoConfig>(`/productos-servicios/${productoId}/gran-formato-config`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateGranFormatoRutaBase(
+  productoId: string,
+  payload: {
+    procesoDefinicionId?: string | null;
+    reglasImpresion: Array<{
+      tecnologia: string;
+      maquinaId?: string | null;
+      pasoPlantillaId: string;
+      perfilOperativoDefaultId?: string | null;
+    }>;
+  },
+) {
+  return apiRequest<GranFormatoRutaBase>(`/productos-servicios/${productoId}/gran-formato-ruta-base`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   });
@@ -298,6 +325,12 @@ export async function deleteGranFormatoVariante(varianteId: string) {
 
 export async function getProductoChecklist(productoId: string) {
   return apiRequest<ProductoChecklist>(`/productos-servicios/${productoId}/checklist`);
+}
+
+export async function getGranFormatoChecklist(productoId: string) {
+  return apiRequest<GranFormatoChecklistConfig>(
+    `/productos-servicios/${productoId}/gran-formato-checklist`,
+  );
 }
 
 export async function getProductoAdicionales(productoId: string) {
@@ -366,49 +399,32 @@ export async function updateAdicionalEfecto(
 
 export async function upsertProductoChecklist(
   productoId: string,
-  payload: {
-    activo?: boolean;
-    preguntas: Array<{
-      id?: string;
-      texto: string;
-      tipoPregunta?: 'binaria' | 'single_select';
-      orden?: number;
-      activo?: boolean;
-      respuestas: Array<{
-        id?: string;
-        texto: string;
-        codigo?: string;
-        preguntaSiguienteId?: string;
-        orden?: number;
-        activo?: boolean;
-        reglas?: Array<{
-          id?: string;
-          accion:
-            | 'activar_paso'
-            | 'seleccionar_variante_paso'
-            | 'costo_extra'
-            | 'material_extra';
-          orden?: number;
-          activo?: boolean;
-          pasoPlantillaId?: string;
-          variantePasoId?: string;
-          costoRegla?: 'tiempo_min' | 'flat' | 'por_unidad' | 'por_pliego' | 'porcentaje_sobre_total';
-          costoValor?: number;
-          costoCentroCostoId?: string;
-          materiaPrimaVarianteId?: string;
-          tipoConsumo?: 'por_unidad' | 'por_pliego' | 'por_m2';
-          factorConsumo?: number;
-          mermaPct?: number;
-          detalle?: Record<string, unknown>;
-        }>;
-      }>;
-    }>;
-  },
+  payload: ProductoChecklistPayload,
 ) {
   return apiRequest<ProductoChecklist>(`/productos-servicios/${productoId}/checklist`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   });
+}
+
+export async function updateGranFormatoChecklist(
+  productoId: string,
+  payload: {
+    aplicaATodasLasTecnologias: boolean;
+    checklistComun?: ProductoChecklistPayload;
+    checklistsPorTecnologia?: Array<{
+      tecnologia: string;
+      checklist: ProductoChecklistPayload;
+    }>;
+  },
+) {
+  return apiRequest<GranFormatoChecklistConfig>(
+    `/productos-servicios/${productoId}/gran-formato-checklist`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export async function createProductoVariante(

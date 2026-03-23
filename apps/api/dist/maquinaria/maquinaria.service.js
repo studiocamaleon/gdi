@@ -154,6 +154,8 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
     'margenFinalNoImprimible',
     'margenInferior',
     'margenInicioNoImprimible',
+    'margenLateralDerechoNoImprimible',
+    'margenLateralIzquierdoNoImprimible',
     'margenIzquierdo',
     'margenSuperior',
     'materialesCompatibles',
@@ -900,6 +902,9 @@ let MaquinariaService = class MaquinariaService {
         return maquina;
     }
     toMaquinaResponse(maquina) {
+        const parametrosTecnicos = maquina.parametrosTecnicosJson ?? null;
+        const anchoImprimibleMaximo = this.toNumeric(parametrosTecnicos?.anchoImprimibleMaximo) ??
+            this.toNumber(maquina.anchoUtil);
         return {
             id: maquina.id,
             codigo: maquina.codigo,
@@ -917,7 +922,7 @@ let MaquinariaService = class MaquinariaService {
             estadoConfiguracion: this.toApiEnum(maquina.estadoConfiguracion),
             geometriaTrabajo: this.toApiEnum(maquina.geometriaTrabajo),
             unidadProduccionPrincipal: this.toApiEnum(maquina.unidadProduccionPrincipal),
-            anchoUtil: this.toNumber(maquina.anchoUtil),
+            anchoUtil: anchoImprimibleMaximo,
             largoUtil: this.toNumber(maquina.largoUtil),
             altoUtil: this.toNumber(maquina.altoUtil),
             espesorMaximo: this.toNumber(maquina.espesorMaximo),
@@ -925,8 +930,7 @@ let MaquinariaService = class MaquinariaService {
             fechaAlta: maquina.fechaAlta?.toISOString().slice(0, 10) ?? '',
             activo: maquina.activo,
             observaciones: maquina.observaciones ?? '',
-            parametrosTecnicos: maquina.parametrosTecnicosJson ??
-                null,
+            parametrosTecnicos,
             capacidadesAvanzadas: maquina.capacidadesAvanzadasJson ??
                 null,
             perfilesOperativos: maquina.perfilesOperativos.map((perfil) => ({
@@ -1171,6 +1175,22 @@ let MaquinariaService = class MaquinariaService {
         return Number.isFinite(parsed) ? parsed : null;
     }
     getDerivedMachineDimensions(payload, parametrosTecnicos) {
+        if ([
+            upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_dtf,
+            upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_dtf_uv,
+            upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_uv_rollo,
+            upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_solvente,
+            upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_inyeccion_tinta,
+            upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_latex,
+            upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_sublimacion_gran_formato,
+        ].includes(payload.plantilla) &&
+            parametrosTecnicos) {
+            const ancho = this.toNumeric(parametrosTecnicos.anchoImprimibleMaximo);
+            return {
+                anchoUtil: ancho ?? payload.anchoUtil,
+                largoUtil: payload.largoUtil,
+            };
+        }
         if (payload.plantilla !== upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_laser ||
             !parametrosTecnicos) {
             return {

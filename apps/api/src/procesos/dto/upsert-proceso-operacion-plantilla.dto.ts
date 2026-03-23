@@ -11,6 +11,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import {
+  BaseCalculoProductividadDto,
   ModoProductividadProcesoDto,
   ProcesoOperacionNivelDto,
   TipoOperacionProcesoDto,
@@ -85,6 +86,10 @@ export class UpsertProcesoOperacionPlantillaDto {
   @IsOptional()
   @IsObject()
   reglaMerma?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsEnum(BaseCalculoProductividadDto)
+  baseCalculoProductividad?: BaseCalculoProductividadDto;
 
   @IsOptional()
   @IsString()

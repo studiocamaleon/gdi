@@ -20,6 +20,7 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  BaseCalculoProductividadDto,
   EstadoConfiguracionProcesoDto,
   ModoProductividadProcesoDto,
   type PlantillaMaquinariaDto,
@@ -677,7 +678,11 @@ export class ProcesosService {
       mermaRunPct: this.toDecimal(payload.mermaRunPct),
       reglaVelocidadJson: undefined,
       reglaMermaJson: this.toNullableJson(payload.reglaMerma),
-      detalleJson: this.buildOperacionDetalleJson(payload.detalle, payload.niveles),
+      detalleJson: this.buildOperacionDetalleJson(
+        payload.detalle,
+        payload.niveles,
+        payload.baseCalculoProductividad,
+      ),
       activo: payload.activo,
     };
   }
@@ -717,7 +722,11 @@ export class ProcesosService {
       mermaRunPct: this.toDecimal(payload.mermaRunPct),
       reglaVelocidadJson: undefined,
       reglaMermaJson: this.toNullableJson(payload.reglaMerma),
-      detalleJson: this.buildOperacionDetalleJson(undefined, payload.niveles),
+      detalleJson: this.buildOperacionDetalleJson(
+        undefined,
+        payload.niveles,
+        payload.baseCalculoProductividad,
+      ),
       observaciones: payload.observaciones?.trim() || null,
       activo: payload.activo,
     };
@@ -787,8 +796,12 @@ export class ProcesosService {
       cleanupMin?: number;
       detalle?: Record<string, unknown>;
     }> = [],
+    baseCalculoProductividad?: BaseCalculoProductividadDto,
   ) {
     const base = detalle && typeof detalle === 'object' && !Array.isArray(detalle) ? { ...detalle } : {};
+    if (baseCalculoProductividad) {
+      base.baseCalculoProductividad = baseCalculoProductividad;
+    }
     const nivelesSanitizados = niveles
       .filter((nivel) => nivel.nombre?.trim())
       .map((nivel, index) => {
@@ -1026,7 +1039,46 @@ export class ProcesosService {
       );
     }
 
+    this.validateBaseCalculoProductividad({
+      operationName: payload.nombre.trim(),
+      baseCalculoProductividad: payload.baseCalculoProductividad,
+      unidadSalida: payload.unidadSalida ?? UnidadProcesoDto.ninguna,
+    });
+
     this.validateOperacionNivelesPayload(payload.niveles ?? [], payload.nombre.trim());
+  }
+
+  private validateBaseCalculoProductividad(input: {
+    operationName: string;
+    baseCalculoProductividad?: BaseCalculoProductividadDto;
+    unidadSalida: UnidadProcesoDto;
+  }) {
+    const baseCalculoProductividad = input.baseCalculoProductividad;
+    if (!baseCalculoProductividad) {
+      return;
+    }
+
+    const requiereMetroLineal =
+      baseCalculoProductividad === BaseCalculoProductividadDto.metro_lineal_total ||
+      baseCalculoProductividad === BaseCalculoProductividadDto.perimetro_total_ml;
+
+    if (
+      requiereMetroLineal &&
+      input.unidadSalida !== UnidadProcesoDto.metro_lineal
+    ) {
+      throw new BadRequestException(
+        `La operacion ${input.operationName} usa Base de calculo lineal y requiere Unidad de productividad en metro lineal.`,
+      );
+    }
+
+    if (
+      baseCalculoProductividad === BaseCalculoProductividadDto.area_total_m2 &&
+      input.unidadSalida !== UnidadProcesoDto.m2
+    ) {
+      throw new BadRequestException(
+        `La operacion ${input.operationName} usa Base de calculo por area y requiere Unidad de productividad en m2.`,
+      );
+    }
   }
 
   private resolveModoProductividadFromPayload(
@@ -1557,6 +1609,12 @@ export class ProcesosService {
         );
       }
 
+      this.validateBaseCalculoProductividad({
+        operationName: operacion.nombre.trim(),
+        baseCalculoProductividad: operacion.baseCalculoProductividad,
+        unidadSalida: this.toApiEnum(derived.unidadSalida) as UnidadProcesoDto,
+      });
+
       const centroRef = this.getCentroRefForOperacionPayload(
         operacion,
         references,
@@ -1596,7 +1654,10 @@ export class ProcesosService {
     const machineIds = Array.from(
       new Set(
         operaciones
-          .map((operacion) => operacion.maquinaId)
+          .flatMap((operacion) => [
+            operacion.maquinaId,
+            ...(operacion.niveles ?? []).map((nivel) => nivel.maquinaId),
+          ])
           .filter((value): value is string => Boolean(value)),
       ),
     );
@@ -1604,7 +1665,10 @@ export class ProcesosService {
     const perfilIds = Array.from(
       new Set(
         operaciones
-          .map((operacion) => operacion.perfilOperativoId)
+          .flatMap((operacion) => [
+            operacion.perfilOperativoId,
+            ...(operacion.niveles ?? []).map((nivel) => nivel.perfilOperativoId),
+          ])
           .filter((value): value is string => Boolean(value)),
       ),
     );
@@ -2100,6 +2164,9 @@ export class ProcesosService {
         reglaMerma:
           (operacion.reglaMermaJson as Record<string, unknown> | null) ?? null,
         detalle: this.getOperacionDetalle(operacion.detalleJson),
+        baseCalculoProductividad:
+          this.getOperacionDetalle(operacion.detalleJson)?.baseCalculoProductividad ??
+          null,
         niveles: this.getOperacionNiveles(operacion.detalleJson),
         activo: operacion.activo,
         warnings: this.getOperationWarnings(operacion),
@@ -2136,6 +2203,9 @@ export class ProcesosService {
       reglaVelocidad:
         (item.reglaVelocidadJson as Record<string, unknown> | null) ?? null,
       reglaMerma: (item.reglaMermaJson as Record<string, unknown> | null) ?? null,
+      detalle: this.getOperacionDetalle(detalleJson),
+      baseCalculoProductividad:
+        this.getOperacionDetalle(detalleJson)?.baseCalculoProductividad ?? null,
       observaciones: item.observaciones ?? '',
       niveles: this.getOperacionNiveles(detalleJson),
       activo: item.activo,

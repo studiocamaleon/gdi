@@ -447,7 +447,7 @@ let ProcesosService = class ProcesosService {
             mermaRunPct: this.toDecimal(payload.mermaRunPct),
             reglaVelocidadJson: undefined,
             reglaMermaJson: this.toNullableJson(payload.reglaMerma),
-            detalleJson: this.buildOperacionDetalleJson(payload.detalle, payload.niveles),
+            detalleJson: this.buildOperacionDetalleJson(payload.detalle, payload.niveles, payload.baseCalculoProductividad),
             activo: payload.activo,
         };
     }
@@ -470,7 +470,7 @@ let ProcesosService = class ProcesosService {
             mermaRunPct: this.toDecimal(payload.mermaRunPct),
             reglaVelocidadJson: undefined,
             reglaMermaJson: this.toNullableJson(payload.reglaMerma),
-            detalleJson: this.buildOperacionDetalleJson(undefined, payload.niveles),
+            detalleJson: this.buildOperacionDetalleJson(undefined, payload.niveles, payload.baseCalculoProductividad),
             observaciones: payload.observaciones?.trim() || null,
             activo: payload.activo,
         };
@@ -519,8 +519,11 @@ let ProcesosService = class ProcesosService {
                 return upsert_proceso_dto_1.TipoOperacionProcesoDto.servicio;
         }
     }
-    buildOperacionDetalleJson(detalle, niveles = []) {
+    buildOperacionDetalleJson(detalle, niveles = [], baseCalculoProductividad) {
         const base = detalle && typeof detalle === 'object' && !Array.isArray(detalle) ? { ...detalle } : {};
+        if (baseCalculoProductividad) {
+            base.baseCalculoProductividad = baseCalculoProductividad;
+        }
         const nivelesSanitizados = niveles
             .filter((nivel) => nivel.nombre?.trim())
             .map((nivel, index) => {
@@ -706,7 +709,28 @@ let ProcesosService = class ProcesosService {
         if (!payload.maquinaId && !payload.centroCostoId) {
             throw new common_1.BadRequestException('Define un centro de costo cuando la plantilla no tiene maquina.');
         }
+        this.validateBaseCalculoProductividad({
+            operationName: payload.nombre.trim(),
+            baseCalculoProductividad: payload.baseCalculoProductividad,
+            unidadSalida: payload.unidadSalida ?? upsert_proceso_dto_1.UnidadProcesoDto.ninguna,
+        });
         this.validateOperacionNivelesPayload(payload.niveles ?? [], payload.nombre.trim());
+    }
+    validateBaseCalculoProductividad(input) {
+        const baseCalculoProductividad = input.baseCalculoProductividad;
+        if (!baseCalculoProductividad) {
+            return;
+        }
+        const requiereMetroLineal = baseCalculoProductividad === upsert_proceso_dto_1.BaseCalculoProductividadDto.metro_lineal_total ||
+            baseCalculoProductividad === upsert_proceso_dto_1.BaseCalculoProductividadDto.perimetro_total_ml;
+        if (requiereMetroLineal &&
+            input.unidadSalida !== upsert_proceso_dto_1.UnidadProcesoDto.metro_lineal) {
+            throw new common_1.BadRequestException(`La operacion ${input.operationName} usa Base de calculo lineal y requiere Unidad de productividad en metro lineal.`);
+        }
+        if (baseCalculoProductividad === upsert_proceso_dto_1.BaseCalculoProductividadDto.area_total_m2 &&
+            input.unidadSalida !== upsert_proceso_dto_1.UnidadProcesoDto.m2) {
+            throw new common_1.BadRequestException(`La operacion ${input.operationName} usa Base de calculo por area y requiere Unidad de productividad en m2.`);
+        }
     }
     resolveModoProductividadFromPayload(payload) {
         if (payload.modoProductividad === upsert_proceso_dto_1.ModoProductividadProcesoDto.fija) {
@@ -1051,6 +1075,11 @@ let ProcesosService = class ProcesosService {
                 (!derived.productividadBase || Number(derived.productividadBase) <= 0)) {
                 throw new common_1.BadRequestException(`La operacion ${operacion.nombre.trim()} en modo variable requiere Productividad base mayor a 0 (manual o desde perfil).`);
             }
+            this.validateBaseCalculoProductividad({
+                operationName: operacion.nombre.trim(),
+                baseCalculoProductividad: operacion.baseCalculoProductividad,
+                unidadSalida: this.toApiEnum(derived.unidadSalida),
+            });
             const centroRef = this.getCentroRefForOperacionPayload(operacion, references);
             if (centroRef) {
                 const unidadError = this.getCentroUnidadCompatibilityErrorForPayload({
@@ -1070,10 +1099,16 @@ let ProcesosService = class ProcesosService {
             .map((operacion) => operacion.centroCostoId)
             .filter((value) => Boolean(value))));
         const machineIds = Array.from(new Set(operaciones
-            .map((operacion) => operacion.maquinaId)
+            .flatMap((operacion) => [
+            operacion.maquinaId,
+            ...(operacion.niveles ?? []).map((nivel) => nivel.maquinaId),
+        ])
             .filter((value) => Boolean(value))));
         const perfilIds = Array.from(new Set(operaciones
-            .map((operacion) => operacion.perfilOperativoId)
+            .flatMap((operacion) => [
+            operacion.perfilOperativoId,
+            ...(operacion.niveles ?? []).map((nivel) => nivel.perfilOperativoId),
+        ])
             .filter((value) => Boolean(value))));
         const [centros, maquinas, perfiles] = await Promise.all([
             centerIds.length
@@ -1446,6 +1481,8 @@ let ProcesosService = class ProcesosService {
                     null,
                 reglaMerma: operacion.reglaMermaJson ?? null,
                 detalle: this.getOperacionDetalle(operacion.detalleJson),
+                baseCalculoProductividad: this.getOperacionDetalle(operacion.detalleJson)?.baseCalculoProductividad ??
+                    null,
                 niveles: this.getOperacionNiveles(operacion.detalleJson),
                 activo: operacion.activo,
                 warnings: this.getOperationWarnings(operacion),
@@ -1477,6 +1514,8 @@ let ProcesosService = class ProcesosService {
             mermaRunPct: this.decimalToNumberOrNull(item.mermaRunPct),
             reglaVelocidad: item.reglaVelocidadJson ?? null,
             reglaMerma: item.reglaMermaJson ?? null,
+            detalle: this.getOperacionDetalle(detalleJson),
+            baseCalculoProductividad: this.getOperacionDetalle(detalleJson)?.baseCalculoProductividad ?? null,
             observaciones: item.observaciones ?? '',
             niveles: this.getOperacionNiveles(detalleJson),
             activo: item.activo,

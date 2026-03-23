@@ -357,6 +357,54 @@ export type GranFormatoConfig = {
   perfilesCompatibles: string[];
   materialBaseId: string | null;
   materialesCompatibles: string[];
+  imposicion: GranFormatoImposicionConfig;
+  updatedAt: string | null;
+};
+
+export type GranFormatoImposicionCriterioOptimizacion =
+  | "menor_desperdicio"
+  | "menor_largo_consumido";
+
+export type GranFormatoImposicionMedida = {
+  anchoMm: number | null;
+  altoMm: number | null;
+  cantidad: number;
+};
+
+export type GranFormatoImposicionConfig = {
+  medidas: GranFormatoImposicionMedida[];
+  piezaAnchoMm: number | null;
+  piezaAltoMm: number | null;
+  cantidadReferencia: number;
+  tecnologiaDefault: string | null;
+  maquinaDefaultId: string | null;
+  perfilDefaultId: string | null;
+  permitirRotacion: boolean;
+  separacionHorizontalMm: number;
+  separacionVerticalMm: number;
+  margenLateralIzquierdoMmOverride: number | null;
+  margenLateralDerechoMmOverride: number | null;
+  margenInicioMmOverride: number | null;
+  margenFinalMmOverride: number | null;
+  criterioOptimizacion: GranFormatoImposicionCriterioOptimizacion;
+};
+
+export type GranFormatoRutaBaseReglaImpresion = {
+  id: string;
+  tecnologia: string;
+  maquinaId: string | null;
+  maquinaNombre: string;
+  pasoPlantillaId: string;
+  pasoPlantillaNombre: string;
+  perfilOperativoDefaultId: string | null;
+  perfilOperativoDefaultNombre: string;
+};
+
+export type GranFormatoRutaBase = {
+  productoId: string;
+  procesoDefinicionId: string | null;
+  procesoDefinicionNombre: string;
+  reglasImpresion: GranFormatoRutaBaseReglaImpresion[];
   updatedAt: string | null;
 };
 
@@ -617,6 +665,56 @@ export type ProductoChecklist = {
   activo: boolean;
   preguntas: ProductoChecklistPregunta[];
   createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type ProductoChecklistPayload = {
+  activo?: boolean;
+  preguntas: Array<{
+    id?: string;
+    texto: string;
+    tipoPregunta?: 'binaria' | 'single_select';
+    orden?: number;
+    activo?: boolean;
+    respuestas: Array<{
+      id?: string;
+      texto: string;
+      codigo?: string;
+      preguntaSiguienteId?: string;
+      orden?: number;
+      activo?: boolean;
+      reglas?: Array<{
+        id?: string;
+        accion:
+          | 'activar_paso'
+          | 'seleccionar_variante_paso'
+          | 'costo_extra'
+          | 'material_extra';
+        orden?: number;
+        activo?: boolean;
+        pasoPlantillaId?: string;
+        variantePasoId?: string;
+        costoRegla?: 'tiempo_min' | 'flat' | 'por_unidad' | 'por_pliego' | 'porcentaje_sobre_total';
+        costoValor?: number;
+        costoCentroCostoId?: string;
+        materiaPrimaVarianteId?: string;
+        tipoConsumo?: 'por_unidad' | 'por_pliego' | 'por_m2';
+        factorConsumo?: number;
+        mermaPct?: number;
+        detalle?: Record<string, unknown>;
+      }>;
+    }>;
+  }>;
+};
+
+export type GranFormatoChecklistConfig = {
+  productoId: string;
+  aplicaATodasLasTecnologias: boolean;
+  checklistComun: ProductoChecklist;
+  checklistsPorTecnologia: Array<{
+    tecnologia: string;
+    checklist: ProductoChecklist;
+  }>;
   updatedAt: string | null;
 };
 

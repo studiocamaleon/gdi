@@ -9,8 +9,8 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UpsertProductoMotorConfigDto = exports.UpdateProductoPrecioEspecialClientesDto = exports.UpdateProductoPrecioDto = exports.AssignProductoMotorDto = exports.AssignProductoVariantesRutaMasivaDto = exports.UpdateProductoRutaPolicyDto = exports.UpsertProductoRutaPasoFijoVarianteDto = exports.UpsertProductoRutaPasoFijoItemDto = exports.UpsertProductoRutaBaseMatchingVarianteDto = exports.UpsertProductoRutaBaseMatchingItemDto = exports.AssignVarianteRutaDto = exports.UpdateProductoVarianteDto = exports.CreateProductoVarianteDto = exports.UpsertProductoServicioDto = exports.UpsertSubfamiliaProductoDto = exports.UpsertProductoImpuestoDto = exports.UpsertFamiliaProductoDto = exports.SetVarianteAdicionalRestrictionDto = exports.AssignProductoAdicionalDto = exports.UpsertProductoAdicionalServicioPricingDto = exports.UpsertProductoAdicionalServicioReglaCostoDto = exports.UpsertProductoAdicionalServicioNivelDto = exports.UpsertProductoAdicionalDto = exports.UpsertProductoAdicionalMaterialDto = exports.UpsertProductoAdicionalEfectoDto = exports.UpsertProductoAdicionalMaterialEffectDto = exports.UpsertProductoAdicionalCostEffectDto = exports.UpsertProductoAdicionalRouteEffectDto = exports.UpsertProductoAdicionalRouteInsertionDto = exports.UpsertProductoAdicionalRouteEffectPasoDto = exports.UpsertProductoAdicionalEfectoScopeDto = exports.UpsertVarianteOpcionesProductivasDto = exports.UpsertVarianteOpcionProductivaDimensionDto = exports.MetodoCalculoPrecioProductoDto = exports.ReglaCostoChecklistDto = exports.TipoChecklistAccionReglaDto = exports.TipoChecklistPreguntaDto = exports.ReglaCostoAdicionalEfectoDto = exports.TipoInsercionRouteEffectDto = exports.TipoProductoAdicionalEfectoDto = exports.ValorOpcionProductivaDto = exports.DimensionOpcionProductivaDto = exports.TipoConsumoAdicionalMaterialDto = exports.MetodoCostoProductoAdicionalDto = exports.TipoProductoAdicionalDto = exports.CarasProductoVarianteDto = exports.TipoImpresionProductoVarianteDto = exports.TipoVentaGranFormatoDto = exports.EstadoProductoServicioDto = exports.TipoProductoServicioDto = void 0;
-exports.PreviewImposicionProductoVarianteDto = exports.CotizarProductoVarianteDto = exports.UpsertProductoChecklistDto = exports.UpsertChecklistPreguntaDto = exports.UpsertChecklistRespuestaDto = exports.UpsertChecklistReglaDto = exports.UpsertChecklistReglaNivelDto = exports.CotizarSeleccionBaseDto = exports.CotizarChecklistRespuestaDto = exports.CotizarAddonConfigDto = exports.UpsertVarianteMotorOverrideDto = exports.UpdateGranFormatoVarianteDto = exports.CreateGranFormatoVarianteDto = exports.UpdateGranFormatoConfigDto = void 0;
+exports.UpdateProductoPrecioEspecialClientesDto = exports.UpdateProductoPrecioDto = exports.AssignProductoMotorDto = exports.AssignProductoVariantesRutaMasivaDto = exports.UpdateProductoRutaPolicyDto = exports.UpsertProductoRutaPasoFijoVarianteDto = exports.UpsertProductoRutaPasoFijoItemDto = exports.UpsertProductoRutaBaseMatchingVarianteDto = exports.UpsertProductoRutaBaseMatchingItemDto = exports.AssignVarianteRutaDto = exports.UpdateProductoVarianteDto = exports.CreateProductoVarianteDto = exports.UpsertProductoServicioDto = exports.UpsertSubfamiliaProductoDto = exports.UpsertProductoImpuestoDto = exports.UpsertFamiliaProductoDto = exports.SetVarianteAdicionalRestrictionDto = exports.AssignProductoAdicionalDto = exports.UpsertProductoAdicionalServicioPricingDto = exports.UpsertProductoAdicionalServicioReglaCostoDto = exports.UpsertProductoAdicionalServicioNivelDto = exports.UpsertProductoAdicionalDto = exports.UpsertProductoAdicionalMaterialDto = exports.UpsertProductoAdicionalEfectoDto = exports.UpsertProductoAdicionalMaterialEffectDto = exports.UpsertProductoAdicionalCostEffectDto = exports.UpsertProductoAdicionalRouteEffectDto = exports.UpsertProductoAdicionalRouteInsertionDto = exports.UpsertProductoAdicionalRouteEffectPasoDto = exports.UpsertProductoAdicionalEfectoScopeDto = exports.UpsertVarianteOpcionesProductivasDto = exports.UpsertVarianteOpcionProductivaDimensionDto = exports.MetodoCalculoPrecioProductoDto = exports.ReglaCostoChecklistDto = exports.TipoChecklistAccionReglaDto = exports.TipoChecklistPreguntaDto = exports.ReglaCostoAdicionalEfectoDto = exports.TipoInsercionRouteEffectDto = exports.TipoProductoAdicionalEfectoDto = exports.ValorOpcionProductivaDto = exports.DimensionOpcionProductivaDto = exports.TipoConsumoAdicionalMaterialDto = exports.MetodoCostoProductoAdicionalDto = exports.TipoProductoAdicionalDto = exports.CarasProductoVarianteDto = exports.TipoImpresionProductoVarianteDto = exports.GranFormatoImposicionCriterioOptimizacionDto = exports.TipoVentaGranFormatoDto = exports.EstadoProductoServicioDto = exports.TipoProductoServicioDto = void 0;
+exports.PreviewImposicionProductoVarianteDto = exports.CotizarProductoVarianteDto = exports.UpdateGranFormatoChecklistDto = exports.UpsertGranFormatoChecklistPorTecnologiaDto = exports.UpsertProductoChecklistDto = exports.UpsertChecklistPreguntaDto = exports.UpsertChecklistRespuestaDto = exports.UpsertChecklistReglaDto = exports.UpsertChecklistReglaNivelDto = exports.CotizarSeleccionBaseDto = exports.CotizarChecklistRespuestaDto = exports.CotizarAddonConfigDto = exports.UpsertVarianteMotorOverrideDto = exports.UpdateGranFormatoVarianteDto = exports.CreateGranFormatoVarianteDto = exports.UpdateGranFormatoRutaBaseDto = exports.UpsertGranFormatoRutaBaseReglaImpresionDto = exports.UpdateGranFormatoConfigDto = exports.UpdateGranFormatoImposicionDto = exports.GranFormatoImposicionMedidaDto = exports.UpsertProductoMotorConfigDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 var TipoProductoServicioDto;
@@ -28,6 +28,11 @@ var TipoVentaGranFormatoDto;
     TipoVentaGranFormatoDto["m2"] = "m2";
     TipoVentaGranFormatoDto["metro_lineal"] = "metro_lineal";
 })(TipoVentaGranFormatoDto || (exports.TipoVentaGranFormatoDto = TipoVentaGranFormatoDto = {}));
+var GranFormatoImposicionCriterioOptimizacionDto;
+(function (GranFormatoImposicionCriterioOptimizacionDto) {
+    GranFormatoImposicionCriterioOptimizacionDto["menor_desperdicio"] = "menor_desperdicio";
+    GranFormatoImposicionCriterioOptimizacionDto["menor_largo_consumido"] = "menor_largo_consumido";
+})(GranFormatoImposicionCriterioOptimizacionDto || (exports.GranFormatoImposicionCriterioOptimizacionDto = GranFormatoImposicionCriterioOptimizacionDto = {}));
 var TipoImpresionProductoVarianteDto;
 (function (TipoImpresionProductoVarianteDto) {
     TipoImpresionProductoVarianteDto["bn"] = "bn";
@@ -1024,6 +1029,146 @@ __decorate([
     (0, class_validator_1.IsObject)(),
     __metadata("design:type", Object)
 ], UpsertProductoMotorConfigDto.prototype, "parametros", void 0);
+class GranFormatoImposicionMedidaDto {
+    anchoMm;
+    altoMm;
+    cantidad;
+}
+exports.GranFormatoImposicionMedidaDto = GranFormatoImposicionMedidaDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(1),
+    __metadata("design:type", Object)
+], GranFormatoImposicionMedidaDto.prototype, "anchoMm", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(1),
+    __metadata("design:type", Object)
+], GranFormatoImposicionMedidaDto.prototype, "altoMm", void 0);
+__decorate([
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    __metadata("design:type", Number)
+], GranFormatoImposicionMedidaDto.prototype, "cantidad", void 0);
+class UpdateGranFormatoImposicionDto {
+    medidas;
+    piezaAnchoMm;
+    piezaAltoMm;
+    cantidadReferencia;
+    tecnologiaDefault;
+    maquinaDefaultId;
+    perfilDefaultId;
+    permitirRotacion;
+    separacionHorizontalMm;
+    separacionVerticalMm;
+    margenLateralIzquierdoMmOverride;
+    margenLateralDerechoMmOverride;
+    margenInicioMmOverride;
+    margenFinalMmOverride;
+    criterioOptimizacion;
+}
+exports.UpdateGranFormatoImposicionDto = UpdateGranFormatoImposicionDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ArrayMaxSize)(50),
+    (0, class_validator_1.ValidateNested)({ each: true }),
+    (0, class_transformer_1.Type)(() => GranFormatoImposicionMedidaDto),
+    __metadata("design:type", Array)
+], UpdateGranFormatoImposicionDto.prototype, "medidas", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(1),
+    __metadata("design:type", Object)
+], UpdateGranFormatoImposicionDto.prototype, "piezaAnchoMm", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(1),
+    __metadata("design:type", Object)
+], UpdateGranFormatoImposicionDto.prototype, "piezaAltoMm", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    __metadata("design:type", Number)
+], UpdateGranFormatoImposicionDto.prototype, "cantidadReferencia", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", Object)
+], UpdateGranFormatoImposicionDto.prototype, "tecnologiaDefault", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", Object)
+], UpdateGranFormatoImposicionDto.prototype, "maquinaDefaultId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", Object)
+], UpdateGranFormatoImposicionDto.prototype, "perfilDefaultId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], UpdateGranFormatoImposicionDto.prototype, "permitirRotacion", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpdateGranFormatoImposicionDto.prototype, "separacionHorizontalMm", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpdateGranFormatoImposicionDto.prototype, "separacionVerticalMm", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Object)
+], UpdateGranFormatoImposicionDto.prototype, "margenLateralIzquierdoMmOverride", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Object)
+], UpdateGranFormatoImposicionDto.prototype, "margenLateralDerechoMmOverride", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Object)
+], UpdateGranFormatoImposicionDto.prototype, "margenInicioMmOverride", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Object)
+], UpdateGranFormatoImposicionDto.prototype, "margenFinalMmOverride", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(GranFormatoImposicionCriterioOptimizacionDto),
+    __metadata("design:type", String)
+], UpdateGranFormatoImposicionDto.prototype, "criterioOptimizacion", void 0);
 class UpdateGranFormatoConfigDto {
     tipoVenta;
     tecnologiasCompatibles;
@@ -1031,6 +1176,7 @@ class UpdateGranFormatoConfigDto {
     perfilesCompatibles;
     materialBaseId;
     materialesCompatibles;
+    imposicion;
 }
 exports.UpdateGranFormatoConfigDto = UpdateGranFormatoConfigDto;
 __decorate([
@@ -1062,6 +1208,55 @@ __decorate([
     (0, class_validator_1.IsUUID)(undefined, { each: true }),
     __metadata("design:type", Array)
 ], UpdateGranFormatoConfigDto.prototype, "materialesCompatibles", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.ValidateNested)(),
+    (0, class_transformer_1.Type)(() => UpdateGranFormatoImposicionDto),
+    __metadata("design:type", UpdateGranFormatoImposicionDto)
+], UpdateGranFormatoConfigDto.prototype, "imposicion", void 0);
+class UpsertGranFormatoRutaBaseReglaImpresionDto {
+    tecnologia;
+    maquinaId;
+    pasoPlantillaId;
+    perfilOperativoDefaultId;
+}
+exports.UpsertGranFormatoRutaBaseReglaImpresionDto = UpsertGranFormatoRutaBaseReglaImpresionDto;
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], UpsertGranFormatoRutaBaseReglaImpresionDto.prototype, "tecnologia", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", Object)
+], UpsertGranFormatoRutaBaseReglaImpresionDto.prototype, "maquinaId", void 0);
+__decorate([
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UpsertGranFormatoRutaBaseReglaImpresionDto.prototype, "pasoPlantillaId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", Object)
+], UpsertGranFormatoRutaBaseReglaImpresionDto.prototype, "perfilOperativoDefaultId", void 0);
+class UpdateGranFormatoRutaBaseDto {
+    procesoDefinicionId;
+    reglasImpresion;
+}
+exports.UpdateGranFormatoRutaBaseDto = UpdateGranFormatoRutaBaseDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", Object)
+], UpdateGranFormatoRutaBaseDto.prototype, "procesoDefinicionId", void 0);
+__decorate([
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ArrayMaxSize)(100),
+    (0, class_validator_1.ValidateNested)({ each: true }),
+    (0, class_transformer_1.Type)(() => UpsertGranFormatoRutaBaseReglaImpresionDto),
+    __metadata("design:type", Array)
+], UpdateGranFormatoRutaBaseDto.prototype, "reglasImpresion", void 0);
 class CreateGranFormatoVarianteDto {
     nombre;
     maquinaId;
@@ -1477,6 +1672,45 @@ __decorate([
     (0, class_transformer_1.Type)(() => UpsertChecklistPreguntaDto),
     __metadata("design:type", Array)
 ], UpsertProductoChecklistDto.prototype, "preguntas", void 0);
+class UpsertGranFormatoChecklistPorTecnologiaDto {
+    tecnologia;
+    checklist;
+}
+exports.UpsertGranFormatoChecklistPorTecnologiaDto = UpsertGranFormatoChecklistPorTecnologiaDto;
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], UpsertGranFormatoChecklistPorTecnologiaDto.prototype, "tecnologia", void 0);
+__decorate([
+    (0, class_validator_1.ValidateNested)(),
+    (0, class_transformer_1.Type)(() => UpsertProductoChecklistDto),
+    __metadata("design:type", UpsertProductoChecklistDto)
+], UpsertGranFormatoChecklistPorTecnologiaDto.prototype, "checklist", void 0);
+class UpdateGranFormatoChecklistDto {
+    aplicaATodasLasTecnologias;
+    checklistComun;
+    checklistsPorTecnologia;
+}
+exports.UpdateGranFormatoChecklistDto = UpdateGranFormatoChecklistDto;
+__decorate([
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], UpdateGranFormatoChecklistDto.prototype, "aplicaATodasLasTecnologias", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.ValidateNested)(),
+    (0, class_transformer_1.Type)(() => UpsertProductoChecklistDto),
+    __metadata("design:type", UpsertProductoChecklistDto)
+], UpdateGranFormatoChecklistDto.prototype, "checklistComun", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ArrayMaxSize)(20),
+    (0, class_validator_1.ValidateNested)({ each: true }),
+    (0, class_transformer_1.Type)(() => UpsertGranFormatoChecklistPorTecnologiaDto),
+    __metadata("design:type", Array)
+], UpdateGranFormatoChecklistDto.prototype, "checklistsPorTecnologia", void 0);
 class CotizarProductoVarianteDto {
     cantidad;
     periodo;

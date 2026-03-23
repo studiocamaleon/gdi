@@ -31,6 +31,11 @@ export type ModoProductividadNivel =
   | 'fija'
   | 'variable_manual'
   | 'variable_perfil';
+export type BaseCalculoProductividad =
+  | 'cantidad'
+  | 'area_total_m2'
+  | 'metro_lineal_total'
+  | 'perimetro_total_ml';
 
 export type ProcesoOperacion = {
   id: string;
@@ -58,6 +63,7 @@ export type ProcesoOperacion = {
   reglaVelocidad: Record<string, unknown> | null;
   reglaMerma: Record<string, unknown> | null;
   detalle: Record<string, unknown> | null;
+  baseCalculoProductividad?: BaseCalculoProductividad | null;
   niveles: ProcesoOperacionNivel[];
   activo: boolean;
   warnings?: string[];
@@ -121,6 +127,7 @@ export type ProcesoOperacionPayload = {
   reglaVelocidad?: Record<string, unknown>;
   reglaMerma?: Record<string, unknown>;
   detalle?: Record<string, unknown>;
+  baseCalculoProductividad?: BaseCalculoProductividad;
   niveles?: ProcesoOperacionNivelPayload[];
   activo: boolean;
 };
@@ -174,6 +181,8 @@ export type ProcesoOperacionPlantilla = {
   mermaRunPct: number | null;
   reglaVelocidad: Record<string, unknown> | null;
   reglaMerma: Record<string, unknown> | null;
+  detalle: Record<string, unknown> | null;
+  baseCalculoProductividad?: BaseCalculoProductividad | null;
   observaciones: string;
   niveles: ProcesoOperacionNivel[];
   activo: boolean;
@@ -198,6 +207,7 @@ export type ProcesoOperacionPlantillaPayload = {
   mermaRunPct?: number;
   reglaVelocidad?: Record<string, unknown>;
   reglaMerma?: Record<string, unknown>;
+  baseCalculoProductividad?: BaseCalculoProductividad;
   observaciones?: string;
   niveles?: ProcesoOperacionNivelPayload[];
   activo: boolean;
@@ -248,4 +258,14 @@ export const unidadProcesoItems: Array<{ label: string; value: UnidadProceso }> 
   { label: 'Kilogramo', value: 'kg' },
   { label: 'Litro', value: 'litro' },
   { label: 'Lote', value: 'lote' },
+];
+
+export const baseCalculoProductividadItems: Array<{
+  label: string;
+  value: BaseCalculoProductividad;
+}> = [
+  { label: 'Cantidad', value: 'cantidad' },
+  { label: 'Area total (m2)', value: 'area_total_m2' },
+  { label: 'Largo total (ml)', value: 'metro_lineal_total' },
+  { label: 'Perimetro total (ml)', value: 'perimetro_total_ml' },
 ];

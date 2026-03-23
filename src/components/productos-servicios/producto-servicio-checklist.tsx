@@ -17,6 +17,7 @@ import type { MateriaPrima } from "@/lib/materias-primas";
 import type { ProcesoOperacionPlantilla } from "@/lib/procesos";
 import { upsertProductoChecklist } from "@/lib/productos-servicios-api";
 import type {
+  ProductoChecklistPayload,
   ProductoChecklist,
   ProductoChecklistPregunta,
   ProductoChecklistRegla,
@@ -538,12 +539,14 @@ function normalizeChecklistForSave(checklist: ProductoChecklist) {
 }
 
 type ChecklistEditorProps = {
-  productoId: string;
+  productoId?: string;
   initialChecklist: ProductoChecklist;
   plantillasPaso: ProcesoOperacionPlantilla[];
   materiasPrimas: MateriaPrima[];
   routeStepOptions: Array<{ id: string; label: string }>;
   onSaved: (checklist: ProductoChecklist) => void;
+  onSaveChecklist?: (payload: ProductoChecklistPayload, draft: ProductoChecklist) => Promise<ProductoChecklist>;
+  onDirtyChange?: (dirty: boolean) => void;
 };
 
 type RouteInsertionMode = "append" | "before_step" | "after_step";
@@ -685,6 +688,8 @@ export function ProductoServicioChecklistEditor({
   materiasPrimas,
   routeStepOptions,
   onSaved,
+  onSaveChecklist,
+  onDirtyChange,
 }: ChecklistEditorProps) {
   const [draft, setDraft] = React.useState<ProductoChecklist>(initialChecklist);
   const [isSaving, startSaving] = React.useTransition();
@@ -746,6 +751,10 @@ export function ProductoServicioChecklistEditor({
     () => JSON.stringify(draft) !== JSON.stringify(initialChecklist),
     [draft, initialChecklist],
   );
+
+  React.useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
 
   const reachableQuestionIds = React.useMemo(() => resolveReachableChecklistQuestionIds(draft), [draft]);
   const questionDependencyMeta = React.useMemo(
@@ -834,10 +843,10 @@ export function ProductoServicioChecklistEditor({
     startSaving(async () => {
       try {
         const normalizedDraft = normalizeChecklistRouteInsertions(draft);
-        const saved = await upsertProductoChecklist(
-          productoId,
-          normalizeChecklistForSave(normalizedDraft),
-        );
+        const payload = normalizeChecklistForSave(normalizedDraft);
+        const saved = onSaveChecklist
+          ? await onSaveChecklist(payload, normalizedDraft)
+          : await upsertProductoChecklist(productoId ?? "", payload);
         const normalizedSaved = normalizeChecklistRouteInsertions(saved);
         setDraft(normalizedSaved);
         onSaved(normalizedSaved);
@@ -1051,7 +1060,16 @@ export function ProductoServicioChecklistEditor({
     if (regla.accion === "activar_paso" || regla.accion === "seleccionar_variante_paso") {
       return (
         <div className="grid gap-2">
-          <div className={cn("grid gap-2", regla.accion === "seleccionar_variante_paso" ? "md:grid-cols-2" : "md:grid-cols-1")}>
+          <div
+            className={cn(
+              "grid gap-2",
+              regla.accion === "seleccionar_variante_paso"
+                ? compact
+                  ? "xl:grid-cols-2"
+                  : "md:grid-cols-2"
+                : "grid-cols-1",
+            )}
+          >
           <div className="grid gap-1">
             {!compact ? <FieldLabel>Paso</FieldLabel> : null}
             <Select
@@ -1160,7 +1178,7 @@ export function ProductoServicioChecklistEditor({
 
     if (regla.accion === "costo_extra") {
       return (
-        <div className="grid gap-2 md:grid-cols-3">
+        <div className={cn("grid gap-2", compact ? "xl:grid-cols-3" : "md:grid-cols-3")}>
           <div className="grid gap-1">
             {!compact ? <FieldLabel>Regla de costo</FieldLabel> : null}
             <Select
@@ -1238,8 +1256,8 @@ export function ProductoServicioChecklistEditor({
     }
 
     return (
-      <div className="grid gap-2 md:grid-cols-4">
-        <div className="grid gap-1 md:col-span-2">
+      <div className={cn("grid gap-2", compact ? "xl:grid-cols-4" : "md:grid-cols-4")}>
+        <div className={cn("grid gap-1", compact ? "xl:col-span-2" : "md:col-span-2")}>
           {!compact ? <FieldLabel>Materia prima</FieldLabel> : null}
           <Select
             value={regla.materiaPrimaVarianteId ?? "__none__"}
@@ -1503,14 +1521,14 @@ export function ProductoServicioChecklistEditor({
                   ) : null}
                 </div>
 
-                <div className="overflow-hidden rounded-md border">
+                <div className="overflow-x-auto rounded-md border">
                   <Table>
                     <TableHeader className="bg-muted/30">
                       <TableRow className="hover:bg-transparent">
-                        <TableHead className="w-[240px] text-xs uppercase tracking-wide text-muted-foreground">Respuesta</TableHead>
-                        <TableHead className="w-[360px] text-xs uppercase tracking-wide text-muted-foreground">Acción</TableHead>
+                        <TableHead className="w-[160px] lg:w-[200px] text-xs uppercase tracking-wide text-muted-foreground">Respuesta</TableHead>
+                        <TableHead className="w-[220px] lg:w-[280px] text-xs uppercase tracking-wide text-muted-foreground">Acción</TableHead>
                         <TableHead className="text-xs uppercase tracking-wide text-muted-foreground">Configuración</TableHead>
-                        <TableHead className="w-[96px] text-right text-xs uppercase tracking-wide text-muted-foreground">Acciones</TableHead>
+                        <TableHead className="w-[72px] lg:w-[96px] text-right text-xs uppercase tracking-wide text-muted-foreground">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1539,6 +1557,7 @@ export function ProductoServicioChecklistEditor({
                             ) : (
                               <Input
                                 aria-label="Respuesta"
+                                className="min-w-0"
                                 value={respuesta.texto}
                                 onChange={(event) =>
                                   updateRespuesta(pregunta.id, respuesta.id, (current) => ({

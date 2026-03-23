@@ -248,6 +248,15 @@ const MACHINE_TECHNOLOGY_TEMPLATES = new Set<PlantillaMaquinaria>([
   ...WIDE_FORMAT_TECHNOLOGY_TEMPLATES,
   "impresora_laser",
 ]);
+const ROLL_WIDE_FORMAT_PRINTER_TEMPLATES = new Set<PlantillaMaquinaria>([
+  "impresora_dtf",
+  "impresora_dtf_uv",
+  "impresora_uv_rollo",
+  "impresora_solvente",
+  "impresora_inyeccion_tinta",
+  "impresora_latex",
+  "impresora_sublimacion_gran_formato",
+]);
 const PRINTER_CHANNEL_OPTIONS = [
   { value: "cian", label: "C" },
   { value: "magenta", label: "M" },
@@ -1072,6 +1081,10 @@ function toPayload(
       ? getDerivedPrintableAreaParams(form.parametrosTecnicos)
       : null;
   const asDraft = options?.asDraft === true;
+  const parametrosTecnicos = { ...(form.parametrosTecnicos ?? {}) };
+  if (ROLL_WIDE_FORMAT_PRINTER_TEMPLATES.has(form.plantilla) && form.anchoUtil != null) {
+    parametrosTecnicos.anchoImprimibleMaximo = form.anchoUtil;
+  }
   const perfilesPersistibles = asDraft
     ? perfiles.filter((item) => item.nombre.trim().length > 0)
     : perfiles;
@@ -1114,6 +1127,7 @@ function toPayload(
     modelo: form.modelo?.trim() || undefined,
     numeroSerie: form.numeroSerie?.trim() || undefined,
     observaciones: form.observaciones?.trim() || undefined,
+    parametrosTecnicos: Object.keys(parametrosTecnicos).length > 0 ? parametrosTecnicos : undefined,
     perfilesOperativos: perfilesPersistibles.map(({ id, ...item }) => {
       return {
         id,
@@ -1165,7 +1179,9 @@ function fromMaquina(maquina: Maquina): {
       geometriaTrabajo: maquina.geometriaTrabajo,
       unidadProduccionPrincipal: maquina.unidadProduccionPrincipal,
       anchoUtil:
-        maquina.anchoUtil ?? getNumericParamValue(maquina.parametrosTecnicos ?? undefined, "anchoUtil"),
+        maquina.anchoUtil ??
+        getNumericParamValue(maquina.parametrosTecnicos ?? undefined, "anchoImprimibleMaximo") ??
+        getNumericParamValue(maquina.parametrosTecnicos ?? undefined, "anchoUtil"),
       largoUtil:
         maquina.largoUtil ?? getNumericParamValue(maquina.parametrosTecnicos ?? undefined, "largoUtil"),
       altoUtil:
@@ -1310,6 +1326,18 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
   );
 
   const templateInfo = React.useMemo(() => getMaquinariaTemplate(form.plantilla), [form.plantilla]);
+  const widthCapacityFieldLabel = React.useMemo(() => {
+    if (ROLL_WIDE_FORMAT_PRINTER_TEMPLATES.has(form.plantilla)) {
+      return "Ancho maximo imprimible (cm)";
+    }
+    return "Ancho util (cm)";
+  }, [form.plantilla]);
+  const widthCapacityFieldTooltip = React.useMemo(() => {
+    if (ROLL_WIDE_FORMAT_PRINTER_TEMPLATES.has(form.plantilla)) {
+      return "Representa el ancho maximo que la maquina puede imprimir. El ancho util real dependera del ancho del rollo cargado y de los margenes no imprimibles.";
+    }
+    return null;
+  }, [form.plantilla]);
   const templateMachineFields = React.useMemo(() => {
     if (!templateInfo) {
       return [];
@@ -4283,10 +4311,15 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                         : null}
                       {visibleCapacityFields.anchoUtil ? (
                         <Field>
-                          <FieldLabel>
-                            Ancho util (cm)
-                            {renderRequiredAsterisk(requiredTemplateMachineKeySet.has("anchoUtil"))}
-                          </FieldLabel>
+                          <div className="flex items-center gap-1">
+                            <FieldLabel>
+                              {widthCapacityFieldLabel}
+                              {renderRequiredAsterisk(requiredTemplateMachineKeySet.has("anchoUtil"))}
+                            </FieldLabel>
+                            {widthCapacityFieldTooltip
+                              ? renderTooltipIcon(widthCapacityFieldTooltip)
+                              : null}
+                          </div>
                           <Input
                             className="max-w-48"
                             type="number"
