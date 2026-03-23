@@ -31,6 +31,10 @@ import {
 } from './dto/upsert-materia-prima.dto';
 import { UpsertUbicacionDto } from './dto/upsert-ubicacion.dto';
 import { convertUnitPrice, unitsAreCompatible, type UnitCode } from './unidades-canonicas';
+import {
+  canUseFlexibleRollDerivedUnits,
+  convertFlexibleRollUnitPrice,
+} from './unidades-derivadas';
 
 type MateriaPrimaEntity = Prisma.MateriaPrimaGetPayload<{
   include: {
@@ -892,11 +896,14 @@ export class InventarioService {
         id: true,
         sku: true,
         precioReferencia: true,
+        atributosVarianteJson: true,
         unidadStock: true,
         unidadCompra: true,
         materiaPrima: {
           select: {
             nombre: true,
+            subfamilia: true,
+            templateId: true,
             unidadStock: true,
             unidadCompra: true,
           },
@@ -961,9 +968,12 @@ export class InventarioService {
 
   private resolvePrecioReferenciaPorUnidadStock(variante: {
     precioReferencia: Prisma.Decimal | null;
+    atributosVarianteJson?: Prisma.JsonValue | null;
     unidadStock: UnidadMateriaPrima | null;
     unidadCompra: UnidadMateriaPrima | null;
     materiaPrima: {
+      subfamilia?: SubfamiliaMateriaPrima | string | null;
+      templateId?: string | null;
       unidadStock: UnidadMateriaPrima;
       unidadCompra: UnidadMateriaPrima;
     };
@@ -983,11 +993,25 @@ export class InventarioService {
       this.toCanonicalUnitCode(variante.unidadStock) ??
       this.toCanonicalUnitCode(variante.materiaPrima.unidadStock);
 
-    if (!sourceUnit || !targetUnit || !unitsAreCompatible(sourceUnit, targetUnit)) {
+    if (!sourceUnit || !targetUnit) {
       return precio;
     }
 
-    return this.roundToScale(convertUnitPrice(precio, sourceUnit, targetUnit), 6);
+    if (unitsAreCompatible(sourceUnit, targetUnit)) {
+      return this.roundToScale(convertUnitPrice(precio, sourceUnit, targetUnit), 6);
+    }
+
+    const derived = convertFlexibleRollUnitPrice({
+      pricePerFromUnit: precio,
+      from: sourceUnit,
+      to: targetUnit,
+      subfamilia: String(variante.materiaPrima.subfamilia ?? ''),
+      attributes: variante.atributosVarianteJson,
+    });
+    if (derived != null) {
+      return this.roundToScale(derived, 6);
+    }
+    return precio;
   }
 
   private roundToScale(value: number, scale = 2) {
@@ -1058,9 +1082,26 @@ export class InventarioService {
   }
 
   private normalizePayload(payload: UpsertMateriaPrimaDto) {
-    if (!unitsAreCompatible(payload.unidadStock, payload.unidadCompra)) {
+    const canUseCanonicalUnits = unitsAreCompatible(payload.unidadStock, payload.unidadCompra);
+    const canUseDerivedUnits =
+      canUseFlexibleRollDerivedUnits({
+        subfamilia: payload.subfamilia,
+        from: payload.unidadCompra,
+        to: payload.unidadStock,
+        attributes: payload.variantes[0]?.atributosVariante,
+      }) &&
+      payload.variantes.every((variante) =>
+        canUseFlexibleRollDerivedUnits({
+          subfamilia: payload.subfamilia,
+          from: variante.unidadCompra ?? payload.unidadCompra,
+          to: variante.unidadStock ?? payload.unidadStock,
+          attributes: variante.atributosVariante,
+        }),
+      );
+
+    if (!canUseCanonicalUnits && !canUseDerivedUnits) {
       throw new BadRequestException(
-        'Unidad de uso y unidad de compra deben ser compatibles para conversion.',
+        'Unidad de uso y unidad de compra deben ser compatibles para conversión. En sustrato rollo flexible también se permite rollo, m2 o metro lineal si cada variante tiene ancho y largo válidos.',
       );
     }
 

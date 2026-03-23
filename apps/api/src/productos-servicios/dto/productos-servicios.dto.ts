@@ -1211,6 +1211,52 @@ export class UpdateGranFormatoChecklistDto {
   checklistsPorTecnologia?: UpsertGranFormatoChecklistPorTecnologiaDto[];
 }
 
+export class PreviewGranFormatoCostoMedidaDto {
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  anchoMm: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  altoMm: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  cantidad: number;
+}
+
+export class PreviewGranFormatoCostosDto {
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/)
+  periodo?: string;
+
+  @IsOptional()
+  @IsString()
+  tecnologia?: string;
+
+  @IsOptional()
+  @IsUUID()
+  perfilOverrideId?: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => PreviewGranFormatoCostoMedidaDto)
+  medidas: PreviewGranFormatoCostoMedidaDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => CotizarChecklistRespuestaDto)
+  checklistRespuestas?: CotizarChecklistRespuestaDto[];
+}
+
 export class CotizarProductoVarianteDto {
   @IsNumber()
   @Min(1)

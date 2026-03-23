@@ -3,16 +3,20 @@
 import * as React from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { PlusIcon, SaveIcon, Trash2Icon } from "lucide-react";
+import { InfoIcon, PlusIcon, SaveIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import type { DigitalProductDetailProps } from "@/components/productos-servicios/motors/digital-product-detail";
-import { ProductoServicioChecklistEditor } from "@/components/productos-servicios/producto-servicio-checklist";
+import {
+  ProductoServicioChecklistCotizador,
+  ProductoServicioChecklistEditor,
+} from "@/components/productos-servicios/producto-servicio-checklist";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
@@ -24,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { getVarianteOptionChips } from "@/lib/materias-primas-variantes-display";
 import type { MateriaPrimaVariante } from "@/lib/materias-primas";
@@ -37,6 +42,7 @@ import {
   assignProductoMotor,
   getGranFormatoConfig,
   getGranFormatoChecklist,
+  previewGranFormatoCostos,
   getGranFormatoRutaBase,
   updateGranFormatoConfig,
   updateGranFormatoChecklist,
@@ -46,6 +52,7 @@ import {
 import {
   type GranFormatoImposicionConfig,
   type GranFormatoImposicionCriterioOptimizacion,
+  type GranFormatoCostosResponse,
   type ProductoChecklist,
   type ProductoChecklistPayload,
   estadoProductoServicioItems,
@@ -302,6 +309,41 @@ function formatMmAsCm(value: number | null | undefined) {
   return String(Number((value / 10).toFixed(2)));
 }
 
+function buildDefaultPeriodo() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+function formatNumber(value: number | null | undefined, decimals = 2) {
+  if (value == null || !Number.isFinite(value)) {
+    return "-";
+  }
+  return new Intl.NumberFormat("es-AR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: decimals,
+  }).format(value);
+}
+
+function formatCurrency(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) {
+    return "-";
+  }
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function getWideFormatMaterialLabel(tipo: string) {
+  if (tipo === "SUSTRATO") return "Sustrato";
+  if (tipo === "TINTA") return "Tinta";
+  if (tipo === "CHECKLIST_MATERIAL") return "Materiales opcionales";
+  return tipo;
+}
+
 function resolveProcesoOperacionPlantilla(
   operacion: {
     nombre: string;
@@ -465,6 +507,7 @@ export function WideFormatProductDetail({
   );
   const [showImposicionOverrides, setShowImposicionOverrides] = React.useState(false);
   const [isImposicion3dOpen, setIsImposicion3dOpen] = React.useState(false);
+  const [isCostos3dOpen, setIsCostos3dOpen] = React.useState(false);
   const [isLoadingRutaBase, setIsLoadingRutaBase] = React.useState(true);
   const [isSavingRutaBase, startSavingRutaBase] = React.useTransition();
   const [rutaBaseProcesoId, setRutaBaseProcesoId] = React.useState("");
@@ -481,6 +524,17 @@ export function WideFormatProductDetail({
   const [checklistsPorTecnologia, setChecklistsPorTecnologia] = React.useState<Record<string, ProductoChecklist>>({});
   const [tecnologiaChecklistSeleccionada, setTecnologiaChecklistSeleccionada] = React.useState("");
   const [checklistDirty, setChecklistDirty] = React.useState(false);
+  const [isCalculatingCosts, startCalculatingCosts] = React.useTransition();
+  const [costosPeriodo, setCostosPeriodo] = React.useState(buildDefaultPeriodo());
+  const [costosTecnologia, setCostosTecnologia] = React.useState("");
+  const [costosPerfilOverrideId, setCostosPerfilOverrideId] = React.useState("");
+  const [costosMedidas, setCostosMedidas] = React.useState<GranFormatoImposicionConfig["medidas"]>(
+    [createGranFormatoImposicionMedida()],
+  );
+  const [costosChecklistRespuestas, setCostosChecklistRespuestas] = React.useState<
+    Record<string, { respuestaId: string }>
+  >({});
+  const [costosPreview, setCostosPreview] = React.useState<GranFormatoCostosResponse | null>(null);
 
   const loadGranFormatoConfig = React.useCallback(async () => {
     setIsLoadingConfig(true);
@@ -514,6 +568,22 @@ export function WideFormatProductDetail({
                 ]
               : [createGranFormatoImposicionMedida()],
       });
+      setCostosMedidas(
+        nextImposicion.medidas?.length
+          ? nextImposicion.medidas
+          : nextImposicion.piezaAnchoMm && nextImposicion.piezaAltoMm
+            ? [
+                {
+                  anchoMm: nextImposicion.piezaAnchoMm,
+                  altoMm: nextImposicion.piezaAltoMm,
+                  cantidad: nextImposicion.cantidadReferencia ?? 1,
+                },
+              ]
+            : [createGranFormatoImposicionMedida()],
+      );
+      setCostosTecnologia(nextImposicion.tecnologiaDefault ?? "");
+      setCostosPerfilOverrideId("");
+      setCostosPreview(null);
       setSavedImposicionSnapshot(
         normalizeImposicionSnapshot({
           ...nextImposicion,
@@ -992,6 +1062,67 @@ export function WideFormatProductDetail({
   const imposicionPreview = imposicionPreviewResult.items;
   const imposicionRejectedVariants = imposicionPreviewResult.rejected;
   const imposicionBestCandidate = imposicionPreview[0] ?? null;
+  const costosTechnologies = imposicionTechnologies;
+  const costosTechnology = React.useMemo(() => {
+    if (costosTecnologia && costosTechnologies.includes(costosTecnologia)) {
+      return costosTecnologia;
+    }
+    return costosTechnologies[0] ?? "";
+  }, [costosTecnologia, costosTechnologies]);
+  const costosProfileOptions = React.useMemo(() => {
+    if (!costosTechnology) {
+      return [];
+    }
+    const items = selectedMachines
+      .filter((machine) => getMaquinaTecnologia(machine) === costosTechnology)
+      .flatMap((machine) =>
+        machine.perfilesOperativos.filter(
+          (profile) => profile.activo && perfilesCompatiblesIds.includes(profile.id),
+        ),
+      );
+    return items.filter((profile, index, list) => list.findIndex((item) => item.id === profile.id) === index);
+  }, [costosTechnology, perfilesCompatiblesIds, selectedMachines]);
+  const checklistCotizadorGranFormato = React.useMemo(() => {
+    if (aplicaChecklistATodasLasTecnologias) {
+      return checklistComun;
+    }
+    return checklistsPorTecnologia[costosTechnology] ?? createEmptyChecklist(producto.id);
+  }, [
+    aplicaChecklistATodasLasTecnologias,
+    checklistComun,
+    checklistsPorTecnologia,
+    costosTechnology,
+    producto.id,
+  ]);
+  const costosMaterialesAgrupados = React.useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        tipo: string;
+        label: string;
+        items: Array<GranFormatoCostosResponse["materiasPrimas"][number]>;
+        totalCantidad: number;
+        totalCosto: number;
+      }
+    >();
+    for (const item of costosPreview?.materiasPrimas ?? []) {
+      const tipo = item.tipo;
+      const current =
+        groups.get(tipo) ??
+        {
+          tipo,
+          label: getWideFormatMaterialLabel(tipo),
+          items: [],
+          totalCantidad: 0,
+          totalCosto: 0,
+        };
+      current.items.push(item);
+      current.totalCantidad += Number(item.cantidad ?? 0);
+      current.totalCosto += Number(item.costo ?? 0);
+      groups.set(tipo, current);
+    }
+    return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [costosPreview]);
 
   React.useEffect(() => {
     setImposicionConfig((prev) => {
@@ -1048,6 +1179,25 @@ export function WideFormatProductDetail({
     imposicionConfig.margenLateralDerechoMmOverride,
     imposicionConfig.margenLateralIzquierdoMmOverride,
   ]);
+
+  React.useEffect(() => {
+    if (!costosTecnologia && costosTechnologies.length > 0) {
+      setCostosTecnologia(costosTechnologies[0]);
+    }
+  }, [costosTecnologia, costosTechnologies]);
+
+  React.useEffect(() => {
+    setCostosChecklistRespuestas({});
+  }, [checklistCotizadorGranFormato]);
+
+  React.useEffect(() => {
+    if (
+      costosPerfilOverrideId &&
+      !costosProfileOptions.some((item) => item.id === costosPerfilOverrideId)
+    ) {
+      setCostosPerfilOverrideId("");
+    }
+  }, [costosPerfilOverrideId, costosProfileOptions]);
 
   React.useEffect(() => {
     setMaquinasCompatiblesIds((prev) => prev.filter((id) => filteredMachineIds.has(id)));
@@ -1507,6 +1657,45 @@ export function WideFormatProductDetail({
         toast.success("Configuración técnica actualizada.");
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "No se pudo guardar la configuración técnica.");
+      }
+    });
+  };
+
+  const handleCalcularCostos = () => {
+    const medidasValidas = costosMedidas.filter(
+      (item) => (item.anchoMm ?? 0) > 0 && (item.altoMm ?? 0) > 0 && (item.cantidad ?? 0) > 0,
+    );
+    if (!medidasValidas.length) {
+      toast.error("Completá al menos una medida válida para calcular costos.");
+      return;
+    }
+    if (!costosTechnology) {
+      toast.error("Seleccioná una tecnología para calcular costos.");
+      return;
+    }
+
+    startCalculatingCosts(async () => {
+      try {
+        const result = await previewGranFormatoCostos(productoState.id, {
+          periodo: costosPeriodo,
+          tecnologia: costosTechnology,
+          perfilOverrideId: costosPerfilOverrideId || undefined,
+          medidas: medidasValidas.map((item) => ({
+            anchoMm: item.anchoMm ?? 0,
+            altoMm: item.altoMm ?? 0,
+            cantidad: item.cantidad ?? 1,
+          })),
+          checklistRespuestas: Object.entries(costosChecklistRespuestas)
+            .filter(([, value]) => Boolean(value?.respuestaId))
+            .map(([preguntaId, value]) => ({
+              preguntaId,
+              respuestaId: value.respuestaId,
+            })),
+        });
+        setCostosPreview(result);
+        toast.success("Costos calculados.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "No se pudo calcular el costo.");
       }
     });
   };
@@ -2816,8 +3005,8 @@ export function WideFormatProductDetail({
                                       )}
                                   </div>
                                 </td>
-                                <td className="px-3 py-2">{item.rollWidthMm.toLocaleString("es-AR")} mm</td>
-                                <td className="px-3 py-2">{item.printableWidthMm.toLocaleString("es-AR")} mm</td>
+                                <td className="px-3 py-2">{(item.rollWidthMm / 10).toLocaleString("es-AR")} cm</td>
+                                <td className="px-3 py-2">{(item.printableWidthMm / 10).toLocaleString("es-AR")} cm</td>
                                 <td className="px-3 py-2">{item.rotated ? "Rotada" : "Normal"}</td>
                                 <td className="px-3 py-2">{item.piecesPerRow}</td>
                                 <td className="px-3 py-2">{item.rows}</td>
@@ -2895,7 +3084,7 @@ export function WideFormatProductDetail({
                     </p>
                   </div>
                   <PlotterSimulator
-                    key={`plotter-${imposicionBestCandidate.varianteId}-${isImposicion3dOpen ? "open" : "closed"}`}
+                    key={`plotter-${imposicionBestCandidate.variant.id}-${isImposicion3dOpen ? "open" : "closed"}`}
                     rollWidth={Number((imposicionBestCandidate.rollWidthMm / 10).toFixed(2))}
                     rollLength={Number((imposicionBestCandidate.consumedLengthMm / 10).toFixed(2))}
                     marginLeft={Number((imposicionBestCandidate.marginLeftMm / 10).toFixed(2))}
@@ -2923,11 +3112,406 @@ export function WideFormatProductDetail({
           </SheetContent>
         </Sheet>
 
+        <Sheet open={isCostos3dOpen} onOpenChange={setIsCostos3dOpen}>
+          <SheetContent side="right" className="!w-[72vw] !max-w-none md:!w-[68vw] lg:!w-[64vw] xl:!w-[62vw] sm:!max-w-none">
+            <SheetHeader>
+              <SheetTitle>Visualización 3D del sustrato costado</SheetTitle>
+              <SheetDescription>
+                Muestra exactamente el layout usado para calcular consumo de sustrato y desperdicio.
+              </SheetDescription>
+            </SheetHeader>
+            <div className="flex-1 px-4 pb-4">
+              {costosPreview?.nestingPreview ? (
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-[#f28a32]/20 bg-gradient-to-r from-[#fff7ed] to-[#fffaf5] p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className="border-red-300 bg-red-50 text-red-700">
+                        Margen no imprimible
+                      </Badge>
+                      <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-700">
+                        Área imprimible
+                      </Badge>
+                      <Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
+                        Material / rollo
+                      </Badge>
+                      <Badge variant="outline" className="border-[#f28a32]/30 bg-[#fff2e8] text-[#c65a10]">
+                        Piezas anidadas
+                      </Badge>
+                    </div>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Esta vista corresponde al candidato efectivamente usado en el cálculo de costos.
+                    </p>
+                  </div>
+                  <PlotterSimulator
+                    key={`plotter-costos-${costosPreview.resumenTecnico.varianteId}-${isCostos3dOpen ? "open" : "closed"}`}
+                    rollWidth={costosPreview.nestingPreview.rollWidth}
+                    rollLength={costosPreview.nestingPreview.rollLength}
+                    marginLeft={costosPreview.nestingPreview.marginLeft}
+                    marginRight={costosPreview.nestingPreview.marginRight}
+                    marginStart={costosPreview.nestingPreview.marginStart}
+                    marginEnd={costosPreview.nestingPreview.marginEnd}
+                    pieces={costosPreview.nestingPreview.pieces}
+                  />
+                </div>
+              ) : (
+                <div className="flex h-[70vh] items-center justify-center rounded-xl border bg-muted/20 text-sm text-muted-foreground">
+                  No hay un layout disponible para renderizar.
+                </div>
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
+
         <TabsContent value="cotizador">
-          <PlaceholderTab
-            title="Costos"
-            description="Acá definiremos el cálculo técnico del trabajo según material, ancho útil, desperdicio y equipo."
-          />
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Costos</CardTitle>
+                <CardDescription>
+                  Ejecuta una simulación operativa del trabajo usando la base técnica definida en Imposición.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1.3fr)_220px_220px_160px]">
+                  <div className="rounded-lg border p-3">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium">Medidas del trabajo</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setCostosMedidas((prev) => [...prev, createGranFormatoImposicionMedida()])
+                        }
+                      >
+                        <PlusIcon className="mr-1 size-4" />
+                        Agregar medida
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      {costosMedidas.map((medida, index) => (
+                        <div
+                          key={`costos-medida-${index}`}
+                          className="grid gap-2 rounded-lg border p-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px]"
+                        >
+                          <Field>
+                            <FieldLabel>Ancho (cm)</FieldLabel>
+                            <Input
+                              value={formatMmAsCm(medida.anchoMm)}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setCostosMedidas((prev) =>
+                                  prev.map((item, itemIndex) =>
+                                    itemIndex === index
+                                      ? {
+                                          ...item,
+                                          anchoMm: value.trim() ? Math.round(Number(value) * 10) : null,
+                                        }
+                                      : item,
+                                  ),
+                                );
+                              }}
+                            />
+                          </Field>
+                          <Field>
+                            <FieldLabel>Alto (cm)</FieldLabel>
+                            <Input
+                              value={formatMmAsCm(medida.altoMm)}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setCostosMedidas((prev) =>
+                                  prev.map((item, itemIndex) =>
+                                    itemIndex === index
+                                      ? {
+                                          ...item,
+                                          altoMm: value.trim() ? Math.round(Number(value) * 10) : null,
+                                        }
+                                      : item,
+                                  ),
+                                );
+                              }}
+                            />
+                          </Field>
+                          <Field>
+                            <FieldLabel>Cantidad</FieldLabel>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={medida.cantidad}
+                              onChange={(event) => {
+                                const value = Number(event.target.value);
+                                setCostosMedidas((prev) =>
+                                  prev.map((item, itemIndex) =>
+                                    itemIndex === index
+                                      ? {
+                                          ...item,
+                                          cantidad: Number.isFinite(value) && value > 0 ? value : 1,
+                                        }
+                                      : item,
+                                  ),
+                                );
+                              }}
+                            />
+                          </Field>
+                          <div className="flex items-end">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              disabled={costosMedidas.length === 1}
+                              onClick={() =>
+                                setCostosMedidas((prev) =>
+                                  prev.length === 1 ? prev : prev.filter((_, itemIndex) => itemIndex !== index),
+                                )
+                              }
+                            >
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <Field>
+                    <FieldLabel>Tecnología</FieldLabel>
+                    <Select value={costosTechnology} onValueChange={setCostosTecnologia}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar tecnología" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {costosTechnologies.map((item) => (
+                          <SelectItem key={item} value={item}>
+                            {technologyLabels[item] ?? item}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+
+                  <Field>
+                    <FieldLabel>Perfil (override)</FieldLabel>
+                    <Select value={costosPerfilOverrideId || "__default__"} onValueChange={(value) => setCostosPerfilOverrideId(value === "__default__" ? "" : value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Usar perfil default" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__default__">Usar perfil default</SelectItem>
+                        {costosProfileOptions.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+
+                  <Field>
+                    <FieldLabel>Período tarifa</FieldLabel>
+                    <Input value={costosPeriodo} onChange={(event) => setCostosPeriodo(event.target.value)} />
+                  </Field>
+                </div>
+
+                <div className="rounded-lg border p-3">
+                  <p className="mb-2 text-sm font-medium">Opcionales para costear</p>
+                  <ProductoServicioChecklistCotizador
+                    checklist={checklistCotizadorGranFormato}
+                    value={costosChecklistRespuestas}
+                    onChange={setCostosChecklistRespuestas}
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <Button type="button" onClick={handleCalcularCostos} disabled={isCalculatingCosts}>
+                    {isCalculatingCosts ? <GdiSpinner className="size-4" data-icon="inline-start" /> : null}
+                    Calcular
+                  </Button>
+                </div>
+
+                {costosPreview?.warnings?.length ? (
+                  <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                    {costosPreview.warnings.map((warning, index) => (
+                      <p key={`costos-warning-${index}`}>{warning}</p>
+                    ))}
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+
+            {costosPreview ? (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Resumen técnico</CardTitle>
+                    <CardDescription>
+                      Candidato elegido para costear material, tinta y tiempo operativo.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      {costosPreview.resumenTecnico.varianteChips.map((chip) => (
+                        <Badge key={`${chip.label}-${chip.value}`} variant="outline">
+                          {chip.label}: {chip.value}
+                        </Badge>
+                      ))}
+                    </div>
+                    <Table>
+                      <TableHeader className="bg-muted/50">
+                        <TableRow>
+                          <TableHead>Ancho rollo</TableHead>
+                          <TableHead>Ancho imprimible</TableHead>
+                          <TableHead>Orientación</TableHead>
+                          <TableHead className="text-right">Piezas/fila</TableHead>
+                          <TableHead className="text-right">Filas</TableHead>
+                          <TableHead className="text-right">Largo consumido</TableHead>
+                          <TableHead className="text-right">Desperdicio</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        <TableRow>
+                          <TableCell>{formatMmAsCm(costosPreview.resumenTecnico.anchoRolloMm)} cm</TableCell>
+                          <TableCell>{formatMmAsCm(costosPreview.resumenTecnico.anchoImprimibleMm)} cm</TableCell>
+                          <TableCell>{costosPreview.resumenTecnico.orientacion === "rotada" ? "Rotada" : "Normal"}</TableCell>
+                          <TableCell className="text-right tabular-nums">{formatNumber(costosPreview.resumenTecnico.piezasPorFila, 0)}</TableCell>
+                          <TableCell className="text-right tabular-nums">{formatNumber(costosPreview.resumenTecnico.filas, 0)}</TableCell>
+                          <TableCell className="text-right tabular-nums">{formatNumber(costosPreview.resumenTecnico.largoConsumidoMm / 1000, 2)} m</TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {formatNumber(costosPreview.resumenTecnico.desperdicioPct, 2)}% · {formatNumber(costosPreview.resumenTecnico.areaDesperdicioM2, 3)} m2
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Centro de costos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader className="bg-muted/50">
+                        <TableRow>
+                          <TableHead>#</TableHead>
+                          <TableHead>Paso</TableHead>
+                          <TableHead>Centro</TableHead>
+                          <TableHead>Origen</TableHead>
+                          <TableHead className="text-right">Minutos</TableHead>
+                          <TableHead className="text-right">Tarifa/h</TableHead>
+                          <TableHead className="text-right">Costo</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {costosPreview.centrosCosto.map((item) => (
+                          <TableRow key={`${item.codigo}-${item.orden}`}>
+                            <TableCell>{item.orden}</TableCell>
+                            <TableCell>{item.paso}</TableCell>
+                            <TableCell>{item.centroCostoNombre || "-"}</TableCell>
+                            <TableCell>{item.origen}</TableCell>
+                            <TableCell className="text-right tabular-nums">{formatNumber(item.minutos, 2)}</TableCell>
+                            <TableCell className="text-right tabular-nums">{formatCurrency(item.tarifaHora)}</TableCell>
+                            <TableCell className="text-right tabular-nums">{formatCurrency(item.costo)}</TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-right font-medium">
+                            Total centro de costos
+                          </TableCell>
+                          <TableCell className="text-right font-semibold tabular-nums">
+                            {formatCurrency(costosPreview.totales.centrosCosto)}
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Materias primas</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {costosMaterialesAgrupados.map((grupo) => (
+                      <div key={grupo.tipo} className="rounded-lg border">
+                        <div className="flex items-center justify-between gap-3 border-b px-3 py-3">
+                          <div>
+                            <p className="font-medium">{grupo.label}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {grupo.items.length} componente{grupo.items.length === 1 ? "" : "s"}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {grupo.tipo === "SUSTRATO" && costosPreview.nestingPreview ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                title="Ver cómo se calculó el consumo del sustrato"
+                                onClick={() => setIsCostos3dOpen(true)}
+                              >
+                                <InfoIcon className="size-4" />
+                              </Button>
+                            ) : null}
+                            <div className="text-right">
+                              <p className="text-xs text-muted-foreground">Costo total</p>
+                              <p className="font-medium tabular-nums">{formatCurrency(grupo.totalCosto)}</p>
+                            </div>
+                          </div>
+                        </div>
+                        <Table>
+                          <TableHeader className="bg-muted/50">
+                            <TableRow>
+                              <TableHead>Componente</TableHead>
+                              <TableHead>Origen</TableHead>
+                              <TableHead className="text-right">Cantidad</TableHead>
+                              <TableHead className="text-right">Costo unitario</TableHead>
+                              <TableHead className="text-right">Costo</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {grupo.items.map((item, index) => (
+                              <TableRow key={`${grupo.tipo}-${index}`}>
+                                <TableCell>{item.nombre}{item.sku ? ` · ${item.sku}` : ""}</TableCell>
+                                <TableCell>{item.origen}</TableCell>
+                                <TableCell className="text-right tabular-nums">
+                                  {formatNumber(item.cantidad, 3)}{item.unidad ? ` ${item.unidad}` : ""}
+                                </TableCell>
+                                <TableCell className="text-right tabular-nums">{formatCurrency(item.costoUnitario)}</TableCell>
+                                <TableCell className="text-right tabular-nums">{formatCurrency(item.costo)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ))}
+
+                    <div className="rounded-lg border">
+                      <Table>
+                        <TableBody>
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-right font-medium">
+                              Total materiales
+                            </TableCell>
+                            <TableCell className="text-right font-semibold tabular-nums">
+                              {formatCurrency(costosPreview.totales.materiales)}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow className="bg-amber-100/60">
+                            <TableCell colSpan={4} className="text-right font-semibold">
+                              Total técnico
+                            </TableCell>
+                            <TableCell className="text-right font-bold tabular-nums">
+                              {formatCurrency(costosPreview.totales.tecnico)}
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            ) : null}
+          </div>
         </TabsContent>
 
         <TabsContent value="precio">

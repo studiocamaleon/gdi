@@ -17,6 +17,7 @@ const crypto_1 = require("crypto");
 const prisma_service_1 = require("../prisma/prisma.service");
 const registrar_movimiento_stock_dto_1 = require("./dto/registrar-movimiento-stock.dto");
 const unidades_canonicas_1 = require("./unidades-canonicas");
+const unidades_derivadas_1 = require("./unidades-derivadas");
 let InventarioService = class InventarioService {
     prisma;
     constructor(prisma) {
@@ -720,11 +721,14 @@ let InventarioService = class InventarioService {
                 id: true,
                 sku: true,
                 precioReferencia: true,
+                atributosVarianteJson: true,
                 unidadStock: true,
                 unidadCompra: true,
                 materiaPrima: {
                     select: {
                         nombre: true,
+                        subfamilia: true,
+                        templateId: true,
                         unidadStock: true,
                         unidadCompra: true,
                     },
@@ -789,10 +793,23 @@ let InventarioService = class InventarioService {
             this.toCanonicalUnitCode(variante.materiaPrima.unidadStock);
         const targetUnit = this.toCanonicalUnitCode(variante.unidadStock) ??
             this.toCanonicalUnitCode(variante.materiaPrima.unidadStock);
-        if (!sourceUnit || !targetUnit || !(0, unidades_canonicas_1.unitsAreCompatible)(sourceUnit, targetUnit)) {
+        if (!sourceUnit || !targetUnit) {
             return precio;
         }
-        return this.roundToScale((0, unidades_canonicas_1.convertUnitPrice)(precio, sourceUnit, targetUnit), 6);
+        if ((0, unidades_canonicas_1.unitsAreCompatible)(sourceUnit, targetUnit)) {
+            return this.roundToScale((0, unidades_canonicas_1.convertUnitPrice)(precio, sourceUnit, targetUnit), 6);
+        }
+        const derived = (0, unidades_derivadas_1.convertFlexibleRollUnitPrice)({
+            pricePerFromUnit: precio,
+            from: sourceUnit,
+            to: targetUnit,
+            subfamilia: String(variante.materiaPrima.subfamilia ?? ''),
+            attributes: variante.atributosVarianteJson,
+        });
+        if (derived != null) {
+            return this.roundToScale(derived, 6);
+        }
+        return precio;
     }
     roundToScale(value, scale = 2) {
         return Number(value.toFixed(scale));
@@ -838,8 +855,21 @@ let InventarioService = class InventarioService {
         return item;
     }
     normalizePayload(payload) {
-        if (!(0, unidades_canonicas_1.unitsAreCompatible)(payload.unidadStock, payload.unidadCompra)) {
-            throw new common_1.BadRequestException('Unidad de uso y unidad de compra deben ser compatibles para conversion.');
+        const canUseCanonicalUnits = (0, unidades_canonicas_1.unitsAreCompatible)(payload.unidadStock, payload.unidadCompra);
+        const canUseDerivedUnits = (0, unidades_derivadas_1.canUseFlexibleRollDerivedUnits)({
+            subfamilia: payload.subfamilia,
+            from: payload.unidadCompra,
+            to: payload.unidadStock,
+            attributes: payload.variantes[0]?.atributosVariante,
+        }) &&
+            payload.variantes.every((variante) => (0, unidades_derivadas_1.canUseFlexibleRollDerivedUnits)({
+                subfamilia: payload.subfamilia,
+                from: variante.unidadCompra ?? payload.unidadCompra,
+                to: variante.unidadStock ?? payload.unidadStock,
+                attributes: variante.atributosVariante,
+            }));
+        if (!canUseCanonicalUnits && !canUseDerivedUnits) {
+            throw new common_1.BadRequestException('Unidad de uso y unidad de compra deben ser compatibles para conversión. En sustrato rollo flexible también se permite rollo, m2 o metro lineal si cada variante tiene ancho y largo válidos.');
         }
         const variantes = payload.variantes.map((variante) => ({
             ...variante,

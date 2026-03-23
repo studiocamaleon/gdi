@@ -1,5 +1,5 @@
 import type { CurrentAuth } from '../auth/auth.types';
-import { AssignProductoAdicionalDto, AssignProductoVariantesRutaMasivaDto, AssignProductoMotorDto, UpdateProductoPrecioDto, UpdateProductoPrecioEspecialClientesDto, UpdateGranFormatoConfigDto, UpdateGranFormatoChecklistDto, UpdateGranFormatoRutaBaseDto, AssignVarianteRutaDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, CreateGranFormatoVarianteDto, UpsertProductoChecklistDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, UpsertProductoAdicionalDto, PreviewImposicionProductoVarianteDto, UpdateProductoRutaPolicyDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, UpdateProductoVarianteDto, UpdateGranFormatoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoImpuestoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
+import { AssignProductoAdicionalDto, AssignProductoVariantesRutaMasivaDto, AssignProductoMotorDto, UpdateProductoPrecioDto, UpdateProductoPrecioEspecialClientesDto, UpdateGranFormatoConfigDto, UpdateGranFormatoChecklistDto, UpdateGranFormatoRutaBaseDto, AssignVarianteRutaDto, CotizarProductoVarianteDto, PreviewGranFormatoCostosDto, CreateProductoVarianteDto, CreateGranFormatoVarianteDto, UpsertProductoChecklistDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, UpsertProductoAdicionalDto, PreviewImposicionProductoVarianteDto, UpdateProductoRutaPolicyDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, UpdateProductoVarianteDto, UpdateGranFormatoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoImpuestoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
 import { ProductosServiciosService } from './productos-servicios.service';
 export declare class ProductosServiciosController {
     private readonly service;
@@ -1616,6 +1616,70 @@ export declare class ProductosServiciosController {
             };
         } | null)[];
         updatedAt: string;
+    }>;
+    previewGranFormatoCostos(auth: CurrentAuth, id: string, payload: PreviewGranFormatoCostosDto): Promise<{
+        productoId: string;
+        periodo: string;
+        tecnologia: string;
+        maquinaId: any;
+        maquinaNombre: any;
+        perfilId: any;
+        perfilNombre: any;
+        warnings: string[];
+        resumenTecnico: {
+            varianteId: any;
+            varianteNombre: any;
+            varianteChips: {
+                label: string;
+                value: string;
+            }[];
+            anchoRolloMm: number;
+            anchoImprimibleMm: number;
+            orientacion: string;
+            piezasPorFila: number;
+            filas: number;
+            largoConsumidoMm: number;
+            areaUtilM2: number;
+            areaConsumidaM2: number;
+            areaDesperdicioM2: number;
+            desperdicioPct: number;
+        };
+        materiasPrimas: Record<string, unknown>[];
+        centrosCosto: {
+            orden: number;
+            codigo: string;
+            paso: string;
+            centroCostoId: string;
+            centroCostoNombre: string;
+            origen: string;
+            minutos: number;
+            tarifaHora: number;
+            costo: number;
+            detalleTecnico: Record<string, unknown> | null;
+        }[];
+        totales: {
+            materiales: number;
+            centrosCosto: number;
+            tecnico: number;
+        };
+        nestingPreview: {
+            rollWidth: number;
+            rollLength: number;
+            marginLeft: number;
+            marginRight: number;
+            marginStart: number;
+            marginEnd: number;
+            pieces: {
+                id: string;
+                w: number;
+                h: number;
+                cx: number;
+                cy: number;
+                color: string;
+                label: string;
+                textColor: string;
+            }[];
+        };
     }>;
     getGranFormatoVariantes(auth: CurrentAuth, id: string): Promise<{
         id: string;

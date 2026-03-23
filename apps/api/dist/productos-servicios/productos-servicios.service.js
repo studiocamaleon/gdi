@@ -16,6 +16,7 @@ const client_1 = require("@prisma/client");
 const library_1 = require("@prisma/client/runtime/library");
 const node_crypto_1 = require("node:crypto");
 const unidades_canonicas_1 = require("../inventario/unidades-canonicas");
+const unidades_derivadas_1 = require("../inventario/unidades-derivadas");
 const prisma_service_1 = require("../prisma/prisma.service");
 const proceso_productividad_engine_1 = require("../procesos/proceso-productividad.engine");
 const productos_servicios_dto_1 = require("./dto/productos-servicios.dto");
@@ -995,6 +996,548 @@ let ProductosServiciosService = class ProductosServiciosService {
             },
         });
         return this.buildGranFormatoChecklistResponse(auth, updated);
+    }
+    async previewGranFormatoCostos(auth, productoId, payload) {
+        const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+        this.ensureWideFormatProducto(producto);
+        const detalleGranFormato = this.getGranFormatoDetalle(producto.detalleJson);
+        const tecnologiasCompatibles = this.normalizeGranFormatoTecnologias(this.getGranFormatoStringArray(detalleGranFormato.tecnologiasCompatibles));
+        const tecnologiaSolicitada = this.normalizeGranFormatoTecnologia(payload.tecnologia ?? null);
+        const tecnologia = (tecnologiaSolicitada && tecnologiasCompatibles.includes(tecnologiaSolicitada)
+            ? tecnologiaSolicitada
+            : null) ??
+            this.normalizeGranFormatoTecnologia(this.getGranFormatoImposicionConfig(detalleGranFormato).tecnologiaDefault) ??
+            tecnologiasCompatibles[0] ??
+            null;
+        if (!tecnologia) {
+            throw new common_1.BadRequestException('No hay una tecnología válida configurada para simular costos.');
+        }
+        const medidas = payload.medidas
+            .map((item) => ({
+            anchoMm: Number(item.anchoMm),
+            altoMm: Number(item.altoMm),
+            cantidad: Number(item.cantidad),
+        }))
+            .filter((item) => Number.isFinite(item.anchoMm) &&
+            item.anchoMm > 0 &&
+            Number.isFinite(item.altoMm) &&
+            item.altoMm > 0 &&
+            Number.isFinite(item.cantidad) &&
+            item.cantidad > 0);
+        if (!medidas.length) {
+            throw new common_1.BadRequestException('Debes ingresar al menos una medida válida para calcular costos.');
+        }
+        const periodo = payload.periodo?.trim() || this.getDefaultTarifaPeriodo();
+        if (!DEFAULT_PERIOD_REGEX.test(periodo)) {
+            throw new common_1.BadRequestException('El período tarifa debe tener formato YYYY-MM.');
+        }
+        const maquinaIdsCompatibles = this.getGranFormatoStringArray(detalleGranFormato.maquinasCompatibles);
+        const perfilIdsCompatibles = this.getGranFormatoStringArray(detalleGranFormato.perfilesCompatibles);
+        const materialBaseId = this.getGranFormatoNullableString(detalleGranFormato.materialBaseId);
+        if (!materialBaseId) {
+            throw new common_1.BadRequestException('El producto no tiene material base configurado en Tecnologías.');
+        }
+        const materialIdsCompatibles = this.getGranFormatoStringArray(detalleGranFormato.materialesCompatibles);
+        const [maquinasCompatibles, perfilesCompatibles, materialBase, materialVariantes] = await Promise.all([
+            maquinaIdsCompatibles.length
+                ? this.prisma.maquina.findMany({
+                    where: {
+                        tenantId: auth.tenantId,
+                        id: { in: maquinaIdsCompatibles },
+                        activo: true,
+                    },
+                })
+                : Promise.resolve([]),
+            perfilIdsCompatibles.length
+                ? this.prisma.maquinaPerfilOperativo.findMany({
+                    where: {
+                        tenantId: auth.tenantId,
+                        id: { in: perfilIdsCompatibles },
+                        activo: true,
+                    },
+                })
+                : Promise.resolve([]),
+            this.prisma.materiaPrima.findFirst({
+                where: {
+                    tenantId: auth.tenantId,
+                    id: materialBaseId,
+                },
+            }),
+            this.prisma.materiaPrimaVariante.findMany({
+                where: {
+                    tenantId: auth.tenantId,
+                    materiaPrimaId: materialBaseId,
+                    activo: true,
+                    ...(materialIdsCompatibles.length ? { id: { in: materialIdsCompatibles } } : {}),
+                },
+                include: {
+                    materiaPrima: true,
+                },
+            }),
+        ]);
+        if (!materialBase || !materialBase.activo) {
+            throw new common_1.BadRequestException('El material base configurado no existe o está inactivo.');
+        }
+        if (!materialVariantes.length) {
+            throw new common_1.BadRequestException('No hay variantes activas de material para calcular costos.');
+        }
+        const maquinasTecnologia = maquinasCompatibles.filter((item) => this.isGranFormatoMachineCompatible(item) &&
+            this.deriveGranFormatoTecnologia(item.plantilla, item.capacidadesAvanzadasJson) === tecnologia);
+        if (!maquinasTecnologia.length) {
+            throw new common_1.BadRequestException('No hay máquinas compatibles para la tecnología seleccionada.');
+        }
+        const rutaBase = await this.buildGranFormatoRutaBaseResponse(auth, producto);
+        if (!rutaBase.procesoDefinicionId) {
+            throw new common_1.BadRequestException('Debes configurar una ruta base antes de calcular costos.');
+        }
+        const plantillaIdsRutaBase = Array.from(new Set(rutaBase.reglasImpresion.map((item) => item.pasoPlantillaId)));
+        const plantillasRutaBase = plantillaIdsRutaBase.length
+            ? await this.prisma.procesoOperacionPlantilla.findMany({
+                where: {
+                    tenantId: auth.tenantId,
+                    id: { in: plantillaIdsRutaBase },
+                },
+                include: {
+                    centroCosto: true,
+                    maquina: true,
+                    perfilOperativo: true,
+                },
+            })
+            : [];
+        const plantillasRutaBaseById = new Map(plantillasRutaBase.map((item) => [item.id, item]));
+        const imposicionGuardada = this.getGranFormatoImposicionConfig(detalleGranFormato);
+        const perfilOverrideId = this.getGranFormatoNullableString(payload.perfilOverrideId);
+        const perfilOverride = perfilOverrideId
+            ? perfilesCompatibles.find((item) => item.id === perfilOverrideId) ?? null
+            : null;
+        if (perfilOverrideId && !perfilOverride) {
+            throw new common_1.BadRequestException('El perfil override no pertenece a los perfiles compatibles del producto.');
+        }
+        let maquinaSeleccionada = perfilOverride
+            ? maquinasTecnologia.find((item) => item.id === perfilOverride.maquinaId) ?? null
+            : null;
+        let perfilSeleccionado = perfilOverride;
+        if (!maquinaSeleccionada) {
+            maquinaSeleccionada =
+                (imposicionGuardada.maquinaDefaultId
+                    ? maquinasTecnologia.find((item) => item.id === imposicionGuardada.maquinaDefaultId) ?? null
+                    : null) ??
+                    maquinasTecnologia[0] ??
+                    null;
+        }
+        if (!maquinaSeleccionada) {
+            throw new common_1.BadRequestException('No se pudo resolver una máquina válida para calcular costos.');
+        }
+        const reglaImpresionSeleccionada = this.resolveGranFormatoRutaBaseReglaImpresion(producto.detalleJson, tecnologia, maquinaSeleccionada.id) ??
+            this.resolveGranFormatoRutaBaseReglaImpresion(producto.detalleJson, tecnologia, null);
+        if (!reglaImpresionSeleccionada) {
+            throw new common_1.BadRequestException('No hay una regla de impresión configurada para la tecnología seleccionada.');
+        }
+        const plantillaImpresionSeleccionada = plantillasRutaBaseById.get(reglaImpresionSeleccionada.pasoPlantillaId) ?? null;
+        if (!plantillaImpresionSeleccionada) {
+            throw new common_1.BadRequestException('La regla de impresión referencia un paso inválido.');
+        }
+        if (plantillaImpresionSeleccionada.maquinaId) {
+            maquinaSeleccionada =
+                maquinasCompatibles.find((item) => item.id === plantillaImpresionSeleccionada.maquinaId) ??
+                    maquinaSeleccionada;
+        }
+        if (!perfilSeleccionado) {
+            perfilSeleccionado =
+                (reglaImpresionSeleccionada.perfilOperativoDefaultId
+                    ? perfilesCompatibles.find((item) => item.id === reglaImpresionSeleccionada.perfilOperativoDefaultId) ?? null
+                    : null) ??
+                    (imposicionGuardada.perfilDefaultId
+                        ? perfilesCompatibles.find((item) => item.id === imposicionGuardada.perfilDefaultId) ?? null
+                        : null) ??
+                    perfilesCompatibles.find((item) => item.maquinaId === maquinaSeleccionada?.id) ??
+                    null;
+        }
+        const candidato = this.evaluateGranFormatoImposicionCandidates({
+            maquina: maquinaSeleccionada,
+            medidas,
+            config: {
+                ...imposicionGuardada,
+            },
+            variants: materialVariantes,
+        })[0];
+        if (!candidato) {
+            throw new common_1.BadRequestException('No se pudo resolver la imposición con la configuración actual para calcular costos.');
+        }
+        const checklistConfig = await this.buildGranFormatoChecklistResponse(auth, producto);
+        const checklistTecnologia = checklistConfig.checklistsPorTecnologia.find((item) => item?.tecnologia === tecnologia) ?? null;
+        const checklistActivo = checklistConfig.aplicaATodasLasTecnologias
+            ? checklistConfig.checklistComun
+            : checklistTecnologia?.checklist ?? checklistConfig.checklistComun;
+        const checklistSelectedByPreguntaId = new Map(Array.from(new Map((payload.checklistRespuestas ?? []).map((item) => [item.preguntaId, item])).values()).map((item) => [item.preguntaId, item.respuestaId]));
+        const checklistPreguntaIdsActivas = this.resolveChecklistPreguntaIdsActivas(checklistActivo.preguntas.map((pregunta) => ({
+            ...pregunta,
+            respuestas: pregunta.respuestas.map((respuesta) => ({
+                id: respuesta.id,
+                activo: respuesta.activo,
+                preguntaSiguienteId: respuesta.preguntaSiguienteId ?? null,
+            })),
+        })), checklistSelectedByPreguntaId);
+        const activeChecklistRules = [];
+        for (const pregunta of checklistActivo.preguntas) {
+            if (!pregunta.activo || !checklistPreguntaIdsActivas.has(pregunta.id))
+                continue;
+            const respuestaId = checklistSelectedByPreguntaId.get(pregunta.id);
+            if (!respuestaId)
+                continue;
+            const respuesta = pregunta.respuestas.find((item) => item.id === respuestaId && item.activo);
+            if (!respuesta)
+                continue;
+            for (const regla of respuesta.reglas.filter((item) => item.activo)) {
+                activeChecklistRules.push({
+                    preguntaId: pregunta.id,
+                    respuestaId: respuesta.id,
+                    regla,
+                });
+            }
+        }
+        const checklistTemplateIds = Array.from(new Set(activeChecklistRules
+            .map((item) => item.regla.pasoPlantillaId)
+            .filter((value) => Boolean(value))));
+        const checklistPlantillas = checklistTemplateIds.length
+            ? await this.prisma.procesoOperacionPlantilla.findMany({
+                where: {
+                    tenantId: auth.tenantId,
+                    id: { in: checklistTemplateIds },
+                },
+                include: {
+                    centroCosto: true,
+                    maquina: true,
+                    perfilOperativo: true,
+                },
+            })
+            : [];
+        const checklistPlantillaById = new Map(checklistPlantillas.map((item) => [item.id, item]));
+        const checklistNivelPerfilIds = Array.from(new Set(activeChecklistRules
+            .map((item) => item.regla.variantePasoId)
+            .filter(Boolean)
+            .flatMap((variantePasoId) => {
+            const template = checklistPlantillaById.get(activeChecklistRules.find((row) => row.regla.variantePasoId === variantePasoId)?.regla
+                .pasoPlantillaId ?? '');
+            return this.getProcesoOperacionNiveles(template?.detalleJson ?? null)
+                .filter((nivel) => nivel.id === variantePasoId)
+                .map((nivel) => nivel.perfilOperativoId)
+                .filter((value) => Boolean(value));
+        })));
+        const checklistNivelPerfiles = checklistNivelPerfilIds.length
+            ? await this.prisma.maquinaPerfilOperativo.findMany({
+                where: {
+                    tenantId: auth.tenantId,
+                    id: { in: checklistNivelPerfilIds },
+                },
+            })
+            : [];
+        const checklistNivelPerfilById = new Map(checklistNivelPerfiles.map((item) => [item.id, item]));
+        const proceso = await this.findProcesoConOperacionesOrThrow(auth, rutaBase.procesoDefinicionId, this.prisma);
+        const templatesForRouteResolution = [...plantillasRutaBase];
+        const allPrintTemplateIds = new Set(rutaBase.reglasImpresion.map((item) => item.pasoPlantillaId));
+        const operacionesBase = proceso.operaciones
+            .filter((item) => item.activo)
+            .map((item) => {
+            const pasoPlantillaId = this.resolvePasoPlantillaIdFromOperacionRuta(item, templatesForRouteResolution) ?? null;
+            return { item, pasoPlantillaId };
+        })
+            .filter(({ pasoPlantillaId }) => {
+            if (!pasoPlantillaId || !allPrintTemplateIds.has(pasoPlantillaId)) {
+                return true;
+            }
+            return pasoPlantillaId === reglaImpresionSeleccionada.pasoPlantillaId;
+        })
+            .map(({ item, pasoPlantillaId }) => {
+            if (pasoPlantillaId === reglaImpresionSeleccionada.pasoPlantillaId) {
+                if (perfilSeleccionado) {
+                    return {
+                        ...this.buildChecklistOperacionFromPlantillaConPerfil(plantillaImpresionSeleccionada, perfilSeleccionado),
+                        orden: item.orden,
+                        codigo: item.codigo,
+                    };
+                }
+                return {
+                    ...this.buildChecklistOperacionFromPlantilla(plantillaImpresionSeleccionada),
+                    orden: item.orden,
+                    codigo: item.codigo,
+                };
+            }
+            return item;
+        });
+        const checklistOps = activeChecklistRules
+            .filter((item) => (item.regla.accion === 'activar_paso' || item.regla.accion === 'seleccionar_variante_paso') &&
+            item.regla.pasoPlantillaId)
+            .map((item) => {
+            const plantilla = checklistPlantillaById.get(item.regla.pasoPlantillaId);
+            if (!plantilla) {
+                return null;
+            }
+            if (item.regla.accion === 'seleccionar_variante_paso' && item.regla.variantePasoId) {
+                const nivel = this.getProcesoOperacionNiveles(plantilla.detalleJson).find((row) => row.id === item.regla.variantePasoId);
+                const perfilNivel = (nivel?.perfilOperativoId
+                    ? checklistNivelPerfilById.get(nivel.perfilOperativoId) ?? null
+                    : null) ??
+                    plantilla.perfilOperativo;
+                if (!perfilNivel) {
+                    return {
+                        ...this.buildChecklistOperacionFromPlantilla(plantilla),
+                        orden: 10_000 + activeChecklistRules.indexOf(item),
+                    };
+                }
+                return {
+                    ...this.buildChecklistOperacionFromPlantillaConPerfil(plantilla, perfilNivel),
+                    orden: 10_000 + activeChecklistRules.indexOf(item),
+                };
+            }
+            return {
+                ...this.buildChecklistOperacionFromPlantilla(plantilla),
+                orden: 10_000 + activeChecklistRules.indexOf(item),
+            };
+        })
+            .filter((item) => Boolean(item));
+        const operacionesCotizadas = [...operacionesBase, ...checklistOps].sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre));
+        const centroIds = Array.from(new Set(operacionesCotizadas
+            .map((item) => item.centroCostoId)
+            .filter((value) => Boolean(value))));
+        const tarifas = centroIds.length
+            ? await this.prisma.centroCostoTarifaPeriodo.findMany({
+                where: {
+                    tenantId: auth.tenantId,
+                    periodo,
+                    estado: client_1.EstadoTarifaCentroCostoPeriodo.PUBLICADA,
+                    centroCostoId: { in: centroIds },
+                },
+                select: {
+                    centroCostoId: true,
+                    tarifaCalculada: true,
+                },
+            })
+            : [];
+        const tarifaByCentro = new Map(tarifas.map((item) => [item.centroCostoId, item.tarifaCalculada]));
+        const warnings = [];
+        const totalPiezas = medidas.reduce((acc, item) => acc + item.cantidad, 0);
+        const perimetroTotalMl = Number((medidas.reduce((acc, item) => acc + (((item.anchoMm + item.altoMm) * 2) / 1000) * item.cantidad, 0) / 1000).toFixed(6));
+        const largoConsumidoMl = Number((candidato.consumedLengthMm / 1000).toFixed(6));
+        const centrosCosto = operacionesCotizadas.map((op, index) => {
+            const setupMin = Number(op.setupMin ?? 0);
+            const cleanupMin = Number(op.cleanupMin ?? 0);
+            const tiempoFijoMin = Number(op.tiempoFijoMin ?? 0);
+            const cantidadObjetivoSalida = this.resolveGranFormatoCantidadObjetivoSalida({
+                operacion: op,
+                totalPiezas,
+                areaUtilM2: candidato.usefulAreaM2,
+                largoConsumidoMl,
+                perimetroTotalMl,
+            });
+            const productividad = (0, proceso_productividad_engine_1.evaluateProductividad)({
+                modoProductividad: op.modoProductividad ?? client_1.ModoProductividadProceso.FIJA,
+                productividadBase: op.productividadBase,
+                reglaVelocidadJson: op.reglaVelocidadJson ?? null,
+                reglaMermaJson: op.reglaMermaJson ?? null,
+                runMin: op.runMin,
+                unidadTiempo: op.unidadTiempo,
+                mermaRunPct: op.mermaRunPct,
+                mermaSetup: op.mermaSetup,
+                cantidadObjetivoSalida,
+                contexto: {
+                    cantidad: totalPiezas,
+                    areaTotalM2: candidato.usefulAreaM2,
+                    largoTotalMl: largoConsumidoMl,
+                    perimetroTotalMl,
+                },
+            });
+            warnings.push(...productividad.warnings.map((warning) => `Paso ${op.nombre}: ${warning}`));
+            const minutos = Number((setupMin + cleanupMin + tiempoFijoMin + productividad.runMin).toFixed(4));
+            const tarifa = op.centroCostoId ? tarifaByCentro.get(op.centroCostoId) ?? null : null;
+            if (op.centroCostoId && !tarifa) {
+                warnings.push(`No hay tarifa PUBLICADA para ${op.centroCosto?.nombre ?? op.nombre} en ${periodo}.`);
+            }
+            const costo = tarifa ? Number(tarifa.mul(minutos / 60).toFixed(6)) : 0;
+            return {
+                orden: index + 1,
+                codigo: op.codigo,
+                paso: op.nombre,
+                centroCostoId: op.centroCostoId,
+                centroCostoNombre: op.centroCosto?.nombre ?? '',
+                origen: Number(op.orden) >= 10_000 ? 'Configurador' : 'Producto base',
+                minutos,
+                tarifaHora: tarifa ? Number(tarifa) : 0,
+                costo,
+                detalleTecnico: {
+                    maquina: op.maquina?.nombre ?? null,
+                    perfilOperativo: op.perfilOperativo?.nombre ?? null,
+                    cantidadObjetivoSalida,
+                },
+            };
+        });
+        const materiasPrimas = [];
+        const substrateTotalCost = this.calculateGranFormatoSustratoCost({
+            variant: candidato.variant,
+            consumedAreaM2: candidato.consumedAreaM2,
+            consumedLengthMl: largoConsumidoMl,
+            warnings,
+        });
+        const usefulFactor = candidato.consumedAreaM2 > 0 ? candidato.usefulAreaM2 / candidato.consumedAreaM2 : 0;
+        const usefulCost = Number((substrateTotalCost * usefulFactor).toFixed(6));
+        const wasteCost = Number((substrateTotalCost - usefulCost).toFixed(6));
+        materiasPrimas.push({
+            tipo: 'SUSTRATO',
+            nombre: candidato.variant.materiaPrima.nombre,
+            sku: candidato.variant.sku,
+            cantidad: Number(candidato.usefulAreaM2.toFixed(6)),
+            costoUnitario: candidato.usefulAreaM2 > 0 ? Number((usefulCost / candidato.usefulAreaM2).toFixed(6)) : 0,
+            costo: usefulCost,
+            origen: 'Base',
+            unidad: 'm2',
+            detalle: {
+                scope: 'util',
+                nestingPreview: true,
+            },
+        });
+        materiasPrimas.push({
+            tipo: 'SUSTRATO',
+            nombre: `${candidato.variant.materiaPrima.nombre} · Desperdicio`,
+            sku: candidato.variant.sku,
+            cantidad: Number(candidato.wasteAreaM2.toFixed(6)),
+            costoUnitario: candidato.wasteAreaM2 > 0 ? Number((wasteCost / candidato.wasteAreaM2).toFixed(6)) : 0,
+            costo: wasteCost,
+            origen: 'Desperdicio',
+            unidad: 'm2',
+            detalle: {
+                scope: 'desperdicio',
+                nestingPreview: true,
+            },
+        });
+        const inkPreview = await this.calculateGranFormatoInkConsumables({
+            auth,
+            maquinaId: maquinaSeleccionada.id,
+            perfilId: perfilSeleccionado?.id ?? null,
+            areaUtilM2: candidato.usefulAreaM2,
+            warnings,
+        });
+        materiasPrimas.push(...inkPreview.materiales);
+        for (const item of activeChecklistRules) {
+            if (item.regla.accion === 'material_extra' && item.regla.materiaPrimaVarianteId) {
+                const material = await this.prisma.materiaPrimaVariante.findFirst({
+                    where: {
+                        tenantId: auth.tenantId,
+                        id: item.regla.materiaPrimaVarianteId,
+                    },
+                    include: { materiaPrima: true },
+                });
+                if (!material) {
+                    warnings.push('Configurador: material adicional no encontrado.');
+                    continue;
+                }
+                const factorConsumo = Number(item.regla.factorConsumo ?? 0);
+                if (factorConsumo <= 0) {
+                    continue;
+                }
+                let cantidadBase = totalPiezas;
+                if (item.regla.tipoConsumo === 'por_m2') {
+                    cantidadBase = candidato.usefulAreaM2;
+                }
+                else if (item.regla.tipoConsumo === 'por_pliego') {
+                    cantidadBase = 1;
+                    warnings.push('Configurador: tipo de consumo POR_PLIEGO se interpretó como 1 trabajo en gran formato.');
+                }
+                const cantidad = Number((cantidadBase * factorConsumo * (1 + Number(item.regla.mermaPct ?? 0) / 100)).toFixed(6));
+                const costoUnitario = this.resolveMateriaPrimaVariantUnitCost({
+                    materiaPrimaVariante: material,
+                    warnings,
+                    contextLabel: 'Configurador',
+                });
+                materiasPrimas.push({
+                    tipo: 'CHECKLIST_MATERIAL',
+                    nombre: material.materiaPrima.nombre,
+                    sku: material.sku,
+                    cantidad,
+                    costoUnitario,
+                    costo: Number((cantidad * costoUnitario).toFixed(6)),
+                    origen: 'Configurador',
+                });
+            }
+            if (item.regla.accion === 'costo_extra' && item.regla.costoRegla) {
+                const costoValor = Number(item.regla.costoValor ?? 0);
+                if (item.regla.costoRegla === 'tiempo_min') {
+                    const centroId = item.regla.costoCentroCostoId;
+                    const tarifa = centroId ? tarifaByCentro.get(centroId) ?? null : null;
+                    if (!tarifa) {
+                        warnings.push('Configurador: costo extra sin tarifa publicada para centro de costo.');
+                        continue;
+                    }
+                    centrosCosto.push({
+                        orden: centrosCosto.length + 1,
+                        codigo: `CFG-${String(item.regla.id).slice(0, 6).toUpperCase()}`,
+                        paso: 'Costo extra',
+                        centroCostoId: centroId ?? '',
+                        centroCostoNombre: '',
+                        origen: 'Configurador',
+                        minutos: costoValor,
+                        tarifaHora: Number(tarifa),
+                        costo: Number(tarifa.mul(costoValor / 60).toFixed(6)),
+                        detalleTecnico: { reglaId: item.regla.id },
+                    });
+                    continue;
+                }
+                const multiplicador = item.regla.costoRegla === 'por_unidad'
+                    ? totalPiezas
+                    : item.regla.costoRegla === 'por_pliego'
+                        ? 1
+                        : 1;
+                centrosCosto.push({
+                    orden: centrosCosto.length + 1,
+                    codigo: `CFG-${String(item.regla.id).slice(0, 6).toUpperCase()}`,
+                    paso: 'Costo extra',
+                    centroCostoId: item.regla.costoCentroCostoId ?? '',
+                    centroCostoNombre: '',
+                    origen: 'Configurador',
+                    minutos: 0,
+                    tarifaHora: 0,
+                    costo: Number((costoValor * multiplicador).toFixed(6)),
+                    detalleTecnico: {
+                        reglaId: item.regla.id,
+                        costoRegla: item.regla.costoRegla,
+                    },
+                });
+            }
+        }
+        const totalMateriales = Number(materiasPrimas.reduce((acc, item) => acc + Number(item.costo ?? 0), 0).toFixed(6));
+        const totalCentrosCosto = Number(centrosCosto.reduce((acc, item) => acc + Number(item.costo ?? 0), 0).toFixed(6));
+        return {
+            productoId: producto.id,
+            periodo,
+            tecnologia,
+            maquinaId: maquinaSeleccionada.id,
+            maquinaNombre: maquinaSeleccionada.nombre,
+            perfilId: perfilSeleccionado?.id ?? null,
+            perfilNombre: perfilSeleccionado?.nombre ?? '',
+            warnings: Array.from(new Set(warnings)),
+            resumenTecnico: {
+                varianteId: candidato.variant.id,
+                varianteNombre: candidato.variant.sku,
+                varianteChips: this.buildGranFormatoVariantChips(candidato.variant),
+                anchoRolloMm: candidato.rollWidthMm,
+                anchoImprimibleMm: candidato.printableWidthMm,
+                orientacion: candidato.rotated ? 'rotada' : 'normal',
+                piezasPorFila: candidato.piecesPerRow,
+                filas: candidato.rows,
+                largoConsumidoMm: candidato.consumedLengthMm,
+                areaUtilM2: Number(candidato.usefulAreaM2.toFixed(6)),
+                areaConsumidaM2: Number(candidato.consumedAreaM2.toFixed(6)),
+                areaDesperdicioM2: Number(candidato.wasteAreaM2.toFixed(6)),
+                desperdicioPct: Number(candidato.wastePct.toFixed(4)),
+            },
+            materiasPrimas,
+            centrosCosto,
+            totales: {
+                materiales: totalMateriales,
+                centrosCosto: totalCentrosCosto,
+                tecnico: Number((totalMateriales + totalCentrosCosto).toFixed(6)),
+            },
+            nestingPreview: this.buildGranFormatoNestingPreview(candidato),
+        };
     }
     async findGranFormatoVariantes(auth, productoId) {
         const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
@@ -6457,11 +7000,21 @@ let ProductosServiciosService = class ProductosServiciosService {
         if (!sourceUnit || !targetUnit) {
             return precio;
         }
-        if (!(0, unidades_canonicas_1.unitsAreCompatible)(sourceUnit, targetUnit)) {
-            input.warnings?.push(`${input.contextLabel ?? 'Materia prima'} ${input.materiaPrimaVariante.materiaPrima.nombre} (${input.materiaPrimaVariante.sku}) tiene precio en ${sourceUnit} y se usa en ${targetUnit}; se usa precio sin convertir.`);
-            return precio;
+        if ((0, unidades_canonicas_1.unitsAreCompatible)(sourceUnit, targetUnit)) {
+            return (0, unidades_canonicas_1.convertUnitPrice)(precio, sourceUnit, targetUnit);
         }
-        return (0, unidades_canonicas_1.convertUnitPrice)(precio, sourceUnit, targetUnit);
+        const derived = (0, unidades_derivadas_1.convertFlexibleRollUnitPrice)({
+            pricePerFromUnit: precio,
+            from: sourceUnit,
+            to: targetUnit,
+            subfamilia: input.materiaPrimaVariante.materiaPrima.subfamilia ?? null,
+            attributes: input.materiaPrimaVariante.atributosVarianteJson,
+        });
+        if (derived != null) {
+            return derived;
+        }
+        input.warnings?.push(`${input.contextLabel ?? 'Materia prima'} ${input.materiaPrimaVariante.materiaPrima.nombre} (${input.materiaPrimaVariante.sku}) tiene precio en ${sourceUnit} y se usa en ${targetUnit}; se usa precio sin convertir.`);
+        return precio;
     }
     enumToApiValue(value) {
         return String(value).toLowerCase();
@@ -7483,6 +8036,357 @@ let ProductosServiciosService = class ProductosServiciosService {
             productivityUnit: perfil.productivityUnit ? this.enumToApiValue(perfil.productivityUnit) : '',
             materialPreset: perfil.materialPreset ?? '',
         };
+    }
+    getDefaultTarifaPeriodo() {
+        const now = new Date();
+        const year = now.getUTCFullYear();
+        const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+        return `${year}-${month}`;
+    }
+    buildGranFormatoVariantChips(variant) {
+        const attrs = this.asObject(variant.atributosVarianteJson);
+        const chips = [];
+        const width = this.readMaterialVariantWidthMmFromRecord(attrs);
+        const length = this.readNumericValue(attrs.largo ?? attrs.largoRollo ?? attrs.longitud ?? attrs.longitudRollo);
+        const acabado = typeof attrs.acabado === 'string' ? attrs.acabado.trim() : '';
+        if (width && width > 0) {
+            chips.push({ label: 'Ancho de rollo', value: `${Number((width / 1000).toFixed(2))} m` });
+        }
+        if (length && length > 0) {
+            chips.push({ label: 'Largo de rollo', value: `${length} m` });
+        }
+        if (acabado) {
+            chips.push({ label: 'Acabado', value: acabado });
+        }
+        return chips;
+    }
+    buildGranFormatoNestingPreview(candidate) {
+        const palette = ['#ff9f43', '#0abde3', '#1dd1a1', '#ff6b6b', '#f97316', '#22c55e'];
+        return {
+            rollWidth: Number((candidate.rollWidthMm / 10).toFixed(2)),
+            rollLength: Number((candidate.consumedLengthMm / 10).toFixed(2)),
+            marginLeft: Number((candidate.marginLeftMm / 10).toFixed(2)),
+            marginRight: Number((candidate.marginRightMm / 10).toFixed(2)),
+            marginStart: Number((candidate.marginStartMm / 10).toFixed(2)),
+            marginEnd: Number((candidate.marginEndMm / 10).toFixed(2)),
+            pieces: candidate.placements.map((item, index) => ({
+                id: item.id,
+                w: Number((item.widthMm / 10).toFixed(2)),
+                h: Number((item.heightMm / 10).toFixed(2)),
+                cx: Number((((item.centerXMm - candidate.rollWidthMm / 2) / 10)).toFixed(2)),
+                cy: Number((item.centerYMm / 10).toFixed(2)),
+                color: palette[index % palette.length],
+                label: item.label,
+                textColor: '#111111',
+            })),
+        };
+    }
+    resolveGranFormatoCantidadObjetivoSalida(input) {
+        const detalle = this.asObject(input.operacion.detalleJson);
+        const baseCalculo = typeof detalle.baseCalculoProductividad === 'string'
+            ? detalle.baseCalculoProductividad.trim().toLowerCase()
+            : '';
+        if (baseCalculo === 'perimetro_total_ml') {
+            return input.perimetroTotalMl;
+        }
+        if (baseCalculo === 'area_total_m2') {
+            return input.areaUtilM2;
+        }
+        if (baseCalculo === 'metro_lineal_total') {
+            return input.largoConsumidoMl;
+        }
+        const unidad = input.operacion.unidadSalida ?? input.operacion.unidadEntrada ?? null;
+        if (unidad === client_1.UnidadProceso.M2) {
+            return input.areaUtilM2;
+        }
+        if (unidad === client_1.UnidadProceso.METRO_LINEAL) {
+            return input.largoConsumidoMl;
+        }
+        if (unidad === client_1.UnidadProceso.PIEZA || unidad === client_1.UnidadProceso.UNIDAD) {
+            return input.totalPiezas;
+        }
+        return input.totalPiezas;
+    }
+    calculateGranFormatoSustratoCost(input) {
+        const sourceUnit = this.toCanonicalUnitCode(input.variant.unidadCompra) ??
+            this.toCanonicalUnitCode(input.variant.unidadStock) ??
+            this.toCanonicalUnitCode(input.variant.materiaPrima.unidadCompra) ??
+            this.toCanonicalUnitCode(input.variant.materiaPrima.unidadStock);
+        if (sourceUnit) {
+            const targetUnit = sourceUnit === 'metro_lineal'
+                ? 'metro_lineal'
+                : sourceUnit === 'm2'
+                    ? 'm2'
+                    : 'm2';
+            const costoUnitario = this.resolveMateriaPrimaVariantUnitCost({
+                materiaPrimaVariante: input.variant,
+                targetUnit,
+                warnings: input.warnings,
+                contextLabel: 'Sustrato',
+            });
+            if (targetUnit === 'metro_lineal') {
+                return Number((costoUnitario * input.consumedLengthMl).toFixed(6));
+            }
+            return Number((costoUnitario * input.consumedAreaM2).toFixed(6));
+        }
+        const fallback = this.resolveMateriaPrimaVariantUnitCost({
+            materiaPrimaVariante: input.variant,
+            warnings: input.warnings,
+            contextLabel: 'Sustrato',
+        });
+        input.warnings.push(`Sustrato ${input.variant.materiaPrima.nombre} (${input.variant.sku}): no se pudo resolver unidad de costo; se usó el precio sin convertir como referencia por m2.`);
+        return Number((fallback * input.consumedAreaM2).toFixed(6));
+    }
+    async calculateGranFormatoInkConsumables(input) {
+        const consumibles = await this.prisma.maquinaConsumible.findMany({
+            where: {
+                tenantId: input.auth.tenantId,
+                activo: true,
+                tipo: client_1.TipoConsumibleMaquina.TINTA,
+                maquinaId: input.maquinaId,
+            },
+            include: {
+                perfilOperativo: true,
+                materiaPrimaVariante: {
+                    include: {
+                        materiaPrima: true,
+                    },
+                },
+            },
+        });
+        const consumiblesPerfil = input.perfilId
+            ? consumibles.filter((item) => item.perfilOperativoId === input.perfilId)
+            : consumibles;
+        if (!consumiblesPerfil.length) {
+            input.warnings.push('El perfil operativo seleccionado no tiene consumibles de tinta configurados.');
+            return { materiales: [], costo: 0 };
+        }
+        const materiales = [];
+        let costo = 0;
+        for (const item of consumiblesPerfil) {
+            const consumoBase = Number(item.consumoBase ?? 0);
+            if (consumoBase <= 0) {
+                input.warnings.push(`Consumible de tinta ${item.materiaPrimaVariante.materiaPrima.nombre} (${item.materiaPrimaVariante.sku}) sin consumoBase válido.`);
+                continue;
+            }
+            if (item.unidad !== client_1.UnidadConsumoMaquina.ML && item.unidad !== client_1.UnidadConsumoMaquina.LITRO) {
+                input.warnings.push(`Consumible de tinta ${item.materiaPrimaVariante.materiaPrima.nombre} (${item.materiaPrimaVariante.sku}) con unidad no soportada en v1.`);
+                continue;
+            }
+            const cantidadBase = Number((consumoBase * input.areaUtilM2).toFixed(6));
+            const targetUnit = item.unidad === client_1.UnidadConsumoMaquina.LITRO ? 'l' : 'ml';
+            const costoUnitario = this.resolveMateriaPrimaVariantUnitCost({
+                materiaPrimaVariante: item.materiaPrimaVariante,
+                targetUnit,
+                warnings: input.warnings,
+                contextLabel: 'Tinta',
+            });
+            const costoItem = Number((cantidadBase * costoUnitario).toFixed(6));
+            costo += costoItem;
+            materiales.push({
+                tipo: 'TINTA',
+                nombre: item.materiaPrimaVariante.materiaPrima.nombre,
+                sku: item.materiaPrimaVariante.sku,
+                cantidad: cantidadBase,
+                costoUnitario,
+                costo: costoItem,
+                origen: 'Base',
+                unidad: item.unidad === client_1.UnidadConsumoMaquina.LITRO ? 'l' : 'ml',
+            });
+        }
+        return { materiales, costo: Number(costo.toFixed(6)) };
+    }
+    evaluateGranFormatoImposicionCandidates(input) {
+        if (!input.maquina) {
+            return [];
+        }
+        const printableWidthMmMax = this.readMachinePrintableWidthMmFromRecord(input.maquina);
+        if (!printableWidthMmMax || printableWidthMmMax <= 0) {
+            return [];
+        }
+        const marginLeftMm = input.config.margenLateralIzquierdoMmOverride ??
+            this.readMachineMarginMmFromRecord(input.maquina, 'margenLateralIzquierdoNoImprimible') ??
+            this.readMachineMarginMmFromRecord(input.maquina, 'margenIzquierdo') ??
+            0;
+        const marginRightMm = input.config.margenLateralDerechoMmOverride ??
+            this.readMachineMarginMmFromRecord(input.maquina, 'margenLateralDerechoNoImprimible') ??
+            this.readMachineMarginMmFromRecord(input.maquina, 'margenDerecho') ??
+            0;
+        const marginStartMm = input.config.margenInicioMmOverride ??
+            this.readMachineMarginMmFromRecord(input.maquina, 'margenInicioNoImprimible') ??
+            this.readMachineMarginMmFromRecord(input.maquina, 'margenSuperior') ??
+            0;
+        const marginEndMm = input.config.margenFinalMmOverride ??
+            this.readMachineMarginMmFromRecord(input.maquina, 'margenFinalNoImprimible') ??
+            this.readMachineMarginMmFromRecord(input.maquina, 'margenInferior') ??
+            0;
+        const accepted = [];
+        for (const variant of input.variants) {
+            const rollWidthMm = this.readMaterialVariantWidthMmFromRecord(this.asObject(variant.atributosVarianteJson));
+            if (!rollWidthMm || rollWidthMm <= 0) {
+                continue;
+            }
+            const machineLimitedWidthMm = Math.min(rollWidthMm, printableWidthMmMax);
+            const printableWidthMm = machineLimitedWidthMm - marginLeftMm - marginRightMm;
+            if (printableWidthMm <= 0) {
+                continue;
+            }
+            const evaluateOrientation = (rotated) => {
+                const pieces = input.medidas
+                    .flatMap((medida) => Array.from({ length: Math.max(1, medida.cantidad) }, () => ({
+                    width: rotated ? medida.altoMm : medida.anchoMm,
+                    height: rotated ? medida.anchoMm : medida.altoMm,
+                    originalWidth: medida.anchoMm,
+                    originalHeight: medida.altoMm,
+                })))
+                    .sort((a, b) => b.height - a.height || b.width - a.width);
+                let currentRowWidth = 0;
+                let currentRowHeight = 0;
+                let totalHeight = 0;
+                let rowCount = 0;
+                let maxPiecesPerRow = 0;
+                let currentPieces = 0;
+                let currentRowTop = marginStartMm;
+                const placements = [];
+                for (const [index, piece] of pieces.entries()) {
+                    if (piece.width > printableWidthMm) {
+                        return null;
+                    }
+                    const additionalWidth = currentRowWidth === 0
+                        ? piece.width
+                        : currentRowWidth + input.config.separacionHorizontalMm + piece.width;
+                    if (additionalWidth <= printableWidthMm) {
+                        const pieceLeft = currentRowWidth === 0
+                            ? marginLeftMm
+                            : marginLeftMm + currentRowWidth + input.config.separacionHorizontalMm;
+                        currentRowWidth = additionalWidth;
+                        currentRowHeight = Math.max(currentRowHeight, piece.height);
+                        currentPieces += 1;
+                        maxPiecesPerRow = Math.max(maxPiecesPerRow, currentPieces);
+                        placements.push({
+                            id: `piece-${index}`,
+                            widthMm: piece.width,
+                            heightMm: piece.height,
+                            centerXMm: pieceLeft + piece.width / 2,
+                            centerYMm: currentRowTop + piece.height / 2,
+                            label: `${Math.round(piece.originalWidth / 10)}x${Math.round(piece.originalHeight / 10)} cm`,
+                        });
+                        continue;
+                    }
+                    totalHeight += currentRowHeight;
+                    if (rowCount > 0 || totalHeight > 0) {
+                        totalHeight += input.config.separacionVerticalMm;
+                    }
+                    rowCount += 1;
+                    currentRowTop = marginStartMm + totalHeight;
+                    currentRowWidth = piece.width;
+                    currentRowHeight = piece.height;
+                    currentPieces = 1;
+                    maxPiecesPerRow = Math.max(maxPiecesPerRow, currentPieces);
+                    placements.push({
+                        id: `piece-${index}`,
+                        widthMm: piece.width,
+                        heightMm: piece.height,
+                        centerXMm: marginLeftMm + piece.width / 2,
+                        centerYMm: currentRowTop + piece.height / 2,
+                        label: `${Math.round(piece.originalWidth / 10)}x${Math.round(piece.originalHeight / 10)} cm`,
+                    });
+                }
+                if (currentRowHeight > 0) {
+                    totalHeight += currentRowHeight;
+                    rowCount += 1;
+                }
+                const consumedLengthMm = marginStartMm + marginEndMm + totalHeight;
+                const usefulAreaM2 = input.medidas.reduce((acc, item) => acc + ((item.anchoMm * item.altoMm) / 1_000_000) * item.cantidad, 0);
+                const consumedAreaM2 = (rollWidthMm * consumedLengthMm) / 1_000_000;
+                const wasteAreaM2 = Math.max(0, consumedAreaM2 - usefulAreaM2);
+                return {
+                    rotated,
+                    piecesPerRow: maxPiecesPerRow,
+                    rows: rowCount,
+                    consumedLengthMm,
+                    usefulAreaM2,
+                    consumedAreaM2,
+                    wasteAreaM2,
+                    wastePct: consumedAreaM2 > 0 ? (wasteAreaM2 / consumedAreaM2) * 100 : 0,
+                    placements,
+                };
+            };
+            const candidates = [
+                evaluateOrientation(false),
+                input.config.permitirRotacion ? evaluateOrientation(true) : null,
+            ].filter(Boolean);
+            if (!candidates.length) {
+                continue;
+            }
+            const best = [...candidates].sort((a, b) => {
+                if (input.config.criterioOptimizacion ===
+                    productos_servicios_dto_1.GranFormatoImposicionCriterioOptimizacionDto.menor_largo_consumido) {
+                    return a.consumedLengthMm - b.consumedLengthMm || a.wasteAreaM2 - b.wasteAreaM2;
+                }
+                return a.wasteAreaM2 - b.wasteAreaM2 || a.consumedLengthMm - b.consumedLengthMm;
+            })[0];
+            accepted.push({
+                variant,
+                rollWidthMm,
+                printableWidthMm,
+                marginLeftMm,
+                marginRightMm,
+                marginStartMm,
+                marginEndMm,
+                ...best,
+            });
+        }
+        return accepted.sort((a, b) => {
+            if (input.config.criterioOptimizacion ===
+                productos_servicios_dto_1.GranFormatoImposicionCriterioOptimizacionDto.menor_largo_consumido) {
+                return a.consumedLengthMm - b.consumedLengthMm || a.wasteAreaM2 - b.wasteAreaM2;
+            }
+            return a.wasteAreaM2 - b.wasteAreaM2 || a.consumedLengthMm - b.consumedLengthMm;
+        });
+    }
+    readNumericValue(value) {
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return value;
+        }
+        if (typeof value === 'string') {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : null;
+        }
+        if (value instanceof client_1.Prisma.Decimal) {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : null;
+        }
+        return null;
+    }
+    readMachineMarginMmFromRecord(maquina, key) {
+        const raw = this.asObject(maquina?.parametrosTecnicosJson)[key];
+        const cm = this.readNumericValue(raw);
+        return cm == null ? null : cm * 10;
+    }
+    readMachinePrintableWidthMmFromRecord(maquina) {
+        if (!maquina) {
+            return null;
+        }
+        const params = this.asObject(maquina.parametrosTecnicosJson);
+        const direct = this.readNumericValue(params.anchoImprimibleMaximo);
+        if (direct != null) {
+            return direct * 10;
+        }
+        const anchoBoca = this.readNumericValue(params.anchoBoca);
+        if (anchoBoca != null) {
+            return anchoBoca * 10;
+        }
+        const anchoCama = this.readNumericValue(params.anchoCama);
+        if (anchoCama != null) {
+            return anchoCama * 10;
+        }
+        const fallback = this.readNumericValue(maquina.anchoUtil ?? null);
+        return fallback == null ? null : fallback * 10;
+    }
+    readMaterialVariantWidthMmFromRecord(attributes) {
+        const meters = this.readNumericValue(attributes?.ancho);
+        return meters == null ? null : meters * 1000;
     }
     deriveGranFormatoTecnologia(plantilla, capacidadesAvanzadasJson) {
         const capacidades = this.asObject(capacidadesAvanzadasJson);

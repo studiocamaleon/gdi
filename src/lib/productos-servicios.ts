@@ -718,6 +718,108 @@ export type GranFormatoChecklistConfig = {
   updatedAt: string | null;
 };
 
+export type PreviewGranFormatoCostoMedida = {
+  anchoMm: number;
+  altoMm: number;
+  cantidad: number;
+};
+
+export type PreviewGranFormatoCostosPayload = {
+  periodo?: string;
+  tecnologia?: string;
+  perfilOverrideId?: string;
+  medidas: PreviewGranFormatoCostoMedida[];
+  checklistRespuestas?: Array<{
+    preguntaId: string;
+    respuestaId: string;
+  }>;
+};
+
+export type GranFormatoCostosNestingPiece = {
+  id: string;
+  w: number;
+  h: number;
+  cx: number;
+  cy: number;
+  color: string;
+  label: string;
+  textColor?: string;
+};
+
+export type GranFormatoCostosNestingPreview = {
+  rollWidth: number;
+  rollLength: number;
+  marginLeft: number;
+  marginRight: number;
+  marginStart: number;
+  marginEnd: number;
+  pieces: GranFormatoCostosNestingPiece[];
+};
+
+export type GranFormatoCostosResumenTecnico = {
+  varianteId: string;
+  varianteNombre: string;
+  varianteChips: Array<{
+    label: string;
+    value: string;
+  }>;
+  anchoRolloMm: number;
+  anchoImprimibleMm: number;
+  orientacion: "normal" | "rotada";
+  piezasPorFila: number;
+  filas: number;
+  largoConsumidoMm: number;
+  areaUtilM2: number;
+  areaConsumidaM2: number;
+  areaDesperdicioM2: number;
+  desperdicioPct: number;
+};
+
+export type GranFormatoCostosMaterialItem = {
+  tipo: string;
+  nombre: string;
+  sku: string;
+  cantidad: number;
+  costoUnitario: number;
+  costo: number;
+  origen: string;
+  unidad?: string | null;
+  detalle?: Record<string, unknown> | null;
+};
+
+export type GranFormatoCostosCentroItem = {
+  orden: number;
+  codigo: string;
+  paso: string;
+  centroCostoId: string;
+  centroCostoNombre: string;
+  origen: string;
+  minutos: number;
+  tarifaHora: number;
+  costo: number;
+  detalleTecnico?: Record<string, unknown> | null;
+};
+
+export type GranFormatoCostosResponse = {
+  productoId: string;
+  periodo: string;
+  tecnologia: string;
+  maquinaId: string | null;
+  maquinaNombre: string;
+  perfilId: string | null;
+  perfilNombre: string;
+  warnings: string[];
+  resumenTecnico: GranFormatoCostosResumenTecnico;
+  materiasPrimas: GranFormatoCostosMaterialItem[];
+  centrosCosto: GranFormatoCostosCentroItem[];
+  totales: {
+    materiales: number;
+    centrosCosto: number;
+    tecnico: number;
+  };
+  nestingPreview: GranFormatoCostosNestingPreview | null;
+};
+
 export type CotizacionProductoSnapshotResumen = {
   id: string;
   cantidad: number;

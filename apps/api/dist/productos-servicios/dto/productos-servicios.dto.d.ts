@@ -419,6 +419,18 @@ export declare class UpdateGranFormatoChecklistDto {
     checklistComun?: UpsertProductoChecklistDto;
     checklistsPorTecnologia?: UpsertGranFormatoChecklistPorTecnologiaDto[];
 }
+export declare class PreviewGranFormatoCostoMedidaDto {
+    anchoMm: number;
+    altoMm: number;
+    cantidad: number;
+}
+export declare class PreviewGranFormatoCostosDto {
+    periodo?: string;
+    tecnologia?: string;
+    perfilOverrideId?: string;
+    medidas: PreviewGranFormatoCostoMedidaDto[];
+    checklistRespuestas?: CotizarChecklistRespuestaDto[];
+}
 export declare class CotizarProductoVarianteDto {
     cantidad: number;
     periodo?: string;

@@ -38,6 +38,7 @@ import {
 } from "@/lib/materia-prima-templates";
 import { getPlantillaMaquinariaLabel } from "@/lib/maquinaria-templates";
 import { areUnitsCompatible, convertUnitPrice, getUnitDefinition } from "@/lib/unidades";
+import { convertFlexibleRollUnitPrice } from "@/lib/unidades-derivadas";
 import type { ProveedorDetalle } from "@/lib/proveedores";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1428,15 +1429,22 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                 const canConvert =
                                   typeof precioReferencia === "number" &&
                                   Number.isFinite(precioReferencia) &&
-                                  precioReferencia > 0 &&
-                                  areUnitsCompatible(unidadCompra, unidadStock);
+                                  precioReferencia > 0;
                                 const precioPorStock =
                                   canConvert
-                                    ? convertUnitPrice(
-                                        precioReferencia as number,
-                                        unidadCompra,
-                                        unidadStock,
-                                      )
+                                    ? areUnitsCompatible(unidadCompra, unidadStock)
+                                      ? convertUnitPrice(
+                                          precioReferencia as number,
+                                          unidadCompra,
+                                          unidadStock,
+                                        )
+                                      : convertFlexibleRollUnitPrice({
+                                          pricePerFromUnit: precioReferencia as number,
+                                          from: unidadCompra,
+                                          to: unidadStock,
+                                          subfamilia: form.subfamilia,
+                                          attributes: parseJsonField(variante.atributosVarianteTexto, {}),
+                                        })
                                     : null;
 
                                 return (

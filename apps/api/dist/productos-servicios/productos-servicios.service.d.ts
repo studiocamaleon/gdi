@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
-import { AssignProductoVariantesRutaMasivaDto, AssignProductoAdicionalDto, AssignProductoMotorDto, AssignVarianteRutaDto, DimensionOpcionProductivaDto, CarasProductoVarianteDto, ReglaCostoAdicionalEfectoDto, MetodoCostoProductoAdicionalDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, TipoProductoAdicionalEfectoDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, TipoConsumoAdicionalMaterialDto, TipoProductoAdicionalDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, UpsertProductoAdicionalDto, UpsertProductoChecklistDto, PreviewImposicionProductoVarianteDto, MetodoCalculoPrecioProductoDto, ReglaCostoChecklistDto, TipoChecklistPreguntaDto, TipoChecklistAccionReglaDto, GranFormatoImposicionCriterioOptimizacionDto, UpdateProductoPrecioDto, UpdateProductoPrecioEspecialClientesDto, UpdateGranFormatoConfigDto, UpdateGranFormatoChecklistDto, UpdateGranFormatoRutaBaseDto, UpdateProductoRutaPolicyDto, EstadoProductoServicioDto, TipoVentaGranFormatoDto, TipoImpresionProductoVarianteDto, TipoProductoServicioDto, ValorOpcionProductivaDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, CreateGranFormatoVarianteDto, UpdateGranFormatoVarianteDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoImpuestoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
+import { AssignProductoVariantesRutaMasivaDto, AssignProductoAdicionalDto, AssignProductoMotorDto, AssignVarianteRutaDto, DimensionOpcionProductivaDto, CarasProductoVarianteDto, ReglaCostoAdicionalEfectoDto, MetodoCostoProductoAdicionalDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, TipoProductoAdicionalEfectoDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, TipoConsumoAdicionalMaterialDto, TipoProductoAdicionalDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, UpsertProductoAdicionalDto, UpsertProductoChecklistDto, PreviewGranFormatoCostosDto, PreviewImposicionProductoVarianteDto, MetodoCalculoPrecioProductoDto, ReglaCostoChecklistDto, TipoChecklistPreguntaDto, TipoChecklistAccionReglaDto, GranFormatoImposicionCriterioOptimizacionDto, UpdateProductoPrecioDto, UpdateProductoPrecioEspecialClientesDto, UpdateGranFormatoConfigDto, UpdateGranFormatoChecklistDto, UpdateGranFormatoRutaBaseDto, UpdateProductoRutaPolicyDto, EstadoProductoServicioDto, TipoVentaGranFormatoDto, TipoImpresionProductoVarianteDto, TipoProductoServicioDto, ValorOpcionProductivaDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, CreateGranFormatoVarianteDto, UpdateGranFormatoVarianteDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoImpuestoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
 import type { ProductMotorDefinition } from './motors/product-motor.contract';
 type ServicioPricingNivel = {
     id: string;
@@ -1168,6 +1168,70 @@ export declare class ProductosServiciosService {
         } | null)[];
         updatedAt: string;
     }>;
+    previewGranFormatoCostos(auth: CurrentAuth, productoId: string, payload: PreviewGranFormatoCostosDto): Promise<{
+        productoId: string;
+        periodo: string;
+        tecnologia: string;
+        maquinaId: any;
+        maquinaNombre: any;
+        perfilId: any;
+        perfilNombre: any;
+        warnings: string[];
+        resumenTecnico: {
+            varianteId: any;
+            varianteNombre: any;
+            varianteChips: {
+                label: string;
+                value: string;
+            }[];
+            anchoRolloMm: number;
+            anchoImprimibleMm: number;
+            orientacion: string;
+            piezasPorFila: number;
+            filas: number;
+            largoConsumidoMm: number;
+            areaUtilM2: number;
+            areaConsumidaM2: number;
+            areaDesperdicioM2: number;
+            desperdicioPct: number;
+        };
+        materiasPrimas: Record<string, unknown>[];
+        centrosCosto: {
+            orden: number;
+            codigo: string;
+            paso: string;
+            centroCostoId: string;
+            centroCostoNombre: string;
+            origen: string;
+            minutos: number;
+            tarifaHora: number;
+            costo: number;
+            detalleTecnico: Record<string, unknown> | null;
+        }[];
+        totales: {
+            materiales: number;
+            centrosCosto: number;
+            tecnico: number;
+        };
+        nestingPreview: {
+            rollWidth: number;
+            rollLength: number;
+            marginLeft: number;
+            marginRight: number;
+            marginStart: number;
+            marginEnd: number;
+            pieces: {
+                id: string;
+                w: number;
+                h: number;
+                cx: number;
+                cy: number;
+                color: string;
+                label: string;
+                textColor: string;
+            }[];
+        };
+    }>;
     findGranFormatoVariantes(auth: CurrentAuth, productoId: string): Promise<{
         id: string;
         productoServicioId: string;
@@ -2202,6 +2266,17 @@ export declare class ProductosServiciosService {
     private resolveGranFormatoRutaBaseReglaImpresion;
     private isGranFormatoMachineCompatible;
     private buildGranFormatoVarianteDetalle;
+    private getDefaultTarifaPeriodo;
+    private buildGranFormatoVariantChips;
+    private buildGranFormatoNestingPreview;
+    private resolveGranFormatoCantidadObjetivoSalida;
+    private calculateGranFormatoSustratoCost;
+    private calculateGranFormatoInkConsumables;
+    private evaluateGranFormatoImposicionCandidates;
+    private readNumericValue;
+    private readMachineMarginMmFromRecord;
+    private readMachinePrintableWidthMmFromRecord;
+    private readMaterialVariantWidthMmFromRecord;
     private deriveGranFormatoTecnologia;
     private normalizeGranFormatoTecnologias;
     private normalizeGranFormatoTecnologia;

@@ -12,6 +12,7 @@ import {
   UpdateGranFormatoRutaBaseDto,
   AssignVarianteRutaDto,
   CotizarProductoVarianteDto,
+  PreviewGranFormatoCostosDto,
   CreateProductoVarianteDto,
   CreateGranFormatoVarianteDto,
   UpsertProductoChecklistDto,
@@ -328,6 +329,15 @@ export class ProductosServiciosController {
     @Body() payload: UpdateGranFormatoChecklistDto,
   ) {
     return this.service.updateGranFormatoChecklist(auth, id, payload);
+  }
+
+  @Post(':id/gran-formato-costos/preview')
+  previewGranFormatoCostos(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: PreviewGranFormatoCostosDto,
+  ) {
+    return this.service.previewGranFormatoCostos(auth, id, payload);
   }
 
   @Get(':id/gran-formato-variantes')

@@ -8,6 +8,7 @@ import {
   ProductoChecklistPayload,
   GranFormatoChecklistConfig,
   GranFormatoImposicionConfig,
+  GranFormatoCostosResponse,
   CotizacionProductoVariante,
   EstadoProductoServicio,
   FamiliaProducto,
@@ -28,6 +29,7 @@ import {
   ProductoServicio,
   SubfamiliaProducto,
   TipoVentaGranFormato,
+  PreviewGranFormatoCostosPayload,
   VarianteOpcionesProductivas,
   ValorOpcionProductiva,
   TipoImpresionProductoVariante,
@@ -270,6 +272,19 @@ export async function updateGranFormatoRutaBase(
     method: 'PUT',
     body: JSON.stringify(payload),
   });
+}
+
+export async function previewGranFormatoCostos(
+  productoId: string,
+  payload: PreviewGranFormatoCostosPayload,
+) {
+  return apiRequest<GranFormatoCostosResponse>(
+    `/productos-servicios/${productoId}/gran-formato-costos/preview`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export async function getGranFormatoVariantes(productoId: string) {

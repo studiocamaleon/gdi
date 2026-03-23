@@ -133,6 +133,9 @@ let ProductosServiciosController = class ProductosServiciosController {
     upsertGranFormatoChecklist(auth, id, payload) {
         return this.service.updateGranFormatoChecklist(auth, id, payload);
     }
+    previewGranFormatoCostos(auth, id, payload) {
+        return this.service.previewGranFormatoCostos(auth, id, payload);
+    }
     getGranFormatoVariantes(auth, id) {
         return this.service.findGranFormatoVariantes(auth, id);
     }
@@ -519,6 +522,15 @@ __decorate([
     __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.UpdateGranFormatoChecklistDto]),
     __metadata("design:returntype", void 0)
 ], ProductosServiciosController.prototype, "upsertGranFormatoChecklist", null);
+__decorate([
+    (0, common_1.Post)(':id/gran-formato-costos/preview'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.PreviewGranFormatoCostosDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "previewGranFormatoCostos", null);
 __decorate([
     (0, common_1.Get)(':id/gran-formato-variantes'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),

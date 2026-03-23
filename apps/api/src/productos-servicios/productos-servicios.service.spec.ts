@@ -53,10 +53,13 @@ describe('ProductosServiciosService V1 adicionales', () => {
     materiaPrimaVariante: {
       sku: string;
       precioReferencia: number | null;
+      atributosVarianteJson?: unknown;
       unidadStock?: string | null;
       unidadCompra?: string | null;
       materiaPrima: {
         nombre: string;
+        subfamilia?: string | null;
+        templateId?: string | null;
         unidadStock?: string | null;
         unidadCompra?: string | null;
       };
@@ -468,6 +471,36 @@ describe('ProductosServiciosService V1 adicionales', () => {
     });
 
     expect(costoMl).toBeCloseTo(12, 6);
+    expect(warnings).toEqual([]);
+  });
+
+  it('convierte precio de referencia por rollo a costo por m2 en sustrato flexible', () => {
+    const warnings: string[] = [];
+
+    const costoM2 = resolveMateriaPrimaVariantUnitCost.call(service, {
+      materiaPrimaVariante: {
+        sku: 'VINILO-152',
+        precioReferencia: 150000,
+        atributosVarianteJson: {
+          ancho: 1.5,
+          largo: 50,
+          acabado: 'Brillante',
+        },
+        unidadCompra: 'ROLLO',
+        unidadStock: 'M2',
+        materiaPrima: {
+          nombre: 'Vinilo polimérico',
+          subfamilia: 'sustrato_rollo_flexible',
+          unidadCompra: 'ROLLO',
+          unidadStock: 'M2',
+        },
+      },
+      targetUnit: 'M2',
+      warnings,
+      contextLabel: 'Sustrato',
+    });
+
+    expect(costoM2).toBeCloseTo(2000, 6);
     expect(warnings).toEqual([]);
   });
 
