@@ -72,6 +72,10 @@ import {
   TipoChecklistPreguntaDto,
   TipoChecklistAccionReglaDto,
   GranFormatoImposicionCriterioOptimizacionDto,
+  GranFormatoPanelizadoInterpretacionAnchoMaximoDto,
+  GranFormatoPanelizadoModoDto,
+  GranFormatoPanelizadoDireccionDto,
+  GranFormatoPanelizadoDistribucionDto,
   UpdateProductoPrecioDto,
   UpdateProductoPrecioEspecialClientesDto,
   UpdateGranFormatoConfigDto,
@@ -193,10 +197,22 @@ type GranFormatoCostosPreviewPlacement = {
   id: string;
   widthMm: number;
   heightMm: number;
+  usefulWidthMm: number;
+  usefulHeightMm: number;
+  overlapStartMm: number;
+  overlapEndMm: number;
   centerXMm: number;
   centerYMm: number;
   label: string;
+  rotated: boolean;
+  originalWidthMm: number;
+  originalHeightMm: number;
+  panelIndex: number | null;
+  panelCount: number | null;
+  panelAxis: 'vertical' | 'horizontal' | null;
+  sourcePieceId: string | null;
 };
+type GranFormatoNestingOrientation = 'normal' | 'rotada' | 'mixta';
 type GranFormatoCostosPreviewCandidate = {
   variant: any;
   rollWidthMm: number;
@@ -205,7 +221,15 @@ type GranFormatoCostosPreviewCandidate = {
   marginRightMm: number;
   marginStartMm: number;
   marginEndMm: number;
-  rotated: boolean;
+  orientacion: GranFormatoNestingOrientation;
+  panelizado: boolean;
+  panelAxis: 'vertical' | 'horizontal' | null;
+  panelCount: number;
+  panelOverlapMm: number | null;
+  panelMaxWidthMm: number | null;
+  panelDistribution: 'equilibrada' | 'libre' | null;
+  panelWidthInterpretation: 'total' | 'util' | null;
+  panelMode: 'automatico' | 'manual' | null;
   piecesPerRow: number;
   rows: number;
   consumedLengthMm: number;
@@ -214,6 +238,10 @@ type GranFormatoCostosPreviewCandidate = {
   wasteAreaM2: number;
   wastePct: number;
   placements: GranFormatoCostosPreviewPlacement[];
+  substrateCost: number;
+  inkCost: number;
+  timeCost: number;
+  totalCost: number;
 };
 
 @Injectable()
@@ -890,7 +918,7 @@ export class ProductosServiciosService {
           familiaProductoId: payload.familiaProductoId,
           codigo: payload.codigo.trim().toUpperCase(),
           nombre: payload.nombre.trim(),
-          unidadComercial: payload.unidadComercial?.trim() || null,
+          unidadComercial: this.normalizeUnidadComercialProductoValue(payload.unidadComercial),
           activo: payload.activo,
         },
         include: {
@@ -919,7 +947,7 @@ export class ProductosServiciosService {
           familiaProductoId: payload.familiaProductoId,
           codigo: payload.codigo.trim().toUpperCase(),
           nombre: payload.nombre.trim(),
-          unidadComercial: payload.unidadComercial?.trim() || null,
+          unidadComercial: this.normalizeUnidadComercialProductoValue(payload.unidadComercial),
           activo: payload.activo,
         },
         include: {
@@ -988,6 +1016,7 @@ export class ProductosServiciosService {
           procesoDefinicionDefaultId: null,
           familiaProductoId: payload.familiaProductoId,
           subfamiliaProductoId: payload.subfamiliaProductoId || null,
+          unidadComercial: payload.unidadComercial,
           estado: this.toEstadoProducto(payload.estado),
           activo: payload.activo,
         },
@@ -1025,6 +1054,7 @@ export class ProductosServiciosService {
           motorVersion: motor.version,
           familiaProductoId: payload.familiaProductoId,
           subfamiliaProductoId: payload.subfamiliaProductoId || null,
+          unidadComercial: payload.unidadComercial,
           estado: this.toEstadoProducto(payload.estado),
           activo: payload.activo,
         },
@@ -1060,7 +1090,9 @@ export class ProductosServiciosService {
   ) {
     const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
     const currentPrecio = this.getProductoPrecioConfig(producto.detalleJson);
-    const measurementUnit = payload.measurementUnit?.trim() || currentPrecio?.measurementUnit || null;
+    const measurementUnit = this.normalizeUnidadComercialProductoValue(
+      payload.measurementUnit ?? currentPrecio?.measurementUnit ?? null,
+    );
     const impuestos = await this.resolveProductoPrecioImpuestos(
       auth,
       payload.impuestos ?? currentPrecio?.impuestos ?? null,
@@ -1283,7 +1315,6 @@ export class ProductosServiciosService {
 
     return {
       productoId: producto.id,
-      tipoVenta: this.getGranFormatoTipoVenta(producto.detalleJson),
       tecnologiasCompatibles: this.normalizeGranFormatoTecnologias(
         this.getGranFormatoStringArray(detalle.tecnologiasCompatibles),
       ),
@@ -1320,7 +1351,6 @@ export class ProductosServiciosService {
 
     return {
       productoId: updated.id,
-      tipoVenta: this.getGranFormatoTipoVenta(updated.detalleJson),
       tecnologiasCompatibles: this.normalizeGranFormatoTecnologias(
         this.getGranFormatoStringArray(normalized.tecnologiasCompatibles),
       ),
@@ -1440,6 +1470,7 @@ export class ProductosServiciosService {
     if (!medidas.length) {
       throw new BadRequestException('Debes ingresar al menos una medida válida para calcular costos.');
     }
+    const cantidadTotal = medidas.reduce((acc, item) => acc + Number(item.cantidad || 0), 0);
 
     const periodo = payload.periodo?.trim() || this.getDefaultTarifaPeriodo();
     if (!DEFAULT_PERIOD_REGEX.test(periodo)) {
@@ -1533,6 +1564,10 @@ export class ProductosServiciosService {
 
     const imposicionGuardada = this.getGranFormatoImposicionConfig(detalleGranFormato);
     const perfilOverrideId = this.getGranFormatoNullableString(payload.perfilOverrideId);
+    const panelizadoPayload =
+      payload.panelizado && typeof payload.panelizado === 'object'
+        ? this.asObject(payload.panelizado)
+        : {};
     const perfilOverride =
       perfilOverrideId
         ? perfilesCompatibles.find((item) => item.id === perfilOverrideId) ?? null
@@ -1588,15 +1623,59 @@ export class ProductosServiciosService {
         null;
     }
 
-    const candidato = this.evaluateGranFormatoImposicionCandidates({
+    const effectiveImposicionConfig = {
+      ...imposicionGuardada,
+      criterioOptimizacion: GranFormatoImposicionCriterioOptimizacionDto.menor_costo_total,
+      panelizadoActivo:
+        'activo' in panelizadoPayload
+          ? panelizadoPayload.activo === true
+          : imposicionGuardada.panelizadoActivo,
+      panelizadoDireccion:
+        'direccion' in panelizadoPayload &&
+        (panelizadoPayload.direccion === GranFormatoPanelizadoDireccionDto.vertical ||
+          panelizadoPayload.direccion === GranFormatoPanelizadoDireccionDto.horizontal ||
+          panelizadoPayload.direccion === GranFormatoPanelizadoDireccionDto.automatica)
+          ? panelizadoPayload.direccion
+          : imposicionGuardada.panelizadoDireccion,
+      panelizadoSolapeMm:
+        'solapeMm' in panelizadoPayload
+          ? this.getGranFormatoNullableNumber(panelizadoPayload.solapeMm)
+          : imposicionGuardada.panelizadoSolapeMm,
+      panelizadoAnchoMaxPanelMm:
+        'anchoMaxPanelMm' in panelizadoPayload
+          ? this.getGranFormatoNullableNumber(panelizadoPayload.anchoMaxPanelMm)
+          : imposicionGuardada.panelizadoAnchoMaxPanelMm,
+      panelizadoDistribucion:
+        'distribucion' in panelizadoPayload &&
+        (panelizadoPayload.distribucion === GranFormatoPanelizadoDistribucionDto.libre ||
+          panelizadoPayload.distribucion === GranFormatoPanelizadoDistribucionDto.equilibrada)
+          ? panelizadoPayload.distribucion
+          : imposicionGuardada.panelizadoDistribucion,
+      panelizadoInterpretacionAnchoMaximo:
+        'interpretacionAnchoMaximo' in panelizadoPayload &&
+        (panelizadoPayload.interpretacionAnchoMaximo === GranFormatoPanelizadoInterpretacionAnchoMaximoDto.util ||
+          panelizadoPayload.interpretacionAnchoMaximo === GranFormatoPanelizadoInterpretacionAnchoMaximoDto.total)
+          ? panelizadoPayload.interpretacionAnchoMaximo
+          : imposicionGuardada.panelizadoInterpretacionAnchoMaximo,
+      panelizadoModo:
+        'modo' in panelizadoPayload && panelizadoPayload.modo === GranFormatoPanelizadoModoDto.manual
+          ? GranFormatoPanelizadoModoDto.manual
+          : 'modo' in panelizadoPayload && panelizadoPayload.modo === GranFormatoPanelizadoModoDto.automatico
+            ? GranFormatoPanelizadoModoDto.automatico
+            : imposicionGuardada.panelizadoModo,
+      panelizadoManualLayout:
+        'manualLayout' in panelizadoPayload
+          ? ((panelizadoPayload.manualLayout as unknown as Record<string, unknown> | null) ?? null)
+          : imposicionGuardada.panelizadoManualLayout,
+    };
+
+    const candidatos = this.evaluateGranFormatoImposicionCandidates({
       maquina: maquinaSeleccionada,
       medidas,
-      config: {
-        ...imposicionGuardada,
-      },
+      config: effectiveImposicionConfig,
       variants: materialVariantes,
-    })[0];
-    if (!candidato) {
+    });
+    if (!candidatos.length) {
       throw new BadRequestException(
         'No se pudo resolver la imposición con la configuración actual para calcular costos.',
       );
@@ -1750,31 +1829,41 @@ export class ProductosServiciosService {
           const nivel = this.getProcesoOperacionNiveles(plantilla.detalleJson).find(
             (row) => row.id === item.regla.variantePasoId,
           );
-          const perfilNivel =
-            (nivel?.perfilOperativoId
-              ? checklistNivelPerfilById.get(nivel.perfilOperativoId) ?? null
-              : null) ??
-            plantilla.perfilOperativo;
-          if (!perfilNivel) {
+          if (!nivel) {
             return {
               ...this.buildChecklistOperacionFromPlantilla(plantilla),
               orden: 10_000 + activeChecklistRules.indexOf(item),
             };
           }
+          const perfilNivel =
+            (nivel?.perfilOperativoId
+              ? checklistNivelPerfilById.get(nivel.perfilOperativoId) ?? null
+              : null) ??
+            plantilla.perfilOperativo;
           return {
-            ...this.buildChecklistOperacionFromPlantillaConPerfil(plantilla, perfilNivel),
-            orden: 10_000 + activeChecklistRules.indexOf(item),
+            operacion: {
+              ...this.buildChecklistOperacionFromPlantillaConNivel(plantilla, nivel, perfilNivel),
+              orden: 10_000 + activeChecklistRules.indexOf(item),
+            },
+            insertion: this.parseChecklistRouteInsertion(item.regla.detalleJson),
           };
         }
         return {
-          ...this.buildChecklistOperacionFromPlantilla(plantilla),
-          orden: 10_000 + activeChecklistRules.indexOf(item),
+          operacion: {
+            ...this.buildChecklistOperacionFromPlantilla(plantilla),
+            orden: 10_000 + activeChecklistRules.indexOf(item),
+          },
+          insertion: this.parseChecklistRouteInsertion(item.regla.detalleJson),
         };
       })
       .filter((item): item is any => Boolean(item));
 
-    const operacionesCotizadas = [...operacionesBase, ...checklistOps].sort(
-      (a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre),
+    const warnings: string[] = [];
+    const operacionesCotizadas = this.buildOperacionesCotizadasOrdenadas(
+      operacionesBase,
+      [],
+      checklistOps,
+      warnings,
     );
     const centroIds = Array.from(
       new Set(
@@ -1798,7 +1887,6 @@ export class ProductosServiciosService {
         })
       : [];
     const tarifaByCentro = new Map(tarifas.map((item) => [item.centroCostoId, item.tarifaCalculada]));
-    const warnings: string[] = [];
     const totalPiezas = medidas.reduce((acc, item) => acc + item.cantidad, 0);
     const perimetroTotalMl = Number(
       (
@@ -1808,256 +1896,366 @@ export class ProductosServiciosService {
         ) / 1000
       ).toFixed(6),
     );
-    const largoConsumidoMl = Number((candidato.consumedLengthMm / 1000).toFixed(6));
 
-    const centrosCosto: Array<{
-      orden: number;
-      codigo: string;
-      paso: string;
-      centroCostoId: string;
-      centroCostoNombre: string;
-      origen: string;
-      minutos: number;
-      tarifaHora: number;
-      costo: number;
-      detalleTecnico: Record<string, unknown> | null;
-    }> = operacionesCotizadas.map((op, index) => {
-      const setupMin = Number(op.setupMin ?? 0);
-      const cleanupMin = Number(op.cleanupMin ?? 0);
-      const tiempoFijoMin = Number(op.tiempoFijoMin ?? 0);
-      const cantidadObjetivoSalida = this.resolveGranFormatoCantidadObjetivoSalida({
-        operacion: op,
-        totalPiezas,
-        areaUtilM2: candidato.usefulAreaM2,
-        largoConsumidoMl,
-        perimetroTotalMl,
-      });
-      const productividad = evaluateProductividad({
-        modoProductividad: op.modoProductividad ?? ModoProductividadProceso.FIJA,
-        productividadBase: op.productividadBase,
-        reglaVelocidadJson: op.reglaVelocidadJson ?? null,
-        reglaMermaJson: op.reglaMermaJson ?? null,
-        runMin: op.runMin,
-        unidadTiempo: op.unidadTiempo,
-        mermaRunPct: op.mermaRunPct,
-        mermaSetup: op.mermaSetup,
-        cantidadObjetivoSalida,
-        contexto: {
-          cantidad: totalPiezas,
-          areaTotalM2: candidato.usefulAreaM2,
-          largoTotalMl: largoConsumidoMl,
-          perimetroTotalMl,
-        },
-      });
-      warnings.push(
-        ...productividad.warnings.map((warning) => `Paso ${op.nombre}: ${warning}`),
-      );
-      const minutos = Number((setupMin + cleanupMin + tiempoFijoMin + productividad.runMin).toFixed(4));
-      const tarifa = op.centroCostoId ? tarifaByCentro.get(op.centroCostoId) ?? null : null;
-      if (op.centroCostoId && !tarifa) {
-        warnings.push(`No hay tarifa PUBLICADA para ${op.centroCosto?.nombre ?? op.nombre} en ${periodo}.`);
-      }
-      const costo = tarifa ? Number(tarifa.mul(minutos / 60).toFixed(6)) : 0;
-      return {
-        orden: index + 1,
-        codigo: op.codigo,
-        paso: op.nombre,
-        centroCostoId: op.centroCostoId,
-        centroCostoNombre: op.centroCosto?.nombre ?? '',
-        origen: Number(op.orden) >= 10_000 ? 'Configurador' : 'Producto base',
-        minutos,
-        tarifaHora: tarifa ? Number(tarifa) : 0,
-        costo,
-        detalleTecnico: {
-          maquina: op.maquina?.nombre ?? null,
-          perfilOperativo: op.perfilOperativo?.nombre ?? null,
-          cantidadObjetivoSalida,
-        },
-      };
-    });
-
-    const materiasPrimas: Array<Record<string, unknown>> = [];
-    const substrateTotalCost = this.calculateGranFormatoSustratoCost({
-      variant: candidato.variant,
-      consumedAreaM2: candidato.consumedAreaM2,
-      consumedLengthMl: largoConsumidoMl,
-      warnings,
-    });
-    const usefulFactor =
-      candidato.consumedAreaM2 > 0 ? candidato.usefulAreaM2 / candidato.consumedAreaM2 : 0;
-    const usefulCost = Number((substrateTotalCost * usefulFactor).toFixed(6));
-    const wasteCost = Number((substrateTotalCost - usefulCost).toFixed(6));
-    materiasPrimas.push({
-      tipo: 'SUSTRATO',
-      nombre: candidato.variant.materiaPrima.nombre,
-      sku: candidato.variant.sku,
-      variantChips: this.buildMateriaPrimaVariantDisplayChips(candidato.variant),
-      cantidad: Number(candidato.usefulAreaM2.toFixed(6)),
-      costoUnitario:
-        candidato.usefulAreaM2 > 0 ? Number((usefulCost / candidato.usefulAreaM2).toFixed(6)) : 0,
-      costo: usefulCost,
-      origen: 'Base',
-      unidad: 'm2',
-      detalle: {
-        scope: 'util',
-        nestingPreview: true,
-      },
-    });
-    materiasPrimas.push({
-      tipo: 'SUSTRATO',
-      nombre: `${candidato.variant.materiaPrima.nombre} · Desperdicio`,
-      sku: candidato.variant.sku,
-      variantChips: this.buildMateriaPrimaVariantDisplayChips(candidato.variant),
-      cantidad: Number(candidato.wasteAreaM2.toFixed(6)),
-      costoUnitario:
-        candidato.wasteAreaM2 > 0 ? Number((wasteCost / candidato.wasteAreaM2).toFixed(6)) : 0,
-      costo: wasteCost,
-      origen: 'Desperdicio',
-      unidad: 'm2',
-      detalle: {
-        scope: 'desperdicio',
-        nestingPreview: true,
-      },
-    });
-
-    const inkPreview = await this.calculateGranFormatoInkConsumables({
-      auth,
-      maquinaId: maquinaSeleccionada.id,
-      perfilId: perfilSeleccionado?.id ?? null,
-      areaUtilM2: candidato.usefulAreaM2,
-      warnings,
-    });
-    materiasPrimas.push(...inkPreview.materiales);
-
-    for (const item of activeChecklistRules) {
-      if (item.regla.accion === 'material_extra' && item.regla.materiaPrimaVarianteId) {
-        const material = await this.prisma.materiaPrimaVariante.findFirst({
-          where: {
-            tenantId: auth.tenantId,
-            id: item.regla.materiaPrimaVarianteId,
-          },
-          include: { materiaPrima: true },
+    const costedCandidates = await Promise.all(
+      candidatos.map(async (candidate) => {
+        const candidateWarnings: string[] = [];
+        const largoConsumidoMl = Number((candidate.consumedLengthMm / 1000).toFixed(6));
+        const centrosCosto: Array<{
+          orden: number;
+          codigo: string;
+          paso: string;
+          centroCostoId: string;
+          centroCostoNombre: string;
+          origen: string;
+          minutos: number;
+          tarifaHora: number;
+          costo: number;
+          detalleTecnico: Record<string, unknown> | null;
+        }> = operacionesCotizadas.map((op, index) => {
+          const setupMin = Number(op.setupMin ?? 0);
+          const cleanupMin = Number(op.cleanupMin ?? 0);
+          const tiempoFijoMin = Number(op.tiempoFijoMin ?? 0);
+          const cantidadObjetivoSalida = this.resolveGranFormatoCantidadObjetivoSalida({
+            operacion: op,
+            totalPiezas,
+            areaUtilM2: candidate.usefulAreaM2,
+            largoConsumidoMl,
+            perimetroTotalMl,
+          });
+          const usaSoloTiempoFijo =
+            (op.modoProductividad ?? ModoProductividadProceso.FIJA) === ModoProductividadProceso.FIJA &&
+            Number(op.tiempoFijoMin ?? 0) > 0 &&
+            Number(op.productividadBase ?? 0) <= 0 &&
+            Number(op.runMin ?? 0) <= 0;
+          const productividad = usaSoloTiempoFijo
+            ? {
+                runMin: 0,
+                cantidadRun: cantidadObjetivoSalida,
+                productividadAplicada: null,
+                mermaRunPctAplicada: 0,
+                mermaSetupAplicada: 0,
+                warnings: [],
+              }
+            : evaluateProductividad({
+                modoProductividad: op.modoProductividad ?? ModoProductividadProceso.FIJA,
+                productividadBase: op.productividadBase,
+                reglaVelocidadJson: op.reglaVelocidadJson ?? null,
+                reglaMermaJson: op.reglaMermaJson ?? null,
+                runMin: op.runMin,
+                unidadTiempo: op.unidadTiempo,
+                mermaRunPct: op.mermaRunPct,
+                mermaSetup: op.mermaSetup,
+                cantidadObjetivoSalida,
+                contexto: {
+                  cantidad: totalPiezas,
+                  areaTotalM2: candidate.usefulAreaM2,
+                  largoTotalMl: largoConsumidoMl,
+                  perimetroTotalMl,
+                },
+              });
+          candidateWarnings.push(
+            ...productividad.warnings.map((warning) => `Paso ${op.nombre}: ${warning}`),
+          );
+          const minutos = Number((setupMin + cleanupMin + tiempoFijoMin + productividad.runMin).toFixed(4));
+          const tarifa = op.centroCostoId ? tarifaByCentro.get(op.centroCostoId) ?? null : null;
+          if (op.centroCostoId && !tarifa) {
+            candidateWarnings.push(
+              `No hay tarifa PUBLICADA para ${op.centroCosto?.nombre ?? op.nombre} en ${periodo}.`,
+            );
+          }
+          const costo = tarifa ? Number(tarifa.mul(minutos / 60).toFixed(6)) : 0;
+          return {
+            orden: index + 1,
+            codigo: op.codigo,
+            paso: op.nombre,
+            centroCostoId: op.centroCostoId,
+            centroCostoNombre: op.centroCosto?.nombre ?? '',
+            origen: Number(op.orden) >= 10_000 ? 'Configurador' : 'Producto base',
+            minutos,
+            tarifaHora: tarifa ? Number(tarifa) : 0,
+            costo,
+            detalleTecnico: {
+              maquina: op.maquina?.nombre ?? null,
+              perfilOperativo: op.perfilOperativo?.nombre ?? null,
+              cantidadObjetivoSalida,
+            },
+          };
         });
-        if (!material) {
-          warnings.push('Configurador: material adicional no encontrado.');
-          continue;
-        }
-        const factorConsumo = Number(item.regla.factorConsumo ?? 0);
-        if (factorConsumo <= 0) {
-          continue;
-        }
-        let cantidadBase = totalPiezas;
-        if (item.regla.tipoConsumo === 'por_m2') {
-          cantidadBase = candidato.usefulAreaM2;
-        } else if (item.regla.tipoConsumo === 'por_pliego') {
-          cantidadBase = 1;
-          warnings.push('Configurador: tipo de consumo POR_PLIEGO se interpretó como 1 trabajo en gran formato.');
-        }
-        const cantidad = Number(
-          (cantidadBase * factorConsumo * (1 + Number(item.regla.mermaPct ?? 0) / 100)).toFixed(6),
-        );
-        const costoUnitario = this.resolveMateriaPrimaVariantUnitCost({
-          materiaPrimaVariante: material,
-          warnings,
-          contextLabel: 'Configurador',
+
+        const materiasPrimas: Array<Record<string, unknown>> = [];
+        const substrateTotalCost = this.calculateGranFormatoSustratoCost({
+          variant: candidate.variant,
+          consumedAreaM2: candidate.consumedAreaM2,
+          consumedLengthMl: largoConsumidoMl,
+          warnings: candidateWarnings,
+        });
+        const usefulFactor =
+          candidate.consumedAreaM2 > 0 ? candidate.usefulAreaM2 / candidate.consumedAreaM2 : 0;
+        const usefulCost = Number((substrateTotalCost * usefulFactor).toFixed(6));
+        const wasteCost = Number((substrateTotalCost - usefulCost).toFixed(6));
+        materiasPrimas.push({
+          tipo: 'SUSTRATO',
+          nombre: candidate.variant.materiaPrima.nombre,
+          sku: candidate.variant.sku,
+          variantChips: this.buildMateriaPrimaVariantDisplayChips(candidate.variant),
+          cantidad: Number(candidate.usefulAreaM2.toFixed(6)),
+          costoUnitario:
+            candidate.usefulAreaM2 > 0 ? Number((usefulCost / candidate.usefulAreaM2).toFixed(6)) : 0,
+          costo: usefulCost,
+          origen: 'Base',
+          unidad: 'm2',
+          detalle: {
+            scope: 'util',
+            nestingPreview: true,
+          },
         });
         materiasPrimas.push({
-          tipo: 'CHECKLIST_MATERIAL',
-          nombre: material.materiaPrima.nombre,
-          sku: material.sku,
-          variantChips: this.buildMateriaPrimaVariantDisplayChips(material),
-          cantidad,
-          costoUnitario,
-          costo: Number((cantidad * costoUnitario).toFixed(6)),
-          origen: 'Configurador',
-        });
-      }
-      if (item.regla.accion === 'costo_extra' && item.regla.costoRegla) {
-        const costoValor = Number(item.regla.costoValor ?? 0);
-        if (item.regla.costoRegla === 'tiempo_min') {
-          const centroId = item.regla.costoCentroCostoId;
-          const tarifa = centroId ? tarifaByCentro.get(centroId) ?? null : null;
-          if (!tarifa) {
-            warnings.push('Configurador: costo extra sin tarifa publicada para centro de costo.');
-            continue;
-          }
-          centrosCosto.push({
-            orden: centrosCosto.length + 1,
-            codigo: `CFG-${String(item.regla.id).slice(0, 6).toUpperCase()}`,
-            paso: 'Costo extra',
-            centroCostoId: centroId ?? '',
-            centroCostoNombre: '',
-            origen: 'Configurador',
-            minutos: costoValor,
-            tarifaHora: Number(tarifa),
-            costo: Number(tarifa.mul(costoValor / 60).toFixed(6)),
-            detalleTecnico: { reglaId: item.regla.id },
-          });
-          continue;
-        }
-        const multiplicador =
-          item.regla.costoRegla === 'por_unidad'
-            ? totalPiezas
-            : item.regla.costoRegla === 'por_pliego'
-              ? 1
-              : 1;
-        centrosCosto.push({
-          orden: centrosCosto.length + 1,
-          codigo: `CFG-${String(item.regla.id).slice(0, 6).toUpperCase()}`,
-          paso: 'Costo extra',
-          centroCostoId: item.regla.costoCentroCostoId ?? '',
-          centroCostoNombre: '',
-          origen: 'Configurador',
-          minutos: 0,
-          tarifaHora: 0,
-          costo: Number((costoValor * multiplicador).toFixed(6)),
-          detalleTecnico: {
-            reglaId: item.regla.id,
-            costoRegla: item.regla.costoRegla,
+          tipo: 'SUSTRATO',
+          nombre: `${candidate.variant.materiaPrima.nombre} · Desperdicio`,
+          sku: candidate.variant.sku,
+          variantChips: this.buildMateriaPrimaVariantDisplayChips(candidate.variant),
+          cantidad: Number(candidate.wasteAreaM2.toFixed(6)),
+          costoUnitario:
+            candidate.wasteAreaM2 > 0 ? Number((wasteCost / candidate.wasteAreaM2).toFixed(6)) : 0,
+          costo: wasteCost,
+          origen: 'Desperdicio',
+          unidad: 'm2',
+          detalle: {
+            scope: 'desperdicio',
+            nestingPreview: true,
           },
         });
-      }
-    }
 
-    const totalMateriales = Number(
-      materiasPrimas.reduce((acc, item) => acc + Number(item.costo ?? 0), 0).toFixed(6),
+        const inkPreview = await this.calculateGranFormatoInkConsumables({
+          auth,
+          maquinaId: maquinaSeleccionada.id,
+          perfilId: perfilSeleccionado?.id ?? null,
+          areaUtilM2: candidate.usefulAreaM2,
+          warnings: candidateWarnings,
+        });
+        materiasPrimas.push(...inkPreview.materiales);
+
+        for (const item of activeChecklistRules) {
+          if (item.regla.accion === 'material_extra' && item.regla.materiaPrimaVarianteId) {
+            const material = await this.prisma.materiaPrimaVariante.findFirst({
+              where: {
+                tenantId: auth.tenantId,
+                id: item.regla.materiaPrimaVarianteId,
+              },
+              include: { materiaPrima: true },
+            });
+            if (!material) {
+              candidateWarnings.push('Configurador: material adicional no encontrado.');
+              continue;
+            }
+            const factorConsumo = Number(item.regla.factorConsumo ?? 0);
+            if (factorConsumo <= 0) {
+              continue;
+            }
+            let cantidadBase = totalPiezas;
+            if (item.regla.tipoConsumo === 'por_m2') {
+              cantidadBase = candidate.usefulAreaM2;
+            } else if (item.regla.tipoConsumo === 'por_pliego') {
+              cantidadBase = 1;
+              candidateWarnings.push(
+                'Configurador: tipo de consumo POR_PLIEGO se interpretó como 1 trabajo en gran formato.',
+              );
+            }
+            const cantidad = Number(
+              (cantidadBase * factorConsumo * (1 + Number(item.regla.mermaPct ?? 0) / 100)).toFixed(6),
+            );
+            const costoUnitario = this.resolveMateriaPrimaVariantUnitCost({
+              materiaPrimaVariante: material,
+              warnings: candidateWarnings,
+              contextLabel: 'Configurador',
+            });
+            materiasPrimas.push({
+              tipo: 'CHECKLIST_MATERIAL',
+              nombre: material.materiaPrima.nombre,
+              sku: material.sku,
+              variantChips: this.buildMateriaPrimaVariantDisplayChips(material),
+              cantidad,
+              costoUnitario,
+              costo: Number((cantidad * costoUnitario).toFixed(6)),
+              origen: 'Configurador',
+            });
+          }
+          if (item.regla.accion === 'costo_extra' && item.regla.costoRegla) {
+            const costoValor = Number(item.regla.costoValor ?? 0);
+            if (item.regla.costoRegla === 'tiempo_min') {
+              const centroId = item.regla.costoCentroCostoId;
+              const tarifa = centroId ? tarifaByCentro.get(centroId) ?? null : null;
+              if (!tarifa) {
+                candidateWarnings.push('Configurador: costo extra sin tarifa publicada para centro de costo.');
+                continue;
+              }
+              centrosCosto.push({
+                orden: centrosCosto.length + 1,
+                codigo: `CFG-${String(item.regla.id).slice(0, 6).toUpperCase()}`,
+                paso: 'Costo extra',
+                centroCostoId: centroId ?? '',
+                centroCostoNombre: '',
+                origen: 'Configurador',
+                minutos: costoValor,
+                tarifaHora: Number(tarifa),
+                costo: Number(tarifa.mul(costoValor / 60).toFixed(6)),
+                detalleTecnico: { reglaId: item.regla.id },
+              });
+              continue;
+            }
+            const multiplicador =
+              item.regla.costoRegla === 'por_unidad'
+                ? totalPiezas
+                : item.regla.costoRegla === 'por_pliego'
+                  ? 1
+                  : 1;
+            centrosCosto.push({
+              orden: centrosCosto.length + 1,
+              codigo: `CFG-${String(item.regla.id).slice(0, 6).toUpperCase()}`,
+              paso: 'Costo extra',
+              centroCostoId: item.regla.costoCentroCostoId ?? '',
+              centroCostoNombre: '',
+              origen: 'Configurador',
+              minutos: 0,
+              tarifaHora: 0,
+              costo: Number((costoValor * multiplicador).toFixed(6)),
+              detalleTecnico: {
+                reglaId: item.regla.id,
+                costoRegla: item.regla.costoRegla,
+              },
+            });
+          }
+        }
+
+        const totalMateriales = Number(
+          materiasPrimas.reduce((acc, item) => acc + Number(item.costo ?? 0), 0).toFixed(6),
+        );
+        const totalCentrosCosto = Number(
+          centrosCosto.reduce((acc, item) => acc + Number(item.costo ?? 0), 0).toFixed(6),
+        );
+        const totalTecnico = Number((totalMateriales + totalCentrosCosto).toFixed(6));
+
+        const candidateWithCosts: GranFormatoCostosPreviewCandidate = {
+          ...candidate,
+          substrateCost: substrateTotalCost,
+          inkCost: Number(inkPreview.costo.toFixed(6)),
+          timeCost: totalCentrosCosto,
+          totalCost: totalTecnico,
+        };
+
+        return {
+          candidate: candidateWithCosts,
+          response: {
+            productoId: producto.id,
+            cantidadTotal,
+            periodo,
+            tecnologia,
+            maquinaId: maquinaSeleccionada.id,
+            maquinaNombre: maquinaSeleccionada.nombre,
+            perfilId: perfilSeleccionado?.id ?? null,
+            perfilNombre: perfilSeleccionado?.nombre ?? '',
+            warnings: Array.from(new Set(candidateWarnings)),
+            resumenTecnico: {
+              varianteId: candidate.variant.id,
+              varianteNombre: candidate.variant.sku,
+              varianteChips: this.buildGranFormatoVariantChips(candidate.variant),
+              anchoRolloMm: candidate.rollWidthMm,
+              anchoImprimibleMm: candidate.printableWidthMm,
+              orientacion: candidate.orientacion,
+              panelizado: candidate.panelizado,
+              panelAxis: candidate.panelAxis,
+              panelCount: candidate.panelCount,
+              panelOverlapMm: candidate.panelOverlapMm,
+              panelMaxWidthMm: candidate.panelMaxWidthMm,
+              panelDistribution: candidate.panelDistribution,
+              panelWidthInterpretation: candidate.panelWidthInterpretation,
+              panelMode: candidate.panelMode,
+              piezasPorFila: candidate.piecesPerRow,
+              filas: candidate.rows,
+              largoConsumidoMm: candidate.consumedLengthMm,
+              areaUtilM2: Number(candidate.usefulAreaM2.toFixed(6)),
+              areaConsumidaM2: Number(candidate.consumedAreaM2.toFixed(6)),
+              areaDesperdicioM2: Number(candidate.wasteAreaM2.toFixed(6)),
+              desperdicioPct: Number(candidate.wastePct.toFixed(4)),
+              costoSustrato: Number(substrateTotalCost.toFixed(6)),
+              costoTinta: Number(inkPreview.costo.toFixed(6)),
+              costoTiempo: totalCentrosCosto,
+              costoTotal: totalTecnico,
+            },
+            materiasPrimas,
+            centrosCosto,
+            totales: {
+              materiales: totalMateriales,
+              centrosCosto: totalCentrosCosto,
+              tecnico: totalTecnico,
+            },
+            nestingPreview: this.buildGranFormatoNestingPreview(candidateWithCosts),
+          } satisfies {
+            productoId: string;
+            cantidadTotal: number;
+            periodo: string;
+            tecnologia: string;
+            maquinaId: string | null;
+            maquinaNombre: string;
+            perfilId: string | null;
+            perfilNombre: string;
+            warnings: string[];
+            resumenTecnico: Record<string, unknown>;
+            materiasPrimas: Array<Record<string, unknown>>;
+            centrosCosto: Array<Record<string, unknown>>;
+            totales: Record<string, number>;
+            nestingPreview: Record<string, unknown> | null;
+          },
+        };
+      }),
     );
-    const totalCentrosCosto = Number(
-      centrosCosto.reduce((acc, item) => acc + Number(item.costo ?? 0), 0).toFixed(6),
-    );
+
+    const winner = [...costedCandidates].sort(
+      (a, b) =>
+        a.candidate.totalCost - b.candidate.totalCost ||
+        a.candidate.wasteAreaM2 - b.candidate.wasteAreaM2 ||
+        a.candidate.consumedLengthMm - b.candidate.consumedLengthMm,
+    )[0];
+
+    const snapshot = await this.prisma.cotizacionProductoSnapshot.create({
+      data: {
+        tenantId: auth.tenantId,
+        productoServicioId: producto.id,
+        productoVarianteId: null,
+        motorCodigo: producto.motorCodigo,
+        motorVersion: producto.motorVersion,
+        configVersionBase: null,
+        configVersionOverride: null,
+        cantidad: cantidadTotal,
+        periodoTarifa: periodo,
+        inputJson: ({
+          cantidadTotal,
+          periodo,
+          tecnologia,
+          perfilOverrideId: payload.perfilOverrideId ?? null,
+          panelizado: {
+            activo: effectiveImposicionConfig.panelizadoActivo,
+            modo: effectiveImposicionConfig.panelizadoModo,
+            direccion: effectiveImposicionConfig.panelizadoDireccion,
+            solapeMm: effectiveImposicionConfig.panelizadoSolapeMm,
+            anchoMaxPanelMm: effectiveImposicionConfig.panelizadoAnchoMaxPanelMm,
+            distribucion: effectiveImposicionConfig.panelizadoDistribucion,
+            interpretacionAnchoMaximo: effectiveImposicionConfig.panelizadoInterpretacionAnchoMaximo,
+            manualLayout: effectiveImposicionConfig.panelizadoManualLayout,
+          },
+          medidas,
+          checklistRespuestas: payload.checklistRespuestas ?? [],
+        } as unknown) as Prisma.InputJsonValue,
+        resultadoJson: (winner.response as unknown) as Prisma.InputJsonValue,
+        total: new Prisma.Decimal(winner.response.totales.tecnico),
+      },
+    });
 
     return {
-      productoId: producto.id,
-      periodo,
-      tecnologia,
-      maquinaId: maquinaSeleccionada.id,
-      maquinaNombre: maquinaSeleccionada.nombre,
-      perfilId: perfilSeleccionado?.id ?? null,
-      perfilNombre: perfilSeleccionado?.nombre ?? '',
-      warnings: Array.from(new Set(warnings)),
-      resumenTecnico: {
-        varianteId: candidato.variant.id,
-        varianteNombre: candidato.variant.sku,
-        varianteChips: this.buildGranFormatoVariantChips(candidato.variant),
-        anchoRolloMm: candidato.rollWidthMm,
-        anchoImprimibleMm: candidato.printableWidthMm,
-        orientacion: candidato.rotated ? 'rotada' : 'normal',
-        piezasPorFila: candidato.piecesPerRow,
-        filas: candidato.rows,
-        largoConsumidoMm: candidato.consumedLengthMm,
-        areaUtilM2: Number(candidato.usefulAreaM2.toFixed(6)),
-        areaConsumidaM2: Number(candidato.consumedAreaM2.toFixed(6)),
-        areaDesperdicioM2: Number(candidato.wasteAreaM2.toFixed(6)),
-        desperdicioPct: Number(candidato.wastePct.toFixed(4)),
-      },
-      materiasPrimas,
-      centrosCosto,
-      totales: {
-        materiales: totalMateriales,
-        centrosCosto: totalCentrosCosto,
-        tecnico: Number((totalMateriales + totalCentrosCosto).toFixed(6)),
-      },
-      nestingPreview: this.buildGranFormatoNestingPreview(candidato),
+      ...winner.response,
+      snapshotId: snapshot.id,
+      createdAt: snapshot.createdAt.toISOString(),
     };
   }
 
@@ -4710,6 +4908,7 @@ export class ProductosServiciosService {
     const snapshot = await this.prisma.cotizacionProductoSnapshot.create({
       data: {
         tenantId: auth.tenantId,
+        productoServicioId: variante.productoServicioId,
         productoVarianteId: variante.id,
         motorCodigo: motor.code,
         motorVersion: motor.version,
@@ -4823,18 +5022,22 @@ export class ProductosServiciosService {
       orderBy: [{ createdAt: 'desc' }],
     });
 
-    return rows.map((item) => ({
-      id: item.id,
-      cantidad: item.cantidad,
-      periodoTarifa: item.periodoTarifa,
-      motorCodigo: item.motorCodigo,
-      motorVersion: item.motorVersion,
-      configVersionBase: item.configVersionBase,
-      configVersionOverride: item.configVersionOverride,
-      total: Number(item.total),
-      unitario: Number(item.total.div(item.cantidad)),
-      createdAt: item.createdAt.toISOString(),
-    }));
+    return rows.map((item) => this.mapCotizacionSnapshotResumen(item));
+  }
+
+  async getProductoCotizaciones(auth: CurrentAuth, productoId: string) {
+    const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+    this.ensureWideFormatProducto(producto);
+
+    const rows = await this.prisma.cotizacionProductoSnapshot.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        productoServicioId: productoId,
+      },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+
+    return rows.map((item) => this.mapCotizacionSnapshotResumen(item));
   }
 
   async getCotizacionById(auth: CurrentAuth, snapshotId: string) {
@@ -4859,6 +5062,31 @@ export class ProductosServiciosService {
       configVersionOverride: item.configVersionOverride,
       total: Number(item.total),
       resultado: item.resultadoJson,
+      createdAt: item.createdAt.toISOString(),
+    };
+  }
+
+  private mapCotizacionSnapshotResumen(item: {
+    id: string;
+    cantidad: number;
+    periodoTarifa: string;
+    motorCodigo: string;
+    motorVersion: number;
+    configVersionBase: number | null;
+    configVersionOverride: number | null;
+    total: Prisma.Decimal;
+    createdAt: Date;
+  }) {
+    return {
+      id: item.id,
+      cantidad: item.cantidad,
+      periodoTarifa: item.periodoTarifa,
+      motorCodigo: item.motorCodigo,
+      motorVersion: item.motorVersion,
+      configVersionBase: item.configVersionBase,
+      configVersionOverride: item.configVersionOverride,
+      total: Number(item.total),
+      unitario: item.cantidad > 0 ? Number(item.total.div(item.cantidad)) : Number(item.total),
       createdAt: item.createdAt.toISOString(),
     };
   }
@@ -6813,6 +7041,7 @@ export class ProductosServiciosService {
     familiaProducto: { nombre: string };
     subfamiliaProductoId: string | null;
     subfamiliaProducto?: { nombre: string; unidadComercial?: string | null } | null;
+    unidadComercial?: string | null;
     procesoDefinicionDefault?: { nombre: string } | null;
     createdAt: Date;
     updatedAt: Date;
@@ -6834,7 +7063,7 @@ export class ProductosServiciosService {
       familiaProductoNombre: item.familiaProducto.nombre,
       subfamiliaProductoId: item.subfamiliaProductoId,
       subfamiliaProductoNombre: item.subfamiliaProducto?.nombre ?? '',
-      unidadComercial: item.subfamiliaProducto?.unidadComercial?.trim() || 'unidad',
+      unidadComercial: this.normalizeUnidadComercialProductoValue(item.unidadComercial) || 'unidad',
       precio: this.getProductoPrecioConfig(item.detalleJson),
       precioEspecialClientes: this.getProductoPrecioEspecialClientes(item.detalleJson),
       dimensionesBaseConsumidas: this.getProductoDimensionesBaseConsumidas(item.detalleJson).map((dimension) =>
@@ -6879,15 +7108,6 @@ export class ProductosServiciosService {
     const detalle = this.asObject(detalleJson);
     const raw = detalle.granFormatoRutaBase;
     return this.asObject(raw);
-  }
-
-  private getGranFormatoTipoVenta(
-    detalleJson: Prisma.JsonValue | Record<string, unknown> | null | undefined,
-  ): TipoVentaGranFormatoDto {
-    const detalle = this.getGranFormatoDetalle(detalleJson);
-    return detalle.tipoVenta === TipoVentaGranFormatoDto.metro_lineal
-      ? TipoVentaGranFormatoDto.metro_lineal
-      : TipoVentaGranFormatoDto.m2;
   }
 
   private getGranFormatoStringArray(value: unknown) {
@@ -6989,10 +7209,36 @@ export class ProductosServiciosService {
       ),
       margenInicioMmOverride: this.getGranFormatoNullableNumber(imposicion.margenInicioMmOverride),
       margenFinalMmOverride: this.getGranFormatoNullableNumber(imposicion.margenFinalMmOverride),
+      panelizadoActivo: imposicion.panelizadoActivo === true,
+      panelizadoDireccion:
+        imposicion.panelizadoDireccion === GranFormatoPanelizadoDireccionDto.vertical ||
+        imposicion.panelizadoDireccion === GranFormatoPanelizadoDireccionDto.horizontal
+          ? imposicion.panelizadoDireccion
+          : GranFormatoPanelizadoDireccionDto.automatica,
+      panelizadoSolapeMm: this.getGranFormatoNullableNumber(imposicion.panelizadoSolapeMm),
+      panelizadoAnchoMaxPanelMm: this.getGranFormatoNullableNumber(imposicion.panelizadoAnchoMaxPanelMm),
+      panelizadoDistribucion:
+        imposicion.panelizadoDistribucion === GranFormatoPanelizadoDistribucionDto.libre
+          ? GranFormatoPanelizadoDistribucionDto.libre
+          : GranFormatoPanelizadoDistribucionDto.equilibrada,
+      panelizadoInterpretacionAnchoMaximo:
+        imposicion.panelizadoInterpretacionAnchoMaximo === GranFormatoPanelizadoInterpretacionAnchoMaximoDto.util
+          ? GranFormatoPanelizadoInterpretacionAnchoMaximoDto.util
+          : GranFormatoPanelizadoInterpretacionAnchoMaximoDto.total,
+      panelizadoModo:
+        imposicion.panelizadoModo === GranFormatoPanelizadoModoDto.manual
+          ? GranFormatoPanelizadoModoDto.manual
+          : GranFormatoPanelizadoModoDto.automatico,
+      panelizadoManualLayout:
+        imposicion.panelizadoManualLayout && typeof imposicion.panelizadoManualLayout === 'object'
+          ? (imposicion.panelizadoManualLayout as Record<string, unknown>)
+          : null,
       criterioOptimizacion:
-        criterio === GranFormatoImposicionCriterioOptimizacionDto.menor_largo_consumido
+        criterio === GranFormatoImposicionCriterioOptimizacionDto.menor_costo_total
+          ? GranFormatoImposicionCriterioOptimizacionDto.menor_costo_total
+          : criterio === GranFormatoImposicionCriterioOptimizacionDto.menor_largo_consumido
           ? GranFormatoImposicionCriterioOptimizacionDto.menor_largo_consumido
-          : GranFormatoImposicionCriterioOptimizacionDto.menor_desperdicio,
+          : GranFormatoImposicionCriterioOptimizacionDto.menor_costo_total,
     };
   }
 
@@ -7284,10 +7530,11 @@ export class ProductosServiciosService {
     if (!metodoCalculo) {
       return null;
     }
-    const measurementUnit =
+    const measurementUnit = this.normalizeUnidadComercialProductoValue(
       typeof raw.measurementUnit === 'string' && raw.measurementUnit.trim().length
         ? raw.measurementUnit.trim()
-        : null;
+        : null,
+    );
     const impuestos = this.normalizeProductoPrecioImpuestos(
       raw.impuestos && typeof raw.impuestos === 'object' && !Array.isArray(raw.impuestos)
         ? (raw.impuestos as Record<string, unknown>)
@@ -7425,10 +7672,11 @@ export class ProductosServiciosService {
     if (!metodoCalculo) {
       return null;
     }
-    const measurementUnit =
+    const measurementUnit = this.normalizeUnidadComercialProductoValue(
       typeof raw.measurementUnit === 'string' && raw.measurementUnit.trim().length
         ? raw.measurementUnit.trim()
-        : null;
+        : null,
+    );
     const detalle = this.normalizeProductoPrecioDetalle(
       metodoCalculo,
       raw.detalle && typeof raw.detalle === 'object' && !Array.isArray(raw.detalle)
@@ -7505,10 +7753,11 @@ export class ProductosServiciosService {
       if (!metodoCalculo) {
         throw new BadRequestException(`La regla especial de "${cliente.nombre}" tiene un método inválido.`);
       }
-      const measurementUnit =
+      const measurementUnit = this.normalizeUnidadComercialProductoValue(
         typeof raw.measurementUnit === 'string' && raw.measurementUnit.trim().length
           ? raw.measurementUnit.trim()
-          : null;
+          : null,
+      );
       const detalle = this.normalizeProductoPrecioDetalle(
         metodoCalculo,
         raw.detalle && typeof raw.detalle === 'object' && !Array.isArray(raw.detalle)
@@ -7600,6 +7849,25 @@ export class ProductosServiciosService {
       value === MetodoCalculoPrecioProductoDto.precio_fijo_para_margen_minimo
       ? value
       : null;
+  }
+
+  private normalizeUnidadComercialProductoValue(value: unknown): string | null {
+    if (typeof value !== 'string') return null;
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return null;
+    if (normalized === 'unidad' || normalized === 'unidades') return 'unidad';
+    if (normalized === 'm2' || normalized === 'm²' || normalized === 'metro cuadrado' || normalized === 'metros cuadrados') {
+      return 'm2';
+    }
+    if (
+      normalized === 'metro_lineal' ||
+      normalized === 'ml' ||
+      normalized === 'metro lineal' ||
+      normalized === 'metros lineales'
+    ) {
+      return 'metro_lineal';
+    }
+    return value.trim();
   }
 
   private normalizeProductoPrecioDetalle(
@@ -9344,6 +9612,78 @@ export class ProductosServiciosService {
     };
   }
 
+  private buildChecklistOperacionFromPlantillaConNivel(
+    template: any,
+    nivel: {
+      id: string;
+      nombre: string;
+      modoProductividadNivel: string;
+      tiempoFijoMin: number | null;
+      productividadBase: number | null;
+      unidadSalida: string | null;
+      unidadTiempo: string | null;
+      maquinaId: string | null;
+      maquinaNombre: string;
+      perfilOperativoId: string | null;
+      perfilOperativoNombre: string;
+      setupMin: number | null;
+      cleanupMin: number | null;
+      resumen: string;
+    },
+    perfilOperativo: any | null,
+  ) {
+    const detalleBase = this.asObject(template.detalleJson);
+    const baseOperacion =
+      perfilOperativo && nivel.modoProductividadNivel === 'variable_perfil'
+        ? this.buildChecklistOperacionFromPlantillaConPerfil(template, perfilOperativo)
+        : this.buildChecklistOperacionFromPlantilla(template);
+
+    return {
+      ...baseOperacion,
+      nombre: template.nombre,
+      maquinaId: nivel.maquinaId ?? baseOperacion.maquinaId,
+      perfilOperativoId:
+        nivel.modoProductividadNivel === 'variable_perfil'
+          ? perfilOperativo?.id ?? nivel.perfilOperativoId ?? baseOperacion.perfilOperativoId
+          : nivel.perfilOperativoId ?? baseOperacion.perfilOperativoId,
+      perfilOperativo:
+        nivel.modoProductividadNivel === 'variable_perfil'
+          ? perfilOperativo ?? baseOperacion.perfilOperativo
+          : baseOperacion.perfilOperativo,
+      setupMin: nivel.setupMin ?? baseOperacion.setupMin,
+      cleanupMin: nivel.cleanupMin ?? baseOperacion.cleanupMin,
+      tiempoFijoMin:
+        nivel.modoProductividadNivel === 'fija'
+          ? nivel.tiempoFijoMin ?? baseOperacion.tiempoFijoMin
+          : baseOperacion.tiempoFijoMin,
+      runMin: nivel.modoProductividadNivel === 'fija' ? new Prisma.Decimal(0) : baseOperacion.runMin,
+      unidadSalida: nivel.unidadSalida ?? baseOperacion.unidadSalida,
+      unidadTiempo: nivel.unidadTiempo ?? baseOperacion.unidadTiempo,
+      productividadBase:
+        nivel.modoProductividadNivel === 'variable_manual'
+          ? nivel.productividadBase === null || nivel.productividadBase === undefined
+            ? null
+            : new Prisma.Decimal(nivel.productividadBase)
+          : baseOperacion.productividadBase,
+      modoProductividad:
+        nivel.modoProductividadNivel === 'fija'
+          ? ModoProductividadProceso.FIJA
+          : ModoProductividadProceso.FIJA,
+      detalleJson: {
+        ...detalleBase,
+        ...this.asObject(baseOperacion.detalleJson),
+        pasoPlantillaId: this.getPasoPlantillaIdFromDetalle(template.detalleJson) ?? template.id,
+        variantePasoId: nivel.id,
+        variantePasoNombre: nivel.nombre,
+        variantePasoResumen: nivel.resumen,
+        perfilOperativoId:
+          nivel.modoProductividadNivel === 'variable_perfil'
+            ? perfilOperativo?.id ?? nivel.perfilOperativoId ?? null
+            : nivel.perfilOperativoId ?? null,
+      } as Prisma.JsonObject,
+    };
+  }
+
   private getPasoPlantillaIdFromDetalle(value: Prisma.JsonValue | Record<string, unknown> | null | undefined) {
     const detalle = this.asObject(value);
     const pasoPlantillaId = detalle.pasoPlantillaId;
@@ -10156,7 +10496,6 @@ export class ProductosServiciosService {
     }
 
     return {
-      tipoVenta: payload.tipoVenta,
       tecnologiasCompatibles,
       maquinasCompatibles,
       perfilesCompatibles,
@@ -10204,11 +10543,51 @@ export class ProductosServiciosService {
           'margenFinalMmOverride' in imposicionPayload
             ? this.getGranFormatoNullableNumber(imposicionPayload.margenFinalMmOverride)
             : imposicionActual.margenFinalMmOverride,
+        panelizadoActivo:
+          'panelizadoActivo' in imposicionPayload
+            ? imposicionPayload.panelizadoActivo === true
+            : imposicionActual.panelizadoActivo,
+        panelizadoDireccion:
+          'panelizadoDireccion' in imposicionPayload && imposicionPayload.panelizadoDireccion
+            ? imposicionPayload.panelizadoDireccion
+            : imposicionActual.panelizadoDireccion,
+        panelizadoSolapeMm:
+          'panelizadoSolapeMm' in imposicionPayload
+            ? this.getGranFormatoNullableNumber(imposicionPayload.panelizadoSolapeMm)
+            : imposicionActual.panelizadoSolapeMm,
+        panelizadoAnchoMaxPanelMm:
+          'panelizadoAnchoMaxPanelMm' in imposicionPayload
+            ? this.getGranFormatoNullableNumber(imposicionPayload.panelizadoAnchoMaxPanelMm)
+            : imposicionActual.panelizadoAnchoMaxPanelMm,
+        panelizadoDistribucion:
+          'panelizadoDistribucion' in imposicionPayload && imposicionPayload.panelizadoDistribucion
+            ? imposicionPayload.panelizadoDistribucion
+            : imposicionActual.panelizadoDistribucion,
+        panelizadoInterpretacionAnchoMaximo:
+          'panelizadoInterpretacionAnchoMaximo' in imposicionPayload &&
+          imposicionPayload.panelizadoInterpretacionAnchoMaximo
+            ? imposicionPayload.panelizadoInterpretacionAnchoMaximo
+            : imposicionActual.panelizadoInterpretacionAnchoMaximo,
+        panelizadoModo:
+          'panelizadoModo' in imposicionPayload && imposicionPayload.panelizadoModo
+            ? imposicionPayload.panelizadoModo
+            : imposicionActual.panelizadoModo,
+        panelizadoManualLayout:
+          'panelizadoManualLayout' in imposicionPayload
+            ? ((imposicionPayload.panelizadoManualLayout as Record<string, unknown> | null) ?? null)
+            : imposicionActual.panelizadoManualLayout,
         criterioOptimizacion:
           'criterioOptimizacion' in imposicionPayload &&
-          this.getGranFormatoNullableString(imposicionPayload.criterioOptimizacion) ===
-            GranFormatoImposicionCriterioOptimizacionDto.menor_largo_consumido
-            ? GranFormatoImposicionCriterioOptimizacionDto.menor_largo_consumido
+          [
+            GranFormatoImposicionCriterioOptimizacionDto.menor_costo_total,
+            GranFormatoImposicionCriterioOptimizacionDto.menor_desperdicio,
+            GranFormatoImposicionCriterioOptimizacionDto.menor_largo_consumido,
+          ].includes(
+            this.getGranFormatoNullableString(imposicionPayload.criterioOptimizacion) as GranFormatoImposicionCriterioOptimizacionDto,
+          )
+            ? (this.getGranFormatoNullableString(
+                imposicionPayload.criterioOptimizacion,
+              ) as GranFormatoImposicionCriterioOptimizacionDto)
             : imposicionActual.criterioOptimizacion,
       },
     };
@@ -10560,6 +10939,644 @@ export class ProductosServiciosService {
     return `Pieza ${label}`;
   }
 
+  private buildGranFormatoNestingOrientacion(
+    placements: Array<{ rotated: boolean }>,
+  ): GranFormatoNestingOrientation {
+    if (!placements.length) {
+      return 'normal';
+    }
+    const hasRotated = placements.some((item) => item.rotated);
+    const hasNormal = placements.some((item) => !item.rotated);
+    if (hasRotated && hasNormal) {
+      return 'mixta';
+    }
+    return hasRotated ? 'rotada' : 'normal';
+  }
+
+  private countGranFormatoRowsAndPiecesPerRow(
+    placements: GranFormatoCostosPreviewPlacement[],
+    toleranceMm: number,
+  ) {
+    if (!placements.length) {
+      return { rows: 0, piecesPerRow: 0 };
+    }
+    const rows: Array<{ topMm: number; bottomMm: number; count: number }> = [];
+    const sorted = [...placements].sort((a, b) => {
+      const topDiff = a.centerYMm - a.heightMm / 2 - (b.centerYMm - b.heightMm / 2);
+      if (Math.abs(topDiff) > toleranceMm) {
+        return topDiff;
+      }
+      return a.centerXMm - b.centerXMm;
+    });
+    for (const placement of sorted) {
+      const topMm = placement.centerYMm - placement.heightMm / 2;
+      const bottomMm = placement.centerYMm + placement.heightMm / 2;
+      const existing = rows.find(
+        (row) =>
+          Math.abs(row.topMm - topMm) <= toleranceMm ||
+          (topMm <= row.bottomMm - toleranceMm && bottomMm >= row.topMm + toleranceMm),
+      );
+      if (existing) {
+        existing.topMm = Math.min(existing.topMm, topMm);
+        existing.bottomMm = Math.max(existing.bottomMm, bottomMm);
+        existing.count += 1;
+        continue;
+      }
+      rows.push({ topMm, bottomMm, count: 1 });
+    }
+    return {
+      rows: rows.length,
+      piecesPerRow: rows.reduce((max, row) => Math.max(max, row.count), 0),
+    };
+  }
+
+  private buildGranFormatoPieceInstances(
+    medidas: Array<{
+      anchoMm: number;
+      altoMm: number;
+      cantidad: number;
+    }>,
+  ) {
+    return medidas
+      .flatMap((medida, medidaIndex) =>
+        Array.from({ length: Math.max(1, medida.cantidad) }, (_, copyIndex) => ({
+          id: `piece-${medidaIndex}-${copyIndex}`,
+          sourcePieceId: `piece-${medidaIndex}-${copyIndex}`,
+          originalWidthMm: medida.anchoMm,
+          originalHeightMm: medida.altoMm,
+          widthMm: medida.anchoMm,
+          heightMm: medida.altoMm,
+          usefulWidthMm: medida.anchoMm,
+          usefulHeightMm: medida.altoMm,
+          overlapStartMm: 0,
+          overlapEndMm: 0,
+          area: medida.anchoMm * medida.altoMm,
+          longestSide: Math.max(medida.anchoMm, medida.altoMm),
+          shortestSide: Math.min(medida.anchoMm, medida.altoMm),
+          panelIndex: null as number | null,
+          panelCount: null as number | null,
+          panelAxis: null as 'vertical' | 'horizontal' | null,
+        })),
+      )
+      .sort(
+        (a, b) =>
+          b.longestSide - a.longestSide ||
+          b.area - a.area ||
+          b.shortestSide - a.shortestSide,
+      );
+  }
+
+  private buildGranFormatoPanelizedPieces(input: {
+    medidas: Array<{
+      anchoMm: number;
+      altoMm: number;
+      cantidad: number;
+    }>;
+    printableWidthMm: number;
+    panelAxis: 'vertical' | 'horizontal';
+    overlapMm: number;
+    maxPanelWidthMm: number;
+    distribution: 'equilibrada' | 'libre';
+    widthInterpretation: 'total' | 'util';
+  }) {
+    const pieces: Array<{
+      id: string;
+      sourcePieceId: string;
+      originalWidthMm: number;
+      originalHeightMm: number;
+      widthMm: number;
+      heightMm: number;
+      usefulWidthMm: number;
+      usefulHeightMm: number;
+      overlapStartMm: number;
+      overlapEndMm: number;
+      panelIndex: number;
+      panelCount: number;
+      panelAxis: 'vertical' | 'horizontal';
+      area: number;
+      longestSide: number;
+      shortestSide: number;
+    }> = [];
+
+    const buildSplitSizes = (totalMm: number, panelCount: number, maxUsefulWidthMm: number) => {
+      if (input.distribution === 'libre') {
+        const sizes: number[] = [];
+        let remaining = totalMm;
+        for (let index = 0; index < panelCount; index += 1) {
+          const segmentsLeft = panelCount - index;
+          if (segmentsLeft === 1) {
+            sizes.push(remaining);
+            break;
+          }
+          const next = Math.min(maxUsefulWidthMm, remaining - (segmentsLeft - 1));
+          sizes.push(next);
+          remaining -= next;
+        }
+        return sizes;
+      }
+
+      const base = Math.floor(totalMm / panelCount);
+      const remainder = totalMm % panelCount;
+      return Array.from({ length: panelCount }, (_, index) => base + (index < remainder ? 1 : 0));
+    };
+
+    for (const [medidaIndex, medida] of input.medidas.entries()) {
+      for (let copyIndex = 0; copyIndex < Math.max(1, medida.cantidad); copyIndex += 1) {
+        const sourcePieceId = `piece-${medidaIndex}-${copyIndex}`;
+      const splitDimension = input.panelAxis === 'vertical' ? medida.anchoMm : medida.altoMm;
+        const effectivePhysicalLimitMm = Math.min(input.maxPanelWidthMm, input.printableWidthMm);
+        const maxOverlapPerPanelMm = input.overlapMm * 2;
+        const effectiveUsefulLimitMm =
+          input.widthInterpretation === 'total'
+            ? effectivePhysicalLimitMm - maxOverlapPerPanelMm
+            : effectivePhysicalLimitMm;
+        if (effectiveUsefulLimitMm <= 0) {
+          return null;
+        }
+        if (splitDimension <= effectiveUsefulLimitMm) {
+          return null;
+        }
+        const panelCountResolved = Math.max(2, Math.ceil(splitDimension / effectiveUsefulLimitMm));
+        const panelSizes = buildSplitSizes(splitDimension, panelCountResolved, effectiveUsefulLimitMm);
+        const fits = panelSizes.every((segment, index) => {
+          const extraStart = index === 0 ? 0 : input.overlapMm;
+          const extraEnd = index === panelCountResolved - 1 ? 0 : input.overlapMm;
+          const physicalSize = segment + extraStart + extraEnd;
+          const withinConfiguredLimit =
+            input.widthInterpretation === 'total'
+              ? physicalSize <= effectivePhysicalLimitMm
+              : segment <= effectivePhysicalLimitMm;
+          return withinConfiguredLimit && physicalSize <= input.printableWidthMm;
+        });
+
+        if (!fits) {
+          return null;
+        }
+
+        panelSizes.forEach((segment, index) => {
+          const extraStart = index === 0 ? 0 : input.overlapMm;
+          const extraEnd = index === panelCountResolved - 1 ? 0 : input.overlapMm;
+          const widthMm =
+            input.panelAxis === 'vertical' ? segment + extraStart + extraEnd : medida.anchoMm;
+          const heightMm =
+            input.panelAxis === 'horizontal' ? segment + extraStart + extraEnd : medida.altoMm;
+          pieces.push({
+            id: `${sourcePieceId}-panel-${index + 1}`,
+            sourcePieceId,
+            originalWidthMm: medida.anchoMm,
+            originalHeightMm: medida.altoMm,
+            widthMm,
+            heightMm,
+            usefulWidthMm: input.panelAxis === 'vertical' ? segment : medida.anchoMm,
+            usefulHeightMm: input.panelAxis === 'horizontal' ? segment : medida.altoMm,
+            overlapStartMm: extraStart,
+            overlapEndMm: extraEnd,
+            panelIndex: index + 1,
+            panelCount: panelCountResolved,
+            panelAxis: input.panelAxis,
+            area: medida.anchoMm * medida.altoMm,
+            longestSide: Math.max(widthMm, heightMm),
+            shortestSide: Math.min(widthMm, heightMm),
+          });
+        });
+      }
+    }
+
+    return pieces.sort(
+      (a, b) =>
+        b.longestSide - a.longestSide ||
+        b.area - a.area ||
+        b.shortestSide - a.shortestSide,
+    );
+  }
+
+  private normalizeGranFormatoPanelManualLayout(
+    value: Record<string, unknown> | null | undefined,
+  ): {
+    items: Array<{
+      sourcePieceId: string;
+      pieceWidthMm: number;
+      pieceHeightMm: number;
+      axis: 'vertical' | 'horizontal';
+      panels: Array<{
+        panelIndex: number;
+        usefulWidthMm: number;
+        usefulHeightMm: number;
+        overlapStartMm: number;
+        overlapEndMm: number;
+        finalWidthMm: number;
+        finalHeightMm: number;
+      }>;
+    }>;
+  } | null {
+    const itemsRaw = Array.isArray(value?.items) ? value.items : null;
+    if (!itemsRaw?.length) {
+      return null;
+    }
+    const items = itemsRaw
+      .map((item) => {
+        const current = item as Record<string, unknown>;
+        const panelsRaw = Array.isArray(current.panels) ? current.panels : [];
+        const sourcePieceId =
+          typeof current.sourcePieceId === 'string' ? current.sourcePieceId.trim() : '';
+        const axis =
+          current.axis === 'horizontal' ? 'horizontal' : current.axis === 'vertical' ? 'vertical' : null;
+        const pieceWidthMm = this.getGranFormatoNullableNumber(current.pieceWidthMm);
+        const pieceHeightMm = this.getGranFormatoNullableNumber(current.pieceHeightMm);
+        const panels = panelsRaw
+          .map((panel) => {
+            const currentPanel = panel as Record<string, unknown>;
+            return {
+              panelIndex: Math.max(1, Number(currentPanel.panelIndex ?? 1)),
+              usefulWidthMm: this.getGranFormatoNullableNumber(currentPanel.usefulWidthMm) ?? 0,
+              usefulHeightMm: this.getGranFormatoNullableNumber(currentPanel.usefulHeightMm) ?? 0,
+              overlapStartMm: this.getGranFormatoNullableNumber(currentPanel.overlapStartMm) ?? 0,
+              overlapEndMm: this.getGranFormatoNullableNumber(currentPanel.overlapEndMm) ?? 0,
+              finalWidthMm: this.getGranFormatoNullableNumber(currentPanel.finalWidthMm) ?? 0,
+              finalHeightMm: this.getGranFormatoNullableNumber(currentPanel.finalHeightMm) ?? 0,
+            };
+          })
+          .filter((panel) => panel.finalWidthMm > 0 && panel.finalHeightMm > 0)
+          .sort((a, b) => a.panelIndex - b.panelIndex);
+        if (!sourcePieceId || !axis || !pieceWidthMm || !pieceHeightMm || !panels.length) {
+          return null;
+        }
+        return {
+          sourcePieceId,
+          pieceWidthMm,
+          pieceHeightMm,
+          axis: axis as 'vertical' | 'horizontal',
+          panels,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item != null);
+
+    return items.length ? { items } : null;
+  }
+
+  private buildGranFormatoManualPieces(input: {
+    medidas: Array<{
+      anchoMm: number;
+      altoMm: number;
+      cantidad: number;
+    }>;
+    printableWidthMm: number;
+    maxPanelWidthMm: number;
+    widthInterpretation: 'total' | 'util';
+    manualLayout: {
+      items: Array<{
+        sourcePieceId: string;
+        pieceWidthMm: number;
+        pieceHeightMm: number;
+        axis: 'vertical' | 'horizontal';
+        panels: Array<{
+          panelIndex: number;
+          usefulWidthMm: number;
+          usefulHeightMm: number;
+          overlapStartMm: number;
+          overlapEndMm: number;
+          finalWidthMm: number;
+          finalHeightMm: number;
+        }>;
+      }>;
+    };
+  }) {
+    const expectedPieces = this.buildGranFormatoPieceInstances(input.medidas);
+    if (expectedPieces.length !== input.manualLayout.items.length) {
+      return null;
+    }
+    const byId = new Map(input.manualLayout.items.map((item) => [item.sourcePieceId, item]));
+    const pieces: Array<{
+      id: string;
+      sourcePieceId: string;
+      originalWidthMm: number;
+      originalHeightMm: number;
+      widthMm: number;
+      heightMm: number;
+      usefulWidthMm: number;
+      usefulHeightMm: number;
+      overlapStartMm: number;
+      overlapEndMm: number;
+      panelIndex: number;
+      panelCount: number;
+      panelAxis: 'vertical' | 'horizontal';
+      area: number;
+      longestSide: number;
+      shortestSide: number;
+    }> = [];
+
+    for (const sourcePiece of expectedPieces) {
+      const layout = byId.get(sourcePiece.sourcePieceId);
+      if (!layout) {
+        return null;
+      }
+      const expectedTotal =
+        layout.axis === 'vertical' ? sourcePiece.originalWidthMm : sourcePiece.originalHeightMm;
+      const usefulTotal = layout.panels.reduce(
+        (acc, panel) => acc + (layout.axis === 'vertical' ? panel.usefulWidthMm : panel.usefulHeightMm),
+        0,
+      );
+      if (Math.abs(usefulTotal - expectedTotal) > 1) {
+        return null;
+      }
+
+      for (const panel of layout.panels) {
+        const physicalLimitOk =
+          input.widthInterpretation === 'total'
+            ? (layout.axis === 'vertical' ? panel.finalWidthMm : panel.finalHeightMm) <= input.maxPanelWidthMm
+            : (layout.axis === 'vertical' ? panel.usefulWidthMm : panel.usefulHeightMm) <= input.maxPanelWidthMm;
+        const printableFit =
+          (layout.axis === 'vertical' ? panel.finalWidthMm : panel.finalHeightMm) <= input.printableWidthMm;
+        if (
+          panel.usefulWidthMm <= 0 ||
+          panel.usefulHeightMm <= 0 ||
+          panel.finalWidthMm <= 0 ||
+          panel.finalHeightMm <= 0 ||
+          !physicalLimitOk ||
+          !printableFit
+        ) {
+          return null;
+        }
+        pieces.push({
+          id: `${layout.sourcePieceId}-panel-${panel.panelIndex}`,
+          sourcePieceId: layout.sourcePieceId,
+          originalWidthMm: layout.pieceWidthMm,
+          originalHeightMm: layout.pieceHeightMm,
+          widthMm: panel.finalWidthMm,
+          heightMm: panel.finalHeightMm,
+          usefulWidthMm: panel.usefulWidthMm,
+          usefulHeightMm: panel.usefulHeightMm,
+          overlapStartMm: panel.overlapStartMm,
+          overlapEndMm: panel.overlapEndMm,
+          panelIndex: panel.panelIndex,
+          panelCount: layout.panels.length,
+          panelAxis: layout.axis,
+          area: layout.pieceWidthMm * layout.pieceHeightMm,
+          longestSide: Math.max(panel.finalWidthMm, panel.finalHeightMm),
+          shortestSide: Math.min(panel.finalWidthMm, panel.finalHeightMm),
+        });
+      }
+    }
+
+    return pieces.sort(
+      (a, b) =>
+        b.longestSide - a.longestSide ||
+        b.area - a.area ||
+        b.shortestSide - a.shortestSide,
+    );
+  }
+
+  private evaluateGranFormatoMixedShelfLayout(input: {
+    printableWidthMm: number;
+    marginLeftMm: number;
+    marginStartMm: number;
+    marginEndMm: number;
+    separacionHorizontalMm: number;
+    separacionVerticalMm: number;
+    permitirRotacion: boolean;
+    medidas: Array<{
+      anchoMm: number;
+      altoMm: number;
+      cantidad: number;
+    }>;
+    panelizado?: {
+      activo: boolean;
+      mode: 'automatico' | 'manual';
+      axis: 'vertical' | 'horizontal';
+      overlapMm: number;
+      maxPanelWidthMm: number;
+      distribution: 'equilibrada' | 'libre';
+      widthInterpretation: 'total' | 'util';
+      manualLayout?: Record<string, unknown> | null;
+    };
+  }) {
+    const manualLayout = this.normalizeGranFormatoPanelManualLayout(
+      (input.panelizado?.manualLayout as Record<string, unknown> | null | undefined) ?? null,
+    );
+    const pieces = input.panelizado?.activo
+      ? input.panelizado.mode === 'manual' && manualLayout
+        ? this.buildGranFormatoManualPieces({
+            medidas: input.medidas,
+            printableWidthMm: input.printableWidthMm,
+            maxPanelWidthMm: input.panelizado.maxPanelWidthMm,
+            widthInterpretation: input.panelizado.widthInterpretation,
+            manualLayout,
+          })
+        : this.buildGranFormatoPanelizedPieces({
+          medidas: input.medidas,
+          printableWidthMm: input.printableWidthMm,
+          panelAxis: input.panelizado.axis,
+          overlapMm: input.panelizado.overlapMm,
+          maxPanelWidthMm: input.panelizado.maxPanelWidthMm,
+          distribution: input.panelizado.distribution,
+          widthInterpretation: input.panelizado.widthInterpretation,
+        })
+      : this.buildGranFormatoPieceInstances(input.medidas);
+    if (!pieces || !pieces.length) {
+      return null;
+    }
+    type Row = {
+      yMm: number;
+      usedWidthMm: number;
+      heightMm: number;
+      count: number;
+    };
+    type State = {
+      rows: Row[];
+      placements: GranFormatoCostosPreviewPlacement[];
+    };
+
+    const resolveNextRowY = (rows: Row[]) => {
+      if (!rows.length) {
+        return input.marginStartMm;
+      }
+      const last = rows[rows.length - 1];
+      return last.yMm + last.heightMm + input.separacionVerticalMm;
+    };
+
+    const measureState = (state: State) => {
+      const contentHeightMm = state.rows.reduce((acc, row) => acc + row.heightMm, 0);
+      const verticalGapsMm =
+        state.rows.length > 1 ? (state.rows.length - 1) * input.separacionVerticalMm : 0;
+      const consumedContentLengthMm = contentHeightMm + verticalGapsMm;
+      const placedAreaMm2 = state.placements.reduce(
+        (acc, placement) => acc + placement.originalWidthMm * placement.originalHeightMm,
+        0,
+      );
+      const wasteProxyMm2 = input.printableWidthMm * consumedContentLengthMm - placedAreaMm2;
+      return { consumedContentLengthMm, wasteProxyMm2 };
+    };
+
+    let states: State[] = [{ rows: [], placements: [] }];
+
+    for (const piece of pieces) {
+      const orientations = [
+        {
+          widthMm: piece.widthMm,
+          heightMm: piece.heightMm,
+          rotated: false,
+        },
+        ...(input.permitirRotacion && piece.widthMm !== piece.heightMm
+          ? [
+              {
+                widthMm: piece.heightMm,
+                heightMm: piece.widthMm,
+                rotated: true,
+              },
+            ]
+          : []),
+      ];
+      const nextStates: State[] = [];
+
+      for (const state of states) {
+        for (const option of orientations) {
+          if (option.widthMm > input.printableWidthMm) {
+            continue;
+          }
+
+          for (const [rowIndex, row] of state.rows.entries()) {
+            const nextWidth =
+              row.usedWidthMm === 0
+                ? option.widthMm
+                : row.usedWidthMm + input.separacionHorizontalMm + option.widthMm;
+            if (nextWidth > input.printableWidthMm) {
+              continue;
+            }
+            const rows = state.rows.map((item) => ({ ...item }));
+            const targetRow = rows[rowIndex];
+            const xMm =
+              targetRow.usedWidthMm === 0
+                ? input.marginLeftMm
+                : input.marginLeftMm + targetRow.usedWidthMm + input.separacionHorizontalMm;
+            targetRow.usedWidthMm = nextWidth;
+            targetRow.heightMm = Math.max(targetRow.heightMm, option.heightMm);
+            targetRow.count += 1;
+            nextStates.push({
+              rows,
+              placements: [
+                ...state.placements,
+                {
+                  id: piece.id,
+                  widthMm: option.widthMm,
+                  heightMm: option.heightMm,
+                  centerXMm: xMm + option.widthMm / 2,
+                  centerYMm: targetRow.yMm + option.heightMm / 2,
+                  label: `${Math.round(piece.originalWidthMm / 10)}x${Math.round(
+                    piece.originalHeightMm / 10,
+                  )} cm`,
+                  rotated: option.rotated,
+                  originalWidthMm: piece.originalWidthMm,
+                  originalHeightMm: piece.originalHeightMm,
+                  panelIndex: piece.panelIndex,
+                  panelCount: piece.panelCount,
+                  panelAxis: piece.panelAxis,
+                  sourcePieceId: piece.sourcePieceId,
+                  usefulWidthMm: piece.usefulWidthMm ?? piece.widthMm,
+                  usefulHeightMm: piece.usefulHeightMm ?? piece.heightMm,
+                  overlapStartMm: piece.overlapStartMm ?? 0,
+                  overlapEndMm: piece.overlapEndMm ?? 0,
+                },
+              ],
+            });
+          }
+
+          const rows = state.rows.map((item) => ({ ...item }));
+          const newRow: Row = {
+            yMm: resolveNextRowY(rows),
+            usedWidthMm: option.widthMm,
+            heightMm: option.heightMm,
+            count: 1,
+          };
+          rows.push(newRow);
+          nextStates.push({
+            rows,
+            placements: [
+              ...state.placements,
+              {
+                id: piece.id,
+                widthMm: option.widthMm,
+                heightMm: option.heightMm,
+                centerXMm: input.marginLeftMm + option.widthMm / 2,
+                centerYMm: newRow.yMm + option.heightMm / 2,
+                label: `${Math.round(piece.originalWidthMm / 10)}x${Math.round(
+                  piece.originalHeightMm / 10,
+                )} cm`,
+                rotated: option.rotated,
+                originalWidthMm: piece.originalWidthMm,
+                originalHeightMm: piece.originalHeightMm,
+                panelIndex: piece.panelIndex,
+                panelCount: piece.panelCount,
+                panelAxis: piece.panelAxis,
+                sourcePieceId: piece.sourcePieceId,
+                usefulWidthMm: piece.usefulWidthMm ?? piece.widthMm,
+                usefulHeightMm: piece.usefulHeightMm ?? piece.heightMm,
+                overlapStartMm: piece.overlapStartMm ?? 0,
+                overlapEndMm: piece.overlapEndMm ?? 0,
+              },
+            ],
+          });
+        }
+      }
+
+      if (!nextStates.length) {
+        return null;
+      }
+
+      states = nextStates
+        .sort((a, b) => {
+          const left = measureState(a);
+          const right = measureState(b);
+          return (
+            left.consumedContentLengthMm - right.consumedContentLengthMm ||
+            left.wasteProxyMm2 - right.wasteProxyMm2 ||
+            a.rows.length - b.rows.length
+          );
+        })
+        .slice(0, 12);
+    }
+
+    const bestState = [...states].sort((a, b) => {
+      const left = measureState(a);
+      const right = measureState(b);
+      return (
+        left.consumedContentLengthMm - right.consumedContentLengthMm ||
+        left.wasteProxyMm2 - right.wasteProxyMm2 ||
+        a.rows.length - b.rows.length
+      );
+    })[0];
+
+    const contentHeightMm = bestState.rows.reduce((acc, row) => acc + row.heightMm, 0);
+    const verticalGapsMm =
+      bestState.rows.length > 1 ? (bestState.rows.length - 1) * input.separacionVerticalMm : 0;
+    const consumedLengthMm = input.marginStartMm + input.marginEndMm + contentHeightMm + verticalGapsMm;
+    const usefulAreaM2 = input.medidas.reduce(
+      (acc, item) => acc + ((item.anchoMm * item.altoMm) / 1_000_000) * item.cantidad,
+      0,
+    );
+    const { rows: rowCount, piecesPerRow } = this.countGranFormatoRowsAndPiecesPerRow(
+      bestState.placements,
+      Math.max(1, input.separacionVerticalMm / 2),
+    );
+
+    return {
+      orientacion: this.buildGranFormatoNestingOrientacion(bestState.placements),
+      panelizado: input.panelizado?.activo === true,
+      panelAxis: input.panelizado?.activo ? input.panelizado.axis : null,
+      panelCount:
+        bestState.placements.reduce((max, item) => Math.max(max, item.panelCount ?? 1), 1),
+      panelOverlapMm: input.panelizado?.activo ? input.panelizado.overlapMm : null,
+      panelMaxWidthMm: input.panelizado?.activo ? input.panelizado.maxPanelWidthMm : null,
+      panelDistribution: input.panelizado?.activo ? input.panelizado.distribution : null,
+      panelWidthInterpretation: input.panelizado?.activo ? input.panelizado.widthInterpretation : null,
+      panelMode: input.panelizado?.activo ? input.panelizado.mode : null,
+      piecesPerRow,
+      rows: rowCount,
+      consumedLengthMm,
+      usefulAreaM2,
+      placements: bestState.placements,
+    };
+  }
+
   private buildGranFormatoNestingPreview(candidate: GranFormatoCostosPreviewCandidate) {
     const palette = ['#ff9f43', '#0abde3', '#1dd1a1', '#ff6b6b', '#f97316', '#22c55e'];
     return {
@@ -10569,15 +11586,32 @@ export class ProductosServiciosService {
       marginRight: Number((candidate.marginRightMm / 10).toFixed(2)),
       marginStart: Number((candidate.marginStartMm / 10).toFixed(2)),
       marginEnd: Number((candidate.marginEndMm / 10).toFixed(2)),
+      panelizado: candidate.panelizado,
+      panelAxis: candidate.panelAxis,
+      panelCount: candidate.panelCount,
+      panelOverlap: candidate.panelOverlapMm != null ? Number((candidate.panelOverlapMm / 10).toFixed(2)) : null,
+      panelMaxWidth: candidate.panelMaxWidthMm != null ? Number((candidate.panelMaxWidthMm / 10).toFixed(2)) : null,
+      panelDistribution: candidate.panelDistribution,
+      panelWidthInterpretation: candidate.panelWidthInterpretation,
+      panelMode: candidate.panelMode,
       pieces: candidate.placements.map((item, index) => ({
         id: item.id,
         w: Number((item.widthMm / 10).toFixed(2)),
         h: Number((item.heightMm / 10).toFixed(2)),
+        usefulW: Number((item.usefulWidthMm / 10).toFixed(2)),
+        usefulH: Number((item.usefulHeightMm / 10).toFixed(2)),
         cx: Number((((item.centerXMm - candidate.rollWidthMm / 2) / 10)).toFixed(2)),
         cy: Number((item.centerYMm / 10).toFixed(2)),
         color: palette[index % palette.length],
         label: this.buildGranFormatoPieceLabel(index),
         textColor: '#111111',
+        rotated: item.rotated,
+        panelIndex: item.panelIndex,
+        panelCount: item.panelCount,
+        panelAxis: item.panelAxis,
+        sourcePieceId: item.sourcePieceId,
+        overlapStart: Number((item.overlapStartMm / 10).toFixed(2)),
+        overlapEnd: Number((item.overlapEndMm / 10).toFixed(2)),
       })),
     };
   }
@@ -10770,6 +11804,14 @@ export class ProductosServiciosService {
       margenInicioMmOverride: number | null;
       margenFinalMmOverride: number | null;
       criterioOptimizacion: GranFormatoImposicionCriterioOptimizacionDto;
+      panelizadoActivo: boolean;
+      panelizadoDireccion: GranFormatoPanelizadoDireccionDto;
+      panelizadoSolapeMm: number | null;
+      panelizadoAnchoMaxPanelMm: number | null;
+      panelizadoDistribucion: GranFormatoPanelizadoDistribucionDto;
+      panelizadoInterpretacionAnchoMaximo: GranFormatoPanelizadoInterpretacionAnchoMaximoDto;
+      panelizadoModo: GranFormatoPanelizadoModoDto;
+      panelizadoManualLayout: Record<string, unknown> | null;
     };
     variants: Array<any>;
   }) {
@@ -10801,7 +11843,8 @@ export class ProductosServiciosService {
       this.readMachineMarginMmFromRecord(input.maquina, 'margenInferior') ??
       0;
 
-    const accepted: GranFormatoCostosPreviewCandidate[] = [];
+    const acceptedNormal: GranFormatoCostosPreviewCandidate[] = [];
+    const acceptedPanelizados: GranFormatoCostosPreviewCandidate[] = [];
 
     for (const variant of input.variants) {
       const rollWidthMm = this.readMaterialVariantWidthMmFromRecord(
@@ -10816,116 +11859,87 @@ export class ProductosServiciosService {
         continue;
       }
 
-      const evaluateOrientation = (rotated: boolean) => {
-        const pieces = input.medidas
-          .flatMap((medida) =>
-            Array.from({ length: Math.max(1, medida.cantidad) }, () => ({
-              width: rotated ? medida.altoMm : medida.anchoMm,
-              height: rotated ? medida.anchoMm : medida.altoMm,
-              originalWidth: medida.anchoMm,
-              originalHeight: medida.altoMm,
-            })),
-          )
-          .sort((a, b) => b.height - a.height || b.width - a.width);
-
-        let currentRowWidth = 0;
-        let currentRowHeight = 0;
-        let totalHeight = 0;
-        let rowCount = 0;
-        let maxPiecesPerRow = 0;
-        let currentPieces = 0;
-        let currentRowTop = marginStartMm;
-        const placements: GranFormatoCostosPreviewPlacement[] = [];
-
-        for (const [index, piece] of pieces.entries()) {
-          if (piece.width > printableWidthMm) {
-            return null;
-          }
-          const additionalWidth =
-            currentRowWidth === 0
-              ? piece.width
-              : currentRowWidth + input.config.separacionHorizontalMm + piece.width;
-          if (additionalWidth <= printableWidthMm) {
-            const pieceLeft =
-              currentRowWidth === 0
-                ? marginLeftMm
-                : marginLeftMm + currentRowWidth + input.config.separacionHorizontalMm;
-            currentRowWidth = additionalWidth;
-            currentRowHeight = Math.max(currentRowHeight, piece.height);
-            currentPieces += 1;
-            maxPiecesPerRow = Math.max(maxPiecesPerRow, currentPieces);
-            placements.push({
-              id: `piece-${index}`,
-              widthMm: piece.width,
-              heightMm: piece.height,
-              centerXMm: pieceLeft + piece.width / 2,
-              centerYMm: currentRowTop + piece.height / 2,
-              label: `${Math.round(piece.originalWidth / 10)}x${Math.round(piece.originalHeight / 10)} cm`,
-            });
-            continue;
-          }
-
-          totalHeight += currentRowHeight;
-          if (rowCount > 0 || totalHeight > 0) {
-            totalHeight += input.config.separacionVerticalMm;
-          }
-          rowCount += 1;
-          currentRowTop = marginStartMm + totalHeight;
-          currentRowWidth = piece.width;
-          currentRowHeight = piece.height;
-          currentPieces = 1;
-          maxPiecesPerRow = Math.max(maxPiecesPerRow, currentPieces);
-          placements.push({
-            id: `piece-${index}`,
-            widthMm: piece.width,
-            heightMm: piece.height,
-            centerXMm: marginLeftMm + piece.width / 2,
-            centerYMm: currentRowTop + piece.height / 2,
-            label: `${Math.round(piece.originalWidth / 10)}x${Math.round(piece.originalHeight / 10)} cm`,
-          });
-        }
-
-        if (currentRowHeight > 0) {
-          totalHeight += currentRowHeight;
-          rowCount += 1;
-        }
-        const consumedLengthMm = marginStartMm + marginEndMm + totalHeight;
-        const usefulAreaM2 = input.medidas.reduce(
-          (acc, item) => acc + ((item.anchoMm * item.altoMm) / 1_000_000) * item.cantidad,
-          0,
-        );
-        const consumedAreaM2 = (rollWidthMm * consumedLengthMm) / 1_000_000;
-        const wasteAreaM2 = Math.max(0, consumedAreaM2 - usefulAreaM2);
-        return {
-          rotated,
-          piecesPerRow: maxPiecesPerRow,
-          rows: rowCount,
-          consumedLengthMm,
-          usefulAreaM2,
-          consumedAreaM2,
-          wasteAreaM2,
-          wastePct: consumedAreaM2 > 0 ? (wasteAreaM2 / consumedAreaM2) * 100 : 0,
-          placements,
-        };
+      const baseInput = {
+        printableWidthMm,
+        marginLeftMm,
+        marginStartMm,
+        marginEndMm,
+        separacionHorizontalMm: input.config.separacionHorizontalMm,
+        separacionVerticalMm: input.config.separacionVerticalMm,
+        permitirRotacion: input.config.permitirRotacion,
+        medidas: input.medidas,
       };
-
-      const candidates = [
-        evaluateOrientation(false),
-        input.config.permitirRotacion ? evaluateOrientation(true) : null,
-      ].filter(Boolean) as Array<NonNullable<ReturnType<typeof evaluateOrientation>>>;
-      if (!candidates.length) {
+      const layout = this.evaluateGranFormatoMixedShelfLayout(baseInput);
+      if (!layout) {
+        if (input.config.panelizadoActivo) {
+          const overlapMm = Math.max(0, input.config.panelizadoSolapeMm ?? 0);
+          const maxPanelWidthMm = Math.max(0, input.config.panelizadoAnchoMaxPanelMm ?? 0);
+          const directions =
+            input.config.panelizadoModo === GranFormatoPanelizadoModoDto.manual
+              ? (['vertical'] as const)
+              :
+            input.config.panelizadoDireccion === GranFormatoPanelizadoDireccionDto.automatica
+              ? (['vertical', 'horizontal'] as const)
+              : [input.config.panelizadoDireccion];
+          for (const axis of directions) {
+            if (maxPanelWidthMm <= 0) {
+              continue;
+            }
+            const panelizedLayout = this.evaluateGranFormatoMixedShelfLayout({
+              ...baseInput,
+              panelizado: {
+                activo: true,
+                mode: input.config.panelizadoModo,
+                axis,
+                overlapMm,
+                maxPanelWidthMm,
+                distribution: input.config.panelizadoDistribucion,
+                widthInterpretation: input.config.panelizadoInterpretacionAnchoMaximo,
+                manualLayout: input.config.panelizadoManualLayout,
+              },
+            });
+            if (!panelizedLayout) {
+              continue;
+            }
+            const consumedAreaM2 = (rollWidthMm * panelizedLayout.consumedLengthMm) / 1_000_000;
+            const wasteAreaM2 = Math.max(0, consumedAreaM2 - panelizedLayout.usefulAreaM2);
+            acceptedPanelizados.push({
+              variant,
+              rollWidthMm,
+              printableWidthMm,
+              marginLeftMm,
+              marginRightMm,
+              marginStartMm,
+              marginEndMm,
+              orientacion: panelizedLayout.orientacion,
+              panelizado: true,
+              panelAxis: panelizedLayout.panelAxis,
+              panelCount: panelizedLayout.panelCount,
+              panelOverlapMm: panelizedLayout.panelOverlapMm,
+              panelMaxWidthMm: panelizedLayout.panelMaxWidthMm,
+              panelDistribution: panelizedLayout.panelDistribution,
+              panelWidthInterpretation: panelizedLayout.panelWidthInterpretation,
+              panelMode: panelizedLayout.panelMode,
+              piecesPerRow: panelizedLayout.piecesPerRow,
+              rows: panelizedLayout.rows,
+              consumedLengthMm: panelizedLayout.consumedLengthMm,
+              usefulAreaM2: panelizedLayout.usefulAreaM2,
+              consumedAreaM2,
+              wasteAreaM2,
+              wastePct: consumedAreaM2 > 0 ? (wasteAreaM2 / consumedAreaM2) * 100 : 0,
+              placements: panelizedLayout.placements,
+              substrateCost: 0,
+              inkCost: 0,
+              timeCost: 0,
+              totalCost: 0,
+            });
+          }
+        }
         continue;
       }
-      const best = [...candidates].sort((a, b) => {
-        if (
-          input.config.criterioOptimizacion ===
-          GranFormatoImposicionCriterioOptimizacionDto.menor_largo_consumido
-        ) {
-          return a.consumedLengthMm - b.consumedLengthMm || a.wasteAreaM2 - b.wasteAreaM2;
-        }
-        return a.wasteAreaM2 - b.wasteAreaM2 || a.consumedLengthMm - b.consumedLengthMm;
-      })[0];
-      accepted.push({
+      const consumedAreaM2 = (rollWidthMm * layout.consumedLengthMm) / 1_000_000;
+      const wasteAreaM2 = Math.max(0, consumedAreaM2 - layout.usefulAreaM2);
+      acceptedNormal.push({
         variant,
         rollWidthMm,
         printableWidthMm,
@@ -10933,15 +11947,37 @@ export class ProductosServiciosService {
         marginRightMm,
         marginStartMm,
         marginEndMm,
-        ...best,
+        orientacion: layout.orientacion,
+        panelizado: false,
+        panelAxis: null,
+        panelCount: 1,
+        panelOverlapMm: null,
+        panelMaxWidthMm: null,
+        panelDistribution: null,
+        panelWidthInterpretation: null,
+        panelMode: null,
+        piecesPerRow: layout.piecesPerRow,
+        rows: layout.rows,
+        consumedLengthMm: layout.consumedLengthMm,
+        usefulAreaM2: layout.usefulAreaM2,
+        consumedAreaM2,
+        wasteAreaM2,
+        wastePct: consumedAreaM2 > 0 ? (wasteAreaM2 / consumedAreaM2) * 100 : 0,
+        placements: layout.placements,
+        substrateCost: 0,
+        inkCost: 0,
+        timeCost: 0,
+        totalCost: 0,
       });
     }
 
+    const accepted = acceptedNormal.length > 0 ? acceptedNormal : acceptedPanelizados;
+
     return accepted.sort((a, b) => {
-      if (
-        input.config.criterioOptimizacion ===
-        GranFormatoImposicionCriterioOptimizacionDto.menor_largo_consumido
-      ) {
+      if (input.config.criterioOptimizacion === GranFormatoImposicionCriterioOptimizacionDto.menor_costo_total) {
+        return a.consumedAreaM2 - b.consumedAreaM2 || a.wasteAreaM2 - b.wasteAreaM2;
+      }
+      if (input.config.criterioOptimizacion === GranFormatoImposicionCriterioOptimizacionDto.menor_largo_consumido) {
         return a.consumedLengthMm - b.consumedLengthMm || a.wasteAreaM2 - b.wasteAreaM2;
       }
       return a.wasteAreaM2 - b.wasteAreaM2 || a.consumedLengthMm - b.consumedLengthMm;

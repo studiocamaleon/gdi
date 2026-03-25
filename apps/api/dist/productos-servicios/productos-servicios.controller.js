@@ -91,6 +91,9 @@ let ProductosServiciosController = class ProductosServiciosController {
     getProductos(auth) {
         return this.service.findProductos(auth);
     }
+    getProductoCotizaciones(auth, id) {
+        return this.service.getProductoCotizaciones(auth, id);
+    }
     getProducto(auth, id) {
         return this.service.findProducto(auth, id);
     }
@@ -402,6 +405,14 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], ProductosServiciosController.prototype, "getProductos", null);
+__decorate([
+    (0, common_1.Get)(':id/cotizaciones'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "getProductoCotizaciones", null);
 __decorate([
     (0, common_1.Get)(':id'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),

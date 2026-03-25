@@ -173,6 +173,30 @@ describe('ProductosServiciosService V1 adicionales', () => {
     }>,
     selectedByPreguntaId: Map<string, string>,
   ) => Set<string>;
+  let evaluateGranFormatoImposicionCandidates: (input: {
+    maquina: {
+      anchoUtil: unknown;
+      parametrosTecnicosJson?: unknown;
+      plantilla: string;
+      capacidadesAvanzadasJson?: unknown;
+    } | null;
+    medidas: Array<{
+      anchoMm: number;
+      altoMm: number;
+      cantidad: number;
+    }>;
+    config: {
+      permitirRotacion: boolean;
+      separacionHorizontalMm: number;
+      separacionVerticalMm: number;
+      margenLateralIzquierdoMmOverride: number | null;
+      margenLateralDerechoMmOverride: number | null;
+      margenInicioMmOverride: number | null;
+      margenFinalMmOverride: number | null;
+      criterioOptimizacion: string;
+    };
+    variants: Array<Record<string, unknown>>;
+  }) => Array<Record<string, any>>;
 
   beforeEach(() => {
     service = new ProductosServiciosService({} as never);
@@ -224,6 +248,10 @@ describe('ProductosServiciosService V1 adicionales', () => {
       service as unknown as Record<string, unknown>,
       'resolveChecklistPreguntaIdsActivas',
     ) as typeof resolveChecklistPreguntaIdsActivas;
+    evaluateGranFormatoImposicionCandidates = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'evaluateGranFormatoImposicionCandidates',
+    ) as typeof evaluateGranFormatoImposicionCandidates;
   });
 
   it('usa la ruta completa para márgenes de imposición aunque haya filtros por addon', () => {
@@ -1665,5 +1693,56 @@ describe('ProductosServiciosService V1 adicionales', () => {
         },
       ),
     ).rejects.toThrow('reglas de impresión duplicadas');
+  });
+
+  it('permite rotar piezas individualmente para generar un layout mixto más eficiente', () => {
+    const candidates = evaluateGranFormatoImposicionCandidates.call(service, {
+      maquina: {
+        anchoUtil: 100,
+        plantilla: 'impresora_uv_rollo',
+        parametrosTecnicosJson: {
+          anchoImprimibleMaximo: 100,
+        },
+        capacidadesAvanzadasJson: {},
+      },
+      medidas: [
+        {
+          anchoMm: 700,
+          altoMm: 400,
+          cantidad: 3,
+        },
+      ],
+      config: {
+        permitirRotacion: true,
+        separacionHorizontalMm: 0,
+        separacionVerticalMm: 0,
+        margenLateralIzquierdoMmOverride: null,
+        margenLateralDerechoMmOverride: null,
+        margenInicioMmOverride: null,
+        margenFinalMmOverride: null,
+        criterioOptimizacion: 'menor_desperdicio',
+      },
+      variants: [
+        {
+          id: 'variant-roll-100',
+          atributosVarianteJson: {
+            ancho: 1,
+          },
+        },
+      ],
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toEqual(
+      expect.objectContaining({
+        orientacion: 'mixta',
+        piecesPerRow: 2,
+        rows: 2,
+        consumedLengthMm: 1100,
+      }),
+    );
+    expect(candidates[0].placements).toHaveLength(3);
+    expect(candidates[0].placements.some((item: { rotated: boolean }) => item.rotated)).toBe(true);
+    expect(candidates[0].placements.some((item: { rotated: boolean }) => !item.rotated)).toBe(true);
   });
 });

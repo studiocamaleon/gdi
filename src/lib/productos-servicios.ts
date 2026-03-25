@@ -2,6 +2,15 @@ export type TipoProductoServicio = 'producto' | 'servicio';
 export type EstadoProductoServicio = 'activo' | 'inactivo';
 export type MotorCategory = 'digital_sheet' | 'wide_format';
 export type TipoVentaGranFormato = 'm2' | 'metro_lineal';
+export type UnidadComercialProducto = 'unidad' | 'm2' | 'metro_lineal';
+export const unidadComercialProductoItems: Array<{
+  value: UnidadComercialProducto;
+  label: string;
+}> = [
+  { value: 'unidad', label: 'Unidad' },
+  { value: 'm2', label: 'Metro cuadrado' },
+  { value: 'metro_lineal', label: 'Metro lineal' },
+];
 export type TipoImpresionProductoVariante = 'bn' | 'cmyk';
 export type CarasProductoVariante = 'simple_faz' | 'doble_faz';
 export type DimensionOpcionProductiva = 'tipo_impresion' | 'caras';
@@ -179,7 +188,7 @@ export type SubfamiliaProducto = {
   familiaProductoNombre: string;
   codigo: string;
   nombre: string;
-  unidadComercial: string;
+  unidadComercial: UnidadComercialProducto;
   activo: boolean;
   createdAt: string;
   updatedAt: string;
@@ -351,7 +360,6 @@ export type DigitalProductDetailModel = {
 
 export type GranFormatoConfig = {
   productoId: string;
-  tipoVenta: TipoVentaGranFormato;
   tecnologiasCompatibles: string[];
   maquinasCompatibles: string[];
   perfilesCompatibles: string[];
@@ -362,8 +370,36 @@ export type GranFormatoConfig = {
 };
 
 export type GranFormatoImposicionCriterioOptimizacion =
+  | "menor_costo_total"
   | "menor_desperdicio"
   | "menor_largo_consumido";
+
+export type GranFormatoPanelizadoDireccion = "automatica" | "vertical" | "horizontal";
+export type GranFormatoPanelizadoDistribucion = "equilibrada" | "libre";
+export type GranFormatoPanelizadoInterpretacionAnchoMaximo = "total" | "util";
+export type GranFormatoPanelizadoModo = "automatico" | "manual";
+
+export type GranFormatoPanelManualItem = {
+  panelIndex: number;
+  usefulWidthMm: number;
+  usefulHeightMm: number;
+  overlapStartMm: number;
+  overlapEndMm: number;
+  finalWidthMm: number;
+  finalHeightMm: number;
+};
+
+export type GranFormatoPanelManualLayoutItem = {
+  sourcePieceId: string;
+  pieceWidthMm: number;
+  pieceHeightMm: number;
+  axis: "vertical" | "horizontal";
+  panels: GranFormatoPanelManualItem[];
+};
+
+export type GranFormatoPanelManualLayout = {
+  items: GranFormatoPanelManualLayoutItem[];
+};
 
 export type GranFormatoImposicionMedida = {
   anchoMm: number | null;
@@ -387,6 +423,14 @@ export type GranFormatoImposicionConfig = {
   margenInicioMmOverride: number | null;
   margenFinalMmOverride: number | null;
   criterioOptimizacion: GranFormatoImposicionCriterioOptimizacion;
+  panelizadoActivo: boolean;
+  panelizadoDireccion: GranFormatoPanelizadoDireccion;
+  panelizadoSolapeMm: number | null;
+  panelizadoAnchoMaxPanelMm: number | null;
+  panelizadoDistribucion: GranFormatoPanelizadoDistribucion;
+  panelizadoInterpretacionAnchoMaximo: GranFormatoPanelizadoInterpretacionAnchoMaximo;
+  panelizadoModo: GranFormatoPanelizadoModo;
+  panelizadoManualLayout: GranFormatoPanelManualLayout | null;
 };
 
 export type GranFormatoRutaBaseReglaImpresion = {
@@ -733,17 +777,36 @@ export type PreviewGranFormatoCostosPayload = {
     preguntaId: string;
     respuestaId: string;
   }>;
+  panelizado?: {
+    activo?: boolean;
+    modo?: GranFormatoPanelizadoModo | null;
+    direccion?: GranFormatoPanelizadoDireccion | null;
+    solapeMm?: number | null;
+    anchoMaxPanelMm?: number | null;
+    distribucion?: GranFormatoPanelizadoDistribucion | null;
+    interpretacionAnchoMaximo?: GranFormatoPanelizadoInterpretacionAnchoMaximo | null;
+    manualLayout?: GranFormatoPanelManualLayout | null;
+  };
 };
 
 export type GranFormatoCostosNestingPiece = {
   id: string;
   w: number;
   h: number;
+  usefulW?: number | null;
+  usefulH?: number | null;
   cx: number;
   cy: number;
   color: string;
   label: string;
   textColor?: string;
+  rotated?: boolean;
+  panelIndex?: number | null;
+  panelCount?: number | null;
+  panelAxis?: "vertical" | "horizontal" | null;
+  sourcePieceId?: string | null;
+  overlapStart?: number | null;
+  overlapEnd?: number | null;
 };
 
 export type GranFormatoCostosNestingPreview = {
@@ -753,6 +816,14 @@ export type GranFormatoCostosNestingPreview = {
   marginRight: number;
   marginStart: number;
   marginEnd: number;
+  panelizado?: boolean;
+  panelAxis?: "vertical" | "horizontal" | null;
+  panelCount?: number;
+  panelOverlap?: number | null;
+  panelMaxWidth?: number | null;
+  panelDistribution?: GranFormatoPanelizadoDistribucion | null;
+  panelWidthInterpretation?: GranFormatoPanelizadoInterpretacionAnchoMaximo | null;
+  panelMode?: GranFormatoPanelizadoModo | null;
   pieces: GranFormatoCostosNestingPiece[];
 };
 
@@ -765,7 +836,15 @@ export type GranFormatoCostosResumenTecnico = {
   }>;
   anchoRolloMm: number;
   anchoImprimibleMm: number;
-  orientacion: "normal" | "rotada";
+  orientacion: "normal" | "rotada" | "mixta";
+  panelizado: boolean;
+  panelAxis: "vertical" | "horizontal" | null;
+  panelCount: number;
+  panelOverlapMm: number | null;
+  panelMaxWidthMm: number | null;
+  panelDistribution: GranFormatoPanelizadoDistribucion | null;
+  panelWidthInterpretation: GranFormatoPanelizadoInterpretacionAnchoMaximo | null;
+  panelMode: GranFormatoPanelizadoModo | null;
   piezasPorFila: number;
   filas: number;
   largoConsumidoMm: number;
@@ -773,6 +852,10 @@ export type GranFormatoCostosResumenTecnico = {
   areaConsumidaM2: number;
   areaDesperdicioM2: number;
   desperdicioPct: number;
+  costoSustrato: number;
+  costoTinta: number;
+  costoTiempo: number;
+  costoTotal: number;
 };
 
 export type GranFormatoCostosMaterialItem = {
@@ -806,6 +889,9 @@ export type GranFormatoCostosCentroItem = {
 
 export type GranFormatoCostosResponse = {
   productoId: string;
+  snapshotId?: string;
+  createdAt?: string;
+  cantidadTotal: number;
   periodo: string;
   tecnologia: string;
   maquinaId: string | null;

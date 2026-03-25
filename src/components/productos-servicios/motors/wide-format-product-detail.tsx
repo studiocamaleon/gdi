@@ -3,7 +3,18 @@
 import * as React from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { PlusIcon, PrinterIcon, SaveIcon, Trash2Icon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  InfoIcon,
+  PencilIcon,
+  PlusIcon,
+  PrinterIcon,
+  SaveIcon,
+  Settings2Icon,
+  Trash2Icon,
+  TrophyIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
@@ -12,6 +23,16 @@ import {
   ProductoServicioChecklistCotizador,
   ProductoServicioChecklistEditor,
 } from "@/components/productos-servicios/producto-servicio-checklist";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +50,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { getVarianteOptionChips } from "@/lib/materias-primas-variantes-display";
 import type { MateriaPrimaVariante } from "@/lib/materias-primas";
@@ -40,6 +62,8 @@ import {
 } from "@/lib/maquinaria";
 import {
   assignProductoMotor,
+  getCotizacionProductoById,
+  getCotizacionesProductoServicio,
   getGranFormatoConfig,
   getGranFormatoChecklist,
   previewGranFormatoCostos,
@@ -47,17 +71,40 @@ import {
   updateGranFormatoConfig,
   updateGranFormatoChecklist,
   updateGranFormatoRutaBase,
+  updateProductoImpuesto,
+  updateProductoPrecio,
+  updateProductoPrecioEspecialClientes,
   updateProductoServicio,
 } from "@/lib/productos-servicios-api";
+import { simularPrecioComercial } from "@/lib/productos-servicios-simulacion";
 import {
+  type CotizacionProductoSnapshotResumen,
   type GranFormatoImposicionConfig,
   type GranFormatoImposicionCriterioOptimizacion,
+  type GranFormatoPanelManualLayout,
+  type GranFormatoPanelManualLayoutItem,
+  type GranFormatoPanelManualItem,
+  type GranFormatoPanelizadoDireccion,
+  type GranFormatoPanelizadoDistribucion,
+  type GranFormatoPanelizadoInterpretacionAnchoMaximo,
+  type GranFormatoPanelizadoModo,
   type GranFormatoCostosResponse,
+  type MetodoCalculoPrecioProducto,
+  type ProductoImpuestoCatalogo,
   type ProductoChecklist,
   type ProductoChecklistPayload,
+  type ProductoPrecioComisionItem,
+  type ProductoPrecioComisionTipo,
+  type ProductoPrecioConfig,
+  type ProductoPrecioEspecialCliente,
+  type ProductoPrecioFilaCantidadMargen,
+  type ProductoPrecioFilaCantidadPrecio,
+  type ProductoPrecioFilaRangoMargen,
+  type ProductoPrecioFilaRangoPrecio,
+  type UnidadComercialProducto,
   estadoProductoServicioItems,
   tipoProductoServicioItems,
-  type TipoVentaGranFormato,
+  unidadComercialProductoItems,
 } from "@/lib/productos-servicios";
 
 const wideFormatTabs = [
@@ -66,15 +113,97 @@ const wideFormatTabs = [
   { value: "produccion", label: "Ruta base" },
   { value: "checklist", label: "Ruta de opcionales" },
   { value: "imposicion", label: "Imposición" },
-  { value: "cotizador", label: "Costos" },
+  { value: "cotizador", label: "Simular costo" },
   { value: "precio", label: "Precio" },
-  { value: "simulacion-comercial", label: "Simulación comercial" },
+  { value: "simulacion-comercial", label: "Simular venta" },
 ] as const;
 
-const tipoVentaItems: Array<{ value: TipoVentaGranFormato; label: string }> = [
-  { value: "m2", label: "Metro cuadrado" },
-  { value: "metro_lineal", label: "Metro lineal" },
-];
+function getUnidadComercialProductoLabel(value: string | null | undefined) {
+  return (
+    unidadComercialProductoItems.find((item) => item.value === value)?.label ??
+    value?.trim() ??
+    "Unidad"
+  );
+}
+
+function LabelWithTooltip({ label, tooltip }: { label: string; tooltip: string }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span>{label}</span>
+      <Tooltip>
+        <TooltipTrigger className="inline-flex items-center text-muted-foreground transition-colors hover:text-foreground">
+          <InfoIcon className="size-3.5" />
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-xs text-xs">
+          {tooltip}
+        </TooltipContent>
+      </Tooltip>
+    </span>
+  );
+}
+
+function resolveUnidadComercialProducto(value: string | null | undefined): UnidadComercialProducto | null {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === "unidad" || normalized === "unidades") return "unidad";
+  if (normalized === "m2" || normalized === "m²" || normalized === "metro cuadrado" || normalized === "metros cuadrados") {
+    return "m2";
+  }
+  if (
+    normalized === "metro_lineal" ||
+    normalized === "ml" ||
+    normalized === "metro lineal" ||
+    normalized === "metros lineales"
+  ) {
+    return "metro_lineal";
+  }
+  return null;
+}
+
+function getUnidadComercialProductoSuffix(value: string | null | undefined) {
+  const normalized = normalizeUnidadComercialProducto(value);
+  if (normalized === "m2") return "m2";
+  if (normalized === "metro_lineal") return "ml";
+  return "unidad";
+}
+
+function normalizeUnidadComercialProducto(value: string | null | undefined): UnidadComercialProducto {
+  return resolveUnidadComercialProducto(value) ?? "unidad";
+}
+
+function normalizeWideFormatMeasurementUnit(
+  value: string | null | undefined,
+  unidadComercial: UnidadComercialProducto,
+) {
+  const resolved = resolveUnidadComercialProducto(value);
+  if (!resolved || resolved === "unidad") {
+    return unidadComercial;
+  }
+  return resolved;
+}
+
+function buildWideFormatPrecioConfigDraft(
+  precio: ProductoPrecioConfig | null | undefined,
+  unidadComercial: UnidadComercialProducto,
+) {
+  const config = buildPrecioConfigDraft(precio, unidadComercial);
+  return {
+    ...config,
+    measurementUnit: normalizeWideFormatMeasurementUnit(config.measurementUnit, unidadComercial),
+  } as ProductoPrecioConfig;
+}
+
+function buildWideFormatPrecioEspecialClienteDraft(
+  item: ProductoPrecioEspecialCliente | null | undefined,
+  unidadComercial: UnidadComercialProducto,
+) {
+  const draft = buildPrecioEspecialClienteDraft(item ?? null, unidadComercial);
+  return {
+    ...draft,
+    measurementUnit: normalizeWideFormatMeasurementUnit(draft.measurementUnit, unidadComercial),
+  };
+}
+
 const EMPTY_MATERIAL_BASE_VALUE = "__empty_material_base__";
 const PlotterSimulator = dynamic(() => import("@/components/plotter-simulator"), {
   ssr: false,
@@ -95,9 +224,134 @@ const imposicionOptimizationItems: Array<{
   value: GranFormatoImposicionCriterioOptimizacion;
   label: string;
 }> = [
+  { value: "menor_costo_total", label: "Menor costo total" },
   { value: "menor_desperdicio", label: "Menor desperdicio" },
   { value: "menor_largo_consumido", label: "Menor largo consumido" },
 ];
+
+const panelizadoDireccionItems: Array<{
+  value: GranFormatoPanelizadoDireccion;
+  label: string;
+}> = [
+  { value: "automatica", label: "Automática" },
+  { value: "vertical", label: "Vertical" },
+  { value: "horizontal", label: "Horizontal" },
+];
+
+const panelizadoDistribucionItems: Array<{
+  value: GranFormatoPanelizadoDistribucion;
+  label: string;
+}> = [
+  { value: "equilibrada", label: "Equilibrada" },
+  { value: "libre", label: "Libre" },
+];
+
+const panelizadoInterpretacionItems: Array<{
+  value: GranFormatoPanelizadoInterpretacionAnchoMaximo;
+  label: string;
+}> = [
+  { value: "total", label: "Ancho total del panel" },
+  { value: "util", label: "Ancho útil sin solape" },
+];
+const MIN_MANUAL_PANEL_USEFUL_MM = 20;
+
+function compareGranFormatoPreviewItems(
+  left: GranFormatoImposicionPreviewItem,
+  right: GranFormatoImposicionPreviewItem,
+  criterio: GranFormatoImposicionCriterioOptimizacion,
+) {
+  if (criterio === "menor_costo_total") {
+    return left.estimatedCostTotal - right.estimatedCostTotal || left.wasteAreaM2 - right.wasteAreaM2;
+  }
+  if (criterio === "menor_largo_consumido") {
+    return left.consumedLengthMm - right.consumedLengthMm || left.wasteAreaM2 - right.wasteAreaM2;
+  }
+  return left.wasteAreaM2 - right.wasteAreaM2 || left.consumedLengthMm - right.consumedLengthMm;
+}
+
+function buildManualLayoutFromPlacements(
+  placements: GranFormatoImposicionPlacement[],
+): GranFormatoPanelManualLayout | null {
+  const groups = new Map<string, GranFormatoPanelManualLayoutItem>();
+  for (const placement of placements) {
+    if (!placement.sourcePieceId || !placement.panelIndex || !placement.panelAxis) {
+      continue;
+    }
+    const current =
+      groups.get(placement.sourcePieceId) ??
+      {
+        sourcePieceId: placement.sourcePieceId,
+        pieceWidthMm: placement.originalWidthMm,
+        pieceHeightMm: placement.originalHeightMm,
+        axis: placement.panelAxis,
+        panels: [] as GranFormatoPanelManualItem[],
+      };
+    current.panels.push({
+      panelIndex: placement.panelIndex,
+      usefulWidthMm: placement.usefulWidthMm,
+      usefulHeightMm: placement.usefulHeightMm,
+      overlapStartMm: placement.overlapStartMm,
+      overlapEndMm: placement.overlapEndMm,
+      finalWidthMm: placement.widthMm,
+      finalHeightMm: placement.heightMm,
+    });
+    groups.set(placement.sourcePieceId, current);
+  }
+  const items = Array.from(groups.values())
+    .map((item) => ({
+      ...item,
+      panels: [...item.panels].sort((a, b) => a.panelIndex - b.panelIndex),
+    }))
+    .sort((a, b) => a.sourcePieceId.localeCompare(b.sourcePieceId));
+  return items.length ? { items } : null;
+}
+
+function recalculateManualLayoutItem(
+  item: GranFormatoPanelManualLayoutItem,
+): GranFormatoPanelManualLayoutItem {
+  return {
+    ...item,
+    panels: item.panels.map((panel) => ({
+      ...panel,
+      finalWidthMm:
+        item.axis === "vertical"
+          ? panel.usefulWidthMm + panel.overlapStartMm + panel.overlapEndMm
+          : item.pieceWidthMm,
+      finalHeightMm:
+        item.axis === "horizontal"
+          ? panel.usefulHeightMm + panel.overlapStartMm + panel.overlapEndMm
+          : item.pieceHeightMm,
+    })),
+  };
+}
+
+function validateManualLayoutItem(input: {
+  item: GranFormatoPanelManualLayoutItem;
+  printableWidthMm: number;
+  maxPanelWidthMm: number | null;
+  widthInterpretation: GranFormatoPanelizadoInterpretacionAnchoMaximo;
+}) {
+  const dimension = input.item.axis === "vertical" ? input.item.pieceWidthMm : input.item.pieceHeightMm;
+  const usefulTotal = input.item.panels.reduce(
+    (acc, panel) =>
+      acc + (input.item.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm),
+    0,
+  );
+  if (Math.abs(usefulTotal - dimension) > 1) {
+    return false;
+  }
+  return input.item.panels.every((panel) => {
+    const useful = input.item.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm;
+    const final = input.item.axis === "vertical" ? panel.finalWidthMm : panel.finalHeightMm;
+    const withinConfiguredLimit =
+      input.maxPanelWidthMm == null
+        ? true
+        : input.widthInterpretation === "total"
+          ? final <= input.maxPanelWidthMm
+          : useful <= input.maxPanelWidthMm;
+    return useful >= MIN_MANUAL_PANEL_USEFUL_MM && final <= input.printableWidthMm && withinConfiguredLimit;
+  });
+}
 
 const defaultGranFormatoImposicionConfig: GranFormatoImposicionConfig = {
   medidas: [createGranFormatoImposicionMedida()],
@@ -114,7 +368,15 @@ const defaultGranFormatoImposicionConfig: GranFormatoImposicionConfig = {
   margenLateralDerechoMmOverride: null,
   margenInicioMmOverride: null,
   margenFinalMmOverride: null,
-  criterioOptimizacion: "menor_desperdicio",
+  criterioOptimizacion: "menor_costo_total",
+  panelizadoActivo: false,
+  panelizadoDireccion: "automatica",
+  panelizadoSolapeMm: null,
+  panelizadoAnchoMaxPanelMm: null,
+  panelizadoDistribucion: "equilibrada",
+  panelizadoInterpretacionAnchoMaximo: "total",
+  panelizadoModo: "automatico",
+  panelizadoManualLayout: null,
 };
 
 function createGranFormatoImposicionMedida() {
@@ -123,6 +385,269 @@ function createGranFormatoImposicionMedida() {
     altoMm: null,
     cantidad: 1,
   };
+}
+
+type PrecioEspecialClienteConfirmDelete = {
+  id: string;
+  clienteNombre: string;
+};
+
+type PrecioEspecialClienteDraft = {
+  id: string;
+  clienteId: string;
+  clienteNombre: string;
+  descripcion: string;
+  activo: boolean;
+  createdAt: string;
+  updatedAt: string;
+  metodoCalculo: MetodoCalculoPrecioProducto;
+  measurementUnit: string | null;
+  impuestos: ProductoPrecioConfig["impuestos"];
+  detalle: Record<string, unknown>;
+};
+
+type PrecioComisionDraft = ProductoPrecioComisionItem;
+
+const metodoCalculoPrecioLabels: Record<MetodoCalculoPrecioProducto, string> = {
+  margen_variable: "Cantidad libre por margen variable",
+  por_margen: "Precio fijo por margen fijo",
+  precio_fijo: "Precio fijo",
+  fijado_por_cantidad: "Cantidades fijas con precio fijo",
+  fijo_con_margen_variable: "Cantidades fijas con margen variable",
+  variable_por_cantidad: "Rangos de precio con precio fijo",
+  precio_fijo_para_margen_minimo: "Precio fijo para margen mínimo",
+};
+
+const metodoCalculoPrecioItems: Array<{ value: MetodoCalculoPrecioProducto; label: string }> = [
+  { value: "margen_variable", label: metodoCalculoPrecioLabels.margen_variable },
+  { value: "por_margen", label: metodoCalculoPrecioLabels.por_margen },
+  { value: "precio_fijo", label: metodoCalculoPrecioLabels.precio_fijo },
+  { value: "fijado_por_cantidad", label: metodoCalculoPrecioLabels.fijado_por_cantidad },
+  { value: "fijo_con_margen_variable", label: metodoCalculoPrecioLabels.fijo_con_margen_variable },
+  { value: "variable_por_cantidad", label: metodoCalculoPrecioLabels.variable_por_cantidad },
+  { value: "precio_fijo_para_margen_minimo", label: metodoCalculoPrecioLabels.precio_fijo_para_margen_minimo },
+];
+
+const precioComisionTipoLabels: Record<ProductoPrecioComisionTipo, string> = {
+  financiera: "Financiera",
+  vendedor: "Vendedor",
+};
+
+const precioComisionTipoItems: Array<{ value: ProductoPrecioComisionTipo; label: string }> = [
+  { value: "financiera", label: precioComisionTipoLabels.financiera },
+  { value: "vendedor", label: precioComisionTipoLabels.vendedor },
+];
+
+function buildDefaultPrecioDetalle(metodoCalculo: MetodoCalculoPrecioProducto) {
+  if (metodoCalculo === "por_margen") {
+    return { marginPct: 0, minimumMarginPct: 0 };
+  }
+  if (metodoCalculo === "precio_fijo") {
+    return { price: 0, minimumPrice: 0 };
+  }
+  if (metodoCalculo === "precio_fijo_para_margen_minimo") {
+    return { price: 0, minimumPrice: 0, minimumMarginPct: 0 };
+  }
+  if (metodoCalculo === "fijado_por_cantidad") {
+    return { tiers: [{ quantity: 1, price: 0 }] as ProductoPrecioFilaCantidadPrecio[] };
+  }
+  if (metodoCalculo === "fijo_con_margen_variable") {
+    return { tiers: [{ quantity: 1, marginPct: 0 }] as ProductoPrecioFilaCantidadMargen[] };
+  }
+  if (metodoCalculo === "variable_por_cantidad") {
+    return { tiers: [{ quantityUntil: 1, price: 0 }] as ProductoPrecioFilaRangoPrecio[] };
+  }
+  return { tiers: [{ quantityUntil: 1, marginPct: 0 }] as ProductoPrecioFilaRangoMargen[] };
+}
+
+function buildDefaultPrecioImpuestos() {
+  return {
+    esquemaId: null,
+    esquemaNombre: "",
+    items: [],
+    porcentajeTotal: 0,
+  };
+}
+
+function buildDefaultPrecioComisiones() {
+  return {
+    items: [] as ProductoPrecioComisionItem[],
+    porcentajeTotal: 0,
+  };
+}
+
+function clonePrecioDetalle(
+  metodoCalculo: MetodoCalculoPrecioProducto,
+  detalle: ProductoPrecioConfig["detalle"],
+): ProductoPrecioConfig["detalle"] {
+  if (metodoCalculo === "por_margen") {
+    const current = detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "por_margen" }>["detalle"];
+    return { marginPct: current.marginPct, minimumMarginPct: current.minimumMarginPct };
+  }
+  if (metodoCalculo === "precio_fijo") {
+    const current = detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo" }>["detalle"];
+    return { price: current.price, minimumPrice: current.minimumPrice };
+  }
+  if (metodoCalculo === "precio_fijo_para_margen_minimo") {
+    const current = detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo_para_margen_minimo" }>["detalle"];
+    return {
+      price: current.price,
+      minimumPrice: current.minimumPrice,
+      minimumMarginPct: current.minimumMarginPct,
+    };
+  }
+  if (metodoCalculo === "fijado_por_cantidad") {
+    const current = detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>["detalle"];
+    return { tiers: current.tiers.map((tier) => ({ ...tier })) };
+  }
+  if (metodoCalculo === "fijo_con_margen_variable") {
+    const current = detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>["detalle"];
+    return { tiers: current.tiers.map((tier) => ({ ...tier })) };
+  }
+  if (metodoCalculo === "variable_por_cantidad") {
+    const current = detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>["detalle"];
+    return { tiers: current.tiers.map((tier) => ({ ...tier })) };
+  }
+  const current = detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>["detalle"];
+  return { tiers: current.tiers.map((tier) => ({ ...tier })) };
+}
+
+function buildPrecioConfigDraft(
+  precio: ProductoPrecioConfig | null | undefined,
+  measurementUnitFallback: string,
+): ProductoPrecioConfig {
+  const metodoCalculo = precio?.metodoCalculo ?? "margen_variable";
+  const detalle = precio?.detalle ?? buildDefaultPrecioDetalle(metodoCalculo);
+  return {
+    metodoCalculo,
+    measurementUnit: precio?.measurementUnit ?? measurementUnitFallback,
+    impuestos: precio?.impuestos
+      ? {
+          esquemaId: precio.impuestos.esquemaId,
+          esquemaNombre: precio.impuestos.esquemaNombre,
+          items: precio.impuestos.items.map((item) => ({ ...item })),
+          porcentajeTotal: precio.impuestos.porcentajeTotal,
+        }
+      : buildDefaultPrecioImpuestos(),
+    comisiones: precio?.comisiones
+      ? {
+          items: precio.comisiones.items.map((item) => ({ ...item })),
+          porcentajeTotal: precio.comisiones.porcentajeTotal,
+        }
+      : buildDefaultPrecioComisiones(),
+    detalle: clonePrecioDetalle(metodoCalculo, detalle),
+  } as ProductoPrecioConfig;
+}
+
+function buildPrecioConfigForMethod(
+  metodoCalculo: MetodoCalculoPrecioProducto,
+  measurementUnit: string | null,
+): ProductoPrecioConfig {
+  return {
+    metodoCalculo,
+    measurementUnit,
+    impuestos: buildDefaultPrecioImpuestos(),
+    comisiones: buildDefaultPrecioComisiones(),
+    detalle: buildDefaultPrecioDetalle(metodoCalculo),
+  } as ProductoPrecioConfig;
+}
+
+function buildPrecioComisionDraft(item?: ProductoPrecioComisionItem | null): PrecioComisionDraft {
+  return {
+    id: item?.id ?? crypto.randomUUID(),
+    nombre: item?.nombre ?? "",
+    tipo: item?.tipo ?? "financiera",
+    porcentaje: item?.porcentaje ?? 0,
+    activo: item?.activo ?? true,
+  };
+}
+
+function buildPrecioEspecialClienteDraft(
+  item: ProductoPrecioEspecialCliente | null | undefined,
+  measurementUnitFallback: string,
+): PrecioEspecialClienteDraft {
+  const precio = buildPrecioConfigDraft(item, measurementUnitFallback);
+  const now = new Date().toISOString();
+  return {
+    id: item?.id ?? crypto.randomUUID(),
+    clienteId: item?.clienteId ?? "",
+    clienteNombre: item?.clienteNombre ?? "",
+    descripcion: item?.descripcion ?? "",
+    activo: item?.activo ?? true,
+    createdAt: item?.createdAt ?? now,
+    updatedAt: item?.updatedAt ?? now,
+    ...precio,
+  } as PrecioEspecialClienteDraft;
+}
+
+function getPrecioEspecialClienteResumen(item: ProductoPrecioEspecialCliente | PrecioEspecialClienteDraft) {
+  if (item.metodoCalculo === "por_margen") {
+    const detail = item.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "por_margen" }>["detalle"];
+    return `${detail.marginPct}%`;
+  }
+  if (item.metodoCalculo === "precio_fijo") {
+    const detail = item.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo" }>["detalle"];
+    return `${detail.price}`;
+  }
+  if (item.metodoCalculo === "fijado_por_cantidad") {
+    const detail = item.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>["detalle"];
+    return detail.tiers.map((tier: ProductoPrecioFilaCantidadPrecio) => tier.quantity).join(", ");
+  }
+  if (item.metodoCalculo === "fijo_con_margen_variable") {
+    const detail = item.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>["detalle"];
+    return detail.tiers.map((tier: ProductoPrecioFilaCantidadMargen) => `${tier.quantity}: ${tier.marginPct}%`).join(", ");
+  }
+  if (item.metodoCalculo === "variable_por_cantidad") {
+    const detail = item.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>["detalle"];
+    return detail.tiers.map((tier: ProductoPrecioFilaRangoPrecio) => `Hasta ${tier.quantityUntil}`).join(", ");
+  }
+  if (item.metodoCalculo === "margen_variable") {
+    const detail = item.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>["detalle"];
+    return detail.tiers
+      .map((tier: ProductoPrecioFilaRangoMargen) => `Hasta ${tier.quantityUntil}: ${tier.marginPct}%`)
+      .join(", ");
+  }
+  return "";
+}
+
+function buildPrecioEspecialClienteFromDraft(
+  draft: PrecioEspecialClienteDraft,
+  clienteNombre: string,
+  updatedAt: string,
+): ProductoPrecioEspecialCliente {
+  return {
+    id: draft.id,
+    clienteId: draft.clienteId,
+    clienteNombre,
+    descripcion: draft.descripcion,
+    activo: draft.activo,
+    createdAt: draft.createdAt,
+    updatedAt,
+    metodoCalculo: draft.metodoCalculo,
+    measurementUnit: draft.measurementUnit,
+    impuestos: draft.impuestos,
+    detalle: draft.detalle,
+  } as ProductoPrecioEspecialCliente;
+}
+
+function getPrecioMethodLabel(value: MetodoCalculoPrecioProducto) {
+  return metodoCalculoPrecioLabels[value] ?? value;
+}
+
+function getPrecioMethodDescription(value: MetodoCalculoPrecioProducto) {
+  if (value === "margen_variable") return "Define márgenes por tramos para vender en cualquier cantidad.";
+  if (value === "por_margen") return "El precio de venta se calcula desde el costo usando un margen fijo.";
+  if (value === "precio_fijo") return "El precio de venta se define manualmente como un valor fijo único.";
+  if (value === "fijado_por_cantidad") return "Define cantidades exactas habilitadas y un precio fijo para cada una.";
+  if (value === "fijo_con_margen_variable") return "Define cantidades exactas habilitadas y un margen variable para cada una.";
+  if (value === "variable_por_cantidad") return "Define rangos de cantidad con un precio fijo para cada tramo.";
+  return "Define los parámetros comerciales del método seleccionado.";
+}
+
+function getVariableRangeLabel(index: number, quantityUntil: number, measurementUnit?: string | null) {
+  const unitSuffix = getUnidadComercialProductoSuffix(measurementUnit);
+  if (index === 0) return `Hasta ${quantityUntil} ${unitSuffix}`;
+  return `Hasta ${quantityUntil} ${unitSuffix}`;
 }
 
 type GranFormatoRutaBaseReglaDraft = {
@@ -137,9 +662,20 @@ type GranFormatoImposicionPlacement = {
   id: string;
   widthMm: number;
   heightMm: number;
+  usefulWidthMm: number;
+  usefulHeightMm: number;
+  overlapStartMm: number;
+  overlapEndMm: number;
   centerXMm: number;
   centerYMm: number;
   label: string;
+  rotated: boolean;
+  originalWidthMm: number;
+  originalHeightMm: number;
+  panelIndex: number | null;
+  panelCount: number | null;
+  panelAxis: "vertical" | "horizontal" | null;
+  sourcePieceId: string | null;
 };
 
 type GranFormatoImposicionPreviewItem = {
@@ -151,7 +687,15 @@ type GranFormatoImposicionPreviewItem = {
   marginRightMm: number;
   marginStartMm: number;
   marginEndMm: number;
-  rotated: boolean;
+  orientacion: "normal" | "rotada" | "mixta";
+  panelizado: boolean;
+  panelAxis: "vertical" | "horizontal" | null;
+  panelCount: number;
+  panelOverlapMm: number | null;
+  panelMaxWidthMm: number | null;
+  panelDistribution: GranFormatoPanelizadoDistribucion | null;
+  panelWidthInterpretation: GranFormatoPanelizadoInterpretacionAnchoMaximo | null;
+  panelMode: GranFormatoPanelizadoModo | null;
   piecesPerRow: number;
   rows: number;
   consumedLengthMm: number;
@@ -160,6 +704,7 @@ type GranFormatoImposicionPreviewItem = {
   wasteAreaM2: number;
   wastePct: number;
   placements: GranFormatoImposicionPlacement[];
+  estimatedCostTotal: number;
 };
 
 function createRutaBaseReglaDraft(): GranFormatoRutaBaseReglaDraft {
@@ -257,7 +802,42 @@ function normalizeImposicionSnapshot(config: GranFormatoImposicionConfig) {
     margenInicioMmOverride: config.margenInicioMmOverride ?? null,
     margenFinalMmOverride: config.margenFinalMmOverride ?? null,
     criterioOptimizacion: config.criterioOptimizacion,
+    panelizadoActivo: config.panelizadoActivo === true,
+    panelizadoDireccion: config.panelizadoDireccion ?? "automatica",
+    panelizadoSolapeMm: config.panelizadoSolapeMm ?? null,
+    panelizadoAnchoMaxPanelMm: config.panelizadoAnchoMaxPanelMm ?? null,
+    panelizadoDistribucion: config.panelizadoDistribucion ?? "equilibrada",
+    panelizadoInterpretacionAnchoMaximo: config.panelizadoInterpretacionAnchoMaximo ?? "total",
+    panelizadoModo: config.panelizadoModo ?? "automatico",
+    panelizadoManualLayout: config.panelizadoManualLayout
+      ? {
+          items: config.panelizadoManualLayout.items.map((item) => ({
+            ...item,
+            panels: item.panels.map((panel) => ({ ...panel })),
+          })),
+        }
+      : null,
   });
+}
+
+function cloneGranFormatoImposicionConfig(config: GranFormatoImposicionConfig): GranFormatoImposicionConfig {
+  return {
+    ...config,
+    medidas: config.medidas.map((item) => ({
+      anchoMm: item.anchoMm ?? null,
+      altoMm: item.altoMm ?? null,
+      cantidad: item.cantidad ?? 1,
+    })),
+    panelizadoModo: config.panelizadoModo ?? "automatico",
+    panelizadoManualLayout: config.panelizadoManualLayout
+      ? {
+          items: config.panelizadoManualLayout.items.map((item) => ({
+            ...item,
+            panels: item.panels.map((panel) => ({ ...panel })),
+          })),
+        }
+      : null,
+  };
 }
 
 function readNumericValue(value: unknown) {
@@ -326,6 +906,542 @@ function getPieceLetterLabel(index: number) {
   return `Pieza ${label}`;
 }
 
+function buildGranFormatoNestingOrientacion(placements: Array<{ rotated: boolean }>) {
+  const hasRotated = placements.some((item) => item.rotated);
+  const hasNormal = placements.some((item) => !item.rotated);
+  if (hasRotated && hasNormal) {
+    return "mixta" as const;
+  }
+  return hasRotated ? ("rotada" as const) : ("normal" as const);
+}
+
+function countGranFormatoRowsAndPiecesPerRow(
+  placements: GranFormatoImposicionPlacement[],
+  toleranceMm: number,
+) {
+  if (!placements.length) {
+    return { rows: 0, piecesPerRow: 0 };
+  }
+  const rows: Array<{ topMm: number; bottomMm: number; count: number }> = [];
+  const sorted = [...placements].sort((a, b) => {
+    const topDiff = a.centerYMm - a.heightMm / 2 - (b.centerYMm - b.heightMm / 2);
+    if (Math.abs(topDiff) > toleranceMm) {
+      return topDiff;
+    }
+    return a.centerXMm - b.centerXMm;
+  });
+  for (const placement of sorted) {
+    const topMm = placement.centerYMm - placement.heightMm / 2;
+    const bottomMm = placement.centerYMm + placement.heightMm / 2;
+    const existing = rows.find(
+      (row) =>
+        Math.abs(row.topMm - topMm) <= toleranceMm ||
+        (topMm <= row.bottomMm - toleranceMm && bottomMm >= row.topMm + toleranceMm),
+    );
+    if (existing) {
+      existing.topMm = Math.min(existing.topMm, topMm);
+      existing.bottomMm = Math.max(existing.bottomMm, bottomMm);
+      existing.count += 1;
+      continue;
+    }
+    rows.push({ topMm, bottomMm, count: 1 });
+  }
+  return {
+    rows: rows.length,
+    piecesPerRow: rows.reduce((max, row) => Math.max(max, row.count), 0),
+  };
+}
+
+function buildGranFormatoPieceInstances(
+  medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>,
+) {
+  return medidas
+    .flatMap((medida, medidaIndex) =>
+      Array.from({ length: Math.max(1, medida.cantidad) }, (_, copyIndex) => ({
+        id: `piece-${medidaIndex}-${copyIndex}`,
+        sourcePieceId: `piece-${medidaIndex}-${copyIndex}`,
+        originalWidthMm: medida.anchoMm,
+        originalHeightMm: medida.altoMm,
+        widthMm: medida.anchoMm,
+        heightMm: medida.altoMm,
+        usefulWidthMm: medida.anchoMm,
+        usefulHeightMm: medida.altoMm,
+        overlapStartMm: 0,
+        overlapEndMm: 0,
+        area: medida.anchoMm * medida.altoMm,
+        longestSide: Math.max(medida.anchoMm, medida.altoMm),
+        shortestSide: Math.min(medida.anchoMm, medida.altoMm),
+        panelIndex: null as number | null,
+        panelCount: null as number | null,
+        panelAxis: null as "vertical" | "horizontal" | null,
+      })),
+    )
+    .sort(
+      (a, b) =>
+        b.longestSide - a.longestSide ||
+        b.area - a.area ||
+        b.shortestSide - a.shortestSide,
+    );
+}
+
+function buildGranFormatoPanelizedMeasures(input: {
+  medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
+  printableWidthMm: number;
+  panelAxis: "vertical" | "horizontal";
+  overlapMm: number;
+  maxPanelWidthMm: number;
+  distribution: GranFormatoPanelizadoDistribucion;
+  widthInterpretation: GranFormatoPanelizadoInterpretacionAnchoMaximo;
+}) {
+  const pieces: Array<{
+    id: string;
+    sourcePieceId: string;
+    originalWidthMm: number;
+    originalHeightMm: number;
+    widthMm: number;
+    heightMm: number;
+    usefulWidthMm: number;
+    usefulHeightMm: number;
+    overlapStartMm: number;
+    overlapEndMm: number;
+    panelIndex: number;
+    panelCount: number;
+    panelAxis: "vertical" | "horizontal";
+  }> = [];
+
+  const buildSplitSizes = (totalMm: number, panelCount: number, maxUsefulWidthMm: number) => {
+    if (input.distribution === "libre") {
+      const sizes: number[] = [];
+      let remaining = totalMm;
+      for (let index = 0; index < panelCount; index += 1) {
+        const segmentsLeft = panelCount - index;
+        if (segmentsLeft === 1) {
+          sizes.push(remaining);
+          break;
+        }
+        const next = Math.min(maxUsefulWidthMm, remaining - (segmentsLeft - 1));
+        sizes.push(next);
+        remaining -= next;
+      }
+      return sizes;
+    }
+
+    const base = Math.floor(totalMm / panelCount);
+    const remainder = totalMm % panelCount;
+    return Array.from({ length: panelCount }, (_, index) => base + (index < remainder ? 1 : 0));
+  };
+
+  for (const [medidaIndex, medida] of input.medidas.entries()) {
+    for (let copyIndex = 0; copyIndex < Math.max(1, medida.cantidad); copyIndex += 1) {
+      const sourcePieceId = `piece-${medidaIndex}-${copyIndex}`;
+      const splitDimension = input.panelAxis === "vertical" ? medida.anchoMm : medida.altoMm;
+      const effectivePhysicalLimitMm = Math.min(input.maxPanelWidthMm, input.printableWidthMm);
+      const effectiveUsefulLimitMm =
+        input.widthInterpretation === "total"
+          ? effectivePhysicalLimitMm - input.overlapMm * 2
+          : effectivePhysicalLimitMm;
+      if (effectiveUsefulLimitMm <= 0 || splitDimension <= effectiveUsefulLimitMm) {
+        return null;
+      }
+      const panelCountResolved = Math.max(2, Math.ceil(splitDimension / effectiveUsefulLimitMm));
+      const panelSizes = buildSplitSizes(splitDimension, panelCountResolved, effectiveUsefulLimitMm);
+      const fits = panelSizes.every((segment, index) => {
+        const extraStart = index === 0 ? 0 : input.overlapMm;
+        const extraEnd = index === panelCountResolved - 1 ? 0 : input.overlapMm;
+        const physicalSize = segment + extraStart + extraEnd;
+        const withinConfiguredLimit =
+          input.widthInterpretation === "total"
+            ? physicalSize <= effectivePhysicalLimitMm
+            : segment <= effectivePhysicalLimitMm;
+        return withinConfiguredLimit && physicalSize <= input.printableWidthMm;
+      });
+
+      if (!fits) {
+        return null;
+      }
+
+      panelSizes.forEach((segment, index) => {
+        const extraStart = index === 0 ? 0 : input.overlapMm;
+        const extraEnd = index === panelCountResolved - 1 ? 0 : input.overlapMm;
+        if (input.panelAxis === "vertical") {
+          pieces.push({
+            id: `${sourcePieceId}-panel-${index + 1}`,
+            sourcePieceId,
+            originalWidthMm: medida.anchoMm,
+            originalHeightMm: medida.altoMm,
+            widthMm: segment + extraStart + extraEnd,
+            heightMm: medida.altoMm,
+            usefulWidthMm: segment,
+            usefulHeightMm: medida.altoMm,
+            overlapStartMm: extraStart,
+            overlapEndMm: extraEnd,
+            panelIndex: index + 1,
+            panelCount: panelCountResolved,
+            panelAxis: input.panelAxis,
+          });
+        } else {
+          pieces.push({
+            id: `${sourcePieceId}-panel-${index + 1}`,
+            sourcePieceId,
+            originalWidthMm: medida.anchoMm,
+            originalHeightMm: medida.altoMm,
+            widthMm: medida.anchoMm,
+            heightMm: segment + extraStart + extraEnd,
+            usefulWidthMm: medida.anchoMm,
+            usefulHeightMm: segment,
+            overlapStartMm: extraStart,
+            overlapEndMm: extraEnd,
+            panelIndex: index + 1,
+            panelCount: panelCountResolved,
+            panelAxis: input.panelAxis,
+          });
+        }
+      });
+    }
+  }
+
+  return pieces
+    .map((piece) => ({
+      ...piece,
+      area: piece.originalWidthMm * piece.originalHeightMm,
+      longestSide: Math.max(piece.widthMm, piece.heightMm),
+      shortestSide: Math.min(piece.widthMm, piece.heightMm),
+    }))
+    .sort(
+      (a, b) =>
+        b.longestSide - a.longestSide ||
+        b.area - a.area ||
+        b.shortestSide - a.shortestSide,
+    );
+}
+
+function buildGranFormatoManualMeasures(input: {
+  medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
+  printableWidthMm: number;
+  maxPanelWidthMm: number;
+  widthInterpretation: GranFormatoPanelizadoInterpretacionAnchoMaximo;
+  manualLayout: GranFormatoPanelManualLayout;
+}) {
+  const sourcePieces = buildGranFormatoPieceInstances(input.medidas);
+  if (sourcePieces.length !== input.manualLayout.items.length) {
+    return null;
+  }
+  const byId = new Map(input.manualLayout.items.map((item) => [item.sourcePieceId, item]));
+  const pieces: Array<{
+    id: string;
+    sourcePieceId: string;
+    originalWidthMm: number;
+    originalHeightMm: number;
+    widthMm: number;
+    heightMm: number;
+    usefulWidthMm: number;
+    usefulHeightMm: number;
+    overlapStartMm: number;
+    overlapEndMm: number;
+    panelIndex: number;
+    panelCount: number;
+    panelAxis: "vertical" | "horizontal";
+    area: number;
+    longestSide: number;
+    shortestSide: number;
+  }> = [];
+
+  for (const sourcePiece of sourcePieces) {
+    const layout = byId.get(sourcePiece.sourcePieceId);
+    if (!layout) {
+      return null;
+    }
+    const targetDimension = layout.axis === "vertical" ? sourcePiece.originalWidthMm : sourcePiece.originalHeightMm;
+    const usefulTotal = layout.panels.reduce(
+      (acc, panel) =>
+        acc + (layout.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm),
+      0,
+    );
+    if (Math.abs(usefulTotal - targetDimension) > 1) {
+      return null;
+    }
+    for (const panel of layout.panels) {
+      const useful = layout.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm;
+      const final = layout.axis === "vertical" ? panel.finalWidthMm : panel.finalHeightMm;
+      const withinConfiguredLimit =
+        input.widthInterpretation === "total"
+          ? final <= input.maxPanelWidthMm
+          : useful <= input.maxPanelWidthMm;
+      if (
+        useful < MIN_MANUAL_PANEL_USEFUL_MM ||
+        final > input.printableWidthMm ||
+        !withinConfiguredLimit
+      ) {
+        return null;
+      }
+      pieces.push({
+        id: `${layout.sourcePieceId}-panel-${panel.panelIndex}`,
+        sourcePieceId: layout.sourcePieceId,
+        originalWidthMm: layout.pieceWidthMm,
+        originalHeightMm: layout.pieceHeightMm,
+        widthMm: panel.finalWidthMm,
+        heightMm: panel.finalHeightMm,
+        usefulWidthMm: panel.usefulWidthMm,
+        usefulHeightMm: panel.usefulHeightMm,
+        overlapStartMm: panel.overlapStartMm,
+        overlapEndMm: panel.overlapEndMm,
+        panelIndex: panel.panelIndex,
+        panelCount: layout.panels.length,
+        panelAxis: layout.axis,
+        area: layout.pieceWidthMm * layout.pieceHeightMm,
+        longestSide: Math.max(panel.finalWidthMm, panel.finalHeightMm),
+        shortestSide: Math.min(panel.finalWidthMm, panel.finalHeightMm),
+      });
+    }
+  }
+
+  return pieces.sort(
+    (a, b) =>
+      b.longestSide - a.longestSide ||
+      b.area - a.area ||
+      b.shortestSide - a.shortestSide,
+  );
+}
+
+function evaluateGranFormatoMixedShelfLayout(input: {
+  printableWidthMm: number;
+  marginLeftMm: number;
+  marginStartMm: number;
+  marginEndMm: number;
+  separacionHorizontalMm: number;
+  separacionVerticalMm: number;
+  permitirRotacion: boolean;
+  medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
+  panelizado?: {
+    activo: boolean;
+    mode: GranFormatoPanelizadoModo;
+    axis: "vertical" | "horizontal";
+    overlapMm: number;
+    maxPanelWidthMm: number;
+    distribution: GranFormatoPanelizadoDistribucion;
+    widthInterpretation: GranFormatoPanelizadoInterpretacionAnchoMaximo;
+    manualLayout?: GranFormatoPanelManualLayout | null;
+  };
+}) {
+  const pieces = input.panelizado?.activo
+    ? input.panelizado.mode === "manual" && input.panelizado.manualLayout
+      ? buildGranFormatoManualMeasures({
+          medidas: input.medidas,
+          printableWidthMm: input.printableWidthMm,
+          maxPanelWidthMm: input.panelizado.maxPanelWidthMm,
+          widthInterpretation: input.panelizado.widthInterpretation,
+          manualLayout: input.panelizado.manualLayout,
+        })
+      : buildGranFormatoPanelizedMeasures({
+        medidas: input.medidas,
+        printableWidthMm: input.printableWidthMm,
+        panelAxis: input.panelizado.axis,
+        overlapMm: input.panelizado.overlapMm,
+        maxPanelWidthMm: input.panelizado.maxPanelWidthMm,
+        distribution: input.panelizado.distribution,
+        widthInterpretation: input.panelizado.widthInterpretation,
+      })
+    : buildGranFormatoPieceInstances(input.medidas);
+  if (!pieces || !pieces.length) {
+    return null;
+  }
+  type Row = { yMm: number; usedWidthMm: number; heightMm: number; count: number };
+  type State = {
+    rows: Row[];
+    placements: GranFormatoImposicionPlacement[];
+  };
+
+  const resolveNextRowY = (rows: Row[]) => {
+    if (!rows.length) {
+      return input.marginStartMm;
+    }
+    const last = rows[rows.length - 1];
+    return last.yMm + last.heightMm + input.separacionVerticalMm;
+  };
+
+  const measureState = (state: State) => {
+    const contentHeightMm = state.rows.reduce((acc, row) => acc + row.heightMm, 0);
+    const verticalGapsMm =
+      state.rows.length > 1 ? (state.rows.length - 1) * input.separacionVerticalMm : 0;
+    const consumedContentLengthMm = contentHeightMm + verticalGapsMm;
+    const placedAreaMm2 = state.placements.reduce(
+      (acc, placement) => acc + placement.originalWidthMm * placement.originalHeightMm,
+      0,
+    );
+    const wasteProxyMm2 = input.printableWidthMm * consumedContentLengthMm - placedAreaMm2;
+    return { consumedContentLengthMm, wasteProxyMm2 };
+  };
+
+  let states: State[] = [{ rows: [], placements: [] }];
+
+  for (const piece of pieces) {
+    const orientations = [
+      {
+        widthMm: piece.widthMm,
+        heightMm: piece.heightMm,
+        rotated: false,
+      },
+      ...(input.permitirRotacion && piece.widthMm !== piece.heightMm
+        ? [
+            {
+              widthMm: piece.heightMm,
+              heightMm: piece.widthMm,
+              rotated: true,
+            },
+          ]
+        : []),
+    ];
+
+    const nextStates: State[] = [];
+
+    for (const state of states) {
+      for (const option of orientations) {
+        if (option.widthMm > input.printableWidthMm) {
+          continue;
+        }
+        for (const [rowIndex, row] of state.rows.entries()) {
+          const nextWidth =
+            row.usedWidthMm === 0
+              ? option.widthMm
+              : row.usedWidthMm + input.separacionHorizontalMm + option.widthMm;
+          if (nextWidth > input.printableWidthMm) {
+            continue;
+          }
+          const rows = state.rows.map((item) => ({ ...item }));
+          const targetRow = rows[rowIndex];
+          const xMm =
+            targetRow.usedWidthMm === 0
+              ? input.marginLeftMm
+              : input.marginLeftMm + targetRow.usedWidthMm + input.separacionHorizontalMm;
+          targetRow.usedWidthMm = nextWidth;
+          targetRow.heightMm = Math.max(targetRow.heightMm, option.heightMm);
+          targetRow.count += 1;
+          nextStates.push({
+            rows,
+            placements: [
+              ...state.placements,
+                {
+                  id: piece.id,
+                  widthMm: option.widthMm,
+                heightMm: option.heightMm,
+                centerXMm: xMm + option.widthMm / 2,
+                centerYMm: targetRow.yMm + option.heightMm / 2,
+                label: `${Math.round(piece.originalWidthMm / 10)}x${Math.round(
+                  piece.originalHeightMm / 10,
+                )} cm`,
+                  rotated: option.rotated,
+                  originalWidthMm: piece.originalWidthMm,
+                  originalHeightMm: piece.originalHeightMm,
+                  panelIndex: piece.panelIndex,
+                  panelCount: piece.panelCount,
+                  panelAxis: piece.panelAxis,
+                  sourcePieceId: piece.sourcePieceId,
+                  usefulWidthMm: piece.usefulWidthMm ?? piece.widthMm,
+                  usefulHeightMm: piece.usefulHeightMm ?? piece.heightMm,
+                  overlapStartMm: piece.overlapStartMm ?? 0,
+                  overlapEndMm: piece.overlapEndMm ?? 0,
+                },
+              ],
+            });
+        }
+
+        const rows = state.rows.map((item) => ({ ...item }));
+        const newRow: Row = {
+          yMm: resolveNextRowY(rows),
+          usedWidthMm: option.widthMm,
+          heightMm: option.heightMm,
+          count: 1,
+        };
+        rows.push(newRow);
+        nextStates.push({
+          rows,
+          placements: [
+            ...state.placements,
+              {
+                id: piece.id,
+                widthMm: option.widthMm,
+              heightMm: option.heightMm,
+              centerXMm: input.marginLeftMm + option.widthMm / 2,
+              centerYMm: newRow.yMm + option.heightMm / 2,
+              label: `${Math.round(piece.originalWidthMm / 10)}x${Math.round(
+                piece.originalHeightMm / 10,
+              )} cm`,
+                rotated: option.rotated,
+                originalWidthMm: piece.originalWidthMm,
+                originalHeightMm: piece.originalHeightMm,
+                panelIndex: piece.panelIndex,
+                panelCount: piece.panelCount,
+                panelAxis: piece.panelAxis,
+                sourcePieceId: piece.sourcePieceId,
+                usefulWidthMm: piece.usefulWidthMm ?? piece.widthMm,
+                usefulHeightMm: piece.usefulHeightMm ?? piece.heightMm,
+                overlapStartMm: piece.overlapStartMm ?? 0,
+                overlapEndMm: piece.overlapEndMm ?? 0,
+              },
+            ],
+          });
+      }
+    }
+
+    if (!nextStates.length) {
+      return null;
+    }
+
+    states = nextStates
+      .sort((a, b) => {
+        const left = measureState(a);
+        const right = measureState(b);
+        return (
+          left.consumedContentLengthMm - right.consumedContentLengthMm ||
+          left.wasteProxyMm2 - right.wasteProxyMm2 ||
+          a.rows.length - b.rows.length
+        );
+      })
+      .slice(0, 12);
+  }
+
+  const bestState = [...states].sort((a, b) => {
+    const left = measureState(a);
+    const right = measureState(b);
+    return (
+      left.consumedContentLengthMm - right.consumedContentLengthMm ||
+      left.wasteProxyMm2 - right.wasteProxyMm2 ||
+      a.rows.length - b.rows.length
+    );
+  })[0];
+
+  const contentHeightMm = bestState.rows.reduce((acc, row) => acc + row.heightMm, 0);
+  const verticalGapsMm =
+    bestState.rows.length > 1 ? (bestState.rows.length - 1) * input.separacionVerticalMm : 0;
+  const consumedLengthMm = input.marginStartMm + input.marginEndMm + contentHeightMm + verticalGapsMm;
+  const usefulAreaM2 = input.medidas.reduce(
+    (acc, item) => acc + ((item.anchoMm * item.altoMm) / 1_000_000) * item.cantidad,
+    0,
+  );
+  const { rows: rowCount, piecesPerRow } = countGranFormatoRowsAndPiecesPerRow(
+    bestState.placements,
+    Math.max(1, input.separacionVerticalMm / 2),
+  );
+
+    return {
+      orientacion: buildGranFormatoNestingOrientacion(bestState.placements),
+      panelizado: input.panelizado?.activo === true,
+      panelAxis: input.panelizado?.activo ? input.panelizado.axis : null,
+      panelCount:
+        bestState.placements.reduce((max, item) => Math.max(max, item.panelCount ?? 1), 1),
+      panelOverlapMm: input.panelizado?.activo ? input.panelizado.overlapMm : null,
+      panelMaxWidthMm: input.panelizado?.activo ? input.panelizado.maxPanelWidthMm : null,
+      panelDistribution: input.panelizado?.activo ? input.panelizado.distribution : null,
+      panelWidthInterpretation: input.panelizado?.activo ? input.panelizado.widthInterpretation : null,
+      panelMode: input.panelizado?.activo ? input.panelizado.mode : null,
+      piecesPerRow,
+      rows: rowCount,
+      consumedLengthMm,
+    usefulAreaM2,
+    placements: bestState.placements,
+  };
+}
+
 function renderGranFormatoMaterialDisplay(item: GranFormatoCostosResponse["materiasPrimas"][number]) {
   if (item.variantChips?.length) {
     return (
@@ -366,6 +1482,20 @@ function formatCurrency(value: number | null | undefined) {
     currency: "ARS",
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+function getPanelizadoInterpretacionLabel(
+  value: GranFormatoPanelizadoInterpretacionAnchoMaximo | null | undefined,
+) {
+  return (
+    panelizadoInterpretacionItems.find((item) => item.value === value)?.label ??
+    "Ancho total del panel"
+  );
+}
+
+function getPanelizadoModoLabel(value: GranFormatoPanelizadoModo | null | undefined) {
+  if (value === "manual") return "Manual";
+  return "Automático";
 }
 
 function getWideFormatMaterialLabel(tipo: string) {
@@ -457,28 +1587,6 @@ function toChecklistPayload(checklist: ProductoChecklist): ProductoChecklistPayl
   };
 }
 
-function PlaceholderTab({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="rounded-lg border border-dashed bg-muted/20 p-6 text-sm text-muted-foreground">
-          Esta sección queda abierta para definir la lógica específica del motor de gran formato.
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 function isWideFormatMachine(maquina: Maquina) {
   return (
     maquina.activo &&
@@ -504,22 +1612,35 @@ export function WideFormatProductDetail({
   plantillasPaso,
   materiasPrimas,
   checklist,
+  initialClientes,
+  initialImpuestosCatalogo,
 }: DigitalProductDetailProps) {
   const [activeTab, setActiveTab] = React.useState("general");
   const [productoState, setProductoState] = React.useState(producto);
+  const clientesOptions = React.useMemo(
+    () => [...initialClientes].sort((a, b) => a.nombre.localeCompare(b.nombre)),
+    [initialClientes],
+  );
+  const [impuestosCatalogo, setImpuestosCatalogo] = React.useState(initialImpuestosCatalogo);
+  const impuestosCatalogoActivos = React.useMemo(
+    () => impuestosCatalogo.filter((item) => item.activo).sort((a, b) => a.nombre.localeCompare(b.nombre)),
+    [impuestosCatalogo],
+  );
   const [isSavingGeneral, startSavingGeneral] = React.useTransition();
   const [isSavingConfig, startSavingConfig] = React.useTransition();
   const [isLoadingConfig, setIsLoadingConfig] = React.useState(true);
+  const [isSavingPrecio, startSavingPrecio] = React.useTransition();
+  const [isSavingPrecioEspecialClientes, startSavingPrecioEspecialClientes] = React.useTransition();
+  const [isSavingImpuestosCatalogo, startSavingImpuestosCatalogo] = React.useTransition();
   const [generalForm, setGeneralForm] = React.useState({
     nombre: producto.nombre,
     descripcion: producto.descripcion ?? "",
     familiaProductoId: producto.familiaProductoId,
     subfamiliaProductoId: producto.subfamiliaProductoId ?? "",
+    unidadComercial: normalizeUnidadComercialProducto(producto.unidadComercial),
     motorCodigo: producto.motorCodigo,
     motorVersion: producto.motorVersion,
   });
-  const [tipoVenta, setTipoVenta] = React.useState<TipoVentaGranFormato>("m2");
-  const [savedTipoVenta, setSavedTipoVenta] = React.useState<TipoVentaGranFormato>("m2");
   const [tecnologiasCompatibles, setTecnologiasCompatibles] = React.useState<string[]>([]);
   const [savedTecnologiasCompatibles, setSavedTecnologiasCompatibles] = React.useState<string[]>([]);
   const [maquinasCompatiblesIds, setMaquinasCompatiblesIds] = React.useState<string[]>([]);
@@ -533,12 +1654,19 @@ export function WideFormatProductDetail({
   const [imposicionConfig, setImposicionConfig] = React.useState<GranFormatoImposicionConfig>(
     defaultGranFormatoImposicionConfig,
   );
+  const [imposicionSimulationConfig, setImposicionSimulationConfig] =
+    React.useState<GranFormatoImposicionConfig | null>(null);
   const [savedImposicionSnapshot, setSavedImposicionSnapshot] = React.useState(
     normalizeImposicionSnapshot(defaultGranFormatoImposicionConfig),
   );
   const [showImposicionOverrides, setShowImposicionOverrides] = React.useState(false);
   const [isImposicion3dOpen, setIsImposicion3dOpen] = React.useState(false);
+  const [isPanelEditorOpen, setIsPanelEditorOpen] = React.useState(false);
+  const [panelEditorDraft, setPanelEditorDraft] = React.useState<GranFormatoPanelManualLayout | null>(null);
+  const [panelEditorSelectedPieceId, setPanelEditorSelectedPieceId] = React.useState("");
+  const [panelEditorDragIndex, setPanelEditorDragIndex] = React.useState<number | null>(null);
   const [isCostos3dOpen, setIsCostos3dOpen] = React.useState(false);
+  const panelEditorCanvasRef = React.useRef<HTMLDivElement | null>(null);
   const [isLoadingRutaBase, setIsLoadingRutaBase] = React.useState(true);
   const [isSavingRutaBase, startSavingRutaBase] = React.useTransition();
   const [rutaBaseProcesoId, setRutaBaseProcesoId] = React.useState("");
@@ -562,17 +1690,84 @@ export function WideFormatProductDetail({
   const [costosMedidas, setCostosMedidas] = React.useState<GranFormatoImposicionConfig["medidas"]>(
     [createGranFormatoImposicionMedida()],
   );
+  const [costosPanelizadoOverride, setCostosPanelizadoOverride] = React.useState(false);
+  const [costosPanelizadoActivo, setCostosPanelizadoActivo] = React.useState(false);
+  const [costosPanelizadoDireccion, setCostosPanelizadoDireccion] =
+    React.useState<GranFormatoPanelizadoDireccion>("automatica");
+  const [costosPanelizadoSolapeMm, setCostosPanelizadoSolapeMm] = React.useState<number | null>(null);
+  const [costosPanelizadoAnchoMaxPanelMm, setCostosPanelizadoAnchoMaxPanelMm] = React.useState<number | null>(null);
+  const [costosPanelizadoDistribucion, setCostosPanelizadoDistribucion] =
+    React.useState<GranFormatoPanelizadoDistribucion>("equilibrada");
+  const [costosPanelizadoInterpretacionAnchoMaximo, setCostosPanelizadoInterpretacionAnchoMaximo] =
+    React.useState<GranFormatoPanelizadoInterpretacionAnchoMaximo>("total");
   const [costosChecklistRespuestas, setCostosChecklistRespuestas] = React.useState<
     Record<string, { respuestaId: string }>
   >({});
   const [costosPreview, setCostosPreview] = React.useState<GranFormatoCostosResponse | null>(null);
+  const [costosSnapshots, setCostosSnapshots] = React.useState<CotizacionProductoSnapshotResumen[]>([]);
+  const [costosSnapshotsOpen, setCostosSnapshotsOpen] = React.useState(false);
+  const [precioForm, setPrecioForm] = React.useState<ProductoPrecioConfig>(() =>
+    buildWideFormatPrecioConfigDraft(producto.precio, normalizeUnidadComercialProducto(producto.unidadComercial)),
+  );
+  const [precioEditorOpen, setPrecioEditorOpen] = React.useState(false);
+  const [precioEditorDraft, setPrecioEditorDraft] = React.useState<ProductoPrecioConfig>(() =>
+    buildWideFormatPrecioConfigDraft(producto.precio, normalizeUnidadComercialProducto(producto.unidadComercial)),
+  );
+  const [precioEspecialClientesForm, setPrecioEspecialClientesForm] = React.useState<ProductoPrecioEspecialCliente[]>(
+    () => producto.precioEspecialClientes ?? [],
+  );
+  const [precioComisionEditorOpen, setPrecioComisionEditorOpen] = React.useState(false);
+  const [precioComisionEditorDraft, setPrecioComisionEditorDraft] = React.useState<PrecioComisionDraft>(() =>
+    buildPrecioComisionDraft(),
+  );
+  const [precioComisionToDelete, setPrecioComisionToDelete] = React.useState<ProductoPrecioComisionItem | null>(null);
+  const [precioEspecialClienteToDelete, setPrecioEspecialClienteToDelete] =
+    React.useState<PrecioEspecialClienteConfirmDelete | null>(null);
+  const [precioEspecialClienteEditorOpen, setPrecioEspecialClienteEditorOpen] = React.useState(false);
+  const [precioEspecialClienteEditorDraft, setPrecioEspecialClienteEditorDraft] =
+    React.useState<PrecioEspecialClienteDraft>(() => buildWideFormatPrecioEspecialClienteDraft(null, normalizeUnidadComercialProducto(producto.unidadComercial)));
+  const [impuestosEditorOpen, setImpuestosEditorOpen] = React.useState(false);
+  const [impuestosEditorDraft, setImpuestosEditorDraft] = React.useState<ProductoImpuestoCatalogo | null>(null);
+
+  const hydrateWideFormatSnapshot = React.useCallback(
+    (snapshotId: string, createdAt: string, cantidad: number, resultado: Record<string, unknown>) => {
+      const base = resultado as GranFormatoCostosResponse;
+      return {
+        ...base,
+        snapshotId,
+        createdAt,
+        cantidadTotal: Number(base.cantidadTotal ?? cantidad ?? 0),
+      } satisfies GranFormatoCostosResponse;
+    },
+    [],
+  );
+
+  const loadGranFormatoSnapshots = React.useCallback(
+    async (productoId: string) => {
+      const snapshots = await getCotizacionesProductoServicio(productoId);
+      setCostosSnapshots(snapshots);
+      const latestSnapshot = snapshots[0];
+      if (!latestSnapshot) {
+        setCostosPreview(null);
+        return;
+      }
+      const detalle = await getCotizacionProductoById(latestSnapshot.id);
+      setCostosPreview(
+        hydrateWideFormatSnapshot(
+          detalle.id,
+          detalle.createdAt,
+          detalle.cantidad,
+          detalle.resultado as Record<string, unknown>,
+        ),
+      );
+    },
+    [hydrateWideFormatSnapshot],
+  );
 
   const loadGranFormatoConfig = React.useCallback(async () => {
     setIsLoadingConfig(true);
     try {
       const config = await getGranFormatoConfig(productoState.id);
-      setTipoVenta(config.tipoVenta);
-      setSavedTipoVenta(config.tipoVenta);
       setTecnologiasCompatibles(config.tecnologiasCompatibles);
       setSavedTecnologiasCompatibles(config.tecnologiasCompatibles);
       setMaquinasCompatiblesIds(config.maquinasCompatibles);
@@ -586,6 +1781,8 @@ export function WideFormatProductDetail({
       const nextImposicion = config.imposicion ?? defaultGranFormatoImposicionConfig;
       setImposicionConfig({
         ...nextImposicion,
+        panelizadoInterpretacionAnchoMaximo:
+          nextImposicion.panelizadoInterpretacionAnchoMaximo ?? "total",
         medidas:
           nextImposicion.medidas?.length
             ? nextImposicion.medidas
@@ -615,6 +1812,7 @@ export function WideFormatProductDetail({
       setCostosTecnologia(nextImposicion.tecnologiaDefault ?? "");
       setCostosPerfilOverrideId("");
       setCostosPreview(null);
+      setImposicionSimulationConfig(null);
       setSavedImposicionSnapshot(
         normalizeImposicionSnapshot({
           ...nextImposicion,
@@ -642,6 +1840,12 @@ export function WideFormatProductDetail({
   React.useEffect(() => {
     void loadGranFormatoConfig();
   }, [loadGranFormatoConfig]);
+
+  React.useEffect(() => {
+    loadGranFormatoSnapshots(productoState.id).catch((error) =>
+      toast.error(error instanceof Error ? error.message : "No se pudieron cargar snapshots de costos."),
+    );
+  }, [loadGranFormatoSnapshots, productoState.id]);
 
   const loadGranFormatoRouteBase = React.useCallback(async () => {
     setIsLoadingRutaBase(true);
@@ -734,6 +1938,7 @@ export function WideFormatProductDetail({
     generalForm.descripcion.trim() !== (productoState.descripcion ?? "").trim() ||
     generalForm.familiaProductoId !== productoState.familiaProductoId ||
     (generalForm.subfamiliaProductoId || "") !== (productoState.subfamiliaProductoId || "") ||
+    generalForm.unidadComercial !== productoState.unidadComercial ||
     generalForm.motorCodigo !== productoState.motorCodigo ||
     generalForm.motorVersion !== productoState.motorVersion;
 
@@ -803,10 +2008,6 @@ export function WideFormatProductDetail({
     () => availableBaseMaterials.find((item) => item.id === materialBaseId) ?? null,
     [availableBaseMaterials, materialBaseId],
   );
-  const tipoVentaLabel = React.useMemo(
-    () => tipoVentaItems.find((item) => item.value === tipoVenta)?.label ?? "Seleccionar tipo de venta",
-    [tipoVenta],
-  );
   const materialBaseLabel = React.useMemo(
     () => availableBaseMaterials.find((item) => item.id === materialBaseId)?.nombre ?? "Seleccionar material base",
     [availableBaseMaterials, materialBaseId],
@@ -816,6 +2017,15 @@ export function WideFormatProductDetail({
     () => (selectedBaseMaterial?.variantes ?? []).filter((variant) => variant.activo),
     [selectedBaseMaterial],
   );
+  const hasImposicionSimulation = imposicionSimulationConfig != null;
+  const imposicionSimulationSnapshot = React.useMemo(
+    () =>
+      imposicionSimulationConfig ? normalizeImposicionSnapshot(imposicionSimulationConfig) : null,
+    [imposicionSimulationConfig],
+  );
+  const isImposicionSimulationStale =
+    hasImposicionSimulation &&
+    imposicionSimulationSnapshot !== normalizeImposicionSnapshot(imposicionConfig);
 
   const validMaterialVariantIds = React.useMemo(
     () => new Set(availableMaterialVariants.map((item) => item.id)),
@@ -868,6 +2078,7 @@ export function WideFormatProductDetail({
         : availableMaterialVariants,
     [availableMaterialVariants, materialesCompatiblesIds],
   );
+  const previewImposicionConfig = imposicionSimulationConfig;
   const imposicionPreviewResult = React.useMemo<{
     items: GranFormatoImposicionPreviewItem[];
     rejected: Array<{
@@ -876,7 +2087,19 @@ export function WideFormatProductDetail({
     }>;
     machineIssue: string | null;
   }>(() => {
-    const medidas = imposicionConfig.medidas.filter((item) => (item.anchoMm ?? 0) > 0 && (item.altoMm ?? 0) > 0);
+    if (!previewImposicionConfig) {
+      return {
+        items: [] as GranFormatoImposicionPreviewItem[],
+        rejected: [] as Array<{
+          variant: (typeof imposicionMaterialVariants)[number];
+          reason: string;
+        }>,
+        machineIssue: "Todavía no ejecutaste una simulación de imposición.",
+      };
+    }
+    const medidas = previewImposicionConfig.medidas.filter(
+      (item) => (item.anchoMm ?? 0) > 0 && (item.altoMm ?? 0) > 0,
+    );
     if (!imposicionMachine || medidas.length === 0) {
       return {
         items: [] as GranFormatoImposicionPreviewItem[],
@@ -904,28 +2127,29 @@ export function WideFormatProductDetail({
     }
 
     const marginLeftMm =
-      imposicionConfig.margenLateralIzquierdoMmOverride ??
+      previewImposicionConfig.margenLateralIzquierdoMmOverride ??
       readMachineMarginMm(imposicionMachine, "margenLateralIzquierdoNoImprimible") ??
       readMachineMarginMm(imposicionMachine, "margenIzquierdo") ??
       0;
     const marginRightMm =
-      imposicionConfig.margenLateralDerechoMmOverride ??
+      previewImposicionConfig.margenLateralDerechoMmOverride ??
       readMachineMarginMm(imposicionMachine, "margenLateralDerechoNoImprimible") ??
       readMachineMarginMm(imposicionMachine, "margenDerecho") ??
       0;
     const marginStartMm =
-      imposicionConfig.margenInicioMmOverride ??
+      previewImposicionConfig.margenInicioMmOverride ??
       readMachineMarginMm(imposicionMachine, "margenInicioNoImprimible") ??
       readMachineMarginMm(imposicionMachine, "margenSuperior") ??
       0;
     const marginEndMm =
-      imposicionConfig.margenFinalMmOverride ??
+      previewImposicionConfig.margenFinalMmOverride ??
       readMachineMarginMm(imposicionMachine, "margenFinalNoImprimible") ??
       readMachineMarginMm(imposicionMachine, "margenInferior") ??
       0;
 
-    const accepted: GranFormatoImposicionPreviewItem[] = [];
-    const rejected: Array<{
+    const acceptedNormal: GranFormatoImposicionPreviewItem[] = [];
+    const acceptedPanelizados: GranFormatoImposicionPreviewItem[] = [];
+    const rejectedNormal: Array<{
       variant: (typeof imposicionMaterialVariants)[number];
       reason: string;
     }> = [];
@@ -933,7 +2157,7 @@ export function WideFormatProductDetail({
     for (const variant of imposicionMaterialVariants) {
         const rollWidthMm = readMaterialVariantWidthMm(variant.atributosVariante);
         if (!rollWidthMm || rollWidthMm <= 0) {
-          rejected.push({
+          rejectedNormal.push({
             variant,
             reason: "La variante no tiene un ancho de rollo técnico válido.",
           });
@@ -943,128 +2167,109 @@ export function WideFormatProductDetail({
         const machineLimitedWidthMm = Math.min(rollWidthMm, printableWidthMmMax);
         const printableWidthMm = machineLimitedWidthMm - marginLeftMm - marginRightMm;
         if (printableWidthMm <= 0) {
-          rejected.push({
+          rejectedNormal.push({
             variant,
             reason: "Los márgenes no imprimibles consumen todo el ancho disponible.",
           });
           continue;
         }
 
-        const evaluateOrientation = (rotated: boolean) => {
-          const pieces = medidas
-            .flatMap((medida) =>
-              Array.from({ length: Math.max(1, medida.cantidad) }, () => ({
-                width: rotated ? (medida.altoMm ?? 0) : (medida.anchoMm ?? 0),
-                height: rotated ? (medida.anchoMm ?? 0) : (medida.altoMm ?? 0),
-                area: ((medida.anchoMm ?? 0) * (medida.altoMm ?? 0)) / 1_000_000,
-              })),
-            )
-            .sort((a, b) => b.height - a.height || b.width - a.width);
-
-          let currentRowWidth = 0;
-          let currentRowHeight = 0;
-          let totalHeight = 0;
-          let rowCount = 0;
-          let maxPiecesPerRow = 0;
-          let currentPieces = 0;
-          let currentRowTop = marginStartMm;
-          const placements: Array<{
-            id: string;
-            widthMm: number;
-            heightMm: number;
-            centerXMm: number;
-            centerYMm: number;
-            label: string;
-          }> = [];
-
-          for (const [pieceIndex, piece] of pieces.entries()) {
-            if (piece.width > printableWidthMm) {
-              return null;
-            }
-            const additionalWidth = currentRowWidth === 0 ? piece.width : currentRowWidth + imposicionConfig.separacionHorizontalMm + piece.width;
-            if (additionalWidth <= printableWidthMm) {
-              const pieceLeft = currentRowWidth === 0 ? marginLeftMm : marginLeftMm + currentRowWidth + imposicionConfig.separacionHorizontalMm;
-              currentRowWidth = additionalWidth;
-              currentRowHeight = Math.max(currentRowHeight, piece.height);
-              currentPieces += 1;
-              maxPiecesPerRow = Math.max(maxPiecesPerRow, currentPieces);
-              placements.push({
-                id: `piece-${pieceIndex}`,
-                widthMm: piece.width,
-                heightMm: piece.height,
-                centerXMm: pieceLeft + piece.width / 2,
-                centerYMm: currentRowTop + piece.height / 2,
-                label: `${Math.round(piece.width / 10)}x${Math.round(piece.height / 10)} cm`,
-              });
-              continue;
-            }
-
-            totalHeight += currentRowHeight;
-            if (rowCount > 0 || totalHeight > 0) {
-              totalHeight += imposicionConfig.separacionVerticalMm;
-            }
-            rowCount += 1;
-            currentRowTop = marginStartMm + totalHeight;
-            currentRowWidth = piece.width;
-            currentRowHeight = piece.height;
-            currentPieces = 1;
-            maxPiecesPerRow = Math.max(maxPiecesPerRow, currentPieces);
-            placements.push({
-              id: `piece-${pieceIndex}`,
-              widthMm: piece.width,
-              heightMm: piece.height,
-              centerXMm: marginLeftMm + piece.width / 2,
-              centerYMm: currentRowTop + piece.height / 2,
-              label: `${Math.round(piece.width / 10)}x${Math.round(piece.height / 10)} cm`,
-            });
-          }
-
-          if (currentRowHeight > 0) {
-            totalHeight += currentRowHeight;
-            rowCount += 1;
-          }
-
-          const consumedLengthMm = marginStartMm + marginEndMm + totalHeight;
-          const usefulAreaM2 = medidas.reduce(
-            (acc, item) => acc + (((item.anchoMm ?? 0) * (item.altoMm ?? 0)) / 1_000_000) * item.cantidad,
-            0,
-          );
-          const consumedAreaM2 = (rollWidthMm * consumedLengthMm) / 1_000_000;
-          const wasteAreaM2 = Math.max(0, consumedAreaM2 - usefulAreaM2);
-          return {
-            rotated,
-            piecesPerRow: maxPiecesPerRow,
-            rows: rowCount,
-            consumedLengthMm,
-            usefulAreaM2,
-            consumedAreaM2,
-            wasteAreaM2,
-            wastePct: consumedAreaM2 > 0 ? (wasteAreaM2 / consumedAreaM2) * 100 : 0,
-            placements,
-          };
+        const baseInput = {
+          printableWidthMm,
+          marginLeftMm,
+          marginStartMm,
+          marginEndMm,
+          separacionHorizontalMm: previewImposicionConfig.separacionHorizontalMm,
+          separacionVerticalMm: previewImposicionConfig.separacionVerticalMm,
+          permitirRotacion: previewImposicionConfig.permitirRotacion,
+          medidas: medidas.map((item) => ({
+            anchoMm: item.anchoMm ?? 0,
+            altoMm: item.altoMm ?? 0,
+            cantidad: item.cantidad,
+          })),
         };
+        const layout = evaluateGranFormatoMixedShelfLayout(baseInput);
 
-        const candidates = [
-          evaluateOrientation(false),
-          imposicionConfig.permitirRotacion ? evaluateOrientation(true) : null,
-        ].filter(Boolean) as Array<NonNullable<ReturnType<typeof evaluateOrientation>>>;
-
-        if (candidates.length === 0) {
-          rejected.push({
+        if (!layout) {
+          rejectedNormal.push({
             variant,
             reason: "La pieza no entra en este ancho de rollo con la configuración actual.",
           });
+          if (previewImposicionConfig.panelizadoActivo) {
+            const overlapMm = Math.max(0, previewImposicionConfig.panelizadoSolapeMm ?? 0);
+            const maxPanelWidthMm = Math.max(0, previewImposicionConfig.panelizadoAnchoMaxPanelMm ?? 0);
+            const directions =
+              previewImposicionConfig.panelizadoModo === "manual"
+                ? (["vertical"] as const)
+                : previewImposicionConfig.panelizadoDireccion === "automatica"
+                ? (["vertical", "horizontal"] as const)
+                : [previewImposicionConfig.panelizadoDireccion];
+            for (const axis of directions) {
+              if (maxPanelWidthMm <= 0) {
+                continue;
+              }
+              const panelizedLayout = evaluateGranFormatoMixedShelfLayout({
+                ...baseInput,
+                panelizado: {
+                  activo: true,
+                  mode: previewImposicionConfig.panelizadoModo,
+                  axis,
+                  overlapMm,
+                  maxPanelWidthMm,
+                  distribution: previewImposicionConfig.panelizadoDistribucion,
+                  widthInterpretation: previewImposicionConfig.panelizadoInterpretacionAnchoMaximo,
+                  manualLayout: previewImposicionConfig.panelizadoManualLayout,
+                },
+              });
+              if (!panelizedLayout) {
+                continue;
+              }
+              const panelizedConsumedAreaM2 = (rollWidthMm * panelizedLayout.consumedLengthMm) / 1_000_000;
+              const panelizedWasteAreaM2 = Math.max(0, panelizedConsumedAreaM2 - panelizedLayout.usefulAreaM2);
+              const costoUnitarioEstimado = Number(variant.precioReferencia ?? 0);
+              const estimatedCostTotal =
+                costoUnitarioEstimado > 0
+                  ? Number((panelizedConsumedAreaM2 * costoUnitarioEstimado).toFixed(6))
+                  : panelizedConsumedAreaM2;
+              acceptedPanelizados.push({
+                variant,
+                rollWidthMm,
+                machineLimitedWidthMm,
+                printableWidthMm,
+                marginLeftMm,
+                marginRightMm,
+                marginStartMm,
+                marginEndMm,
+                orientacion: panelizedLayout.orientacion,
+                panelizado: true,
+                panelAxis: panelizedLayout.panelAxis,
+                panelCount: panelizedLayout.panelCount,
+                panelOverlapMm: panelizedLayout.panelOverlapMm,
+                panelMaxWidthMm: panelizedLayout.panelMaxWidthMm,
+                panelDistribution: panelizedLayout.panelDistribution,
+                panelWidthInterpretation: panelizedLayout.panelWidthInterpretation,
+                panelMode: panelizedLayout.panelMode,
+                piecesPerRow: panelizedLayout.piecesPerRow,
+                rows: panelizedLayout.rows,
+                consumedLengthMm: panelizedLayout.consumedLengthMm,
+                usefulAreaM2: panelizedLayout.usefulAreaM2,
+                consumedAreaM2: panelizedConsumedAreaM2,
+                wasteAreaM2: panelizedWasteAreaM2,
+                wastePct: panelizedConsumedAreaM2 > 0 ? (panelizedWasteAreaM2 / panelizedConsumedAreaM2) * 100 : 0,
+                placements: panelizedLayout.placements,
+                estimatedCostTotal,
+              });
+            }
+          }
           continue;
         }
+        const consumedAreaM2 = (rollWidthMm * layout.consumedLengthMm) / 1_000_000;
+        const wasteAreaM2 = Math.max(0, consumedAreaM2 - layout.usefulAreaM2);
+        const costoUnitarioEstimado = Number(variant.precioReferencia ?? 0);
+        const estimatedCostTotal =
+          costoUnitarioEstimado > 0 ? Number((consumedAreaM2 * costoUnitarioEstimado).toFixed(6)) : consumedAreaM2;
 
-        const best = [...candidates].sort((a, b) => {
-          if (imposicionConfig.criterioOptimizacion === "menor_largo_consumido") {
-            return a.consumedLengthMm - b.consumedLengthMm || a.wasteAreaM2 - b.wasteAreaM2;
-          }
-          return a.wasteAreaM2 - b.wasteAreaM2 || a.consumedLengthMm - b.consumedLengthMm;
-        })[0];
-
-        accepted.push({
+        acceptedNormal.push({
           variant,
           rollWidthMm,
           machineLimitedWidthMm,
@@ -1073,26 +2278,175 @@ export function WideFormatProductDetail({
           marginRightMm,
           marginStartMm,
           marginEndMm,
-          ...best,
+          orientacion: layout.orientacion,
+          panelizado: false,
+          panelAxis: null,
+          panelCount: 1,
+          panelOverlapMm: null,
+          panelMaxWidthMm: null,
+          panelDistribution: null,
+          panelWidthInterpretation: null,
+          panelMode: null,
+          piecesPerRow: layout.piecesPerRow,
+          rows: layout.rows,
+          consumedLengthMm: layout.consumedLengthMm,
+          usefulAreaM2: layout.usefulAreaM2,
+          consumedAreaM2,
+          wasteAreaM2,
+          wastePct: consumedAreaM2 > 0 ? (wasteAreaM2 / consumedAreaM2) * 100 : 0,
+          placements: layout.placements,
+          estimatedCostTotal,
         });
       }
 
+    const accepted =
+      acceptedNormal.length > 0
+        ? acceptedNormal
+        : Array.from(
+            acceptedPanelizados.reduce((map, item) => {
+              const current = map.get(item.variant.id);
+              if (
+                !current ||
+                compareGranFormatoPreviewItems(
+                  item,
+                  current,
+                  previewImposicionConfig.criterioOptimizacion,
+                ) < 0
+              ) {
+                map.set(item.variant.id, item);
+              }
+              return map;
+            }, new Map<string, GranFormatoImposicionPreviewItem>()),
+          ).map(([, item]) => item);
+    const rejected = acceptedNormal.length > 0 ? rejectedNormal : rejectedNormal;
+
     return {
       items: accepted.sort((a, b) => {
-        const left = a as NonNullable<(typeof a)>;
-        const right = b as NonNullable<(typeof b)>;
-        if (imposicionConfig.criterioOptimizacion === "menor_largo_consumido") {
-          return left.consumedLengthMm - right.consumedLengthMm || left.wasteAreaM2 - right.wasteAreaM2;
-        }
-        return left.wasteAreaM2 - right.wasteAreaM2 || left.consumedLengthMm - right.consumedLengthMm;
+        return compareGranFormatoPreviewItems(a, b, previewImposicionConfig.criterioOptimizacion);
       }),
       rejected,
       machineIssue: null as string | null,
     };
-  }, [imposicionConfig, imposicionMachine, imposicionMaterialVariants]);
+  }, [imposicionMachine, imposicionMaterialVariants, previewImposicionConfig]);
   const imposicionPreview = imposicionPreviewResult.items;
   const imposicionRejectedVariants = imposicionPreviewResult.rejected;
   const imposicionBestCandidate = imposicionPreview[0] ?? null;
+  const imposicionManualLayoutActual = React.useMemo(
+    () => imposicionConfig.panelizadoManualLayout ?? buildManualLayoutFromPlacements(imposicionBestCandidate?.placements ?? []),
+    [imposicionBestCandidate?.placements, imposicionConfig.panelizadoManualLayout],
+  );
+  const panelEditorPieces = React.useMemo(
+    () => panelEditorDraft?.items ?? imposicionManualLayoutActual?.items ?? [],
+    [imposicionManualLayoutActual?.items, panelEditorDraft?.items],
+  );
+  const panelEditorSelectedPiece = React.useMemo(
+    () =>
+      panelEditorPieces.find((item) => item.sourcePieceId === panelEditorSelectedPieceId) ??
+      panelEditorPieces[0] ??
+      null,
+    [panelEditorPieces, panelEditorSelectedPieceId],
+  );
+  React.useEffect(() => {
+    if (!panelEditorPieces.length) {
+      if (panelEditorSelectedPieceId) {
+        setPanelEditorSelectedPieceId("");
+      }
+      return;
+    }
+    if (!panelEditorSelectedPieceId || !panelEditorPieces.some((item) => item.sourcePieceId === panelEditorSelectedPieceId)) {
+      setPanelEditorSelectedPieceId(panelEditorPieces[0]?.sourcePieceId ?? "");
+    }
+  }, [panelEditorPieces, panelEditorSelectedPieceId]);
+  const panelEditorPrintableWidthMm = imposicionBestCandidate?.printableWidthMm ?? 0;
+  const panelEditorAllValid = React.useMemo(() => {
+    if (!panelEditorDraft) {
+      return true;
+    }
+    return panelEditorDraft.items.every((item) =>
+      validateManualLayoutItem({
+        item,
+        printableWidthMm: panelEditorPrintableWidthMm,
+        maxPanelWidthMm: imposicionConfig.panelizadoAnchoMaxPanelMm,
+        widthInterpretation: imposicionConfig.panelizadoInterpretacionAnchoMaximo,
+      }),
+    );
+  }, [
+    imposicionConfig.panelizadoAnchoMaxPanelMm,
+    imposicionConfig.panelizadoInterpretacionAnchoMaximo,
+    panelEditorDraft,
+    panelEditorPrintableWidthMm,
+  ]);
+  const panelEditorSelectedPieceValid = React.useMemo(() => {
+    if (!panelEditorSelectedPiece) {
+      return true;
+    }
+    return validateManualLayoutItem({
+      item: panelEditorSelectedPiece,
+      printableWidthMm: panelEditorPrintableWidthMm,
+      maxPanelWidthMm: imposicionConfig.panelizadoAnchoMaxPanelMm,
+      widthInterpretation: imposicionConfig.panelizadoInterpretacionAnchoMaximo,
+    });
+  }, [
+    imposicionConfig.panelizadoAnchoMaxPanelMm,
+    imposicionConfig.panelizadoInterpretacionAnchoMaximo,
+    panelEditorPrintableWidthMm,
+    panelEditorSelectedPiece,
+  ]);
+  const imposicionMarginSummary = React.useMemo(() => {
+    const machineLeftMm =
+      readMachineMarginMm(imposicionMachine, "margenLateralIzquierdoNoImprimible") ??
+      readMachineMarginMm(imposicionMachine, "margenIzquierdo") ??
+      0;
+    const machineRightMm =
+      readMachineMarginMm(imposicionMachine, "margenLateralDerechoNoImprimible") ??
+      readMachineMarginMm(imposicionMachine, "margenDerecho") ??
+      0;
+    const machineStartMm =
+      readMachineMarginMm(imposicionMachine, "margenInicioNoImprimible") ??
+      readMachineMarginMm(imposicionMachine, "margenSuperior") ??
+      0;
+    const machineEndMm =
+      readMachineMarginMm(imposicionMachine, "margenFinalNoImprimible") ??
+      readMachineMarginMm(imposicionMachine, "margenInferior") ??
+      0;
+
+    return [
+      {
+        key: "left",
+        title: "Izquierdo",
+        machineMm: machineLeftMm,
+        overrideKey: "margenLateralIzquierdoMmOverride" as const,
+        effectiveMm: imposicionConfig.margenLateralIzquierdoMmOverride ?? machineLeftMm,
+      },
+      {
+        key: "right",
+        title: "Derecho",
+        machineMm: machineRightMm,
+        overrideKey: "margenLateralDerechoMmOverride" as const,
+        effectiveMm: imposicionConfig.margenLateralDerechoMmOverride ?? machineRightMm,
+      },
+      {
+        key: "start",
+        title: "Inicio",
+        machineMm: machineStartMm,
+        overrideKey: "margenInicioMmOverride" as const,
+        effectiveMm: imposicionConfig.margenInicioMmOverride ?? machineStartMm,
+      },
+      {
+        key: "end",
+        title: "Final",
+        machineMm: machineEndMm,
+        overrideKey: "margenFinalMmOverride" as const,
+        effectiveMm: imposicionConfig.margenFinalMmOverride ?? machineEndMm,
+      },
+    ];
+  }, [
+    imposicionConfig.margenFinalMmOverride,
+    imposicionConfig.margenInicioMmOverride,
+    imposicionConfig.margenLateralDerechoMmOverride,
+    imposicionConfig.margenLateralIzquierdoMmOverride,
+    imposicionMachine,
+  ]);
   const costosTechnologies = imposicionTechnologies;
   const costosTechnology = React.useMemo(() => {
     if (costosTecnologia && costosTechnologies.includes(costosTecnologia)) {
@@ -1182,6 +2536,37 @@ export function WideFormatProductDetail({
         value: `${formatMmAsCm(costosPreview.resumenTecnico.anchoRolloMm)} cm`,
       },
       {
+        label: "Panelizado",
+        value: costosPreview.resumenTecnico.panelizado
+          ? `${costosPreview.resumenTecnico.panelCount} panel(es)`
+          : "No",
+      },
+      ...(costosPreview.resumenTecnico.panelizado
+        ? [
+            {
+              label: "Modo",
+              value: getPanelizadoModoLabel(costosPreview.resumenTecnico.panelMode),
+            },
+            {
+              label: "Dirección",
+              value:
+                costosPreview.resumenTecnico.panelAxis === "vertical" ? "Vertical" : "Horizontal",
+            },
+            {
+              label: "Ancho máx. panel",
+              value: costosPreview.resumenTecnico.panelMaxWidthMm != null
+                ? `${formatMmAsCm(costosPreview.resumenTecnico.panelMaxWidthMm)} cm`
+                : "Sin dato",
+            },
+            {
+              label: "Interpretación",
+              value: getPanelizadoInterpretacionLabel(
+                costosPreview.resumenTecnico.panelWidthInterpretation,
+              ),
+            },
+          ]
+        : []),
+      {
         label: "Cantidad de piezas",
         value: formatNumber(costosPreview.nestingPreview.pieces.length, 0),
       },
@@ -1199,30 +2584,127 @@ export function WideFormatProductDetail({
       },
     ];
   }, [costosPreview]);
+  const simulacionComercial = React.useMemo(
+    () =>
+      simularPrecioComercial({
+        precio: precioForm,
+        costoTotal: costosPreview?.totales.tecnico ?? null,
+        cantidad: costosPreview?.cantidadTotal ?? null,
+      }),
+    [costosPreview?.cantidadTotal, costosPreview?.totales.tecnico, precioForm],
+  );
+  const imposicion3dResumen = React.useMemo(() => {
+    if (!imposicionBestCandidate) {
+      return null;
+    }
+
+    return [
+      {
+        label: "Ancho de rollo",
+        value: `${formatMmAsCm(imposicionBestCandidate.rollWidthMm)} cm`,
+      },
+      {
+        label: "Panelizado",
+        value: imposicionBestCandidate.panelizado
+          ? `${imposicionBestCandidate.panelCount} panel(es)`
+          : "No",
+      },
+      ...(imposicionBestCandidate.panelizado
+        ? [
+            {
+              label: "Modo",
+              value: getPanelizadoModoLabel(imposicionBestCandidate.panelMode),
+            },
+            {
+              label: "Dirección",
+              value: imposicionBestCandidate.panelAxis === "vertical" ? "Vertical" : "Horizontal",
+            },
+            {
+              label: "Ancho máx. panel",
+              value:
+                imposicionBestCandidate.panelMaxWidthMm != null
+                  ? `${formatMmAsCm(imposicionBestCandidate.panelMaxWidthMm)} cm`
+                  : "Sin dato",
+            },
+            {
+              label: "Interpretación",
+              value: getPanelizadoInterpretacionLabel(
+                imposicionBestCandidate.panelWidthInterpretation,
+              ),
+            },
+          ]
+        : []),
+      {
+        label: "Cantidad de piezas",
+        value: formatNumber(imposicionBestCandidate.placements.length, 0),
+      },
+      {
+        label: "Desperdicio",
+        value: `${formatNumber(imposicionBestCandidate.wastePct, 2)}%`,
+      },
+      {
+        label: "M2 impresos",
+        value: `${formatNumber(imposicionBestCandidate.usefulAreaM2, 3)} m2`,
+      },
+      {
+        label: "Largo consumido",
+        value: `${formatNumber(imposicionBestCandidate.consumedLengthMm / 1000, 3)} m`,
+      },
+    ];
+  }, [imposicionBestCandidate]);
 
   React.useEffect(() => {
+    const tecnologiasSet = new Set(tecnologiasCompatibles);
+    const maquinasSet = new Set(maquinasCompatiblesIds);
+    const perfilesSet = new Set(perfilesCompatiblesIds);
+    const tecnologiaDefault = imposicionConfig.tecnologiaDefault;
+    const maquinaDefaultId = imposicionConfig.maquinaDefaultId;
+    const perfilDefaultId = imposicionConfig.perfilDefaultId;
+    const hasInvalidTecnologia =
+      typeof tecnologiaDefault === "string" && tecnologiaDefault.length > 0 && !tecnologiasSet.has(tecnologiaDefault);
+    const hasInvalidMaquina =
+      typeof maquinaDefaultId === "string" && maquinaDefaultId.length > 0 && !maquinasSet.has(maquinaDefaultId);
+    const hasInvalidPerfil =
+      typeof perfilDefaultId === "string" && perfilDefaultId.length > 0 && !perfilesSet.has(perfilDefaultId);
+
+    if (!hasInvalidTecnologia && !hasInvalidMaquina && !hasInvalidPerfil) {
+      return;
+    }
+
     setImposicionConfig((prev) => {
       const next: GranFormatoImposicionConfig = { ...prev };
-      const tecnologiasSet = new Set(tecnologiasCompatibles);
       if (next.tecnologiaDefault && !tecnologiasSet.has(next.tecnologiaDefault)) {
         next.tecnologiaDefault = null;
       }
 
-      const maquinasSet = new Set(maquinasCompatiblesIds);
       if (next.maquinaDefaultId && !maquinasSet.has(next.maquinaDefaultId)) {
         next.maquinaDefaultId = null;
       }
 
-      const perfilesSet = new Set(perfilesCompatiblesIds);
       if (next.perfilDefaultId && !perfilesSet.has(next.perfilDefaultId)) {
         next.perfilDefaultId = null;
       }
 
       return normalizeImposicionSnapshot(next) === normalizeImposicionSnapshot(prev) ? prev : next;
     });
-  }, [maquinasCompatiblesIds, perfilesCompatiblesIds, tecnologiasCompatibles]);
+  }, [
+    imposicionConfig.maquinaDefaultId,
+    imposicionConfig.perfilDefaultId,
+    imposicionConfig.tecnologiaDefault,
+    maquinasCompatiblesIds,
+    perfilesCompatiblesIds,
+    tecnologiasCompatibles,
+  ]);
 
   React.useEffect(() => {
+    const needsTecnologiaDefault = !imposicionConfig.tecnologiaDefault && imposicionTechnologies.length > 0;
+    const needsMaquinaDefault = !imposicionConfig.maquinaDefaultId && imposicionMachineOptions.length > 0;
+    const needsPerfilDefault = !imposicionConfig.perfilDefaultId && imposicionProfileOptions.length > 0;
+
+    if (!needsTecnologiaDefault && !needsMaquinaDefault && !needsPerfilDefault) {
+      return;
+    }
+
     setImposicionConfig((prev) => {
       const next = { ...prev };
 
@@ -1238,7 +2720,14 @@ export function WideFormatProductDetail({
 
       return normalizeImposicionSnapshot(next) === normalizeImposicionSnapshot(prev) ? prev : next;
     });
-  }, [imposicionMachineOptions, imposicionProfileOptions, imposicionTechnologies]);
+  }, [
+    imposicionConfig.maquinaDefaultId,
+    imposicionConfig.perfilDefaultId,
+    imposicionConfig.tecnologiaDefault,
+    imposicionMachineOptions,
+    imposicionProfileOptions,
+    imposicionTechnologies,
+  ]);
 
   React.useEffect(() => {
     const hasOverride =
@@ -1267,6 +2756,26 @@ export function WideFormatProductDetail({
   }, [checklistCotizadorGranFormato]);
 
   React.useEffect(() => {
+    if (costosPanelizadoOverride) {
+      return;
+    }
+    setCostosPanelizadoActivo(imposicionConfig.panelizadoActivo);
+    setCostosPanelizadoDireccion(imposicionConfig.panelizadoDireccion);
+    setCostosPanelizadoSolapeMm(imposicionConfig.panelizadoSolapeMm);
+    setCostosPanelizadoAnchoMaxPanelMm(imposicionConfig.panelizadoAnchoMaxPanelMm);
+    setCostosPanelizadoDistribucion(imposicionConfig.panelizadoDistribucion);
+    setCostosPanelizadoInterpretacionAnchoMaximo(imposicionConfig.panelizadoInterpretacionAnchoMaximo);
+  }, [
+    costosPanelizadoOverride,
+    imposicionConfig.panelizadoActivo,
+    imposicionConfig.panelizadoAnchoMaxPanelMm,
+    imposicionConfig.panelizadoDireccion,
+    imposicionConfig.panelizadoDistribucion,
+    imposicionConfig.panelizadoInterpretacionAnchoMaximo,
+    imposicionConfig.panelizadoSolapeMm,
+  ]);
+
+  React.useEffect(() => {
     if (
       costosPerfilOverrideId &&
       !costosProfileOptions.some((item) => item.id === costosPerfilOverrideId)
@@ -1276,25 +2785,42 @@ export function WideFormatProductDetail({
   }, [costosPerfilOverrideId, costosProfileOptions]);
 
   React.useEffect(() => {
-    setMaquinasCompatiblesIds((prev) => prev.filter((id) => filteredMachineIds.has(id)));
-  }, [filteredMachineIds]);
+    const next = maquinasCompatiblesIds.filter((id) => filteredMachineIds.has(id));
+    if (JSON.stringify(next) !== JSON.stringify(maquinasCompatiblesIds)) {
+      setMaquinasCompatiblesIds(next);
+    }
+  }, [filteredMachineIds, maquinasCompatiblesIds]);
 
   React.useEffect(() => {
-    setPerfilesCompatiblesIds((prev) => prev.filter((id) => validProfileIds.has(id)));
-  }, [validProfileIds]);
+    const next = perfilesCompatiblesIds.filter((id) => validProfileIds.has(id));
+    if (JSON.stringify(next) !== JSON.stringify(perfilesCompatiblesIds)) {
+      setPerfilesCompatiblesIds(next);
+    }
+  }, [validProfileIds, perfilesCompatiblesIds]);
 
   React.useEffect(() => {
-    setMaterialesCompatiblesIds((prev) => prev.filter((id) => validMaterialVariantIds.has(id)));
-  }, [validMaterialVariantIds]);
+    const next = materialesCompatiblesIds.filter((id) => validMaterialVariantIds.has(id));
+    if (JSON.stringify(next) !== JSON.stringify(materialesCompatiblesIds)) {
+      setMaterialesCompatiblesIds(next);
+    }
+  }, [validMaterialVariantIds, materialesCompatiblesIds]);
 
   const isConfigDirty =
-    tipoVenta !== savedTipoVenta ||
     JSON.stringify([...tecnologiasCompatibles].sort()) !== JSON.stringify([...savedTecnologiasCompatibles].sort()) ||
     JSON.stringify([...maquinasCompatiblesIds].sort()) !== JSON.stringify([...savedMaquinasCompatiblesIds].sort()) ||
     JSON.stringify([...perfilesCompatiblesIds].sort()) !== JSON.stringify([...savedPerfilesCompatiblesIds].sort()) ||
     materialBaseId !== savedMaterialBaseId ||
     JSON.stringify([...materialesCompatiblesIds].sort()) !== JSON.stringify([...savedMaterialesCompatiblesIds].sort()) ||
     normalizeImposicionSnapshot(imposicionConfig) !== savedImposicionSnapshot;
+  const persistedPrecio = React.useMemo(
+    () =>
+      buildWideFormatPrecioConfigDraft(
+        productoState.precio,
+        normalizeUnidadComercialProducto(productoState.unidadComercial),
+      ),
+    [productoState.precio, productoState.unidadComercial],
+  );
+  const isPrecioDirty = JSON.stringify(precioForm) !== JSON.stringify(persistedPrecio);
 
   const machineById = React.useMemo(() => new Map(maquinas.map((item) => [item.id, item])), [maquinas]);
   const routeBasePlantillasActivas = plantillasPaso.filter((item) => item.activo);
@@ -1318,6 +2844,21 @@ export function WideFormatProductDetail({
     }
     return next;
   }, [selectedMachines]);
+  const syncProductoCommercialState = React.useCallback((updated: typeof productoState) => {
+    setProductoState(updated);
+    const nextPrecio = buildWideFormatPrecioConfigDraft(
+      updated.precio,
+      normalizeUnidadComercialProducto(updated.unidadComercial),
+    );
+    setPrecioForm(nextPrecio);
+    setPrecioEditorDraft(nextPrecio);
+    setPrecioEspecialClientesForm(updated.precioEspecialClientes ?? []);
+  }, []);
+
+  React.useEffect(() => {
+    syncProductoCommercialState(producto);
+  }, [producto, syncProductoCommercialState]);
+
   const rutaBasePrintingPlantillas = React.useMemo(
     () => {
       if (!routeBaseProceso) {
@@ -1481,50 +3022,51 @@ export function WideFormatProductDetail({
   }, [tecnologiasChecklistDisponibles]);
 
   React.useEffect(() => {
-    setRutaBaseReglasImpresion((prev) => {
-      const next = prev
-        .map((item) => {
-          if (!item.tecnologia || !tecnologiasCompatiblesSet.has(item.tecnologia)) {
-            return {
-              ...item,
-              tecnologia: tecnologiasCompatibles[0] ?? "",
-              maquinaId: "",
-              pasoPlantillaId: "",
-              perfilOperativoDefaultId: "",
-            };
-          }
-          const machineOptions = selectedMachines.filter(
-            (machine) => getMaquinaTecnologia(machine) === item.tecnologia,
-          );
-          const maquinaId =
-            item.maquinaId && machineOptions.some((machine) => machine.id === item.maquinaId) ? item.maquinaId : "";
-          const printingOptions = rutaBasePrintingPlantillas.filter((plantilla) => {
-            if (!plantilla.maquinaId) return false;
-            const machine = machineById.get(plantilla.maquinaId);
-            if (!machine) return false;
-            if (getMaquinaTecnologia(machine) !== item.tecnologia) return false;
-            return maquinaId ? plantilla.maquinaId === maquinaId : true;
-          });
-          const pasoPlantillaId =
-            item.pasoPlantillaId &&
-            (printingOptions.some((plantilla) => plantilla.id === item.pasoPlantillaId) ||
-              routeBasePlantillaById.has(item.pasoPlantillaId))
-              ? item.pasoPlantillaId
-              : "";
-          const plantilla = pasoPlantillaId ? routeBasePlantillaById.get(pasoPlantillaId) ?? null : null;
-          const profiles = plantilla?.maquinaId ? selectedProfilesByMachine.get(plantilla.maquinaId) ?? [] : [];
+    const next = rutaBaseReglasImpresion
+      .map((item) => {
+        if (!item.tecnologia || !tecnologiasCompatiblesSet.has(item.tecnologia)) {
           return {
             ...item,
-            maquinaId,
-            pasoPlantillaId,
-            perfilOperativoDefaultId: profiles.some((profile) => profile.id === item.perfilOperativoDefaultId)
-              ? item.perfilOperativoDefaultId
-              : "",
+            tecnologia: tecnologiasCompatibles[0] ?? "",
+            maquinaId: "",
+            pasoPlantillaId: "",
+            perfilOperativoDefaultId: "",
           };
-        })
-        .filter((item, index, array) => array.findIndex((candidate) => candidate.id === item.id) === index);
-      return normalizeRutaBaseReglasSnapshot(next) === normalizeRutaBaseReglasSnapshot(prev) ? prev : next;
-    });
+        }
+        const machineOptions = selectedMachines.filter(
+          (machine) => getMaquinaTecnologia(machine) === item.tecnologia,
+        );
+        const maquinaId =
+          item.maquinaId && machineOptions.some((machine) => machine.id === item.maquinaId) ? item.maquinaId : "";
+        const printingOptions = rutaBasePrintingPlantillas.filter((plantilla) => {
+          if (!plantilla.maquinaId) return false;
+          const machine = machineById.get(plantilla.maquinaId);
+          if (!machine) return false;
+          if (getMaquinaTecnologia(machine) !== item.tecnologia) return false;
+          return maquinaId ? plantilla.maquinaId === maquinaId : true;
+        });
+        const pasoPlantillaId =
+          item.pasoPlantillaId &&
+          (printingOptions.some((plantilla) => plantilla.id === item.pasoPlantillaId) ||
+            routeBasePlantillaById.has(item.pasoPlantillaId))
+            ? item.pasoPlantillaId
+            : "";
+        const plantilla = pasoPlantillaId ? routeBasePlantillaById.get(pasoPlantillaId) ?? null : null;
+        const profiles = plantilla?.maquinaId ? selectedProfilesByMachine.get(plantilla.maquinaId) ?? [] : [];
+        return {
+          ...item,
+          maquinaId,
+          pasoPlantillaId,
+          perfilOperativoDefaultId: profiles.some((profile) => profile.id === item.perfilOperativoDefaultId)
+            ? item.perfilOperativoDefaultId
+            : "",
+        };
+      })
+      .filter((item, index, array) => array.findIndex((candidate) => candidate.id === item.id) === index);
+
+    if (normalizeRutaBaseReglasSnapshot(next) !== normalizeRutaBaseReglasSnapshot(rutaBaseReglasImpresion)) {
+      setRutaBaseReglasImpresion(next);
+    }
   }, [
     tecnologiasCompatibles,
     tecnologiasCompatiblesSet,
@@ -1533,6 +3075,7 @@ export function WideFormatProductDetail({
     routeBasePlantillaById,
     machineById,
     selectedProfilesByMachine,
+    rutaBaseReglasImpresion,
   ]);
 
   const handleSaveRutaBase = () => {
@@ -1672,6 +3215,7 @@ export function WideFormatProductDetail({
           descripcion: generalForm.descripcion.trim(),
           familiaProductoId: generalForm.familiaProductoId,
           subfamiliaProductoId: generalForm.subfamiliaProductoId || undefined,
+          unidadComercial: generalForm.unidadComercial,
           motorCodigo: generalForm.motorCodigo,
           motorVersion: generalForm.motorVersion,
           estado: productoState.estado,
@@ -1686,12 +3230,13 @@ export function WideFormatProductDetail({
               motorVersion: generalForm.motorVersion,
             })
           : updated;
-        setProductoState(withMotor);
+        syncProductoCommercialState(withMotor);
         setGeneralForm({
           nombre: withMotor.nombre,
           descripcion: withMotor.descripcion ?? "",
           familiaProductoId: withMotor.familiaProductoId,
           subfamiliaProductoId: withMotor.subfamiliaProductoId ?? "",
+          unidadComercial: normalizeUnidadComercialProducto(withMotor.unidadComercial),
           motorCodigo: withMotor.motorCodigo,
           motorVersion: withMotor.motorVersion,
         });
@@ -1702,11 +3247,449 @@ export function WideFormatProductDetail({
     });
   };
 
+  const handleSavePrecio = (draftPrecio: ProductoPrecioConfig = precioForm, closeEditor = false) => {
+    startSavingPrecio(async () => {
+      try {
+        const updated = await updateProductoPrecio(productoState.id, {
+          metodoCalculo: draftPrecio.metodoCalculo,
+          measurementUnit: draftPrecio.measurementUnit,
+          impuestos: draftPrecio.impuestos,
+          comisiones: draftPrecio.comisiones,
+          detalle: draftPrecio.detalle as Record<string, unknown>,
+        });
+        syncProductoCommercialState(updated);
+        if (closeEditor) {
+          setPrecioEditorOpen(false);
+        }
+        toast.success("Configuración de precio actualizada.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "No se pudo guardar la configuración de precio.");
+      }
+    });
+  };
+
+  const persistPrecioComisiones = (
+    nextComisiones: ProductoPrecioConfig["comisiones"],
+    options?: { successMessage?: string; onSuccess?: () => void },
+  ) => {
+    const nextPrecio = { ...precioForm, comisiones: nextComisiones } as ProductoPrecioConfig;
+    setPrecioForm(nextPrecio);
+    setPrecioEditorDraft((current) => ({ ...current, comisiones: nextComisiones }));
+
+    startSavingPrecio(async () => {
+      try {
+        const updated = await updateProductoPrecio(productoState.id, {
+          metodoCalculo: nextPrecio.metodoCalculo,
+          measurementUnit: nextPrecio.measurementUnit,
+          impuestos: nextPrecio.impuestos,
+          comisiones: nextPrecio.comisiones,
+          detalle: nextPrecio.detalle as Record<string, unknown>,
+        });
+        syncProductoCommercialState(updated);
+        options?.onSuccess?.();
+        toast.success(options?.successMessage ?? "Comisiones actualizadas.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "No se pudieron guardar las comisiones.");
+      }
+    });
+  };
+
+  const handleChangeMetodoCalculoPrecio = (metodoCalculo: MetodoCalculoPrecioProducto) => {
+    const unidadComercial = normalizeUnidadComercialProducto(productoState.unidadComercial);
+    const basePrecio = buildWideFormatPrecioConfigDraft(precioForm, unidadComercial);
+    const nextMeasurementUnit = normalizeWideFormatMeasurementUnit(basePrecio.measurementUnit, unidadComercial);
+    const next = {
+      ...buildPrecioConfigForMethod(metodoCalculo, nextMeasurementUnit),
+      impuestos: {
+        esquemaId: basePrecio.impuestos.esquemaId,
+        esquemaNombre: basePrecio.impuestos.esquemaNombre,
+        items: basePrecio.impuestos.items.map((item) => ({ ...item })),
+        porcentajeTotal: basePrecio.impuestos.porcentajeTotal,
+      },
+      comisiones: {
+        items: basePrecio.comisiones.items.map((item) => ({ ...item })),
+        porcentajeTotal: basePrecio.comisiones.porcentajeTotal,
+      },
+    } as ProductoPrecioConfig;
+    setPrecioForm(next);
+    setPrecioEditorDraft(next);
+  };
+
+  const handleOpenPrecioComisionEditor = (item?: ProductoPrecioComisionItem) => {
+    setPrecioComisionEditorDraft(buildPrecioComisionDraft(item));
+    setPrecioComisionEditorOpen(true);
+  };
+
+  const handleSavePrecioComisionDraft = () => {
+    if (!precioComisionEditorDraft.nombre.trim()) {
+      toast.error("El nombre de la comisión es obligatorio.");
+      return;
+    }
+    const nextItem: ProductoPrecioComisionItem = {
+      ...precioComisionEditorDraft,
+      nombre: precioComisionEditorDraft.nombre.trim(),
+      porcentaje: Number(precioComisionEditorDraft.porcentaje || 0),
+    };
+    const nextItems = precioForm.comisiones.items.some((item) => item.id === nextItem.id)
+      ? precioForm.comisiones.items.map((item) => (item.id === nextItem.id ? nextItem : item))
+      : [...precioForm.comisiones.items, nextItem];
+    const comisiones = {
+      items: nextItems,
+      porcentajeTotal: Number(
+        nextItems
+          .filter((item) => item.activo)
+          .reduce((sum, item) => sum + Number(item.porcentaje || 0), 0)
+          .toFixed(4),
+      ),
+    };
+    persistPrecioComisiones(comisiones, {
+      successMessage: "Comisión guardada.",
+      onSuccess: () => setPrecioComisionEditorOpen(false),
+    });
+  };
+
+  const handleTogglePrecioComision = (itemId: string, activo: boolean) => {
+    const nextItems = precioForm.comisiones.items.map((item) =>
+      item.id === itemId ? { ...item, activo } : item,
+    );
+    const comisiones = {
+      items: nextItems,
+      porcentajeTotal: Number(
+        nextItems
+          .filter((item) => item.activo)
+          .reduce((sum, item) => sum + Number(item.porcentaje || 0), 0)
+          .toFixed(4),
+      ),
+    };
+    persistPrecioComisiones(comisiones, { successMessage: "Estado de comisión actualizado." });
+  };
+
+  const handleDeletePrecioComision = (itemId: string) => {
+    const nextItems = precioForm.comisiones.items.filter((item) => item.id !== itemId);
+    const comisiones = {
+      items: nextItems,
+      porcentajeTotal: Number(
+        nextItems
+          .filter((item) => item.activo)
+          .reduce((sum, item) => sum + Number(item.porcentaje || 0), 0)
+          .toFixed(4),
+      ),
+    };
+    persistPrecioComisiones(comisiones, {
+      successMessage: "Comisión eliminada.",
+      onSuccess: () => setPrecioComisionToDelete(null),
+    });
+  };
+
+  const handleChangeImpuestoEsquema = (esquemaId: string | null) => {
+    const esquema = impuestosCatalogoActivos.find((item) => item.id === esquemaId) ?? null;
+    const impuestos = esquema
+      ? {
+          esquemaId: esquema.id,
+          esquemaNombre: esquema.nombre,
+          items: esquema.detalle.items,
+          porcentajeTotal: esquema.porcentaje,
+        }
+      : buildDefaultPrecioImpuestos();
+    setPrecioForm((current) => ({ ...current, impuestos }));
+    setPrecioEditorDraft((current) => ({ ...current, impuestos }));
+  };
+
+  const handleOpenImpuestosEditor = () => {
+    const current = impuestosCatalogo.find((item) => item.id === precioForm.impuestos.esquemaId) ?? impuestosCatalogoActivos[0] ?? null;
+    setImpuestosEditorDraft(current ? { ...current, detalle: { items: current.detalle.items.map((item) => ({ ...item })) } } : null);
+    setImpuestosEditorOpen(true);
+  };
+
+  const handleSaveImpuestosEditor = () => {
+    if (!impuestosEditorDraft) {
+      toast.error("Selecciona un esquema impositivo.");
+      return;
+    }
+    const porcentaje = Number(
+      impuestosEditorDraft.detalle.items.reduce((sum, item) => sum + Number(item.porcentaje || 0), 0).toFixed(4),
+    );
+    startSavingImpuestosCatalogo(async () => {
+      try {
+        const updated = await updateProductoImpuesto(impuestosEditorDraft.id, {
+          codigo: impuestosEditorDraft.codigo,
+          nombre: impuestosEditorDraft.nombre,
+          porcentaje,
+          detalle: {
+            items: impuestosEditorDraft.detalle.items.map((item) => ({
+              nombre: item.nombre,
+              porcentaje: Number(item.porcentaje || 0),
+            })),
+          },
+          activo: impuestosEditorDraft.activo,
+        });
+        setImpuestosCatalogo((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+        setImpuestosEditorDraft(updated);
+        if (precioForm.impuestos.esquemaId === updated.id) {
+          handleChangeImpuestoEsquema(updated.id);
+        }
+        setImpuestosEditorOpen(false);
+        toast.success("Impuestos actualizados.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "No se pudo guardar el esquema impositivo.");
+      }
+    });
+  };
+
+  const handleOpenPrecioEditor = () => {
+    setPrecioEditorDraft(
+      buildWideFormatPrecioConfigDraft(
+        precioForm,
+        normalizeUnidadComercialProducto(productoState.unidadComercial),
+      ),
+    );
+    setPrecioEditorOpen(true);
+  };
+
+  const handleCancelPrecioEditor = () => {
+    setPrecioEditorDraft(
+      buildWideFormatPrecioConfigDraft(
+        precioForm,
+        normalizeUnidadComercialProducto(productoState.unidadComercial),
+      ),
+    );
+    setPrecioEditorOpen(false);
+  };
+
+  const handleSavePrecioFromEditor = () => {
+    const nextPrecio = buildWideFormatPrecioConfigDraft(
+      precioEditorDraft,
+      normalizeUnidadComercialProducto(productoState.unidadComercial),
+    );
+    setPrecioForm(nextPrecio);
+    handleSavePrecio(nextPrecio, true);
+  };
+
+  const handleOpenPrecioEspecialClienteEditor = (item?: ProductoPrecioEspecialCliente) => {
+    setPrecioEspecialClienteEditorDraft(
+      buildWideFormatPrecioEspecialClienteDraft(
+        item,
+        normalizeUnidadComercialProducto(productoState.unidadComercial),
+      ),
+    );
+    setPrecioEspecialClienteEditorOpen(true);
+  };
+
+  const handleChangeMetodoCalculoPrecioEspecialCliente = (metodoCalculo: MetodoCalculoPrecioProducto) => {
+    const nextMeasurementUnit = normalizeWideFormatMeasurementUnit(
+      precioEspecialClienteEditorDraft.measurementUnit,
+      normalizeUnidadComercialProducto(productoState.unidadComercial),
+    );
+    updatePrecioEspecialClienteEditorDraft((current) => ({
+      ...current,
+      ...buildPrecioConfigForMethod(metodoCalculo, nextMeasurementUnit),
+      clienteId: current.clienteId,
+      clienteNombre: current.clienteNombre,
+      descripcion: current.descripcion,
+      activo: current.activo,
+      id: current.id,
+      createdAt: current.createdAt,
+      updatedAt: current.updatedAt,
+    }));
+  };
+
+  const persistPrecioEspecialClientes = (
+    nextItems: ProductoPrecioEspecialCliente[],
+    options?: { successMessage?: string; onSuccess?: (updated: typeof productoState) => void },
+  ) => {
+    startSavingPrecioEspecialClientes(async () => {
+      try {
+        const updated = await updateProductoPrecioEspecialClientes(productoState.id, {
+          items: nextItems.map((item) => ({
+            id: item.id,
+            clienteId: item.clienteId,
+            clienteNombre: item.clienteNombre,
+            descripcion: item.descripcion,
+            activo: item.activo,
+            metodoCalculo: item.metodoCalculo,
+            measurementUnit: item.measurementUnit,
+            detalle: item.detalle as Record<string, unknown>,
+          })),
+        });
+        syncProductoCommercialState(updated);
+        options?.onSuccess?.(updated);
+        toast.success(options?.successMessage ?? "Precios especiales guardados.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "No se pudieron guardar los precios especiales.");
+      }
+    });
+  };
+
+  const handleSavePrecioEspecialClienteDraft = () => {
+    if (!precioEspecialClienteEditorDraft.clienteId) {
+      toast.error("Selecciona un cliente.");
+      return;
+    }
+    const selectedCliente = clientesOptions.find((item) => item.id === precioEspecialClienteEditorDraft.clienteId);
+    if (!selectedCliente) {
+      toast.error("El cliente seleccionado no existe.");
+      return;
+    }
+    const nextItem = buildPrecioEspecialClienteFromDraft(
+      precioEspecialClienteEditorDraft,
+      selectedCliente.nombre,
+      new Date().toISOString(),
+    );
+    const nextItems = precioEspecialClientesForm.some((item) => item.id === nextItem.id)
+      ? precioEspecialClientesForm.map((item) => (item.id === nextItem.id ? nextItem : item))
+      : [...precioEspecialClientesForm, nextItem];
+    persistPrecioEspecialClientes(nextItems, {
+      successMessage: "Precio especial guardado.",
+      onSuccess: () => setPrecioEspecialClienteEditorOpen(false),
+    });
+  };
+
+  const handleTogglePrecioEspecialCliente = (itemId: string, activo: boolean) => {
+    const nextItems = precioEspecialClientesForm.map((item) =>
+      item.id === itemId ? { ...item, activo, updatedAt: new Date().toISOString() } : item,
+    );
+    persistPrecioEspecialClientes(nextItems, { successMessage: "Estado del precio especial actualizado." });
+  };
+
+  const handleDeletePrecioEspecialCliente = (itemId: string) => {
+    const nextItems = precioEspecialClientesForm.filter((item) => item.id !== itemId);
+    persistPrecioEspecialClientes(nextItems, { successMessage: "Precio especial eliminado." });
+  };
+
+  const updatePrecioEspecialClienteEditorDraft = (
+    updater: (current: PrecioEspecialClienteDraft) => PrecioEspecialClienteDraft,
+  ) => {
+    setPrecioEspecialClienteEditorDraft((current) => updater(current));
+  };
+
+  const addPrecioEspecialClienteTierRow = () => {
+    updatePrecioEspecialClienteEditorDraft((current) => {
+      if (current.metodoCalculo === "fijado_por_cantidad") {
+        const draft = current as PrecioEspecialClienteDraft & {
+          detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>["detalle"];
+        };
+        return { ...draft, detalle: { tiers: [...draft.detalle.tiers, { quantity: 1, price: 0 }] } };
+      }
+      if (current.metodoCalculo === "fijo_con_margen_variable") {
+        const draft = current as PrecioEspecialClienteDraft & {
+          detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>["detalle"];
+        };
+        return { ...draft, detalle: { tiers: [...draft.detalle.tiers, { quantity: 1, marginPct: 0 }] } };
+      }
+      if (current.metodoCalculo === "variable_por_cantidad") {
+        const draft = current as PrecioEspecialClienteDraft & {
+          detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>["detalle"];
+        };
+        return { ...draft, detalle: { tiers: [...draft.detalle.tiers, { quantityUntil: 1, price: 0 }] } };
+      }
+      if (current.metodoCalculo === "margen_variable") {
+        const draft = current as PrecioEspecialClienteDraft & {
+          detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>["detalle"];
+        };
+        return { ...draft, detalle: { tiers: [...draft.detalle.tiers, { quantityUntil: 1, marginPct: 0 }] } };
+      }
+      return current;
+    });
+  };
+
+  const removePrecioEspecialClienteTierRow = (index: number) => {
+    updatePrecioEspecialClienteEditorDraft((current) => {
+      if (current.metodoCalculo === "fijado_por_cantidad") {
+        const draft = current as PrecioEspecialClienteDraft & {
+          detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>["detalle"];
+        };
+        return draft.detalle.tiers.length > 1
+          ? { ...draft, detalle: { tiers: draft.detalle.tiers.filter((_, rowIndex) => rowIndex !== index) } }
+          : current;
+      }
+      if (current.metodoCalculo === "fijo_con_margen_variable") {
+        const draft = current as PrecioEspecialClienteDraft & {
+          detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>["detalle"];
+        };
+        return draft.detalle.tiers.length > 1
+          ? { ...draft, detalle: { tiers: draft.detalle.tiers.filter((_, rowIndex) => rowIndex !== index) } }
+          : current;
+      }
+      if (current.metodoCalculo === "variable_por_cantidad") {
+        const draft = current as PrecioEspecialClienteDraft & {
+          detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>["detalle"];
+        };
+        return draft.detalle.tiers.length > 1
+          ? { ...draft, detalle: { tiers: draft.detalle.tiers.filter((_, rowIndex) => rowIndex !== index) } }
+          : current;
+      }
+      if (current.metodoCalculo === "margen_variable") {
+        const draft = current as PrecioEspecialClienteDraft & {
+          detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>["detalle"];
+        };
+        return draft.detalle.tiers.length > 1
+          ? { ...draft, detalle: { tiers: draft.detalle.tiers.filter((_, rowIndex) => rowIndex !== index) } }
+          : current;
+      }
+      return current;
+    });
+  };
+
+  const updatePrecioEditorDraft = (updater: (current: ProductoPrecioConfig) => ProductoPrecioConfig) => {
+    setPrecioEditorDraft((current) => updater(current));
+  };
+
+  const addPrecioTierRow = () => {
+    updatePrecioEditorDraft((current) => {
+      if (current.metodoCalculo === "fijado_por_cantidad") {
+        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>;
+        return { ...draft, detalle: { tiers: [...draft.detalle.tiers, { quantity: 1, price: 0 }] } };
+      }
+      if (current.metodoCalculo === "fijo_con_margen_variable") {
+        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>;
+        return { ...draft, detalle: { tiers: [...draft.detalle.tiers, { quantity: 1, marginPct: 0 }] } };
+      }
+      if (current.metodoCalculo === "variable_por_cantidad") {
+        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>;
+        return { ...draft, detalle: { tiers: [...draft.detalle.tiers, { quantityUntil: 1, price: 0 }] } };
+      }
+      if (current.metodoCalculo === "margen_variable") {
+        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>;
+        return { ...draft, detalle: { tiers: [...draft.detalle.tiers, { quantityUntil: 1, marginPct: 0 }] } };
+      }
+      return current;
+    });
+  };
+
+  const removePrecioTierRow = (index: number) => {
+    updatePrecioEditorDraft((current) => {
+      if (current.metodoCalculo === "fijado_por_cantidad") {
+        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>;
+        return draft.detalle.tiers.length > 1
+          ? { ...draft, detalle: { tiers: draft.detalle.tiers.filter((_, rowIndex) => rowIndex !== index) } }
+          : current;
+      }
+      if (current.metodoCalculo === "fijo_con_margen_variable") {
+        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>;
+        return draft.detalle.tiers.length > 1
+          ? { ...draft, detalle: { tiers: draft.detalle.tiers.filter((_, rowIndex) => rowIndex !== index) } }
+          : current;
+      }
+      if (current.metodoCalculo === "variable_por_cantidad") {
+        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>;
+        return draft.detalle.tiers.length > 1
+          ? { ...draft, detalle: { tiers: draft.detalle.tiers.filter((_, rowIndex) => rowIndex !== index) } }
+          : current;
+      }
+      if (current.metodoCalculo === "margen_variable") {
+        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>;
+        return draft.detalle.tiers.length > 1
+          ? { ...draft, detalle: { tiers: draft.detalle.tiers.filter((_, rowIndex) => rowIndex !== index) } }
+          : current;
+      }
+      return current;
+    });
+  };
+
   const handleSaveTecnologias = () => {
     startSavingConfig(async () => {
       try {
         const updated = await updateGranFormatoConfig(productoState.id, {
-          tipoVenta,
           tecnologiasCompatibles,
           maquinasCompatibles: maquinasCompatiblesIds,
           perfilesCompatibles: perfilesCompatiblesIds,
@@ -1714,8 +3697,6 @@ export function WideFormatProductDetail({
           materialesCompatibles: materialesCompatiblesIds,
           imposicion: imposicionConfig,
         });
-        setTipoVenta(updated.tipoVenta);
-        setSavedTipoVenta(updated.tipoVenta);
         setTecnologiasCompatibles(updated.tecnologiasCompatibles);
         setSavedTecnologiasCompatibles(updated.tecnologiasCompatibles);
         setMaquinasCompatiblesIds(updated.maquinasCompatibles);
@@ -1726,9 +3707,14 @@ export function WideFormatProductDetail({
         setSavedMaterialBaseId(updated.materialBaseId ?? "");
         setMaterialesCompatiblesIds(updated.materialesCompatibles);
         setSavedMaterialesCompatiblesIds(updated.materialesCompatibles);
-        setImposicionConfig(updated.imposicion ?? defaultGranFormatoImposicionConfig);
+        const nextImposicion = {
+          ...(updated.imposicion ?? defaultGranFormatoImposicionConfig),
+          panelizadoInterpretacionAnchoMaximo:
+            updated.imposicion?.panelizadoInterpretacionAnchoMaximo ?? "total",
+        };
+        setImposicionConfig(nextImposicion);
         setSavedImposicionSnapshot(
-          normalizeImposicionSnapshot(updated.imposicion ?? defaultGranFormatoImposicionConfig),
+          normalizeImposicionSnapshot(nextImposicion),
         );
         toast.success("Configuración técnica actualizada.");
       } catch (error) {
@@ -1738,6 +3724,11 @@ export function WideFormatProductDetail({
   };
 
   const handleCalcularCostos = () => {
+    if (checklistDirty) {
+      toast.error("Guardá primero los cambios de Ruta de opcionales para costear con el orden real de la ruta.");
+      return;
+    }
+
     const medidasValidas = costosMedidas.filter(
       (item) => (item.anchoMm ?? 0) > 0 && (item.altoMm ?? 0) > 0 && (item.cantidad ?? 0) > 0,
     );
@@ -1767,13 +3758,164 @@ export function WideFormatProductDetail({
               preguntaId,
               respuestaId: value.respuestaId,
             })),
+          panelizado: {
+            activo: costosPanelizadoActivo,
+            modo:
+              imposicionConfig.panelizadoModo === "manual" && imposicionConfig.panelizadoManualLayout
+                ? "manual"
+                : "automatico",
+            direccion: costosPanelizadoDireccion,
+            solapeMm: costosPanelizadoSolapeMm,
+            anchoMaxPanelMm: costosPanelizadoAnchoMaxPanelMm,
+            distribucion: costosPanelizadoDistribucion,
+            interpretacionAnchoMaximo: costosPanelizadoInterpretacionAnchoMaximo,
+            manualLayout:
+              imposicionConfig.panelizadoModo === "manual"
+                ? imposicionConfig.panelizadoManualLayout
+                : null,
+          },
         });
         setCostosPreview(result);
+        const snapshots = await getCotizacionesProductoServicio(productoState.id);
+        setCostosSnapshots(snapshots);
         toast.success("Costos calculados.");
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "No se pudo calcular el costo.");
       }
     });
+  };
+
+  const openPanelEditor = () => {
+    if (!imposicionBestCandidate?.panelizado) {
+      return;
+    }
+    const layout =
+      imposicionConfig.panelizadoModo === "manual" && imposicionConfig.panelizadoManualLayout
+        ? cloneGranFormatoImposicionConfig(imposicionConfig).panelizadoManualLayout
+        : buildManualLayoutFromPlacements(imposicionBestCandidate.placements);
+    if (!layout) {
+      toast.error("No hay paneles disponibles para editar.");
+      return;
+    }
+    setPanelEditorDraft(layout);
+    setPanelEditorSelectedPieceId(layout.items[0]?.sourcePieceId ?? "");
+    setPanelEditorDragIndex(null);
+    setIsPanelEditorOpen(true);
+  };
+
+  const updatePanelEditorBoundary = React.useCallback(
+    (deltaMm: number) => {
+      if (!panelEditorSelectedPiece || panelEditorDragIndex == null || !panelEditorDraft) {
+        return;
+      }
+      setPanelEditorDraft((current) => {
+        if (!current) {
+          return current;
+        }
+        return {
+          items: current.items.map((item) => {
+            if (item.sourcePieceId !== panelEditorSelectedPiece.sourcePieceId) {
+              return item;
+            }
+            const panels = [...item.panels];
+            const left = panels[panelEditorDragIndex];
+            const right = panels[panelEditorDragIndex + 1];
+            if (!left || !right) {
+              return item;
+            }
+            if (item.axis === "vertical") {
+              const nextLeft = Math.max(MIN_MANUAL_PANEL_USEFUL_MM, left.usefulWidthMm + deltaMm);
+              const appliedDelta = nextLeft - left.usefulWidthMm;
+              if (Math.abs(appliedDelta) < 0.1) {
+                return item;
+              }
+              left.usefulWidthMm = nextLeft;
+              right.usefulWidthMm = Math.max(MIN_MANUAL_PANEL_USEFUL_MM, right.usefulWidthMm - appliedDelta);
+            } else {
+              const nextLeft = Math.max(MIN_MANUAL_PANEL_USEFUL_MM, left.usefulHeightMm + deltaMm);
+              const appliedDelta = nextLeft - left.usefulHeightMm;
+              if (Math.abs(appliedDelta) < 0.1) {
+                return item;
+              }
+              left.usefulHeightMm = nextLeft;
+              right.usefulHeightMm = Math.max(MIN_MANUAL_PANEL_USEFUL_MM, right.usefulHeightMm - appliedDelta);
+            }
+            return recalculateManualLayoutItem({
+              ...item,
+              panels,
+            });
+          }),
+        };
+      });
+    },
+    [panelEditorDraft, panelEditorDragIndex, panelEditorSelectedPiece],
+  );
+
+  React.useEffect(() => {
+    if (panelEditorDragIndex == null) {
+      return;
+    }
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!panelEditorSelectedPiece || !panelEditorCanvasRef.current) {
+        return;
+      }
+      const rect = panelEditorCanvasRef.current.getBoundingClientRect();
+      const axisLengthPx =
+        panelEditorSelectedPiece.axis === "vertical" ? rect.width : rect.height;
+      const axisLengthMm =
+        panelEditorSelectedPiece.axis === "vertical"
+          ? panelEditorSelectedPiece.pieceWidthMm
+          : panelEditorSelectedPiece.pieceHeightMm;
+      if (axisLengthPx <= 0 || axisLengthMm <= 0) {
+        return;
+      }
+      const deltaPx =
+        panelEditorSelectedPiece.axis === "vertical" ? event.movementX : -event.movementY;
+      const deltaMm = (deltaPx / axisLengthPx) * axisLengthMm;
+      if (Math.abs(deltaMm) > 0) {
+        updatePanelEditorBoundary(deltaMm);
+      }
+    };
+    const handleMouseUp = () => setPanelEditorDragIndex(null);
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [panelEditorDragIndex, panelEditorSelectedPiece, updatePanelEditorBoundary]);
+
+  const applyPanelEditor = () => {
+    if (!panelEditorDraft) {
+      return;
+    }
+    if (!panelEditorAllValid) {
+      toast.error("El layout manual tiene paneles inválidos.");
+      return;
+    }
+    const nextConfig: GranFormatoImposicionConfig = {
+      ...imposicionConfig,
+      panelizadoModo: "manual",
+      panelizadoManualLayout: panelEditorDraft,
+    };
+    setImposicionConfig(nextConfig);
+    setImposicionSimulationConfig(cloneGranFormatoImposicionConfig(nextConfig));
+    setIsPanelEditorOpen(false);
+    toast.success("Panelizado manual aplicado.");
+  };
+
+  const restoreAutomaticPanelLayout = () => {
+    const nextConfig: GranFormatoImposicionConfig = {
+      ...imposicionConfig,
+      panelizadoModo: "automatico",
+      panelizadoManualLayout: null,
+    };
+    setPanelEditorDraft(buildManualLayoutFromPlacements(imposicionBestCandidate?.placements ?? []));
+    setImposicionConfig(nextConfig);
+    setImposicionSimulationConfig(cloneGranFormatoImposicionConfig(nextConfig));
+    setIsPanelEditorOpen(false);
+    setPanelEditorDragIndex(null);
+    toast.success("Se restableció el panelizado automático.");
   };
 
   return (
@@ -1884,6 +4026,31 @@ export function WideFormatProductDetail({
                   </SelectContent>
                 </Select>
               </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Unidad comercial</p>
+                <Select
+                  value={generalForm.unidadComercial}
+                  onValueChange={(value) =>
+                    setGeneralForm((prev) => ({
+                      ...prev,
+                      unidadComercial: (value as UnidadComercialProducto) ?? "unidad",
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar unidad comercial">
+                      {getUnidadComercialProductoLabel(generalForm.unidadComercial)}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {unidadComercialProductoItems.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="rounded-lg border p-3 md:col-span-2">
                 <p className="text-xs text-muted-foreground">Descripción</p>
                 <textarea
@@ -1944,22 +4111,7 @@ export function WideFormatProductDetail({
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex flex-col gap-4 rounded-lg border p-4 md:flex-row md:items-end md:justify-between">
-                <div className="w-full max-w-sm">
-                  <p className="mb-2 text-xs text-muted-foreground">Tipo de venta</p>
-                  <Select value={tipoVenta} onValueChange={(value) => setTipoVenta(value as TipoVentaGranFormato)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar tipo de venta">{tipoVentaLabel}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {tipoVentaItems.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="flex justify-end">
                 <Button type="button" onClick={handleSaveTecnologias} disabled={isSavingConfig || isLoadingConfig || !isConfigDirty}>
                   {isSavingConfig ? <GdiSpinner className="size-4" /> : <SaveIcon />}
                   Guardar tecnologías
@@ -2621,36 +4773,452 @@ export function WideFormatProductDetail({
             <CardContent className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Parámetros base</CardTitle>
+                  <CardTitle className="text-base">Parámetros de imposición</CardTitle>
                   <CardDescription>
-                    Estos valores quedan como referencia del producto y luego podrán ser usados por Costos y Simulación comercial.
+                    Definí el baseline técnico del producto: defaults de impresión, optimización y márgenes que luego usará el resto del flujo.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  <div className="space-y-3 md:col-span-2 xl:col-span-4">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">Medidas a evaluar</p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setImposicionConfig((prev) => ({
-                            ...prev,
-                            medidas: [...prev.medidas, createGranFormatoImposicionMedida()],
-                          }))
-                        }
-                      >
-                        <PlusIcon />
-                        Agregar medida
-                      </Button>
+                <CardContent className="space-y-5">
+                  <div className="rounded-xl border bg-muted/10 p-4">
+                    <div className="mb-4">
+                      <h4 className="text-sm font-semibold">Configuración por defecto</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Estos valores definen el contexto técnico base del producto para imposición, costos y simulación comercial.
+                      </p>
                     </div>
-                    <div className="space-y-3">
-                      {imposicionConfig.medidas.map((medida, index) => (
-                        <div key={`medida-${index}`} className="grid gap-3 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_auto] md:items-end">
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">Tecnología default</p>
+                        <Select
+                          value={imposicionTechnology || "__none__"}
+                          onValueChange={(value) =>
+                            setImposicionConfig((prev) => ({
+                              ...prev,
+                              tecnologiaDefault: value === "__none__" ? null : value,
+                              maquinaDefaultId: null,
+                              perfilDefaultId: null,
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar tecnología">
+                              {technologyLabels[imposicionTechnology] ?? "Seleccionar tecnología"}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Seleccionar tecnología</SelectItem>
+                            {imposicionTechnologies.map((item) => (
+                              <SelectItem key={item} value={item}>
+                                {technologyLabels[item] ?? item}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">Máquina default</p>
+                        <Select
+                          value={imposicionMachine?.id ?? "__none__"}
+                          onValueChange={(value) =>
+                            setImposicionConfig((prev) => ({
+                              ...prev,
+                              maquinaDefaultId: value === "__none__" ? null : value,
+                              perfilDefaultId: null,
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar máquina">
+                              {imposicionMachine?.nombre ?? "Seleccionar máquina"}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Seleccionar máquina</SelectItem>
+                            {imposicionMachineOptions.map((item) => (
+                              <SelectItem key={item.id} value={item.id}>
+                                {item.nombre}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">Perfil default</p>
+                        <Select
+                          value={imposicionProfile?.id ?? "__none__"}
+                          onValueChange={(value) =>
+                            setImposicionConfig((prev) => ({
+                              ...prev,
+                              perfilDefaultId: value === "__none__" ? null : value,
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar perfil">
+                              {imposicionProfile?.nombre ?? "Seleccionar perfil"}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Seleccionar perfil</SelectItem>
+                            {imposicionProfileOptions.map((item) => (
+                              <SelectItem key={item.id} value={item.id}>
+                                {item.nombre}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border bg-muted/10 p-4">
+                    <div className="mb-4">
+                      <h4 className="text-sm font-semibold">Configuración de optimización</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Ajustá cómo el sistema evalúa alternativas de nesting para este producto.
+                      </p>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                      <div className="space-y-2 xl:col-span-1">
+                        <p className="text-xs text-muted-foreground">Criterio de optimización</p>
+                        <Select
+                          value={imposicionConfig.criterioOptimizacion}
+                          onValueChange={(value) =>
+                            setImposicionConfig((prev) => ({
+                              ...prev,
+                              criterioOptimizacion: value as GranFormatoImposicionCriterioOptimizacion,
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue>
+                              {imposicionOptimizationItems.find((item) => item.value === imposicionConfig.criterioOptimizacion)?.label ??
+                                "Seleccionar criterio"}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {imposicionOptimizationItems.map((item) => (
+                              <SelectItem key={item.value} value={item.value}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg border bg-background px-3 py-3">
+                        <p className="text-sm font-medium">
+                          <LabelWithTooltip
+                            label="Permitir rotación"
+                            tooltip="Evalúa orientaciones alternativas para mejorar el aprovechamiento del rollo."
+                          />
+                        </p>
+                        <Switch
+                          checked={imposicionConfig.permitirRotacion}
+                          onCheckedChange={(checked) =>
+                            setImposicionConfig((prev) => ({ ...prev, permitirRotacion: Boolean(checked) }))
+                          }
+                        />
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg border bg-background px-3 py-3">
+                        <p className="text-sm font-medium">
+                          <LabelWithTooltip
+                            label="Apto para panelizado"
+                            tooltip="Si una pieza no entra entera en ningún rollo, el sistema podrá dividirla en paneles automáticamente."
+                          />
+                        </p>
+                        <Switch
+                          checked={imposicionConfig.panelizadoActivo}
+                          onCheckedChange={(checked) =>
+                            setImposicionConfig((prev) => ({
+                              ...prev,
+                              panelizadoActivo: Boolean(checked),
+                              panelizadoDireccion: checked ? prev.panelizadoDireccion : "automatica",
+                              panelizadoDistribucion: checked ? prev.panelizadoDistribucion : "equilibrada",
+                            }))
+                          }
+                        />
+                      </div>
+                      {imposicionConfig.panelizadoActivo ? (
+                        <>
                           <div className="space-y-2">
-                            <p className="text-xs text-muted-foreground">Ancho (cm)</p>
+                            <p className="text-xs text-muted-foreground">Dirección de panelizado</p>
+                            <Select
+                              value={imposicionConfig.panelizadoDireccion ?? "automatica"}
+                              onValueChange={(value) =>
+                                setImposicionConfig((prev) => ({
+                                  ...prev,
+                                  panelizadoDireccion: value as GranFormatoPanelizadoDireccion,
+                                }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue>
+                                  {panelizadoDireccionItems.find(
+                                    (item) => item.value === (imposicionConfig.panelizadoDireccion ?? "automatica"),
+                                  )?.label ?? "Automática"}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {panelizadoDireccionItems.map((item) => (
+                                  <SelectItem key={item.value} value={item.value}>
+                                    {item.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground">Solape por panel (mm)</p>
                             <Input
+                              type="number"
+                              min={0}
+                              value={imposicionConfig.panelizadoSolapeMm ?? ""}
+                              onChange={(event) =>
+                                setImposicionConfig((prev) => ({
+                                  ...prev,
+                                  panelizadoSolapeMm: event.target.value ? Math.max(0, Number(event.target.value)) : null,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground">Ancho máximo de panel (mm)</p>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={imposicionConfig.panelizadoAnchoMaxPanelMm ?? ""}
+                              onChange={(event) =>
+                                setImposicionConfig((prev) => ({
+                                  ...prev,
+                                  panelizadoAnchoMaxPanelMm: event.target.value ? Math.max(1, Number(event.target.value)) : null,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground">Distribución de paneles</p>
+                            <Select
+                              value={imposicionConfig.panelizadoDistribucion ?? "equilibrada"}
+                              onValueChange={(value) =>
+                                setImposicionConfig((prev) => ({
+                                  ...prev,
+                                  panelizadoDistribucion: value as GranFormatoPanelizadoDistribucion,
+                                }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue>
+                                  {panelizadoDistribucionItems.find(
+                                    (item) => item.value === (imposicionConfig.panelizadoDistribucion ?? "equilibrada"),
+                                  )?.label ?? "Equilibrada"}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {panelizadoDistribucionItems.map((item) => (
+                                  <SelectItem key={item.value} value={item.value}>
+                                    {item.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2 xl:col-span-2">
+                            <p className="text-xs text-muted-foreground">Interpretar ancho máximo como</p>
+                            <Select
+                              value={imposicionConfig.panelizadoInterpretacionAnchoMaximo ?? "total"}
+                              onValueChange={(value) =>
+                                setImposicionConfig((prev) => ({
+                                  ...prev,
+                                  panelizadoInterpretacionAnchoMaximo:
+                                    value as GranFormatoPanelizadoInterpretacionAnchoMaximo,
+                                }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue>
+                                  {panelizadoInterpretacionItems.find(
+                                    (item) =>
+                                      item.value ===
+                                      (imposicionConfig.panelizadoInterpretacionAnchoMaximo ?? "total"),
+                                  )?.label ?? "Ancho total del panel"}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {panelizadoInterpretacionItems.map((item) => (
+                                  <SelectItem key={item.value} value={item.value}>
+                                    {item.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border bg-muted/10 p-4">
+                    <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <h4 className="text-sm font-semibold">Configuración de márgenes de impresión</h4>
+                        <p className="text-sm text-muted-foreground">
+                          Mostramos primero los márgenes heredados de la máquina y, si hace falta, podés overridearlos para este producto.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={showImposicionOverrides}
+                          onCheckedChange={(checked) => {
+                            setShowImposicionOverrides(checked);
+                            if (!checked) {
+                              setImposicionConfig((prev) => ({
+                                ...prev,
+                                margenLateralIzquierdoMmOverride: null,
+                                margenLateralDerechoMmOverride: null,
+                                margenInicioMmOverride: null,
+                                margenFinalMmOverride: null,
+                              }));
+                            }
+                          }}
+                        />
+                        <p className="text-sm font-medium">Usar overrides de márgenes</p>
+                      </div>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      {imposicionMarginSummary.map((item) => {
+                        const overrideValue = imposicionConfig[item.overrideKey] as number | null;
+                        return (
+                          <div key={item.key} className="rounded-lg border bg-background p-3">
+                            <p className="text-xs text-muted-foreground">{item.title}</p>
+                            <p className="mt-1 text-lg font-semibold">{formatMmAsCm(item.effectiveMm)} cm</p>
+                            <p className="text-xs text-muted-foreground">
+                              Máquina: {formatMmAsCm(item.machineMm)} cm
+                            </p>
+                            {showImposicionOverrides ? (
+                              <div className="mt-3 space-y-2">
+                                <p className="text-xs text-muted-foreground">Override (mm)</p>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  value={overrideValue ?? ""}
+                                  onChange={(event) =>
+                                    setImposicionConfig((prev) => ({
+                                      ...prev,
+                                      [item.overrideKey]: event.target.value ? Math.max(0, Number(event.target.value)) : null,
+                                    }))
+                                  }
+                                />
+                              </div>
+                            ) : (
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                {overrideValue != null ? "Override activo" : "Usando valor heredado de máquina"}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-5 rounded-xl border bg-background p-4">
+                      <div className="mb-4">
+                        <h5 className="text-sm font-semibold">Márgenes entre piezas para impresión</h5>
+                        <p className="text-sm text-muted-foreground">
+                          Definí la separación técnica mínima entre piezas dentro del nesting.
+                        </p>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <p className="text-xs text-muted-foreground">Separación horizontal (mm)</p>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={imposicionConfig.separacionHorizontalMm}
+                            onChange={(event) =>
+                              setImposicionConfig((prev) => ({
+                                ...prev,
+                                separacionHorizontalMm: Math.max(0, Number(event.target.value || 0)),
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-xs text-muted-foreground">Separación vertical (mm)</p>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={imposicionConfig.separacionVerticalMm}
+                            onChange={(event) =>
+                              setImposicionConfig((prev) => ({
+                                ...prev,
+                                separacionVerticalMm: Math.max(0, Number(event.target.value || 0)),
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <CardTitle className="text-base">Simulador de imposición</CardTitle>
+                      <CardDescription>
+                        Cargá medidas reales del trabajo y revisá cómo responde el producto frente a cada ancho de rollo disponible.
+                      </CardDescription>
+                    </div>
+                    <Button
+                      type="button"
+                      className="gap-2 self-start bg-orange-500 text-white hover:bg-orange-500/90"
+                      onClick={() => setImposicionSimulationConfig(cloneGranFormatoImposicionConfig(imposicionConfig))}
+                    >
+                      <PrinterIcon className="size-4" />
+                      Simular imposición
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="rounded-xl border bg-muted/10 p-4">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold">Medidas a evaluar</p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="gap-2 bg-orange-500 text-white hover:bg-orange-500/90"
+                          onClick={() =>
+                            setImposicionConfig((prev) => ({
+                              ...prev,
+                              medidas: [...prev.medidas, createGranFormatoImposicionMedida()],
+                            }))
+                          }
+                        >
+                          <PlusIcon />
+                          Agregar medida
+                        </Button>
+                      </div>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Ingresá una o varias medidas y el sistema comparará variantes de rollo para detectar la alternativa más conveniente.
+                      </p>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      <div className="hidden gap-3 px-3 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_auto]">
+                        <p className="text-xs font-medium text-muted-foreground">Ancho (cm)</p>
+                        <p className="text-xs font-medium text-muted-foreground">Alto (cm)</p>
+                        <p className="text-xs font-medium text-muted-foreground">Cantidad</p>
+                        <span />
+                      </div>
+                      {imposicionConfig.medidas.map((medida, index) => (
+                        <div
+                          key={`medida-${index}`}
+                          className="grid gap-3 rounded-lg border bg-background p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_auto] md:items-end"
+                        >
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground md:hidden">Ancho (cm)</p>
+                            <Input
+                              aria-label={`Ancho de la medida ${index + 1} en centímetros`}
                               type="number"
                               min={1}
                               step="0.1"
@@ -2675,8 +5243,9 @@ export function WideFormatProductDetail({
                             />
                           </div>
                           <div className="space-y-2">
-                            <p className="text-xs text-muted-foreground">Alto (cm)</p>
+                            <p className="text-xs text-muted-foreground md:hidden">Alto (cm)</p>
                             <Input
+                              aria-label={`Alto de la medida ${index + 1} en centímetros`}
                               type="number"
                               min={1}
                               step="0.1"
@@ -2701,10 +5270,9 @@ export function WideFormatProductDetail({
                             />
                           </div>
                           <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <p className="text-xs text-muted-foreground">Cantidad</p>
-                            </div>
+                            <p className="text-xs text-muted-foreground md:hidden">Cantidad</p>
                             <Input
+                              aria-label={`Cantidad de la medida ${index + 1}`}
                               type="number"
                               min={1}
                               value={medida.cantidad}
@@ -2755,245 +5323,20 @@ export function WideFormatProductDetail({
                       ))}
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">Criterio de optimización</p>
-                    <Select
-                      value={imposicionConfig.criterioOptimizacion}
-                      onValueChange={(value) =>
-                        setImposicionConfig((prev) => ({
-                          ...prev,
-                          criterioOptimizacion: value as GranFormatoImposicionCriterioOptimizacion,
-                        }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue>
-                          {imposicionOptimizationItems.find((item) => item.value === imposicionConfig.criterioOptimizacion)?.label ??
-                            "Seleccionar criterio"}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {imposicionOptimizationItems.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">Tecnología default</p>
-                    <Select
-                      value={imposicionTechnology || "__none__"}
-                      onValueChange={(value) =>
-                        setImposicionConfig((prev) => ({
-                          ...prev,
-                          tecnologiaDefault: value === "__none__" ? null : value,
-                          maquinaDefaultId: null,
-                          perfilDefaultId: null,
-                        }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar tecnología">
-                          {technologyLabels[imposicionTechnology] ?? "Seleccionar tecnología"}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">Seleccionar tecnología</SelectItem>
-                        {imposicionTechnologies.map((item) => (
-                          <SelectItem key={item} value={item}>
-                            {technologyLabels[item] ?? item}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">Máquina default</p>
-                    <Select
-                      value={imposicionMachine?.id ?? "__none__"}
-                      onValueChange={(value) =>
-                        setImposicionConfig((prev) => ({
-                          ...prev,
-                          maquinaDefaultId: value === "__none__" ? null : value,
-                          perfilDefaultId: null,
-                        }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar máquina">
-                          {imposicionMachine?.nombre ?? "Seleccionar máquina"}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">Seleccionar máquina</SelectItem>
-                        {imposicionMachineOptions.map((item) => (
-                          <SelectItem key={item.id} value={item.id}>
-                            {item.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">Perfil default</p>
-                    <Select
-                      value={imposicionProfile?.id ?? "__none__"}
-                      onValueChange={(value) =>
-                        setImposicionConfig((prev) => ({
-                          ...prev,
-                          perfilDefaultId: value === "__none__" ? null : value,
-                        }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar perfil">
-                          {imposicionProfile?.nombre ?? "Seleccionar perfil"}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">Seleccionar perfil</SelectItem>
-                        {imposicionProfileOptions.map((item) => (
-                          <SelectItem key={item.id} value={item.id}>
-                            {item.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-center justify-between rounded-lg border px-3 py-2">
-                    <div>
-                      <p className="text-sm font-medium">Permitir rotación</p>
-                      <p className="text-xs text-muted-foreground">Evalúa también la pieza rotada para optimizar el ancho del rollo.</p>
-                    </div>
-                    <Switch
-                      checked={imposicionConfig.permitirRotacion}
-                      onCheckedChange={(checked) =>
-                        setImposicionConfig((prev) => ({ ...prev, permitirRotacion: Boolean(checked) }))
-                      }
-                    />
-                  </div>
-                </CardContent>
-              </Card>
 
-              <Card>
-                <CardHeader>
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <CardTitle className="text-base">Separación y overrides de márgenes</CardTitle>
-                      <CardDescription>
-                        Por defecto el sistema toma los márgenes no imprimibles de la máquina seleccionada.
-                      </CardDescription>
+                  <div className="rounded-xl border bg-muted/10 p-4">
+                    <div className="mb-4">
+                      <h4 className="text-sm font-semibold">Preview por ancho de rollo</h4>
+                      <p className="text-sm text-muted-foreground">
+                        El sistema compara las variantes de material compatibles y muestra cuál conviene según el criterio configurado.
+                      </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={showImposicionOverrides}
-                        onCheckedChange={(checked) => {
-                          setShowImposicionOverrides(checked);
-                          if (!checked) {
-                            setImposicionConfig((prev) => ({
-                              ...prev,
-                              margenLateralIzquierdoMmOverride: null,
-                              margenLateralDerechoMmOverride: null,
-                              margenInicioMmOverride: null,
-                              margenFinalMmOverride: null,
-                            }));
-                          }
-                        }}
-                      />
-                      <p className="text-sm font-medium">Usar overrides</p>
+                    <div className="space-y-4">
+                  {!hasImposicionSimulation ? (
+                    <div className="rounded-lg border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">
+                      Configurá el escenario y presioná <span className="font-medium text-foreground">Simular imposición</span> para ver candidatos.
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">Separación horizontal (mm)</p>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={imposicionConfig.separacionHorizontalMm}
-                      onChange={(event) =>
-                        setImposicionConfig((prev) => ({
-                          ...prev,
-                          separacionHorizontalMm: Math.max(0, Number(event.target.value || 0)),
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">Separación vertical (mm)</p>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={imposicionConfig.separacionVerticalMm}
-                      onChange={(event) =>
-                        setImposicionConfig((prev) => ({
-                          ...prev,
-                          separacionVerticalMm: Math.max(0, Number(event.target.value || 0)),
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="hidden xl:block" />
-                  {showImposicionOverrides
-                    ? [
-                        ["margenLateralIzquierdoMmOverride", "Margen lateral izquierdo override (mm)"],
-                        ["margenLateralDerechoMmOverride", "Margen lateral derecho override (mm)"],
-                        ["margenInicioMmOverride", "Margen inicio override (mm)"],
-                        ["margenFinalMmOverride", "Margen final override (mm)"],
-                      ].map(([key, label]) => (
-                        <div key={key} className="space-y-2">
-                          <p className="text-xs text-muted-foreground">{label}</p>
-                          <Input
-                            type="number"
-                            min={0}
-                            value={(imposicionConfig[key as keyof GranFormatoImposicionConfig] as number | null) ?? ""}
-                            onChange={(event) =>
-                              setImposicionConfig((prev) => ({
-                                ...prev,
-                                [key]: event.target.value ? Math.max(0, Number(event.target.value)) : null,
-                              }))
-                            }
-                          />
-                        </div>
-                      ))
-                    : null}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Contexto técnico activo</CardTitle>
-                  <CardDescription>
-                    La imposición se previsualiza sobre la máquina y el perfil default activos para la tecnología seleccionada.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-lg border p-3 text-sm">
-                    <p className="text-xs text-muted-foreground">Tecnología</p>
-                    <p className="font-medium">{technologyLabels[imposicionTechnology] ?? "Sin tecnología"}</p>
-                  </div>
-                  <div className="rounded-lg border p-3 text-sm">
-                    <p className="text-xs text-muted-foreground">Máquina</p>
-                    <p className="font-medium">{imposicionMachine?.nombre ?? "Sin máquina default"}</p>
-                  </div>
-                  <div className="rounded-lg border p-3 text-sm">
-                    <p className="text-xs text-muted-foreground">Perfil</p>
-                    <p className="font-medium">{imposicionProfile?.nombre ?? "Sin perfil default"}</p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Preview por ancho de rollo</CardTitle>
-                  <CardDescription>
-                    El sistema compara las variantes de material compatibles y muestra cuál conviene según el criterio configurado.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {imposicionConfig.medidas.every((item) => !(item.anchoMm && item.altoMm)) ? (
+                  ) : imposicionConfig.medidas.every((item) => !(item.anchoMm && item.altoMm)) ? (
                     <div className="rounded-lg border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">
                       Completá al menos una medida válida para simular la imposición.
                     </div>
@@ -3003,6 +5346,11 @@ export function WideFormatProductDetail({
                     </div>
                   ) : imposicionPreview.length === 0 ? (
                     <div className="space-y-3">
+                      {isImposicionSimulationStale ? (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                          Hay cambios sin simular. El preview corresponde a la última simulación ejecutada.
+                        </div>
+                      ) : null}
                       <div className="rounded-lg border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">
                         {imposicionPreviewResult.machineIssue ??
                           (imposicionRejectedVariants.length > 0
@@ -3013,8 +5361,8 @@ export function WideFormatProductDetail({
                         <div className="rounded-lg border p-4">
                           <p className="text-sm font-medium">Motivos de descarte</p>
                           <div className="mt-3 space-y-2">
-                            {imposicionRejectedVariants.map((item) => (
-                              <div key={item.variant.id} className="rounded-md border px-3 py-2 text-sm">
+                            {imposicionRejectedVariants.map((item, index) => (
+                              <div key={`${item.variant.id}-${index}-${item.reason}`} className="rounded-md border px-3 py-2 text-sm">
                                 <p className="font-medium">{item.variant.sku}</p>
                                 <p className="text-muted-foreground">{item.reason}</p>
                               </div>
@@ -3025,11 +5373,26 @@ export function WideFormatProductDetail({
                     </div>
                   ) : (
                     <>
+                      {isImposicionSimulationStale ? (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                          Hay cambios sin simular. El resultado mostrado corresponde a la última simulación ejecutada.
+                        </div>
+                      ) : null}
                       {imposicionBestCandidate ? (
                         <div className="rounded-lg border bg-muted/20 p-4">
                           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                             <div>
-                              <p className="text-sm font-medium">Mejor candidato actual</p>
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex size-7 items-center justify-center rounded-full bg-orange-500/12 text-orange-600">
+                                  <TrophyIcon className="size-4" />
+                                </span>
+                                <p className="text-sm font-medium">Mejor candidato actual</p>
+                                {imposicionBestCandidate.panelizado ? (
+                                  <Badge variant="outline" className="bg-white">
+                                    {getPanelizadoModoLabel(imposicionBestCandidate.panelMode)}
+                                  </Badge>
+                                ) : null}
+                              </div>
                               <div className="mt-2 flex flex-wrap gap-1">
                                 {selectedBaseMaterial
                                   ? getVarianteOptionChips(selectedBaseMaterial, imposicionBestCandidate.variant).map((chip) => (
@@ -3044,9 +5407,29 @@ export function WideFormatProductDetail({
                                   )}
                               </div>
                             </div>
-                            <Button type="button" variant="outline" size="sm" onClick={() => setIsImposicion3dOpen(true)}>
-                              Ver nesting 3D
-                            </Button>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="gap-2 bg-orange-500 text-white hover:bg-orange-500/90"
+                                onClick={() => setIsImposicion3dOpen(true)}
+                              >
+                                <PrinterIcon className="size-4" />
+                                Ver nesting
+                              </Button>
+                              {imposicionBestCandidate.panelizado ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-2"
+                                  onClick={openPanelEditor}
+                                >
+                                  <PencilIcon className="size-4" />
+                                  Editar paneles
+                                </Button>
+                              ) : null}
+                            </div>
                           </div>
                         </div>
                       ) : null}
@@ -3067,7 +5450,10 @@ export function WideFormatProductDetail({
                           </thead>
                           <tbody>
                             {imposicionPreview.map((item) => (
-                              <tr key={item.variant.id} className="border-t">
+                              <tr
+                                key={`${item.variant.id}-${item.panelizado ? item.panelAxis ?? "panel" : "normal"}-${item.panelMode ?? "na"}-${Math.round(item.consumedLengthMm)}`}
+                                className="border-t"
+                              >
                                 <td className="px-3 py-2">
                                   <div className="flex flex-wrap gap-1">
                                     {selectedBaseMaterial
@@ -3083,7 +5469,28 @@ export function WideFormatProductDetail({
                                 </td>
                                 <td className="px-3 py-2">{(item.rollWidthMm / 10).toLocaleString("es-AR")} cm</td>
                                 <td className="px-3 py-2">{(item.printableWidthMm / 10).toLocaleString("es-AR")} cm</td>
-                                <td className="px-3 py-2">{item.rotated ? "Rotada" : "Normal"}</td>
+                                <td className="px-3 py-2">
+                                  <div>
+                                    <p>
+                                      {item.orientacion === "mixta"
+                                        ? "Mixta"
+                                        : item.orientacion === "rotada"
+                                          ? "Rotada"
+                                          : "Normal"}
+                                    </p>
+                                    {item.panelizado ? (
+                                      <p className="text-xs text-muted-foreground">
+                                        {getPanelizadoModoLabel(item.panelMode)} ·{" "}
+                                        Panelizado {item.panelAxis === "vertical" ? "vertical" : "horizontal"} · {item.panelCount} paneles ·{" "}
+                                        {item.panelDistribution === "libre" ? "Libre" : "Equilibrada"}
+                                        {item.panelMaxWidthMm != null ? ` · Máx. ${formatMmAsCm(item.panelMaxWidthMm)} cm` : ""}
+                                        {item.panelWidthInterpretation
+                                          ? ` · ${getPanelizadoInterpretacionLabel(item.panelWidthInterpretation)}`
+                                          : ""}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                </td>
                                 <td className="px-3 py-2">{item.piecesPerRow}</td>
                                 <td className="px-3 py-2">{item.rows}</td>
                                 <td className="px-3 py-2">
@@ -3102,8 +5509,8 @@ export function WideFormatProductDetail({
                         <div className="rounded-lg border p-4">
                           <p className="text-sm font-medium">Variantes descartadas</p>
                           <div className="mt-3 space-y-2">
-                            {imposicionRejectedVariants.map((item) => (
-                              <div key={item.variant.id} className="rounded-md border px-3 py-2 text-sm">
+                            {imposicionRejectedVariants.map((item, index) => (
+                              <div key={`${item.variant.id}-${index}-${item.reason}`} className="rounded-md border px-3 py-2 text-sm">
                                 <div className="flex flex-wrap gap-1">
                                   {selectedBaseMaterial
                                     ? getVarianteOptionChips(selectedBaseMaterial, item.variant).map((chip) => (
@@ -3123,11 +5530,403 @@ export function WideFormatProductDetail({
                       ) : null}
                     </>
                   )}
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </CardContent>
           </Card>
         </TabsContent>
+
+        <Sheet
+          open={isPanelEditorOpen}
+          onOpenChange={(open) => {
+            setIsPanelEditorOpen(open);
+            if (!open) {
+              setPanelEditorDragIndex(null);
+            }
+          }}
+        >
+          <SheetContent side="right" className="!w-[78vw] !max-w-none md:!w-[72vw] xl:!w-[68vw] sm:!max-w-none">
+            <SheetHeader>
+              <SheetTitle>Editor visual de paneles</SheetTitle>
+              <SheetDescription>
+                Ajustá manualmente las divisiones del panelizado. Cuando apliques los cambios, este layout pasa a ser la fuente de verdad para imposición, nesting 3D y costos.
+              </SheetDescription>
+            </SheetHeader>
+            <div className="flex h-full flex-col gap-4 overflow-hidden px-4 pb-4">
+              {!panelEditorSelectedPiece ? (
+                <div className="flex h-full items-center justify-center rounded-xl border bg-muted/20 text-sm text-muted-foreground">
+                  No hay paneles disponibles para editar.
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-xl border bg-muted/10 p-3">
+                      <p className="text-xs text-muted-foreground">Modo actual</p>
+                      <p className="mt-1 text-sm font-semibold">
+                        {imposicionConfig.panelizadoModo === "manual" ? "Manual" : "Automático"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border bg-muted/10 p-3">
+                      <p className="text-xs text-muted-foreground">Dirección</p>
+                      <p className="mt-1 text-sm font-semibold">
+                        {panelEditorSelectedPiece.axis === "vertical" ? "Vertical" : "Horizontal"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border bg-muted/10 p-3">
+                      <p className="text-xs text-muted-foreground">Solape</p>
+                      <p className="mt-1 text-sm font-semibold">
+                        {formatMmAsCm(imposicionConfig.panelizadoSolapeMm)} cm
+                      </p>
+                    </div>
+                    <div className="rounded-xl border bg-muted/10 p-3">
+                      <p className="text-xs text-muted-foreground">Ancho máximo</p>
+                      <p className="mt-1 text-sm font-semibold">
+                        {imposicionConfig.panelizadoAnchoMaxPanelMm != null
+                          ? `${formatMmAsCm(imposicionConfig.panelizadoAnchoMaxPanelMm)} cm`
+                          : "Sin dato"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {panelEditorPieces.length > 1 ? (
+                    <div className="rounded-xl border bg-muted/10 p-3">
+                      <p className="mb-3 text-sm font-medium">Pieza a editar</p>
+                      <div className="flex flex-wrap gap-2">
+                        {panelEditorPieces.map((item, index) => (
+                          <Button
+                            key={item.sourcePieceId}
+                            type="button"
+                            size="sm"
+                            variant={item.sourcePieceId === panelEditorSelectedPiece.sourcePieceId ? "default" : "outline"}
+                            onClick={() => setPanelEditorSelectedPieceId(item.sourcePieceId)}
+                          >
+                            {getPieceLetterLabel(index)}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1.5fr)_320px]">
+                    <div className="flex min-h-0 flex-col rounded-xl border bg-muted/10 p-4">
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold">
+                            {getPieceLetterLabel(
+                              Math.max(
+                                0,
+                                panelEditorPieces.findIndex(
+                                  (item) => item.sourcePieceId === panelEditorSelectedPiece.sourcePieceId,
+                                ),
+                              ),
+                            )}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Pieza real: {formatMmAsCm(panelEditorSelectedPiece.pieceWidthMm)} ×{" "}
+                            {formatMmAsCm(panelEditorSelectedPiece.pieceHeightMm)} cm
+                          </p>
+                        </div>
+                        <Badge variant={panelEditorSelectedPieceValid ? "outline" : "destructive"}>
+                          {panelEditorSelectedPieceValid ? "Layout válido" : "Layout inválido"}
+                        </Badge>
+                      </div>
+
+                      <div className="mb-3 rounded-lg border border-dashed bg-background/80 px-3 py-2 text-xs text-muted-foreground">
+                        Arrastrá los divisores para cambiar el tamaño útil de los paneles. El solape se mantiene fijo según la configuración técnica del producto.
+                      </div>
+
+                      <div className="min-h-0 flex-1 overflow-auto">
+                        <div
+                          className="mx-auto flex h-full min-h-[340px] max-h-[540px] w-full max-w-[840px] items-center justify-center"
+                        >
+                          <div
+                            ref={panelEditorCanvasRef}
+                            className={cn(
+                              "relative flex w-full max-w-[820px] overflow-visible rounded-2xl border-2 border-dashed border-orange-200 bg-white p-2 shadow-sm select-none",
+                              panelEditorSelectedPiece.axis === "vertical"
+                                ? "min-h-[260px] flex-row items-stretch"
+                                : "min-h-[420px] max-w-[420px] flex-col items-stretch",
+                            )}
+                            style={{
+                              aspectRatio: `${Math.max(panelEditorSelectedPiece.pieceWidthMm, 1)} / ${Math.max(panelEditorSelectedPiece.pieceHeightMm, 1)}`,
+                            }}
+                          >
+                            {panelEditorSelectedPiece.panels.map((panel, index) => {
+                              const usefulDimension =
+                                panelEditorSelectedPiece.axis === "vertical"
+                                  ? panel.usefulWidthMm
+                                  : panel.usefulHeightMm;
+                              const finalDimension =
+                                panelEditorSelectedPiece.axis === "vertical"
+                                  ? panel.finalWidthMm
+                                  : panel.finalHeightMm;
+                              const withinConfiguredLimit =
+                                imposicionConfig.panelizadoAnchoMaxPanelMm == null
+                                  ? true
+                                  : imposicionConfig.panelizadoInterpretacionAnchoMaximo === "total"
+                                    ? finalDimension <= imposicionConfig.panelizadoAnchoMaxPanelMm
+                                    : usefulDimension <= imposicionConfig.panelizadoAnchoMaxPanelMm;
+                              const withinPrintableWidth = finalDimension <= panelEditorPrintableWidthMm;
+                              const panelValid =
+                                usefulDimension >= MIN_MANUAL_PANEL_USEFUL_MM &&
+                                withinConfiguredLimit &&
+                                withinPrintableWidth;
+                              const totalForFlex =
+                                panelEditorSelectedPiece.axis === "vertical"
+                                  ? panel.finalWidthMm
+                                  : panel.finalHeightMm;
+                              const overlapStartPct =
+                                totalForFlex > 0
+                                  ? ((panelEditorSelectedPiece.axis === "vertical"
+                                      ? panel.overlapStartMm
+                                      : panel.overlapStartMm) /
+                                      totalForFlex) *
+                                    100
+                                  : 0;
+                              const overlapEndPct =
+                                totalForFlex > 0
+                                  ? ((panelEditorSelectedPiece.axis === "vertical"
+                                      ? panel.overlapEndMm
+                                      : panel.overlapEndMm) /
+                                      totalForFlex) *
+                                    100
+                                  : 0;
+
+                              return (
+                                <React.Fragment key={`${panelEditorSelectedPiece.sourcePieceId}-${panel.panelIndex}`}>
+                                  <div
+                                    className={cn(
+                                      "relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border",
+                                      panelValid
+                                        ? "border-zinc-200 bg-zinc-50"
+                                        : "border-red-300 bg-red-50",
+                                    )}
+                                    style={{ flexGrow: Math.max(totalForFlex, 1), flexBasis: 0 }}
+                                  >
+                                    {panelEditorSelectedPiece.axis === "vertical" ? (
+                                      <>
+                                        {panel.overlapStartMm > 0 ? (
+                                          <div
+                                            className="absolute inset-y-0 left-0 bg-orange-200/80"
+                                            style={{ width: `${overlapStartPct}%` }}
+                                          />
+                                        ) : null}
+                                        {panel.overlapEndMm > 0 ? (
+                                          <div
+                                            className="absolute inset-y-0 right-0 bg-orange-200/80"
+                                            style={{ width: `${overlapEndPct}%` }}
+                                          />
+                                        ) : null}
+                                        <div
+                                          className="absolute inset-y-2 rounded-lg border border-cyan-300/50 bg-cyan-200/35"
+                                          style={{
+                                            left: `${overlapStartPct}%`,
+                                            right: `${overlapEndPct}%`,
+                                          }}
+                                        />
+                                      </>
+                                    ) : (
+                                      <>
+                                        {panel.overlapStartMm > 0 ? (
+                                          <div
+                                            className="absolute inset-x-0 top-0 bg-orange-200/80"
+                                            style={{ height: `${overlapStartPct}%` }}
+                                          />
+                                        ) : null}
+                                        {panel.overlapEndMm > 0 ? (
+                                          <div
+                                            className="absolute inset-x-0 bottom-0 bg-orange-200/80"
+                                            style={{ height: `${overlapEndPct}%` }}
+                                          />
+                                        ) : null}
+                                        <div
+                                          className="absolute inset-x-2 rounded-lg border border-cyan-300/50 bg-cyan-200/35"
+                                          style={{
+                                            top: `${overlapStartPct}%`,
+                                            bottom: `${overlapEndPct}%`,
+                                          }}
+                                        />
+                                      </>
+                                    )}
+
+                                    <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-2 p-3 text-center">
+                                      <Badge variant="outline" className="bg-white/80">
+                                        {`Panel ${panel.panelIndex}`}
+                                      </Badge>
+                                      <div className="space-y-1">
+                                        <p className="text-sm font-semibold">
+                                          Útil:{" "}
+                                          {panelEditorSelectedPiece.axis === "vertical"
+                                            ? `${formatMmAsCm(panel.usefulWidthMm)} × ${formatMmAsCm(panel.usefulHeightMm)} cm`
+                                            : `${formatMmAsCm(panel.usefulWidthMm)} × ${formatMmAsCm(panel.usefulHeightMm)} cm`}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                          Final: {formatMmAsCm(panel.finalWidthMm)} × {formatMmAsCm(panel.finalHeightMm)} cm
+                                        </p>
+                                      </div>
+                                      {!panelValid ? (
+                                        <p className="text-xs font-medium text-red-600">
+                                          {withinConfiguredLimit
+                                            ? withinPrintableWidth
+                                              ? "Panel menor al mínimo técnico"
+                                              : "No entra en el ancho imprimible"
+                                            : "Supera el ancho máximo configurado"}
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                  {index < panelEditorSelectedPiece.panels.length - 1 ? (
+                                    <button
+                                      type="button"
+                                      aria-label={`Mover divisor entre panel ${panel.panelIndex} y panel ${panel.panelIndex + 1}`}
+                                      className={cn(
+                                        "relative shrink-0 rounded-full border border-orange-300 bg-orange-100/90 transition hover:bg-orange-200",
+                                        panelEditorSelectedPiece.axis === "vertical"
+                                          ? "mx-1 my-auto h-full max-h-[72px] w-3 cursor-col-resize"
+                                          : "mx-auto my-1 h-3 w-full max-w-[72px] cursor-row-resize",
+                                      )}
+                                      onMouseDown={(event) => {
+                                        event.preventDefault();
+                                        setPanelEditorDragIndex(index);
+                                      }}
+                                    >
+                                      <span
+                                        className={cn(
+                                          "absolute rounded-full bg-orange-500",
+                                          panelEditorSelectedPiece.axis === "vertical"
+                                            ? "left-1/2 top-1/2 h-8 w-1 -translate-x-1/2 -translate-y-1/2"
+                                            : "left-1/2 top-1/2 h-1 w-8 -translate-x-1/2 -translate-y-1/2",
+                                        )}
+                                      />
+                                    </button>
+                                  ) : null}
+                                </React.Fragment>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex min-h-0 flex-col gap-4">
+                      <div className="rounded-xl border bg-muted/10 p-4">
+                        <p className="text-sm font-semibold">Configuración usada</p>
+                        <div className="mt-3 space-y-2 text-sm">
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="text-muted-foreground">Distribución</span>
+                            <span className="font-medium">
+                              {panelizadoDistribucionItems.find(
+                                (item) => item.value === imposicionConfig.panelizadoDistribucion,
+                              )?.label ?? "Equilibrada"}
+                            </span>
+                          </div>
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="text-muted-foreground">Interpretación</span>
+                            <span className="text-right font-medium">
+                              {getPanelizadoInterpretacionLabel(
+                                imposicionConfig.panelizadoInterpretacionAnchoMaximo,
+                              )}
+                            </span>
+                          </div>
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="text-muted-foreground">Ancho imprimible</span>
+                            <span className="font-medium">
+                              {panelEditorPrintableWidthMm > 0
+                                ? `${formatMmAsCm(panelEditorPrintableWidthMm)} cm`
+                                : "Sin dato"}
+                            </span>
+                          </div>
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="text-muted-foreground">Estado general</span>
+                            <span className={cn("font-medium", panelEditorAllValid ? "text-emerald-600" : "text-red-600")}>
+                              {panelEditorAllValid ? "Válido" : "Revisar paneles"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border bg-muted/10 p-4">
+                        <p className="text-sm font-semibold">Detalle de paneles</p>
+                        <div className="mt-3 space-y-2">
+                          {panelEditorSelectedPiece.panels.map((panel) => {
+                            const usefulDimension =
+                              panelEditorSelectedPiece.axis === "vertical"
+                                ? panel.usefulWidthMm
+                                : panel.usefulHeightMm;
+                            const finalDimension =
+                              panelEditorSelectedPiece.axis === "vertical"
+                                ? panel.finalWidthMm
+                                : panel.finalHeightMm;
+                            const withinConfiguredLimit =
+                              imposicionConfig.panelizadoAnchoMaxPanelMm == null
+                                ? true
+                                : imposicionConfig.panelizadoInterpretacionAnchoMaximo === "total"
+                                  ? finalDimension <= imposicionConfig.panelizadoAnchoMaxPanelMm
+                                  : usefulDimension <= imposicionConfig.panelizadoAnchoMaxPanelMm;
+                            const withinPrintableWidth = finalDimension <= panelEditorPrintableWidthMm;
+                            const panelValid =
+                              usefulDimension >= MIN_MANUAL_PANEL_USEFUL_MM &&
+                              withinConfiguredLimit &&
+                              withinPrintableWidth;
+                            return (
+                              <div
+                                key={`detail-${panelEditorSelectedPiece.sourcePieceId}-${panel.panelIndex}`}
+                                className={cn(
+                                  "rounded-lg border p-3",
+                                  panelValid ? "bg-background" : "border-red-300 bg-red-50",
+                                )}
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <p className="text-sm font-medium">{`Panel ${panel.panelIndex}`}</p>
+                                  <Badge variant={panelValid ? "outline" : "destructive"}>
+                                    {panelValid ? "OK" : "Inválido"}
+                                  </Badge>
+                                </div>
+                                <div className="mt-2 grid gap-2 text-xs text-muted-foreground">
+                                  <p>Útil: {formatMmAsCm(panel.usefulWidthMm)} × {formatMmAsCm(panel.usefulHeightMm)} cm</p>
+                                  <p>Final: {formatMmAsCm(panel.finalWidthMm)} × {formatMmAsCm(panel.finalHeightMm)} cm</p>
+                                  <p>Solape inicio/fin: {formatMmAsCm(panel.overlapStartMm)} / {formatMmAsCm(panel.overlapEndMm)} cm</p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+                    <Button type="button" variant="outline" onClick={restoreAutomaticPanelLayout}>
+                      Restablecer automático
+                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setIsPanelEditorOpen(false);
+                          setPanelEditorDragIndex(null);
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        type="button"
+                        className="bg-orange-500 text-white hover:bg-orange-500/90"
+                        onClick={applyPanelEditor}
+                        disabled={!panelEditorAllValid}
+                      >
+                        Aplicar panelizado manual
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
 
         <Sheet open={isImposicion3dOpen} onOpenChange={setIsImposicion3dOpen}>
           <SheetContent side="right" className="!w-[72vw] !max-w-none md:!w-[68vw] lg:!w-[64vw] xl:!w-[62vw] sm:!max-w-none">
@@ -3159,25 +5958,64 @@ export function WideFormatProductDetail({
                       La vista muestra el sustrato apoyado en el plotter, el área utilizable del material y los márgenes no imprimibles que el motor descuenta para la imposición.
                     </p>
                   </div>
-                  <PlotterSimulator
-                    key={`plotter-${imposicionBestCandidate.variant.id}-${isImposicion3dOpen ? "open" : "closed"}`}
-                    rollWidth={Number((imposicionBestCandidate.rollWidthMm / 10).toFixed(2))}
-                    rollLength={Number((imposicionBestCandidate.consumedLengthMm / 10).toFixed(2))}
-                    marginLeft={Number((imposicionBestCandidate.marginLeftMm / 10).toFixed(2))}
-                    marginRight={Number((imposicionBestCandidate.marginRightMm / 10).toFixed(2))}
-                    marginStart={Number((imposicionBestCandidate.marginStartMm / 10).toFixed(2))}
-                    marginEnd={Number((imposicionBestCandidate.marginEndMm / 10).toFixed(2))}
-                    pieces={imposicionBestCandidate.placements.map((item, index) => ({
-                      id: item.id,
-                      w: Number((item.widthMm / 10).toFixed(2)),
-                      h: Number((item.heightMm / 10).toFixed(2)),
-                      cx: Number((((item.centerXMm - imposicionBestCandidate.rollWidthMm / 2) / 10)).toFixed(2)),
-                      cy: Number((item.centerYMm / 10).toFixed(2)),
-                      color: ["#ff9f43", "#0abde3", "#1dd1a1", "#ff6b6b", "#f97316", "#22c55e"][index % 6],
-                      label: getPieceLetterLabel(index),
-                      textColor: "#111111",
-                    }))}
-                  />
+                  <div className="relative">
+                    {imposicion3dResumen ? (
+                      <div className="pointer-events-none absolute left-4 top-4 z-10 w-[220px] rounded-xl border border-white/10 bg-zinc-950/75 p-3 text-white shadow-xl backdrop-blur-md">
+                        <div className="space-y-2">
+                          {imposicion3dResumen.map((item) => (
+                            <div key={item.label} className="flex items-start justify-between gap-3 text-sm">
+                              <span className="text-zinc-300">{item.label}</span>
+                              <span className="text-right font-medium tabular-nums text-white">{item.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    <PlotterSimulator
+                      key={`plotter-${imposicionBestCandidate.variant.id}-${isImposicion3dOpen ? "open" : "closed"}`}
+                      rollWidth={Number((imposicionBestCandidate.rollWidthMm / 10).toFixed(2))}
+                      rollLength={Number((imposicionBestCandidate.consumedLengthMm / 10).toFixed(2))}
+                      marginLeft={Number((imposicionBestCandidate.marginLeftMm / 10).toFixed(2))}
+                      marginRight={Number((imposicionBestCandidate.marginRightMm / 10).toFixed(2))}
+                      marginStart={Number((imposicionBestCandidate.marginStartMm / 10).toFixed(2))}
+                      marginEnd={Number((imposicionBestCandidate.marginEndMm / 10).toFixed(2))}
+                      panelizado={imposicionBestCandidate.panelizado}
+                      panelAxis={imposicionBestCandidate.panelAxis}
+                      panelCount={imposicionBestCandidate.panelCount}
+                      panelOverlap={
+                        imposicionBestCandidate.panelOverlapMm != null
+                          ? Number((imposicionBestCandidate.panelOverlapMm / 10).toFixed(2))
+                          : null
+                      }
+                      panelMaxWidth={
+                        imposicionBestCandidate.panelMaxWidthMm != null
+                          ? Number((imposicionBestCandidate.panelMaxWidthMm / 10).toFixed(2))
+                          : null
+                      }
+                      panelDistribution={imposicionBestCandidate.panelDistribution}
+                      panelWidthInterpretation={imposicionBestCandidate.panelWidthInterpretation}
+                      panelMode={imposicionBestCandidate.panelMode}
+                      pieces={imposicionBestCandidate.placements.map((item, index) => ({
+                        id: item.id,
+                        w: Number((item.widthMm / 10).toFixed(2)),
+                        h: Number((item.heightMm / 10).toFixed(2)),
+                        usefulW: Number((item.usefulWidthMm / 10).toFixed(2)),
+                        usefulH: Number((item.usefulHeightMm / 10).toFixed(2)),
+                        cx: Number((((item.centerXMm - imposicionBestCandidate.rollWidthMm / 2) / 10)).toFixed(2)),
+                        cy: Number((item.centerYMm / 10).toFixed(2)),
+                        color: ["#ff9f43", "#0abde3", "#1dd1a1", "#ff6b6b", "#f97316", "#22c55e"][index % 6],
+                        label: getPieceLetterLabel(index),
+                        textColor: "#111111",
+                        rotated: item.rotated,
+                        panelIndex: item.panelIndex,
+                        panelCount: item.panelCount,
+                        panelAxis: item.panelAxis,
+                        sourcePieceId: item.sourcePieceId,
+                        overlapStart: Number((item.overlapStartMm / 10).toFixed(2)),
+                        overlapEnd: Number((item.overlapEndMm / 10).toFixed(2)),
+                      }))}
+                    />
+                  </div>
                 </div>
               ) : (
                 <div className="flex h-[70vh] items-center justify-center rounded-xl border bg-muted/20 text-sm text-muted-foreground">
@@ -3239,6 +6077,14 @@ export function WideFormatProductDetail({
                       marginRight={costosPreview.nestingPreview.marginRight}
                       marginStart={costosPreview.nestingPreview.marginStart}
                       marginEnd={costosPreview.nestingPreview.marginEnd}
+                      panelizado={costosPreview.nestingPreview.panelizado}
+                      panelAxis={costosPreview.nestingPreview.panelAxis}
+                      panelCount={costosPreview.nestingPreview.panelCount}
+                      panelOverlap={costosPreview.nestingPreview.panelOverlap}
+                      panelMaxWidth={costosPreview.nestingPreview.panelMaxWidth}
+                      panelDistribution={costosPreview.nestingPreview.panelDistribution}
+                      panelWidthInterpretation={costosPreview.nestingPreview.panelWidthInterpretation}
+                      panelMode={costosPreview.nestingPreview.panelMode}
                       pieces={costosPreview.nestingPreview.pieces}
                     />
                   </div>
@@ -3256,7 +6102,7 @@ export function WideFormatProductDetail({
           <div className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Costos</CardTitle>
+                <CardTitle>Simulador de costos</CardTitle>
                 <CardDescription>
                   Ejecuta una simulación operativa del trabajo usando la base técnica definida en Imposición.
                 </CardDescription>
@@ -3268,25 +6114,31 @@ export function WideFormatProductDetail({
                       <p className="text-sm font-medium">Medidas del trabajo</p>
                       <Button
                         type="button"
-                        variant="outline"
                         size="sm"
+                        className="gap-2 bg-orange-500 text-white hover:bg-orange-500/90"
                         onClick={() =>
                           setCostosMedidas((prev) => [...prev, createGranFormatoImposicionMedida()])
                         }
                       >
-                        <PlusIcon className="mr-1 size-4" />
+                        <PlusIcon className="size-4" />
                         Agregar medida
                       </Button>
                     </div>
                     <div className="space-y-2">
+                      <div className="hidden gap-2 px-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px]">
+                        <span>Ancho (cm)</span>
+                        <span>Alto (cm)</span>
+                        <span>Cantidad</span>
+                        <span />
+                      </div>
                       {costosMedidas.map((medida, index) => (
                         <div
                           key={`costos-medida-${index}`}
                           className="grid gap-2 rounded-lg border p-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px]"
                         >
                           <Field>
-                            <FieldLabel>Ancho (cm)</FieldLabel>
                             <Input
+                              aria-label={`Ancho (cm) fila ${index + 1}`}
                               value={formatMmAsCm(medida.anchoMm)}
                               onChange={(event) => {
                                 const value = event.target.value;
@@ -3304,8 +6156,8 @@ export function WideFormatProductDetail({
                             />
                           </Field>
                           <Field>
-                            <FieldLabel>Alto (cm)</FieldLabel>
                             <Input
+                              aria-label={`Alto (cm) fila ${index + 1}`}
                               value={formatMmAsCm(medida.altoMm)}
                               onChange={(event) => {
                                 const value = event.target.value;
@@ -3323,8 +6175,8 @@ export function WideFormatProductDetail({
                             />
                           </Field>
                           <Field>
-                            <FieldLabel>Cantidad</FieldLabel>
                             <Input
+                              aria-label={`Cantidad fila ${index + 1}`}
                               type="number"
                               min={1}
                               value={medida.cantidad}
@@ -3367,7 +6219,7 @@ export function WideFormatProductDetail({
                     <div className="space-y-3">
                       <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
                         <FieldLabel className="sm:mb-0">Tecnología</FieldLabel>
-                        <Select value={costosTechnology} onValueChange={setCostosTecnologia}>
+                        <Select value={costosTechnology} onValueChange={(value) => setCostosTecnologia(value ?? "")}>
                           <SelectTrigger>
                             <SelectValue>{costosTechnologyLabel}</SelectValue>
                           </SelectTrigger>
@@ -3385,7 +6237,7 @@ export function WideFormatProductDetail({
                         <FieldLabel className="sm:mb-0">Perfil operativo</FieldLabel>
                         <Select
                           value={costosPerfilOverrideId || "__default__"}
-                          onValueChange={(value) => setCostosPerfilOverrideId(value === "__default__" ? "" : value)}
+                          onValueChange={(value) => setCostosPerfilOverrideId(value === "__default__" || value == null ? "" : value)}
                         >
                           <SelectTrigger>
                             <SelectValue>{costosPerfilOverrideLabel}</SelectValue>
@@ -3409,6 +6261,143 @@ export function WideFormatProductDetail({
                           onChange={(event) => setCostosPeriodo(event.target.value)}
                         />
                       </div>
+
+                      <div className="rounded-lg border p-3 sm:col-span-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium">Panelizado</p>
+                            <p className="text-xs text-muted-foreground">
+                              Usa por default la configuración técnica del producto y permite override para esta simulación.
+                            </p>
+                          </div>
+                          <Switch
+                            checked={costosPanelizadoOverride}
+                            onCheckedChange={(checked) => {
+                              setCostosPanelizadoOverride(Boolean(checked));
+                              if (!checked) {
+                                setCostosPanelizadoActivo(imposicionConfig.panelizadoActivo);
+                                setCostosPanelizadoDireccion(imposicionConfig.panelizadoDireccion);
+                                setCostosPanelizadoSolapeMm(imposicionConfig.panelizadoSolapeMm);
+                                setCostosPanelizadoAnchoMaxPanelMm(imposicionConfig.panelizadoAnchoMaxPanelMm);
+                                setCostosPanelizadoDistribucion(imposicionConfig.panelizadoDistribucion);
+                                setCostosPanelizadoInterpretacionAnchoMaximo(
+                                  imposicionConfig.panelizadoInterpretacionAnchoMaximo,
+                                );
+                              }
+                            }}
+                          />
+                        </div>
+                        <div className="mt-3 grid gap-3 md:grid-cols-4">
+                          <div className="flex items-center justify-between rounded-lg border px-3 py-2 md:col-span-4">
+                            <div>
+                              <p className="text-sm font-medium">Activo</p>
+                              <p className="text-xs text-muted-foreground">
+                                Si está apagado, esta simulación nunca intentará panelizar.
+                              </p>
+                            </div>
+                            <Switch checked={costosPanelizadoActivo} onCheckedChange={setCostosPanelizadoActivo} />
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground">Dirección</p>
+                            <Select
+                              value={costosPanelizadoDireccion ?? "automatica"}
+                              onValueChange={(value) =>
+                                setCostosPanelizadoDireccion(value as GranFormatoPanelizadoDireccion)
+                              }
+                              disabled={!costosPanelizadoActivo}
+                            >
+                              <SelectTrigger>
+                                <SelectValue>
+                                  {panelizadoDireccionItems.find(
+                                    (item) => item.value === (costosPanelizadoDireccion ?? "automatica"),
+                                  )?.label ?? "Automática"}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {panelizadoDireccionItems.map((item) => (
+                                  <SelectItem key={item.value} value={item.value}>
+                                    {item.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground">Solape (mm)</p>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={costosPanelizadoSolapeMm ?? ""}
+                              onChange={(event) => setCostosPanelizadoSolapeMm(event.target.value ? Math.max(0, Number(event.target.value)) : null)}
+                              disabled={!costosPanelizadoActivo}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground">Ancho máx. panel (mm)</p>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={costosPanelizadoAnchoMaxPanelMm ?? ""}
+                              onChange={(event) =>
+                                setCostosPanelizadoAnchoMaxPanelMm(event.target.value ? Math.max(1, Number(event.target.value)) : null)
+                              }
+                              disabled={!costosPanelizadoActivo}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground">Distribución</p>
+                            <Select
+                              value={costosPanelizadoDistribucion ?? "equilibrada"}
+                              onValueChange={(value) =>
+                                setCostosPanelizadoDistribucion(value as GranFormatoPanelizadoDistribucion)
+                              }
+                              disabled={!costosPanelizadoActivo}
+                            >
+                              <SelectTrigger>
+                                <SelectValue>
+                                  {panelizadoDistribucionItems.find(
+                                    (item) => item.value === (costosPanelizadoDistribucion ?? "equilibrada"),
+                                  )?.label ?? "Equilibrada"}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {panelizadoDistribucionItems.map((item) => (
+                                  <SelectItem key={item.value} value={item.value}>
+                                    {item.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2 md:col-span-2">
+                            <p className="text-xs text-muted-foreground">Interpretar ancho máximo como</p>
+                            <Select
+                              value={costosPanelizadoInterpretacionAnchoMaximo ?? "total"}
+                              onValueChange={(value) =>
+                                setCostosPanelizadoInterpretacionAnchoMaximo(
+                                  value as GranFormatoPanelizadoInterpretacionAnchoMaximo,
+                                )
+                              }
+                              disabled={!costosPanelizadoActivo}
+                            >
+                              <SelectTrigger>
+                                <SelectValue>
+                                  {panelizadoInterpretacionItems.find(
+                                    (item) => item.value === (costosPanelizadoInterpretacionAnchoMaximo ?? "total"),
+                                  )?.label ?? "Ancho total del panel"}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {panelizadoInterpretacionItems.map((item) => (
+                                  <SelectItem key={item.value} value={item.value}>
+                                    {item.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3423,11 +6412,18 @@ export function WideFormatProductDetail({
                 </div>
 
                 <div className="flex justify-end">
-                  <Button type="button" onClick={handleCalcularCostos} disabled={isCalculatingCosts}>
+                  <Button type="button" onClick={handleCalcularCostos} disabled={isCalculatingCosts || checklistDirty}>
                     {isCalculatingCosts ? <GdiSpinner className="size-4" data-icon="inline-start" /> : null}
-                    Calcular
+                    Simular costo
                   </Button>
                 </div>
+
+                {checklistDirty ? (
+                  <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-950">
+                    Guardá primero los cambios de <span className="font-medium">Ruta de opcionales</span> para que
+                    el orden del preview de ruta y el centro de costos coincidan en este cálculo.
+                  </div>
+                ) : null}
 
                 {costosPreview?.warnings?.length ? (
                   <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
@@ -3472,7 +6468,30 @@ export function WideFormatProductDetail({
                         <TableRow>
                           <TableCell>{formatMmAsCm(costosPreview.resumenTecnico.anchoRolloMm)} cm</TableCell>
                           <TableCell>{formatMmAsCm(costosPreview.resumenTecnico.anchoImprimibleMm)} cm</TableCell>
-                          <TableCell>{costosPreview.resumenTecnico.orientacion === "rotada" ? "Rotada" : "Normal"}</TableCell>
+                          <TableCell>
+                            <div>
+                              <p>
+                                {costosPreview.resumenTecnico.orientacion === "mixta"
+                                  ? "Mixta"
+                                  : costosPreview.resumenTecnico.orientacion === "rotada"
+                                    ? "Rotada"
+                                    : "Normal"}
+                              </p>
+                              {costosPreview.resumenTecnico.panelizado ? (
+                                <p className="text-xs text-muted-foreground">
+                                  Panelizado {costosPreview.resumenTecnico.panelAxis === "vertical" ? "vertical" : "horizontal"} ·{" "}
+                                  {formatNumber(costosPreview.resumenTecnico.panelCount, 0)} paneles ·{" "}
+                                  {costosPreview.resumenTecnico.panelDistribution === "libre" ? "Libre" : "Equilibrada"}
+                                  {costosPreview.resumenTecnico.panelMaxWidthMm != null
+                                    ? ` · Máx. ${formatMmAsCm(costosPreview.resumenTecnico.panelMaxWidthMm)} cm`
+                                    : ""}
+                                  {costosPreview.resumenTecnico.panelWidthInterpretation
+                                    ? ` · ${getPanelizadoInterpretacionLabel(costosPreview.resumenTecnico.panelWidthInterpretation)}`
+                                    : ""}
+                                </p>
+                              ) : null}
+                            </div>
+                          </TableCell>
                           <TableCell className="text-right tabular-nums">{formatNumber(costosPreview.resumenTecnico.piezasPorFila, 0)}</TableCell>
                           <TableCell className="text-right tabular-nums">{formatNumber(costosPreview.resumenTecnico.filas, 0)}</TableCell>
                           <TableCell className="text-right tabular-nums">{formatNumber(costosPreview.resumenTecnico.largoConsumidoMm / 1000, 2)} m</TableCell>
@@ -3560,26 +6579,33 @@ export function WideFormatProductDetail({
                             </div>
                           </div>
                         </div>
-                        <Table>
+                        <Table className="table-fixed">
+                          <colgroup>
+                            <col className="w-auto" />
+                            <col className="w-[140px]" />
+                            <col className="w-[140px]" />
+                            <col className="w-[160px]" />
+                            <col className="w-[160px]" />
+                          </colgroup>
                           <TableHeader className="bg-muted/50">
                             <TableRow>
                               <TableHead>Componente</TableHead>
-                              <TableHead>Origen</TableHead>
-                              <TableHead className="text-right">Cantidad</TableHead>
-                              <TableHead className="text-right">Costo unitario</TableHead>
-                              <TableHead className="text-right">Costo</TableHead>
+                              <TableHead className="whitespace-nowrap">Origen</TableHead>
+                              <TableHead className="text-right whitespace-nowrap">Cantidad</TableHead>
+                              <TableHead className="text-right whitespace-nowrap">Costo unitario</TableHead>
+                              <TableHead className="text-right whitespace-nowrap">Costo</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {grupo.items.map((item, index) => (
                               <TableRow key={`${grupo.tipo}-${index}`}>
-                                <TableCell>{renderGranFormatoMaterialDisplay(item)}</TableCell>
-                                <TableCell>{item.origen}</TableCell>
-                                <TableCell className="text-right tabular-nums">
+                                <TableCell className="align-top">{renderGranFormatoMaterialDisplay(item)}</TableCell>
+                                <TableCell className="align-top whitespace-nowrap">{item.origen}</TableCell>
+                                <TableCell className="align-top text-right tabular-nums whitespace-nowrap">
                                   {formatNumber(item.cantidad, 3)}{item.unidad ? ` ${item.unidad}` : ""}
                                 </TableCell>
-                                <TableCell className="text-right tabular-nums">{formatCurrency(item.costoUnitario)}</TableCell>
-                                <TableCell className="text-right tabular-nums">{formatCurrency(item.costo)}</TableCell>
+                                <TableCell className="align-top text-right tabular-nums whitespace-nowrap">{formatCurrency(item.costoUnitario)}</TableCell>
+                                <TableCell className="align-top text-right tabular-nums whitespace-nowrap">{formatCurrency(item.costo)}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
@@ -3611,25 +6637,1574 @@ export function WideFormatProductDetail({
                     </div>
                   </CardContent>
                 </Card>
+
+                <div className="rounded-lg border">
+                  <button
+                    type="button"
+                    className="flex w-full cursor-pointer items-center justify-between px-3 py-2 text-left transition-colors hover:bg-muted/60"
+                    onClick={() => setCostosSnapshotsOpen((prev) => !prev)}
+                  >
+                    <span className="text-sm font-medium">Historial de snapshots</span>
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      {costosSnapshots.length}
+                      {costosSnapshotsOpen ? (
+                        <ChevronDownIcon className="size-4" />
+                      ) : (
+                        <ChevronRightIcon className="size-4" />
+                      )}
+                    </span>
+                  </button>
+                  {costosSnapshotsOpen ? (
+                    <div className="border-t">
+                      <Table>
+                        <TableHeader className="bg-muted/50">
+                          <TableRow>
+                            <TableHead>Snapshot</TableHead>
+                            <TableHead>Cantidad</TableHead>
+                            <TableHead>Período</TableHead>
+                            <TableHead>Total</TableHead>
+                            <TableHead>Unitario</TableHead>
+                            <TableHead>Fecha</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {costosSnapshots.length ? (
+                            costosSnapshots.map((item) => (
+                              <TableRow key={item.id}>
+                                <TableCell className="font-mono text-xs">{item.id.slice(0, 8)}</TableCell>
+                                <TableCell>{item.cantidad}</TableCell>
+                                <TableCell>{item.periodoTarifa}</TableCell>
+                                <TableCell>{formatCurrency(item.total)}</TableCell>
+                                <TableCell>{formatCurrency(item.unitario)}</TableCell>
+                                <TableCell>{new Date(item.createdAt).toLocaleString()}</TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                                Todavía no hay snapshots guardados.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : null}
+                </div>
               </>
             ) : null}
           </div>
         </TabsContent>
 
         <TabsContent value="precio">
-          <PlaceholderTab
-            title="Precio"
-            description="Acá definiremos la capa comercial sobre el costo técnico del trabajo de gran formato."
-          />
+          <Card>
+            <CardHeader>
+              <CardTitle>Precio</CardTitle>
+              <CardDescription>Configura el método de cálculo comercial del producto.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-lg border p-4">
+                <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                  <div className="grid gap-3 md:min-w-[360px]">
+                    <Field>
+                      <FieldLabel>Método de cálculo</FieldLabel>
+                      <Select
+                        value={precioForm.metodoCalculo}
+                        onValueChange={(value) =>
+                          handleChangeMetodoCalculoPrecio((value as MetodoCalculoPrecioProducto) ?? "margen_variable")
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona método">
+                            {getPrecioMethodLabel(precioForm.metodoCalculo)}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {metodoCalculoPrecioItems.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <p className="text-xs text-muted-foreground">
+                      Unidad comercial:{" "}
+                      {getUnidadComercialProductoLabel(
+                        normalizeWideFormatMeasurementUnit(
+                          precioForm.measurementUnit,
+                          normalizeUnidadComercialProducto(productoState.unidadComercial),
+                        ),
+                      )}
+                    </p>
+                  </div>
+                  <Button type="button" variant="outline" onClick={handleOpenPrecioEditor}>
+                    <InfoIcon className="size-4" />
+                    Ver detalle
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-4">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">Impuestos</p>
+                      <p className="text-xs text-muted-foreground">
+                        Selecciona el esquema impositivo que aplica a este producto.
+                      </p>
+                    </div>
+                    <Button type="button" variant="outline" onClick={handleOpenImpuestosEditor}>
+                      <Settings2Icon className="size-4" />
+                      Administrar impuestos
+                    </Button>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+                    <Field>
+                      <FieldLabel>Impuestos</FieldLabel>
+                      <Select
+                        value={precioForm.impuestos.esquemaId ?? "__none__"}
+                        onValueChange={(value) => handleChangeImpuestoEsquema(value === "__none__" ? null : value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione">
+                            {precioForm.impuestos.esquemaNombre || "Seleccione"}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Seleccione</SelectItem>
+                          {impuestosCatalogoActivos.map((item) => (
+                            <SelectItem key={item.id} value={item.id}>
+                              {item.nombre}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field>
+                      <FieldLabel>Impuestos Totales</FieldLabel>
+                      <Input value={formatNumber(precioForm.impuestos.porcentajeTotal)} disabled />
+                    </Field>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-4">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">Comisiones</p>
+                      <p className="text-xs text-muted-foreground">
+                        Define cargos financieros y comisiones comerciales que afectan la rentabilidad del producto.
+                      </p>
+                    </div>
+                    <Button type="button" variant="outline" onClick={() => handleOpenPrecioComisionEditor()}>
+                      <PlusIcon className="size-4" />
+                      Agregar
+                    </Button>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+                    <div className="overflow-hidden rounded-lg border">
+                      <Table>
+                        <TableHeader className="bg-muted/50">
+                          <TableRow>
+                            <TableHead>Nombre</TableHead>
+                            <TableHead>Tipo</TableHead>
+                            <TableHead>Porcentaje</TableHead>
+                            <TableHead>Estado</TableHead>
+                            <TableHead className="w-[140px] text-right">Acciones</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {precioForm.comisiones.items.length ? (
+                            precioForm.comisiones.items.map((item) => (
+                              <TableRow key={item.id}>
+                                <TableCell className="font-medium">{item.nombre}</TableCell>
+                                <TableCell>{precioComisionTipoLabels[item.tipo]}</TableCell>
+                                <TableCell>{formatNumber(item.porcentaje)}%</TableCell>
+                                <TableCell>{item.activo ? "Activa" : "Inactiva"}</TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <Button type="button" variant="ghost" size="icon" onClick={() => handleOpenPrecioComisionEditor(item)}>
+                                      <PencilIcon className="size-4" />
+                                    </Button>
+                                    <Button type="button" variant="ghost" size="icon" onClick={() => setPrecioComisionToDelete(item)}>
+                                      <Trash2Icon className="size-4" />
+                                    </Button>
+                                    <Switch
+                                      checked={item.activo}
+                                      onCheckedChange={(checked) => handleTogglePrecioComision(item.id, Boolean(checked))}
+                                    />
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                                No hay comisiones configuradas.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <Field>
+                      <FieldLabel>Comisiones Totales</FieldLabel>
+                      <Input value={formatNumber(precioForm.comisiones.porcentajeTotal)} disabled />
+                    </Field>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">Precio especial para clientes</p>
+                    <p className="text-xs text-muted-foreground">Define reglas comerciales especiales por cliente.</p>
+                  </div>
+                  <Button type="button" variant="outline" onClick={() => handleOpenPrecioEspecialClienteEditor()}>
+                    <PlusIcon className="size-4" />
+                    Agregar
+                  </Button>
+                </div>
+
+                <div className="mt-4 overflow-hidden rounded-lg border">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead>Cliente</TableHead>
+                        <TableHead>Método de cálculo</TableHead>
+                        <TableHead>Descripción</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead className="w-[140px] text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {precioEspecialClientesForm.length ? (
+                        precioEspecialClientesForm.map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell className="font-medium">{item.clienteNombre}</TableCell>
+                            <TableCell>{getPrecioMethodLabel(item.metodoCalculo)}</TableCell>
+                            <TableCell>{item.descripcion || getPrecioEspecialClienteResumen(item) || "-"}</TableCell>
+                            <TableCell>{item.activo ? "Activa" : "Inactiva"}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  disabled={isSavingPrecioEspecialClientes}
+                                  onClick={() => handleOpenPrecioEspecialClienteEditor(item)}
+                                >
+                                  <PencilIcon className="size-4" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  disabled={isSavingPrecioEspecialClientes}
+                                  onClick={() =>
+                                    setPrecioEspecialClienteToDelete({
+                                      id: item.id,
+                                      clienteNombre: item.clienteNombre,
+                                    })
+                                  }
+                                >
+                                  <Trash2Icon className="size-4" />
+                                </Button>
+                                <Switch
+                                  checked={item.activo}
+                                  disabled={isSavingPrecioEspecialClientes}
+                                  onCheckedChange={(checked) => handleTogglePrecioEspecialCliente(item.id, Boolean(checked))}
+                                />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                            No hay elementos registrados.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              <Button type="button" onClick={() => handleSavePrecio()} disabled={isSavingPrecio || !isPrecioDirty}>
+                {isSavingPrecio ? <GdiSpinner className="size-4" /> : <SaveIcon />}
+                Guardar configuración de precio
+              </Button>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="simulacion-comercial">
-          <PlaceholderTab
-            title="Simulación comercial"
-            description="Acá compararemos costo técnico, precio final y margen para trabajos de gran formato."
-          />
+          <Card>
+            <CardHeader>
+              <CardTitle>Simulación comercial</CardTitle>
+              <CardDescription>
+                Estima el precio final de venta a partir de la última simulación de costos y la configuración comercial del producto.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-lg border p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">Estado de simulación</p>
+                    <p className="text-xs text-muted-foreground">
+                      Usa la última simulación/snapshot calculada en el tab Simulador de costos.
+                    </p>
+                  </div>
+                  <Badge
+                    variant={
+                      simulacionComercial.status === "disponible"
+                        ? "default"
+                        : simulacionComercial.status === "no_calculable"
+                          ? "secondary"
+                          : "outline"
+                    }
+                  >
+                    {simulacionComercial.status === "disponible"
+                      ? "Simulación disponible"
+                      : simulacionComercial.status === "no_calculable"
+                        ? "No calculable"
+                        : "Sin simulación de costos"}
+                  </Badge>
+                </div>
+                <div className="mt-3 rounded-md border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+                  {simulacionComercial.reason ??
+                    simulacionComercial.descripcion ??
+                    "La simulación comercial está lista con el último snapshot de costos calculado."}
+                </div>
+              </div>
+
+              {simulacionComercial.status === "disponible" ? (
+                <div className="space-y-4">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                    <div className="rounded-lg border bg-muted/20 p-4 text-center">
+                      <p className="text-3xl font-semibold">
+                        {simulacionComercial.valorComercial != null
+                          ? formatCurrency(simulacionComercial.valorComercial)
+                          : "-"}
+                      </p>
+                      <div className="mt-1 flex items-center justify-center gap-1 text-sm text-muted-foreground">
+                        <span>Valor comercial</span>
+                        <InfoIcon className="size-3.5" />
+                      </div>
+                    </div>
+                    <div className="rounded-lg border bg-muted/20 p-4 text-center">
+                      <p className="text-3xl font-semibold">
+                        {simulacionComercial.vmcMonto != null
+                          ? formatCurrency(simulacionComercial.vmcMonto)
+                          : "-"}
+                      </p>
+                      <div className="mt-1 flex items-center justify-center gap-1 text-sm text-muted-foreground">
+                        <span>VMC</span>
+                        <InfoIcon className="size-3.5" />
+                      </div>
+                    </div>
+                    <div className="rounded-lg border bg-muted/20 p-4 text-center">
+                      <p className="text-3xl font-semibold">
+                        {simulacionComercial.icmPct != null
+                          ? `${formatNumber(simulacionComercial.icmPct)}%`
+                          : "-"}
+                      </p>
+                      <div className="mt-1 flex items-center justify-center gap-1 text-sm text-muted-foreground">
+                        <span>ICM</span>
+                        <InfoIcon className="size-3.5" />
+                      </div>
+                    </div>
+                    <div className="rounded-lg border bg-muted/20 p-4 text-center">
+                      <p className="text-3xl font-semibold">
+                        {simulacionComercial.beneficioMonto != null
+                          ? formatCurrency(simulacionComercial.beneficioMonto)
+                          : "-"}
+                      </p>
+                      <div className="mt-1 flex items-center justify-center gap-1 text-sm text-muted-foreground">
+                        <span>Beneficio</span>
+                        <InfoIcon className="size-3.5" />
+                      </div>
+                    </div>
+                    <div className="rounded-lg border bg-muted/20 p-4 text-center">
+                      <p className="text-3xl font-semibold">
+                        {simulacionComercial.beneficioPct != null
+                          ? `${formatNumber(simulacionComercial.beneficioPct)}%`
+                          : "-"}
+                      </p>
+                      <div className="mt-1 flex items-center justify-center gap-1 text-sm text-muted-foreground">
+                        <span>Beneficio</span>
+                        <InfoIcon className="size-3.5" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+                    <div className="overflow-hidden rounded-lg border">
+                      <Table>
+                        <TableHeader className="bg-muted/50">
+                          <TableRow>
+                            <TableHead>Resumen comercial</TableHead>
+                            <TableHead className="w-[220px] text-right">Valor</TableHead>
+                            <TableHead className="w-[140px] text-right">%</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          <TableRow>
+                            <TableCell className="text-muted-foreground">Costo total</TableCell>
+                            <TableCell className="text-right font-medium">{formatCurrency(simulacionComercial.costoTotal)}</TableCell>
+                            <TableCell className="text-right font-medium">
+                              {simulacionComercial.precioFinal
+                                ? `${formatNumber((simulacionComercial.costoTotal / simulacionComercial.precioFinal) * 100)}%`
+                                : "-"}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="text-muted-foreground">Impuestos</TableCell>
+                            <TableCell className="text-right font-medium">
+                              {simulacionComercial.impuestosMonto != null
+                                ? formatCurrency(simulacionComercial.impuestosMonto)
+                                : "-"}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {simulacionComercial.impuestosMonto != null
+                                ? `${formatNumber(simulacionComercial.impuestosPct)}%`
+                                : "-"}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell className="text-muted-foreground">Comisiones</TableCell>
+                            <TableCell className="text-right font-medium">
+                              {simulacionComercial.comisionesMonto != null
+                                ? formatCurrency(simulacionComercial.comisionesMonto)
+                                : "-"}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {simulacionComercial.comisionesMonto != null
+                                ? `${formatNumber(simulacionComercial.comisionesPct)}%`
+                                : "-"}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow className="bg-muted/20">
+                            <TableCell className="font-medium">Precio final al cliente</TableCell>
+                            <TableCell className="text-right font-semibold">
+                              {simulacionComercial.precioFinal != null
+                                ? formatCurrency(simulacionComercial.precioFinal)
+                                : "-"}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold">
+                              {simulacionComercial.precioFinal != null ? "100%" : "-"}
+                            </TableCell>
+                          </TableRow>
+                          <TableRow className="bg-emerald-50/60">
+                            <TableCell className="font-medium">Margen real</TableCell>
+                            <TableCell className="text-right font-semibold">
+                              {simulacionComercial.margenRealMonto != null
+                                ? formatCurrency(simulacionComercial.margenRealMonto)
+                                : "-"}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold">
+                              {simulacionComercial.margenRealPct != null
+                                ? `${formatNumber(simulacionComercial.margenRealPct)}%`
+                                : "-"}
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="rounded-lg border p-4">
+                        <p className="text-sm font-medium">Lectura rápida</p>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          {simulacionComercial.descripcion}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border p-4">
+                        <p className="text-sm font-medium">Configuración usada</p>
+                        <div className="mt-3 space-y-2 text-sm">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground">Unidad comercial</span>
+                            <span>{getUnidadComercialProductoLabel(precioForm.measurementUnit ?? productoState.unidadComercial)}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground">Esquema impositivo</span>
+                            <span>{precioForm.impuestos.esquemaNombre || "Sin impuestos"}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground">Comisiones activas</span>
+                            <span>{precioForm.comisiones.items.filter((item) => item.activo).length}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground">Snapshot de costos</span>
+                            <span>{costosPreview?.snapshotId ? costosPreview.snapshotId.slice(0, 8) : "-"}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed p-8 text-center">
+                  <p className="text-sm font-medium">
+                    {simulacionComercial.status === "sin_cotizacion"
+                      ? "Todavía no hay una simulación de costos para simular."
+                      : "La configuración actual no permite calcular un precio comercial."}
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {simulacionComercial.reason ??
+                      "Revisá la última simulación en Simulador de costos y la configuración del tab Precio."}
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
+      <Sheet open={precioEditorOpen} onOpenChange={(open) => (open ? setPrecioEditorOpen(true) : handleCancelPrecioEditor())}>
+        <SheetContent
+          side="right"
+          className="overflow-y-auto px-4 py-6 data-[side=right]:w-[96vw] data-[side=right]:max-w-none sm:px-6 sm:data-[side=right]:w-[72vw] sm:data-[side=right]:max-w-none lg:px-8 lg:data-[side=right]:w-[30vw] lg:data-[side=right]:min-w-[540px] lg:data-[side=right]:max-w-none"
+        >
+          <SheetHeader className="border-b pb-4">
+            <SheetTitle>Detalle de precio</SheetTitle>
+            <SheetDescription>
+              {getPrecioMethodDescription(precioEditorDraft.metodoCalculo)}
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-6 space-y-5">
+            <Field>
+              <FieldLabel>Unidad comercial</FieldLabel>
+              <Input
+                value={getUnidadComercialProductoLabel(
+                  normalizeWideFormatMeasurementUnit(
+                    precioEditorDraft.measurementUnit,
+                    normalizeUnidadComercialProducto(productoState.unidadComercial),
+                  ),
+                )}
+                disabled
+              />
+            </Field>
+
+            {precioEditorDraft.metodoCalculo === "por_margen" ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Precio fijo por margen fijo: el precio se calcula a partir del costo y del margen definido aquí.
+                </p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Field>
+                    <FieldLabel>Margen (%)</FieldLabel>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={precioEditorDraft.detalle.marginPct}
+                      onChange={(e) =>
+                        updatePrecioEditorDraft((current) => {
+                          const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "por_margen" }>;
+                          return {
+                            ...draft,
+                            detalle: {
+                              ...draft.detalle,
+                              marginPct: Number(e.target.value || 0),
+                            },
+                          };
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Margen mínimo (%)</FieldLabel>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={precioEditorDraft.detalle.minimumMarginPct}
+                      onChange={(e) =>
+                        updatePrecioEditorDraft((current) => {
+                          const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "por_margen" }>;
+                          return {
+                            ...draft,
+                            detalle: {
+                              ...draft.detalle,
+                              minimumMarginPct: Number(e.target.value || 0),
+                            },
+                          };
+                        })
+                      }
+                    />
+                  </Field>
+                </div>
+              </div>
+            ) : null}
+
+            {precioEditorDraft.metodoCalculo === "precio_fijo" ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Precio fijo: ingresás manualmente el precio final de venta, sin calcularlo desde un margen.
+                </p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Field>
+                    <FieldLabel>Precio</FieldLabel>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={precioEditorDraft.detalle.price}
+                      onChange={(e) =>
+                        updatePrecioEditorDraft((current) => {
+                          const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo" }>;
+                          return { ...draft, detalle: { ...draft.detalle, price: Number(e.target.value || 0) } };
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Precio mínimo</FieldLabel>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={precioEditorDraft.detalle.minimumPrice}
+                      onChange={(e) =>
+                        updatePrecioEditorDraft((current) => {
+                          const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo" }>;
+                          return {
+                            ...draft,
+                            detalle: { ...draft.detalle, minimumPrice: Number(e.target.value || 0) },
+                          };
+                        })
+                      }
+                    />
+                  </Field>
+                </div>
+              </div>
+            ) : null}
+
+            {precioEditorDraft.metodoCalculo === "precio_fijo_para_margen_minimo" ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <Field>
+                  <FieldLabel>Precio</FieldLabel>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={precioEditorDraft.detalle.price}
+                    onChange={(e) =>
+                      updatePrecioEditorDraft((current) => {
+                        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo_para_margen_minimo" }>;
+                        return { ...draft, detalle: { ...draft.detalle, price: Number(e.target.value || 0) } };
+                      })
+                    }
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>Precio mínimo</FieldLabel>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={precioEditorDraft.detalle.minimumPrice}
+                    onChange={(e) =>
+                      updatePrecioEditorDraft((current) => {
+                        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo_para_margen_minimo" }>;
+                        return {
+                          ...draft,
+                          detalle: { ...draft.detalle, minimumPrice: Number(e.target.value || 0) },
+                        };
+                      })
+                    }
+                  />
+                </Field>
+                <Field className="md:col-span-2">
+                  <FieldLabel>Margen mínimo (%)</FieldLabel>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={precioEditorDraft.detalle.minimumMarginPct}
+                    onChange={(e) =>
+                      updatePrecioEditorDraft((current) => {
+                        const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo_para_margen_minimo" }>;
+                        return {
+                          ...draft,
+                          detalle: { ...draft.detalle, minimumMarginPct: Number(e.target.value || 0) },
+                        };
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+            ) : null}
+
+            {precioEditorDraft.metodoCalculo === "fijado_por_cantidad" ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Cantidades fijas con precio fijo: sólo se podrán vender las cantidades definidas en esta tabla, expresadas en {getUnidadComercialProductoSuffix(precioEditorDraft.measurementUnit)}.
+                </p>
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead className="min-w-[120px]">Cantidad ({getUnidadComercialProductoSuffix(precioEditorDraft.measurementUnit)})</TableHead>
+                        <TableHead className="min-w-[140px]">Precio</TableHead>
+                        <TableHead className="w-[90px] text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {precioEditorDraft.detalle.tiers.map((tier, index) => (
+                        <TableRow key={`precio-cantidad-${index}`}>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={tier.quantity}
+                              onChange={(e) =>
+                                updatePrecioEditorDraft((current) => {
+                                  const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>;
+                                  return {
+                                    ...draft,
+                                    detalle: {
+                                      tiers: draft.detalle.tiers.map((item, rowIndex) =>
+                                        rowIndex === index ? { ...item, quantity: Number(e.target.value || 1) } : item,
+                                      ),
+                                    },
+                                  };
+                                })
+                              }
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={tier.price}
+                              onChange={(e) =>
+                                updatePrecioEditorDraft((current) => {
+                                  const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>;
+                                  return {
+                                    ...draft,
+                                    detalle: {
+                                      tiers: draft.detalle.tiers.map((item, rowIndex) =>
+                                        rowIndex === index ? { ...item, price: Number(e.target.value || 0) } : item,
+                                      ),
+                                    },
+                                  };
+                                })
+                              }
+                            />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => removePrecioTierRow(index)}>
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Button type="button" variant="outline" onClick={addPrecioTierRow}>
+                  <PlusIcon className="size-4" />
+                  Agregar cantidad
+                </Button>
+              </div>
+            ) : null}
+
+            {precioEditorDraft.metodoCalculo === "fijo_con_margen_variable" ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Cantidades fijas con margen variable: sólo se podrán vender las cantidades definidas en esta tabla en {getUnidadComercialProductoSuffix(precioEditorDraft.measurementUnit)} y cada cantidad usa su propio margen.
+                </p>
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead className="min-w-[120px]">Cantidad ({getUnidadComercialProductoSuffix(precioEditorDraft.measurementUnit)})</TableHead>
+                        <TableHead className="min-w-[140px]">Margen (%)</TableHead>
+                        <TableHead className="w-[90px] text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {precioEditorDraft.detalle.tiers.map((tier, index) => (
+                        <TableRow key={`margen-fijo-cantidad-${index}`}>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={tier.quantity}
+                              onChange={(e) =>
+                                updatePrecioEditorDraft((current) => {
+                                  const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>;
+                                  return {
+                                    ...draft,
+                                    detalle: {
+                                      tiers: draft.detalle.tiers.map((item, rowIndex) =>
+                                        rowIndex === index ? { ...item, quantity: Number(e.target.value || 1) } : item,
+                                      ),
+                                    },
+                                  };
+                                })
+                              }
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={tier.marginPct}
+                              onChange={(e) =>
+                                updatePrecioEditorDraft((current) => {
+                                  const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>;
+                                  return {
+                                    ...draft,
+                                    detalle: {
+                                      tiers: draft.detalle.tiers.map((item, rowIndex) =>
+                                        rowIndex === index ? { ...item, marginPct: Number(e.target.value || 0) } : item,
+                                      ),
+                                    },
+                                  };
+                                })
+                              }
+                            />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => removePrecioTierRow(index)}>
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Button type="button" variant="outline" onClick={addPrecioTierRow}>
+                  <PlusIcon className="size-4" />
+                  Agregar cantidad
+                </Button>
+              </div>
+            ) : null}
+
+            {precioEditorDraft.metodoCalculo === "variable_por_cantidad" ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Rangos de precio con precio fijo: cada tramo define hasta qué cantidad en {getUnidadComercialProductoSuffix(precioEditorDraft.measurementUnit)} aplica ese precio.
+                </p>
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead className="min-w-[110px]">Rango</TableHead>
+                        <TableHead className="min-w-[130px]">Hasta cantidad ({getUnidadComercialProductoSuffix(precioEditorDraft.measurementUnit)})</TableHead>
+                        <TableHead className="min-w-[130px]">Precio</TableHead>
+                        <TableHead className="w-[90px] text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {precioEditorDraft.detalle.tiers.map((tier, index) => (
+                        <TableRow key={`precio-rango-${index}`}>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {getVariableRangeLabel(index, tier.quantityUntil, precioEditorDraft.measurementUnit)}
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={tier.quantityUntil}
+                              onChange={(e) =>
+                                updatePrecioEditorDraft((current) => {
+                                  const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>;
+                                  return {
+                                    ...draft,
+                                    detalle: {
+                                      tiers: draft.detalle.tiers.map((item, rowIndex) =>
+                                        rowIndex === index
+                                          ? { ...item, quantityUntil: Number(e.target.value || 1) }
+                                          : item,
+                                      ),
+                                    },
+                                  };
+                                })
+                              }
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={tier.price}
+                              onChange={(e) =>
+                                updatePrecioEditorDraft((current) => {
+                                  const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>;
+                                  return {
+                                    ...draft,
+                                    detalle: {
+                                      tiers: draft.detalle.tiers.map((item, rowIndex) =>
+                                        rowIndex === index ? { ...item, price: Number(e.target.value || 0) } : item,
+                                      ),
+                                    },
+                                  };
+                                })
+                              }
+                            />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => removePrecioTierRow(index)}>
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Button type="button" variant="outline" onClick={addPrecioTierRow}>
+                  <PlusIcon className="size-4" />
+                  Agregar rango
+                </Button>
+              </div>
+            ) : null}
+
+            {precioEditorDraft.metodoCalculo === "margen_variable" ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Cantidad libre por margen variable: cada tramo define hasta qué cantidad en {getUnidadComercialProductoSuffix(precioEditorDraft.measurementUnit)} aplica ese margen.
+                </p>
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead className="min-w-[110px]">Rango</TableHead>
+                        <TableHead className="min-w-[130px]">Hasta cantidad ({getUnidadComercialProductoSuffix(precioEditorDraft.measurementUnit)})</TableHead>
+                        <TableHead className="min-w-[130px]">Margen (%)</TableHead>
+                        <TableHead className="w-[90px] text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {precioEditorDraft.detalle.tiers.map((tier, index) => (
+                        <TableRow key={`margen-rango-${index}`}>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {getVariableRangeLabel(index, tier.quantityUntil, precioEditorDraft.measurementUnit)}
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={tier.quantityUntil}
+                              onChange={(e) =>
+                                updatePrecioEditorDraft((current) => {
+                                  const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>;
+                                  return {
+                                    ...draft,
+                                    detalle: {
+                                      tiers: draft.detalle.tiers.map((item, rowIndex) =>
+                                        rowIndex === index
+                                          ? { ...item, quantityUntil: Number(e.target.value || 1) }
+                                          : item,
+                                      ),
+                                    },
+                                  };
+                                })
+                              }
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={tier.marginPct}
+                              onChange={(e) =>
+                                updatePrecioEditorDraft((current) => {
+                                  const draft = current as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>;
+                                  return {
+                                    ...draft,
+                                    detalle: {
+                                      tiers: draft.detalle.tiers.map((item, rowIndex) =>
+                                        rowIndex === index ? { ...item, marginPct: Number(e.target.value || 0) } : item,
+                                      ),
+                                    },
+                                  };
+                                })
+                              }
+                            />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => removePrecioTierRow(index)}>
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Button type="button" variant="outline" onClick={addPrecioTierRow}>
+                  <PlusIcon className="size-4" />
+                  Agregar rango
+                </Button>
+              </div>
+            ) : null}
+
+            <div className="flex items-center justify-end gap-2 border-t pt-4">
+              <Button type="button" variant="outline" onClick={handleCancelPrecioEditor}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={handleSavePrecioFromEditor} disabled={isSavingPrecio}>
+                {isSavingPrecio ? <GdiSpinner className="size-4" data-icon="inline-start" /> : null}
+                Guardar
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+      <Sheet open={precioEspecialClienteEditorOpen} onOpenChange={setPrecioEspecialClienteEditorOpen}>
+        <SheetContent
+          side="right"
+          className="overflow-y-auto px-4 py-6 data-[side=right]:w-[96vw] data-[side=right]:max-w-none sm:px-6 sm:data-[side=right]:w-[72vw] sm:data-[side=right]:max-w-none lg:px-8 lg:data-[side=right]:w-[32vw] lg:data-[side=right]:min-w-[560px] lg:data-[side=right]:max-w-none"
+        >
+          <SheetHeader className="border-b pb-4">
+            <SheetTitle>{precioEspecialClienteEditorDraft.clienteId ? "Editar precio especial" : "Añadir precio especial"}</SheetTitle>
+            <SheetDescription>
+              Define una regla comercial especial para un cliente.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-6 space-y-5">
+            <Field>
+              <FieldLabel>Cliente</FieldLabel>
+              <Select
+                value={precioEspecialClienteEditorDraft.clienteId || "__none__"}
+                onValueChange={(value) => {
+                  const nextValue = value ?? "__none__";
+                  const cliente = clientesOptions.find((item) => item.id === nextValue);
+                  updatePrecioEspecialClienteEditorDraft((current) => ({
+                    ...current,
+                    clienteId: nextValue === "__none__" ? "" : nextValue,
+                    clienteNombre: nextValue === "__none__" ? "" : (cliente?.nombre ?? ""),
+                  }));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona cliente">
+                    {precioEspecialClienteEditorDraft.clienteNombre || "Selecciona cliente"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Selecciona cliente</SelectItem>
+                  {clientesOptions.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field>
+                <FieldLabel>Método de cálculo</FieldLabel>
+                <Select
+                  value={precioEspecialClienteEditorDraft.metodoCalculo}
+                  onValueChange={(value) =>
+                    handleChangeMetodoCalculoPrecioEspecialCliente(
+                      (value as MetodoCalculoPrecioProducto) ?? "margen_variable",
+                    )
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona método">
+                      {getPrecioMethodLabel(precioEspecialClienteEditorDraft.metodoCalculo)}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {metodoCalculoPrecioItems.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel>Unidad comercial</FieldLabel>
+                <Input
+                  value={getUnidadComercialProductoLabel(
+                    normalizeWideFormatMeasurementUnit(
+                      precioEspecialClienteEditorDraft.measurementUnit,
+                      normalizeUnidadComercialProducto(productoState.unidadComercial),
+                    ),
+                  )}
+                  disabled
+                />
+              </Field>
+            </div>
+
+            <Field>
+              <FieldLabel>Descripción</FieldLabel>
+              <Input
+                value={precioEspecialClienteEditorDraft.descripcion}
+                onChange={(e) =>
+                  updatePrecioEspecialClienteEditorDraft((current) => ({
+                    ...current,
+                    descripcion: e.target.value,
+                  }))
+                }
+                placeholder="Opcional"
+              />
+            </Field>
+
+            {precioEspecialClienteEditorDraft.metodoCalculo === "por_margen" ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                {(() => {
+                  const draft = precioEspecialClienteEditorDraft as PrecioEspecialClienteDraft & {
+                    detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "por_margen" }>["detalle"];
+                  };
+                  return (
+                    <>
+                      <Field>
+                        <FieldLabel>Margen (%)</FieldLabel>
+                        <Input type="number" min="0" step="0.01" value={draft.detalle.marginPct} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { ...(current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "por_margen" }>["detalle"]), marginPct: Number(e.target.value || 0) } }))} />
+                      </Field>
+                      <Field>
+                        <FieldLabel>Margen mínimo (%)</FieldLabel>
+                        <Input type="number" min="0" step="0.01" value={draft.detalle.minimumMarginPct} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { ...(current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "por_margen" }>["detalle"]), minimumMarginPct: Number(e.target.value || 0) } }))} />
+                      </Field>
+                    </>
+                  );
+                })()}
+              </div>
+            ) : null}
+
+            {precioEspecialClienteEditorDraft.metodoCalculo === "precio_fijo" ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                {(() => {
+                  const draft = precioEspecialClienteEditorDraft as PrecioEspecialClienteDraft & {
+                    detalle: Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo" }>["detalle"];
+                  };
+                  return (
+                    <>
+                      <Field>
+                        <FieldLabel>Precio</FieldLabel>
+                        <Input type="number" min="0" step="0.01" value={draft.detalle.price} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { ...(current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo" }>["detalle"]), price: Number(e.target.value || 0) } }))} />
+                      </Field>
+                      <Field>
+                        <FieldLabel>Precio mínimo</FieldLabel>
+                        <Input type="number" min="0" step="0.01" value={draft.detalle.minimumPrice} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { ...(current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "precio_fijo" }>["detalle"]), minimumPrice: Number(e.target.value || 0) } }))} />
+                      </Field>
+                    </>
+                  );
+                })()}
+              </div>
+            ) : null}
+
+            {precioEspecialClienteEditorDraft.metodoCalculo === "fijado_por_cantidad" ? (
+              <div className="space-y-3">
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead>Cantidad ({getUnidadComercialProductoSuffix(precioEspecialClienteEditorDraft.measurementUnit)})</TableHead>
+                        <TableHead>Precio</TableHead>
+                        <TableHead className="w-[90px] text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(precioEspecialClienteEditorDraft.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>["detalle"]).tiers.map((tier, index) => (
+                        <TableRow key={`especial-precio-${index}`}>
+                          <TableCell>
+                            <Input type="number" min="1" step="1" value={tier.quantity} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, quantity: Number(e.target.value || 1) } : item) } }))} />
+                          </TableCell>
+                          <TableCell>
+                            <Input type="number" min="0" step="0.01" value={tier.price} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijado_por_cantidad" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, price: Number(e.target.value || 0) } : item) } }))} />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => removePrecioEspecialClienteTierRow(index)}>
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Button type="button" variant="outline" onClick={addPrecioEspecialClienteTierRow}>
+                  <PlusIcon className="size-4" />
+                  Agregar cantidad
+                </Button>
+              </div>
+            ) : null}
+
+            {precioEspecialClienteEditorDraft.metodoCalculo === "fijo_con_margen_variable" ? (
+              <div className="space-y-3">
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead>Cantidad ({getUnidadComercialProductoSuffix(precioEspecialClienteEditorDraft.measurementUnit)})</TableHead>
+                        <TableHead>Margen (%)</TableHead>
+                        <TableHead className="w-[90px] text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(precioEspecialClienteEditorDraft.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>["detalle"]).tiers.map((tier, index) => (
+                        <TableRow key={`especial-margen-fijo-${index}`}>
+                          <TableCell>
+                            <Input type="number" min="1" step="1" value={tier.quantity} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, quantity: Number(e.target.value || 1) } : item) } }))} />
+                          </TableCell>
+                          <TableCell>
+                            <Input type="number" min="0" step="0.01" value={tier.marginPct} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "fijo_con_margen_variable" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, marginPct: Number(e.target.value || 0) } : item) } }))} />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => removePrecioEspecialClienteTierRow(index)}>
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Button type="button" variant="outline" onClick={addPrecioEspecialClienteTierRow}>
+                  <PlusIcon className="size-4" />
+                  Agregar cantidad
+                </Button>
+              </div>
+            ) : null}
+
+            {precioEspecialClienteEditorDraft.metodoCalculo === "variable_por_cantidad" ? (
+              <div className="space-y-3">
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead>Rango</TableHead>
+                        <TableHead>Hasta cantidad ({getUnidadComercialProductoSuffix(precioEspecialClienteEditorDraft.measurementUnit)})</TableHead>
+                        <TableHead>Precio</TableHead>
+                        <TableHead className="w-[90px] text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(precioEspecialClienteEditorDraft.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>["detalle"]).tiers.map((tier, index) => (
+                        <TableRow key={`especial-rango-precio-${index}`}>
+                          <TableCell className="text-sm text-muted-foreground">{getVariableRangeLabel(index, tier.quantityUntil, precioEspecialClienteEditorDraft.measurementUnit)}</TableCell>
+                          <TableCell>
+                            <Input type="number" min="1" step="1" value={tier.quantityUntil} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, quantityUntil: Number(e.target.value || 1) } : item) } }))} />
+                          </TableCell>
+                          <TableCell>
+                            <Input type="number" min="0" step="0.01" value={tier.price} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, price: Number(e.target.value || 0) } : item) } }))} />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => removePrecioEspecialClienteTierRow(index)}>
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Button type="button" variant="outline" onClick={addPrecioEspecialClienteTierRow}>
+                  <PlusIcon className="size-4" />
+                  Agregar rango
+                </Button>
+              </div>
+            ) : null}
+
+            {precioEspecialClienteEditorDraft.metodoCalculo === "margen_variable" ? (
+              <div className="space-y-3">
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead>Rango</TableHead>
+                        <TableHead>Hasta cantidad ({getUnidadComercialProductoSuffix(precioEspecialClienteEditorDraft.measurementUnit)})</TableHead>
+                        <TableHead>Margen (%)</TableHead>
+                        <TableHead className="w-[90px] text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(precioEspecialClienteEditorDraft.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>["detalle"]).tiers.map((tier, index) => (
+                        <TableRow key={`especial-rango-margen-${index}`}>
+                          <TableCell className="text-sm text-muted-foreground">{getVariableRangeLabel(index, tier.quantityUntil, precioEspecialClienteEditorDraft.measurementUnit)}</TableCell>
+                          <TableCell>
+                            <Input type="number" min="1" step="1" value={tier.quantityUntil} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, quantityUntil: Number(e.target.value || 1) } : item) } }))} />
+                          </TableCell>
+                          <TableCell>
+                            <Input type="number" min="0" step="0.01" value={tier.marginPct} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, marginPct: Number(e.target.value || 0) } : item) } }))} />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => removePrecioEspecialClienteTierRow(index)}>
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Button type="button" variant="outline" onClick={addPrecioEspecialClienteTierRow}>
+                  <PlusIcon className="size-4" />
+                  Agregar rango
+                </Button>
+              </div>
+            ) : null}
+
+            <div className="flex items-center justify-end gap-2 border-t pt-4">
+              <Button type="button" variant="outline" onClick={() => setPrecioEspecialClienteEditorOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={handleSavePrecioEspecialClienteDraft} disabled={isSavingPrecioEspecialClientes}>
+                {isSavingPrecioEspecialClientes ? <GdiSpinner className="size-4" data-icon="inline-start" /> : null}
+                Guardar
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+      <Sheet open={precioComisionEditorOpen} onOpenChange={setPrecioComisionEditorOpen}>
+        <SheetContent
+          side="right"
+          className="overflow-y-auto px-4 py-6 data-[side=right]:w-[96vw] data-[side=right]:max-w-none sm:px-6 sm:data-[side=right]:w-[52vw] sm:data-[side=right]:max-w-none lg:px-8 lg:data-[side=right]:w-[30vw] lg:data-[side=right]:min-w-[440px] lg:data-[side=right]:max-w-none"
+        >
+          <SheetHeader className="border-b pb-4">
+            <SheetTitle>{precioForm.comisiones.items.some((item) => item.id === precioComisionEditorDraft.id) ? "Editar comisión" : "Añadir comisión"}</SheetTitle>
+            <SheetDescription>
+              Configura un cargo financiero o una comisión comercial del producto.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-6 space-y-5">
+            <Field>
+              <FieldLabel>Nombre</FieldLabel>
+              <Input
+                value={precioComisionEditorDraft.nombre}
+                onChange={(e) =>
+                  setPrecioComisionEditorDraft((current) => ({
+                    ...current,
+                    nombre: e.target.value,
+                  }))
+                }
+                placeholder="Ej: Mercado Pago o Comisión vendedor"
+              />
+            </Field>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field>
+                <FieldLabel>Tipo</FieldLabel>
+                <Select
+                  value={precioComisionEditorDraft.tipo}
+                  onValueChange={(value) =>
+                    setPrecioComisionEditorDraft((current) => ({
+                      ...current,
+                      tipo: (value as ProductoPrecioComisionTipo) ?? "financiera",
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona tipo">
+                      {precioComisionTipoLabels[precioComisionEditorDraft.tipo]}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {precioComisionTipoItems.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel>Porcentaje (%)</FieldLabel>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={precioComisionEditorDraft.porcentaje}
+                  onChange={(e) =>
+                    setPrecioComisionEditorDraft((current) => ({
+                      ...current,
+                      porcentaje: Number(e.target.value || 0),
+                    }))
+                  }
+                />
+              </Field>
+            </div>
+
+            <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+              <Switch
+                checked={precioComisionEditorDraft.activo}
+                onCheckedChange={(checked) =>
+                  setPrecioComisionEditorDraft((current) => ({
+                    ...current,
+                    activo: Boolean(checked),
+                  }))
+                }
+              />
+              <span className="text-sm">Comisión activa</span>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t pt-4">
+              <Button type="button" variant="outline" onClick={() => setPrecioComisionEditorOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={handleSavePrecioComisionDraft}>
+                Aplicar
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+      <Sheet open={impuestosEditorOpen} onOpenChange={setImpuestosEditorOpen}>
+        <SheetContent
+          side="right"
+          className="overflow-y-auto px-4 py-6 data-[side=right]:w-[96vw] data-[side=right]:max-w-none sm:px-6 sm:data-[side=right]:w-[52vw] sm:data-[side=right]:max-w-none lg:px-8 lg:data-[side=right]:w-[30vw] lg:data-[side=right]:min-w-[440px] lg:data-[side=right]:max-w-none"
+        >
+          <SheetHeader className="border-b pb-4">
+            <SheetTitle>Administrar impuestos</SheetTitle>
+            <SheetDescription>
+              Edita el detalle del esquema impositivo seleccionado.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-6 space-y-5">
+            <Field>
+              <FieldLabel>Esquema</FieldLabel>
+              <Select
+                value={impuestosEditorDraft?.id ?? "__none__"}
+                onValueChange={(value) =>
+                  setImpuestosEditorDraft(
+                    impuestosCatalogoActivos.find((item) => item.id === value) ?? null,
+                  )
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona esquema">
+                    {impuestosEditorDraft?.nombre || "Selecciona esquema"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {impuestosCatalogoActivos.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+
+            {impuestosEditorDraft ? (
+              <div className="space-y-3">
+                {impuestosEditorDraft.detalle.items.map((item, index) => (
+                  <Field key={`${impuestosEditorDraft.id}-${item.nombre}-${index}`}>
+                    <FieldLabel>{item.nombre}</FieldLabel>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={item.porcentaje}
+                      onChange={(e) =>
+                        setImpuestosEditorDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                detalle: {
+                                  items: current.detalle.items.map((entry, itemIndex) =>
+                                    itemIndex === index
+                                      ? { ...entry, porcentaje: Number(e.target.value || 0) }
+                                      : entry,
+                                  ),
+                                },
+                              }
+                            : current,
+                        )
+                      }
+                    />
+                  </Field>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No hay un esquema impositivo disponible para editar.</p>
+            )}
+
+            <div className="flex items-center justify-end gap-2 border-t pt-4">
+              <Button type="button" variant="outline" onClick={() => setImpuestosEditorOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={handleSaveImpuestosEditor} disabled={isSavingImpuestosCatalogo || !impuestosEditorDraft}>
+                {isSavingImpuestosCatalogo ? <GdiSpinner className="size-4" data-icon="inline-start" /> : null}
+                Aplicar
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+      <AlertDialog
+        open={Boolean(precioEspecialClienteToDelete)}
+        onOpenChange={(open) => (!open ? setPrecioEspecialClienteToDelete(null) : null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar precio especial</AlertDialogTitle>
+            <AlertDialogDescription>
+              {precioEspecialClienteToDelete
+                ? `Vas a eliminar el precio especial de "${precioEspecialClienteToDelete.clienteNombre}". Esta acción no se puede deshacer.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSavingPrecioEspecialClientes}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isSavingPrecioEspecialClientes}
+              onClick={() => {
+                if (!precioEspecialClienteToDelete) return;
+                handleDeletePrecioEspecialCliente(precioEspecialClienteToDelete.id);
+                setPrecioEspecialClienteToDelete(null);
+              }}
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={Boolean(precioComisionToDelete)}
+        onOpenChange={(open) => (!open ? setPrecioComisionToDelete(null) : null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar comisión</AlertDialogTitle>
+            <AlertDialogDescription>
+              {precioComisionToDelete
+                ? `Vas a eliminar la comisión "${precioComisionToDelete.nombre}". Esta acción no se puede deshacer.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!precioComisionToDelete) return;
+                handleDeletePrecioComision(precioComisionToDelete.id);
+              }}
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

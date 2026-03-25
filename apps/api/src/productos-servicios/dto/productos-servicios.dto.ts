@@ -33,9 +33,104 @@ export enum TipoVentaGranFormatoDto {
   metro_lineal = 'metro_lineal',
 }
 
+export enum UnidadComercialProductoDto {
+  unidad = 'unidad',
+  m2 = 'm2',
+  metro_lineal = 'metro_lineal',
+}
+
 export enum GranFormatoImposicionCriterioOptimizacionDto {
+  menor_costo_total = 'menor_costo_total',
   menor_desperdicio = 'menor_desperdicio',
   menor_largo_consumido = 'menor_largo_consumido',
+}
+
+export enum GranFormatoPanelizadoDireccionDto {
+  automatica = 'automatica',
+  vertical = 'vertical',
+  horizontal = 'horizontal',
+}
+
+export enum GranFormatoPanelizadoDistribucionDto {
+  equilibrada = 'equilibrada',
+  libre = 'libre',
+}
+
+export enum GranFormatoPanelizadoInterpretacionAnchoMaximoDto {
+  total = 'total',
+  util = 'util',
+}
+
+export enum GranFormatoPanelizadoModoDto {
+  automatico = 'automatico',
+  manual = 'manual',
+}
+
+export class GranFormatoPanelManualItemDto {
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  panelIndex: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  usefulWidthMm: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  usefulHeightMm: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  overlapStartMm: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  overlapEndMm: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  finalWidthMm: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  finalHeightMm: number;
+}
+
+export class GranFormatoPanelManualLayoutItemDto {
+  @IsString()
+  sourcePieceId: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  pieceWidthMm: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  pieceHeightMm: number;
+
+  @IsEnum(GranFormatoPanelizadoDireccionDto)
+  axis: GranFormatoPanelizadoDireccionDto;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GranFormatoPanelManualItemDto)
+  panels: GranFormatoPanelManualItemDto[];
+}
+
+export class GranFormatoPanelManualLayoutDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GranFormatoPanelManualLayoutItemDto)
+  items: GranFormatoPanelManualLayoutItemDto[];
 }
 
 export enum TipoImpresionProductoVarianteDto {
@@ -533,6 +628,9 @@ export class UpsertProductoServicioDto {
   @IsUUID()
   subfamiliaProductoId?: string;
 
+  @IsEnum(UnidadComercialProductoDto)
+  unidadComercial: UnidadComercialProductoDto;
+
   @IsEnum(EstadoProductoServicioDto)
   estado: EstadoProductoServicioDto;
 
@@ -840,12 +938,46 @@ export class UpdateGranFormatoImposicionDto {
   @IsOptional()
   @IsEnum(GranFormatoImposicionCriterioOptimizacionDto)
   criterioOptimizacion?: GranFormatoImposicionCriterioOptimizacionDto;
+
+  @IsOptional()
+  @IsBoolean()
+  panelizadoActivo?: boolean;
+
+  @IsOptional()
+  @IsEnum(GranFormatoPanelizadoModoDto)
+  panelizadoModo?: GranFormatoPanelizadoModoDto;
+
+  @IsOptional()
+  @IsEnum(GranFormatoPanelizadoDireccionDto)
+  panelizadoDireccion?: GranFormatoPanelizadoDireccionDto;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  panelizadoSolapeMm?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  panelizadoAnchoMaxPanelMm?: number | null;
+
+  @IsOptional()
+  @IsEnum(GranFormatoPanelizadoDistribucionDto)
+  panelizadoDistribucion?: GranFormatoPanelizadoDistribucionDto;
+
+  @IsOptional()
+  @IsEnum(GranFormatoPanelizadoInterpretacionAnchoMaximoDto)
+  panelizadoInterpretacionAnchoMaximo?: GranFormatoPanelizadoInterpretacionAnchoMaximoDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => GranFormatoPanelManualLayoutDto)
+  panelizadoManualLayout?: GranFormatoPanelManualLayoutDto | null;
 }
 
 export class UpdateGranFormatoConfigDto {
-  @IsEnum(TipoVentaGranFormatoDto)
-  tipoVenta: TipoVentaGranFormatoDto;
-
   @IsArray()
   @IsString({ each: true })
   tecnologiasCompatibles: string[];
@@ -1255,6 +1387,19 @@ export class PreviewGranFormatoCostosDto {
   @ValidateNested({ each: true })
   @Type(() => CotizarChecklistRespuestaDto)
   checklistRespuestas?: CotizarChecklistRespuestaDto[];
+
+  @IsOptional()
+  @IsObject()
+  panelizado?: {
+    activo?: boolean;
+    modo?: GranFormatoPanelizadoModoDto | null;
+    direccion?: GranFormatoPanelizadoDireccionDto | null;
+    solapeMm?: number | null;
+    anchoMaxPanelMm?: number | null;
+    distribucion?: GranFormatoPanelizadoDistribucionDto | null;
+    interpretacionAnchoMaximo?: GranFormatoPanelizadoInterpretacionAnchoMaximoDto | null;
+    manualLayout?: GranFormatoPanelManualLayoutDto | null;
+  };
 }
 
 export class CotizarProductoVarianteDto {

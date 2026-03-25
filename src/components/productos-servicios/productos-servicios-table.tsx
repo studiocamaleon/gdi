@@ -14,9 +14,11 @@ import type {
   MotorCostoCatalogItem,
   ProductoServicio,
   SubfamiliaProducto,
+  UnidadComercialProducto,
 } from "@/lib/productos-servicios";
 import {
   estadoProductoServicioItems,
+  unidadComercialProductoItems,
 } from "@/lib/productos-servicios";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -60,6 +62,7 @@ type ProductoFormState = {
   descripcion: string;
   familiaProductoId: string;
   subfamiliaProductoId: string;
+  unidadComercial: UnidadComercialProducto;
   motorCodigo: string;
   motorVersion: number;
 };
@@ -74,6 +77,7 @@ function createEmptyProductoForm(
     descripcion: "",
     familiaProductoId: familias[0]?.id ?? "",
     subfamiliaProductoId: "",
+    unidadComercial: "unidad",
     motorCodigo: motor?.code ?? "impresion_digital_laser",
     motorVersion: motor?.version ?? 1,
   };
@@ -161,6 +165,7 @@ export function ProductosServiciosTable({
           motorVersion: form.motorVersion,
           familiaProductoId: form.familiaProductoId,
           subfamiliaProductoId: form.subfamiliaProductoId || undefined,
+          unidadComercial: form.unidadComercial,
           activo: true,
           estado: "activo",
         });
@@ -332,6 +337,32 @@ export function ProductosServiciosTable({
                     ? "La familia actual no tiene subfamilias cargadas."
                     : "No hay subfamilia seleccionada."}
               </p>
+            </Field>
+
+            <Field>
+              <FieldLabel>Unidad comercial</FieldLabel>
+              <Select
+                value={form.unidadComercial}
+                onValueChange={(value) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    unidadComercial: (value as UnidadComercialProducto) ?? "unidad",
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar unidad comercial">
+                    {unidadComercialProductoItems.find((item) => item.value === form.unidadComercial)?.label ?? "Unidad"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {unidadComercialProductoItems.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
 
             <Field>

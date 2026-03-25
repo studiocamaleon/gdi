@@ -28,8 +28,8 @@ import {
   ProductoVariante,
   ProductoServicio,
   SubfamiliaProducto,
-  TipoVentaGranFormato,
   PreviewGranFormatoCostosPayload,
+  UnidadComercialProducto,
   VarianteOpcionesProductivas,
   ValorOpcionProductiva,
   TipoImpresionProductoVariante,
@@ -196,6 +196,7 @@ export async function createProductoServicio(payload: {
   motorVersion: number;
   familiaProductoId: string;
   subfamiliaProductoId?: string;
+  unidadComercial: UnidadComercialProducto;
   estado: EstadoProductoServicio;
   activo: boolean;
 }) {
@@ -216,6 +217,7 @@ export async function updateProductoServicio(
     motorVersion?: number;
     familiaProductoId: string;
     subfamiliaProductoId?: string;
+    unidadComercial: UnidadComercialProducto;
     estado: EstadoProductoServicio;
     activo: boolean;
   },
@@ -241,7 +243,6 @@ export async function getGranFormatoRutaBase(productoId: string) {
 export async function updateGranFormatoConfig(
   productoId: string,
   payload: {
-    tipoVenta: TipoVentaGranFormato;
     tecnologiasCompatibles: string[];
     maquinasCompatibles: string[];
     perfilesCompatibles: string[];
@@ -284,6 +285,12 @@ export async function previewGranFormatoCostos(
       method: 'POST',
       body: JSON.stringify(payload),
     },
+  );
+}
+
+export async function getCotizacionesProductoServicio(productoId: string) {
+  return apiRequest<CotizacionProductoSnapshotResumen[]>(
+    `/productos-servicios/${productoId}/cotizaciones`,
   );
 }
 

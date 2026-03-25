@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
-import { AssignProductoVariantesRutaMasivaDto, AssignProductoAdicionalDto, AssignProductoMotorDto, AssignVarianteRutaDto, DimensionOpcionProductivaDto, CarasProductoVarianteDto, ReglaCostoAdicionalEfectoDto, MetodoCostoProductoAdicionalDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, TipoProductoAdicionalEfectoDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, TipoConsumoAdicionalMaterialDto, TipoProductoAdicionalDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, UpsertProductoAdicionalDto, UpsertProductoChecklistDto, PreviewGranFormatoCostosDto, PreviewImposicionProductoVarianteDto, MetodoCalculoPrecioProductoDto, ReglaCostoChecklistDto, TipoChecklistPreguntaDto, TipoChecklistAccionReglaDto, GranFormatoImposicionCriterioOptimizacionDto, UpdateProductoPrecioDto, UpdateProductoPrecioEspecialClientesDto, UpdateGranFormatoConfigDto, UpdateGranFormatoChecklistDto, UpdateGranFormatoRutaBaseDto, UpdateProductoRutaPolicyDto, EstadoProductoServicioDto, TipoVentaGranFormatoDto, TipoImpresionProductoVarianteDto, TipoProductoServicioDto, ValorOpcionProductivaDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, CreateGranFormatoVarianteDto, UpdateGranFormatoVarianteDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoImpuestoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
+import { AssignProductoVariantesRutaMasivaDto, AssignProductoAdicionalDto, AssignProductoMotorDto, AssignVarianteRutaDto, DimensionOpcionProductivaDto, CarasProductoVarianteDto, ReglaCostoAdicionalEfectoDto, MetodoCostoProductoAdicionalDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, TipoProductoAdicionalEfectoDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, TipoConsumoAdicionalMaterialDto, TipoProductoAdicionalDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, UpsertProductoAdicionalDto, UpsertProductoChecklistDto, PreviewGranFormatoCostosDto, PreviewImposicionProductoVarianteDto, MetodoCalculoPrecioProductoDto, ReglaCostoChecklistDto, TipoChecklistPreguntaDto, TipoChecklistAccionReglaDto, GranFormatoImposicionCriterioOptimizacionDto, GranFormatoPanelizadoInterpretacionAnchoMaximoDto, GranFormatoPanelizadoModoDto, GranFormatoPanelizadoDireccionDto, GranFormatoPanelizadoDistribucionDto, UpdateProductoPrecioDto, UpdateProductoPrecioEspecialClientesDto, UpdateGranFormatoConfigDto, UpdateGranFormatoChecklistDto, UpdateGranFormatoRutaBaseDto, UpdateProductoRutaPolicyDto, EstadoProductoServicioDto, TipoImpresionProductoVarianteDto, TipoProductoServicioDto, ValorOpcionProductivaDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, CreateGranFormatoVarianteDto, UpdateGranFormatoVarianteDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoImpuestoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
 import type { ProductMotorDefinition } from './motors/product-motor.contract';
 type ServicioPricingNivel = {
     id: string;
@@ -56,6 +56,7 @@ type RouteEffectInsertionConfig = {
     modo: RouteEffectInsertionMode;
     pasoPlantillaId: string | null;
 };
+type GranFormatoNestingOrientation = 'normal' | 'rotada' | 'mixta';
 export declare class ProductosServiciosService {
     private readonly prisma;
     private static readonly CODIGO_PREFIX;
@@ -734,7 +735,7 @@ export declare class ProductosServiciosService {
         productoId: string;
         motorCodigo: string;
         motorVersion: number;
-        parametros: string | number | boolean | Prisma.JsonObject | Prisma.JsonArray | {
+        parametros: string | number | boolean | {
             tipoCorte: string;
             demasiaCorteMm: number;
             lineaCorteMm: number;
@@ -745,7 +746,7 @@ export declare class ProductosServiciosService {
                 altoMm: number;
             };
             mermaAdicionalPct: number;
-        };
+        } | Prisma.JsonObject | Prisma.JsonArray;
         versionConfig: number;
         activo: boolean;
         updatedAt: string | null;
@@ -780,7 +781,6 @@ export declare class ProductosServiciosService {
     }>;
     getGranFormatoConfig(auth: CurrentAuth, productoId: string): Promise<{
         productoId: string;
-        tipoVenta: TipoVentaGranFormatoDto;
         tecnologiasCompatibles: string[];
         maquinasCompatibles: string[];
         perfilesCompatibles: string[];
@@ -805,13 +805,20 @@ export declare class ProductosServiciosService {
             margenLateralDerechoMmOverride: number | null;
             margenInicioMmOverride: number | null;
             margenFinalMmOverride: number | null;
+            panelizadoActivo: boolean;
+            panelizadoDireccion: GranFormatoPanelizadoDireccionDto;
+            panelizadoSolapeMm: number | null;
+            panelizadoAnchoMaxPanelMm: number | null;
+            panelizadoDistribucion: GranFormatoPanelizadoDistribucionDto;
+            panelizadoInterpretacionAnchoMaximo: GranFormatoPanelizadoInterpretacionAnchoMaximoDto;
+            panelizadoModo: GranFormatoPanelizadoModoDto;
+            panelizadoManualLayout: Record<string, unknown> | null;
             criterioOptimizacion: GranFormatoImposicionCriterioOptimizacionDto;
         };
         updatedAt: string;
     }>;
     updateGranFormatoConfig(auth: CurrentAuth, productoId: string, payload: UpdateGranFormatoConfigDto): Promise<{
         productoId: string;
-        tipoVenta: TipoVentaGranFormatoDto;
         tecnologiasCompatibles: string[];
         maquinasCompatibles: string[];
         perfilesCompatibles: string[];
@@ -836,6 +843,14 @@ export declare class ProductosServiciosService {
             margenLateralDerechoMmOverride: number | null;
             margenInicioMmOverride: number | null;
             margenFinalMmOverride: number | null;
+            panelizadoActivo: boolean;
+            panelizadoDireccion: GranFormatoPanelizadoDireccionDto;
+            panelizadoSolapeMm: number | null;
+            panelizadoAnchoMaxPanelMm: number | null;
+            panelizadoDistribucion: GranFormatoPanelizadoDistribucionDto;
+            panelizadoInterpretacionAnchoMaximo: GranFormatoPanelizadoInterpretacionAnchoMaximoDto;
+            panelizadoModo: GranFormatoPanelizadoModoDto;
+            panelizadoManualLayout: Record<string, unknown> | null;
             criterioOptimizacion: GranFormatoImposicionCriterioOptimizacionDto;
         };
         updatedAt: string;
@@ -928,7 +943,7 @@ export declare class ProductosServiciosService {
                             resumen: string;
                             detalle: Record<string, unknown>;
                         }[];
-                        costoRegla: "flat" | "por_unidad" | "por_pliego" | "porcentaje_sobre_total" | "tiempo_min" | null;
+                        costoRegla: "flat" | "tiempo_min" | "por_unidad" | "por_pliego" | "porcentaje_sobre_total" | null;
                         costoValor: number | null;
                         costoCentroCostoId: string | null;
                         costoCentroCostoNombre: string;
@@ -1000,7 +1015,7 @@ export declare class ProductosServiciosService {
                                 resumen: string;
                                 detalle: Record<string, unknown>;
                             }[];
-                            costoRegla: "flat" | "por_unidad" | "por_pliego" | "porcentaje_sobre_total" | "tiempo_min" | null;
+                            costoRegla: "flat" | "tiempo_min" | "por_unidad" | "por_pliego" | "porcentaje_sobre_total" | null;
                             costoValor: number | null;
                             costoCentroCostoId: string | null;
                             costoCentroCostoNombre: string;
@@ -1076,7 +1091,7 @@ export declare class ProductosServiciosService {
                             resumen: string;
                             detalle: Record<string, unknown>;
                         }[];
-                        costoRegla: "flat" | "por_unidad" | "por_pliego" | "porcentaje_sobre_total" | "tiempo_min" | null;
+                        costoRegla: "flat" | "tiempo_min" | "por_unidad" | "por_pliego" | "porcentaje_sobre_total" | null;
                         costoValor: number | null;
                         costoCentroCostoId: string | null;
                         costoCentroCostoNombre: string;
@@ -1148,7 +1163,7 @@ export declare class ProductosServiciosService {
                                 resumen: string;
                                 detalle: Record<string, unknown>;
                             }[];
-                            costoRegla: "flat" | "por_unidad" | "por_pliego" | "porcentaje_sobre_total" | "tiempo_min" | null;
+                            costoRegla: "flat" | "tiempo_min" | "por_unidad" | "por_pliego" | "porcentaje_sobre_total" | null;
                             costoValor: number | null;
                             costoCentroCostoId: string | null;
                             costoCentroCostoNombre: string;
@@ -1169,7 +1184,10 @@ export declare class ProductosServiciosService {
         updatedAt: string;
     }>;
     previewGranFormatoCostos(auth: CurrentAuth, productoId: string, payload: PreviewGranFormatoCostosDto): Promise<{
+        snapshotId: string;
+        createdAt: string;
         productoId: string;
+        cantidadTotal: number;
         periodo: string;
         tecnologia: string;
         maquinaId: any;
@@ -1186,7 +1204,15 @@ export declare class ProductosServiciosService {
             }[];
             anchoRolloMm: number;
             anchoImprimibleMm: number;
-            orientacion: string;
+            orientacion: GranFormatoNestingOrientation;
+            panelizado: boolean;
+            panelAxis: "vertical" | "horizontal" | null;
+            panelCount: number;
+            panelOverlapMm: number | null;
+            panelMaxWidthMm: number | null;
+            panelDistribution: "equilibrada" | "libre" | null;
+            panelWidthInterpretation: "total" | "util" | null;
+            panelMode: "automatico" | "manual" | null;
             piezasPorFila: number;
             filas: number;
             largoConsumidoMm: number;
@@ -1194,6 +1220,10 @@ export declare class ProductosServiciosService {
             areaConsumidaM2: number;
             areaDesperdicioM2: number;
             desperdicioPct: number;
+            costoSustrato: number;
+            costoTinta: number;
+            costoTiempo: number;
+            costoTotal: number;
         };
         materiasPrimas: Record<string, unknown>[];
         centrosCosto: {
@@ -1220,15 +1250,32 @@ export declare class ProductosServiciosService {
             marginRight: number;
             marginStart: number;
             marginEnd: number;
+            panelizado: boolean;
+            panelAxis: "vertical" | "horizontal" | null;
+            panelCount: number;
+            panelOverlap: number | null;
+            panelMaxWidth: number | null;
+            panelDistribution: "equilibrada" | "libre" | null;
+            panelWidthInterpretation: "total" | "util" | null;
+            panelMode: "automatico" | "manual" | null;
             pieces: {
                 id: string;
                 w: number;
                 h: number;
+                usefulW: number;
+                usefulH: number;
                 cx: number;
                 cy: number;
                 color: string;
                 label: string;
                 textColor: string;
+                rotated: boolean;
+                panelIndex: number | null;
+                panelCount: number | null;
+                panelAxis: "vertical" | "horizontal" | null;
+                sourcePieceId: string | null;
+                overlapStart: number;
+                overlapEnd: number;
             }[];
         };
     }>;
@@ -2114,6 +2161,18 @@ export declare class ProductosServiciosService {
         unitario: number;
         createdAt: string;
     }[]>;
+    getProductoCotizaciones(auth: CurrentAuth, productoId: string): Promise<{
+        id: string;
+        cantidad: number;
+        periodoTarifa: string;
+        motorCodigo: string;
+        motorVersion: number;
+        configVersionBase: number | null;
+        configVersionOverride: number | null;
+        total: number;
+        unitario: number;
+        createdAt: string;
+    }[]>;
     getCotizacionById(auth: CurrentAuth, snapshotId: string): Promise<{
         id: string;
         cantidad: number;
@@ -2126,6 +2185,7 @@ export declare class ProductosServiciosService {
         resultado: Prisma.JsonValue;
         createdAt: string;
     }>;
+    private mapCotizacionSnapshotResumen;
     private validateProductoRelations;
     private findFamiliaOrThrow;
     private findSubfamiliaOrThrow;
@@ -2175,7 +2235,6 @@ export declare class ProductosServiciosService {
     private ensureWideFormatProducto;
     private getGranFormatoDetalle;
     private getGranFormatoRutaBaseDetalle;
-    private getGranFormatoTipoVenta;
     private getGranFormatoStringArray;
     private getGranFormatoNullableString;
     private getGranFormatoNullableNumber;
@@ -2196,6 +2255,7 @@ export declare class ProductosServiciosService {
     private resolveProductoPrecioImpuestos;
     private parseImpuestoDetalle;
     private normalizeMetodoCalculoPrecioProducto;
+    private normalizeUnidadComercialProductoValue;
     private normalizeProductoPrecioDetalle;
     private normalizeProductoPrecioTierRows;
     private getProductoDimensionesBaseConsumidas;
@@ -2246,6 +2306,7 @@ export declare class ProductosServiciosService {
     private resolveChecklistPasoPlantilla;
     private buildChecklistOperacionFromPlantilla;
     private buildChecklistOperacionFromPlantillaConPerfil;
+    private buildChecklistOperacionFromPlantillaConNivel;
     private getPasoPlantillaIdFromDetalle;
     private resolvePasoPlantillaIdFromOperacionRuta;
     private normalizePasoNombreBase;
@@ -2270,6 +2331,13 @@ export declare class ProductosServiciosService {
     private buildGranFormatoVariantChips;
     private buildMateriaPrimaVariantDisplayChips;
     private buildGranFormatoPieceLabel;
+    private buildGranFormatoNestingOrientacion;
+    private countGranFormatoRowsAndPiecesPerRow;
+    private buildGranFormatoPieceInstances;
+    private buildGranFormatoPanelizedPieces;
+    private normalizeGranFormatoPanelManualLayout;
+    private buildGranFormatoManualPieces;
+    private evaluateGranFormatoMixedShelfLayout;
     private buildGranFormatoNestingPreview;
     private resolveGranFormatoCantidadObjetivoSalida;
     private calculateGranFormatoSustratoCost;

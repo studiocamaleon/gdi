@@ -214,6 +214,11 @@ export class ProductosServiciosController {
     return this.service.findProductos(auth);
   }
 
+  @Get(':id/cotizaciones')
+  getProductoCotizaciones(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    return this.service.getProductoCotizaciones(auth, id);
+  }
+
   @Get(':id')
   getProducto(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.service.findProducto(auth, id);

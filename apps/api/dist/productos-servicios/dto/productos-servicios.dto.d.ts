@@ -10,9 +10,51 @@ export declare enum TipoVentaGranFormatoDto {
     m2 = "m2",
     metro_lineal = "metro_lineal"
 }
+export declare enum UnidadComercialProductoDto {
+    unidad = "unidad",
+    m2 = "m2",
+    metro_lineal = "metro_lineal"
+}
 export declare enum GranFormatoImposicionCriterioOptimizacionDto {
+    menor_costo_total = "menor_costo_total",
     menor_desperdicio = "menor_desperdicio",
     menor_largo_consumido = "menor_largo_consumido"
+}
+export declare enum GranFormatoPanelizadoDireccionDto {
+    automatica = "automatica",
+    vertical = "vertical",
+    horizontal = "horizontal"
+}
+export declare enum GranFormatoPanelizadoDistribucionDto {
+    equilibrada = "equilibrada",
+    libre = "libre"
+}
+export declare enum GranFormatoPanelizadoInterpretacionAnchoMaximoDto {
+    total = "total",
+    util = "util"
+}
+export declare enum GranFormatoPanelizadoModoDto {
+    automatico = "automatico",
+    manual = "manual"
+}
+export declare class GranFormatoPanelManualItemDto {
+    panelIndex: number;
+    usefulWidthMm: number;
+    usefulHeightMm: number;
+    overlapStartMm: number;
+    overlapEndMm: number;
+    finalWidthMm: number;
+    finalHeightMm: number;
+}
+export declare class GranFormatoPanelManualLayoutItemDto {
+    sourcePieceId: string;
+    pieceWidthMm: number;
+    pieceHeightMm: number;
+    axis: GranFormatoPanelizadoDireccionDto;
+    panels: GranFormatoPanelManualItemDto[];
+}
+export declare class GranFormatoPanelManualLayoutDto {
+    items: GranFormatoPanelManualLayoutItemDto[];
 }
 export declare enum TipoImpresionProductoVarianteDto {
     bn = "bn",
@@ -214,6 +256,7 @@ export declare class UpsertProductoServicioDto {
     motorVersion?: number;
     familiaProductoId: string;
     subfamiliaProductoId?: string;
+    unidadComercial: UnidadComercialProductoDto;
     estado: EstadoProductoServicioDto;
     activo: boolean;
 }
@@ -307,9 +350,16 @@ export declare class UpdateGranFormatoImposicionDto {
     margenInicioMmOverride?: number | null;
     margenFinalMmOverride?: number | null;
     criterioOptimizacion?: GranFormatoImposicionCriterioOptimizacionDto;
+    panelizadoActivo?: boolean;
+    panelizadoModo?: GranFormatoPanelizadoModoDto;
+    panelizadoDireccion?: GranFormatoPanelizadoDireccionDto;
+    panelizadoSolapeMm?: number | null;
+    panelizadoAnchoMaxPanelMm?: number | null;
+    panelizadoDistribucion?: GranFormatoPanelizadoDistribucionDto;
+    panelizadoInterpretacionAnchoMaximo?: GranFormatoPanelizadoInterpretacionAnchoMaximoDto;
+    panelizadoManualLayout?: GranFormatoPanelManualLayoutDto | null;
 }
 export declare class UpdateGranFormatoConfigDto {
-    tipoVenta: TipoVentaGranFormatoDto;
     tecnologiasCompatibles: string[];
     maquinasCompatibles: string[];
     perfilesCompatibles: string[];
@@ -430,6 +480,16 @@ export declare class PreviewGranFormatoCostosDto {
     perfilOverrideId?: string;
     medidas: PreviewGranFormatoCostoMedidaDto[];
     checklistRespuestas?: CotizarChecklistRespuestaDto[];
+    panelizado?: {
+        activo?: boolean;
+        modo?: GranFormatoPanelizadoModoDto | null;
+        direccion?: GranFormatoPanelizadoDireccionDto | null;
+        solapeMm?: number | null;
+        anchoMaxPanelMm?: number | null;
+        distribucion?: GranFormatoPanelizadoDistribucionDto | null;
+        interpretacionAnchoMaximo?: GranFormatoPanelizadoInterpretacionAnchoMaximoDto | null;
+        manualLayout?: GranFormatoPanelManualLayoutDto | null;
+    };
 }
 export declare class CotizarProductoVarianteDto {
     cantidad: number;

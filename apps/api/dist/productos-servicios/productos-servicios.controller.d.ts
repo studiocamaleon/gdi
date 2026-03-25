@@ -637,6 +637,18 @@ export declare class ProductosServiciosController {
         createdAt: string;
         updatedAt: string;
     }[]>;
+    getProductoCotizaciones(auth: CurrentAuth, id: string): Promise<{
+        id: string;
+        cantidad: number;
+        periodoTarifa: string;
+        motorCodigo: string;
+        motorVersion: number;
+        configVersionBase: number | null;
+        configVersionOverride: number | null;
+        total: number;
+        unitario: number;
+        createdAt: string;
+    }[]>;
     getProducto(auth: CurrentAuth, id: string): Promise<{
         matchingBasePorVariante: {
             varianteId: string;
@@ -1229,7 +1241,6 @@ export declare class ProductosServiciosController {
     upsertProductoMotorConfig(auth: CurrentAuth, id: string, payload: UpsertProductoMotorConfigDto): Promise<unknown>;
     getGranFormatoConfig(auth: CurrentAuth, id: string): Promise<{
         productoId: string;
-        tipoVenta: import("./dto/productos-servicios.dto").TipoVentaGranFormatoDto;
         tecnologiasCompatibles: string[];
         maquinasCompatibles: string[];
         perfilesCompatibles: string[];
@@ -1254,13 +1265,20 @@ export declare class ProductosServiciosController {
             margenLateralDerechoMmOverride: number | null;
             margenInicioMmOverride: number | null;
             margenFinalMmOverride: number | null;
+            panelizadoActivo: boolean;
+            panelizadoDireccion: import("./dto/productos-servicios.dto").GranFormatoPanelizadoDireccionDto;
+            panelizadoSolapeMm: number | null;
+            panelizadoAnchoMaxPanelMm: number | null;
+            panelizadoDistribucion: import("./dto/productos-servicios.dto").GranFormatoPanelizadoDistribucionDto;
+            panelizadoInterpretacionAnchoMaximo: import("./dto/productos-servicios.dto").GranFormatoPanelizadoInterpretacionAnchoMaximoDto;
+            panelizadoModo: import("./dto/productos-servicios.dto").GranFormatoPanelizadoModoDto;
+            panelizadoManualLayout: Record<string, unknown> | null;
             criterioOptimizacion: import("./dto/productos-servicios.dto").GranFormatoImposicionCriterioOptimizacionDto;
         };
         updatedAt: string;
     }>;
     updateGranFormatoConfig(auth: CurrentAuth, id: string, payload: UpdateGranFormatoConfigDto): Promise<{
         productoId: string;
-        tipoVenta: import("./dto/productos-servicios.dto").TipoVentaGranFormatoDto;
         tecnologiasCompatibles: string[];
         maquinasCompatibles: string[];
         perfilesCompatibles: string[];
@@ -1285,6 +1303,14 @@ export declare class ProductosServiciosController {
             margenLateralDerechoMmOverride: number | null;
             margenInicioMmOverride: number | null;
             margenFinalMmOverride: number | null;
+            panelizadoActivo: boolean;
+            panelizadoDireccion: import("./dto/productos-servicios.dto").GranFormatoPanelizadoDireccionDto;
+            panelizadoSolapeMm: number | null;
+            panelizadoAnchoMaxPanelMm: number | null;
+            panelizadoDistribucion: import("./dto/productos-servicios.dto").GranFormatoPanelizadoDistribucionDto;
+            panelizadoInterpretacionAnchoMaximo: import("./dto/productos-servicios.dto").GranFormatoPanelizadoInterpretacionAnchoMaximoDto;
+            panelizadoModo: import("./dto/productos-servicios.dto").GranFormatoPanelizadoModoDto;
+            panelizadoManualLayout: Record<string, unknown> | null;
             criterioOptimizacion: import("./dto/productos-servicios.dto").GranFormatoImposicionCriterioOptimizacionDto;
         };
         updatedAt: string;
@@ -1618,7 +1644,10 @@ export declare class ProductosServiciosController {
         updatedAt: string;
     }>;
     previewGranFormatoCostos(auth: CurrentAuth, id: string, payload: PreviewGranFormatoCostosDto): Promise<{
+        snapshotId: string;
+        createdAt: string;
         productoId: string;
+        cantidadTotal: number;
         periodo: string;
         tecnologia: string;
         maquinaId: any;
@@ -1635,7 +1664,15 @@ export declare class ProductosServiciosController {
             }[];
             anchoRolloMm: number;
             anchoImprimibleMm: number;
-            orientacion: string;
+            orientacion: "rotada" | "normal" | "mixta";
+            panelizado: boolean;
+            panelAxis: "vertical" | "horizontal" | null;
+            panelCount: number;
+            panelOverlapMm: number | null;
+            panelMaxWidthMm: number | null;
+            panelDistribution: "equilibrada" | "libre" | null;
+            panelWidthInterpretation: "total" | "util" | null;
+            panelMode: "manual" | "automatico" | null;
             piezasPorFila: number;
             filas: number;
             largoConsumidoMm: number;
@@ -1643,6 +1680,10 @@ export declare class ProductosServiciosController {
             areaConsumidaM2: number;
             areaDesperdicioM2: number;
             desperdicioPct: number;
+            costoSustrato: number;
+            costoTinta: number;
+            costoTiempo: number;
+            costoTotal: number;
         };
         materiasPrimas: Record<string, unknown>[];
         centrosCosto: {
@@ -1669,15 +1710,32 @@ export declare class ProductosServiciosController {
             marginRight: number;
             marginStart: number;
             marginEnd: number;
+            panelizado: boolean;
+            panelAxis: "vertical" | "horizontal" | null;
+            panelCount: number;
+            panelOverlap: number | null;
+            panelMaxWidth: number | null;
+            panelDistribution: "equilibrada" | "libre" | null;
+            panelWidthInterpretation: "total" | "util" | null;
+            panelMode: "manual" | "automatico" | null;
             pieces: {
                 id: string;
                 w: number;
                 h: number;
+                usefulW: number;
+                usefulH: number;
                 cx: number;
                 cy: number;
                 color: string;
                 label: string;
                 textColor: string;
+                rotated: boolean;
+                panelIndex: number | null;
+                panelCount: number | null;
+                panelAxis: "vertical" | "horizontal" | null;
+                sourcePieceId: string | null;
+                overlapStart: number;
+                overlapEnd: number;
             }[];
         };
     }>;

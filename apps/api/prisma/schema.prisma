@@ -1458,6 +1458,7 @@ model ProductoServicio {
   detalleJson                Json?
   familiaProductoId          String                      @db.Uuid
   subfamiliaProductoId       String?                     @db.Uuid
+  unidadComercial            String                      @default("unidad")
   estado                     EstadoProductoServicio      @default(ACTIVO)
   activo                     Boolean                     @default(true)
   createdAt                  DateTime                    @default(now())
@@ -1471,6 +1472,7 @@ model ProductoServicio {
   motorConfigs               ProductoMotorConfig[]
   adicionalesAsignados       ProductoServicioAdicional[]
   checklist                  ProductoChecklist?
+  cotizaciones               CotizacionProductoSnapshot[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, nombre, activo])
@@ -1954,7 +1956,8 @@ model ProductoVarianteAlgoritmoConfig {
 model CotizacionProductoSnapshot {
   id                    String           @id @default(uuid()) @db.Uuid
   tenantId              String           @db.Uuid
-  productoVarianteId    String           @db.Uuid
+  productoServicioId    String?          @db.Uuid
+  productoVarianteId    String?          @db.Uuid
   motorCodigo           String
   motorVersion          Int
   configVersionBase     Int?
@@ -1966,9 +1969,11 @@ model CotizacionProductoSnapshot {
   total                 Decimal          @db.Decimal(14, 6)
   createdAt             DateTime         @default(now())
   tenant                Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  productoVariante      ProductoVariante @relation(fields: [productoVarianteId], references: [id], onDelete: Cascade)
+  productoServicio      ProductoServicio? @relation(fields: [productoServicioId], references: [id], onDelete: Cascade)
+  productoVariante      ProductoVariante? @relation(fields: [productoVarianteId], references: [id], onDelete: Cascade)
   checklistRespuestas   CotizacionChecklistRespuestaSnapshot[]
 
+  @@index([tenantId, productoServicioId, createdAt])
   @@index([tenantId, productoVarianteId, createdAt])
   @@index([tenantId, motorCodigo, motorVersion, createdAt])
 }

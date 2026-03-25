@@ -12,11 +12,20 @@ export interface PlotterSimulatorPiece {
   id: string;
   w: number;
   h: number;
+  usefulW?: number | null;
+  usefulH?: number | null;
   cx: number;
   cy: number;
   color: string;
   label: string;
   textColor?: string;
+  rotated?: boolean;
+  panelIndex?: number | null;
+  panelCount?: number | null;
+  panelAxis?: "vertical" | "horizontal" | null;
+  sourcePieceId?: string | null;
+  overlapStart?: number | null;
+  overlapEnd?: number | null;
 }
 
 interface PlotterSimulatorProps {
@@ -28,13 +37,45 @@ interface PlotterSimulatorProps {
   marginRight?: number;
   marginStart?: number;
   marginEnd?: number;
+  panelizado?: boolean;
+  panelAxis?: "vertical" | "horizontal" | null;
+  panelCount?: number;
+  panelOverlap?: number | null;
+  panelMaxWidth?: number | null;
+  panelDistribution?: "equilibrada" | "libre" | null;
+  panelWidthInterpretation?: "total" | "util" | null;
+  panelMode?: "automatico" | "manual" | null;
 }
 
 function NestedItem({ piece }: { piece: PlotterSimulatorPiece }) {
   const width = piece.w * SCALE;
   const height = piece.h * SCALE;
+  const usefulWidth = (piece.usefulW ?? piece.w) * SCALE;
+  const usefulHeight = (piece.usefulH ?? piece.h) * SCALE;
   const posX = piece.cx * SCALE;
   const posY = piece.cy * SCALE;
+  const isNarrowPiece = width / Math.max(height, 0.01) < 0.42;
+  const isVeryNarrowPiece = width / Math.max(height, 0.01) < 0.2;
+  const shouldRotateText = isNarrowPiece;
+  const textBlockWidth = shouldRotateText ? height : width;
+  const textBlockHeight = shouldRotateText ? width : height;
+  const compactTextMode = isVeryNarrowPiece || textBlockWidth < 0.6 || textBlockHeight < 0.3;
+  const labelFontSize = Math.max(
+    compactTextMode ? 0.07 : 0.06,
+    Math.min(compactTextMode ? 0.135 : 0.12, textBlockWidth * 0.18, textBlockHeight * 0.24),
+  );
+  const detailFontSize = Math.max(
+    compactTextMode ? 0.055 : 0.048,
+    Math.min(compactTextMode ? 0.105 : 0.1, labelFontSize * 0.74),
+  );
+  const labelOffsetY = Math.min(textBlockHeight * 0.12, 0.08);
+  const detailOffsetY = Math.min(textBlockHeight * 0.12, 0.085);
+  const rotatedLaneOffset = Math.max(0.16, Math.min(textBlockHeight * 0.34, 0.3));
+  const detailText = `${piece.w}x${piece.h} cm`;
+  const overlapStart = Math.max((piece.overlapStart ?? 0) * SCALE, 0);
+  const overlapEnd = Math.max((piece.overlapEnd ?? 0) * SCALE, 0);
+  const usefulOffsetX = piece.panelAxis === "vertical" ? (overlapStart - overlapEnd) / 2 : 0;
+  const usefulOffsetY = piece.panelAxis === "horizontal" ? (-overlapStart + overlapEnd) / 2 : 0;
 
   return (
     <group position={[posX, -posY, 0.012]}>
@@ -43,34 +84,112 @@ function NestedItem({ piece }: { piece: PlotterSimulatorPiece }) {
         <meshBasicMaterial color={piece.color} polygonOffset polygonOffsetFactor={-4} />
         <Edges color="#000000" opacity={0.2} transparent />
       </mesh>
-      <Text
-        position={[0, 0.05, 0.03]}
-        fontSize={0.12}
-        color={piece.textColor || "#111"}
-        anchorX="center"
-        anchorY="middle"
-        fontWeight="bold"
-        renderOrder={10}
-        depthOffset={-10}
-        material-depthWrite={false}
-        material-depthTest={false}
-      >
-        {piece.label}
-      </Text>
-      <Text
-        position={[0, -0.08, 0.03]}
-        fontSize={0.1}
-        color={piece.textColor || "#111"}
-        anchorX="center"
-        anchorY="middle"
-        opacity={0.8}
-        renderOrder={10}
-        depthOffset={-10}
-        material-depthWrite={false}
-        material-depthTest={false}
-      >
-        {piece.w}x{piece.h} cm
-      </Text>
+      {piece.panelIndex ? (
+        <group>
+          <mesh position={[usefulOffsetX, usefulOffsetY, 0.02]}>
+            <planeGeometry args={[Math.max(usefulWidth, 0.01), Math.max(usefulHeight, 0.01)]} />
+            <meshBasicMaterial color="#ffffff" opacity={0.1} transparent depthWrite={false} />
+          </mesh>
+          {piece.panelAxis === "vertical" && overlapStart > 0 ? (
+            <mesh position={[(-width / 2) + overlapStart / 2, 0, 0.022]}>
+              <planeGeometry args={[Math.max(overlapStart, 0.01), Math.max(height, 0.01)]} />
+              <meshBasicMaterial color="#111111" opacity={0.16} transparent depthWrite={false} />
+            </mesh>
+          ) : null}
+          {piece.panelAxis === "vertical" && overlapEnd > 0 ? (
+            <mesh position={[(width / 2) - overlapEnd / 2, 0, 0.022]}>
+              <planeGeometry args={[Math.max(overlapEnd, 0.01), Math.max(height, 0.01)]} />
+              <meshBasicMaterial color="#111111" opacity={0.16} transparent depthWrite={false} />
+            </mesh>
+          ) : null}
+          {piece.panelAxis === "horizontal" && overlapStart > 0 ? (
+            <mesh position={[0, (height / 2) - overlapStart / 2, 0.022]}>
+              <planeGeometry args={[Math.max(width, 0.01), Math.max(overlapStart, 0.01)]} />
+              <meshBasicMaterial color="#111111" opacity={0.16} transparent depthWrite={false} />
+            </mesh>
+          ) : null}
+          {piece.panelAxis === "horizontal" && overlapEnd > 0 ? (
+            <mesh position={[0, (-height / 2) + overlapEnd / 2, 0.022]}>
+              <planeGeometry args={[Math.max(width, 0.01), Math.max(overlapEnd, 0.01)]} />
+              <meshBasicMaterial color="#111111" opacity={0.16} transparent depthWrite={false} />
+            </mesh>
+          ) : null}
+          <Text
+            position={[0, Math.max(height / 2 - 0.08, -height / 2 + 0.08), 0.03]}
+            fontSize={0.05}
+            color="#111111"
+            anchorX="center"
+            anchorY="top"
+            fontWeight="bold"
+            renderOrder={11}
+            depthOffset={-11}
+            material-depthWrite={false}
+            material-depthTest={false}
+          >
+            {`Panel ${piece.panelIndex}`}
+          </Text>
+        </group>
+      ) : null}
+      {piece.rotated ? (
+        <group position={[Math.max(width / 2 - 0.16, 0), Math.max(height / 2 - 0.08, 0), 0.028]}>
+          <Text
+            position={[0, 0, 0.01]}
+            fontSize={0.075}
+            color="#111111"
+            anchorX="center"
+            anchorY="middle"
+            fontWeight="bold"
+            renderOrder={11}
+            depthOffset={-11}
+            material-depthWrite={false}
+            material-depthTest={false}
+          >
+            ↻
+          </Text>
+        </group>
+      ) : null}
+      <group rotation={[0, 0, shouldRotateText ? Math.PI / 2 : 0]}>
+        <Text
+          position={
+            shouldRotateText
+              ? [-rotatedLaneOffset, 0, 0.03]
+              : [0, labelOffsetY, 0.03]
+          }
+          fontSize={labelFontSize}
+          maxWidth={Math.max(textBlockWidth * 0.82, compactTextMode ? 0.28 : 0.2)}
+          color={piece.textColor || "#111"}
+          anchorX="center"
+          anchorY="middle"
+          fontWeight="bold"
+          renderOrder={10}
+          depthOffset={-10}
+          material-depthWrite={false}
+          material-depthTest={false}
+        >
+          {piece.label}
+        </Text>
+        <Text
+          position={
+            shouldRotateText
+              ? [rotatedLaneOffset, 0, 0.03]
+              : [0, -detailOffsetY, 0.03]
+          }
+          fontSize={detailFontSize}
+          maxWidth={shouldRotateText ? Math.max(textBlockWidth * 1.8, 1.6) : Math.max(textBlockWidth * 0.86, compactTextMode ? 0.3 : 0.22)}
+          color={piece.textColor || "#111"}
+          anchorX="center"
+          anchorY="middle"
+          whiteSpace="nowrap"
+          renderOrder={10}
+          depthOffset={-10}
+          material-transparent
+          material-opacity={0.8}
+          material-depthWrite={false}
+          material-depthTest={false}
+        >
+          {detailText}
+        </Text>
+      </group>
     </group>
   );
 }
@@ -281,6 +400,14 @@ export default function PlotterSimulator({
   marginRight = 0,
   marginStart = 0,
   marginEnd = 0,
+  panelizado = false,
+  panelAxis = null,
+  panelCount = 0,
+  panelOverlap = null,
+  panelMaxWidth = null,
+  panelDistribution = null,
+  panelWidthInterpretation = null,
+  panelMode = null,
 }: PlotterSimulatorProps) {
   const [spacePressed, setSpacePressed] = useState(false);
   const [pointerDown, setPointerDown] = useState(false);
@@ -367,6 +494,101 @@ export default function PlotterSimulator({
       </div>
 
       <div className="pointer-events-none absolute inset-0 flex flex-col">
+        {panelizado ? (
+          <div className="absolute right-4 top-4 w-[240px] rounded-xl border border-white/10 bg-zinc-950/75 p-3 text-white shadow-xl backdrop-blur-md">
+            <div className="space-y-2">
+              <div className="flex items-start justify-between gap-3 text-sm">
+                <span className="text-zinc-300">Panelizado</span>
+                <span className="text-right font-medium">
+                  {panelMode === "manual" ? "Manual" : "Automático"}
+                </span>
+              </div>
+              <div className="flex items-start justify-between gap-3 text-sm">
+                <span className="text-zinc-300">Dirección</span>
+                <span className="text-right font-medium">
+                  {panelAxis === "horizontal" ? "Horizontal" : "Vertical"}
+                </span>
+              </div>
+              <div className="flex items-start justify-between gap-3 text-sm">
+                <span className="text-zinc-300">Paneles</span>
+                <span className="text-right font-medium">
+                  {panelCount || pieces.filter((piece) => piece.panelIndex).length}
+                </span>
+              </div>
+              {panelOverlap != null ? (
+                <div className="flex items-start justify-between gap-3 text-sm">
+                  <span className="text-zinc-300">Solape</span>
+                  <span className="text-right font-medium">{panelOverlap} cm</span>
+                </div>
+              ) : null}
+              {panelMaxWidth != null ? (
+                <div className="flex items-start justify-between gap-3 text-sm">
+                  <span className="text-zinc-300">Ancho máximo</span>
+                  <span className="text-right font-medium">{panelMaxWidth} cm</span>
+                </div>
+              ) : null}
+              {panelDistribution ? (
+                <div className="flex items-start justify-between gap-3 text-sm">
+                  <span className="text-zinc-300">Distribución</span>
+                  <span className="text-right font-medium">
+                    {panelDistribution === "libre" ? "Libre" : "Equilibrada"}
+                  </span>
+                </div>
+              ) : null}
+              {panelWidthInterpretation ? (
+                <div className="flex items-start justify-between gap-3 text-sm">
+                  <span className="text-zinc-300">Interpretación</span>
+                  <span className="text-right font-medium">
+                    {panelWidthInterpretation === "util" ? "Ancho útil" : "Ancho total"}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+            <div className="mt-3 rounded-lg border border-white/10 bg-white/5 p-2">
+              <div className="mb-2 flex items-center justify-between text-[11px] uppercase tracking-wide text-zinc-300">
+                <span>Esquema</span>
+                <span>{pieces.filter((piece) => piece.panelIndex).length} paneles</span>
+              </div>
+              <div className={`flex ${panelAxis === "horizontal" ? "flex-col" : "flex-row"} gap-1`}>
+                {pieces
+                  .filter((piece) => piece.panelIndex)
+                  .sort((a, b) => (a.panelIndex ?? 0) - (b.panelIndex ?? 0))
+                  .map((piece) => {
+                    const total = panelAxis === "horizontal" ? piece.h : piece.w;
+                    const useful = panelAxis === "horizontal" ? (piece.usefulH ?? piece.h) : (piece.usefulW ?? piece.w);
+                    const start = piece.overlapStart ?? 0;
+                    const end = piece.overlapEnd ?? 0;
+                    const denom = Math.max(total, 1);
+                    return (
+                      <div
+                        key={`schema-${piece.id}`}
+                        className={`flex ${panelAxis === "horizontal" ? "h-14 w-full" : "h-14 flex-1"} items-stretch overflow-hidden rounded border border-white/10 bg-zinc-900/80`}
+                      >
+                        {start > 0 ? <div style={{ flex: start / denom }} className="bg-orange-300/35" /> : null}
+                        <div
+                          style={{ flex: useful / denom }}
+                          className="flex min-w-0 items-center justify-center bg-cyan-300/20 px-1 text-[10px] font-medium text-white"
+                        >
+                          {`P${piece.panelIndex}`}
+                        </div>
+                        {end > 0 ? <div style={{ flex: end / denom }} className="bg-orange-300/35" /> : null}
+                      </div>
+                    );
+                  })}
+              </div>
+              <div className="mt-2 flex items-center gap-3 text-[10px] text-zinc-300">
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-sm bg-cyan-300/60" />
+                  Área útil
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-sm bg-orange-300/60" />
+                  Solape
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full border border-zinc-800/50 bg-zinc-900/60 px-6 py-2 shadow-xl backdrop-blur-md">
           <Maximize2 className="h-4 w-4 text-zinc-400" />
           <span className="text-xs font-medium text-zinc-300">Arrastrá para rotar • Rueda para zoom • Espacio + arrastrar para desplazar</span>
