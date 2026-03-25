@@ -2528,6 +2528,9 @@ export declare class ProductosServiciosService {
     private buildGranFormatoManualPieces;
     private evaluateGranFormatoMixedShelfLayout;
     private buildGranFormatoNestingPreview;
+    private getGranFormatoCandidateAveragePanelUsefulSpanMm;
+    private compareGranFormatoPreviewCandidates;
+    private getGranFormatoCandidateResumenAveragePanelUsefulSpanMm;
     private buildGranFormatoCostosCandidateResumen;
     private resolveGranFormatoCantidadObjetivoSalida;
     private calculateGranFormatoSustratoCost;

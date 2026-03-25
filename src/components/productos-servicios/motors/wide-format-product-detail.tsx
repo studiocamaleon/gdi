@@ -1523,6 +1523,10 @@ export function WideFormatProductDetail({
   const isImposicionSimulationStale =
     hasImposicionSimulation &&
     imposicionSimulationSnapshot !== normalizeImposicionSnapshot(imposicionConfig);
+  const imposicionPreviewConfig = imposicionSimulationConfig ?? imposicionConfig;
+  const imposicionPreviewHasValidMeasures = imposicionPreviewConfig.medidas.some(
+    (item) => (item.anchoMm ?? 0) > 0 && (item.altoMm ?? 0) > 0 && (item.cantidad ?? 0) > 0,
+  );
 
   const validMaterialVariantIds = React.useMemo(
     () => new Set(availableMaterialVariants.map((item) => item.id)),
@@ -1579,8 +1583,10 @@ export function WideFormatProductDetail({
   const imposicionRejectedVariants = imposicionPreviewResult.rejected;
   const imposicionBestCandidate = imposicionPreview[0] ?? null;
   const imposicionManualLayoutActual = React.useMemo(
-    () => imposicionConfig.panelizadoManualLayout ?? buildManualLayoutFromPlacements(imposicionBestCandidate?.placements ?? []),
-    [imposicionBestCandidate?.placements, imposicionConfig.panelizadoManualLayout],
+    () =>
+      imposicionPreviewConfig.panelizadoManualLayout ??
+      buildManualLayoutFromPlacements(imposicionBestCandidate?.placements ?? []),
+    [imposicionBestCandidate?.placements, imposicionPreviewConfig.panelizadoManualLayout],
   );
   const costosManualLayoutActual = React.useMemo(
     () =>
@@ -1626,13 +1632,13 @@ export function WideFormatProductDetail({
       validateManualLayoutItem({
         item,
         printableWidthMm: panelEditorPrintableWidthMm,
-        maxPanelWidthMm: imposicionConfig.panelizadoAnchoMaxPanelMm,
-        widthInterpretation: imposicionConfig.panelizadoInterpretacionAnchoMaximo,
+        maxPanelWidthMm: imposicionPreviewConfig.panelizadoAnchoMaxPanelMm,
+        widthInterpretation: imposicionPreviewConfig.panelizadoInterpretacionAnchoMaximo,
       }),
     );
   }, [
-    imposicionConfig.panelizadoAnchoMaxPanelMm,
-    imposicionConfig.panelizadoInterpretacionAnchoMaximo,
+    imposicionPreviewConfig.panelizadoAnchoMaxPanelMm,
+    imposicionPreviewConfig.panelizadoInterpretacionAnchoMaximo,
     panelEditorDraft,
     panelEditorPrintableWidthMm,
   ]);
@@ -1643,12 +1649,12 @@ export function WideFormatProductDetail({
     return validateManualLayoutItem({
       item: panelEditorSelectedPiece,
       printableWidthMm: panelEditorPrintableWidthMm,
-      maxPanelWidthMm: imposicionConfig.panelizadoAnchoMaxPanelMm,
-      widthInterpretation: imposicionConfig.panelizadoInterpretacionAnchoMaximo,
+      maxPanelWidthMm: imposicionPreviewConfig.panelizadoAnchoMaxPanelMm,
+      widthInterpretation: imposicionPreviewConfig.panelizadoInterpretacionAnchoMaximo,
     });
   }, [
-    imposicionConfig.panelizadoAnchoMaxPanelMm,
-    imposicionConfig.panelizadoInterpretacionAnchoMaximo,
+    imposicionPreviewConfig.panelizadoAnchoMaxPanelMm,
+    imposicionPreviewConfig.panelizadoInterpretacionAnchoMaximo,
     panelEditorPrintableWidthMm,
     panelEditorSelectedPiece,
   ]);
@@ -2980,9 +2986,23 @@ export function WideFormatProductDetail({
 
   const handleSimularImposicion = () => {
     const nextConfig = cloneGranFormatoImposicionConfig(imposicionConfig);
-    setImposicionSimulationConfig(nextConfig);
+    const shouldResetManualPanelLayout =
+      nextConfig.panelizadoActivo &&
+      nextConfig.panelizadoModo === "manual" &&
+      nextConfig.panelizadoManualLayout != null;
+    const effectiveConfig = shouldResetManualPanelLayout
+      ? {
+          ...nextConfig,
+          panelizadoModo: "automatico" as const,
+          panelizadoManualLayout: null,
+        }
+      : nextConfig;
+    if (shouldResetManualPanelLayout) {
+      setImposicionConfig(effectiveConfig);
+    }
+    setImposicionSimulationConfig(effectiveConfig);
 
-    const medidasValidas = nextConfig.medidas.filter(
+    const medidasValidas = effectiveConfig.medidas.filter(
       (item) => (item.anchoMm ?? 0) > 0 && (item.altoMm ?? 0) > 0 && (item.cantidad ?? 0) > 0,
     );
     if (!medidasValidas.length) {
@@ -3004,7 +3024,7 @@ export function WideFormatProductDetail({
       try {
         const result = await previewGranFormatoCostos(productoState.id, {
           periodo: costosPeriodo,
-          tecnologia: nextConfig.tecnologiaDefault ?? undefined,
+          tecnologia: effectiveConfig.tecnologiaDefault ?? undefined,
           persistirSnapshot: false,
           incluirCandidatos: true,
           medidas: medidasValidas.map((item) => ({
@@ -3013,15 +3033,15 @@ export function WideFormatProductDetail({
             cantidad: item.cantidad ?? 1,
           })),
           panelizado: {
-            activo: nextConfig.panelizadoActivo,
-            modo: nextConfig.panelizadoModo,
-            direccion: nextConfig.panelizadoDireccion,
-            solapeMm: nextConfig.panelizadoSolapeMm,
-            anchoMaxPanelMm: nextConfig.panelizadoAnchoMaxPanelMm,
-            distribucion: nextConfig.panelizadoDistribucion,
-            interpretacionAnchoMaximo: nextConfig.panelizadoInterpretacionAnchoMaximo,
+            activo: effectiveConfig.panelizadoActivo,
+            modo: effectiveConfig.panelizadoModo,
+            direccion: effectiveConfig.panelizadoDireccion,
+            solapeMm: effectiveConfig.panelizadoSolapeMm,
+            anchoMaxPanelMm: effectiveConfig.panelizadoAnchoMaxPanelMm,
+            distribucion: effectiveConfig.panelizadoDistribucion,
+            interpretacionAnchoMaximo: effectiveConfig.panelizadoInterpretacionAnchoMaximo,
             manualLayout:
-              nextConfig.panelizadoModo === "manual" ? nextConfig.panelizadoManualLayout : null,
+              effectiveConfig.panelizadoModo === "manual" ? effectiveConfig.panelizadoManualLayout : null,
           },
         });
 
@@ -3072,6 +3092,9 @@ export function WideFormatProductDetail({
               ? null
               : "No se pudo resolver la imposición con la configuración actual.",
         });
+        if (shouldResetManualPanelLayout) {
+          toast.info("La simulación se recalculó en automático desde cero.");
+        }
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "No se pudo simular la imposición.";
@@ -3149,8 +3172,8 @@ export function WideFormatProductDetail({
       return;
     }
     const layout =
-      imposicionConfig.panelizadoModo === "manual" && imposicionConfig.panelizadoManualLayout
-        ? cloneGranFormatoImposicionConfig(imposicionConfig).panelizadoManualLayout
+      imposicionPreviewConfig.panelizadoModo === "manual" && imposicionPreviewConfig.panelizadoManualLayout
+        ? cloneGranFormatoImposicionConfig(imposicionPreviewConfig).panelizadoManualLayout
         : buildManualLayoutFromPlacements(imposicionBestCandidate.placements);
     if (!layout) {
       toast.error("No hay paneles disponibles para editar.");
@@ -4744,7 +4767,7 @@ export function WideFormatProductDetail({
                     <div className="rounded-lg border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">
                       Configurá el escenario y presioná <span className="font-medium text-foreground">Simular imposición</span> para ver candidatos.
                     </div>
-                  ) : imposicionConfig.medidas.every((item) => !(item.anchoMm && item.altoMm)) ? (
+                  ) : !imposicionPreviewHasValidMeasures ? (
                     <div className="rounded-lg border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">
                       Completá al menos una medida válida para simular la imposición.
                     </div>
@@ -4976,7 +4999,7 @@ export function WideFormatProductDetail({
                       <p className="text-xs text-muted-foreground">Modo actual</p>
                       <p className="mt-1 text-sm font-semibold">
                         {getPanelizadoModoLabel(
-                          panelEditorContext === "costos" ? costosPanelizadoModo : imposicionConfig.panelizadoModo,
+                          panelEditorContext === "costos" ? costosPanelizadoModo : imposicionPreviewConfig.panelizadoModo,
                         )}
                       </p>
                     </div>
@@ -4989,14 +5012,14 @@ export function WideFormatProductDetail({
                     <div className="rounded-xl border bg-muted/10 p-3">
                       <p className="text-xs text-muted-foreground">Solape</p>
                       <p className="mt-1 text-sm font-semibold">
-                        {formatMmAsCm(imposicionConfig.panelizadoSolapeMm)} cm
+                        {formatMmAsCm(imposicionPreviewConfig.panelizadoSolapeMm)} cm
                       </p>
                     </div>
                     <div className="rounded-xl border bg-muted/10 p-3">
                       <p className="text-xs text-muted-foreground">Ancho máximo</p>
                       <p className="mt-1 text-sm font-semibold">
-                        {imposicionConfig.panelizadoAnchoMaxPanelMm != null
-                          ? `${formatMmAsCm(imposicionConfig.panelizadoAnchoMaxPanelMm)} cm`
+                        {imposicionPreviewConfig.panelizadoAnchoMaxPanelMm != null
+                          ? `${formatMmAsCm(imposicionPreviewConfig.panelizadoAnchoMaxPanelMm)} cm`
                           : "Sin dato"}
                       </p>
                     </div>
@@ -5075,11 +5098,11 @@ export function WideFormatProductDetail({
                                   ? panel.finalWidthMm
                                   : panel.finalHeightMm;
                               const withinConfiguredLimit =
-                                imposicionConfig.panelizadoAnchoMaxPanelMm == null
+                                imposicionPreviewConfig.panelizadoAnchoMaxPanelMm == null
                                   ? true
-                                  : imposicionConfig.panelizadoInterpretacionAnchoMaximo === "total"
-                                    ? finalDimension <= imposicionConfig.panelizadoAnchoMaxPanelMm
-                                    : usefulDimension <= imposicionConfig.panelizadoAnchoMaxPanelMm;
+                                  : imposicionPreviewConfig.panelizadoInterpretacionAnchoMaximo === "total"
+                                    ? finalDimension <= imposicionPreviewConfig.panelizadoAnchoMaxPanelMm
+                                    : usefulDimension <= imposicionPreviewConfig.panelizadoAnchoMaxPanelMm;
                               const withinPrintableWidth = finalDimension <= panelEditorPrintableWidthMm;
                               const panelValid =
                                 usefulDimension >= MIN_MANUAL_PANEL_USEFUL_MM &&
@@ -5234,7 +5257,7 @@ export function WideFormatProductDetail({
                             <span className="text-muted-foreground">Distribución</span>
                             <span className="font-medium">
                               {panelizadoDistribucionItems.find(
-                                (item) => item.value === imposicionConfig.panelizadoDistribucion,
+                                (item) => item.value === imposicionPreviewConfig.panelizadoDistribucion,
                               )?.label ?? "Equilibrada"}
                             </span>
                           </div>
@@ -5242,7 +5265,7 @@ export function WideFormatProductDetail({
                             <span className="text-muted-foreground">Interpretación</span>
                             <span className="text-right font-medium">
                               {getPanelizadoInterpretacionLabel(
-                                imposicionConfig.panelizadoInterpretacionAnchoMaximo,
+                                imposicionPreviewConfig.panelizadoInterpretacionAnchoMaximo,
                               )}
                             </span>
                           </div>
@@ -5282,11 +5305,11 @@ export function WideFormatProductDetail({
                                 ? panel.finalWidthMm
                                 : panel.finalHeightMm;
                             const withinConfiguredLimit =
-                              imposicionConfig.panelizadoAnchoMaxPanelMm == null
+                              imposicionPreviewConfig.panelizadoAnchoMaxPanelMm == null
                                 ? true
-                                : imposicionConfig.panelizadoInterpretacionAnchoMaximo === "total"
-                                  ? finalDimension <= imposicionConfig.panelizadoAnchoMaxPanelMm
-                                  : usefulDimension <= imposicionConfig.panelizadoAnchoMaxPanelMm;
+                                : imposicionPreviewConfig.panelizadoInterpretacionAnchoMaximo === "total"
+                                  ? finalDimension <= imposicionPreviewConfig.panelizadoAnchoMaxPanelMm
+                                  : usefulDimension <= imposicionPreviewConfig.panelizadoAnchoMaxPanelMm;
                             const withinPrintableWidth = finalDimension <= panelEditorPrintableWidthMm;
                             const panelValid =
                               usefulDimension >= MIN_MANUAL_PANEL_USEFUL_MM &&

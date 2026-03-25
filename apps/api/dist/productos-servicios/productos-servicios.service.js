@@ -1628,24 +1628,32 @@ let ProductosServiciosService = class ProductosServiciosService {
                 },
             };
         }));
-        const winner = [...costedCandidates].sort((a, b) => a.candidate.totalCost - b.candidate.totalCost ||
+        const winner = [...costedCandidates].sort((a, b) => this.compareGranFormatoPreviewCandidates(a.candidate, b.candidate, effectiveImposicionConfig.criterioOptimizacion) ||
+            a.candidate.totalCost - b.candidate.totalCost ||
             a.candidate.wasteAreaM2 - b.candidate.wasteAreaM2 ||
             a.candidate.consumedLengthMm - b.candidate.consumedLengthMm)[0];
         const candidatosResumen = incluirCandidatos
             ? Array.from(costedCandidates.reduce((map, row) => {
                 const current = map.get(row.candidate.variant.id);
                 if (!current ||
-                    row.candidate.totalCost < current.candidate.totalCost ||
-                    (row.candidate.totalCost === current.candidate.totalCost &&
-                        (row.candidate.wasteAreaM2 < current.candidate.wasteAreaM2 ||
-                            (row.candidate.wasteAreaM2 === current.candidate.wasteAreaM2 &&
-                                row.candidate.consumedLengthMm < current.candidate.consumedLengthMm)))) {
+                    this.compareGranFormatoPreviewCandidates(row.candidate, current.candidate, effectiveImposicionConfig.criterioOptimizacion) < 0 ||
+                    (this.compareGranFormatoPreviewCandidates(row.candidate, current.candidate, effectiveImposicionConfig.criterioOptimizacion) === 0 &&
+                        (row.candidate.totalCost < current.candidate.totalCost ||
+                            (row.candidate.totalCost === current.candidate.totalCost &&
+                                (row.candidate.wasteAreaM2 < current.candidate.wasteAreaM2 ||
+                                    (row.candidate.wasteAreaM2 === current.candidate.wasteAreaM2 &&
+                                        row.candidate.consumedLengthMm < current.candidate.consumedLengthMm)))))) {
                     map.set(row.candidate.variant.id, row);
                 }
                 return map;
             }, new Map()))
                 .map(([, row]) => this.buildGranFormatoCostosCandidateResumen(row.candidate))
-                .sort((a, b) => a.totalCost - b.totalCost ||
+                .sort((a, b) => (a.panelizado && b.panelizado
+                ? a.panelCount - b.panelCount ||
+                    (this.getGranFormatoCandidateResumenAveragePanelUsefulSpanMm(b) -
+                        this.getGranFormatoCandidateResumenAveragePanelUsefulSpanMm(a))
+                : 0) ||
+                a.totalCost - b.totalCost ||
                 a.wasteAreaM2 - b.wasteAreaM2 ||
                 a.consumedLengthMm - b.consumedLengthMm)
             : undefined;
@@ -8824,6 +8832,45 @@ let ProductosServiciosService = class ProductosServiciosService {
             })),
         };
     }
+    getGranFormatoCandidateAveragePanelUsefulSpanMm(candidate) {
+        if (!candidate.panelizado || !candidate.panelAxis || candidate.placements.length === 0) {
+            return 0;
+        }
+        const total = candidate.placements.reduce((acc, placement) => acc +
+            (candidate.panelAxis === 'vertical'
+                ? placement.usefulWidthMm
+                : placement.usefulHeightMm), 0);
+        return total / candidate.placements.length;
+    }
+    compareGranFormatoPreviewCandidates(left, right, criterio) {
+        if (left.panelizado && right.panelizado) {
+            if (left.panelCount !== right.panelCount) {
+                return left.panelCount - right.panelCount;
+            }
+            const leftAveragePanelMm = this.getGranFormatoCandidateAveragePanelUsefulSpanMm(left);
+            const rightAveragePanelMm = this.getGranFormatoCandidateAveragePanelUsefulSpanMm(right);
+            if (leftAveragePanelMm !== rightAveragePanelMm) {
+                return rightAveragePanelMm - leftAveragePanelMm;
+            }
+        }
+        if (criterio === productos_servicios_dto_1.GranFormatoImposicionCriterioOptimizacionDto.menor_costo_total) {
+            return left.consumedAreaM2 - right.consumedAreaM2 || left.wasteAreaM2 - right.wasteAreaM2;
+        }
+        if (criterio === productos_servicios_dto_1.GranFormatoImposicionCriterioOptimizacionDto.menor_largo_consumido) {
+            return left.consumedLengthMm - right.consumedLengthMm || left.wasteAreaM2 - right.wasteAreaM2;
+        }
+        return left.wasteAreaM2 - right.wasteAreaM2 || left.consumedLengthMm - right.consumedLengthMm;
+    }
+    getGranFormatoCandidateResumenAveragePanelUsefulSpanMm(candidate) {
+        if (!candidate.panelizado || !candidate.panelAxis || candidate.placements.length === 0) {
+            return 0;
+        }
+        const total = candidate.placements.reduce((acc, placement) => acc +
+            (candidate.panelAxis === 'vertical'
+                ? placement.usefulWidthMm
+                : placement.usefulHeightMm), 0);
+        return total / candidate.placements.length;
+    }
     buildGranFormatoCostosCandidateResumen(candidate) {
         return {
             variantId: candidate.variant.id,
@@ -9043,10 +9090,9 @@ let ProductosServiciosService = class ProductosServiciosService {
                     const maxPanelWidthMm = Math.max(0, input.config.panelizadoAnchoMaxPanelMm ?? 0);
                     const directions = input.config.panelizadoModo === productos_servicios_dto_1.GranFormatoPanelizadoModoDto.manual
                         ? ['vertical']
-                        :
-                            input.config.panelizadoDireccion === productos_servicios_dto_1.GranFormatoPanelizadoDireccionDto.automatica
-                                ? ['vertical', 'horizontal']
-                                : [input.config.panelizadoDireccion];
+                        : input.config.panelizadoDireccion === productos_servicios_dto_1.GranFormatoPanelizadoDireccionDto.automatica
+                            ? ['vertical', 'horizontal']
+                            : [input.config.panelizadoDireccion];
                     for (const axis of directions) {
                         if (maxPanelWidthMm <= 0) {
                             continue;
@@ -9137,15 +9183,7 @@ let ProductosServiciosService = class ProductosServiciosService {
             });
         }
         const accepted = acceptedNormal.length > 0 ? acceptedNormal : acceptedPanelizados;
-        return accepted.sort((a, b) => {
-            if (input.config.criterioOptimizacion === productos_servicios_dto_1.GranFormatoImposicionCriterioOptimizacionDto.menor_costo_total) {
-                return a.consumedAreaM2 - b.consumedAreaM2 || a.wasteAreaM2 - b.wasteAreaM2;
-            }
-            if (input.config.criterioOptimizacion === productos_servicios_dto_1.GranFormatoImposicionCriterioOptimizacionDto.menor_largo_consumido) {
-                return a.consumedLengthMm - b.consumedLengthMm || a.wasteAreaM2 - b.wasteAreaM2;
-            }
-            return a.wasteAreaM2 - b.wasteAreaM2 || a.consumedLengthMm - b.consumedLengthMm;
-        });
+        return accepted.sort((a, b) => this.compareGranFormatoPreviewCandidates(a, b, input.config.criterioOptimizacion));
     }
     readNumericValue(value) {
         if (typeof value === 'number' && Number.isFinite(value)) {
