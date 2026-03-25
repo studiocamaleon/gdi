@@ -1745,4 +1745,5 @@ describe('ProductosServiciosService V1 adicionales', () => {
     expect(candidates[0].placements.some((item: { rotated: boolean }) => item.rotated)).toBe(true);
     expect(candidates[0].placements.some((item: { rotated: boolean }) => !item.rotated)).toBe(true);
   });
+
 });
