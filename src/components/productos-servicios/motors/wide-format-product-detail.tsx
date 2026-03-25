@@ -62,7 +62,6 @@ import {
 } from "@/lib/maquinaria";
 import {
   assignProductoMotor,
-  getCotizacionProductoById,
   getCotizacionesProductoServicio,
   getGranFormatoConfig,
   getGranFormatoChecklist,
@@ -255,20 +254,6 @@ const panelizadoInterpretacionItems: Array<{
 ];
 const MIN_MANUAL_PANEL_USEFUL_MM = 20;
 
-function compareGranFormatoPreviewItems(
-  left: GranFormatoImposicionPreviewItem,
-  right: GranFormatoImposicionPreviewItem,
-  criterio: GranFormatoImposicionCriterioOptimizacion,
-) {
-  if (criterio === "menor_costo_total") {
-    return left.estimatedCostTotal - right.estimatedCostTotal || left.wasteAreaM2 - right.wasteAreaM2;
-  }
-  if (criterio === "menor_largo_consumido") {
-    return left.consumedLengthMm - right.consumedLengthMm || left.wasteAreaM2 - right.wasteAreaM2;
-  }
-  return left.wasteAreaM2 - right.wasteAreaM2 || left.consumedLengthMm - right.consumedLengthMm;
-}
-
 function buildManualLayoutFromPlacements(
   placements: GranFormatoImposicionPlacement[],
 ): GranFormatoPanelManualLayout | null {
@@ -292,8 +277,14 @@ function buildManualLayoutFromPlacements(
       usefulHeightMm: placement.usefulHeightMm,
       overlapStartMm: placement.overlapStartMm,
       overlapEndMm: placement.overlapEndMm,
-      finalWidthMm: placement.widthMm,
-      finalHeightMm: placement.heightMm,
+      finalWidthMm:
+        placement.panelAxis === "vertical"
+          ? placement.usefulWidthMm + placement.overlapStartMm + placement.overlapEndMm
+          : placement.usefulWidthMm,
+      finalHeightMm:
+        placement.panelAxis === "horizontal"
+          ? placement.usefulHeightMm + placement.overlapStartMm + placement.overlapEndMm
+          : placement.usefulHeightMm,
     });
     groups.set(placement.sourcePieceId, current);
   }
@@ -302,6 +293,67 @@ function buildManualLayoutFromPlacements(
       ...item,
       panels: [...item.panels].sort((a, b) => a.panelIndex - b.panelIndex),
     }))
+    .sort((a, b) => a.sourcePieceId.localeCompare(b.sourcePieceId));
+  return items.length ? { items } : null;
+}
+
+function buildManualLayoutFromNestingPieces(
+  pieces: NonNullable<GranFormatoCostosResponse["nestingPreview"]>["pieces"],
+): GranFormatoPanelManualLayout | null {
+  const groups = new Map<string, GranFormatoPanelManualLayoutItem>();
+  for (const piece of pieces) {
+    if (!piece.sourcePieceId || !piece.panelIndex || !piece.panelAxis) {
+      continue;
+    }
+    const usefulWidthMm = Math.round(((piece.usefulW ?? piece.w ?? 0)) * 10);
+    const usefulHeightMm = Math.round(((piece.usefulH ?? piece.h ?? 0)) * 10);
+    const overlapStartMm = Math.round(((piece.overlapStart ?? 0)) * 10);
+    const overlapEndMm = Math.round(((piece.overlapEnd ?? 0)) * 10);
+    const current =
+      groups.get(piece.sourcePieceId) ??
+      {
+        sourcePieceId: piece.sourcePieceId,
+        pieceWidthMm: 0,
+        pieceHeightMm: 0,
+        axis: piece.panelAxis,
+        panels: [] as GranFormatoPanelManualItem[],
+      };
+    current.panels.push({
+      panelIndex: piece.panelIndex,
+      usefulWidthMm,
+      usefulHeightMm,
+      overlapStartMm,
+      overlapEndMm,
+      finalWidthMm:
+        piece.panelAxis === "vertical"
+          ? usefulWidthMm + overlapStartMm + overlapEndMm
+          : usefulWidthMm,
+      finalHeightMm:
+        piece.panelAxis === "horizontal"
+          ? usefulHeightMm + overlapStartMm + overlapEndMm
+          : usefulHeightMm,
+    });
+    groups.set(piece.sourcePieceId, current);
+  }
+  const items = Array.from(groups.values())
+    .map((item) => {
+      const panels = [...item.panels].sort((a, b) => a.panelIndex - b.panelIndex);
+      const pieceWidthMm =
+        item.axis === "vertical"
+          ? panels.reduce((acc, panel) => acc + panel.usefulWidthMm, 0)
+          : panels[0]?.usefulWidthMm ?? 0;
+      const pieceHeightMm =
+        item.axis === "horizontal"
+          ? panels.reduce((acc, panel) => acc + panel.usefulHeightMm, 0)
+          : panels[0]?.usefulHeightMm ?? 0;
+      return {
+        ...item,
+        pieceWidthMm,
+        pieceHeightMm,
+        panels,
+      };
+    })
+    .filter((item) => item.pieceWidthMm > 0 && item.pieceHeightMm > 0)
     .sort((a, b) => a.sourcePieceId.localeCompare(b.sourcePieceId));
   return items.length ? { items } : null;
 }
@@ -707,6 +759,23 @@ type GranFormatoImposicionPreviewItem = {
   estimatedCostTotal: number;
 };
 
+type GranFormatoImposicionPreviewResultState = {
+  items: GranFormatoImposicionPreviewItem[];
+  rejected: Array<{
+    variant: MateriaPrimaVariante;
+    reason: string;
+  }>;
+  machineIssue: string | null;
+};
+
+function createEmptyImposicionPreviewResult(machineIssue: string | null): GranFormatoImposicionPreviewResultState {
+  return {
+    items: [],
+    rejected: [],
+    machineIssue,
+  };
+}
+
 function createRutaBaseReglaDraft(): GranFormatoRutaBaseReglaDraft {
   return {
     id: crypto.randomUUID(),
@@ -857,31 +926,6 @@ function readMachineMarginMm(maquina: Maquina | null, key: string) {
   return cm == null ? null : cm * 10;
 }
 
-function readMachinePrintableWidthMm(maquina: Maquina | null) {
-  if (!maquina) {
-    return null;
-  }
-  const direct = readNumericValue(maquina.parametrosTecnicos?.anchoImprimibleMaximo);
-  if (direct != null) {
-    return direct * 10;
-  }
-  const uvBridgeWidth = readNumericValue(maquina.parametrosTecnicos?.anchoBoca);
-  if (uvBridgeWidth != null) {
-    return uvBridgeWidth * 10;
-  }
-  const bedWidth = readNumericValue(maquina.parametrosTecnicos?.anchoCama);
-  if (bedWidth != null) {
-    return bedWidth * 10;
-  }
-  const fallback = readNumericValue(maquina.anchoUtil);
-  return fallback == null ? null : fallback * 10;
-}
-
-function readMaterialVariantWidthMm(attributes: Record<string, unknown> | null | undefined) {
-  const meters = readNumericValue(attributes?.ancho);
-  return meters == null ? null : meters * 1000;
-}
-
 function formatMmAsCm(value: number | null | undefined) {
   if (value == null || !Number.isFinite(value)) {
     return "";
@@ -904,542 +948,6 @@ function getPieceLetterLabel(index: number) {
     current = Math.floor(current / 26) - 1;
   } while (current >= 0);
   return `Pieza ${label}`;
-}
-
-function buildGranFormatoNestingOrientacion(placements: Array<{ rotated: boolean }>) {
-  const hasRotated = placements.some((item) => item.rotated);
-  const hasNormal = placements.some((item) => !item.rotated);
-  if (hasRotated && hasNormal) {
-    return "mixta" as const;
-  }
-  return hasRotated ? ("rotada" as const) : ("normal" as const);
-}
-
-function countGranFormatoRowsAndPiecesPerRow(
-  placements: GranFormatoImposicionPlacement[],
-  toleranceMm: number,
-) {
-  if (!placements.length) {
-    return { rows: 0, piecesPerRow: 0 };
-  }
-  const rows: Array<{ topMm: number; bottomMm: number; count: number }> = [];
-  const sorted = [...placements].sort((a, b) => {
-    const topDiff = a.centerYMm - a.heightMm / 2 - (b.centerYMm - b.heightMm / 2);
-    if (Math.abs(topDiff) > toleranceMm) {
-      return topDiff;
-    }
-    return a.centerXMm - b.centerXMm;
-  });
-  for (const placement of sorted) {
-    const topMm = placement.centerYMm - placement.heightMm / 2;
-    const bottomMm = placement.centerYMm + placement.heightMm / 2;
-    const existing = rows.find(
-      (row) =>
-        Math.abs(row.topMm - topMm) <= toleranceMm ||
-        (topMm <= row.bottomMm - toleranceMm && bottomMm >= row.topMm + toleranceMm),
-    );
-    if (existing) {
-      existing.topMm = Math.min(existing.topMm, topMm);
-      existing.bottomMm = Math.max(existing.bottomMm, bottomMm);
-      existing.count += 1;
-      continue;
-    }
-    rows.push({ topMm, bottomMm, count: 1 });
-  }
-  return {
-    rows: rows.length,
-    piecesPerRow: rows.reduce((max, row) => Math.max(max, row.count), 0),
-  };
-}
-
-function buildGranFormatoPieceInstances(
-  medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>,
-) {
-  return medidas
-    .flatMap((medida, medidaIndex) =>
-      Array.from({ length: Math.max(1, medida.cantidad) }, (_, copyIndex) => ({
-        id: `piece-${medidaIndex}-${copyIndex}`,
-        sourcePieceId: `piece-${medidaIndex}-${copyIndex}`,
-        originalWidthMm: medida.anchoMm,
-        originalHeightMm: medida.altoMm,
-        widthMm: medida.anchoMm,
-        heightMm: medida.altoMm,
-        usefulWidthMm: medida.anchoMm,
-        usefulHeightMm: medida.altoMm,
-        overlapStartMm: 0,
-        overlapEndMm: 0,
-        area: medida.anchoMm * medida.altoMm,
-        longestSide: Math.max(medida.anchoMm, medida.altoMm),
-        shortestSide: Math.min(medida.anchoMm, medida.altoMm),
-        panelIndex: null as number | null,
-        panelCount: null as number | null,
-        panelAxis: null as "vertical" | "horizontal" | null,
-      })),
-    )
-    .sort(
-      (a, b) =>
-        b.longestSide - a.longestSide ||
-        b.area - a.area ||
-        b.shortestSide - a.shortestSide,
-    );
-}
-
-function buildGranFormatoPanelizedMeasures(input: {
-  medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
-  printableWidthMm: number;
-  panelAxis: "vertical" | "horizontal";
-  overlapMm: number;
-  maxPanelWidthMm: number;
-  distribution: GranFormatoPanelizadoDistribucion;
-  widthInterpretation: GranFormatoPanelizadoInterpretacionAnchoMaximo;
-}) {
-  const pieces: Array<{
-    id: string;
-    sourcePieceId: string;
-    originalWidthMm: number;
-    originalHeightMm: number;
-    widthMm: number;
-    heightMm: number;
-    usefulWidthMm: number;
-    usefulHeightMm: number;
-    overlapStartMm: number;
-    overlapEndMm: number;
-    panelIndex: number;
-    panelCount: number;
-    panelAxis: "vertical" | "horizontal";
-  }> = [];
-
-  const buildSplitSizes = (totalMm: number, panelCount: number, maxUsefulWidthMm: number) => {
-    if (input.distribution === "libre") {
-      const sizes: number[] = [];
-      let remaining = totalMm;
-      for (let index = 0; index < panelCount; index += 1) {
-        const segmentsLeft = panelCount - index;
-        if (segmentsLeft === 1) {
-          sizes.push(remaining);
-          break;
-        }
-        const next = Math.min(maxUsefulWidthMm, remaining - (segmentsLeft - 1));
-        sizes.push(next);
-        remaining -= next;
-      }
-      return sizes;
-    }
-
-    const base = Math.floor(totalMm / panelCount);
-    const remainder = totalMm % panelCount;
-    return Array.from({ length: panelCount }, (_, index) => base + (index < remainder ? 1 : 0));
-  };
-
-  for (const [medidaIndex, medida] of input.medidas.entries()) {
-    for (let copyIndex = 0; copyIndex < Math.max(1, medida.cantidad); copyIndex += 1) {
-      const sourcePieceId = `piece-${medidaIndex}-${copyIndex}`;
-      const splitDimension = input.panelAxis === "vertical" ? medida.anchoMm : medida.altoMm;
-      const effectivePhysicalLimitMm = Math.min(input.maxPanelWidthMm, input.printableWidthMm);
-      const effectiveUsefulLimitMm =
-        input.widthInterpretation === "total"
-          ? effectivePhysicalLimitMm - input.overlapMm * 2
-          : effectivePhysicalLimitMm;
-      if (effectiveUsefulLimitMm <= 0 || splitDimension <= effectiveUsefulLimitMm) {
-        return null;
-      }
-      const panelCountResolved = Math.max(2, Math.ceil(splitDimension / effectiveUsefulLimitMm));
-      const panelSizes = buildSplitSizes(splitDimension, panelCountResolved, effectiveUsefulLimitMm);
-      const fits = panelSizes.every((segment, index) => {
-        const extraStart = index === 0 ? 0 : input.overlapMm;
-        const extraEnd = index === panelCountResolved - 1 ? 0 : input.overlapMm;
-        const physicalSize = segment + extraStart + extraEnd;
-        const withinConfiguredLimit =
-          input.widthInterpretation === "total"
-            ? physicalSize <= effectivePhysicalLimitMm
-            : segment <= effectivePhysicalLimitMm;
-        return withinConfiguredLimit && physicalSize <= input.printableWidthMm;
-      });
-
-      if (!fits) {
-        return null;
-      }
-
-      panelSizes.forEach((segment, index) => {
-        const extraStart = index === 0 ? 0 : input.overlapMm;
-        const extraEnd = index === panelCountResolved - 1 ? 0 : input.overlapMm;
-        if (input.panelAxis === "vertical") {
-          pieces.push({
-            id: `${sourcePieceId}-panel-${index + 1}`,
-            sourcePieceId,
-            originalWidthMm: medida.anchoMm,
-            originalHeightMm: medida.altoMm,
-            widthMm: segment + extraStart + extraEnd,
-            heightMm: medida.altoMm,
-            usefulWidthMm: segment,
-            usefulHeightMm: medida.altoMm,
-            overlapStartMm: extraStart,
-            overlapEndMm: extraEnd,
-            panelIndex: index + 1,
-            panelCount: panelCountResolved,
-            panelAxis: input.panelAxis,
-          });
-        } else {
-          pieces.push({
-            id: `${sourcePieceId}-panel-${index + 1}`,
-            sourcePieceId,
-            originalWidthMm: medida.anchoMm,
-            originalHeightMm: medida.altoMm,
-            widthMm: medida.anchoMm,
-            heightMm: segment + extraStart + extraEnd,
-            usefulWidthMm: medida.anchoMm,
-            usefulHeightMm: segment,
-            overlapStartMm: extraStart,
-            overlapEndMm: extraEnd,
-            panelIndex: index + 1,
-            panelCount: panelCountResolved,
-            panelAxis: input.panelAxis,
-          });
-        }
-      });
-    }
-  }
-
-  return pieces
-    .map((piece) => ({
-      ...piece,
-      area: piece.originalWidthMm * piece.originalHeightMm,
-      longestSide: Math.max(piece.widthMm, piece.heightMm),
-      shortestSide: Math.min(piece.widthMm, piece.heightMm),
-    }))
-    .sort(
-      (a, b) =>
-        b.longestSide - a.longestSide ||
-        b.area - a.area ||
-        b.shortestSide - a.shortestSide,
-    );
-}
-
-function buildGranFormatoManualMeasures(input: {
-  medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
-  printableWidthMm: number;
-  maxPanelWidthMm: number;
-  widthInterpretation: GranFormatoPanelizadoInterpretacionAnchoMaximo;
-  manualLayout: GranFormatoPanelManualLayout;
-}) {
-  const sourcePieces = buildGranFormatoPieceInstances(input.medidas);
-  if (sourcePieces.length !== input.manualLayout.items.length) {
-    return null;
-  }
-  const byId = new Map(input.manualLayout.items.map((item) => [item.sourcePieceId, item]));
-  const pieces: Array<{
-    id: string;
-    sourcePieceId: string;
-    originalWidthMm: number;
-    originalHeightMm: number;
-    widthMm: number;
-    heightMm: number;
-    usefulWidthMm: number;
-    usefulHeightMm: number;
-    overlapStartMm: number;
-    overlapEndMm: number;
-    panelIndex: number;
-    panelCount: number;
-    panelAxis: "vertical" | "horizontal";
-    area: number;
-    longestSide: number;
-    shortestSide: number;
-  }> = [];
-
-  for (const sourcePiece of sourcePieces) {
-    const layout = byId.get(sourcePiece.sourcePieceId);
-    if (!layout) {
-      return null;
-    }
-    const targetDimension = layout.axis === "vertical" ? sourcePiece.originalWidthMm : sourcePiece.originalHeightMm;
-    const usefulTotal = layout.panels.reduce(
-      (acc, panel) =>
-        acc + (layout.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm),
-      0,
-    );
-    if (Math.abs(usefulTotal - targetDimension) > 1) {
-      return null;
-    }
-    for (const panel of layout.panels) {
-      const useful = layout.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm;
-      const final = layout.axis === "vertical" ? panel.finalWidthMm : panel.finalHeightMm;
-      const withinConfiguredLimit =
-        input.widthInterpretation === "total"
-          ? final <= input.maxPanelWidthMm
-          : useful <= input.maxPanelWidthMm;
-      if (
-        useful < MIN_MANUAL_PANEL_USEFUL_MM ||
-        final > input.printableWidthMm ||
-        !withinConfiguredLimit
-      ) {
-        return null;
-      }
-      pieces.push({
-        id: `${layout.sourcePieceId}-panel-${panel.panelIndex}`,
-        sourcePieceId: layout.sourcePieceId,
-        originalWidthMm: layout.pieceWidthMm,
-        originalHeightMm: layout.pieceHeightMm,
-        widthMm: panel.finalWidthMm,
-        heightMm: panel.finalHeightMm,
-        usefulWidthMm: panel.usefulWidthMm,
-        usefulHeightMm: panel.usefulHeightMm,
-        overlapStartMm: panel.overlapStartMm,
-        overlapEndMm: panel.overlapEndMm,
-        panelIndex: panel.panelIndex,
-        panelCount: layout.panels.length,
-        panelAxis: layout.axis,
-        area: layout.pieceWidthMm * layout.pieceHeightMm,
-        longestSide: Math.max(panel.finalWidthMm, panel.finalHeightMm),
-        shortestSide: Math.min(panel.finalWidthMm, panel.finalHeightMm),
-      });
-    }
-  }
-
-  return pieces.sort(
-    (a, b) =>
-      b.longestSide - a.longestSide ||
-      b.area - a.area ||
-      b.shortestSide - a.shortestSide,
-  );
-}
-
-function evaluateGranFormatoMixedShelfLayout(input: {
-  printableWidthMm: number;
-  marginLeftMm: number;
-  marginStartMm: number;
-  marginEndMm: number;
-  separacionHorizontalMm: number;
-  separacionVerticalMm: number;
-  permitirRotacion: boolean;
-  medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
-  panelizado?: {
-    activo: boolean;
-    mode: GranFormatoPanelizadoModo;
-    axis: "vertical" | "horizontal";
-    overlapMm: number;
-    maxPanelWidthMm: number;
-    distribution: GranFormatoPanelizadoDistribucion;
-    widthInterpretation: GranFormatoPanelizadoInterpretacionAnchoMaximo;
-    manualLayout?: GranFormatoPanelManualLayout | null;
-  };
-}) {
-  const pieces = input.panelizado?.activo
-    ? input.panelizado.mode === "manual" && input.panelizado.manualLayout
-      ? buildGranFormatoManualMeasures({
-          medidas: input.medidas,
-          printableWidthMm: input.printableWidthMm,
-          maxPanelWidthMm: input.panelizado.maxPanelWidthMm,
-          widthInterpretation: input.panelizado.widthInterpretation,
-          manualLayout: input.panelizado.manualLayout,
-        })
-      : buildGranFormatoPanelizedMeasures({
-        medidas: input.medidas,
-        printableWidthMm: input.printableWidthMm,
-        panelAxis: input.panelizado.axis,
-        overlapMm: input.panelizado.overlapMm,
-        maxPanelWidthMm: input.panelizado.maxPanelWidthMm,
-        distribution: input.panelizado.distribution,
-        widthInterpretation: input.panelizado.widthInterpretation,
-      })
-    : buildGranFormatoPieceInstances(input.medidas);
-  if (!pieces || !pieces.length) {
-    return null;
-  }
-  type Row = { yMm: number; usedWidthMm: number; heightMm: number; count: number };
-  type State = {
-    rows: Row[];
-    placements: GranFormatoImposicionPlacement[];
-  };
-
-  const resolveNextRowY = (rows: Row[]) => {
-    if (!rows.length) {
-      return input.marginStartMm;
-    }
-    const last = rows[rows.length - 1];
-    return last.yMm + last.heightMm + input.separacionVerticalMm;
-  };
-
-  const measureState = (state: State) => {
-    const contentHeightMm = state.rows.reduce((acc, row) => acc + row.heightMm, 0);
-    const verticalGapsMm =
-      state.rows.length > 1 ? (state.rows.length - 1) * input.separacionVerticalMm : 0;
-    const consumedContentLengthMm = contentHeightMm + verticalGapsMm;
-    const placedAreaMm2 = state.placements.reduce(
-      (acc, placement) => acc + placement.originalWidthMm * placement.originalHeightMm,
-      0,
-    );
-    const wasteProxyMm2 = input.printableWidthMm * consumedContentLengthMm - placedAreaMm2;
-    return { consumedContentLengthMm, wasteProxyMm2 };
-  };
-
-  let states: State[] = [{ rows: [], placements: [] }];
-
-  for (const piece of pieces) {
-    const orientations = [
-      {
-        widthMm: piece.widthMm,
-        heightMm: piece.heightMm,
-        rotated: false,
-      },
-      ...(input.permitirRotacion && piece.widthMm !== piece.heightMm
-        ? [
-            {
-              widthMm: piece.heightMm,
-              heightMm: piece.widthMm,
-              rotated: true,
-            },
-          ]
-        : []),
-    ];
-
-    const nextStates: State[] = [];
-
-    for (const state of states) {
-      for (const option of orientations) {
-        if (option.widthMm > input.printableWidthMm) {
-          continue;
-        }
-        for (const [rowIndex, row] of state.rows.entries()) {
-          const nextWidth =
-            row.usedWidthMm === 0
-              ? option.widthMm
-              : row.usedWidthMm + input.separacionHorizontalMm + option.widthMm;
-          if (nextWidth > input.printableWidthMm) {
-            continue;
-          }
-          const rows = state.rows.map((item) => ({ ...item }));
-          const targetRow = rows[rowIndex];
-          const xMm =
-            targetRow.usedWidthMm === 0
-              ? input.marginLeftMm
-              : input.marginLeftMm + targetRow.usedWidthMm + input.separacionHorizontalMm;
-          targetRow.usedWidthMm = nextWidth;
-          targetRow.heightMm = Math.max(targetRow.heightMm, option.heightMm);
-          targetRow.count += 1;
-          nextStates.push({
-            rows,
-            placements: [
-              ...state.placements,
-                {
-                  id: piece.id,
-                  widthMm: option.widthMm,
-                heightMm: option.heightMm,
-                centerXMm: xMm + option.widthMm / 2,
-                centerYMm: targetRow.yMm + option.heightMm / 2,
-                label: `${Math.round(piece.originalWidthMm / 10)}x${Math.round(
-                  piece.originalHeightMm / 10,
-                )} cm`,
-                  rotated: option.rotated,
-                  originalWidthMm: piece.originalWidthMm,
-                  originalHeightMm: piece.originalHeightMm,
-                  panelIndex: piece.panelIndex,
-                  panelCount: piece.panelCount,
-                  panelAxis: piece.panelAxis,
-                  sourcePieceId: piece.sourcePieceId,
-                  usefulWidthMm: piece.usefulWidthMm ?? piece.widthMm,
-                  usefulHeightMm: piece.usefulHeightMm ?? piece.heightMm,
-                  overlapStartMm: piece.overlapStartMm ?? 0,
-                  overlapEndMm: piece.overlapEndMm ?? 0,
-                },
-              ],
-            });
-        }
-
-        const rows = state.rows.map((item) => ({ ...item }));
-        const newRow: Row = {
-          yMm: resolveNextRowY(rows),
-          usedWidthMm: option.widthMm,
-          heightMm: option.heightMm,
-          count: 1,
-        };
-        rows.push(newRow);
-        nextStates.push({
-          rows,
-          placements: [
-            ...state.placements,
-              {
-                id: piece.id,
-                widthMm: option.widthMm,
-              heightMm: option.heightMm,
-              centerXMm: input.marginLeftMm + option.widthMm / 2,
-              centerYMm: newRow.yMm + option.heightMm / 2,
-              label: `${Math.round(piece.originalWidthMm / 10)}x${Math.round(
-                piece.originalHeightMm / 10,
-              )} cm`,
-                rotated: option.rotated,
-                originalWidthMm: piece.originalWidthMm,
-                originalHeightMm: piece.originalHeightMm,
-                panelIndex: piece.panelIndex,
-                panelCount: piece.panelCount,
-                panelAxis: piece.panelAxis,
-                sourcePieceId: piece.sourcePieceId,
-                usefulWidthMm: piece.usefulWidthMm ?? piece.widthMm,
-                usefulHeightMm: piece.usefulHeightMm ?? piece.heightMm,
-                overlapStartMm: piece.overlapStartMm ?? 0,
-                overlapEndMm: piece.overlapEndMm ?? 0,
-              },
-            ],
-          });
-      }
-    }
-
-    if (!nextStates.length) {
-      return null;
-    }
-
-    states = nextStates
-      .sort((a, b) => {
-        const left = measureState(a);
-        const right = measureState(b);
-        return (
-          left.consumedContentLengthMm - right.consumedContentLengthMm ||
-          left.wasteProxyMm2 - right.wasteProxyMm2 ||
-          a.rows.length - b.rows.length
-        );
-      })
-      .slice(0, 12);
-  }
-
-  const bestState = [...states].sort((a, b) => {
-    const left = measureState(a);
-    const right = measureState(b);
-    return (
-      left.consumedContentLengthMm - right.consumedContentLengthMm ||
-      left.wasteProxyMm2 - right.wasteProxyMm2 ||
-      a.rows.length - b.rows.length
-    );
-  })[0];
-
-  const contentHeightMm = bestState.rows.reduce((acc, row) => acc + row.heightMm, 0);
-  const verticalGapsMm =
-    bestState.rows.length > 1 ? (bestState.rows.length - 1) * input.separacionVerticalMm : 0;
-  const consumedLengthMm = input.marginStartMm + input.marginEndMm + contentHeightMm + verticalGapsMm;
-  const usefulAreaM2 = input.medidas.reduce(
-    (acc, item) => acc + ((item.anchoMm * item.altoMm) / 1_000_000) * item.cantidad,
-    0,
-  );
-  const { rows: rowCount, piecesPerRow } = countGranFormatoRowsAndPiecesPerRow(
-    bestState.placements,
-    Math.max(1, input.separacionVerticalMm / 2),
-  );
-
-    return {
-      orientacion: buildGranFormatoNestingOrientacion(bestState.placements),
-      panelizado: input.panelizado?.activo === true,
-      panelAxis: input.panelizado?.activo ? input.panelizado.axis : null,
-      panelCount:
-        bestState.placements.reduce((max, item) => Math.max(max, item.panelCount ?? 1), 1),
-      panelOverlapMm: input.panelizado?.activo ? input.panelizado.overlapMm : null,
-      panelMaxWidthMm: input.panelizado?.activo ? input.panelizado.maxPanelWidthMm : null,
-      panelDistribution: input.panelizado?.activo ? input.panelizado.distribution : null,
-      panelWidthInterpretation: input.panelizado?.activo ? input.panelizado.widthInterpretation : null,
-      panelMode: input.panelizado?.activo ? input.panelizado.mode : null,
-      piecesPerRow,
-      rows: rowCount,
-      consumedLengthMm,
-    usefulAreaM2,
-    placements: bestState.placements,
-  };
 }
 
 function renderGranFormatoMaterialDisplay(item: GranFormatoCostosResponse["materiasPrimas"][number]) {
@@ -1654,14 +1162,20 @@ export function WideFormatProductDetail({
   const [imposicionConfig, setImposicionConfig] = React.useState<GranFormatoImposicionConfig>(
     defaultGranFormatoImposicionConfig,
   );
+  const [isSimulatingImposicion, startSimulatingImposicion] = React.useTransition();
   const [imposicionSimulationConfig, setImposicionSimulationConfig] =
     React.useState<GranFormatoImposicionConfig | null>(null);
+  const [imposicionPreviewResult, setImposicionPreviewResult] =
+    React.useState<GranFormatoImposicionPreviewResultState>(
+      createEmptyImposicionPreviewResult("Todavía no ejecutaste una simulación de imposición."),
+    );
   const [savedImposicionSnapshot, setSavedImposicionSnapshot] = React.useState(
     normalizeImposicionSnapshot(defaultGranFormatoImposicionConfig),
   );
   const [showImposicionOverrides, setShowImposicionOverrides] = React.useState(false);
   const [isImposicion3dOpen, setIsImposicion3dOpen] = React.useState(false);
   const [isPanelEditorOpen, setIsPanelEditorOpen] = React.useState(false);
+  const [panelEditorContext, setPanelEditorContext] = React.useState<"imposicion" | "costos">("imposicion");
   const [panelEditorDraft, setPanelEditorDraft] = React.useState<GranFormatoPanelManualLayout | null>(null);
   const [panelEditorSelectedPieceId, setPanelEditorSelectedPieceId] = React.useState("");
   const [panelEditorDragIndex, setPanelEditorDragIndex] = React.useState<number | null>(null);
@@ -1690,16 +1204,13 @@ export function WideFormatProductDetail({
   const [costosMedidas, setCostosMedidas] = React.useState<GranFormatoImposicionConfig["medidas"]>(
     [createGranFormatoImposicionMedida()],
   );
-  const [costosPanelizadoOverride, setCostosPanelizadoOverride] = React.useState(false);
-  const [costosPanelizadoActivo, setCostosPanelizadoActivo] = React.useState(false);
-  const [costosPanelizadoDireccion, setCostosPanelizadoDireccion] =
-    React.useState<GranFormatoPanelizadoDireccion>("automatica");
-  const [costosPanelizadoSolapeMm, setCostosPanelizadoSolapeMm] = React.useState<number | null>(null);
-  const [costosPanelizadoAnchoMaxPanelMm, setCostosPanelizadoAnchoMaxPanelMm] = React.useState<number | null>(null);
-  const [costosPanelizadoDistribucion, setCostosPanelizadoDistribucion] =
-    React.useState<GranFormatoPanelizadoDistribucion>("equilibrada");
-  const [costosPanelizadoInterpretacionAnchoMaximo, setCostosPanelizadoInterpretacionAnchoMaximo] =
-    React.useState<GranFormatoPanelizadoInterpretacionAnchoMaximo>("total");
+  const [costosPanelizadoModo, setCostosPanelizadoModo] =
+    React.useState<GranFormatoPanelizadoModo>("automatico");
+  const [costosPanelizadoManualLayout, setCostosPanelizadoManualLayout] =
+    React.useState<GranFormatoPanelManualLayout | null>(null);
+  const [costosPanelizadoEsTemporal, setCostosPanelizadoEsTemporal] = React.useState(false);
+  const [costosPanelizadoPrintableWidthMm, setCostosPanelizadoPrintableWidthMm] =
+    React.useState<number | null>(null);
   const [costosChecklistRespuestas, setCostosChecklistRespuestas] = React.useState<
     Record<string, { respuestaId: string }>
   >({});
@@ -1729,39 +1240,14 @@ export function WideFormatProductDetail({
   const [impuestosEditorOpen, setImpuestosEditorOpen] = React.useState(false);
   const [impuestosEditorDraft, setImpuestosEditorDraft] = React.useState<ProductoImpuestoCatalogo | null>(null);
 
-  const hydrateWideFormatSnapshot = React.useCallback(
-    (snapshotId: string, createdAt: string, cantidad: number, resultado: Record<string, unknown>) => {
-      const base = resultado as GranFormatoCostosResponse;
-      return {
-        ...base,
-        snapshotId,
-        createdAt,
-        cantidadTotal: Number(base.cantidadTotal ?? cantidad ?? 0),
-      } satisfies GranFormatoCostosResponse;
-    },
-    [],
-  );
-
   const loadGranFormatoSnapshots = React.useCallback(
     async (productoId: string) => {
       const snapshots = await getCotizacionesProductoServicio(productoId);
       setCostosSnapshots(snapshots);
-      const latestSnapshot = snapshots[0];
-      if (!latestSnapshot) {
-        setCostosPreview(null);
-        return;
-      }
-      const detalle = await getCotizacionProductoById(latestSnapshot.id);
-      setCostosPreview(
-        hydrateWideFormatSnapshot(
-          detalle.id,
-          detalle.createdAt,
-          detalle.cantidad,
-          detalle.resultado as Record<string, unknown>,
-        ),
-      );
+      setCostosPreview(null);
+      setCostosPanelizadoPrintableWidthMm(null);
     },
-    [hydrateWideFormatSnapshot],
+    [],
   );
 
   const loadGranFormatoConfig = React.useCallback(async () => {
@@ -1811,8 +1297,19 @@ export function WideFormatProductDetail({
       );
       setCostosTecnologia(nextImposicion.tecnologiaDefault ?? "");
       setCostosPerfilOverrideId("");
+      setCostosPanelizadoModo(nextImposicion.panelizadoModo ?? "automatico");
+      setCostosPanelizadoManualLayout(
+        nextImposicion.panelizadoManualLayout
+          ? cloneGranFormatoImposicionConfig(nextImposicion).panelizadoManualLayout
+          : null,
+      );
+      setCostosPanelizadoEsTemporal(false);
+      setCostosPanelizadoPrintableWidthMm(null);
       setCostosPreview(null);
       setImposicionSimulationConfig(null);
+      setImposicionPreviewResult(
+        createEmptyImposicionPreviewResult("Todavía no ejecutaste una simulación de imposición."),
+      );
       setSavedImposicionSnapshot(
         normalizeImposicionSnapshot({
           ...nextImposicion,
@@ -2078,256 +1575,6 @@ export function WideFormatProductDetail({
         : availableMaterialVariants,
     [availableMaterialVariants, materialesCompatiblesIds],
   );
-  const previewImposicionConfig = imposicionSimulationConfig;
-  const imposicionPreviewResult = React.useMemo<{
-    items: GranFormatoImposicionPreviewItem[];
-    rejected: Array<{
-      variant: (typeof imposicionMaterialVariants)[number];
-      reason: string;
-    }>;
-    machineIssue: string | null;
-  }>(() => {
-    if (!previewImposicionConfig) {
-      return {
-        items: [] as GranFormatoImposicionPreviewItem[],
-        rejected: [] as Array<{
-          variant: (typeof imposicionMaterialVariants)[number];
-          reason: string;
-        }>,
-        machineIssue: "Todavía no ejecutaste una simulación de imposición.",
-      };
-    }
-    const medidas = previewImposicionConfig.medidas.filter(
-      (item) => (item.anchoMm ?? 0) > 0 && (item.altoMm ?? 0) > 0,
-    );
-    if (!imposicionMachine || medidas.length === 0) {
-      return {
-        items: [] as GranFormatoImposicionPreviewItem[],
-        rejected: [] as Array<{
-          variant: (typeof imposicionMaterialVariants)[number];
-          reason: string;
-        }>,
-        machineIssue:
-          !imposicionMachine
-            ? "Seleccioná una máquina compatible para evaluar la imposición."
-            : "Completá al menos una medida válida para simular la imposición.",
-      };
-    }
-
-    const printableWidthMmMax = readMachinePrintableWidthMm(imposicionMachine);
-    if (!printableWidthMmMax || printableWidthMmMax <= 0) {
-      return {
-        items: [] as GranFormatoImposicionPreviewItem[],
-        rejected: imposicionMaterialVariants.map((variant) => ({
-          variant,
-          reason: "La máquina no tiene ancho máximo imprimible configurado.",
-        })),
-        machineIssue: "La máquina seleccionada no tiene ancho máximo imprimible válido.",
-      };
-    }
-
-    const marginLeftMm =
-      previewImposicionConfig.margenLateralIzquierdoMmOverride ??
-      readMachineMarginMm(imposicionMachine, "margenLateralIzquierdoNoImprimible") ??
-      readMachineMarginMm(imposicionMachine, "margenIzquierdo") ??
-      0;
-    const marginRightMm =
-      previewImposicionConfig.margenLateralDerechoMmOverride ??
-      readMachineMarginMm(imposicionMachine, "margenLateralDerechoNoImprimible") ??
-      readMachineMarginMm(imposicionMachine, "margenDerecho") ??
-      0;
-    const marginStartMm =
-      previewImposicionConfig.margenInicioMmOverride ??
-      readMachineMarginMm(imposicionMachine, "margenInicioNoImprimible") ??
-      readMachineMarginMm(imposicionMachine, "margenSuperior") ??
-      0;
-    const marginEndMm =
-      previewImposicionConfig.margenFinalMmOverride ??
-      readMachineMarginMm(imposicionMachine, "margenFinalNoImprimible") ??
-      readMachineMarginMm(imposicionMachine, "margenInferior") ??
-      0;
-
-    const acceptedNormal: GranFormatoImposicionPreviewItem[] = [];
-    const acceptedPanelizados: GranFormatoImposicionPreviewItem[] = [];
-    const rejectedNormal: Array<{
-      variant: (typeof imposicionMaterialVariants)[number];
-      reason: string;
-    }> = [];
-
-    for (const variant of imposicionMaterialVariants) {
-        const rollWidthMm = readMaterialVariantWidthMm(variant.atributosVariante);
-        if (!rollWidthMm || rollWidthMm <= 0) {
-          rejectedNormal.push({
-            variant,
-            reason: "La variante no tiene un ancho de rollo técnico válido.",
-          });
-          continue;
-        }
-
-        const machineLimitedWidthMm = Math.min(rollWidthMm, printableWidthMmMax);
-        const printableWidthMm = machineLimitedWidthMm - marginLeftMm - marginRightMm;
-        if (printableWidthMm <= 0) {
-          rejectedNormal.push({
-            variant,
-            reason: "Los márgenes no imprimibles consumen todo el ancho disponible.",
-          });
-          continue;
-        }
-
-        const baseInput = {
-          printableWidthMm,
-          marginLeftMm,
-          marginStartMm,
-          marginEndMm,
-          separacionHorizontalMm: previewImposicionConfig.separacionHorizontalMm,
-          separacionVerticalMm: previewImposicionConfig.separacionVerticalMm,
-          permitirRotacion: previewImposicionConfig.permitirRotacion,
-          medidas: medidas.map((item) => ({
-            anchoMm: item.anchoMm ?? 0,
-            altoMm: item.altoMm ?? 0,
-            cantidad: item.cantidad,
-          })),
-        };
-        const layout = evaluateGranFormatoMixedShelfLayout(baseInput);
-
-        if (!layout) {
-          rejectedNormal.push({
-            variant,
-            reason: "La pieza no entra en este ancho de rollo con la configuración actual.",
-          });
-          if (previewImposicionConfig.panelizadoActivo) {
-            const overlapMm = Math.max(0, previewImposicionConfig.panelizadoSolapeMm ?? 0);
-            const maxPanelWidthMm = Math.max(0, previewImposicionConfig.panelizadoAnchoMaxPanelMm ?? 0);
-            const directions =
-              previewImposicionConfig.panelizadoModo === "manual"
-                ? (["vertical"] as const)
-                : previewImposicionConfig.panelizadoDireccion === "automatica"
-                ? (["vertical", "horizontal"] as const)
-                : [previewImposicionConfig.panelizadoDireccion];
-            for (const axis of directions) {
-              if (maxPanelWidthMm <= 0) {
-                continue;
-              }
-              const panelizedLayout = evaluateGranFormatoMixedShelfLayout({
-                ...baseInput,
-                panelizado: {
-                  activo: true,
-                  mode: previewImposicionConfig.panelizadoModo,
-                  axis,
-                  overlapMm,
-                  maxPanelWidthMm,
-                  distribution: previewImposicionConfig.panelizadoDistribucion,
-                  widthInterpretation: previewImposicionConfig.panelizadoInterpretacionAnchoMaximo,
-                  manualLayout: previewImposicionConfig.panelizadoManualLayout,
-                },
-              });
-              if (!panelizedLayout) {
-                continue;
-              }
-              const panelizedConsumedAreaM2 = (rollWidthMm * panelizedLayout.consumedLengthMm) / 1_000_000;
-              const panelizedWasteAreaM2 = Math.max(0, panelizedConsumedAreaM2 - panelizedLayout.usefulAreaM2);
-              const costoUnitarioEstimado = Number(variant.precioReferencia ?? 0);
-              const estimatedCostTotal =
-                costoUnitarioEstimado > 0
-                  ? Number((panelizedConsumedAreaM2 * costoUnitarioEstimado).toFixed(6))
-                  : panelizedConsumedAreaM2;
-              acceptedPanelizados.push({
-                variant,
-                rollWidthMm,
-                machineLimitedWidthMm,
-                printableWidthMm,
-                marginLeftMm,
-                marginRightMm,
-                marginStartMm,
-                marginEndMm,
-                orientacion: panelizedLayout.orientacion,
-                panelizado: true,
-                panelAxis: panelizedLayout.panelAxis,
-                panelCount: panelizedLayout.panelCount,
-                panelOverlapMm: panelizedLayout.panelOverlapMm,
-                panelMaxWidthMm: panelizedLayout.panelMaxWidthMm,
-                panelDistribution: panelizedLayout.panelDistribution,
-                panelWidthInterpretation: panelizedLayout.panelWidthInterpretation,
-                panelMode: panelizedLayout.panelMode,
-                piecesPerRow: panelizedLayout.piecesPerRow,
-                rows: panelizedLayout.rows,
-                consumedLengthMm: panelizedLayout.consumedLengthMm,
-                usefulAreaM2: panelizedLayout.usefulAreaM2,
-                consumedAreaM2: panelizedConsumedAreaM2,
-                wasteAreaM2: panelizedWasteAreaM2,
-                wastePct: panelizedConsumedAreaM2 > 0 ? (panelizedWasteAreaM2 / panelizedConsumedAreaM2) * 100 : 0,
-                placements: panelizedLayout.placements,
-                estimatedCostTotal,
-              });
-            }
-          }
-          continue;
-        }
-        const consumedAreaM2 = (rollWidthMm * layout.consumedLengthMm) / 1_000_000;
-        const wasteAreaM2 = Math.max(0, consumedAreaM2 - layout.usefulAreaM2);
-        const costoUnitarioEstimado = Number(variant.precioReferencia ?? 0);
-        const estimatedCostTotal =
-          costoUnitarioEstimado > 0 ? Number((consumedAreaM2 * costoUnitarioEstimado).toFixed(6)) : consumedAreaM2;
-
-        acceptedNormal.push({
-          variant,
-          rollWidthMm,
-          machineLimitedWidthMm,
-          printableWidthMm,
-          marginLeftMm,
-          marginRightMm,
-          marginStartMm,
-          marginEndMm,
-          orientacion: layout.orientacion,
-          panelizado: false,
-          panelAxis: null,
-          panelCount: 1,
-          panelOverlapMm: null,
-          panelMaxWidthMm: null,
-          panelDistribution: null,
-          panelWidthInterpretation: null,
-          panelMode: null,
-          piecesPerRow: layout.piecesPerRow,
-          rows: layout.rows,
-          consumedLengthMm: layout.consumedLengthMm,
-          usefulAreaM2: layout.usefulAreaM2,
-          consumedAreaM2,
-          wasteAreaM2,
-          wastePct: consumedAreaM2 > 0 ? (wasteAreaM2 / consumedAreaM2) * 100 : 0,
-          placements: layout.placements,
-          estimatedCostTotal,
-        });
-      }
-
-    const accepted =
-      acceptedNormal.length > 0
-        ? acceptedNormal
-        : Array.from(
-            acceptedPanelizados.reduce((map, item) => {
-              const current = map.get(item.variant.id);
-              if (
-                !current ||
-                compareGranFormatoPreviewItems(
-                  item,
-                  current,
-                  previewImposicionConfig.criterioOptimizacion,
-                ) < 0
-              ) {
-                map.set(item.variant.id, item);
-              }
-              return map;
-            }, new Map<string, GranFormatoImposicionPreviewItem>()),
-          ).map(([, item]) => item);
-    const rejected = acceptedNormal.length > 0 ? rejectedNormal : rejectedNormal;
-
-    return {
-      items: accepted.sort((a, b) => {
-        return compareGranFormatoPreviewItems(a, b, previewImposicionConfig.criterioOptimizacion);
-      }),
-      rejected,
-      machineIssue: null as string | null,
-    };
-  }, [imposicionMachine, imposicionMaterialVariants, previewImposicionConfig]);
   const imposicionPreview = imposicionPreviewResult.items;
   const imposicionRejectedVariants = imposicionPreviewResult.rejected;
   const imposicionBestCandidate = imposicionPreview[0] ?? null;
@@ -2335,9 +1582,19 @@ export function WideFormatProductDetail({
     () => imposicionConfig.panelizadoManualLayout ?? buildManualLayoutFromPlacements(imposicionBestCandidate?.placements ?? []),
     [imposicionBestCandidate?.placements, imposicionConfig.panelizadoManualLayout],
   );
+  const costosManualLayoutActual = React.useMemo(
+    () =>
+      costosPanelizadoManualLayout ??
+      buildManualLayoutFromNestingPieces(costosPreview?.nestingPreview?.pieces ?? []),
+    [costosPanelizadoManualLayout, costosPreview?.nestingPreview?.pieces],
+  );
+  const panelEditorBaseLayout = React.useMemo(
+    () => (panelEditorContext === "costos" ? costosManualLayoutActual : imposicionManualLayoutActual),
+    [costosManualLayoutActual, imposicionManualLayoutActual, panelEditorContext],
+  );
   const panelEditorPieces = React.useMemo(
-    () => panelEditorDraft?.items ?? imposicionManualLayoutActual?.items ?? [],
-    [imposicionManualLayoutActual?.items, panelEditorDraft?.items],
+    () => panelEditorDraft?.items ?? panelEditorBaseLayout?.items ?? [],
+    [panelEditorBaseLayout?.items, panelEditorDraft?.items],
   );
   const panelEditorSelectedPiece = React.useMemo(
     () =>
@@ -2357,7 +1614,10 @@ export function WideFormatProductDetail({
       setPanelEditorSelectedPieceId(panelEditorPieces[0]?.sourcePieceId ?? "");
     }
   }, [panelEditorPieces, panelEditorSelectedPieceId]);
-  const panelEditorPrintableWidthMm = imposicionBestCandidate?.printableWidthMm ?? 0;
+  const panelEditorPrintableWidthMm =
+    panelEditorContext === "costos"
+      ? (costosPanelizadoPrintableWidthMm ?? costosPreview?.resumenTecnico.anchoImprimibleMm ?? 0)
+      : (imposicionBestCandidate?.printableWidthMm ?? 0);
   const panelEditorAllValid = React.useMemo(() => {
     if (!panelEditorDraft) {
       return true;
@@ -2756,23 +2016,18 @@ export function WideFormatProductDetail({
   }, [checklistCotizadorGranFormato]);
 
   React.useEffect(() => {
-    if (costosPanelizadoOverride) {
+    if (costosPanelizadoEsTemporal) {
       return;
     }
-    setCostosPanelizadoActivo(imposicionConfig.panelizadoActivo);
-    setCostosPanelizadoDireccion(imposicionConfig.panelizadoDireccion);
-    setCostosPanelizadoSolapeMm(imposicionConfig.panelizadoSolapeMm);
-    setCostosPanelizadoAnchoMaxPanelMm(imposicionConfig.panelizadoAnchoMaxPanelMm);
-    setCostosPanelizadoDistribucion(imposicionConfig.panelizadoDistribucion);
-    setCostosPanelizadoInterpretacionAnchoMaximo(imposicionConfig.panelizadoInterpretacionAnchoMaximo);
+    setCostosPanelizadoModo(imposicionConfig.panelizadoModo ?? "automatico");
+    setCostosPanelizadoManualLayout(
+      imposicionConfig.panelizadoManualLayout
+        ? cloneGranFormatoImposicionConfig(imposicionConfig).panelizadoManualLayout
+        : null,
+    );
   }, [
-    costosPanelizadoOverride,
-    imposicionConfig.panelizadoActivo,
-    imposicionConfig.panelizadoAnchoMaxPanelMm,
-    imposicionConfig.panelizadoDireccion,
-    imposicionConfig.panelizadoDistribucion,
-    imposicionConfig.panelizadoInterpretacionAnchoMaximo,
-    imposicionConfig.panelizadoSolapeMm,
+    costosPanelizadoEsTemporal,
+    imposicionConfig,
   ]);
 
   React.useEffect(() => {
@@ -3723,6 +2978,109 @@ export function WideFormatProductDetail({
     });
   };
 
+  const handleSimularImposicion = () => {
+    const nextConfig = cloneGranFormatoImposicionConfig(imposicionConfig);
+    setImposicionSimulationConfig(nextConfig);
+
+    const medidasValidas = nextConfig.medidas.filter(
+      (item) => (item.anchoMm ?? 0) > 0 && (item.altoMm ?? 0) > 0 && (item.cantidad ?? 0) > 0,
+    );
+    if (!medidasValidas.length) {
+      setImposicionPreviewResult(
+        createEmptyImposicionPreviewResult("Completá al menos una medida válida para simular la imposición."),
+      );
+      toast.error("Completá al menos una medida válida para simular la imposición.");
+      return;
+    }
+    if (!imposicionMachine) {
+      setImposicionPreviewResult(
+        createEmptyImposicionPreviewResult("Seleccioná una máquina compatible para evaluar la imposición."),
+      );
+      toast.error("Seleccioná una máquina compatible para simular la imposición.");
+      return;
+    }
+
+    startSimulatingImposicion(async () => {
+      try {
+        const result = await previewGranFormatoCostos(productoState.id, {
+          periodo: costosPeriodo,
+          tecnologia: nextConfig.tecnologiaDefault ?? undefined,
+          persistirSnapshot: false,
+          incluirCandidatos: true,
+          medidas: medidasValidas.map((item) => ({
+            anchoMm: item.anchoMm ?? 0,
+            altoMm: item.altoMm ?? 0,
+            cantidad: item.cantidad ?? 1,
+          })),
+          panelizado: {
+            activo: nextConfig.panelizadoActivo,
+            modo: nextConfig.panelizadoModo,
+            direccion: nextConfig.panelizadoDireccion,
+            solapeMm: nextConfig.panelizadoSolapeMm,
+            anchoMaxPanelMm: nextConfig.panelizadoAnchoMaxPanelMm,
+            distribucion: nextConfig.panelizadoDistribucion,
+            interpretacionAnchoMaximo: nextConfig.panelizadoInterpretacionAnchoMaximo,
+            manualLayout:
+              nextConfig.panelizadoModo === "manual" ? nextConfig.panelizadoManualLayout : null,
+          },
+        });
+
+        const variantById = new Map(imposicionMaterialVariants.map((item) => [item.id, item]));
+        const items: GranFormatoImposicionPreviewItem[] = (result.candidatos ?? [])
+          .map((candidate) => {
+            const variant = variantById.get(candidate.variantId);
+            if (!variant) {
+              return null;
+            }
+            return {
+              variant,
+              rollWidthMm: candidate.rollWidthMm,
+              machineLimitedWidthMm:
+                candidate.printableWidthMm + candidate.marginLeftMm + candidate.marginRightMm,
+              printableWidthMm: candidate.printableWidthMm,
+              marginLeftMm: candidate.marginLeftMm,
+              marginRightMm: candidate.marginRightMm,
+              marginStartMm: candidate.marginStartMm,
+              marginEndMm: candidate.marginEndMm,
+              orientacion: candidate.orientacion,
+              panelizado: candidate.panelizado,
+              panelAxis: candidate.panelAxis,
+              panelCount: candidate.panelCount,
+              panelOverlapMm: candidate.panelOverlapMm,
+              panelMaxWidthMm: candidate.panelMaxWidthMm,
+              panelDistribution: candidate.panelDistribution,
+              panelWidthInterpretation: candidate.panelWidthInterpretation,
+              panelMode: candidate.panelMode,
+              piecesPerRow: candidate.piecesPerRow,
+              rows: candidate.rows,
+              consumedLengthMm: candidate.consumedLengthMm,
+              usefulAreaM2: candidate.usefulAreaM2,
+              consumedAreaM2: candidate.consumedAreaM2,
+              wasteAreaM2: candidate.wasteAreaM2,
+              wastePct: candidate.wastePct,
+              placements: candidate.placements,
+              estimatedCostTotal: candidate.totalCost,
+            };
+          })
+          .filter((item): item is GranFormatoImposicionPreviewItem => Boolean(item));
+
+        setImposicionPreviewResult({
+          items,
+          rejected: [],
+          machineIssue:
+            items.length > 0
+              ? null
+              : "No se pudo resolver la imposición con la configuración actual.",
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "No se pudo simular la imposición.";
+        setImposicionPreviewResult(createEmptyImposicionPreviewResult(message));
+        toast.error(message);
+      }
+    });
+  };
+
   const handleCalcularCostos = () => {
     if (checklistDirty) {
       toast.error("Guardá primero los cambios de Ruta de opcionales para costear con el orden real de la ruta.");
@@ -3759,23 +3117,24 @@ export function WideFormatProductDetail({
               respuestaId: value.respuestaId,
             })),
           panelizado: {
-            activo: costosPanelizadoActivo,
+            activo: imposicionConfig.panelizadoActivo,
             modo:
-              imposicionConfig.panelizadoModo === "manual" && imposicionConfig.panelizadoManualLayout
+              costosPanelizadoModo === "manual" && costosPanelizadoManualLayout
                 ? "manual"
                 : "automatico",
-            direccion: costosPanelizadoDireccion,
-            solapeMm: costosPanelizadoSolapeMm,
-            anchoMaxPanelMm: costosPanelizadoAnchoMaxPanelMm,
-            distribucion: costosPanelizadoDistribucion,
-            interpretacionAnchoMaximo: costosPanelizadoInterpretacionAnchoMaximo,
+            direccion: imposicionConfig.panelizadoDireccion,
+            solapeMm: imposicionConfig.panelizadoSolapeMm,
+            anchoMaxPanelMm: imposicionConfig.panelizadoAnchoMaxPanelMm,
+            distribucion: imposicionConfig.panelizadoDistribucion,
+            interpretacionAnchoMaximo: imposicionConfig.panelizadoInterpretacionAnchoMaximo,
             manualLayout:
-              imposicionConfig.panelizadoModo === "manual"
-                ? imposicionConfig.panelizadoManualLayout
+              costosPanelizadoModo === "manual"
+                ? costosPanelizadoManualLayout
                 : null,
           },
         });
         setCostosPreview(result);
+        setCostosPanelizadoPrintableWidthMm(result.resumenTecnico.anchoImprimibleMm ?? null);
         const snapshots = await getCotizacionesProductoServicio(productoState.id);
         setCostosSnapshots(snapshots);
         toast.success("Costos calculados.");
@@ -3785,7 +3144,7 @@ export function WideFormatProductDetail({
     });
   };
 
-  const openPanelEditor = () => {
+  const openImposicionPanelEditor = () => {
     if (!imposicionBestCandidate?.panelizado) {
       return;
     }
@@ -3797,6 +3156,20 @@ export function WideFormatProductDetail({
       toast.error("No hay paneles disponibles para editar.");
       return;
     }
+    setPanelEditorContext("imposicion");
+    setPanelEditorDraft(layout);
+    setPanelEditorSelectedPieceId(layout.items[0]?.sourcePieceId ?? "");
+    setPanelEditorDragIndex(null);
+    setIsPanelEditorOpen(true);
+  };
+
+  const openCostosPanelEditor = () => {
+    const layout = costosManualLayoutActual;
+    if (!layout) {
+      toast.error("Simulá primero un costo con panelizado para poder editar los paneles.");
+      return;
+    }
+    setPanelEditorContext("costos");
     setPanelEditorDraft(layout);
     setPanelEditorSelectedPieceId(layout.items[0]?.sourcePieceId ?? "");
     setPanelEditorDragIndex(null);
@@ -3893,6 +3266,15 @@ export function WideFormatProductDetail({
       toast.error("El layout manual tiene paneles inválidos.");
       return;
     }
+    if (panelEditorContext === "costos") {
+      setCostosPanelizadoModo("manual");
+      setCostosPanelizadoManualLayout(panelEditorDraft);
+      setCostosPanelizadoEsTemporal(true);
+      setCostosPreview(null);
+      setIsPanelEditorOpen(false);
+      toast.success("Panelizado manual temporal aplicado. Ejecutá Simular costo para recalcular.");
+      return;
+    }
     const nextConfig: GranFormatoImposicionConfig = {
       ...imposicionConfig,
       panelizadoModo: "manual",
@@ -3905,6 +3287,25 @@ export function WideFormatProductDetail({
   };
 
   const restoreAutomaticPanelLayout = () => {
+    if (panelEditorContext === "costos") {
+      setPanelEditorDraft(
+        imposicionConfig.panelizadoManualLayout
+          ? cloneGranFormatoImposicionConfig(imposicionConfig).panelizadoManualLayout
+          : buildManualLayoutFromNestingPieces(costosPreview?.nestingPreview?.pieces ?? []),
+      );
+      setCostosPanelizadoModo(imposicionConfig.panelizadoModo ?? "automatico");
+      setCostosPanelizadoManualLayout(
+        imposicionConfig.panelizadoManualLayout
+          ? cloneGranFormatoImposicionConfig(imposicionConfig).panelizadoManualLayout
+          : null,
+      );
+      setCostosPanelizadoEsTemporal(false);
+      setCostosPreview(null);
+      setIsPanelEditorOpen(false);
+      setPanelEditorDragIndex(null);
+      toast.success("Se quitó la edición manual temporal del costo.");
+      return;
+    }
     const nextConfig: GranFormatoImposicionConfig = {
       ...imposicionConfig,
       panelizadoModo: "automatico",
@@ -4982,15 +4383,18 @@ export function WideFormatProductDetail({
                             />
                           </div>
                           <div className="space-y-2">
-                            <p className="text-xs text-muted-foreground">Ancho máximo de panel (mm)</p>
+                            <p className="text-xs text-muted-foreground">Ancho máximo de panel (cm)</p>
                             <Input
                               type="number"
                               min={1}
-                              value={imposicionConfig.panelizadoAnchoMaxPanelMm ?? ""}
+                              step="0.1"
+                              value={formatMmAsCm(imposicionConfig.panelizadoAnchoMaxPanelMm)}
                               onChange={(event) =>
                                 setImposicionConfig((prev) => ({
                                   ...prev,
-                                  panelizadoAnchoMaxPanelMm: event.target.value ? Math.max(1, Number(event.target.value)) : null,
+                                  panelizadoAnchoMaxPanelMm: event.target.value
+                                    ? Math.max(1, Number(event.target.value) * 10)
+                                    : null,
                                 }))
                               }
                             />
@@ -5172,7 +4576,8 @@ export function WideFormatProductDetail({
                     <Button
                       type="button"
                       className="gap-2 self-start bg-orange-500 text-white hover:bg-orange-500/90"
-                      onClick={() => setImposicionSimulationConfig(cloneGranFormatoImposicionConfig(imposicionConfig))}
+                      disabled={isSimulatingImposicion}
+                      onClick={handleSimularImposicion}
                     >
                       <PrinterIcon className="size-4" />
                       Simular imposición
@@ -5184,36 +4589,23 @@ export function WideFormatProductDetail({
                     <div>
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-semibold">Medidas a evaluar</p>
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="gap-2 bg-orange-500 text-white hover:bg-orange-500/90"
-                          onClick={() =>
-                            setImposicionConfig((prev) => ({
-                              ...prev,
-                              medidas: [...prev.medidas, createGranFormatoImposicionMedida()],
-                            }))
-                          }
-                        >
-                          <PlusIcon />
-                          Agregar medida
-                        </Button>
                       </div>
                       <p className="mt-2 text-sm text-muted-foreground">
                         Ingresá una o varias medidas y el sistema comparará variantes de rollo para detectar la alternativa más conveniente.
                       </p>
                     </div>
                     <div className="mt-4 space-y-3">
-                      <div className="hidden gap-3 px-3 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_auto]">
+                      <div className="hidden gap-3 px-3 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_auto_auto]">
                         <p className="text-xs font-medium text-muted-foreground">Ancho (cm)</p>
                         <p className="text-xs font-medium text-muted-foreground">Alto (cm)</p>
                         <p className="text-xs font-medium text-muted-foreground">Cantidad</p>
+                        <span />
                         <span />
                       </div>
                       {imposicionConfig.medidas.map((medida, index) => (
                         <div
                           key={`medida-${index}`}
-                          className="grid gap-3 rounded-lg border bg-background p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_auto] md:items-end"
+                          className="grid gap-3 rounded-lg border bg-background p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_auto_auto] md:items-end"
                         >
                           <div className="space-y-2">
                             <p className="text-xs text-muted-foreground md:hidden">Ancho (cm)</p>
@@ -5294,6 +4686,22 @@ export function WideFormatProductDetail({
                                 })
                               }
                             />
+                          </div>
+                          <div className="flex md:justify-end">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Agregar nueva medida"
+                              onClick={() =>
+                                setImposicionConfig((prev) => ({
+                                  ...prev,
+                                  medidas: [...prev.medidas, createGranFormatoImposicionMedida()],
+                                }))
+                              }
+                            >
+                              <PlusIcon className="size-4" />
+                            </Button>
                           </div>
                           <div className="flex md:justify-end">
                             <Button
@@ -5423,7 +4831,7 @@ export function WideFormatProductDetail({
                                   size="sm"
                                   variant="outline"
                                   className="gap-2"
-                                  onClick={openPanelEditor}
+                                  onClick={openImposicionPanelEditor}
                                 >
                                   <PencilIcon className="size-4" />
                                   Editar paneles
@@ -5551,7 +4959,9 @@ export function WideFormatProductDetail({
             <SheetHeader>
               <SheetTitle>Editor visual de paneles</SheetTitle>
               <SheetDescription>
-                Ajustá manualmente las divisiones del panelizado. Cuando apliques los cambios, este layout pasa a ser la fuente de verdad para imposición, nesting 3D y costos.
+                {panelEditorContext === "costos"
+                  ? "Ajustá manualmente las divisiones para esta simulación puntual. Los cambios afectarán nesting, desperdicio y costo cuando vuelvas a simular, pero no modificarán la configuración base del producto."
+                  : "Ajustá manualmente las divisiones del panelizado. Cuando apliques los cambios, este layout pasa a ser la configuración manual base del producto."}
               </SheetDescription>
             </SheetHeader>
             <div className="flex h-full flex-col gap-4 overflow-hidden px-4 pb-4">
@@ -5561,11 +4971,13 @@ export function WideFormatProductDetail({
                 </div>
               ) : (
                 <>
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-xl border bg-muted/10 p-3">
                       <p className="text-xs text-muted-foreground">Modo actual</p>
                       <p className="mt-1 text-sm font-semibold">
-                        {imposicionConfig.panelizadoModo === "manual" ? "Manual" : "Automático"}
+                        {getPanelizadoModoLabel(
+                          panelEditorContext === "costos" ? costosPanelizadoModo : imposicionConfig.panelizadoModo,
+                        )}
                       </p>
                     </div>
                     <div className="rounded-xl border bg-muted/10 p-3">
@@ -5644,7 +5056,7 @@ export function WideFormatProductDetail({
                           <div
                             ref={panelEditorCanvasRef}
                             className={cn(
-                              "relative flex w-full max-w-[820px] overflow-visible rounded-2xl border-2 border-dashed border-orange-200 bg-white p-2 shadow-sm select-none",
+                              "relative flex w-full max-w-[820px] overflow-visible border-2 border-dashed border-orange-200 bg-white p-2 shadow-sm select-none",
                               panelEditorSelectedPiece.axis === "vertical"
                                 ? "min-h-[260px] flex-row items-stretch"
                                 : "min-h-[420px] max-w-[420px] flex-col items-stretch",
@@ -5697,111 +5109,115 @@ export function WideFormatProductDetail({
                               return (
                                 <React.Fragment key={`${panelEditorSelectedPiece.sourcePieceId}-${panel.panelIndex}`}>
                                   <div
-                                    className={cn(
-                                      "relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border",
-                                      panelValid
-                                        ? "border-zinc-200 bg-zinc-50"
-                                        : "border-red-300 bg-red-50",
-                                    )}
+                                    className="relative flex min-h-0 min-w-0"
                                     style={{ flexGrow: Math.max(totalForFlex, 1), flexBasis: 0 }}
                                   >
-                                    {panelEditorSelectedPiece.axis === "vertical" ? (
-                                      <>
-                                        {panel.overlapStartMm > 0 ? (
-                                          <div
-                                            className="absolute inset-y-0 left-0 bg-orange-200/80"
-                                            style={{ width: `${overlapStartPct}%` }}
-                                          />
-                                        ) : null}
-                                        {panel.overlapEndMm > 0 ? (
-                                          <div
-                                            className="absolute inset-y-0 right-0 bg-orange-200/80"
-                                            style={{ width: `${overlapEndPct}%` }}
-                                          />
-                                        ) : null}
-                                        <div
-                                          className="absolute inset-y-2 rounded-lg border border-cyan-300/50 bg-cyan-200/35"
-                                          style={{
-                                            left: `${overlapStartPct}%`,
-                                            right: `${overlapEndPct}%`,
-                                          }}
-                                        />
-                                      </>
-                                    ) : (
-                                      <>
-                                        {panel.overlapStartMm > 0 ? (
-                                          <div
-                                            className="absolute inset-x-0 top-0 bg-orange-200/80"
-                                            style={{ height: `${overlapStartPct}%` }}
-                                          />
-                                        ) : null}
-                                        {panel.overlapEndMm > 0 ? (
-                                          <div
-                                            className="absolute inset-x-0 bottom-0 bg-orange-200/80"
-                                            style={{ height: `${overlapEndPct}%` }}
-                                          />
-                                        ) : null}
-                                        <div
-                                          className="absolute inset-x-2 rounded-lg border border-cyan-300/50 bg-cyan-200/35"
-                                          style={{
-                                            top: `${overlapStartPct}%`,
-                                            bottom: `${overlapEndPct}%`,
-                                          }}
-                                        />
-                                      </>
-                                    )}
-
-                                    <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-2 p-3 text-center">
-                                      <Badge variant="outline" className="bg-white/80">
-                                        {`Panel ${panel.panelIndex}`}
-                                      </Badge>
-                                      <div className="space-y-1">
-                                        <p className="text-sm font-semibold">
-                                          Útil:{" "}
-                                          {panelEditorSelectedPiece.axis === "vertical"
-                                            ? `${formatMmAsCm(panel.usefulWidthMm)} × ${formatMmAsCm(panel.usefulHeightMm)} cm`
-                                            : `${formatMmAsCm(panel.usefulWidthMm)} × ${formatMmAsCm(panel.usefulHeightMm)} cm`}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground">
-                                          Final: {formatMmAsCm(panel.finalWidthMm)} × {formatMmAsCm(panel.finalHeightMm)} cm
-                                        </p>
-                                      </div>
-                                      {!panelValid ? (
-                                        <p className="text-xs font-medium text-red-600">
-                                          {withinConfiguredLimit
-                                            ? withinPrintableWidth
-                                              ? "Panel menor al mínimo técnico"
-                                              : "No entra en el ancho imprimible"
-                                            : "Supera el ancho máximo configurado"}
-                                        </p>
-                                      ) : null}
-                                    </div>
-                                  </div>
-                                  {index < panelEditorSelectedPiece.panels.length - 1 ? (
-                                    <button
-                                      type="button"
-                                      aria-label={`Mover divisor entre panel ${panel.panelIndex} y panel ${panel.panelIndex + 1}`}
+                                    <div
                                       className={cn(
-                                        "relative shrink-0 rounded-full border border-orange-300 bg-orange-100/90 transition hover:bg-orange-200",
-                                        panelEditorSelectedPiece.axis === "vertical"
-                                          ? "mx-1 my-auto h-full max-h-[72px] w-3 cursor-col-resize"
-                                          : "mx-auto my-1 h-3 w-full max-w-[72px] cursor-row-resize",
+                                        "relative flex min-h-0 min-w-0 flex-1 overflow-hidden border",
+                                        panelValid
+                                          ? "border-zinc-200 bg-zinc-50"
+                                          : "border-red-300 bg-red-50",
                                       )}
-                                      onMouseDown={(event) => {
-                                        event.preventDefault();
-                                        setPanelEditorDragIndex(index);
-                                      }}
                                     >
-                                      <span
+                                      {panelEditorSelectedPiece.axis === "vertical" ? (
+                                        <>
+                                          {panel.overlapStartMm > 0 ? (
+                                            <div
+                                              className="absolute inset-y-0 left-0 bg-orange-200/80"
+                                              style={{ width: `${overlapStartPct}%` }}
+                                            />
+                                          ) : null}
+                                          {panel.overlapEndMm > 0 ? (
+                                            <div
+                                              className="absolute inset-y-0 right-0 bg-orange-200/80"
+                                              style={{ width: `${overlapEndPct}%` }}
+                                            />
+                                          ) : null}
+                                          <div
+                                            className="absolute inset-y-0 border border-cyan-300/50 bg-cyan-200/35"
+                                            style={{
+                                              left: `${overlapStartPct}%`,
+                                              right: `${overlapEndPct}%`,
+                                            }}
+                                          />
+                                        </>
+                                      ) : (
+                                        <>
+                                          {panel.overlapStartMm > 0 ? (
+                                            <div
+                                              className="absolute inset-x-0 top-0 bg-orange-200/80"
+                                              style={{ height: `${overlapStartPct}%` }}
+                                            />
+                                          ) : null}
+                                          {panel.overlapEndMm > 0 ? (
+                                            <div
+                                              className="absolute inset-x-0 bottom-0 bg-orange-200/80"
+                                              style={{ height: `${overlapEndPct}%` }}
+                                            />
+                                          ) : null}
+                                          <div
+                                            className="absolute inset-x-0 border border-cyan-300/50 bg-cyan-200/35"
+                                            style={{
+                                              top: `${overlapStartPct}%`,
+                                              bottom: `${overlapEndPct}%`,
+                                            }}
+                                          />
+                                        </>
+                                      )}
+
+                                      <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-2 p-3 text-center">
+                                        <Badge variant="outline" className="bg-white/80">
+                                          {`Panel ${panel.panelIndex}`}
+                                        </Badge>
+                                        <div className="space-y-1">
+                                          <p className="text-sm font-semibold">
+                                            Útil:{" "}
+                                            {panelEditorSelectedPiece.axis === "vertical"
+                                              ? `${formatMmAsCm(panel.usefulWidthMm)} × ${formatMmAsCm(panel.usefulHeightMm)} cm`
+                                              : `${formatMmAsCm(panel.usefulWidthMm)} × ${formatMmAsCm(panel.usefulHeightMm)} cm`}
+                                          </p>
+                                          <p className="text-xs text-muted-foreground">
+                                            Final: {formatMmAsCm(panel.finalWidthMm)} × {formatMmAsCm(panel.finalHeightMm)} cm
+                                          </p>
+                                        </div>
+                                        {!panelValid ? (
+                                          <p className="text-xs font-medium text-red-600">
+                                            {withinConfiguredLimit
+                                              ? withinPrintableWidth
+                                                ? "Panel menor al mínimo técnico"
+                                                : "No entra en el ancho imprimible"
+                                              : "Supera el ancho máximo configurado"}
+                                          </p>
+                                        ) : null}
+                                      </div>
+                                    </div>
+                                    {index < panelEditorSelectedPiece.panels.length - 1 ? (
+                                      <button
+                                        type="button"
+                                        aria-label={`Mover divisor entre panel ${panel.panelIndex} y panel ${panel.panelIndex + 1}`}
                                         className={cn(
-                                          "absolute rounded-full bg-orange-500",
+                                          "absolute z-20 border-0 bg-transparent transition",
                                           panelEditorSelectedPiece.axis === "vertical"
-                                            ? "left-1/2 top-1/2 h-8 w-1 -translate-x-1/2 -translate-y-1/2"
-                                            : "left-1/2 top-1/2 h-1 w-8 -translate-x-1/2 -translate-y-1/2",
+                                            ? "-right-2 top-0 h-full w-4 cursor-col-resize"
+                                            : "-bottom-2 left-0 h-4 w-full cursor-row-resize",
                                         )}
-                                      />
-                                    </button>
-                                  ) : null}
+                                        onMouseDown={(event) => {
+                                          event.preventDefault();
+                                          setPanelEditorDragIndex(index);
+                                        }}
+                                      >
+                                        <span
+                                          className={cn(
+                                            "absolute bg-orange-500 shadow-[0_0_0_2px_rgba(255,255,255,0.9)]",
+                                            panelEditorSelectedPiece.axis === "vertical"
+                                              ? "left-1/2 top-1/2 h-16 w-[3px] -translate-x-1/2 -translate-y-1/2"
+                                              : "left-1/2 top-1/2 h-[3px] w-16 -translate-x-1/2 -translate-y-1/2",
+                                          )}
+                                        />
+                                      </button>
+                                    ) : null}
+                                  </div>
                                 </React.Fragment>
                               );
                             })}
@@ -5811,8 +5227,8 @@ export function WideFormatProductDetail({
                     </div>
 
                     <div className="flex min-h-0 flex-col gap-4">
-                      <div className="rounded-xl border bg-muted/10 p-4">
-                        <p className="text-sm font-semibold">Configuración usada</p>
+                    <div className="rounded-xl border bg-muted/10 p-4">
+                      <p className="text-sm font-semibold">Configuración usada</p>
                         <div className="mt-3 space-y-2 text-sm">
                           <div className="flex items-start justify-between gap-3">
                             <span className="text-muted-foreground">Distribución</span>
@@ -5844,6 +5260,12 @@ export function WideFormatProductDetail({
                               {panelEditorAllValid ? "Válido" : "Revisar paneles"}
                             </span>
                           </div>
+                          {panelEditorContext === "costos" ? (
+                            <div className="flex items-start justify-between gap-3">
+                              <span className="text-muted-foreground">Destino</span>
+                              <span className="text-right font-medium">Sólo esta simulación</span>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
 
@@ -5899,7 +5321,7 @@ export function WideFormatProductDetail({
 
                   <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
                     <Button type="button" variant="outline" onClick={restoreAutomaticPanelLayout}>
-                      Restablecer automático
+                      {panelEditorContext === "costos" ? "Quitar edición manual" : "Restablecer automático"}
                     </Button>
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -5918,7 +5340,9 @@ export function WideFormatProductDetail({
                         onClick={applyPanelEditor}
                         disabled={!panelEditorAllValid}
                       >
-                        Aplicar panelizado manual
+                        {panelEditorContext === "costos"
+                          ? "Aplicar a esta simulación"
+                          : "Aplicar panelizado manual"}
                       </Button>
                     </div>
                   </div>
@@ -6112,29 +5536,19 @@ export function WideFormatProductDetail({
                   <div className="rounded-lg border p-3">
                     <div className="mb-3 flex items-center justify-between gap-2">
                       <p className="text-sm font-medium">Medidas del trabajo</p>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="gap-2 bg-orange-500 text-white hover:bg-orange-500/90"
-                        onClick={() =>
-                          setCostosMedidas((prev) => [...prev, createGranFormatoImposicionMedida()])
-                        }
-                      >
-                        <PlusIcon className="size-4" />
-                        Agregar medida
-                      </Button>
                     </div>
                     <div className="space-y-2">
-                      <div className="hidden gap-2 px-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px]">
+                      <div className="hidden gap-2 px-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px_40px]">
                         <span>Ancho (cm)</span>
                         <span>Alto (cm)</span>
                         <span>Cantidad</span>
+                        <span />
                         <span />
                       </div>
                       {costosMedidas.map((medida, index) => (
                         <div
                           key={`costos-medida-${index}`}
-                          className="grid gap-2 rounded-lg border p-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px]"
+                          className="grid gap-2 rounded-lg border p-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px_40px]"
                         >
                           <Field>
                             <Input
@@ -6195,6 +5609,19 @@ export function WideFormatProductDetail({
                               }}
                             />
                           </Field>
+                          <div className="flex items-end">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Agregar nueva medida"
+                              onClick={() =>
+                                setCostosMedidas((prev) => [...prev, createGranFormatoImposicionMedida()])
+                              }
+                            >
+                              <PlusIcon className="size-4" />
+                            </Button>
+                          </div>
                           <div className="flex items-end">
                             <Button
                               type="button"
@@ -6261,146 +5688,42 @@ export function WideFormatProductDetail({
                           onChange={(event) => setCostosPeriodo(event.target.value)}
                         />
                       </div>
-
-                      <div className="rounded-lg border p-3 sm:col-span-2">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-medium">Panelizado</p>
-                            <p className="text-xs text-muted-foreground">
-                              Usa por default la configuración técnica del producto y permite override para esta simulación.
-                            </p>
-                          </div>
-                          <Switch
-                            checked={costosPanelizadoOverride}
-                            onCheckedChange={(checked) => {
-                              setCostosPanelizadoOverride(Boolean(checked));
-                              if (!checked) {
-                                setCostosPanelizadoActivo(imposicionConfig.panelizadoActivo);
-                                setCostosPanelizadoDireccion(imposicionConfig.panelizadoDireccion);
-                                setCostosPanelizadoSolapeMm(imposicionConfig.panelizadoSolapeMm);
-                                setCostosPanelizadoAnchoMaxPanelMm(imposicionConfig.panelizadoAnchoMaxPanelMm);
-                                setCostosPanelizadoDistribucion(imposicionConfig.panelizadoDistribucion);
-                                setCostosPanelizadoInterpretacionAnchoMaximo(
-                                  imposicionConfig.panelizadoInterpretacionAnchoMaximo,
-                                );
-                              }
-                            }}
-                          />
-                        </div>
-                        <div className="mt-3 grid gap-3 md:grid-cols-4">
-                          <div className="flex items-center justify-between rounded-lg border px-3 py-2 md:col-span-4">
-                            <div>
-                              <p className="text-sm font-medium">Activo</p>
-                              <p className="text-xs text-muted-foreground">
-                                Si está apagado, esta simulación nunca intentará panelizar.
-                              </p>
-                            </div>
-                            <Switch checked={costosPanelizadoActivo} onCheckedChange={setCostosPanelizadoActivo} />
-                          </div>
-                          <div className="space-y-2">
-                            <p className="text-xs text-muted-foreground">Dirección</p>
-                            <Select
-                              value={costosPanelizadoDireccion ?? "automatica"}
-                              onValueChange={(value) =>
-                                setCostosPanelizadoDireccion(value as GranFormatoPanelizadoDireccion)
-                              }
-                              disabled={!costosPanelizadoActivo}
-                            >
-                              <SelectTrigger>
-                                <SelectValue>
-                                  {panelizadoDireccionItems.find(
-                                    (item) => item.value === (costosPanelizadoDireccion ?? "automatica"),
-                                  )?.label ?? "Automática"}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                {panelizadoDireccionItems.map((item) => (
-                                  <SelectItem key={item.value} value={item.value}>
-                                    {item.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <p className="text-xs text-muted-foreground">Solape (mm)</p>
-                            <Input
-                              type="number"
-                              min={0}
-                              value={costosPanelizadoSolapeMm ?? ""}
-                              onChange={(event) => setCostosPanelizadoSolapeMm(event.target.value ? Math.max(0, Number(event.target.value)) : null)}
-                              disabled={!costosPanelizadoActivo}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <p className="text-xs text-muted-foreground">Ancho máx. panel (mm)</p>
-                            <Input
-                              type="number"
-                              min={1}
-                              value={costosPanelizadoAnchoMaxPanelMm ?? ""}
-                              onChange={(event) =>
-                                setCostosPanelizadoAnchoMaxPanelMm(event.target.value ? Math.max(1, Number(event.target.value)) : null)
-                              }
-                              disabled={!costosPanelizadoActivo}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <p className="text-xs text-muted-foreground">Distribución</p>
-                            <Select
-                              value={costosPanelizadoDistribucion ?? "equilibrada"}
-                              onValueChange={(value) =>
-                                setCostosPanelizadoDistribucion(value as GranFormatoPanelizadoDistribucion)
-                              }
-                              disabled={!costosPanelizadoActivo}
-                            >
-                              <SelectTrigger>
-                                <SelectValue>
-                                  {panelizadoDistribucionItems.find(
-                                    (item) => item.value === (costosPanelizadoDistribucion ?? "equilibrada"),
-                                  )?.label ?? "Equilibrada"}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                {panelizadoDistribucionItems.map((item) => (
-                                  <SelectItem key={item.value} value={item.value}>
-                                    {item.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2 md:col-span-2">
-                            <p className="text-xs text-muted-foreground">Interpretar ancho máximo como</p>
-                            <Select
-                              value={costosPanelizadoInterpretacionAnchoMaximo ?? "total"}
-                              onValueChange={(value) =>
-                                setCostosPanelizadoInterpretacionAnchoMaximo(
-                                  value as GranFormatoPanelizadoInterpretacionAnchoMaximo,
-                                )
-                              }
-                              disabled={!costosPanelizadoActivo}
-                            >
-                              <SelectTrigger>
-                                <SelectValue>
-                                  {panelizadoInterpretacionItems.find(
-                                    (item) => item.value === (costosPanelizadoInterpretacionAnchoMaximo ?? "total"),
-                                  )?.label ?? "Ancho total del panel"}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                {panelizadoInterpretacionItems.map((item) => (
-                                  <SelectItem key={item.value} value={item.value}>
-                                    {item.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 </div>
+
+                {costosPanelizadoEsTemporal ? (
+                  <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="font-medium">Panelizado manual para esta simulación</p>
+                      <p>Este ajuste es temporal y no modifica Imposición. Ejecutá Simular costo para recalcular con este layout.</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" size="sm" variant="outline" onClick={openCostosPanelEditor}>
+                        <PencilIcon className="size-4" />
+                        Editar paneles
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setCostosPanelizadoModo(imposicionConfig.panelizadoModo ?? "automatico");
+                          setCostosPanelizadoManualLayout(
+                            imposicionConfig.panelizadoManualLayout
+                              ? cloneGranFormatoImposicionConfig(imposicionConfig).panelizadoManualLayout
+                              : null,
+                          );
+                          setCostosPanelizadoEsTemporal(false);
+                          setCostosPreview(null);
+                          toast.success("Se quitó la edición manual temporal del costo.");
+                        }}
+                      >
+                        Quitar edición manual
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="rounded-lg border p-3">
                   <p className="mb-2 text-sm font-medium">Opcionales para costear</p>
@@ -6411,7 +5734,13 @@ export function WideFormatProductDetail({
                   />
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-2">
+                  {costosPanelizadoModo === "manual" && costosPanelizadoManualLayout ? (
+                    <Button type="button" variant="outline" onClick={openCostosPanelEditor}>
+                      <PencilIcon className="size-4" />
+                      Editar paneles
+                    </Button>
+                  ) : null}
                   <Button type="button" onClick={handleCalcularCostos} disabled={isCalculatingCosts || checklistDirty}>
                     {isCalculatingCosts ? <GdiSpinner className="size-4" data-icon="inline-start" /> : null}
                     Simular costo
@@ -6439,10 +5768,27 @@ export function WideFormatProductDetail({
               <>
                 <Card>
                   <CardHeader>
-                    <CardTitle>Resumen técnico</CardTitle>
-                    <CardDescription>
-                      Candidato elegido para costear material, tinta y tiempo operativo.
-                    </CardDescription>
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <CardTitle>Resumen técnico</CardTitle>
+                        <CardDescription>
+                          Candidato elegido para costear material, tinta y tiempo operativo.
+                        </CardDescription>
+                      </div>
+                      {(costosPreview.resumenTecnico.panelizado || costosPanelizadoModo === "manual") ? (
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" size="sm" variant="outline" onClick={openCostosPanelEditor}>
+                            <PencilIcon className="size-4" />
+                            Editar paneles
+                          </Button>
+                          {costosPanelizadoEsTemporal ? (
+                            <Badge variant="outline" className="bg-white">
+                              Manual temporal
+                            </Badge>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="flex flex-wrap gap-2">

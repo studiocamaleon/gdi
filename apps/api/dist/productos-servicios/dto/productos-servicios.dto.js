@@ -1916,6 +1916,8 @@ class PreviewGranFormatoCostosDto {
     periodo;
     tecnologia;
     perfilOverrideId;
+    persistirSnapshot;
+    incluirCandidatos;
     medidas;
     checklistRespuestas;
     panelizado;
@@ -1937,6 +1939,16 @@ __decorate([
     (0, class_validator_1.IsUUID)(),
     __metadata("design:type", String)
 ], PreviewGranFormatoCostosDto.prototype, "perfilOverrideId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], PreviewGranFormatoCostosDto.prototype, "persistirSnapshot", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], PreviewGranFormatoCostosDto.prototype, "incluirCandidatos", void 0);
 __decorate([
     (0, class_validator_1.IsArray)(),
     (0, class_validator_1.ArrayMinSize)(1),

@@ -478,6 +478,8 @@ export declare class PreviewGranFormatoCostosDto {
     periodo?: string;
     tecnologia?: string;
     perfilOverrideId?: string;
+    persistirSnapshot?: boolean;
+    incluirCandidatos?: boolean;
     medidas: PreviewGranFormatoCostoMedidaDto[];
     checklistRespuestas?: CotizarChecklistRespuestaDto[];
     panelizado?: {

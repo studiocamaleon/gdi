@@ -772,6 +772,8 @@ export type PreviewGranFormatoCostosPayload = {
   periodo?: string;
   tecnologia?: string;
   perfilOverrideId?: string;
+  persistirSnapshot?: boolean;
+  incluirCandidatos?: boolean;
   medidas: PreviewGranFormatoCostoMedida[];
   checklistRespuestas?: Array<{
     preguntaId: string;
@@ -787,6 +789,55 @@ export type PreviewGranFormatoCostosPayload = {
     interpretacionAnchoMaximo?: GranFormatoPanelizadoInterpretacionAnchoMaximo | null;
     manualLayout?: GranFormatoPanelManualLayout | null;
   };
+};
+
+export type GranFormatoCostosCandidateResumen = {
+  variantId: string;
+  rollWidthMm: number;
+  printableWidthMm: number;
+  marginLeftMm: number;
+  marginRightMm: number;
+  marginStartMm: number;
+  marginEndMm: number;
+  orientacion: "normal" | "rotada" | "mixta";
+  panelizado: boolean;
+  panelAxis: "vertical" | "horizontal" | null;
+  panelCount: number;
+  panelOverlapMm: number | null;
+  panelMaxWidthMm: number | null;
+  panelDistribution: GranFormatoPanelizadoDistribucion | null;
+  panelWidthInterpretation: GranFormatoPanelizadoInterpretacionAnchoMaximo | null;
+  panelMode: GranFormatoPanelizadoModo | null;
+  piecesPerRow: number;
+  rows: number;
+  consumedLengthMm: number;
+  usefulAreaM2: number;
+  consumedAreaM2: number;
+  wasteAreaM2: number;
+  wastePct: number;
+  substrateCost: number;
+  inkCost: number;
+  timeCost: number;
+  totalCost: number;
+  placements: Array<{
+    id: string;
+    widthMm: number;
+    heightMm: number;
+    usefulWidthMm: number;
+    usefulHeightMm: number;
+    overlapStartMm: number;
+    overlapEndMm: number;
+    centerXMm: number;
+    centerYMm: number;
+    label: string;
+    rotated: boolean;
+    originalWidthMm: number;
+    originalHeightMm: number;
+    panelIndex: number | null;
+    panelCount: number | null;
+    panelAxis: "vertical" | "horizontal" | null;
+    sourcePieceId: string | null;
+  }>;
 };
 
 export type GranFormatoCostosNestingPiece = {
@@ -908,6 +959,7 @@ export type GranFormatoCostosResponse = {
     tecnico: number;
   };
   nestingPreview: GranFormatoCostosNestingPreview | null;
+  candidatos?: GranFormatoCostosCandidateResumen[];
 };
 
 export type CotizacionProductoSnapshotResumen = {

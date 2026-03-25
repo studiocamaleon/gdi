@@ -1374,6 +1374,14 @@ export class PreviewGranFormatoCostosDto {
   @IsUUID()
   perfilOverrideId?: string;
 
+  @IsOptional()
+  @IsBoolean()
+  persistirSnapshot?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  incluirCandidatos?: boolean;
+
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(200)

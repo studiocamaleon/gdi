@@ -1471,6 +1471,8 @@ export class ProductosServiciosService {
       throw new BadRequestException('Debes ingresar al menos una medida válida para calcular costos.');
     }
     const cantidadTotal = medidas.reduce((acc, item) => acc + Number(item.cantidad || 0), 0);
+    const persistirSnapshot = payload.persistirSnapshot !== false;
+    const incluirCandidatos = payload.incluirCandidatos === true;
 
     const periodo = payload.periodo?.trim() || this.getDefaultTarifaPeriodo();
     if (!DEFAULT_PERIOD_REGEX.test(periodo)) {
@@ -2218,6 +2220,39 @@ export class ProductosServiciosService {
         a.candidate.consumedLengthMm - b.candidate.consumedLengthMm,
     )[0];
 
+    const candidatosResumen = incluirCandidatos
+      ? Array.from(
+          costedCandidates.reduce((map, row) => {
+            const current = map.get(row.candidate.variant.id);
+            if (
+              !current ||
+              row.candidate.totalCost < current.candidate.totalCost ||
+              (row.candidate.totalCost === current.candidate.totalCost &&
+                (row.candidate.wasteAreaM2 < current.candidate.wasteAreaM2 ||
+                  (row.candidate.wasteAreaM2 === current.candidate.wasteAreaM2 &&
+                    row.candidate.consumedLengthMm < current.candidate.consumedLengthMm)))
+            ) {
+              map.set(row.candidate.variant.id, row);
+            }
+            return map;
+          }, new Map<string, (typeof costedCandidates)[number]>()),
+        )
+          .map(([, row]) => this.buildGranFormatoCostosCandidateResumen(row.candidate))
+          .sort(
+            (a, b) =>
+              a.totalCost - b.totalCost ||
+              a.wasteAreaM2 - b.wasteAreaM2 ||
+              a.consumedLengthMm - b.consumedLengthMm,
+          )
+      : undefined;
+
+    if (!persistirSnapshot) {
+      return {
+        ...winner.response,
+        candidatos: candidatosResumen,
+      };
+    }
+
     const snapshot = await this.prisma.cotizacionProductoSnapshot.create({
       data: {
         tenantId: auth.tenantId,
@@ -2254,6 +2289,7 @@ export class ProductosServiciosService {
 
     return {
       ...winner.response,
+      candidatos: candidatosResumen,
       snapshotId: snapshot.id,
       createdAt: snapshot.createdAt.toISOString(),
     };
@@ -11612,6 +11648,57 @@ export class ProductosServiciosService {
         sourcePieceId: item.sourcePieceId,
         overlapStart: Number((item.overlapStartMm / 10).toFixed(2)),
         overlapEnd: Number((item.overlapEndMm / 10).toFixed(2)),
+      })),
+    };
+  }
+
+  private buildGranFormatoCostosCandidateResumen(candidate: GranFormatoCostosPreviewCandidate) {
+    return {
+      variantId: candidate.variant.id,
+      rollWidthMm: candidate.rollWidthMm,
+      printableWidthMm: candidate.printableWidthMm,
+      marginLeftMm: candidate.marginLeftMm,
+      marginRightMm: candidate.marginRightMm,
+      marginStartMm: candidate.marginStartMm,
+      marginEndMm: candidate.marginEndMm,
+      orientacion: candidate.orientacion,
+      panelizado: candidate.panelizado,
+      panelAxis: candidate.panelAxis,
+      panelCount: candidate.panelCount,
+      panelOverlapMm: candidate.panelOverlapMm,
+      panelMaxWidthMm: candidate.panelMaxWidthMm,
+      panelDistribution: candidate.panelDistribution,
+      panelWidthInterpretation: candidate.panelWidthInterpretation,
+      panelMode: candidate.panelMode,
+      piecesPerRow: candidate.piecesPerRow,
+      rows: candidate.rows,
+      consumedLengthMm: candidate.consumedLengthMm,
+      usefulAreaM2: Number(candidate.usefulAreaM2.toFixed(6)),
+      consumedAreaM2: Number(candidate.consumedAreaM2.toFixed(6)),
+      wasteAreaM2: Number(candidate.wasteAreaM2.toFixed(6)),
+      wastePct: Number(candidate.wastePct.toFixed(4)),
+      substrateCost: Number(candidate.substrateCost.toFixed(6)),
+      inkCost: Number(candidate.inkCost.toFixed(6)),
+      timeCost: Number(candidate.timeCost.toFixed(6)),
+      totalCost: Number(candidate.totalCost.toFixed(6)),
+      placements: this.buildGranFormatoNestingPreview(candidate).pieces.map((item, index) => ({
+        id: candidate.placements[index]?.id ?? item.id,
+        widthMm: candidate.placements[index]?.widthMm ?? Math.round((item.w ?? 0) * 10),
+        heightMm: candidate.placements[index]?.heightMm ?? Math.round((item.h ?? 0) * 10),
+        usefulWidthMm: candidate.placements[index]?.usefulWidthMm ?? Math.round((item.usefulW ?? 0) * 10),
+        usefulHeightMm: candidate.placements[index]?.usefulHeightMm ?? Math.round((item.usefulH ?? 0) * 10),
+        overlapStartMm: candidate.placements[index]?.overlapStartMm ?? Math.round((item.overlapStart ?? 0) * 10),
+        overlapEndMm: candidate.placements[index]?.overlapEndMm ?? Math.round((item.overlapEnd ?? 0) * 10),
+        centerXMm: candidate.placements[index]?.centerXMm ?? 0,
+        centerYMm: candidate.placements[index]?.centerYMm ?? 0,
+        label: candidate.placements[index]?.label ?? item.label,
+        rotated: candidate.placements[index]?.rotated ?? Boolean(item.rotated),
+        originalWidthMm: candidate.placements[index]?.originalWidthMm ?? Math.round((item.usefulW ?? item.w ?? 0) * 10),
+        originalHeightMm: candidate.placements[index]?.originalHeightMm ?? Math.round((item.usefulH ?? item.h ?? 0) * 10),
+        panelIndex: candidate.placements[index]?.panelIndex ?? item.panelIndex ?? null,
+        panelCount: candidate.placements[index]?.panelCount ?? item.panelCount ?? null,
+        panelAxis: candidate.placements[index]?.panelAxis ?? item.panelAxis ?? null,
+        sourcePieceId: candidate.placements[index]?.sourcePieceId ?? item.sourcePieceId ?? null,
       })),
     };
   }
