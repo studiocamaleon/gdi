@@ -766,6 +766,10 @@ type GranFormatoImposicionPreviewResultState = {
     reason: string;
   }>;
   machineIssue: string | null;
+  medidasOriginales: GranFormatoCostosResponse["medidasOriginales"];
+  medidasEfectivas: GranFormatoCostosResponse["medidasEfectivas"];
+  mutacionesAplicadas: GranFormatoCostosResponse["mutacionesAplicadas"];
+  traceChecklist: GranFormatoCostosResponse["traceChecklist"];
 };
 
 function createEmptyImposicionPreviewResult(machineIssue: string | null): GranFormatoImposicionPreviewResultState {
@@ -773,6 +777,10 @@ function createEmptyImposicionPreviewResult(machineIssue: string | null): GranFo
     items: [],
     rejected: [],
     machineIssue,
+    medidasOriginales: [],
+    medidasEfectivas: [],
+    mutacionesAplicadas: [],
+    traceChecklist: [],
   };
 }
 
@@ -850,6 +858,29 @@ function createEmptyChecklist(productoId: string): ProductoChecklist {
   };
 }
 
+function formatMeasureSummary(
+  medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>,
+) {
+  if (!medidas.length) {
+    return "Sin medidas";
+  }
+  return medidas
+    .map((item) => `${formatMmAsCm(item.anchoMm)} × ${formatMmAsCm(item.altoMm)} cm × ${item.cantidad}`)
+    .join(" · ");
+}
+
+function formatChecklistMutationSummary(
+  item: GranFormatoCostosResponse["mutacionesAplicadas"][number],
+) {
+  const delta =
+    item.ejes === "ambos"
+      ? `${formatMmAsCm(item.deltaAnchoMm)} cm ancho y ${formatMmAsCm(item.deltaAltoMm)} cm alto`
+      : item.ejes === "ancho"
+        ? `${formatMmAsCm(item.deltaAnchoMm)} cm en ancho`
+        : `${formatMmAsCm(item.deltaAltoMm)} cm en alto`;
+  return `${item.respuesta}: +${formatMmAsCm(item.valorMmPorLado)} cm por lado (${delta})`;
+}
+
 function normalizeImposicionSnapshot(config: GranFormatoImposicionConfig) {
   return JSON.stringify({
     medidas: config.medidas.map((item) => ({
@@ -887,6 +918,18 @@ function normalizeImposicionSnapshot(config: GranFormatoImposicionConfig) {
         }
       : null,
   });
+}
+
+function normalizeChecklistCotizadorSnapshot(value: Record<string, { respuestaId: string }>) {
+  return JSON.stringify(
+    Object.entries(value)
+      .filter(([, item]) => Boolean(item?.respuestaId))
+      .map(([preguntaId, item]) => ({
+        preguntaId,
+        respuestaId: item.respuestaId,
+      }))
+      .sort((a, b) => a.preguntaId.localeCompare(b.preguntaId)),
+  );
 }
 
 function cloneGranFormatoImposicionConfig(config: GranFormatoImposicionConfig): GranFormatoImposicionConfig {
@@ -1214,6 +1257,11 @@ export function WideFormatProductDetail({
   const [costosChecklistRespuestas, setCostosChecklistRespuestas] = React.useState<
     Record<string, { respuestaId: string }>
   >({});
+  const [imposicionChecklistRespuestas, setImposicionChecklistRespuestas] = React.useState<
+    Record<string, { respuestaId: string }>
+  >({});
+  const [imposicionSimulationChecklistSnapshot, setImposicionSimulationChecklistSnapshot] =
+    React.useState<string | null>(null);
   const [costosPreview, setCostosPreview] = React.useState<GranFormatoCostosResponse | null>(null);
   const [costosSnapshots, setCostosSnapshots] = React.useState<CotizacionProductoSnapshotResumen[]>([]);
   const [costosSnapshotsOpen, setCostosSnapshotsOpen] = React.useState(false);
@@ -1520,9 +1568,14 @@ export function WideFormatProductDetail({
       imposicionSimulationConfig ? normalizeImposicionSnapshot(imposicionSimulationConfig) : null,
     [imposicionSimulationConfig],
   );
+  const imposicionChecklistSnapshot = React.useMemo(
+    () => normalizeChecklistCotizadorSnapshot(imposicionChecklistRespuestas),
+    [imposicionChecklistRespuestas],
+  );
   const isImposicionSimulationStale =
     hasImposicionSimulation &&
-    imposicionSimulationSnapshot !== normalizeImposicionSnapshot(imposicionConfig);
+    (imposicionSimulationSnapshot !== normalizeImposicionSnapshot(imposicionConfig) ||
+      imposicionSimulationChecklistSnapshot !== imposicionChecklistSnapshot);
   const imposicionPreviewConfig = imposicionSimulationConfig ?? imposicionConfig;
   const imposicionPreviewHasValidMeasures = imposicionPreviewConfig.medidas.some(
     (item) => (item.anchoMm ?? 0) > 0 && (item.altoMm ?? 0) > 0 && (item.cantidad ?? 0) > 0,
@@ -1756,6 +1809,18 @@ export function WideFormatProductDetail({
     checklistComun,
     checklistsPorTecnologia,
     costosTechnology,
+    producto.id,
+  ]);
+  const checklistCotizadorImposicion = React.useMemo(() => {
+    if (aplicaChecklistATodasLasTecnologias) {
+      return checklistComun;
+    }
+    return checklistsPorTecnologia[imposicionTechnology] ?? createEmptyChecklist(producto.id);
+  }, [
+    aplicaChecklistATodasLasTecnologias,
+    checklistComun,
+    checklistsPorTecnologia,
+    imposicionTechnology,
     producto.id,
   ]);
   const costosMaterialesAgrupados = React.useMemo(() => {
@@ -2020,6 +2085,10 @@ export function WideFormatProductDetail({
   React.useEffect(() => {
     setCostosChecklistRespuestas({});
   }, [checklistCotizadorGranFormato]);
+
+  React.useEffect(() => {
+    setImposicionChecklistRespuestas({});
+  }, [checklistCotizadorImposicion]);
 
   React.useEffect(() => {
     if (costosPanelizadoEsTemporal) {
@@ -3001,6 +3070,9 @@ export function WideFormatProductDetail({
       setImposicionConfig(effectiveConfig);
     }
     setImposicionSimulationConfig(effectiveConfig);
+    setImposicionSimulationChecklistSnapshot(
+      normalizeChecklistCotizadorSnapshot(imposicionChecklistRespuestas),
+    );
 
     const medidasValidas = effectiveConfig.medidas.filter(
       (item) => (item.anchoMm ?? 0) > 0 && (item.altoMm ?? 0) > 0 && (item.cantidad ?? 0) > 0,
@@ -3032,6 +3104,12 @@ export function WideFormatProductDetail({
             altoMm: item.altoMm ?? 0,
             cantidad: item.cantidad ?? 1,
           })),
+          checklistRespuestas: Object.entries(imposicionChecklistRespuestas)
+            .filter(([, value]) => Boolean(value?.respuestaId))
+            .map(([preguntaId, value]) => ({
+              preguntaId,
+              respuestaId: value.respuestaId,
+            })),
           panelizado: {
             activo: effectiveConfig.panelizadoActivo,
             modo: effectiveConfig.panelizadoModo,
@@ -3091,6 +3169,10 @@ export function WideFormatProductDetail({
             items.length > 0
               ? null
               : "No se pudo resolver la imposición con la configuración actual.",
+          medidasOriginales: result.medidasOriginales ?? [],
+          medidasEfectivas: result.medidasEfectivas ?? [],
+          mutacionesAplicadas: result.mutacionesAplicadas ?? [],
+          traceChecklist: result.traceChecklist ?? [],
         });
         if (shouldResetManualPanelLayout) {
           toast.info("La simulación se recalculó en automático desde cero.");
@@ -4757,6 +4839,20 @@ export function WideFormatProductDetail({
 
                   <div className="rounded-xl border bg-muted/10 p-4">
                     <div className="mb-4">
+                      <h4 className="text-sm font-semibold">Opcionales para simular</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Estas respuestas pueden sumar costos, materiales o modificar la medida efectiva del trabajo antes de imponer.
+                      </p>
+                    </div>
+                    <ProductoServicioChecklistCotizador
+                      checklist={checklistCotizadorImposicion}
+                      value={imposicionChecklistRespuestas}
+                      onChange={setImposicionChecklistRespuestas}
+                    />
+                  </div>
+
+                  <div className="rounded-xl border bg-muted/10 p-4">
+                    <div className="mb-4">
                       <h4 className="text-sm font-semibold">Preview por ancho de rollo</h4>
                       <p className="text-sm text-muted-foreground">
                         El sistema compara las variantes de material compatibles y muestra cuál conviene según el criterio configurado.
@@ -4780,6 +4876,21 @@ export function WideFormatProductDetail({
                       {isImposicionSimulationStale ? (
                         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                           Hay cambios sin simular. El preview corresponde a la última simulación ejecutada.
+                        </div>
+                      ) : null}
+                      {imposicionPreviewResult.medidasOriginales.length > 0 ? (
+                        <div className="rounded-lg border bg-background p-4 text-sm">
+                          <p><span className="font-medium">Original:</span> {formatMeasureSummary(imposicionPreviewResult.medidasOriginales)}</p>
+                          <p><span className="font-medium">Efectiva:</span> {formatMeasureSummary(imposicionPreviewResult.medidasEfectivas)}</p>
+                          {imposicionPreviewResult.mutacionesAplicadas.length > 0 ? (
+                            <div className="mt-2 space-y-1 text-muted-foreground">
+                              {imposicionPreviewResult.mutacionesAplicadas.map((item) => (
+                                <p key={`${item.reglaId}-${item.respuestaId}`}>{formatChecklistMutationSummary(item)}</p>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="mt-2 text-muted-foreground">No se aplicaron mutaciones sobre la medida.</p>
+                          )}
                         </div>
                       ) : null}
                       <div className="rounded-lg border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">
@@ -4807,6 +4918,21 @@ export function WideFormatProductDetail({
                       {isImposicionSimulationStale ? (
                         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                           Hay cambios sin simular. El resultado mostrado corresponde a la última simulación ejecutada.
+                        </div>
+                      ) : null}
+                      {imposicionPreviewResult.medidasOriginales.length > 0 ? (
+                        <div className="rounded-lg border bg-background p-4 text-sm">
+                          <p><span className="font-medium">Original:</span> {formatMeasureSummary(imposicionPreviewResult.medidasOriginales)}</p>
+                          <p><span className="font-medium">Efectiva:</span> {formatMeasureSummary(imposicionPreviewResult.medidasEfectivas)}</p>
+                          {imposicionPreviewResult.mutacionesAplicadas.length > 0 ? (
+                            <div className="mt-2 space-y-1 text-muted-foreground">
+                              {imposicionPreviewResult.mutacionesAplicadas.map((item) => (
+                                <p key={`${item.reglaId}-${item.respuestaId}`}>{formatChecklistMutationSummary(item)}</p>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="mt-2 text-muted-foreground">No se aplicaron mutaciones sobre la medida.</p>
+                          )}
                         </div>
                       ) : null}
                       {imposicionBestCandidate ? (
@@ -5446,6 +5572,8 @@ export function WideFormatProductDetail({
                         id: item.id,
                         w: Number((item.widthMm / 10).toFixed(2)),
                         h: Number((item.heightMm / 10).toFixed(2)),
+                        originalW: Number((item.originalWidthMm / 10).toFixed(2)),
+                        originalH: Number((item.originalHeightMm / 10).toFixed(2)),
                         usefulW: Number((item.usefulWidthMm / 10).toFixed(2)),
                         usefulH: Number((item.usefulHeightMm / 10).toFixed(2)),
                         cx: Number((((item.centerXMm - imposicionBestCandidate.rollWidthMm / 2) / 10)).toFixed(2)),
@@ -5814,6 +5942,19 @@ export function WideFormatProductDetail({
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
+                    <div className="rounded-lg border bg-muted/20 p-4 text-sm">
+                      <p><span className="font-medium">Original:</span> {formatMeasureSummary(costosPreview.medidasOriginales)}</p>
+                      <p><span className="font-medium">Efectiva:</span> {formatMeasureSummary(costosPreview.medidasEfectivas)}</p>
+                      {costosPreview.mutacionesAplicadas.length > 0 ? (
+                        <div className="mt-2 space-y-1 text-muted-foreground">
+                          {costosPreview.mutacionesAplicadas.map((item) => (
+                            <p key={`${item.reglaId}-${item.respuestaId}`}>{formatChecklistMutationSummary(item)}</p>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-muted-foreground">No se aplicaron mutaciones sobre la medida.</p>
+                      )}
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       {costosPreview.resumenTecnico.varianteChips.map((chip) => (
                         <Badge key={`${chip.label}-${chip.value}`} variant="outline">

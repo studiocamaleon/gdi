@@ -1368,7 +1368,7 @@ export declare class ProductosServiciosController {
                     activo: boolean;
                     reglas: {
                         id: string;
-                        accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra";
+                        accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra" | "mutar_producto_base";
                         orden: number;
                         activo: boolean;
                         pasoPlantillaId: string | null;
@@ -1413,7 +1413,11 @@ export declare class ProductosServiciosController {
                         tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
                         factorConsumo: number | null;
                         mermaPct: number | null;
-                        detalle: Record<string, unknown> | null;
+                        detalle: Record<string, unknown> | {
+                            tipo: "agregar_demasia_por_lado";
+                            ejes: "ancho" | "alto" | "ambos";
+                            valorMmPorLado: number;
+                        } | null;
                     }[];
                 }[];
             }[];
@@ -1440,7 +1444,7 @@ export declare class ProductosServiciosController {
                         activo: boolean;
                         reglas: {
                             id: string;
-                            accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra";
+                            accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra" | "mutar_producto_base";
                             orden: number;
                             activo: boolean;
                             pasoPlantillaId: string | null;
@@ -1485,7 +1489,11 @@ export declare class ProductosServiciosController {
                             tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
                             factorConsumo: number | null;
                             mermaPct: number | null;
-                            detalle: Record<string, unknown> | null;
+                            detalle: Record<string, unknown> | {
+                                tipo: "agregar_demasia_por_lado";
+                                ejes: "ancho" | "alto" | "ambos";
+                                valorMmPorLado: number;
+                            } | null;
                         }[];
                     }[];
                 }[];
@@ -1516,7 +1524,7 @@ export declare class ProductosServiciosController {
                     activo: boolean;
                     reglas: {
                         id: string;
-                        accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra";
+                        accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra" | "mutar_producto_base";
                         orden: number;
                         activo: boolean;
                         pasoPlantillaId: string | null;
@@ -1561,7 +1569,11 @@ export declare class ProductosServiciosController {
                         tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
                         factorConsumo: number | null;
                         mermaPct: number | null;
-                        detalle: Record<string, unknown> | null;
+                        detalle: Record<string, unknown> | {
+                            tipo: "agregar_demasia_por_lado";
+                            ejes: "ancho" | "alto" | "ambos";
+                            valorMmPorLado: number;
+                        } | null;
                     }[];
                 }[];
             }[];
@@ -1588,7 +1600,7 @@ export declare class ProductosServiciosController {
                         activo: boolean;
                         reglas: {
                             id: string;
-                            accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra";
+                            accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra" | "mutar_producto_base";
                             orden: number;
                             activo: boolean;
                             pasoPlantillaId: string | null;
@@ -1633,7 +1645,11 @@ export declare class ProductosServiciosController {
                             tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
                             factorConsumo: number | null;
                             mermaPct: number | null;
-                            detalle: Record<string, unknown> | null;
+                            detalle: Record<string, unknown> | {
+                                tipo: "agregar_demasia_por_lado";
+                                ejes: "ancho" | "alto" | "ambos";
+                                valorMmPorLado: number;
+                            } | null;
                         }[];
                     }[];
                 }[];
@@ -1696,6 +1712,34 @@ export declare class ProductosServiciosController {
         cantidadTotal: number;
         periodo: string;
         tecnologia: string;
+        medidasOriginales: {
+            anchoMm: number;
+            altoMm: number;
+            cantidad: number;
+        }[];
+        medidasEfectivas: {
+            anchoMm: number;
+            altoMm: number;
+            cantidad: number;
+        }[];
+        mutacionesAplicadas: {
+            tipo: "agregar_demasia_por_lado";
+            ejes: "ancho" | "alto" | "ambos";
+            valorMmPorLado: number;
+            deltaAnchoMm: number;
+            deltaAltoMm: number;
+            preguntaId: string;
+            pregunta: string;
+            respuestaId: string;
+            respuesta: string;
+            reglaId: string;
+        }[];
+        traceChecklist: {
+            preguntaId: string;
+            pregunta: string;
+            respuestaId: string;
+            respuesta: string;
+        }[];
         maquinaId: any;
         maquinaNombre: any;
         perfilId: any;
@@ -1768,6 +1812,8 @@ export declare class ProductosServiciosController {
                 id: string;
                 w: number;
                 h: number;
+                originalW: number;
+                originalH: number;
                 usefulW: number;
                 usefulH: number;
                 cx: number;
@@ -1839,6 +1885,34 @@ export declare class ProductosServiciosController {
         cantidadTotal: number;
         periodo: string;
         tecnologia: string;
+        medidasOriginales: {
+            anchoMm: number;
+            altoMm: number;
+            cantidad: number;
+        }[];
+        medidasEfectivas: {
+            anchoMm: number;
+            altoMm: number;
+            cantidad: number;
+        }[];
+        mutacionesAplicadas: {
+            tipo: "agregar_demasia_por_lado";
+            ejes: "ancho" | "alto" | "ambos";
+            valorMmPorLado: number;
+            deltaAnchoMm: number;
+            deltaAltoMm: number;
+            preguntaId: string;
+            pregunta: string;
+            respuestaId: string;
+            respuesta: string;
+            reglaId: string;
+        }[];
+        traceChecklist: {
+            preguntaId: string;
+            pregunta: string;
+            respuestaId: string;
+            respuesta: string;
+        }[];
         maquinaId: any;
         maquinaNombre: any;
         perfilId: any;
@@ -1911,6 +1985,8 @@ export declare class ProductosServiciosController {
                 id: string;
                 w: number;
                 h: number;
+                originalW: number;
+                originalH: number;
                 usefulW: number;
                 usefulH: number;
                 cx: number;

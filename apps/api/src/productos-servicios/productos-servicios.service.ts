@@ -176,7 +176,12 @@ type GranFormatoChecklistStored = {
       activo?: boolean;
       reglas?: Array<{
         id?: string;
-        accion: 'activar_paso' | 'seleccionar_variante_paso' | 'costo_extra' | 'material_extra';
+        accion:
+          | 'activar_paso'
+          | 'seleccionar_variante_paso'
+          | 'costo_extra'
+          | 'material_extra'
+          | 'mutar_producto_base';
         orden?: number;
         activo?: boolean;
         pasoPlantillaId?: string;
@@ -188,10 +193,33 @@ type GranFormatoChecklistStored = {
         tipoConsumo?: 'por_unidad' | 'por_pliego' | 'por_m2';
         factorConsumo?: number;
         mermaPct?: number;
-        detalle?: Record<string, unknown>;
+        detalle?:
+          | Record<string, unknown>
+          | {
+              tipo: 'agregar_demasia_por_lado';
+              ejes: 'ancho' | 'alto' | 'ambos';
+              valorMmPorLado: number;
+            };
       }>;
     }>;
   }>;
+};
+type ChecklistProductoMutacionDetalle = {
+  tipo: 'agregar_demasia_por_lado';
+  ejes: 'ancho' | 'alto' | 'ambos';
+  valorMmPorLado: number;
+};
+type GranFormatoChecklistMutationTrace = {
+  tipo: ChecklistProductoMutacionDetalle['tipo'];
+  ejes: ChecklistProductoMutacionDetalle['ejes'];
+  valorMmPorLado: number;
+  deltaAnchoMm: number;
+  deltaAltoMm: number;
+  preguntaId: string;
+  pregunta: string;
+  respuestaId: string;
+  respuesta: string;
+  reglaId: string;
 };
 type GranFormatoCostosPreviewPlacement = {
   id: string;
@@ -1671,18 +1699,6 @@ export class ProductosServiciosService {
           : imposicionGuardada.panelizadoManualLayout,
     };
 
-    const candidatos = this.evaluateGranFormatoImposicionCandidates({
-      maquina: maquinaSeleccionada,
-      medidas,
-      config: effectiveImposicionConfig,
-      variants: materialVariantes,
-    });
-    if (!candidatos.length) {
-      throw new BadRequestException(
-        'No se pudo resolver la imposición con la configuración actual para calcular costos.',
-      );
-    }
-
     const checklistConfig = await this.buildGranFormatoChecklistResponse(auth, producto);
     const checklistTecnologia =
       checklistConfig.checklistsPorTecnologia.find(
@@ -1709,7 +1725,9 @@ export class ProductosServiciosService {
     );
     const activeChecklistRules: Array<{
       preguntaId: string;
+      pregunta: string;
       respuestaId: string;
+      respuesta: string;
       regla: any;
     }> = [];
     for (const pregunta of checklistActivo.preguntas) {
@@ -1721,10 +1739,29 @@ export class ProductosServiciosService {
       for (const regla of respuesta.reglas.filter((item) => item.activo)) {
         activeChecklistRules.push({
           preguntaId: pregunta.id,
+          pregunta: pregunta.texto,
           respuestaId: respuesta.id,
+          respuesta: respuesta.texto,
           regla,
         });
       }
+    }
+    const { medidasOriginales, medidasEfectivas, mutacionesAplicadas, traceChecklist } =
+      this.applyGranFormatoChecklistProductMutations({
+        medidas,
+        activeChecklistRules,
+      });
+
+    const candidatos = this.evaluateGranFormatoImposicionCandidates({
+      maquina: maquinaSeleccionada,
+      medidas: medidasEfectivas,
+      config: effectiveImposicionConfig,
+      variants: materialVariantes,
+    });
+    if (!candidatos.length) {
+      throw new BadRequestException(
+        'No se pudo resolver la imposición con la configuración actual para calcular costos.',
+      );
     }
 
     const checklistTemplateIds = Array.from(
@@ -1889,18 +1926,25 @@ export class ProductosServiciosService {
         })
       : [];
     const tarifaByCentro = new Map(tarifas.map((item) => [item.centroCostoId, item.tarifaCalculada]));
-    const totalPiezas = medidas.reduce((acc, item) => acc + item.cantidad, 0);
+    const totalPiezas = medidasEfectivas.reduce((acc, item) => acc + item.cantidad, 0);
     const perimetroTotalMl = Number(
       (
-        medidas.reduce(
+        medidasEfectivas.reduce(
           (acc, item) => acc + (((item.anchoMm + item.altoMm) * 2) / 1000) * item.cantidad,
           0,
         ) / 1000
       ).toFixed(6),
     );
 
+    const normalizedCandidates = candidatos.map((candidate) =>
+      this.applyGranFormatoOriginalMeasuresToCandidatePlacements({
+        candidate,
+        medidasOriginales,
+      }),
+    );
+
     const costedCandidates = await Promise.all(
-      candidatos.map(async (candidate) => {
+      normalizedCandidates.map(async (candidate) => {
         const candidateWarnings: string[] = [];
         const largoConsumidoMl = Number((candidate.consumedLengthMm / 1000).toFixed(6));
         const centrosCosto: Array<{
@@ -2153,6 +2197,10 @@ export class ProductosServiciosService {
             cantidadTotal,
             periodo,
             tecnologia,
+            medidasOriginales,
+            medidasEfectivas,
+            mutacionesAplicadas,
+            traceChecklist,
             maquinaId: maquinaSeleccionada.id,
             maquinaNombre: maquinaSeleccionada.nombre,
             perfilId: perfilSeleccionado?.id ?? null,
@@ -2198,6 +2246,10 @@ export class ProductosServiciosService {
             cantidadTotal: number;
             periodo: string;
             tecnologia: string;
+            medidasOriginales: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
+            medidasEfectivas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
+            mutacionesAplicadas: Array<Record<string, unknown>>;
+            traceChecklist: Array<Record<string, unknown>>;
             maquinaId: string | null;
             maquinaNombre: string;
             perfilId: string | null;
@@ -2299,7 +2351,10 @@ export class ProductosServiciosService {
             interpretacionAnchoMaximo: effectiveImposicionConfig.panelizadoInterpretacionAnchoMaximo,
             manualLayout: effectiveImposicionConfig.panelizadoManualLayout,
           },
-          medidas,
+          medidasOriginales,
+          medidasEfectivas,
+          mutacionesAplicadas,
+          traceChecklist,
           checklistRespuestas: payload.checklistRespuestas ?? [],
         } as unknown) as Prisma.InputJsonValue,
         resultadoJson: (winner.response as unknown) as Prisma.InputJsonValue,
@@ -3021,6 +3076,10 @@ export class ProductosServiciosService {
               throw new BadRequestException(
                 'SET_ATRIBUTO_TECNICO ya no se admite en Ruta de opcionales.',
               );
+            }
+            if (regla.accion === TipoChecklistAccionReglaDto.mutar_producto_base) {
+              const detalleMutacion = this.parseChecklistProductoMutacionDetalle(regla.detalle, true);
+              Object.assign(detalleReglaBase, detalleMutacion);
             }
             const reglaRow = await tx.productoChecklistRegla.create({
               data: {
@@ -6134,6 +6193,9 @@ export class ProductosServiciosService {
           if (regla.accion === TipoChecklistAccionReglaDto.material_extra && !regla.materiaPrimaVarianteId) {
             throw new BadRequestException('La regla MATERIAL_EXTRA requiere materiaPrimaVarianteId.');
           }
+          if (regla.accion === TipoChecklistAccionReglaDto.mutar_producto_base) {
+            this.parseChecklistProductoMutacionDetalle(regla.detalle, true);
+          }
           if (
             (regla.accion === TipoChecklistAccionReglaDto.activar_paso ||
               regla.accion === TipoChecklistAccionReglaDto.seleccionar_variante_paso)
@@ -6193,6 +6255,149 @@ export class ProductosServiciosService {
     for (const preguntaId of questionGraph.keys()) {
       visit(preguntaId);
     }
+  }
+
+  private parseChecklistProductoMutacionDetalle(
+    value: unknown,
+    throwOnError = false,
+  ): ChecklistProductoMutacionDetalle | null {
+    const detalle = this.asObject(value);
+    const fail = (message: string) => {
+      if (throwOnError) {
+        throw new BadRequestException(message);
+      }
+      return null;
+    };
+    const tipo = typeof detalle.tipo === 'string' ? detalle.tipo.trim() : '';
+    if (!tipo) {
+      return fail('La regla MUTAR_PRODUCTO_BASE requiere un tipo de mutación.');
+    }
+    if (tipo !== 'agregar_demasia_por_lado') {
+      return fail('La mutación configurada no está soportada todavía.');
+    }
+    const ejes = typeof detalle.ejes === 'string' ? detalle.ejes.trim() : '';
+    if (ejes !== 'ancho' && ejes !== 'alto' && ejes !== 'ambos') {
+      return fail('La mutación AGREGAR_DEMASIA_POR_LADO requiere ejes válidos.');
+    }
+    const valorMmPorLado = Number(detalle.valorMmPorLado);
+    if (!Number.isFinite(valorMmPorLado) || valorMmPorLado <= 0) {
+      return fail('La mutación AGREGAR_DEMASIA_POR_LADO requiere valorMmPorLado mayor a 0.');
+    }
+    return {
+      tipo: 'agregar_demasia_por_lado',
+      ejes,
+      valorMmPorLado,
+    };
+  }
+
+  private applyGranFormatoChecklistProductMutations(input: {
+    medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
+    activeChecklistRules: Array<{
+      preguntaId: string;
+      pregunta: string;
+      respuestaId: string;
+      respuesta: string;
+      regla: { id: string; accion: string; detalle?: unknown };
+    }>;
+  }) {
+    const medidasOriginales = input.medidas.map((item) => ({
+      anchoMm: item.anchoMm,
+      altoMm: item.altoMm,
+      cantidad: item.cantidad,
+    }));
+    const medidasEfectivas = input.medidas.map((item) => ({
+      anchoMm: item.anchoMm,
+      altoMm: item.altoMm,
+      cantidad: item.cantidad,
+    }));
+    const traceChecklist = Array.from(
+      new Map(
+        input.activeChecklistRules.map((item) => [
+          `${item.preguntaId}:${item.respuestaId}`,
+          {
+            preguntaId: item.preguntaId,
+            pregunta: item.pregunta,
+            respuestaId: item.respuestaId,
+            respuesta: item.respuesta,
+          },
+        ]),
+      ).values(),
+    );
+    const mutacionesAplicadas: GranFormatoChecklistMutationTrace[] = [];
+
+    for (const item of input.activeChecklistRules) {
+      if (item.regla.accion !== 'mutar_producto_base') continue;
+      const detalle = this.parseChecklistProductoMutacionDetalle(item.regla.detalle, true);
+      if (!detalle) continue;
+
+      let deltaAnchoMm = 0;
+      let deltaAltoMm = 0;
+      if (detalle.ejes === 'ancho' || detalle.ejes === 'ambos') {
+        deltaAnchoMm += detalle.valorMmPorLado * 2;
+      }
+      if (detalle.ejes === 'alto' || detalle.ejes === 'ambos') {
+        deltaAltoMm += detalle.valorMmPorLado * 2;
+      }
+      for (const medida of medidasEfectivas) {
+        medida.anchoMm += deltaAnchoMm;
+        medida.altoMm += deltaAltoMm;
+      }
+      mutacionesAplicadas.push({
+        tipo: detalle.tipo,
+        ejes: detalle.ejes,
+        valorMmPorLado: detalle.valorMmPorLado,
+        deltaAnchoMm,
+        deltaAltoMm,
+        preguntaId: item.preguntaId,
+        pregunta: item.pregunta,
+        respuestaId: item.respuestaId,
+        respuesta: item.respuesta,
+        reglaId: item.regla.id,
+      });
+    }
+
+    return {
+      medidasOriginales,
+      medidasEfectivas,
+      mutacionesAplicadas,
+      traceChecklist,
+    };
+  }
+
+  private applyGranFormatoOriginalMeasuresToCandidatePlacements(input: {
+    candidate: GranFormatoCostosPreviewCandidate;
+    medidasOriginales: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
+  }): GranFormatoCostosPreviewCandidate {
+    const originalesBySourcePieceId = new Map<
+      string,
+      { anchoMm: number; altoMm: number }
+    >();
+    for (const [medidaIndex, medida] of input.medidasOriginales.entries()) {
+      for (let copyIndex = 0; copyIndex < Math.max(1, medida.cantidad); copyIndex += 1) {
+        originalesBySourcePieceId.set(`piece-${medidaIndex}-${copyIndex}`, {
+          anchoMm: medida.anchoMm,
+          altoMm: medida.altoMm,
+        });
+      }
+    }
+
+    return {
+      ...input.candidate,
+      placements: input.candidate.placements.map((placement) => {
+        const original =
+          (placement.sourcePieceId
+            ? originalesBySourcePieceId.get(placement.sourcePieceId) ?? null
+            : null) ?? null;
+        if (!original) {
+          return placement;
+        }
+        return {
+          ...placement,
+          originalWidthMm: original.anchoMm,
+          originalHeightMm: original.altoMm,
+        };
+      }),
+    };
   }
 
   private resolveChecklistPreguntaIdsActivas(
@@ -11654,6 +11859,8 @@ export class ProductosServiciosService {
         id: item.id,
         w: Number((item.widthMm / 10).toFixed(2)),
         h: Number((item.heightMm / 10).toFixed(2)),
+        originalW: Number((item.originalWidthMm / 10).toFixed(2)),
+        originalH: Number((item.originalHeightMm / 10).toFixed(2)),
         usefulW: Number((item.usefulWidthMm / 10).toFixed(2)),
         usefulH: Number((item.usefulHeightMm / 10).toFixed(2)),
         cx: Number((((item.centerXMm - candidate.rollWidthMm / 2) / 10)).toFixed(2)),
@@ -12631,6 +12838,9 @@ export class ProductosServiciosService {
     if (value === TipoChecklistAccionReglaDto.material_extra) {
       return TipoProductoChecklistReglaAccion.MATERIAL_EXTRA;
     }
+    if (value === TipoChecklistAccionReglaDto.mutar_producto_base) {
+      return TipoProductoChecklistReglaAccion.MUTAR_PRODUCTO_BASE;
+    }
     if (value === TipoChecklistAccionReglaDto.set_atributo_tecnico) {
       return TipoProductoChecklistReglaAccion.SET_ATRIBUTO_TECNICO;
     }
@@ -12646,6 +12856,9 @@ export class ProductosServiciosService {
     }
     if (value === TipoProductoChecklistReglaAccion.MATERIAL_EXTRA) {
       return TipoChecklistAccionReglaDto.material_extra;
+    }
+    if (value === TipoProductoChecklistReglaAccion.MUTAR_PRODUCTO_BASE) {
+      return TipoChecklistAccionReglaDto.mutar_producto_base;
     }
     if (value === TipoProductoChecklistReglaAccion.SET_ATRIBUTO_TECNICO) {
       return TipoChecklistAccionReglaDto.set_atributo_tecnico;

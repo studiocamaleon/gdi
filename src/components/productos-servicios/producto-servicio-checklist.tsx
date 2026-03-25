@@ -19,6 +19,8 @@ import { upsertProductoChecklist } from "@/lib/productos-servicios-api";
 import type {
   ProductoChecklistPayload,
   ProductoChecklist,
+  ProductoChecklistMutacionEjes,
+  ProductoChecklistMutacionProductoBase,
   ProductoChecklistPregunta,
   ProductoChecklistRegla,
   ProductoChecklistRespuesta,
@@ -64,6 +66,7 @@ const accionItems: Array<{ value: TipoChecklistAccionRegla; label: string }> = [
   { value: "seleccionar_variante_paso", label: "Seleccionar variante de paso" },
   { value: "costo_extra", label: "Costo extra" },
   { value: "material_extra", label: "Material extra" },
+  { value: "mutar_producto_base", label: "Modificar producto cotizable" },
 ];
 
 const reglaCostoItems: Array<{ value: ReglaCostoChecklist; label: string }> = [
@@ -79,6 +82,42 @@ const tipoConsumoItems = [
   { value: "por_pliego", label: "Por pliego" },
   { value: "por_m2", label: "Por m2" },
 ] as const;
+
+const checklistMutationTypeItems = [
+  { value: "agregar_demasia_por_lado", label: "Agregar demasía por lado" },
+] as const;
+
+const checklistMutationEjesItems: Array<{ value: ProductoChecklistMutacionEjes; label: string }> = [
+  { value: "ambos", label: "Ambos ejes" },
+  { value: "ancho", label: "Sólo ancho" },
+  { value: "alto", label: "Sólo alto" },
+];
+
+function isChecklistProductMutationDetalle(
+  value: ProductoChecklistRegla["detalle"],
+): value is ProductoChecklistMutacionProductoBase {
+  return Boolean(value && typeof value === "object" && "tipo" in value);
+}
+
+function buildDefaultChecklistProductMutation(): ProductoChecklistMutacionProductoBase {
+  return {
+    tipo: "agregar_demasia_por_lado",
+    ejes: "ambos",
+    valorMmPorLado: 100,
+  };
+}
+
+function getChecklistMutationTypeLabel(value: ProductoChecklistMutacionProductoBase["tipo"]) {
+  return checklistMutationTypeItems.find((item) => item.value === value)?.label ?? value;
+}
+
+function getChecklistMutationEjesLabel(value: ProductoChecklistMutacionEjes) {
+  return checklistMutationEjesItems.find((item) => item.value === value)?.label ?? value;
+}
+
+function formatChecklistMutationMmAsCm(value: number) {
+  return Number((value / 10).toFixed(2)).toLocaleString("es-AR");
+}
 
 function normalizePreguntaRespuestasByTipo(
   pregunta: ProductoChecklistPregunta,
@@ -169,6 +208,15 @@ function isReglaIncomplete(regla: ProductoChecklistRegla) {
   if (regla.accion === "material_extra") {
     return !regla.materiaPrimaVarianteId || !regla.tipoConsumo || regla.factorConsumo === null;
   }
+  if (regla.accion === "mutar_producto_base") {
+    if (!isChecklistProductMutationDetalle(regla.detalle)) return true;
+    return (
+      !regla.detalle.tipo ||
+      !regla.detalle.ejes ||
+      !Number.isFinite(regla.detalle.valorMmPorLado) ||
+      regla.detalle.valorMmPorLado <= 0
+    );
+  }
   return false;
 }
 
@@ -186,6 +234,12 @@ function getReglaResumen(regla: ProductoChecklistRegla) {
   }
   if (regla.accion === "material_extra") {
     return `${regla.materiaPrimaNombre || "Sin material"} · ${getTipoConsumoLabel(regla.tipoConsumo)}`;
+  }
+  if (regla.accion === "mutar_producto_base") {
+    const detalle = isChecklistProductMutationDetalle(regla.detalle)
+      ? regla.detalle
+      : buildDefaultChecklistProductMutation();
+    return `${getChecklistMutationTypeLabel(detalle.tipo)} · ${formatChecklistMutationMmAsCm(detalle.valorMmPorLado)} cm por lado · ${getChecklistMutationEjesLabel(detalle.ejes)}`;
   }
   return getAccionLabel(regla.accion);
 }
@@ -234,7 +288,7 @@ function buildDefaultRegla(accion: TipoChecklistAccionRegla): ProductoChecklistR
     tipoConsumo: accion === "material_extra" ? "por_unidad" : null,
     factorConsumo: null,
     mermaPct: null,
-    detalle: null,
+    detalle: accion === "mutar_producto_base" ? buildDefaultChecklistProductMutation() : null,
   };
 }
 
@@ -1250,6 +1304,106 @@ export function ProductoServicioChecklistEditor({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+        </div>
+      );
+    }
+
+    if (regla.accion === "mutar_producto_base") {
+      const detalle = isChecklistProductMutationDetalle(regla.detalle)
+        ? regla.detalle
+        : buildDefaultChecklistProductMutation();
+      return (
+        <div className={cn("grid gap-2", compact ? "xl:grid-cols-3" : "md:grid-cols-3")}>
+          <div className="grid gap-1">
+            {!compact ? <FieldLabel>Mutación</FieldLabel> : null}
+            <Select
+              value={detalle.tipo}
+              onValueChange={(value) =>
+                updateRegla(pregunta.id, respuesta.id, regla.id, (current) => ({
+                  ...current,
+                  detalle: {
+                    ...(isChecklistProductMutationDetalle(current.detalle)
+                      ? current.detalle
+                      : buildDefaultChecklistProductMutation()),
+                    tipo: value as ProductoChecklistMutacionProductoBase["tipo"],
+                  },
+                }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Mutación">
+                  {getChecklistMutationTypeLabel(detalle.tipo)}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {checklistMutationTypeItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1">
+            {!compact ? <FieldLabel>Ejes</FieldLabel> : null}
+            <Select
+              value={detalle.ejes}
+              onValueChange={(value) =>
+                updateRegla(pregunta.id, respuesta.id, regla.id, (current) => ({
+                  ...current,
+                  detalle: {
+                    ...(isChecklistProductMutationDetalle(current.detalle)
+                      ? current.detalle
+                      : buildDefaultChecklistProductMutation()),
+                    ejes: value as ProductoChecklistMutacionEjes,
+                  },
+                }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Ejes">
+                  {getChecklistMutationEjesLabel(detalle.ejes)}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {checklistMutationEjesItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1">
+            {!compact ? <FieldLabel>Demasía por lado (cm)</FieldLabel> : null}
+            <div className="relative">
+              <Input
+                type="number"
+                min="0.1"
+                step="0.1"
+                aria-label="Demasía por lado en centímetros"
+                placeholder="10"
+                className="pr-12"
+                value={detalle.valorMmPorLado ? String(Number((detalle.valorMmPorLado / 10).toFixed(2))) : ""}
+                onChange={(event) =>
+                  updateRegla(pregunta.id, respuesta.id, regla.id, (current) => ({
+                    ...current,
+                    detalle: {
+                      ...(isChecklistProductMutationDetalle(current.detalle)
+                        ? current.detalle
+                        : buildDefaultChecklistProductMutation()),
+                      valorMmPorLado: event.target.value.trim()
+                        ? Math.round(Number(event.target.value) * 10)
+                        : 0,
+                    },
+                  }))
+                }
+              />
+              <span className="pointer-events-none absolute inset-y-0 right-3 inline-flex items-center text-xs font-medium text-muted-foreground">
+                cm
+              </span>
+            </div>
           </div>
         </div>
       );

@@ -226,6 +226,7 @@ var TipoChecklistAccionReglaDto;
     TipoChecklistAccionReglaDto["seleccionar_variante_paso"] = "seleccionar_variante_paso";
     TipoChecklistAccionReglaDto["costo_extra"] = "costo_extra";
     TipoChecklistAccionReglaDto["material_extra"] = "material_extra";
+    TipoChecklistAccionReglaDto["mutar_producto_base"] = "mutar_producto_base";
     TipoChecklistAccionReglaDto["set_atributo_tecnico"] = "set_atributo_tecnico";
 })(TipoChecklistAccionReglaDto || (exports.TipoChecklistAccionReglaDto = TipoChecklistAccionReglaDto = {}));
 var ReglaCostoChecklistDto;

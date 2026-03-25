@@ -197,6 +197,29 @@ describe('ProductosServiciosService V1 adicionales', () => {
     };
     variants: Array<Record<string, unknown>>;
   }) => Array<Record<string, any>>;
+  let parseChecklistProductoMutacionDetalle: (
+    value: unknown,
+    throwOnError?: boolean,
+  ) => {
+    tipo: 'agregar_demasia_por_lado';
+    ejes: 'ancho' | 'alto' | 'ambos';
+    valorMmPorLado: number;
+  } | null;
+  let applyGranFormatoChecklistProductMutations: (input: {
+    medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
+    activeChecklistRules: Array<{
+      preguntaId: string;
+      pregunta: string;
+      respuestaId: string;
+      respuesta: string;
+      regla: { id: string; accion: string; detalle?: unknown };
+    }>;
+  }) => {
+    medidasOriginales: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
+    medidasEfectivas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
+    mutacionesAplicadas: Array<Record<string, unknown>>;
+    traceChecklist: Array<Record<string, unknown>>;
+  };
 
   beforeEach(() => {
     service = new ProductosServiciosService({} as never);
@@ -252,6 +275,14 @@ describe('ProductosServiciosService V1 adicionales', () => {
       service as unknown as Record<string, unknown>,
       'evaluateGranFormatoImposicionCandidates',
     ) as typeof evaluateGranFormatoImposicionCandidates;
+    parseChecklistProductoMutacionDetalle = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'parseChecklistProductoMutacionDetalle',
+    ) as typeof parseChecklistProductoMutacionDetalle;
+    applyGranFormatoChecklistProductMutations = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'applyGranFormatoChecklistProductMutations',
+    ) as typeof applyGranFormatoChecklistProductMutations;
   });
 
   it('usa la ruta completa para márgenes de imposición aunque haya filtros por addon', () => {
@@ -599,6 +630,142 @@ describe('ProductosServiciosService V1 adicionales', () => {
         ],
       }),
     ).toThrow('El configurador no puede contener ciclos entre preguntas.');
+  });
+
+  it('acepta mutaciones de producto válidas en el checklist', () => {
+    expect(() =>
+      validateProductoChecklistPayload.call(service, {
+        preguntas: [
+          {
+            id: 'preg-1',
+            texto: '¿Lleva tensado?',
+            tipoPregunta: 'binaria',
+            respuestas: [
+              {
+                texto: 'Si',
+                reglas: [
+                  {
+                    accion: 'mutar_producto_base',
+                    detalle: {
+                      tipo: 'agregar_demasia_por_lado',
+                      ejes: 'ambos',
+                      valorMmPorLado: 100,
+                    },
+                  },
+                ],
+              },
+              {
+                texto: 'No',
+                reglas: [],
+              },
+            ],
+          },
+        ],
+      }),
+    ).not.toThrow();
+  });
+
+  it('rechaza mutaciones de producto inválidas en el checklist', () => {
+    expect(() =>
+      validateProductoChecklistPayload.call(service, {
+        preguntas: [
+          {
+            id: 'preg-1',
+            texto: '¿Lleva tensado?',
+            tipoPregunta: 'binaria',
+            respuestas: [
+              {
+                texto: 'Si',
+                reglas: [
+                  {
+                    accion: 'mutar_producto_base',
+                    detalle: {
+                      tipo: 'agregar_demasia_por_lado',
+                      ejes: 'ambos',
+                      valorMmPorLado: 0,
+                    },
+                  },
+                ],
+              },
+              {
+                texto: 'No',
+                reglas: [],
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow('valorMmPorLado mayor a 0');
+  });
+
+  it('parsea la mutación agregar demasía por lado', () => {
+    expect(
+      parseChecklistProductoMutacionDetalle.call(service, {
+        tipo: 'agregar_demasia_por_lado',
+        ejes: 'ancho',
+        valorMmPorLado: 50,
+      }),
+    ).toEqual({
+      tipo: 'agregar_demasia_por_lado',
+      ejes: 'ancho',
+      valorMmPorLado: 50,
+    });
+  });
+
+  it('aplica mutaciones acumulativas sobre las medidas efectivas', () => {
+    const result = applyGranFormatoChecklistProductMutations.call(service, {
+      medidas: [{ anchoMm: 1000, altoMm: 2000, cantidad: 1 }],
+      activeChecklistRules: [
+        {
+          preguntaId: 'preg-1',
+          pregunta: '¿Lleva tensado?',
+          respuestaId: 'resp-1',
+          respuesta: 'Si',
+          regla: {
+            id: 'regla-1',
+            accion: 'mutar_producto_base',
+            detalle: {
+              tipo: 'agregar_demasia_por_lado',
+              ejes: 'ambos',
+              valorMmPorLado: 100,
+            },
+          },
+        },
+        {
+          preguntaId: 'preg-2',
+          pregunta: '¿Refuerzo adicional?',
+          respuestaId: 'resp-2',
+          respuesta: 'Si',
+          regla: {
+            id: 'regla-2',
+            accion: 'mutar_producto_base',
+            detalle: {
+              tipo: 'agregar_demasia_por_lado',
+              ejes: 'alto',
+              valorMmPorLado: 50,
+            },
+          },
+        },
+      ],
+    });
+
+    expect(result.medidasOriginales).toEqual([{ anchoMm: 1000, altoMm: 2000, cantidad: 1 }]);
+    expect(result.medidasEfectivas).toEqual([{ anchoMm: 1200, altoMm: 2300, cantidad: 1 }]);
+    expect(result.mutacionesAplicadas).toHaveLength(2);
+    expect(result.traceChecklist).toEqual([
+      {
+        preguntaId: 'preg-1',
+        pregunta: '¿Lleva tensado?',
+        respuestaId: 'resp-1',
+        respuesta: 'Si',
+      },
+      {
+        preguntaId: 'preg-2',
+        pregunta: '¿Refuerzo adicional?',
+        respuestaId: 'resp-2',
+        respuesta: 'Si',
+      },
+    ]);
   });
 
   it('activa preguntas hijas solo cuando la respuesta padre las abre', () => {

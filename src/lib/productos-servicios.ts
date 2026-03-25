@@ -20,7 +20,16 @@ export type TipoChecklistAccionRegla =
   | 'activar_paso'
   | 'seleccionar_variante_paso'
   | 'costo_extra'
-  | 'material_extra';
+  | 'material_extra'
+  | 'mutar_producto_base';
+export type ProductoChecklistMutacionTipo = 'agregar_demasia_por_lado';
+export type ProductoChecklistMutacionEjes = 'ancho' | 'alto' | 'ambos';
+export type ProductoChecklistMutacionProductoBase =
+  | {
+      tipo: 'agregar_demasia_por_lado';
+      ejes: ProductoChecklistMutacionEjes;
+      valorMmPorLado: number;
+    };
 export type ReglaCostoChecklist =
   | 'tiempo_min'
   | 'flat'
@@ -681,7 +690,7 @@ export type ProductoChecklistRegla = {
   tipoConsumo: 'por_unidad' | 'por_pliego' | 'por_m2' | null;
   factorConsumo: number | null;
   mermaPct: number | null;
-  detalle: Record<string, unknown> | null;
+  detalle: Record<string, unknown> | ProductoChecklistMutacionProductoBase | null;
 };
 
 export type ProductoChecklistRespuesta = {
@@ -733,7 +742,8 @@ export type ProductoChecklistPayload = {
           | 'activar_paso'
           | 'seleccionar_variante_paso'
           | 'costo_extra'
-          | 'material_extra';
+          | 'material_extra'
+          | 'mutar_producto_base';
         orden?: number;
         activo?: boolean;
         pasoPlantillaId?: string;
@@ -745,7 +755,7 @@ export type ProductoChecklistPayload = {
         tipoConsumo?: 'por_unidad' | 'por_pliego' | 'por_m2';
         factorConsumo?: number;
         mermaPct?: number;
-        detalle?: Record<string, unknown>;
+        detalle?: Record<string, unknown> | ProductoChecklistMutacionProductoBase;
       }>;
     }>;
   }>;
@@ -844,6 +854,8 @@ export type GranFormatoCostosNestingPiece = {
   id: string;
   w: number;
   h: number;
+  originalW?: number | null;
+  originalH?: number | null;
   usefulW?: number | null;
   usefulH?: number | null;
   cx: number;
@@ -945,6 +957,26 @@ export type GranFormatoCostosResponse = {
   cantidadTotal: number;
   periodo: string;
   tecnologia: string;
+  medidasOriginales: PreviewGranFormatoCostoMedida[];
+  medidasEfectivas: PreviewGranFormatoCostoMedida[];
+  mutacionesAplicadas: Array<{
+    tipo: ProductoChecklistMutacionTipo;
+    ejes: ProductoChecklistMutacionEjes;
+    valorMmPorLado: number;
+    deltaAnchoMm: number;
+    deltaAltoMm: number;
+    preguntaId: string;
+    pregunta: string;
+    respuestaId: string;
+    respuesta: string;
+    reglaId: string;
+  }>;
+  traceChecklist: Array<{
+    preguntaId: string;
+    pregunta: string;
+    respuestaId: string;
+    respuesta: string;
+  }>;
   maquinaId: string | null;
   maquinaNombre: string;
   perfilId: string | null;

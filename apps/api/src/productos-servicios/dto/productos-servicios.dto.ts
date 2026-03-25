@@ -201,6 +201,7 @@ export enum TipoChecklistAccionReglaDto {
   seleccionar_variante_paso = 'seleccionar_variante_paso',
   costo_extra = 'costo_extra',
   material_extra = 'material_extra',
+  mutar_producto_base = 'mutar_producto_base',
   set_atributo_tecnico = 'set_atributo_tecnico',
 }
 

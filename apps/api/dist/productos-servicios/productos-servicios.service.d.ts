@@ -56,6 +56,23 @@ type RouteEffectInsertionConfig = {
     modo: RouteEffectInsertionMode;
     pasoPlantillaId: string | null;
 };
+type ChecklistProductoMutacionDetalle = {
+    tipo: 'agregar_demasia_por_lado';
+    ejes: 'ancho' | 'alto' | 'ambos';
+    valorMmPorLado: number;
+};
+type GranFormatoChecklistMutationTrace = {
+    tipo: ChecklistProductoMutacionDetalle['tipo'];
+    ejes: ChecklistProductoMutacionDetalle['ejes'];
+    valorMmPorLado: number;
+    deltaAnchoMm: number;
+    deltaAltoMm: number;
+    preguntaId: string;
+    pregunta: string;
+    respuestaId: string;
+    respuesta: string;
+    reglaId: string;
+};
 type GranFormatoNestingOrientation = 'normal' | 'rotada' | 'mixta';
 export declare class ProductosServiciosService {
     private readonly prisma;
@@ -908,7 +925,7 @@ export declare class ProductosServiciosService {
                     activo: boolean;
                     reglas: {
                         id: string;
-                        accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra";
+                        accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra" | "mutar_producto_base";
                         orden: number;
                         activo: boolean;
                         pasoPlantillaId: string | null;
@@ -953,7 +970,11 @@ export declare class ProductosServiciosService {
                         tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
                         factorConsumo: number | null;
                         mermaPct: number | null;
-                        detalle: Record<string, unknown> | null;
+                        detalle: Record<string, unknown> | {
+                            tipo: "agregar_demasia_por_lado";
+                            ejes: "ancho" | "alto" | "ambos";
+                            valorMmPorLado: number;
+                        } | null;
                     }[];
                 }[];
             }[];
@@ -980,7 +1001,7 @@ export declare class ProductosServiciosService {
                         activo: boolean;
                         reglas: {
                             id: string;
-                            accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra";
+                            accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra" | "mutar_producto_base";
                             orden: number;
                             activo: boolean;
                             pasoPlantillaId: string | null;
@@ -1025,7 +1046,11 @@ export declare class ProductosServiciosService {
                             tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
                             factorConsumo: number | null;
                             mermaPct: number | null;
-                            detalle: Record<string, unknown> | null;
+                            detalle: Record<string, unknown> | {
+                                tipo: "agregar_demasia_por_lado";
+                                ejes: "ancho" | "alto" | "ambos";
+                                valorMmPorLado: number;
+                            } | null;
                         }[];
                     }[];
                 }[];
@@ -1056,7 +1081,7 @@ export declare class ProductosServiciosService {
                     activo: boolean;
                     reglas: {
                         id: string;
-                        accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra";
+                        accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra" | "mutar_producto_base";
                         orden: number;
                         activo: boolean;
                         pasoPlantillaId: string | null;
@@ -1101,7 +1126,11 @@ export declare class ProductosServiciosService {
                         tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
                         factorConsumo: number | null;
                         mermaPct: number | null;
-                        detalle: Record<string, unknown> | null;
+                        detalle: Record<string, unknown> | {
+                            tipo: "agregar_demasia_por_lado";
+                            ejes: "ancho" | "alto" | "ambos";
+                            valorMmPorLado: number;
+                        } | null;
                     }[];
                 }[];
             }[];
@@ -1128,7 +1157,7 @@ export declare class ProductosServiciosService {
                         activo: boolean;
                         reglas: {
                             id: string;
-                            accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra";
+                            accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra" | "mutar_producto_base";
                             orden: number;
                             activo: boolean;
                             pasoPlantillaId: string | null;
@@ -1173,7 +1202,11 @@ export declare class ProductosServiciosService {
                             tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
                             factorConsumo: number | null;
                             mermaPct: number | null;
-                            detalle: Record<string, unknown> | null;
+                            detalle: Record<string, unknown> | {
+                                tipo: "agregar_demasia_por_lado";
+                                ejes: "ancho" | "alto" | "ambos";
+                                valorMmPorLado: number;
+                            } | null;
                         }[];
                     }[];
                 }[];
@@ -1236,6 +1269,23 @@ export declare class ProductosServiciosService {
         cantidadTotal: number;
         periodo: string;
         tecnologia: string;
+        medidasOriginales: {
+            anchoMm: number;
+            altoMm: number;
+            cantidad: number;
+        }[];
+        medidasEfectivas: {
+            anchoMm: number;
+            altoMm: number;
+            cantidad: number;
+        }[];
+        mutacionesAplicadas: GranFormatoChecklistMutationTrace[];
+        traceChecklist: {
+            preguntaId: string;
+            pregunta: string;
+            respuestaId: string;
+            respuesta: string;
+        }[];
         maquinaId: any;
         maquinaNombre: any;
         perfilId: any;
@@ -1308,6 +1358,8 @@ export declare class ProductosServiciosService {
                 id: string;
                 w: number;
                 h: number;
+                originalW: number;
+                originalH: number;
                 usefulW: number;
                 usefulH: number;
                 cx: number;
@@ -1379,6 +1431,23 @@ export declare class ProductosServiciosService {
         cantidadTotal: number;
         periodo: string;
         tecnologia: string;
+        medidasOriginales: {
+            anchoMm: number;
+            altoMm: number;
+            cantidad: number;
+        }[];
+        medidasEfectivas: {
+            anchoMm: number;
+            altoMm: number;
+            cantidad: number;
+        }[];
+        mutacionesAplicadas: GranFormatoChecklistMutationTrace[];
+        traceChecklist: {
+            preguntaId: string;
+            pregunta: string;
+            respuestaId: string;
+            respuesta: string;
+        }[];
         maquinaId: any;
         maquinaNombre: any;
         perfilId: any;
@@ -1451,6 +1520,8 @@ export declare class ProductosServiciosService {
                 id: string;
                 w: number;
                 h: number;
+                originalW: number;
+                originalH: number;
                 usefulW: number;
                 usefulH: number;
                 cx: number;
@@ -2406,6 +2477,9 @@ export declare class ProductosServiciosService {
     private toAdicionalEfectoResponse;
     private isPlantillaTerminacionSoportada;
     private validateProductoChecklistPayload;
+    private parseChecklistProductoMutacionDetalle;
+    private applyGranFormatoChecklistProductMutations;
+    private applyGranFormatoOriginalMeasuresToCandidatePlacements;
     private resolveChecklistPreguntaIdsActivas;
     private toProductoChecklistResponse;
     private validateOpcionesProductivasPayload;

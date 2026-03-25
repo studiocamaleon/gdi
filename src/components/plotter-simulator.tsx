@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { ContactShadows, Edges, Environment, OrbitControls, Text } from "@react-three/drei";
+import { ContactShadows, Edges, Environment, Line, OrbitControls, Text } from "@react-three/drei";
 import * as THREE from "three";
 import { Maximize2 } from "lucide-react";
 
@@ -12,6 +12,8 @@ export interface PlotterSimulatorPiece {
   id: string;
   w: number;
   h: number;
+  originalW?: number | null;
+  originalH?: number | null;
   usefulW?: number | null;
   usefulH?: number | null;
   cx: number;
@@ -50,6 +52,10 @@ interface PlotterSimulatorProps {
 function NestedItem({ piece }: { piece: PlotterSimulatorPiece }) {
   const width = piece.w * SCALE;
   const height = piece.h * SCALE;
+  const originalPlacementWidth =
+    (piece.rotated ? (piece.originalH ?? piece.h) : (piece.originalW ?? piece.w)) * SCALE;
+  const originalPlacementHeight =
+    (piece.rotated ? (piece.originalW ?? piece.w) : (piece.originalH ?? piece.h)) * SCALE;
   const usefulWidth = (piece.usefulW ?? piece.w) * SCALE;
   const usefulHeight = (piece.usefulH ?? piece.h) * SCALE;
   const posX = piece.cx * SCALE;
@@ -76,6 +82,17 @@ function NestedItem({ piece }: { piece: PlotterSimulatorPiece }) {
   const overlapEnd = Math.max((piece.overlapEnd ?? 0) * SCALE, 0);
   const usefulOffsetX = piece.panelAxis === "vertical" ? (overlapStart - overlapEnd) / 2 : 0;
   const usefulOffsetY = piece.panelAxis === "horizontal" ? (-overlapStart + overlapEnd) / 2 : 0;
+  const showsOriginalOutline =
+    !piece.panelIndex &&
+    (Math.abs(originalPlacementWidth - width) > 0.0001 ||
+      Math.abs(originalPlacementHeight - height) > 0.0001);
+  const originalOutlinePoints: Array<[number, number, number]> = [
+    [-originalPlacementWidth / 2, originalPlacementHeight / 2, 0.032],
+    [originalPlacementWidth / 2, originalPlacementHeight / 2, 0.032],
+    [originalPlacementWidth / 2, -originalPlacementHeight / 2, 0.032],
+    [-originalPlacementWidth / 2, -originalPlacementHeight / 2, 0.032],
+    [-originalPlacementWidth / 2, originalPlacementHeight / 2, 0.032],
+  ];
 
   return (
     <group position={[posX, -posY, 0.012]}>
@@ -190,6 +207,20 @@ function NestedItem({ piece }: { piece: PlotterSimulatorPiece }) {
           {detailText}
         </Text>
       </group>
+      {showsOriginalOutline ? (
+        <Line
+          points={originalOutlinePoints}
+          color="#ffffff"
+          lineWidth={2}
+          dashed
+          dashSize={0.12}
+          gapSize={0.06}
+          transparent
+          opacity={0.95}
+          renderOrder={12}
+          depthTest={false}
+        />
+      ) : null}
     </group>
   );
 }
@@ -411,6 +442,15 @@ export default function PlotterSimulator({
 }: PlotterSimulatorProps) {
   const [spacePressed, setSpacePressed] = useState(false);
   const [pointerDown, setPointerDown] = useState(false);
+  const hasOriginalOverlay = pieces.some((piece) => {
+    if (piece.panelIndex) return false;
+    const originalPlacementWidth = piece.rotated ? (piece.originalH ?? piece.h) : (piece.originalW ?? piece.w);
+    const originalPlacementHeight = piece.rotated ? (piece.originalW ?? piece.w) : (piece.originalH ?? piece.h);
+    return (
+      Math.abs((originalPlacementWidth ?? piece.w) - piece.w) > 0.001 ||
+      Math.abs((originalPlacementHeight ?? piece.h) - piece.h) > 0.001
+    );
+  });
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -587,6 +627,11 @@ export default function PlotterSimulator({
                 </span>
               </div>
             </div>
+          </div>
+        ) : null}
+        {hasOriginalOverlay ? (
+          <div className="absolute left-4 top-4 rounded-xl border border-white/10 bg-zinc-950/75 px-3 py-2 text-xs text-white shadow-xl backdrop-blur-md">
+            Línea punteada: medida original antes de la demasía
           </div>
         ) : null}
         <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full border border-zinc-800/50 bg-zinc-900/60 px-6 py-2 shadow-xl backdrop-blur-md">
