@@ -78,12 +78,14 @@ import type {
   ProductoServicio,
   ProductoVariante,
   SubfamiliaProducto,
+  UnidadComercialProducto,
   ValorOpcionProductiva,
 } from "@/lib/productos-servicios";
 import {
   carasProductoVarianteItems,
   estadoProductoServicioItems,
   tipoImpresionProductoVarianteItems,
+  unidadComercialProductoItems,
 } from "@/lib/productos-servicios";
 import { simularPrecioComercial } from "@/lib/productos-servicios-simulacion";
 import { Badge } from "@/components/ui/badge";
@@ -131,7 +133,7 @@ type PapelOption = {
   resumen: string;
 };
 
-type ProductoServicioFichaTabsProps = {
+export type DigitalProductDetailProps = {
   producto: ProductoServicio;
   initialVariantes: ProductoVariante[];
   initialClientes: ClienteDetalle[];
@@ -165,6 +167,43 @@ type PrecioEspecialClienteConfirmDelete = {
   id: string;
   clienteNombre: string;
 };
+
+function getUnidadComercialProductoLabel(value: string | null | undefined) {
+  return (
+    unidadComercialProductoItems.find((item) => item.value === value)?.label ??
+    value?.trim() ??
+    "Unidad"
+  );
+}
+
+function resolveUnidadComercialProducto(value: string | null | undefined): UnidadComercialProducto | null {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === "unidad" || normalized === "unidades") return "unidad";
+  if (normalized === "m2" || normalized === "m²" || normalized === "metro cuadrado" || normalized === "metros cuadrados") {
+    return "m2";
+  }
+  if (
+    normalized === "metro_lineal" ||
+    normalized === "ml" ||
+    normalized === "metro lineal" ||
+    normalized === "metros lineales"
+  ) {
+    return "metro_lineal";
+  }
+  return null;
+}
+
+function getUnidadComercialProductoSuffix(value: string | null | undefined) {
+  const normalized = normalizeUnidadComercialProducto(value);
+  if (normalized === "m2") return "m2";
+  if (normalized === "metro_lineal") return "ml";
+  return "unidad";
+}
+
+function normalizeUnidadComercialProducto(value: string | null | undefined): UnidadComercialProducto {
+  return resolveUnidadComercialProducto(value) ?? "unidad";
+}
 
 type RouteOperationDraft = ProcesoOperacionPayload & {
   id: string;
@@ -483,9 +522,10 @@ function getPrecioMethodDescription(value: MetodoCalculoPrecioProducto) {
   return "Define los parámetros comerciales del método seleccionado.";
 }
 
-function getVariableRangeLabel(index: number, quantityUntil: number) {
-  if (index === 0) return `Hasta ${quantityUntil}`;
-  return `Hasta ${quantityUntil}`;
+function getVariableRangeLabel(index: number, quantityUntil: number, measurementUnit?: string | null) {
+  const unitSuffix = getUnidadComercialProductoSuffix(measurementUnit);
+  if (index === 0) return `Hasta ${quantityUntil} ${unitSuffix}`;
+  return `Hasta ${quantityUntil} ${unitSuffix}`;
 }
 
 const tipoCorteItems = [
@@ -1440,7 +1480,7 @@ export function ProductoServicioFichaTabs({
   motores,
   checklist,
   maquinas,
-}: ProductoServicioFichaTabsProps) {
+}: DigitalProductDetailProps) {
   const measurementUnitFallback = producto.unidadComercial?.trim() || "unidad";
   const [activeTab, setActiveTab] = React.useState("general");
   const [mountedTabs, setMountedTabs] = React.useState<string[]>(["general"]);
@@ -1459,6 +1499,7 @@ export function ProductoServicioFichaTabs({
     descripcion: string;
     familiaProductoId: string;
     subfamiliaProductoId: string;
+    unidadComercial: UnidadComercialProducto;
     motorCodigo: string;
     motorVersion: number;
   }>({
@@ -1466,6 +1507,7 @@ export function ProductoServicioFichaTabs({
     descripcion: producto.descripcion ?? "",
     familiaProductoId: producto.familiaProductoId,
     subfamiliaProductoId: producto.subfamiliaProductoId ?? "",
+    unidadComercial: normalizeUnidadComercialProducto(producto.unidadComercial),
     motorCodigo: producto.motorCodigo,
     motorVersion: producto.motorVersion,
   });
@@ -1630,6 +1672,7 @@ export function ProductoServicioFichaTabs({
       descripcion: producto.descripcion ?? "",
       familiaProductoId: producto.familiaProductoId,
       subfamiliaProductoId: producto.subfamiliaProductoId ?? "",
+      unidadComercial: normalizeUnidadComercialProducto(producto.unidadComercial),
       motorCodigo: producto.motorCodigo,
       motorVersion: producto.motorVersion,
     });
@@ -2031,6 +2074,7 @@ export function ProductoServicioFichaTabs({
           descripcion: generalForm.descripcion.trim(),
           familiaProductoId: generalForm.familiaProductoId,
           subfamiliaProductoId: generalForm.subfamiliaProductoId || undefined,
+          unidadComercial: generalForm.unidadComercial,
           motorCodigo: generalForm.motorCodigo,
           motorVersion: generalForm.motorVersion,
           estado: productoState.estado,
@@ -2050,6 +2094,7 @@ export function ProductoServicioFichaTabs({
           ...prev,
           nombre: withMotor.nombre,
           descripcion: withMotor.descripcion ?? "",
+          unidadComercial: normalizeUnidadComercialProducto(withMotor.unidadComercial),
           motorCodigo: withMotor.motorCodigo,
           motorVersion: withMotor.motorVersion,
         }));
@@ -3481,6 +3526,7 @@ export function ProductoServicioFichaTabs({
     generalForm.descripcion.trim() !== (productoState.descripcion ?? "").trim() ||
     generalForm.familiaProductoId !== productoState.familiaProductoId ||
     (generalForm.subfamiliaProductoId || "") !== (productoState.subfamiliaProductoId || "") ||
+    generalForm.unidadComercial !== productoState.unidadComercial ||
     generalForm.motorCodigo !== productoState.motorCodigo ||
     generalForm.motorVersion !== productoState.motorVersion;
   const persistedPrecio = React.useMemo(
@@ -3592,6 +3638,31 @@ export function ProductoServicioFichaTabs({
                     {subfamiliasFiltradasGeneral.map((item) => (
                       <SelectItem key={item.id} value={item.id}>
                         {item.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Unidad comercial</p>
+                <Select
+                  value={generalForm.unidadComercial}
+                  onValueChange={(value) =>
+                    setGeneralForm((prev) => ({
+                      ...prev,
+                      unidadComercial: (value as UnidadComercialProducto) ?? "unidad",
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar unidad comercial">
+                      {getUnidadComercialProductoLabel(generalForm.unidadComercial)}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {unidadComercialProductoItems.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -4798,7 +4869,7 @@ export function ProductoServicioFichaTabs({
                       </Select>
                     </Field>
                     <p className="text-xs text-muted-foreground">
-                      Unidad comercial: {precioForm.measurementUnit?.trim() || productoState.unidadComercial || "unidad"}
+                      Unidad comercial: {getUnidadComercialProductoLabel(precioForm.measurementUnit ?? productoState.unidadComercial)}
                     </p>
                   </div>
                   <Button type="button" variant="outline" onClick={handleOpenPrecioEditor}>
@@ -5253,7 +5324,7 @@ export function ProductoServicioFichaTabs({
                       <div className="mt-3 space-y-2 text-sm">
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-muted-foreground">Unidad comercial</span>
-                          <span>{precioForm.measurementUnit?.trim() || productoState.unidadComercial || "unidad"}</span>
+                          <span>{getUnidadComercialProductoLabel(precioForm.measurementUnit ?? productoState.unidadComercial)}</span>
                         </div>
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-muted-foreground">Esquema impositivo</span>
@@ -6053,7 +6124,7 @@ export function ProductoServicioFichaTabs({
           <div className="mt-6 space-y-5">
             <Field>
               <FieldLabel>Unidad comercial</FieldLabel>
-              <Input value={precioEditorDraft.measurementUnit?.trim() || productoState.unidadComercial || "unidad"} disabled />
+              <Input value={getUnidadComercialProductoLabel(precioEditorDraft.measurementUnit ?? productoState.unidadComercial)} disabled />
             </Field>
 
             {precioEditorDraft.metodoCalculo === "por_margen" ? (
@@ -6210,13 +6281,13 @@ export function ProductoServicioFichaTabs({
             {precioEditorDraft.metodoCalculo === "fijado_por_cantidad" ? (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Cantidades fijas con precio fijo: sólo se podrán vender las cantidades definidas en esta tabla.
+                  Cantidades fijas con precio fijo: sólo se podrán vender las cantidades definidas en esta tabla, expresadas en {getUnidadComercialProductoSuffix(precioEditorDraft.measurementUnit)}.
                 </p>
                 <div className="overflow-x-auto rounded-lg border">
                   <Table>
                     <TableHeader className="bg-muted/50">
                       <TableRow>
-                        <TableHead className="min-w-[120px]">Cantidad</TableHead>
+                        <TableHead className="min-w-[120px]">Cantidad ({getUnidadComercialProductoSuffix(precioEditorDraft.measurementUnit)})</TableHead>
                         <TableHead className="min-w-[140px]">Precio</TableHead>
                         <TableHead className="w-[90px] text-right">Acciones</TableHead>
                       </TableRow>
@@ -6286,13 +6357,13 @@ export function ProductoServicioFichaTabs({
             {precioEditorDraft.metodoCalculo === "fijo_con_margen_variable" ? (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Cantidades fijas con margen variable: sólo se podrán vender las cantidades definidas en esta tabla y cada cantidad usa su propio margen.
+                  Cantidades fijas con margen variable: sólo se podrán vender las cantidades definidas en esta tabla en {getUnidadComercialProductoSuffix(precioEditorDraft.measurementUnit)} y cada cantidad usa su propio margen.
                 </p>
                 <div className="overflow-x-auto rounded-lg border">
                   <Table>
                     <TableHeader className="bg-muted/50">
                       <TableRow>
-                        <TableHead className="min-w-[120px]">Cantidad</TableHead>
+                        <TableHead className="min-w-[120px]">Cantidad ({getUnidadComercialProductoSuffix(precioEditorDraft.measurementUnit)})</TableHead>
                         <TableHead className="min-w-[140px]">Margen (%)</TableHead>
                         <TableHead className="w-[90px] text-right">Acciones</TableHead>
                       </TableRow>
@@ -6362,14 +6433,14 @@ export function ProductoServicioFichaTabs({
             {precioEditorDraft.metodoCalculo === "variable_por_cantidad" ? (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Rangos de precio con precio fijo: cada tramo define hasta qué cantidad aplica ese precio.
+                  Rangos de precio con precio fijo: cada tramo define hasta qué cantidad en {getUnidadComercialProductoSuffix(precioEditorDraft.measurementUnit)} aplica ese precio.
                 </p>
                 <div className="overflow-x-auto rounded-lg border">
                   <Table>
                     <TableHeader className="bg-muted/50">
                       <TableRow>
                         <TableHead className="min-w-[110px]">Rango</TableHead>
-                        <TableHead className="min-w-[130px]">Hasta cantidad</TableHead>
+                        <TableHead className="min-w-[130px]">Hasta cantidad ({getUnidadComercialProductoSuffix(precioEditorDraft.measurementUnit)})</TableHead>
                         <TableHead className="min-w-[130px]">Precio</TableHead>
                         <TableHead className="w-[90px] text-right">Acciones</TableHead>
                       </TableRow>
@@ -6378,7 +6449,7 @@ export function ProductoServicioFichaTabs({
                       {precioEditorDraft.detalle.tiers.map((tier, index) => (
                         <TableRow key={`precio-rango-${index}`}>
                           <TableCell className="text-sm text-muted-foreground">
-                            {getVariableRangeLabel(index, tier.quantityUntil)}
+                            {getVariableRangeLabel(index, tier.quantityUntil, precioEditorDraft.measurementUnit)}
                           </TableCell>
                           <TableCell>
                             <Input
@@ -6444,14 +6515,14 @@ export function ProductoServicioFichaTabs({
             {precioEditorDraft.metodoCalculo === "margen_variable" ? (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Cantidad libre por margen variable: cada tramo define hasta qué cantidad aplica ese margen.
+                  Cantidad libre por margen variable: cada tramo define hasta qué cantidad en {getUnidadComercialProductoSuffix(precioEditorDraft.measurementUnit)} aplica ese margen.
                 </p>
                 <div className="overflow-x-auto rounded-lg border">
                   <Table>
                     <TableHeader className="bg-muted/50">
                       <TableRow>
                         <TableHead className="min-w-[110px]">Rango</TableHead>
-                        <TableHead className="min-w-[130px]">Hasta cantidad</TableHead>
+                        <TableHead className="min-w-[130px]">Hasta cantidad ({getUnidadComercialProductoSuffix(precioEditorDraft.measurementUnit)})</TableHead>
                         <TableHead className="min-w-[130px]">Margen (%)</TableHead>
                         <TableHead className="w-[90px] text-right">Acciones</TableHead>
                       </TableRow>
@@ -6460,7 +6531,7 @@ export function ProductoServicioFichaTabs({
                       {precioEditorDraft.detalle.tiers.map((tier, index) => (
                         <TableRow key={`margen-rango-${index}`}>
                           <TableCell className="text-sm text-muted-foreground">
-                            {getVariableRangeLabel(index, tier.quantityUntil)}
+                            {getVariableRangeLabel(index, tier.quantityUntil, precioEditorDraft.measurementUnit)}
                           </TableCell>
                           <TableCell>
                             <Input
@@ -6605,7 +6676,7 @@ export function ProductoServicioFichaTabs({
               </Field>
               <Field>
                 <FieldLabel>Unidad comercial</FieldLabel>
-                <Input value={precioEspecialClienteEditorDraft.measurementUnit?.trim() || productoState.unidadComercial || "unidad"} disabled />
+                <Input value={getUnidadComercialProductoLabel(precioEspecialClienteEditorDraft.measurementUnit ?? productoState.unidadComercial)} disabled />
               </Field>
             </div>
 
@@ -6673,7 +6744,7 @@ export function ProductoServicioFichaTabs({
                   <Table>
                     <TableHeader className="bg-muted/50">
                       <TableRow>
-                        <TableHead>Cantidad</TableHead>
+                        <TableHead>Cantidad ({getUnidadComercialProductoSuffix(precioEspecialClienteEditorDraft.measurementUnit)})</TableHead>
                         <TableHead>Precio</TableHead>
                         <TableHead className="w-[90px] text-right">Acciones</TableHead>
                       </TableRow>
@@ -6710,7 +6781,7 @@ export function ProductoServicioFichaTabs({
                   <Table>
                     <TableHeader className="bg-muted/50">
                       <TableRow>
-                        <TableHead>Cantidad</TableHead>
+                        <TableHead>Cantidad ({getUnidadComercialProductoSuffix(precioEspecialClienteEditorDraft.measurementUnit)})</TableHead>
                         <TableHead>Margen (%)</TableHead>
                         <TableHead className="w-[90px] text-right">Acciones</TableHead>
                       </TableRow>
@@ -6748,7 +6819,7 @@ export function ProductoServicioFichaTabs({
                     <TableHeader className="bg-muted/50">
                       <TableRow>
                         <TableHead>Rango</TableHead>
-                        <TableHead>Hasta cantidad</TableHead>
+                        <TableHead>Hasta cantidad ({getUnidadComercialProductoSuffix(precioEspecialClienteEditorDraft.measurementUnit)})</TableHead>
                         <TableHead>Precio</TableHead>
                         <TableHead className="w-[90px] text-right">Acciones</TableHead>
                       </TableRow>
@@ -6756,7 +6827,7 @@ export function ProductoServicioFichaTabs({
                     <TableBody>
                       {(precioEspecialClienteEditorDraft.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>["detalle"]).tiers.map((tier, index) => (
                         <TableRow key={`especial-rango-precio-${index}`}>
-                          <TableCell className="text-sm text-muted-foreground">{getVariableRangeLabel(index, tier.quantityUntil)}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{getVariableRangeLabel(index, tier.quantityUntil, precioEspecialClienteEditorDraft.measurementUnit)}</TableCell>
                           <TableCell>
                             <Input type="number" min="1" step="1" value={tier.quantityUntil} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "variable_por_cantidad" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, quantityUntil: Number(e.target.value || 1) } : item) } }))} />
                           </TableCell>
@@ -6787,7 +6858,7 @@ export function ProductoServicioFichaTabs({
                     <TableHeader className="bg-muted/50">
                       <TableRow>
                         <TableHead>Rango</TableHead>
-                        <TableHead>Hasta cantidad</TableHead>
+                        <TableHead>Hasta cantidad ({getUnidadComercialProductoSuffix(precioEspecialClienteEditorDraft.measurementUnit)})</TableHead>
                         <TableHead>Margen (%)</TableHead>
                         <TableHead className="w-[90px] text-right">Acciones</TableHead>
                       </TableRow>
@@ -6795,7 +6866,7 @@ export function ProductoServicioFichaTabs({
                     <TableBody>
                       {(precioEspecialClienteEditorDraft.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>["detalle"]).tiers.map((tier, index) => (
                         <TableRow key={`especial-rango-margen-${index}`}>
-                          <TableCell className="text-sm text-muted-foreground">{getVariableRangeLabel(index, tier.quantityUntil)}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{getVariableRangeLabel(index, tier.quantityUntil, precioEspecialClienteEditorDraft.measurementUnit)}</TableCell>
                           <TableCell>
                             <Input type="number" min="1" step="1" value={tier.quantityUntil} onChange={(e) => updatePrecioEspecialClienteEditorDraft((current) => ({ ...current, detalle: { tiers: (current.detalle as Extract<ProductoPrecioConfig, { metodoCalculo: "margen_variable" }>["detalle"]).tiers.map((item, rowIndex) => rowIndex === index ? { ...item, quantityUntil: Number(e.target.value || 1) } : item) } }))} />
                           </TableCell>

@@ -37,7 +37,8 @@ import {
   getReplacementComponentOptionsForTemplates,
 } from "@/lib/materia-prima-templates";
 import { getPlantillaMaquinariaLabel } from "@/lib/maquinaria-templates";
-import { getUnitDefinition } from "@/lib/unidades";
+import { areUnitsCompatible, convertUnitPrice, getUnitDefinition } from "@/lib/unidades";
+import { convertFlexibleRollUnitPrice } from "@/lib/unidades-derivadas";
 import type { ProveedorDetalle } from "@/lib/proveedores";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -128,6 +129,21 @@ function getLabel<T extends string>(
     return fallback;
   }
   return items.find((item) => item.value === value)?.label ?? fallback;
+}
+
+function formatCurrencyUnit(value: number, unitLabel: string) {
+  return `$${number2Formatter.format(value)} por ${unitLabel}`;
+}
+
+function resolveVarianteUnits(
+  _variante: LocalVariante,
+  fallbackStock: UnidadMateriaPrima,
+  fallbackCompra: UnidadMateriaPrima,
+) {
+  return {
+    unidadStock: fallbackStock,
+    unidadCompra: fallbackCompra,
+  };
 }
 
 
@@ -289,8 +305,8 @@ function mapMateriaPrimaToForm(materiaPrima: MateriaPrima): FormState {
               null,
               2,
             ),
-            unidadStock: variante.unidadStock ?? undefined,
-            unidadCompra: variante.unidadCompra ?? undefined,
+            unidadStock: undefined,
+            unidadCompra: undefined,
             precioReferencia: variante.precioReferencia ?? undefined,
             proveedorReferenciaId: variante.proveedorReferenciaId ?? undefined,
           }))
@@ -352,8 +368,8 @@ function buildPayload(
           sku: variante.sku.trim() || generatedSku,
           activo: variante.activo,
           atributosVariante: attrs,
-          unidadStock: variante.unidadStock,
-          unidadCompra: variante.unidadCompra,
+          unidadStock: undefined,
+          unidadCompra: undefined,
           precioReferencia: variante.precioReferencia,
           proveedorReferenciaId: variante.proveedorReferenciaId,
         };
@@ -1395,28 +1411,81 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                               </div>
                             </TableCell>
                             <TableCell>
-                              <div className="relative max-w-[260px]">
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  step="0.000001"
-                                  className="pl-6 pr-20"
-                                  value={variante.precioReferencia ?? ""}
-                                  onChange={(event) =>
-                                    setVariante(variante.id, {
-                                      precioReferencia: event.target.value
-                                        ? Number(event.target.value)
-                                        : undefined,
-                                    })
-                                  }
-                                />
-                                <span className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-xs text-muted-foreground">
-                                  $
-                                </span>
-                                <span className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-xs text-muted-foreground">
-                                  {unidadStockLabel}
-                                </span>
-                              </div>
+                              {(() => {
+                                const { unidadStock, unidadCompra } = resolveVarianteUnits(
+                                  variante,
+                                  form.unidadStock,
+                                  form.unidadCompra,
+                                );
+                                const unidadCompraLabelVariante = getLabel(
+                                  unidadMateriaPrimaItems,
+                                  unidadCompra,
+                                );
+                                const unidadStockLabelVariante = getLabel(
+                                  unidadMateriaPrimaItems,
+                                  unidadStock,
+                                );
+                                const precioReferencia = variante.precioReferencia ?? null;
+                                const canConvert =
+                                  typeof precioReferencia === "number" &&
+                                  Number.isFinite(precioReferencia) &&
+                                  precioReferencia > 0;
+                                const precioPorStock =
+                                  canConvert
+                                    ? areUnitsCompatible(unidadCompra, unidadStock)
+                                      ? convertUnitPrice(
+                                          precioReferencia as number,
+                                          unidadCompra,
+                                          unidadStock,
+                                        )
+                                      : convertFlexibleRollUnitPrice({
+                                          pricePerFromUnit: precioReferencia as number,
+                                          from: unidadCompra,
+                                          to: unidadStock,
+                                          subfamilia: form.subfamilia,
+                                          attributes: parseJsonField(variante.atributosVarianteTexto, {}),
+                                        })
+                                    : null;
+
+                                return (
+                                  <div className="space-y-1">
+                                    <div className="relative max-w-[260px]">
+                                      <Input
+                                        type="number"
+                                        min={0}
+                                        step="0.000001"
+                                        className="pl-6 pr-20"
+                                        value={variante.precioReferencia ?? ""}
+                                        onChange={(event) =>
+                                          setVariante(variante.id, {
+                                            precioReferencia: event.target.value
+                                              ? Number(event.target.value)
+                                              : undefined,
+                                          })
+                                        }
+                                      />
+                                      <span className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-xs text-muted-foreground">
+                                        $
+                                      </span>
+                                      <span className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-xs text-muted-foreground">
+                                        {unidadCompraLabelVariante}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                      Precio cargado:{" "}
+                                      {typeof precioReferencia === "number" && Number.isFinite(precioReferencia)
+                                        ? formatCurrencyUnit(precioReferencia, unidadCompraLabelVariante)
+                                        : `Sin definir por ${unidadCompraLabelVariante}`}
+                                    </p>
+                                    {precioPorStock !== null && unidadCompra !== unidadStock ? (
+                                      <p className="text-xs text-muted-foreground">
+                                        Valor interno normalizado:{" "}
+                                        {formatCurrencyUnit(precioPorStock, unidadStockLabelVariante)}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell>
                               <Select

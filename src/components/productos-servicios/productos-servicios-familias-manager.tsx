@@ -7,6 +7,7 @@ import {
   ChevronsRightIcon,
   GripVerticalIcon,
   PlusIcon,
+  Trash2Icon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -14,6 +15,8 @@ import type { FamiliaProducto, ProductoServicio, SubfamiliaProducto } from "@/li
 import {
   createFamiliaProducto,
   createSubfamiliaProducto,
+  deleteFamiliaProducto,
+  deleteSubfamiliaProducto,
   updateFamiliaProducto,
   updateSubfamiliaProducto,
 } from "@/lib/productos-servicios-api";
@@ -60,6 +63,29 @@ export function ProductosServiciosFamiliasManager({
   );
 
   const familiaById = React.useMemo(() => new Map(familias.map((item) => [item.id, item])), [familias]);
+  const subfamiliasCountByFamiliaId = React.useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of subfamilias) {
+      map.set(item.familiaProductoId, (map.get(item.familiaProductoId) ?? 0) + 1);
+    }
+    return map;
+  }, [subfamilias]);
+  const productosCountByFamiliaId = React.useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of initialProductos) {
+      if (!item.familiaProductoId) continue;
+      map.set(item.familiaProductoId, (map.get(item.familiaProductoId) ?? 0) + 1);
+    }
+    return map;
+  }, [initialProductos]);
+  const productosCountBySubfamiliaId = React.useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of initialProductos) {
+      if (!item.subfamiliaProductoId) continue;
+      map.set(item.subfamiliaProductoId, (map.get(item.subfamiliaProductoId) ?? 0) + 1);
+    }
+    return map;
+  }, [initialProductos]);
 
   const subfamiliasVisibles = React.useMemo(
     () =>
@@ -227,6 +253,51 @@ export function ProductosServiciosFamiliasManager({
     });
   };
 
+  const handleDeleteFamilia = (familiaId: string) => {
+    const currentSubfamilias = subfamiliasCountByFamiliaId.get(familiaId) ?? 0;
+    const currentProductos = productosCountByFamiliaId.get(familiaId) ?? 0;
+    if (currentSubfamilias > 0 || currentProductos > 0) {
+      toast.error("No se puede borrar la familia porque tiene subfamilias o productos asociados.");
+      return;
+    }
+    startSavingFamilia(async () => {
+      try {
+        await deleteFamiliaProducto(familiaId);
+        const nextFamilias = familias.filter((item) => item.id !== familiaId);
+        setFamilias(nextFamilias);
+        setSelectedFamiliaId((prev) =>
+          prev === familiaId ? (nextFamilias[0]?.id ?? "") : prev,
+        );
+        toast.success("Familia eliminada.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "No se pudo borrar la familia.");
+      }
+    });
+  };
+
+  const handleDeleteSubfamilia = (subfamiliaId: string) => {
+    const currentProductos = productosCountBySubfamiliaId.get(subfamiliaId) ?? 0;
+    if (currentProductos > 0) {
+      toast.error("No se puede borrar la subfamilia porque tiene productos asociados.");
+      return;
+    }
+    startSavingSubfamilia(async () => {
+      try {
+        await deleteSubfamiliaProducto(subfamiliaId);
+        const nextSubfamilias = subfamilias.filter((item) => item.id !== subfamiliaId);
+        setSubfamilias(nextSubfamilias);
+        setSelectedSubfamiliaId((prev) =>
+          prev === subfamiliaId
+            ? (nextSubfamilias.find((item) => item.familiaProductoId === selectedFamiliaId)?.id ?? "")
+            : prev,
+        );
+        toast.success("Subfamilia eliminada.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "No se pudo borrar la subfamilia.");
+      }
+    });
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -276,10 +347,17 @@ export function ProductosServiciosFamiliasManager({
                       key={item.id}
                       className={cn(
                         "grid grid-cols-[28px_1fr_auto] items-center border-t px-2 py-2",
-                        selectedFamiliaId === item.id ? "bg-accent/50" : "bg-background",
+                        selectedFamiliaId === item.id
+                          ? "border-l-4 border-l-orange-500 bg-orange-50 shadow-[inset_0_0_0_1px_rgba(249,115,22,0.18)]"
+                          : "bg-background",
                       )}
                     >
-                      <GripVerticalIcon className="text-muted-foreground" />
+                      <GripVerticalIcon
+                        className={cn(
+                          "text-muted-foreground",
+                          selectedFamiliaId === item.id ? "text-orange-600" : "",
+                        )}
+                      />
                       <div className="flex items-center pr-4">
                         <Input
                           value={draftNombre}
@@ -293,7 +371,12 @@ export function ProductosServiciosFamiliasManager({
                               (e.currentTarget as HTMLInputElement).blur();
                             }
                           }}
-                          className="h-8 w-full border-muted-foreground/20 bg-background"
+                          className={cn(
+                            "h-8 w-full border-muted-foreground/20 bg-background",
+                            selectedFamiliaId === item.id
+                              ? "border-orange-300 bg-white ring-1 ring-orange-200"
+                              : "",
+                          )}
                           onClick={() => setSelectedFamiliaId(item.id)}
                         />
                       </div>
@@ -302,6 +385,19 @@ export function ProductosServiciosFamiliasManager({
                           checked={item.activo}
                           onCheckedChange={(checked) => handleToggleFamiliaActiva(item.id, checked)}
                         />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteFamilia(item.id)}
+                          disabled={
+                            isSavingFamilia ||
+                            (subfamiliasCountByFamiliaId.get(item.id) ?? 0) > 0 ||
+                            (productosCountByFamiliaId.get(item.id) ?? 0) > 0
+                          }
+                        >
+                          <Trash2Icon className="size-4" />
+                        </Button>
                         <Button type="button" variant="ghost" size="icon" onClick={() => setSelectedFamiliaId(item.id)}>
                           <ChevronsRightIcon />
                         </Button>
@@ -360,10 +456,17 @@ export function ProductosServiciosFamiliasManager({
                       key={item.id}
                       className={cn(
                         "grid grid-cols-[28px_1fr_auto] items-center border-t px-2 py-2",
-                        selectedSubfamiliaId === item.id ? "bg-accent/40" : "bg-background",
+                        selectedSubfamiliaId === item.id
+                          ? "border-l-4 border-l-orange-500 bg-orange-50/80 shadow-[inset_0_0_0_1px_rgba(249,115,22,0.18)]"
+                          : "bg-background",
                       )}
                     >
-                      <GripVerticalIcon className="text-muted-foreground" />
+                      <GripVerticalIcon
+                        className={cn(
+                          "text-muted-foreground",
+                          selectedSubfamiliaId === item.id ? "text-orange-600" : "",
+                        )}
+                      />
                       <div className="flex items-center pr-4">
                         <Input
                           value={draftNombre}
@@ -377,7 +480,12 @@ export function ProductosServiciosFamiliasManager({
                               (e.currentTarget as HTMLInputElement).blur();
                             }
                           }}
-                          className="h-8 w-full border-muted-foreground/20 bg-background"
+                          className={cn(
+                            "h-8 w-full border-muted-foreground/20 bg-background",
+                            selectedSubfamiliaId === item.id
+                              ? "border-orange-300 bg-white ring-1 ring-orange-200"
+                              : "",
+                          )}
                           onClick={() => setSelectedSubfamiliaId(item.id)}
                         />
                       </div>
@@ -386,6 +494,15 @@ export function ProductosServiciosFamiliasManager({
                           checked={item.activo}
                           onCheckedChange={(checked) => handleToggleSubfamiliaActiva(item.id, checked)}
                         />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteSubfamilia(item.id)}
+                          disabled={isSavingSubfamilia || (productosCountBySubfamiliaId.get(item.id) ?? 0) > 0}
+                        >
+                          <Trash2Icon className="size-4" />
+                        </Button>
                         <Button
                           type="button"
                           variant="ghost"

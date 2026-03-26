@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CANONICAL_UNITS = void 0;
 exports.unitsAreCompatible = unitsAreCompatible;
+exports.convertUnitValue = convertUnitValue;
+exports.convertUnitPrice = convertUnitPrice;
 exports.CANONICAL_UNITS = {
     unidad: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
     pack: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
@@ -27,5 +29,21 @@ function unitsAreCompatible(from, to) {
     const left = exports.CANONICAL_UNITS[from];
     const right = exports.CANONICAL_UNITS[to];
     return left.dimension === right.dimension && left.baseCode === right.baseCode;
+}
+function convertUnitValue(value, from, to) {
+    if (!unitsAreCompatible(from, to)) {
+        throw new Error(`Units ${from} and ${to} are not compatible.`);
+    }
+    const fromFactor = exports.CANONICAL_UNITS[from].factorToBase;
+    const toFactor = exports.CANONICAL_UNITS[to].factorToBase;
+    return (value * fromFactor) / toFactor;
+}
+function convertUnitPrice(pricePerFromUnit, from, to) {
+    if (!unitsAreCompatible(from, to)) {
+        throw new Error(`Units ${from} and ${to} are not compatible.`);
+    }
+    const fromFactor = exports.CANONICAL_UNITS[from].factorToBase;
+    const toFactor = exports.CANONICAL_UNITS[to].factorToBase;
+    return pricePerFromUnit * (toFactor / fromFactor);
 }
 //# sourceMappingURL=unidades-canonicas.js.map

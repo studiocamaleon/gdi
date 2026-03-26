@@ -1,5 +1,16 @@
 export type TipoProductoServicio = 'producto' | 'servicio';
 export type EstadoProductoServicio = 'activo' | 'inactivo';
+export type MotorCategory = 'digital_sheet' | 'wide_format';
+export type TipoVentaGranFormato = 'm2' | 'metro_lineal';
+export type UnidadComercialProducto = 'unidad' | 'm2' | 'metro_lineal';
+export const unidadComercialProductoItems: Array<{
+  value: UnidadComercialProducto;
+  label: string;
+}> = [
+  { value: 'unidad', label: 'Unidad' },
+  { value: 'm2', label: 'Metro cuadrado' },
+  { value: 'metro_lineal', label: 'Metro lineal' },
+];
 export type TipoImpresionProductoVariante = 'bn' | 'cmyk';
 export type CarasProductoVariante = 'simple_faz' | 'doble_faz';
 export type DimensionOpcionProductiva = 'tipo_impresion' | 'caras';
@@ -9,7 +20,16 @@ export type TipoChecklistAccionRegla =
   | 'activar_paso'
   | 'seleccionar_variante_paso'
   | 'costo_extra'
-  | 'material_extra';
+  | 'material_extra'
+  | 'mutar_producto_base';
+export type ProductoChecklistMutacionTipo = 'agregar_demasia_por_lado';
+export type ProductoChecklistMutacionEjes = 'ancho' | 'alto' | 'ambos';
+export type ProductoChecklistMutacionProductoBase =
+  | {
+      tipo: 'agregar_demasia_por_lado';
+      ejes: ProductoChecklistMutacionEjes;
+      valorMmPorLado: number;
+    };
 export type ReglaCostoChecklist =
   | 'tiempo_min'
   | 'flat'
@@ -177,7 +197,7 @@ export type SubfamiliaProducto = {
   familiaProductoNombre: string;
   codigo: string;
   nombre: string;
-  unidadComercial: string;
+  unidadComercial: UnidadComercialProducto;
   activo: boolean;
   createdAt: string;
   updatedAt: string;
@@ -209,6 +229,25 @@ export type ProductoServicio = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type ProductoCore = Pick<
+  ProductoServicio,
+  | 'id'
+  | 'tipo'
+  | 'codigo'
+  | 'nombre'
+  | 'descripcion'
+  | 'motorCodigo'
+  | 'motorVersion'
+  | 'estado'
+  | 'activo'
+  | 'familiaProductoId'
+  | 'familiaProductoNombre'
+  | 'subfamiliaProductoId'
+  | 'subfamiliaProductoNombre'
+  | 'createdAt'
+  | 'updatedAt'
+>;
 
 export type ProductoRutaBaseMatchingItem = {
   tipoImpresion: TipoImpresionProductoVariante | null;
@@ -270,12 +309,23 @@ export type VarianteOpcionesProductivas = {
   updatedAt?: string;
 };
 
+export type MotorCapabilities = {
+  hasProductConfig: boolean;
+  hasVariantOverride: boolean;
+  hasPreview: boolean;
+  hasQuote: boolean;
+};
+
 export type MotorCostoCatalogItem = {
   code: string;
   version: number;
   label: string;
+  category: MotorCategory;
+  capabilities: MotorCapabilities;
   schema: Record<string, unknown>;
 };
+
+export type MotorDefinition = MotorCostoCatalogItem;
 
 export type ProductoMotorConfig = {
   productoId: string;
@@ -286,6 +336,8 @@ export type ProductoMotorConfig = {
   activo: boolean;
   updatedAt: string | null;
 };
+
+export type MotorProductConfig = ProductoMotorConfig;
 
 export type ProductoRutaPolicy = {
   id: string;
@@ -305,6 +357,137 @@ export type VarianteMotorOverride = {
   versionConfig: number;
   activo: boolean;
   updatedAt: string | null;
+};
+
+export type MotorVariantOverride = VarianteMotorOverride;
+
+export type DigitalProductDetailModel = {
+  producto: ProductoServicio;
+  variantes: ProductoVariante[];
+  motores: MotorDefinition[];
+};
+
+export type GranFormatoConfig = {
+  productoId: string;
+  tecnologiasCompatibles: string[];
+  maquinasCompatibles: string[];
+  perfilesCompatibles: string[];
+  materialBaseId: string | null;
+  materialesCompatibles: string[];
+  imposicion: GranFormatoImposicionConfig;
+  updatedAt: string | null;
+};
+
+export type GranFormatoImposicionCriterioOptimizacion =
+  | "menor_costo_total"
+  | "menor_desperdicio"
+  | "menor_largo_consumido";
+
+export type GranFormatoPanelizadoDireccion = "automatica" | "vertical" | "horizontal";
+export type GranFormatoPanelizadoDistribucion = "equilibrada" | "libre";
+export type GranFormatoPanelizadoInterpretacionAnchoMaximo = "total" | "util";
+export type GranFormatoPanelizadoModo = "automatico" | "manual";
+
+export type GranFormatoPanelManualItem = {
+  panelIndex: number;
+  usefulWidthMm: number;
+  usefulHeightMm: number;
+  overlapStartMm: number;
+  overlapEndMm: number;
+  finalWidthMm: number;
+  finalHeightMm: number;
+};
+
+export type GranFormatoPanelManualLayoutItem = {
+  sourcePieceId: string;
+  pieceWidthMm: number;
+  pieceHeightMm: number;
+  axis: "vertical" | "horizontal";
+  panels: GranFormatoPanelManualItem[];
+};
+
+export type GranFormatoPanelManualLayout = {
+  items: GranFormatoPanelManualLayoutItem[];
+};
+
+export type GranFormatoImposicionMedida = {
+  anchoMm: number | null;
+  altoMm: number | null;
+  cantidad: number;
+};
+
+export type GranFormatoImposicionConfig = {
+  medidas: GranFormatoImposicionMedida[];
+  piezaAnchoMm: number | null;
+  piezaAltoMm: number | null;
+  cantidadReferencia: number;
+  tecnologiaDefault: string | null;
+  maquinaDefaultId: string | null;
+  perfilDefaultId: string | null;
+  permitirRotacion: boolean;
+  separacionHorizontalMm: number;
+  separacionVerticalMm: number;
+  margenLateralIzquierdoMmOverride: number | null;
+  margenLateralDerechoMmOverride: number | null;
+  margenInicioMmOverride: number | null;
+  margenFinalMmOverride: number | null;
+  criterioOptimizacion: GranFormatoImposicionCriterioOptimizacion;
+  panelizadoActivo: boolean;
+  panelizadoDireccion: GranFormatoPanelizadoDireccion;
+  panelizadoSolapeMm: number | null;
+  panelizadoAnchoMaxPanelMm: number | null;
+  panelizadoDistribucion: GranFormatoPanelizadoDistribucion;
+  panelizadoInterpretacionAnchoMaximo: GranFormatoPanelizadoInterpretacionAnchoMaximo;
+  panelizadoModo: GranFormatoPanelizadoModo;
+  panelizadoManualLayout: GranFormatoPanelManualLayout | null;
+};
+
+export type GranFormatoRutaBaseReglaImpresion = {
+  id: string;
+  tecnologia: string;
+  maquinaId: string | null;
+  maquinaNombre: string;
+  pasoPlantillaId: string;
+  pasoPlantillaNombre: string;
+  perfilOperativoDefaultId: string | null;
+  perfilOperativoDefaultNombre: string;
+};
+
+export type GranFormatoRutaBase = {
+  productoId: string;
+  procesoDefinicionId: string | null;
+  procesoDefinicionNombre: string;
+  reglasImpresion: GranFormatoRutaBaseReglaImpresion[];
+  updatedAt: string | null;
+};
+
+export type GranFormatoVariante = {
+  id: string;
+  productoServicioId: string;
+  nombre: string;
+  maquinaId: string;
+  maquinaNombre: string;
+  plantillaMaquina: string;
+  tecnologia: string;
+  geometriaTrabajo: string;
+  anchoUtilMaquina: number | null;
+  perfilOperativoId: string;
+  perfilOperativoNombre: string;
+  productivityValue: number | null;
+  productivityUnit: string;
+  cantidadPasadas: number | null;
+  materialPreset: string;
+  configuracionTintas: string;
+  materiaPrimaVarianteId: string;
+  materiaPrimaNombre: string;
+  materiaPrimaSku: string;
+  esDefault: boolean;
+  permiteOverrideEnCotizacion: boolean;
+  activo: boolean;
+  observaciones: string;
+  detalle: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type TipoProductoAdicional = "servicio" | "acabado";
@@ -507,7 +690,7 @@ export type ProductoChecklistRegla = {
   tipoConsumo: 'por_unidad' | 'por_pliego' | 'por_m2' | null;
   factorConsumo: number | null;
   mermaPct: number | null;
-  detalle: Record<string, unknown> | null;
+  detalle: Record<string, unknown> | ProductoChecklistMutacionProductoBase | null;
 };
 
 export type ProductoChecklistRespuesta = {
@@ -536,6 +719,279 @@ export type ProductoChecklist = {
   preguntas: ProductoChecklistPregunta[];
   createdAt: string | null;
   updatedAt: string | null;
+};
+
+export type ProductoChecklistPayload = {
+  activo?: boolean;
+  preguntas: Array<{
+    id?: string;
+    texto: string;
+    tipoPregunta?: 'binaria' | 'single_select';
+    orden?: number;
+    activo?: boolean;
+    respuestas: Array<{
+      id?: string;
+      texto: string;
+      codigo?: string;
+      preguntaSiguienteId?: string;
+      orden?: number;
+      activo?: boolean;
+      reglas?: Array<{
+        id?: string;
+        accion:
+          | 'activar_paso'
+          | 'seleccionar_variante_paso'
+          | 'costo_extra'
+          | 'material_extra'
+          | 'mutar_producto_base';
+        orden?: number;
+        activo?: boolean;
+        pasoPlantillaId?: string;
+        variantePasoId?: string;
+        costoRegla?: 'tiempo_min' | 'flat' | 'por_unidad' | 'por_pliego' | 'porcentaje_sobre_total';
+        costoValor?: number;
+        costoCentroCostoId?: string;
+        materiaPrimaVarianteId?: string;
+        tipoConsumo?: 'por_unidad' | 'por_pliego' | 'por_m2';
+        factorConsumo?: number;
+        mermaPct?: number;
+        detalle?: Record<string, unknown> | ProductoChecklistMutacionProductoBase;
+      }>;
+    }>;
+  }>;
+};
+
+export type GranFormatoChecklistConfig = {
+  productoId: string;
+  aplicaATodasLasTecnologias: boolean;
+  checklistComun: ProductoChecklist;
+  checklistsPorTecnologia: Array<{
+    tecnologia: string;
+    checklist: ProductoChecklist;
+  }>;
+  updatedAt: string | null;
+};
+
+export type PreviewGranFormatoCostoMedida = {
+  anchoMm: number;
+  altoMm: number;
+  cantidad: number;
+};
+
+export type PreviewGranFormatoCostosPayload = {
+  periodo?: string;
+  tecnologia?: string;
+  perfilOverrideId?: string;
+  persistirSnapshot?: boolean;
+  incluirCandidatos?: boolean;
+  medidas: PreviewGranFormatoCostoMedida[];
+  checklistRespuestas?: Array<{
+    preguntaId: string;
+    respuestaId: string;
+  }>;
+  panelizado?: {
+    activo?: boolean;
+    modo?: GranFormatoPanelizadoModo | null;
+    direccion?: GranFormatoPanelizadoDireccion | null;
+    solapeMm?: number | null;
+    anchoMaxPanelMm?: number | null;
+    distribucion?: GranFormatoPanelizadoDistribucion | null;
+    interpretacionAnchoMaximo?: GranFormatoPanelizadoInterpretacionAnchoMaximo | null;
+    manualLayout?: GranFormatoPanelManualLayout | null;
+  };
+};
+
+export type GranFormatoCostosCandidateResumen = {
+  variantId: string;
+  rollWidthMm: number;
+  printableWidthMm: number;
+  marginLeftMm: number;
+  marginRightMm: number;
+  marginStartMm: number;
+  marginEndMm: number;
+  orientacion: "normal" | "rotada" | "mixta";
+  panelizado: boolean;
+  panelAxis: "vertical" | "horizontal" | null;
+  panelCount: number;
+  panelOverlapMm: number | null;
+  panelMaxWidthMm: number | null;
+  panelDistribution: GranFormatoPanelizadoDistribucion | null;
+  panelWidthInterpretation: GranFormatoPanelizadoInterpretacionAnchoMaximo | null;
+  panelMode: GranFormatoPanelizadoModo | null;
+  piecesPerRow: number;
+  rows: number;
+  consumedLengthMm: number;
+  usefulAreaM2: number;
+  consumedAreaM2: number;
+  wasteAreaM2: number;
+  wastePct: number;
+  substrateCost: number;
+  inkCost: number;
+  timeCost: number;
+  totalCost: number;
+  placements: Array<{
+    id: string;
+    widthMm: number;
+    heightMm: number;
+    usefulWidthMm: number;
+    usefulHeightMm: number;
+    overlapStartMm: number;
+    overlapEndMm: number;
+    centerXMm: number;
+    centerYMm: number;
+    label: string;
+    rotated: boolean;
+    originalWidthMm: number;
+    originalHeightMm: number;
+    panelIndex: number | null;
+    panelCount: number | null;
+    panelAxis: "vertical" | "horizontal" | null;
+    sourcePieceId: string | null;
+  }>;
+};
+
+export type GranFormatoCostosNestingPiece = {
+  id: string;
+  w: number;
+  h: number;
+  originalW?: number | null;
+  originalH?: number | null;
+  usefulW?: number | null;
+  usefulH?: number | null;
+  cx: number;
+  cy: number;
+  color: string;
+  label: string;
+  textColor?: string;
+  rotated?: boolean;
+  panelIndex?: number | null;
+  panelCount?: number | null;
+  panelAxis?: "vertical" | "horizontal" | null;
+  sourcePieceId?: string | null;
+  overlapStart?: number | null;
+  overlapEnd?: number | null;
+};
+
+export type GranFormatoCostosNestingPreview = {
+  rollWidth: number;
+  rollLength: number;
+  marginLeft: number;
+  marginRight: number;
+  marginStart: number;
+  marginEnd: number;
+  panelizado?: boolean;
+  panelAxis?: "vertical" | "horizontal" | null;
+  panelCount?: number;
+  panelOverlap?: number | null;
+  panelMaxWidth?: number | null;
+  panelDistribution?: GranFormatoPanelizadoDistribucion | null;
+  panelWidthInterpretation?: GranFormatoPanelizadoInterpretacionAnchoMaximo | null;
+  panelMode?: GranFormatoPanelizadoModo | null;
+  pieces: GranFormatoCostosNestingPiece[];
+};
+
+export type GranFormatoCostosResumenTecnico = {
+  varianteId: string;
+  varianteNombre: string;
+  varianteChips: Array<{
+    label: string;
+    value: string;
+  }>;
+  anchoRolloMm: number;
+  anchoImprimibleMm: number;
+  orientacion: "normal" | "rotada" | "mixta";
+  panelizado: boolean;
+  panelAxis: "vertical" | "horizontal" | null;
+  panelCount: number;
+  panelOverlapMm: number | null;
+  panelMaxWidthMm: number | null;
+  panelDistribution: GranFormatoPanelizadoDistribucion | null;
+  panelWidthInterpretation: GranFormatoPanelizadoInterpretacionAnchoMaximo | null;
+  panelMode: GranFormatoPanelizadoModo | null;
+  piezasPorFila: number;
+  filas: number;
+  largoConsumidoMm: number;
+  areaUtilM2: number;
+  areaConsumidaM2: number;
+  areaDesperdicioM2: number;
+  desperdicioPct: number;
+  costoSustrato: number;
+  costoTinta: number;
+  costoTiempo: number;
+  costoTotal: number;
+};
+
+export type GranFormatoCostosMaterialItem = {
+  tipo: string;
+  nombre: string;
+  sku: string;
+  variantChips?: Array<{
+    label: string;
+    value: string;
+  }>;
+  cantidad: number;
+  costoUnitario: number;
+  costo: number;
+  origen: string;
+  unidad?: string | null;
+  detalle?: Record<string, unknown> | null;
+};
+
+export type GranFormatoCostosCentroItem = {
+  orden: number;
+  codigo: string;
+  paso: string;
+  centroCostoId: string;
+  centroCostoNombre: string;
+  origen: string;
+  minutos: number;
+  tarifaHora: number;
+  costo: number;
+  detalleTecnico?: Record<string, unknown> | null;
+};
+
+export type GranFormatoCostosResponse = {
+  productoId: string;
+  snapshotId?: string;
+  createdAt?: string;
+  cantidadTotal: number;
+  periodo: string;
+  tecnologia: string;
+  medidasOriginales: PreviewGranFormatoCostoMedida[];
+  medidasEfectivas: PreviewGranFormatoCostoMedida[];
+  mutacionesAplicadas: Array<{
+    tipo: ProductoChecklistMutacionTipo;
+    ejes: ProductoChecklistMutacionEjes;
+    valorMmPorLado: number;
+    deltaAnchoMm: number;
+    deltaAltoMm: number;
+    preguntaId: string;
+    pregunta: string;
+    respuestaId: string;
+    respuesta: string;
+    reglaId: string;
+  }>;
+  traceChecklist: Array<{
+    preguntaId: string;
+    pregunta: string;
+    respuestaId: string;
+    respuesta: string;
+  }>;
+  maquinaId: string | null;
+  maquinaNombre: string;
+  perfilId: string | null;
+  perfilNombre: string;
+  warnings: string[];
+  resumenTecnico: GranFormatoCostosResumenTecnico;
+  materiasPrimas: GranFormatoCostosMaterialItem[];
+  centrosCosto: GranFormatoCostosCentroItem[];
+  totales: {
+    materiales: number;
+    centrosCosto: number;
+    tecnico: number;
+  };
+  nestingPreview: GranFormatoCostosNestingPreview | null;
+  candidatos?: GranFormatoCostosCandidateResumen[];
 };
 
 export type CotizacionProductoSnapshotResumen = {

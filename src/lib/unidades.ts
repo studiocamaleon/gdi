@@ -101,3 +101,12 @@ export function convertUnitValue(value: number, from: UnitCode, to: UnitCode) {
   const valueInBase = value * fromDef.factorToBase;
   return valueInBase / toDef.factorToBase;
 }
+
+export function convertUnitPrice(pricePerFromUnit: number, from: UnitCode, to: UnitCode) {
+  if (!areUnitsCompatible(from, to)) {
+    throw new Error(`Unidades incompatibles: ${from} -> ${to}`);
+  }
+  const fromDef = UNIT_DEFINITIONS[from];
+  const toDef = UNIT_DEFINITIONS[to];
+  return pricePerFromUnit * (toDef.factorToBase / fromDef.factorToBase);
+}

@@ -79,6 +79,9 @@ let ProductosServiciosController = class ProductosServiciosController {
     updateFamilia(auth, id, payload) {
         return this.service.updateFamilia(auth, id, payload);
     }
+    deleteFamilia(auth, id) {
+        return this.service.deleteFamilia(auth, id);
+    }
     getSubfamilias(auth, familiaId) {
         return this.service.findSubfamilias(auth, familiaId);
     }
@@ -88,8 +91,14 @@ let ProductosServiciosController = class ProductosServiciosController {
     updateSubfamilia(auth, id, payload) {
         return this.service.updateSubfamilia(auth, id, payload);
     }
+    deleteSubfamilia(auth, id) {
+        return this.service.deleteSubfamilia(auth, id);
+    }
     getProductos(auth) {
         return this.service.findProductos(auth);
+    }
+    getProductoCotizaciones(auth, id) {
+        return this.service.getProductoCotizaciones(auth, id);
     }
     getProducto(auth, id) {
         return this.service.findProducto(auth, id);
@@ -114,6 +123,39 @@ let ProductosServiciosController = class ProductosServiciosController {
     }
     upsertProductoMotorConfig(auth, id, payload) {
         return this.service.upsertProductoMotorConfig(auth, id, payload);
+    }
+    getGranFormatoConfig(auth, id) {
+        return this.service.getGranFormatoConfig(auth, id);
+    }
+    updateGranFormatoConfig(auth, id, payload) {
+        return this.service.updateGranFormatoConfig(auth, id, payload);
+    }
+    getGranFormatoRutaBase(auth, id) {
+        return this.service.getGranFormatoRutaBase(auth, id);
+    }
+    updateGranFormatoRutaBase(auth, id, payload) {
+        return this.service.updateGranFormatoRutaBase(auth, id, payload);
+    }
+    getGranFormatoChecklist(auth, id) {
+        return this.service.getGranFormatoChecklist(auth, id);
+    }
+    upsertGranFormatoChecklist(auth, id, payload) {
+        return this.service.updateGranFormatoChecklist(auth, id, payload);
+    }
+    previewGranFormatoCostos(auth, id, payload) {
+        return this.service.previewGranFormatoCostos(auth, id, payload);
+    }
+    getGranFormatoVariantes(auth, id) {
+        return this.service.findGranFormatoVariantes(auth, id);
+    }
+    createGranFormatoVariante(auth, id, payload) {
+        return this.service.createGranFormatoVariante(auth, id, payload);
+    }
+    updateGranFormatoVariante(auth, varianteId, payload) {
+        return this.service.updateGranFormatoVariante(auth, varianteId, payload);
+    }
+    deleteGranFormatoVariante(auth, varianteId) {
+        return this.service.deleteGranFormatoVariante(auth, varianteId);
     }
     updateProductoRutaPolicy(auth, id, payload) {
         return this.service.updateProductoRutaPolicy(auth, id, payload);
@@ -338,6 +380,14 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], ProductosServiciosController.prototype, "updateFamilia", null);
 __decorate([
+    (0, common_1.Delete)('familias/:id'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "deleteFamilia", null);
+__decorate([
     (0, common_1.Get)('subfamilias'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),
     __param(1, (0, common_1.Query)('familiaId')),
@@ -363,12 +413,28 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], ProductosServiciosController.prototype, "updateSubfamilia", null);
 __decorate([
+    (0, common_1.Delete)('subfamilias/:id'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "deleteSubfamilia", null);
+__decorate([
     (0, common_1.Get)(),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], ProductosServiciosController.prototype, "getProductos", null);
+__decorate([
+    (0, common_1.Get)(':id/cotizaciones'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "getProductoCotizaciones", null);
 __decorate([
     (0, common_1.Get)(':id'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),
@@ -438,6 +504,100 @@ __decorate([
     __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.UpsertProductoMotorConfigDto]),
     __metadata("design:returntype", void 0)
 ], ProductosServiciosController.prototype, "upsertProductoMotorConfig", null);
+__decorate([
+    (0, common_1.Get)(':id/gran-formato-config'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "getGranFormatoConfig", null);
+__decorate([
+    (0, common_1.Put)(':id/gran-formato-config'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.UpdateGranFormatoConfigDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "updateGranFormatoConfig", null);
+__decorate([
+    (0, common_1.Get)(':id/gran-formato-ruta-base'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "getGranFormatoRutaBase", null);
+__decorate([
+    (0, common_1.Put)(':id/gran-formato-ruta-base'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.UpdateGranFormatoRutaBaseDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "updateGranFormatoRutaBase", null);
+__decorate([
+    (0, common_1.Get)(':id/gran-formato-checklist'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "getGranFormatoChecklist", null);
+__decorate([
+    (0, common_1.Put)(':id/gran-formato-checklist'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.UpdateGranFormatoChecklistDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "upsertGranFormatoChecklist", null);
+__decorate([
+    (0, common_1.Post)(':id/gran-formato-costos/preview'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.PreviewGranFormatoCostosDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "previewGranFormatoCostos", null);
+__decorate([
+    (0, common_1.Get)(':id/gran-formato-variantes'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "getGranFormatoVariantes", null);
+__decorate([
+    (0, common_1.Post)(':id/gran-formato-variantes'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.CreateGranFormatoVarianteDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "createGranFormatoVariante", null);
+__decorate([
+    (0, common_1.Put)('gran-formato-variantes/:varianteId'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('varianteId')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.UpdateGranFormatoVarianteDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "updateGranFormatoVariante", null);
+__decorate([
+    (0, common_1.Delete)('gran-formato-variantes/:varianteId'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('varianteId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "deleteGranFormatoVariante", null);
 __decorate([
     (0, common_1.Put)(':id/ruta-policy'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),

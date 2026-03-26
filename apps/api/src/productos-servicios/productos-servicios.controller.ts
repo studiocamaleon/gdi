@@ -7,9 +7,14 @@ import {
   AssignProductoMotorDto,
   UpdateProductoPrecioDto,
   UpdateProductoPrecioEspecialClientesDto,
+  UpdateGranFormatoConfigDto,
+  UpdateGranFormatoChecklistDto,
+  UpdateGranFormatoRutaBaseDto,
   AssignVarianteRutaDto,
   CotizarProductoVarianteDto,
+  PreviewGranFormatoCostosDto,
   CreateProductoVarianteDto,
+  CreateGranFormatoVarianteDto,
   UpsertProductoChecklistDto,
   UpsertProductoAdicionalServicioPricingDto,
   UpsertVarianteOpcionesProductivasDto,
@@ -21,6 +26,7 @@ import {
   UpsertProductoMotorConfigDto,
   UpsertVarianteMotorOverrideDto,
   UpdateProductoVarianteDto,
+  UpdateGranFormatoVarianteDto,
   UpsertFamiliaProductoDto,
   UpsertProductoImpuestoDto,
   UpsertProductoServicioDto,
@@ -178,6 +184,11 @@ export class ProductosServiciosController {
     return this.service.updateFamilia(auth, id, payload);
   }
 
+  @Delete('familias/:id')
+  deleteFamilia(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    return this.service.deleteFamilia(auth, id);
+  }
+
   @Get('subfamilias')
   getSubfamilias(
     @CurrentSession() auth: CurrentAuth,
@@ -203,9 +214,19 @@ export class ProductosServiciosController {
     return this.service.updateSubfamilia(auth, id, payload);
   }
 
+  @Delete('subfamilias/:id')
+  deleteSubfamilia(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    return this.service.deleteSubfamilia(auth, id);
+  }
+
   @Get()
   getProductos(@CurrentSession() auth: CurrentAuth) {
     return this.service.findProductos(auth);
+  }
+
+  @Get(':id/cotizaciones')
+  getProductoCotizaciones(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    return this.service.getProductoCotizaciones(auth, id);
   }
 
   @Get(':id')
@@ -272,6 +293,100 @@ export class ProductosServiciosController {
     @Body() payload: UpsertProductoMotorConfigDto,
   ) {
     return this.service.upsertProductoMotorConfig(auth, id, payload);
+  }
+
+  @Get(':id/gran-formato-config')
+  getGranFormatoConfig(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.service.getGranFormatoConfig(auth, id);
+  }
+
+  @Put(':id/gran-formato-config')
+  updateGranFormatoConfig(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: UpdateGranFormatoConfigDto,
+  ) {
+    return this.service.updateGranFormatoConfig(auth, id, payload);
+  }
+
+  @Get(':id/gran-formato-ruta-base')
+  getGranFormatoRutaBase(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.service.getGranFormatoRutaBase(auth, id);
+  }
+
+  @Put(':id/gran-formato-ruta-base')
+  updateGranFormatoRutaBase(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: UpdateGranFormatoRutaBaseDto,
+  ) {
+    return this.service.updateGranFormatoRutaBase(auth, id, payload);
+  }
+
+  @Get(':id/gran-formato-checklist')
+  getGranFormatoChecklist(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.service.getGranFormatoChecklist(auth, id);
+  }
+
+  @Put(':id/gran-formato-checklist')
+  upsertGranFormatoChecklist(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: UpdateGranFormatoChecklistDto,
+  ) {
+    return this.service.updateGranFormatoChecklist(auth, id, payload);
+  }
+
+  @Post(':id/gran-formato-costos/preview')
+  previewGranFormatoCostos(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: PreviewGranFormatoCostosDto,
+  ) {
+    return this.service.previewGranFormatoCostos(auth, id, payload);
+  }
+
+  @Get(':id/gran-formato-variantes')
+  getGranFormatoVariantes(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.service.findGranFormatoVariantes(auth, id);
+  }
+
+  @Post(':id/gran-formato-variantes')
+  createGranFormatoVariante(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: CreateGranFormatoVarianteDto,
+  ) {
+    return this.service.createGranFormatoVariante(auth, id, payload);
+  }
+
+  @Put('gran-formato-variantes/:varianteId')
+  updateGranFormatoVariante(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('varianteId') varianteId: string,
+    @Body() payload: UpdateGranFormatoVarianteDto,
+  ) {
+    return this.service.updateGranFormatoVariante(auth, varianteId, payload);
+  }
+
+  @Delete('gran-formato-variantes/:varianteId')
+  deleteGranFormatoVariante(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('varianteId') varianteId: string,
+  ) {
+    return this.service.deleteGranFormatoVariante(auth, varianteId);
   }
 
   @Put(':id/ruta-policy')

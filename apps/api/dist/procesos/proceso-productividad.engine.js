@@ -369,7 +369,7 @@ function validateProductividadRulesByMode(args) {
                 message: 'Modo formula requiere Productividad base mayor a 0.',
             });
         }
-        if (!parseFormulaRule(args.reglaVelocidadJson)) {
+        if (args.reglaVelocidadJson && !parseFormulaRule(args.reglaVelocidadJson)) {
             errors.push({
                 field: 'reglaVelocidad',
                 message: 'Modo formula requiere una Regla de velocidad valida con tipo formula_v1.',
@@ -377,7 +377,7 @@ function validateProductividadRulesByMode(args) {
         }
     }
     if (args.modoProductividad === client_1.ModoProductividadProceso.TABLA) {
-        if (!parseTablaRule(args.reglaVelocidadJson)) {
+        if (args.reglaVelocidadJson && !parseTablaRule(args.reglaVelocidadJson)) {
             errors.push({
                 field: 'reglaVelocidad',
                 message: 'Modo tabla requiere una Regla de velocidad valida con tipo tabla_v1.',
@@ -455,6 +455,12 @@ function evaluateProductividad(input) {
                 contexto: input.contexto,
             });
         }
+        else if (productividadBase > 0) {
+            productividadAplicada = productividadBase;
+            if (input.reglaVelocidadJson) {
+                warnings.push('Regla de velocidad formula invalida. Se usa productividad base como fallback.');
+            }
+        }
         else {
             warnings.push('Regla de velocidad formula invalida. Se usa run manual como fallback.');
         }
@@ -468,6 +474,12 @@ function evaluateProductividad(input) {
             });
             if (productividadAplicada === null) {
                 warnings.push('La tabla de velocidad no encontro coincidencia ni fallback valido. Se usa run manual.');
+            }
+        }
+        else if (productividadBase > 0) {
+            productividadAplicada = productividadBase;
+            if (input.reglaVelocidadJson) {
+                warnings.push('Regla de velocidad tabla invalida. Se usa productividad base como fallback.');
             }
         }
         else {

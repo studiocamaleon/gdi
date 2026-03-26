@@ -1,0 +1,2 @@
+ALTER TYPE "TipoProductoChecklistReglaAccion"
+ADD VALUE IF NOT EXISTS 'MUTAR_PRODUCTO_BASE';

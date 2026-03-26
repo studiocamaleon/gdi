@@ -28,6 +28,111 @@ export enum EstadoProductoServicioDto {
   inactivo = 'inactivo',
 }
 
+export enum TipoVentaGranFormatoDto {
+  m2 = 'm2',
+  metro_lineal = 'metro_lineal',
+}
+
+export enum UnidadComercialProductoDto {
+  unidad = 'unidad',
+  m2 = 'm2',
+  metro_lineal = 'metro_lineal',
+}
+
+export enum GranFormatoImposicionCriterioOptimizacionDto {
+  menor_costo_total = 'menor_costo_total',
+  menor_desperdicio = 'menor_desperdicio',
+  menor_largo_consumido = 'menor_largo_consumido',
+}
+
+export enum GranFormatoPanelizadoDireccionDto {
+  automatica = 'automatica',
+  vertical = 'vertical',
+  horizontal = 'horizontal',
+}
+
+export enum GranFormatoPanelizadoDistribucionDto {
+  equilibrada = 'equilibrada',
+  libre = 'libre',
+}
+
+export enum GranFormatoPanelizadoInterpretacionAnchoMaximoDto {
+  total = 'total',
+  util = 'util',
+}
+
+export enum GranFormatoPanelizadoModoDto {
+  automatico = 'automatico',
+  manual = 'manual',
+}
+
+export class GranFormatoPanelManualItemDto {
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  panelIndex: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  usefulWidthMm: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  usefulHeightMm: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  overlapStartMm: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  overlapEndMm: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  finalWidthMm: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  finalHeightMm: number;
+}
+
+export class GranFormatoPanelManualLayoutItemDto {
+  @IsString()
+  sourcePieceId: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  pieceWidthMm: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  pieceHeightMm: number;
+
+  @IsEnum(GranFormatoPanelizadoDireccionDto)
+  axis: GranFormatoPanelizadoDireccionDto;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GranFormatoPanelManualItemDto)
+  panels: GranFormatoPanelManualItemDto[];
+}
+
+export class GranFormatoPanelManualLayoutDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GranFormatoPanelManualLayoutItemDto)
+  items: GranFormatoPanelManualLayoutItemDto[];
+}
+
 export enum TipoImpresionProductoVarianteDto {
   bn = 'bn',
   cmyk = 'cmyk',
@@ -96,6 +201,7 @@ export enum TipoChecklistAccionReglaDto {
   seleccionar_variante_paso = 'seleccionar_variante_paso',
   costo_extra = 'costo_extra',
   material_extra = 'material_extra',
+  mutar_producto_base = 'mutar_producto_base',
   set_atributo_tecnico = 'set_atributo_tecnico',
 }
 
@@ -523,6 +629,9 @@ export class UpsertProductoServicioDto {
   @IsUUID()
   subfamiliaProductoId?: string;
 
+  @IsEnum(UnidadComercialProductoDto)
+  unidadComercial: UnidadComercialProductoDto;
+
   @IsEnum(EstadoProductoServicioDto)
   estado: EstadoProductoServicioDto;
 
@@ -728,6 +837,267 @@ export class UpdateProductoPrecioEspecialClientesDto {
 export class UpsertProductoMotorConfigDto {
   @IsObject()
   parametros: Record<string, unknown>;
+}
+
+export class GranFormatoImposicionMedidaDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  anchoMm?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  altoMm?: number | null;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  cantidad: number;
+}
+
+export class UpdateGranFormatoImposicionDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => GranFormatoImposicionMedidaDto)
+  medidas?: GranFormatoImposicionMedidaDto[];
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  piezaAnchoMm?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  piezaAltoMm?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  cantidadReferencia?: number;
+
+  @IsOptional()
+  @IsString()
+  tecnologiaDefault?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  maquinaDefaultId?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  perfilDefaultId?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  permitirRotacion?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  separacionHorizontalMm?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  separacionVerticalMm?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  margenLateralIzquierdoMmOverride?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  margenLateralDerechoMmOverride?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  margenInicioMmOverride?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  margenFinalMmOverride?: number | null;
+
+  @IsOptional()
+  @IsEnum(GranFormatoImposicionCriterioOptimizacionDto)
+  criterioOptimizacion?: GranFormatoImposicionCriterioOptimizacionDto;
+
+  @IsOptional()
+  @IsBoolean()
+  panelizadoActivo?: boolean;
+
+  @IsOptional()
+  @IsEnum(GranFormatoPanelizadoModoDto)
+  panelizadoModo?: GranFormatoPanelizadoModoDto;
+
+  @IsOptional()
+  @IsEnum(GranFormatoPanelizadoDireccionDto)
+  panelizadoDireccion?: GranFormatoPanelizadoDireccionDto;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  panelizadoSolapeMm?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  panelizadoAnchoMaxPanelMm?: number | null;
+
+  @IsOptional()
+  @IsEnum(GranFormatoPanelizadoDistribucionDto)
+  panelizadoDistribucion?: GranFormatoPanelizadoDistribucionDto;
+
+  @IsOptional()
+  @IsEnum(GranFormatoPanelizadoInterpretacionAnchoMaximoDto)
+  panelizadoInterpretacionAnchoMaximo?: GranFormatoPanelizadoInterpretacionAnchoMaximoDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => GranFormatoPanelManualLayoutDto)
+  panelizadoManualLayout?: GranFormatoPanelManualLayoutDto | null;
+}
+
+export class UpdateGranFormatoConfigDto {
+  @IsArray()
+  @IsString({ each: true })
+  tecnologiasCompatibles: string[];
+
+  @IsArray()
+  @IsUUID(undefined, { each: true })
+  maquinasCompatibles: string[];
+
+  @IsArray()
+  @IsUUID(undefined, { each: true })
+  perfilesCompatibles: string[];
+
+  @IsOptional()
+  @IsUUID()
+  materialBaseId?: string | null;
+
+  @IsArray()
+  @IsUUID(undefined, { each: true })
+  materialesCompatibles: string[];
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateGranFormatoImposicionDto)
+  imposicion?: UpdateGranFormatoImposicionDto;
+}
+
+export class UpsertGranFormatoRutaBaseReglaImpresionDto {
+  @IsString()
+  @IsNotEmpty()
+  tecnologia: string;
+
+  @IsOptional()
+  @IsUUID()
+  maquinaId?: string | null;
+
+  @IsUUID()
+  pasoPlantillaId: string;
+
+  @IsOptional()
+  @IsUUID()
+  perfilOperativoDefaultId?: string | null;
+}
+
+export class UpdateGranFormatoRutaBaseDto {
+  @IsOptional()
+  @IsUUID()
+  procesoDefinicionId?: string | null;
+
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => UpsertGranFormatoRutaBaseReglaImpresionDto)
+  reglasImpresion: UpsertGranFormatoRutaBaseReglaImpresionDto[];
+}
+
+export class CreateGranFormatoVarianteDto {
+  @IsString()
+  @IsNotEmpty()
+  nombre: string;
+
+  @IsUUID()
+  maquinaId: string;
+
+  @IsUUID()
+  perfilOperativoId: string;
+
+  @IsUUID()
+  materiaPrimaVarianteId: string;
+
+  @IsOptional()
+  @IsBoolean()
+  esDefault?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  permiteOverrideEnCotizacion?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  activo?: boolean;
+
+  @IsOptional()
+  @IsString()
+  observaciones?: string;
+}
+
+export class UpdateGranFormatoVarianteDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  nombre?: string;
+
+  @IsOptional()
+  @IsUUID()
+  maquinaId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  perfilOperativoId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  materiaPrimaVarianteId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  esDefault?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  permiteOverrideEnCotizacion?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  activo?: boolean;
+
+  @IsOptional()
+  @IsString()
+  observaciones?: string;
 }
 
 export class UpsertVarianteMotorOverrideDto {
@@ -945,6 +1315,100 @@ export class UpsertProductoChecklistDto {
   @ValidateNested({ each: true })
   @Type(() => UpsertChecklistPreguntaDto)
   preguntas: UpsertChecklistPreguntaDto[];
+}
+
+export class UpsertGranFormatoChecklistPorTecnologiaDto {
+  @IsString()
+  @IsNotEmpty()
+  tecnologia: string;
+
+  @ValidateNested()
+  @Type(() => UpsertProductoChecklistDto)
+  checklist: UpsertProductoChecklistDto;
+}
+
+export class UpdateGranFormatoChecklistDto {
+  @IsBoolean()
+  aplicaATodasLasTecnologias: boolean;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpsertProductoChecklistDto)
+  checklistComun?: UpsertProductoChecklistDto;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => UpsertGranFormatoChecklistPorTecnologiaDto)
+  checklistsPorTecnologia?: UpsertGranFormatoChecklistPorTecnologiaDto[];
+}
+
+export class PreviewGranFormatoCostoMedidaDto {
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  anchoMm: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  altoMm: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  cantidad: number;
+}
+
+export class PreviewGranFormatoCostosDto {
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/)
+  periodo?: string;
+
+  @IsOptional()
+  @IsString()
+  tecnologia?: string;
+
+  @IsOptional()
+  @IsUUID()
+  perfilOverrideId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  persistirSnapshot?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  incluirCandidatos?: boolean;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => PreviewGranFormatoCostoMedidaDto)
+  medidas: PreviewGranFormatoCostoMedidaDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => CotizarChecklistRespuestaDto)
+  checklistRespuestas?: CotizarChecklistRespuestaDto[];
+
+  @IsOptional()
+  @IsObject()
+  panelizado?: {
+    activo?: boolean;
+    modo?: GranFormatoPanelizadoModoDto | null;
+    direccion?: GranFormatoPanelizadoDireccionDto | null;
+    solapeMm?: number | null;
+    anchoMaxPanelMm?: number | null;
+    distribucion?: GranFormatoPanelizadoDistribucionDto | null;
+    interpretacionAnchoMaximo?: GranFormatoPanelizadoInterpretacionAnchoMaximoDto | null;
+    manualLayout?: GranFormatoPanelManualLayoutDto | null;
+  };
 }
 
 export class CotizarProductoVarianteDto {

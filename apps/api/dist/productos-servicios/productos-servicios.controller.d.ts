@@ -1,5 +1,5 @@
 import type { CurrentAuth } from '../auth/auth.types';
-import { AssignProductoAdicionalDto, AssignProductoVariantesRutaMasivaDto, AssignProductoMotorDto, UpdateProductoPrecioDto, UpdateProductoPrecioEspecialClientesDto, AssignVarianteRutaDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, UpsertProductoChecklistDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, UpsertProductoAdicionalDto, PreviewImposicionProductoVarianteDto, UpdateProductoRutaPolicyDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoImpuestoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
+import { AssignProductoAdicionalDto, AssignProductoVariantesRutaMasivaDto, AssignProductoMotorDto, UpdateProductoPrecioDto, UpdateProductoPrecioEspecialClientesDto, UpdateGranFormatoConfigDto, UpdateGranFormatoChecklistDto, UpdateGranFormatoRutaBaseDto, AssignVarianteRutaDto, CotizarProductoVarianteDto, PreviewGranFormatoCostosDto, CreateProductoVarianteDto, CreateGranFormatoVarianteDto, UpsertProductoChecklistDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, UpsertProductoAdicionalDto, PreviewImposicionProductoVarianteDto, UpdateProductoRutaPolicyDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, UpdateProductoVarianteDto, UpdateGranFormatoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoImpuestoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
 import { ProductosServiciosService } from './productos-servicios.service';
 export declare class ProductosServiciosController {
     private readonly service;
@@ -21,21 +21,12 @@ export declare class ProductosServiciosController {
         altoMm: number;
     }[];
     getMotoresCosto(): {
-        code: "impresion_digital_laser";
-        version: 1;
-        label: "Impresión digital laser · v1";
-        schema: {
-            tipoCorte: string;
-            demasiaCorteMm: number;
-            lineaCorteMm: number;
-            tamanoPliegoImpresion: {
-                codigo: string;
-                nombre: string;
-                anchoMm: number;
-                altoMm: number;
-            };
-            mermaAdicionalPct: number;
-        };
+        code: string;
+        version: number;
+        label: string;
+        category: import("./motors/product-motor.contract").MotorCategory;
+        capabilities: import("./motors/product-motor.contract").ProductMotorCapabilities;
+        schema: Record<string, unknown>;
     }[];
     getAdicionales(auth: CurrentAuth): Promise<{
         id: string;
@@ -533,6 +524,10 @@ export declare class ProductosServiciosController {
         createdAt: string;
         updatedAt: string;
     }>;
+    deleteFamilia(auth: CurrentAuth, id: string): Promise<{
+        id: string;
+        deleted: boolean;
+    }>;
     getSubfamilias(auth: CurrentAuth, familiaId?: string): Promise<{
         id: string;
         codigo: string;
@@ -565,6 +560,10 @@ export declare class ProductosServiciosController {
         familiaProductoNombre: string;
         createdAt: string;
         updatedAt: string;
+    }>;
+    deleteSubfamilia(auth: CurrentAuth, id: string): Promise<{
+        id: string;
+        deleted: boolean;
     }>;
     getProductos(auth: CurrentAuth): Promise<{
         matchingBasePorVariante: never[];
@@ -645,6 +644,18 @@ export declare class ProductosServiciosController {
         dimensionesBaseConsumidas: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
+    }[]>;
+    getProductoCotizaciones(auth: CurrentAuth, id: string): Promise<{
+        id: string;
+        cantidad: number;
+        periodoTarifa: string;
+        motorCodigo: string;
+        motorVersion: number;
+        configVersionBase: number | null;
+        configVersionOverride: number | null;
+        total: number;
+        unitario: number;
+        createdAt: string;
     }[]>;
     getProducto(auth: CurrentAuth, id: string): Promise<{
         matchingBasePorVariante: {
@@ -1234,34 +1245,860 @@ export declare class ProductosServiciosController {
         createdAt: string;
         updatedAt: string;
     }>;
-    getProductoMotorConfig(auth: CurrentAuth, id: string): Promise<{
+    getProductoMotorConfig(auth: CurrentAuth, id: string): Promise<unknown>;
+    upsertProductoMotorConfig(auth: CurrentAuth, id: string, payload: UpsertProductoMotorConfigDto): Promise<unknown>;
+    getGranFormatoConfig(auth: CurrentAuth, id: string): Promise<{
         productoId: string;
-        motorCodigo: "impresion_digital_laser";
-        motorVersion: 1;
-        parametros: string | number | boolean | import("@prisma/client/runtime/library").JsonObject | import("@prisma/client/runtime/library").JsonArray | {
-            tipoCorte: string;
-            demasiaCorteMm: number;
-            lineaCorteMm: number;
-            tamanoPliegoImpresion: {
-                codigo: string;
-                nombre: string;
-                anchoMm: number;
-                altoMm: number;
-            };
-            mermaAdicionalPct: number;
+        tecnologiasCompatibles: string[];
+        maquinasCompatibles: string[];
+        perfilesCompatibles: string[];
+        materialBaseId: string | null;
+        materialesCompatibles: string[];
+        imposicion: {
+            medidas: {
+                anchoMm: number | null;
+                altoMm: number | null;
+                cantidad: number;
+            }[];
+            piezaAnchoMm: number | null;
+            piezaAltoMm: number | null;
+            cantidadReferencia: number;
+            tecnologiaDefault: string | null;
+            maquinaDefaultId: string | null;
+            perfilDefaultId: string | null;
+            permitirRotacion: boolean;
+            separacionHorizontalMm: number;
+            separacionVerticalMm: number;
+            margenLateralIzquierdoMmOverride: number | null;
+            margenLateralDerechoMmOverride: number | null;
+            margenInicioMmOverride: number | null;
+            margenFinalMmOverride: number | null;
+            panelizadoActivo: boolean;
+            panelizadoDireccion: import("./dto/productos-servicios.dto").GranFormatoPanelizadoDireccionDto;
+            panelizadoSolapeMm: number | null;
+            panelizadoAnchoMaxPanelMm: number | null;
+            panelizadoDistribucion: import("./dto/productos-servicios.dto").GranFormatoPanelizadoDistribucionDto;
+            panelizadoInterpretacionAnchoMaximo: import("./dto/productos-servicios.dto").GranFormatoPanelizadoInterpretacionAnchoMaximoDto;
+            panelizadoModo: import("./dto/productos-servicios.dto").GranFormatoPanelizadoModoDto;
+            panelizadoManualLayout: Record<string, unknown> | null;
+            criterioOptimizacion: import("./dto/productos-servicios.dto").GranFormatoImposicionCriterioOptimizacionDto;
         };
-        versionConfig: number;
-        activo: boolean;
-        updatedAt: string | null;
-    }>;
-    upsertProductoMotorConfig(auth: CurrentAuth, id: string, payload: UpsertProductoMotorConfigDto): Promise<{
-        productoId: string;
-        motorCodigo: "impresion_digital_laser";
-        motorVersion: 1;
-        parametros: import("@prisma/client/runtime/library").JsonValue;
-        versionConfig: number;
-        activo: boolean;
         updatedAt: string;
+    }>;
+    updateGranFormatoConfig(auth: CurrentAuth, id: string, payload: UpdateGranFormatoConfigDto): Promise<{
+        productoId: string;
+        tecnologiasCompatibles: string[];
+        maquinasCompatibles: string[];
+        perfilesCompatibles: string[];
+        materialBaseId: string | null;
+        materialesCompatibles: string[];
+        imposicion: {
+            medidas: {
+                anchoMm: number | null;
+                altoMm: number | null;
+                cantidad: number;
+            }[];
+            piezaAnchoMm: number | null;
+            piezaAltoMm: number | null;
+            cantidadReferencia: number;
+            tecnologiaDefault: string | null;
+            maquinaDefaultId: string | null;
+            perfilDefaultId: string | null;
+            permitirRotacion: boolean;
+            separacionHorizontalMm: number;
+            separacionVerticalMm: number;
+            margenLateralIzquierdoMmOverride: number | null;
+            margenLateralDerechoMmOverride: number | null;
+            margenInicioMmOverride: number | null;
+            margenFinalMmOverride: number | null;
+            panelizadoActivo: boolean;
+            panelizadoDireccion: import("./dto/productos-servicios.dto").GranFormatoPanelizadoDireccionDto;
+            panelizadoSolapeMm: number | null;
+            panelizadoAnchoMaxPanelMm: number | null;
+            panelizadoDistribucion: import("./dto/productos-servicios.dto").GranFormatoPanelizadoDistribucionDto;
+            panelizadoInterpretacionAnchoMaximo: import("./dto/productos-servicios.dto").GranFormatoPanelizadoInterpretacionAnchoMaximoDto;
+            panelizadoModo: import("./dto/productos-servicios.dto").GranFormatoPanelizadoModoDto;
+            panelizadoManualLayout: Record<string, unknown> | null;
+            criterioOptimizacion: import("./dto/productos-servicios.dto").GranFormatoImposicionCriterioOptimizacionDto;
+        };
+        updatedAt: string;
+    }>;
+    getGranFormatoRutaBase(auth: CurrentAuth, id: string): Promise<{
+        productoId: string;
+        procesoDefinicionId: string | null;
+        procesoDefinicionNombre: string;
+        reglasImpresion: {
+            id: string;
+            tecnologia: string;
+            maquinaId: string | null;
+            maquinaNombre: string;
+            pasoPlantillaId: string;
+            pasoPlantillaNombre: string;
+            perfilOperativoDefaultId: string | null;
+            perfilOperativoDefaultNombre: string;
+        }[];
+        updatedAt: string;
+    }>;
+    updateGranFormatoRutaBase(auth: CurrentAuth, id: string, payload: UpdateGranFormatoRutaBaseDto): Promise<{
+        productoId: string;
+        procesoDefinicionId: string | null;
+        procesoDefinicionNombre: string;
+        reglasImpresion: {
+            id: string;
+            tecnologia: string;
+            maquinaId: string | null;
+            maquinaNombre: string;
+            pasoPlantillaId: string;
+            pasoPlantillaNombre: string;
+            perfilOperativoDefaultId: string | null;
+            perfilOperativoDefaultNombre: string;
+        }[];
+        updatedAt: string;
+    }>;
+    getGranFormatoChecklist(auth: CurrentAuth, id: string): Promise<{
+        productoId: string;
+        aplicaATodasLasTecnologias: boolean;
+        checklistComun: {
+            productoId: string;
+            activo: boolean;
+            preguntas: {
+                id: string;
+                texto: string;
+                tipoPregunta: import("./dto/productos-servicios.dto").TipoChecklistPreguntaDto;
+                orden: number;
+                activo: boolean;
+                respuestas: {
+                    id: string;
+                    texto: string;
+                    codigo: string | null;
+                    preguntaSiguienteId: string | null;
+                    orden: number;
+                    activo: boolean;
+                    reglas: {
+                        id: string;
+                        accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra" | "mutar_producto_base";
+                        orden: number;
+                        activo: boolean;
+                        pasoPlantillaId: string | null;
+                        pasoPlantillaNombre: any;
+                        centroCostoId: any;
+                        centroCostoNombre: any;
+                        maquinaNombre: any;
+                        perfilOperativoNombre: any;
+                        setupMin: number | null;
+                        runMin: null;
+                        cleanupMin: number | null;
+                        tiempoFijoMin: number | null;
+                        variantePasoId: string | null;
+                        variantePasoNombre: string;
+                        variantePasoResumen: string;
+                        nivelesDisponibles: {
+                            id: string;
+                            nombre: string;
+                            orden: number;
+                            activo: boolean;
+                            modoProductividadNivel: string;
+                            tiempoFijoMin: number | null;
+                            productividadBase: number | null;
+                            unidadSalida: string | null;
+                            unidadTiempo: string | null;
+                            maquinaId: string | null;
+                            maquinaNombre: string;
+                            perfilOperativoId: string | null;
+                            perfilOperativoNombre: string;
+                            setupMin: number | null;
+                            cleanupMin: number | null;
+                            resumen: string;
+                            detalle: Record<string, unknown>;
+                        }[];
+                        costoRegla: "flat" | "por_unidad" | "por_pliego" | "porcentaje_sobre_total" | "tiempo_min" | null;
+                        costoValor: number | null;
+                        costoCentroCostoId: string | null;
+                        costoCentroCostoNombre: string;
+                        materiaPrimaVarianteId: string | null;
+                        materiaPrimaNombre: any;
+                        materiaPrimaSku: any;
+                        tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
+                        factorConsumo: number | null;
+                        mermaPct: number | null;
+                        detalle: Record<string, unknown> | {
+                            tipo: "agregar_demasia_por_lado";
+                            ejes: "ancho" | "alto" | "ambos";
+                            valorMmPorLado: number;
+                        } | null;
+                    }[];
+                }[];
+            }[];
+            createdAt: null;
+            updatedAt: string;
+        };
+        checklistsPorTecnologia: ({
+            tecnologia: string;
+            checklist: {
+                productoId: string;
+                activo: boolean;
+                preguntas: {
+                    id: string;
+                    texto: string;
+                    tipoPregunta: import("./dto/productos-servicios.dto").TipoChecklistPreguntaDto;
+                    orden: number;
+                    activo: boolean;
+                    respuestas: {
+                        id: string;
+                        texto: string;
+                        codigo: string | null;
+                        preguntaSiguienteId: string | null;
+                        orden: number;
+                        activo: boolean;
+                        reglas: {
+                            id: string;
+                            accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra" | "mutar_producto_base";
+                            orden: number;
+                            activo: boolean;
+                            pasoPlantillaId: string | null;
+                            pasoPlantillaNombre: any;
+                            centroCostoId: any;
+                            centroCostoNombre: any;
+                            maquinaNombre: any;
+                            perfilOperativoNombre: any;
+                            setupMin: number | null;
+                            runMin: null;
+                            cleanupMin: number | null;
+                            tiempoFijoMin: number | null;
+                            variantePasoId: string | null;
+                            variantePasoNombre: string;
+                            variantePasoResumen: string;
+                            nivelesDisponibles: {
+                                id: string;
+                                nombre: string;
+                                orden: number;
+                                activo: boolean;
+                                modoProductividadNivel: string;
+                                tiempoFijoMin: number | null;
+                                productividadBase: number | null;
+                                unidadSalida: string | null;
+                                unidadTiempo: string | null;
+                                maquinaId: string | null;
+                                maquinaNombre: string;
+                                perfilOperativoId: string | null;
+                                perfilOperativoNombre: string;
+                                setupMin: number | null;
+                                cleanupMin: number | null;
+                                resumen: string;
+                                detalle: Record<string, unknown>;
+                            }[];
+                            costoRegla: "flat" | "por_unidad" | "por_pliego" | "porcentaje_sobre_total" | "tiempo_min" | null;
+                            costoValor: number | null;
+                            costoCentroCostoId: string | null;
+                            costoCentroCostoNombre: string;
+                            materiaPrimaVarianteId: string | null;
+                            materiaPrimaNombre: any;
+                            materiaPrimaSku: any;
+                            tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
+                            factorConsumo: number | null;
+                            mermaPct: number | null;
+                            detalle: Record<string, unknown> | {
+                                tipo: "agregar_demasia_por_lado";
+                                ejes: "ancho" | "alto" | "ambos";
+                                valorMmPorLado: number;
+                            } | null;
+                        }[];
+                    }[];
+                }[];
+                createdAt: null;
+                updatedAt: string;
+            };
+        } | null)[];
+        updatedAt: string;
+    }>;
+    upsertGranFormatoChecklist(auth: CurrentAuth, id: string, payload: UpdateGranFormatoChecklistDto): Promise<{
+        productoId: string;
+        aplicaATodasLasTecnologias: boolean;
+        checklistComun: {
+            productoId: string;
+            activo: boolean;
+            preguntas: {
+                id: string;
+                texto: string;
+                tipoPregunta: import("./dto/productos-servicios.dto").TipoChecklistPreguntaDto;
+                orden: number;
+                activo: boolean;
+                respuestas: {
+                    id: string;
+                    texto: string;
+                    codigo: string | null;
+                    preguntaSiguienteId: string | null;
+                    orden: number;
+                    activo: boolean;
+                    reglas: {
+                        id: string;
+                        accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra" | "mutar_producto_base";
+                        orden: number;
+                        activo: boolean;
+                        pasoPlantillaId: string | null;
+                        pasoPlantillaNombre: any;
+                        centroCostoId: any;
+                        centroCostoNombre: any;
+                        maquinaNombre: any;
+                        perfilOperativoNombre: any;
+                        setupMin: number | null;
+                        runMin: null;
+                        cleanupMin: number | null;
+                        tiempoFijoMin: number | null;
+                        variantePasoId: string | null;
+                        variantePasoNombre: string;
+                        variantePasoResumen: string;
+                        nivelesDisponibles: {
+                            id: string;
+                            nombre: string;
+                            orden: number;
+                            activo: boolean;
+                            modoProductividadNivel: string;
+                            tiempoFijoMin: number | null;
+                            productividadBase: number | null;
+                            unidadSalida: string | null;
+                            unidadTiempo: string | null;
+                            maquinaId: string | null;
+                            maquinaNombre: string;
+                            perfilOperativoId: string | null;
+                            perfilOperativoNombre: string;
+                            setupMin: number | null;
+                            cleanupMin: number | null;
+                            resumen: string;
+                            detalle: Record<string, unknown>;
+                        }[];
+                        costoRegla: "flat" | "por_unidad" | "por_pliego" | "porcentaje_sobre_total" | "tiempo_min" | null;
+                        costoValor: number | null;
+                        costoCentroCostoId: string | null;
+                        costoCentroCostoNombre: string;
+                        materiaPrimaVarianteId: string | null;
+                        materiaPrimaNombre: any;
+                        materiaPrimaSku: any;
+                        tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
+                        factorConsumo: number | null;
+                        mermaPct: number | null;
+                        detalle: Record<string, unknown> | {
+                            tipo: "agregar_demasia_por_lado";
+                            ejes: "ancho" | "alto" | "ambos";
+                            valorMmPorLado: number;
+                        } | null;
+                    }[];
+                }[];
+            }[];
+            createdAt: null;
+            updatedAt: string;
+        };
+        checklistsPorTecnologia: ({
+            tecnologia: string;
+            checklist: {
+                productoId: string;
+                activo: boolean;
+                preguntas: {
+                    id: string;
+                    texto: string;
+                    tipoPregunta: import("./dto/productos-servicios.dto").TipoChecklistPreguntaDto;
+                    orden: number;
+                    activo: boolean;
+                    respuestas: {
+                        id: string;
+                        texto: string;
+                        codigo: string | null;
+                        preguntaSiguienteId: string | null;
+                        orden: number;
+                        activo: boolean;
+                        reglas: {
+                            id: string;
+                            accion: "activar_paso" | "seleccionar_variante_paso" | "costo_extra" | "material_extra" | "mutar_producto_base";
+                            orden: number;
+                            activo: boolean;
+                            pasoPlantillaId: string | null;
+                            pasoPlantillaNombre: any;
+                            centroCostoId: any;
+                            centroCostoNombre: any;
+                            maquinaNombre: any;
+                            perfilOperativoNombre: any;
+                            setupMin: number | null;
+                            runMin: null;
+                            cleanupMin: number | null;
+                            tiempoFijoMin: number | null;
+                            variantePasoId: string | null;
+                            variantePasoNombre: string;
+                            variantePasoResumen: string;
+                            nivelesDisponibles: {
+                                id: string;
+                                nombre: string;
+                                orden: number;
+                                activo: boolean;
+                                modoProductividadNivel: string;
+                                tiempoFijoMin: number | null;
+                                productividadBase: number | null;
+                                unidadSalida: string | null;
+                                unidadTiempo: string | null;
+                                maquinaId: string | null;
+                                maquinaNombre: string;
+                                perfilOperativoId: string | null;
+                                perfilOperativoNombre: string;
+                                setupMin: number | null;
+                                cleanupMin: number | null;
+                                resumen: string;
+                                detalle: Record<string, unknown>;
+                            }[];
+                            costoRegla: "flat" | "por_unidad" | "por_pliego" | "porcentaje_sobre_total" | "tiempo_min" | null;
+                            costoValor: number | null;
+                            costoCentroCostoId: string | null;
+                            costoCentroCostoNombre: string;
+                            materiaPrimaVarianteId: string | null;
+                            materiaPrimaNombre: any;
+                            materiaPrimaSku: any;
+                            tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
+                            factorConsumo: number | null;
+                            mermaPct: number | null;
+                            detalle: Record<string, unknown> | {
+                                tipo: "agregar_demasia_por_lado";
+                                ejes: "ancho" | "alto" | "ambos";
+                                valorMmPorLado: number;
+                            } | null;
+                        }[];
+                    }[];
+                }[];
+                createdAt: null;
+                updatedAt: string;
+            };
+        } | null)[];
+        updatedAt: string;
+    }>;
+    previewGranFormatoCostos(auth: CurrentAuth, id: string, payload: PreviewGranFormatoCostosDto): Promise<{
+        candidatos: {
+            variantId: any;
+            rollWidthMm: number;
+            printableWidthMm: number;
+            marginLeftMm: number;
+            marginRightMm: number;
+            marginStartMm: number;
+            marginEndMm: number;
+            orientacion: "rotada" | "normal" | "mixta";
+            panelizado: boolean;
+            panelAxis: "vertical" | "horizontal" | null;
+            panelCount: number;
+            panelOverlapMm: number | null;
+            panelMaxWidthMm: number | null;
+            panelDistribution: "equilibrada" | "libre" | null;
+            panelWidthInterpretation: "total" | "util" | null;
+            panelMode: "manual" | "automatico" | null;
+            piecesPerRow: number;
+            rows: number;
+            consumedLengthMm: number;
+            usefulAreaM2: number;
+            consumedAreaM2: number;
+            wasteAreaM2: number;
+            wastePct: number;
+            substrateCost: number;
+            inkCost: number;
+            timeCost: number;
+            totalCost: number;
+            placements: {
+                id: string;
+                widthMm: number;
+                heightMm: number;
+                usefulWidthMm: number;
+                usefulHeightMm: number;
+                overlapStartMm: number;
+                overlapEndMm: number;
+                centerXMm: number;
+                centerYMm: number;
+                label: string;
+                rotated: boolean;
+                originalWidthMm: number;
+                originalHeightMm: number;
+                panelIndex: number | null;
+                panelCount: number | null;
+                panelAxis: "vertical" | "horizontal" | null;
+                sourcePieceId: string | null;
+            }[];
+        }[] | undefined;
+        productoId: string;
+        cantidadTotal: number;
+        periodo: string;
+        tecnologia: string;
+        medidasOriginales: {
+            anchoMm: number;
+            altoMm: number;
+            cantidad: number;
+        }[];
+        medidasEfectivas: {
+            anchoMm: number;
+            altoMm: number;
+            cantidad: number;
+        }[];
+        mutacionesAplicadas: {
+            tipo: "agregar_demasia_por_lado";
+            ejes: "ancho" | "alto" | "ambos";
+            valorMmPorLado: number;
+            deltaAnchoMm: number;
+            deltaAltoMm: number;
+            preguntaId: string;
+            pregunta: string;
+            respuestaId: string;
+            respuesta: string;
+            reglaId: string;
+        }[];
+        traceChecklist: {
+            preguntaId: string;
+            pregunta: string;
+            respuestaId: string;
+            respuesta: string;
+        }[];
+        maquinaId: any;
+        maquinaNombre: any;
+        perfilId: any;
+        perfilNombre: any;
+        warnings: string[];
+        resumenTecnico: {
+            varianteId: any;
+            varianteNombre: any;
+            varianteChips: {
+                label: string;
+                value: string;
+            }[];
+            anchoRolloMm: number;
+            anchoImprimibleMm: number;
+            orientacion: "rotada" | "normal" | "mixta";
+            panelizado: boolean;
+            panelAxis: "vertical" | "horizontal" | null;
+            panelCount: number;
+            panelOverlapMm: number | null;
+            panelMaxWidthMm: number | null;
+            panelDistribution: "equilibrada" | "libre" | null;
+            panelWidthInterpretation: "total" | "util" | null;
+            panelMode: "manual" | "automatico" | null;
+            piezasPorFila: number;
+            filas: number;
+            largoConsumidoMm: number;
+            areaUtilM2: number;
+            areaConsumidaM2: number;
+            areaDesperdicioM2: number;
+            desperdicioPct: number;
+            costoSustrato: number;
+            costoTinta: number;
+            costoTiempo: number;
+            costoTotal: number;
+        };
+        materiasPrimas: Record<string, unknown>[];
+        centrosCosto: {
+            orden: number;
+            codigo: string;
+            paso: string;
+            centroCostoId: string;
+            centroCostoNombre: string;
+            origen: string;
+            minutos: number;
+            tarifaHora: number;
+            costo: number;
+            detalleTecnico: Record<string, unknown> | null;
+        }[];
+        totales: {
+            materiales: number;
+            centrosCosto: number;
+            tecnico: number;
+        };
+        nestingPreview: {
+            rollWidth: number;
+            rollLength: number;
+            marginLeft: number;
+            marginRight: number;
+            marginStart: number;
+            marginEnd: number;
+            panelizado: boolean;
+            panelAxis: "vertical" | "horizontal" | null;
+            panelCount: number;
+            panelOverlap: number | null;
+            panelMaxWidth: number | null;
+            panelDistribution: "equilibrada" | "libre" | null;
+            panelWidthInterpretation: "total" | "util" | null;
+            panelMode: "manual" | "automatico" | null;
+            pieces: {
+                id: string;
+                w: number;
+                h: number;
+                originalW: number;
+                originalH: number;
+                usefulW: number;
+                usefulH: number;
+                cx: number;
+                cy: number;
+                color: string;
+                label: string;
+                textColor: string;
+                rotated: boolean;
+                panelIndex: number | null;
+                panelCount: number | null;
+                panelAxis: "vertical" | "horizontal" | null;
+                sourcePieceId: string | null;
+                overlapStart: number;
+                overlapEnd: number;
+            }[];
+        };
+    } | {
+        candidatos: {
+            variantId: any;
+            rollWidthMm: number;
+            printableWidthMm: number;
+            marginLeftMm: number;
+            marginRightMm: number;
+            marginStartMm: number;
+            marginEndMm: number;
+            orientacion: "rotada" | "normal" | "mixta";
+            panelizado: boolean;
+            panelAxis: "vertical" | "horizontal" | null;
+            panelCount: number;
+            panelOverlapMm: number | null;
+            panelMaxWidthMm: number | null;
+            panelDistribution: "equilibrada" | "libre" | null;
+            panelWidthInterpretation: "total" | "util" | null;
+            panelMode: "manual" | "automatico" | null;
+            piecesPerRow: number;
+            rows: number;
+            consumedLengthMm: number;
+            usefulAreaM2: number;
+            consumedAreaM2: number;
+            wasteAreaM2: number;
+            wastePct: number;
+            substrateCost: number;
+            inkCost: number;
+            timeCost: number;
+            totalCost: number;
+            placements: {
+                id: string;
+                widthMm: number;
+                heightMm: number;
+                usefulWidthMm: number;
+                usefulHeightMm: number;
+                overlapStartMm: number;
+                overlapEndMm: number;
+                centerXMm: number;
+                centerYMm: number;
+                label: string;
+                rotated: boolean;
+                originalWidthMm: number;
+                originalHeightMm: number;
+                panelIndex: number | null;
+                panelCount: number | null;
+                panelAxis: "vertical" | "horizontal" | null;
+                sourcePieceId: string | null;
+            }[];
+        }[] | undefined;
+        snapshotId: string;
+        createdAt: string;
+        productoId: string;
+        cantidadTotal: number;
+        periodo: string;
+        tecnologia: string;
+        medidasOriginales: {
+            anchoMm: number;
+            altoMm: number;
+            cantidad: number;
+        }[];
+        medidasEfectivas: {
+            anchoMm: number;
+            altoMm: number;
+            cantidad: number;
+        }[];
+        mutacionesAplicadas: {
+            tipo: "agregar_demasia_por_lado";
+            ejes: "ancho" | "alto" | "ambos";
+            valorMmPorLado: number;
+            deltaAnchoMm: number;
+            deltaAltoMm: number;
+            preguntaId: string;
+            pregunta: string;
+            respuestaId: string;
+            respuesta: string;
+            reglaId: string;
+        }[];
+        traceChecklist: {
+            preguntaId: string;
+            pregunta: string;
+            respuestaId: string;
+            respuesta: string;
+        }[];
+        maquinaId: any;
+        maquinaNombre: any;
+        perfilId: any;
+        perfilNombre: any;
+        warnings: string[];
+        resumenTecnico: {
+            varianteId: any;
+            varianteNombre: any;
+            varianteChips: {
+                label: string;
+                value: string;
+            }[];
+            anchoRolloMm: number;
+            anchoImprimibleMm: number;
+            orientacion: "rotada" | "normal" | "mixta";
+            panelizado: boolean;
+            panelAxis: "vertical" | "horizontal" | null;
+            panelCount: number;
+            panelOverlapMm: number | null;
+            panelMaxWidthMm: number | null;
+            panelDistribution: "equilibrada" | "libre" | null;
+            panelWidthInterpretation: "total" | "util" | null;
+            panelMode: "manual" | "automatico" | null;
+            piezasPorFila: number;
+            filas: number;
+            largoConsumidoMm: number;
+            areaUtilM2: number;
+            areaConsumidaM2: number;
+            areaDesperdicioM2: number;
+            desperdicioPct: number;
+            costoSustrato: number;
+            costoTinta: number;
+            costoTiempo: number;
+            costoTotal: number;
+        };
+        materiasPrimas: Record<string, unknown>[];
+        centrosCosto: {
+            orden: number;
+            codigo: string;
+            paso: string;
+            centroCostoId: string;
+            centroCostoNombre: string;
+            origen: string;
+            minutos: number;
+            tarifaHora: number;
+            costo: number;
+            detalleTecnico: Record<string, unknown> | null;
+        }[];
+        totales: {
+            materiales: number;
+            centrosCosto: number;
+            tecnico: number;
+        };
+        nestingPreview: {
+            rollWidth: number;
+            rollLength: number;
+            marginLeft: number;
+            marginRight: number;
+            marginStart: number;
+            marginEnd: number;
+            panelizado: boolean;
+            panelAxis: "vertical" | "horizontal" | null;
+            panelCount: number;
+            panelOverlap: number | null;
+            panelMaxWidth: number | null;
+            panelDistribution: "equilibrada" | "libre" | null;
+            panelWidthInterpretation: "total" | "util" | null;
+            panelMode: "manual" | "automatico" | null;
+            pieces: {
+                id: string;
+                w: number;
+                h: number;
+                originalW: number;
+                originalH: number;
+                usefulW: number;
+                usefulH: number;
+                cx: number;
+                cy: number;
+                color: string;
+                label: string;
+                textColor: string;
+                rotated: boolean;
+                panelIndex: number | null;
+                panelCount: number | null;
+                panelAxis: "vertical" | "horizontal" | null;
+                sourcePieceId: string | null;
+                overlapStart: number;
+                overlapEnd: number;
+            }[];
+        };
+    }>;
+    getGranFormatoVariantes(auth: CurrentAuth, id: string): Promise<{
+        id: string;
+        productoServicioId: string;
+        nombre: string;
+        maquinaId: string;
+        maquinaNombre: string;
+        plantillaMaquina: string;
+        tecnologia: string;
+        geometriaTrabajo: string;
+        anchoUtilMaquina: number | null;
+        perfilOperativoId: string;
+        perfilOperativoNombre: string;
+        productivityValue: number | null;
+        productivityUnit: string;
+        cantidadPasadas: number | null;
+        materialPreset: string;
+        configuracionTintas: string;
+        materiaPrimaVarianteId: string;
+        materiaPrimaNombre: string;
+        materiaPrimaSku: string;
+        esDefault: boolean;
+        permiteOverrideEnCotizacion: boolean;
+        activo: boolean;
+        observaciones: string;
+        detalle: Record<string, unknown>;
+        createdAt: string;
+        updatedAt: string;
+    }[]>;
+    createGranFormatoVariante(auth: CurrentAuth, id: string, payload: CreateGranFormatoVarianteDto): Promise<{
+        id: string;
+        productoServicioId: string;
+        nombre: string;
+        maquinaId: string;
+        maquinaNombre: string;
+        plantillaMaquina: string;
+        tecnologia: string;
+        geometriaTrabajo: string;
+        anchoUtilMaquina: number | null;
+        perfilOperativoId: string;
+        perfilOperativoNombre: string;
+        productivityValue: number | null;
+        productivityUnit: string;
+        cantidadPasadas: number | null;
+        materialPreset: string;
+        configuracionTintas: string;
+        materiaPrimaVarianteId: string;
+        materiaPrimaNombre: string;
+        materiaPrimaSku: string;
+        esDefault: boolean;
+        permiteOverrideEnCotizacion: boolean;
+        activo: boolean;
+        observaciones: string;
+        detalle: Record<string, unknown>;
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    updateGranFormatoVariante(auth: CurrentAuth, varianteId: string, payload: UpdateGranFormatoVarianteDto): Promise<{
+        id: string;
+        productoServicioId: string;
+        nombre: string;
+        maquinaId: string;
+        maquinaNombre: string;
+        plantillaMaquina: string;
+        tecnologia: string;
+        geometriaTrabajo: string;
+        anchoUtilMaquina: number | null;
+        perfilOperativoId: string;
+        perfilOperativoNombre: string;
+        productivityValue: number | null;
+        productivityUnit: string;
+        cantidadPasadas: number | null;
+        materialPreset: string;
+        configuracionTintas: string;
+        materiaPrimaVarianteId: string;
+        materiaPrimaNombre: string;
+        materiaPrimaSku: string;
+        esDefault: boolean;
+        permiteOverrideEnCotizacion: boolean;
+        activo: boolean;
+        observaciones: string;
+        detalle: Record<string, unknown>;
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    deleteGranFormatoVariante(auth: CurrentAuth, varianteId: string): Promise<{
+        id: string;
+        deleted: boolean;
     }>;
     updateProductoRutaPolicy(auth: CurrentAuth, id: string, payload: UpdateProductoRutaPolicyDto): Promise<{
         matchingBasePorVariante: {
@@ -1769,234 +2606,10 @@ export declare class ProductosServiciosController {
         createdAt: string;
         updatedAt: string;
     }>;
-    getVarianteMotorOverride(auth: CurrentAuth, varianteId: string): Promise<{
-        varianteId: string;
-        motorCodigo: "impresion_digital_laser";
-        motorVersion: 1;
-        parametros: string | number | boolean | import("@prisma/client/runtime/library").JsonObject | import("@prisma/client/runtime/library").JsonArray;
-        versionConfig: number;
-        activo: boolean;
-        updatedAt: string | null;
-    }>;
-    upsertVarianteMotorOverride(auth: CurrentAuth, varianteId: string, payload: UpsertVarianteMotorOverrideDto): Promise<{
-        varianteId: string;
-        motorCodigo: "impresion_digital_laser";
-        motorVersion: 1;
-        parametros: import("@prisma/client/runtime/library").JsonValue;
-        versionConfig: number;
-        activo: boolean;
-        updatedAt: string;
-    }>;
-    cotizarVariante(auth: CurrentAuth, varianteId: string, payload: CotizarProductoVarianteDto): Promise<{
-        createdAt: string;
-        varianteId: string;
-        productoServicioId: string;
-        productoNombre: string;
-        varianteNombre: string;
-        motorCodigo: "impresion_digital_laser";
-        motorVersion: 1;
-        periodo: string;
-        cantidad: number;
-        piezasPorPliego: number;
-        pliegos: number;
-        warnings: string[];
-        bloques: {
-            procesos: {
-                orden: number;
-                codigo: string;
-                nombre: string;
-                centroCostoId: string;
-                centroCostoNombre: string;
-                origen: string;
-                addonId: string | null;
-                setupMin: number;
-                runMin: number;
-                cleanupMin: number;
-                tiempoFijoMin: number;
-                totalMin: number;
-                tarifaHora: number;
-                costo: number;
-                detalleTecnico: Record<string, unknown> | null;
-            }[];
-            materiales: Record<string, unknown>[];
-        };
-        subtotales: {
-            procesos: number;
-            papel: number;
-            toner: number;
-            desgaste: number;
-            consumiblesTerminacion: number;
-            adicionalesMateriales: number;
-            adicionalesCostEffects: number;
-        };
-        total: number;
-        unitario: number;
-        trazabilidad: {
-            imposicion: {
-                tipoCorte: string;
-                piezasPorPliego: number;
-                orientacion: string;
-                anchoImprimibleMm: number;
-                altoImprimibleMm: number;
-                anchoDisponibleMm: number;
-                altoDisponibleMm: number;
-                normal: number;
-                rotada: number;
-                demasiaCorteMm: number;
-                lineaCorteMm: number;
-                piezaAnchoMm: number;
-                piezaAltoMm: number;
-                piezaAnchoEfectivoMm: number;
-                piezaAltoEfectivoMm: number;
-                cols: number;
-                rows: number;
-                sheetAnchoMm: number;
-                sheetAltoMm: number;
-                machineMargins: {
-                    leftMm: number;
-                    rightMm: number;
-                    topMm: number;
-                    bottomMm: number;
-                };
-            };
-            conversionPapel: {
-                esDerivado: boolean;
-                pliegosPorSustrato: number;
-                orientacion: string;
-            };
-            matchingBaseAplicado: {
-                pasoPlantillaId: any;
-                pasoPlantillaNombre: any;
-                perfilOperativoId: any;
-                perfilOperativoNombre: any;
-                tipoImpresion: import("./dto/productos-servicios.dto").TipoImpresionProductoVarianteDto | null;
-                caras: import("./dto/productos-servicios.dto").CarasProductoVarianteDto | null;
-            }[];
-            checklistAplicado: Record<string, unknown>[];
-            checklistRespuestasSeleccionadas: import("./dto/productos-servicios.dto").CotizarChecklistRespuestaDto[];
-            atributosTecnicosConfigurados: {
-                dimension: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto;
-                valor: import("./dto/productos-servicios.dto").ValorOpcionProductivaDto;
-            }[];
-            opcionProductivaEfectiva: {
-                dimension: import("./dto/productos-servicios.dto").DimensionOpcionProductivaDto;
-                valores: import("./dto/productos-servicios.dto").ValorOpcionProductivaDto[];
-            }[];
-            efectosAplicados: {
-                id: any;
-                addonId: any;
-                addonNombre: string;
-                tipo: import("./dto/productos-servicios.dto").TipoProductoAdicionalEfectoDto;
-                nombre: any;
-            }[];
-            routeEffectsAplicados: {
-                id: any;
-                addonId: any;
-                nombre: any;
-                pasos: any;
-                insertion: {
-                    modo: "append" | "before_step" | "after_step";
-                    pasoPlantillaId: string | null;
-                };
-            }[];
-            costEffectsAplicados: {
-                id: any;
-                addonId: any;
-                nombre: any;
-                regla: import("./dto/productos-servicios.dto").ReglaCostoAdicionalEfectoDto | null;
-            }[];
-            materialEffectsAplicados: {
-                id: any;
-                addonId: any;
-                nombre: any;
-                material: any;
-            }[];
-            costosPorEfecto: Record<string, unknown>[];
-            pasosCondicionalesActivos: {
-                pasoCodigo: string;
-                addonId: string | null;
-            }[];
-            config: {
-                tipoCorte: string;
-                demasiaCorteMm: number;
-                lineaCorteMm: number;
-                tamanoPliegoImpresion: {
-                    codigo: string;
-                    nombre: string;
-                    anchoMm: number;
-                    altoMm: number;
-                };
-                mermaAdicionalPct: number;
-            };
-            configVersionBase: number | null;
-            configVersionOverride: number | null;
-        };
-        snapshotId: string;
-    }>;
-    previewImposicionVariante(auth: CurrentAuth, varianteId: string, payload: PreviewImposicionProductoVarianteDto): Promise<{
-        varianteId: string;
-        varianteNombre: string;
-        pliegoImpresion: {
-            codigo: string;
-            nombre: string;
-            anchoMm: number;
-            altoMm: number;
-        };
-        sustrato: {
-            anchoMm: number;
-            altoMm: number;
-        };
-        machineMargins: {
-            leftMm: number;
-            rightMm: number;
-            topMm: number;
-            bottomMm: number;
-        };
-        imposicion: {
-            tipoCorte: string;
-            piezasPorPliego: number;
-            orientacion: string;
-            anchoImprimibleMm: number;
-            altoImprimibleMm: number;
-            anchoDisponibleMm: number;
-            altoDisponibleMm: number;
-            normal: number;
-            rotada: number;
-            demasiaCorteMm: number;
-            lineaCorteMm: number;
-            piezaAnchoMm: number;
-            piezaAltoMm: number;
-            piezaAnchoEfectivoMm: number;
-            piezaAltoEfectivoMm: number;
-            cols: number;
-            rows: number;
-            sheetAnchoMm: number;
-            sheetAltoMm: number;
-            machineMargins: {
-                leftMm: number;
-                rightMm: number;
-                topMm: number;
-                bottomMm: number;
-            };
-        };
-        conversionPapel: {
-            esDerivado: boolean;
-            pliegosPorSustrato: number;
-            orientacion: string;
-        };
-        config: {
-            tipoCorte: string;
-            demasiaCorteMm: number;
-            lineaCorteMm: number;
-            tamanoPliegoImpresion: {
-                codigo: string;
-                nombre: string;
-                anchoMm: number;
-                altoMm: number;
-            };
-            mermaAdicionalPct: number;
-        };
-    }>;
+    getVarianteMotorOverride(auth: CurrentAuth, varianteId: string): Promise<unknown>;
+    upsertVarianteMotorOverride(auth: CurrentAuth, varianteId: string, payload: UpsertVarianteMotorOverrideDto): Promise<unknown>;
+    cotizarVariante(auth: CurrentAuth, varianteId: string, payload: CotizarProductoVarianteDto): Promise<unknown>;
+    previewImposicionVariante(auth: CurrentAuth, varianteId: string, payload: PreviewImposicionProductoVarianteDto): Promise<unknown>;
     getVarianteCotizaciones(auth: CurrentAuth, varianteId: string): Promise<{
         id: string;
         cantidad: number;

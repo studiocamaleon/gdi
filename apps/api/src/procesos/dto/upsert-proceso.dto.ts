@@ -80,6 +80,13 @@ export enum UnidadProcesoDto {
   lote = 'lote',
 }
 
+export enum BaseCalculoProductividadDto {
+  cantidad = 'cantidad',
+  area_total_m2 = 'area_total_m2',
+  metro_lineal_total = 'metro_lineal_total',
+  perimetro_total_ml = 'perimetro_total_ml',
+}
+
 export class ProcesoOperacionItemDto {
   @IsOptional()
   @IsString()
@@ -172,6 +179,10 @@ export class ProcesoOperacionItemDto {
   @IsOptional()
   @IsObject()
   detalle?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsEnum(BaseCalculoProductividadDto)
+  baseCalculoProductividad?: BaseCalculoProductividadDto;
 
   @IsOptional()
   @IsArray()

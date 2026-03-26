@@ -60,10 +60,15 @@ const guillotinaPaperPresetOptions = [
 
 const uvPrintModeOptions = [
   option("cmyk", "CMYK"),
-  option("cmyk_blanco", "CMYK + Blanco"),
-  option("cmyk_barniz", "CMYK + Barniz"),
-  option("cmyk_blanco_barniz", "CMYK + Blanco + Barniz"),
-  option("cmyk_blanco_barniz_primer", "CMYK + Blanco + Barniz + Primer"),
+  option("cmyk_blanco", "CMYK + W"),
+  option("cmyk_barniz", "CMYK + V"),
+  option("cmyk_blanco_barniz", "CMYK + W + V"),
+];
+
+const uvMesaTypeOptions = [
+  option("mesa_extensora", "Mesa extensora"),
+  option("cinta", "Cinta"),
+  option("hibrida", "Hibrida"),
 ];
 
 const rollMediaOptions = [
@@ -168,8 +173,8 @@ const threeDTechnologyOptions = [
 ];
 
 const dtfInkOptions = [
-  option("cmyk_blanco", "CMYK + Blanco"),
-  option("cmyk_blanco_fluor", "CMYK + Blanco + Fluor"),
+  option("cmyk_blanco", "CMYK + W"),
+  option("cmyk_blanco_fluor", "CMYK + W + Fluor"),
 ];
 
 const cureSystemOptions = [
@@ -608,27 +613,37 @@ function buildUvFlatbedSections(kind: "flatbed" | "mesa_extensora"): MaquinariaT
     section({
       id: "capacidades_fisicas",
       title: "Capacidades fisicas",
-      description: "Superficie util, altura de objeto y limites mecanicos del equipo UV.",
+      description: "Boca de impresion, dimensiones de cama y altura maxima real del objeto.",
       fields: [
         field({
-          key: "anchoCama",
-          label: "Ancho cama",
+          key: "anchoBoca",
+          label: "Ancho de boca",
           scope: "maquina",
           kind: "number",
           required: true,
           unit: "cm",
-          description: "Ancho util de cama o zona de impresion.",
-          placeholder: "250",
+          description: "Ancho maximo efectivo de impresion del puente o cabezal.",
+          placeholder: "180",
+        }),
+        field({
+          key: "anchoCama",
+          label: "Ancho de cama",
+          scope: "maquina",
+          kind: "number",
+          required: true,
+          unit: "cm",
+          description: "Ancho fisico util de la cama o mesa de apoyo.",
+          placeholder: "180",
         }),
         field({
           key: "largoCama",
-          label: "Largo cama",
+          label: "Largo de cama",
           scope: "maquina",
           kind: "number",
           required: true,
           unit: "cm",
-          description: "Largo util de cama o zona de impresion.",
-          placeholder: "130",
+          description: "Largo fisico util de la cama o mesa de apoyo.",
+          placeholder: "300",
         }),
         field({
           key: "alturaMaximaObjeto",
@@ -636,49 +651,30 @@ function buildUvFlatbedSections(kind: "flatbed" | "mesa_extensora"): MaquinariaT
           scope: "maquina",
           kind: "number",
           required: true,
-          unit: "cm",
+          unit: "mm",
           description: "Altura maxima del objeto que puede imprimirse.",
-          placeholder: "15",
-        }),
-        field({
-          key: "pesoMaximoSoportado",
-          label: "Peso maximo soportado",
-          scope: "maquina",
-          kind: "number",
-          unit: "kg",
-          description: "Peso maximo de la pieza o mesa cargada.",
-          placeholder: "80",
-        }),
-        field({
-          key: "zonasVacio",
-          label: "Zonas de vacio",
-          scope: "maquina",
-          kind: "number",
-          description: "Cantidad de zonas de vacio controlables.",
-          placeholder: "4",
+          placeholder: "27",
         }),
       ],
     }),
     section({
       id: "parametros_tecnicos",
       title: "Parametros tecnicos",
-      description: "Canales de tinta, mesa y comportamiento UV del equipo.",
+      description: "Canales de tinta y capacidades especiales del equipo UV.",
       fields: [
-        field({
-          key: "tipoMesa",
-          label: "Tipo de mesa",
-          scope: "maquina",
-          kind: "select",
-          required: true,
-          description: "Configuracion mecanica principal de alimentacion.",
-          options:
-            kind === "mesa_extensora"
-              ? [
-                  option("mesa_extensora", "Mesa extensora"),
-                  option("cinta", "Cinta"),
-                ]
-              : [option("flatbed", "Flatbed fija")],
-        }),
+        ...(kind === "mesa_extensora"
+          ? [
+              field({
+                key: "tipoMesa",
+                label: "Tipo de mesa",
+                scope: "maquina",
+                kind: "select",
+                required: true,
+                description: "Define si el equipo trabaja con mesa extensora, cinta o configuracion hibrida.",
+                options: uvMesaTypeOptions,
+              }),
+            ]
+          : []),
         field({
           key: "configuracionCanales",
           label: "Configuracion de canales",
@@ -689,20 +685,6 @@ function buildUvFlatbedSections(kind: "flatbed" | "mesa_extensora"): MaquinariaT
           options: uvPrintModeOptions,
         }),
         field({
-          key: "blancoDisponible",
-          label: "Blanco disponible",
-          scope: "maquina",
-          kind: "boolean",
-          description: "Indica si la maquina imprime tinta blanca.",
-        }),
-        field({
-          key: "barnizDisponible",
-          label: "Barniz disponible",
-          scope: "maquina",
-          kind: "boolean",
-          description: "Indica si la maquina aplica barniz o clear.",
-        }),
-        field({
           key: "primerDisponible",
           label: "Primer disponible",
           scope: "maquina",
@@ -710,12 +692,40 @@ function buildUvFlatbedSections(kind: "flatbed" | "mesa_extensora"): MaquinariaT
           description: "Activalo si el equipo puede usar primer en linea.",
         }),
         field({
-          key: "materialesCompatibles",
-          label: "Materiales compatibles",
+          key: "margenIzquierdo",
+          label: "Margen izquierdo no imprimible",
           scope: "maquina",
-          kind: "multiselect",
-          description: "Materiales rigidos sobre los que la maquina trabaja con seguridad.",
-          options: rigidMediaOptions,
+          kind: "number",
+          unit: "cm",
+          description: "Reserva lateral izquierda que no se usa para impresion.",
+          placeholder: "0.5",
+        }),
+        field({
+          key: "margenDerecho",
+          label: "Margen derecho no imprimible",
+          scope: "maquina",
+          kind: "number",
+          unit: "cm",
+          description: "Reserva lateral derecha que no se usa para impresion.",
+          placeholder: "0.5",
+        }),
+        field({
+          key: "margenSuperior",
+          label: "Margen superior no imprimible",
+          scope: "maquina",
+          kind: "number",
+          unit: "cm",
+          description: "Reserva superior que no se usa para impresion.",
+          placeholder: "0.5",
+        }),
+        field({
+          key: "margenInferior",
+          label: "Margen inferior no imprimible",
+          scope: "maquina",
+          kind: "number",
+          unit: "cm",
+          description: "Reserva inferior que no se usa para impresion.",
+          placeholder: "0.5",
         }),
       ],
     }),
@@ -739,7 +749,7 @@ function buildUvFlatbedSections(kind: "flatbed" | "mesa_extensora"): MaquinariaT
           scope: "perfil_operativo",
           kind: "select",
           required: true,
-          description: "Combinacion de color y canales usada por este perfil.",
+          description: "Combinacion de canales de impresion usada por este perfil, limitada por la configuracion de canales de la maquina.",
           options: uvPrintModeOptions,
         }),
         field({
@@ -804,12 +814,12 @@ function buildUvRolloSections(): MaquinariaTemplateSection[] {
       fields: [
         field({
           key: "anchoUtil",
-          label: "Ancho util",
+          label: "Ancho maximo imprimible",
           scope: "maquina",
           kind: "number",
           required: true,
           unit: "cm",
-          description: "Ancho maximo imprimible real.",
+          description: "Ancho maximo que la maquina puede imprimir sobre el material cargado.",
           placeholder: "160",
         }),
         field({
@@ -856,20 +866,6 @@ function buildUvRolloSections(): MaquinariaTemplateSection[] {
           options: uvPrintModeOptions,
         }),
         field({
-          key: "blancoDisponible",
-          label: "Blanco disponible",
-          scope: "maquina",
-          kind: "boolean",
-          description: "Indica si la maquina imprime tinta blanca.",
-        }),
-        field({
-          key: "barnizDisponible",
-          label: "Barniz disponible",
-          scope: "maquina",
-          kind: "boolean",
-          description: "Indica si la maquina aplica barniz o clear.",
-        }),
-        field({
           key: "primerDisponible",
           label: "Primer disponible",
           scope: "maquina",
@@ -892,6 +888,24 @@ function buildUvRolloSections(): MaquinariaTemplateSection[] {
           unit: "cm",
           description: "Avance inicial de material que no se utiliza para impresion.",
           placeholder: "15",
+        }),
+        field({
+          key: "margenLateralIzquierdoNoImprimible",
+          label: "Margen lateral izquierdo no imprimible",
+          scope: "maquina",
+          kind: "number",
+          unit: "cm",
+          description: "Reserva lateral izquierda que no se usa para impresion.",
+          placeholder: "0.5",
+        }),
+        field({
+          key: "margenLateralDerechoNoImprimible",
+          label: "Margen lateral derecho no imprimible",
+          scope: "maquina",
+          kind: "number",
+          unit: "cm",
+          description: "Reserva lateral derecha que no se usa para impresion.",
+          placeholder: "0.5",
         }),
         field({
           key: "margenFinalNoImprimible",
@@ -924,7 +938,7 @@ function buildUvRolloSections(): MaquinariaTemplateSection[] {
           kind: "text",
           required: true,
           description: "Nombre del perfil UV rollo.",
-          placeholder: "Vinilo CMYK + Blanco normal",
+          placeholder: "Vinilo CMYK + W normal",
         }),
         field({
           key: "printMode",
@@ -932,7 +946,7 @@ function buildUvRolloSections(): MaquinariaTemplateSection[] {
           scope: "perfil_operativo",
           kind: "select",
           required: true,
-          description: "Configuracion de color usada en el perfil.",
+          description: "Configuracion de canales de impresion usada en el perfil, limitada por la configuracion de canales de la maquina.",
           options: uvPrintModeOptions,
         }),
         field({
@@ -1051,20 +1065,6 @@ function buildUvCylindricalSections(): MaquinariaTemplateSection[] {
           options: uvPrintModeOptions,
         }),
         field({
-          key: "blancoDisponible",
-          label: "Blanco disponible",
-          scope: "maquina",
-          kind: "boolean",
-          description: "Indica si la maquina imprime tinta blanca.",
-        }),
-        field({
-          key: "barnizDisponible",
-          label: "Barniz disponible",
-          scope: "maquina",
-          kind: "boolean",
-          description: "Indica si la maquina aplica barniz o clear.",
-        }),
-        field({
           key: "objetosCompatibles",
           label: "Objetos compatibles",
           scope: "maquina",
@@ -1109,7 +1109,7 @@ function buildUvCylindricalSections(): MaquinariaTemplateSection[] {
           scope: "perfil_operativo",
           kind: "select",
           required: true,
-          description: "Configuracion de color usada.",
+          description: "Configuracion de canales de impresion usada por este perfil, limitada por la configuracion de canales de la maquina.",
           options: uvPrintModeOptions,
         }),
         field({
@@ -1177,12 +1177,12 @@ function buildRollInkjetSections(
       fields: [
         field({
           key: "anchoUtil",
-          label: "Ancho util",
+          label: "Ancho maximo imprimible",
           scope: "maquina",
           kind: "number",
           required: true,
           unit: "cm",
-          description: "Ancho maximo imprimible real.",
+          description: "Ancho maximo que la maquina puede imprimir sobre el material cargado.",
           placeholder: "160",
         }),
         field({
@@ -1243,6 +1243,42 @@ function buildRollInkjetSections(
           kind: "select",
           description: "Sistema de secado o curado principal.",
           options: cureSystemOptions,
+        }),
+        field({
+          key: "margenLateralIzquierdoNoImprimible",
+          label: "Margen lateral izquierdo no imprimible",
+          scope: "maquina",
+          kind: "number",
+          unit: "cm",
+          description: "Reserva lateral izquierda que no se usa para impresion.",
+          placeholder: "0.5",
+        }),
+        field({
+          key: "margenLateralDerechoNoImprimible",
+          label: "Margen lateral derecho no imprimible",
+          scope: "maquina",
+          kind: "number",
+          unit: "cm",
+          description: "Reserva lateral derecha que no se usa para impresion.",
+          placeholder: "0.5",
+        }),
+        field({
+          key: "margenInicioNoImprimible",
+          label: "Margen inicio no imprimible",
+          scope: "maquina",
+          kind: "number",
+          unit: "cm",
+          description: "Avance inicial de material que no se utiliza para impresion.",
+          placeholder: "10",
+        }),
+        field({
+          key: "margenFinalNoImprimible",
+          label: "Margen final no imprimible",
+          scope: "maquina",
+          kind: "number",
+          unit: "cm",
+          description: "Reserva de material al final de tirada que no se imprime.",
+          placeholder: "5",
         }),
         field({
           key: "materialesCompatibles",
@@ -1330,12 +1366,12 @@ function buildDtfSections(kind: "dtf" | "dtf_uv"): MaquinariaTemplateSection[] {
       fields: [
         field({
           key: "anchoUtil",
-          label: "Ancho util",
+          label: "Ancho maximo imprimible",
           scope: "maquina",
           kind: "number",
           required: true,
           unit: "cm",
-          description: "Ancho maximo imprimible sobre film.",
+          description: "Ancho maximo que la maquina puede imprimir sobre el film cargado.",
           placeholder: "60",
         }),
         field({
@@ -1358,6 +1394,42 @@ function buildDtfSections(kind: "dtf" | "dtf_uv"): MaquinariaTemplateSection[] {
           : "Canales, materiales y laminacion para transferencia DTF UV.",
       fields: [
         field({
+          key: "margenLateralIzquierdoNoImprimible",
+          label: "Margen lateral izquierdo no imprimible",
+          scope: "maquina",
+          kind: "number",
+          unit: "cm",
+          description: "Reserva lateral izquierda que no se usa para impresion.",
+          placeholder: "0.3",
+        }),
+        field({
+          key: "margenLateralDerechoNoImprimible",
+          label: "Margen lateral derecho no imprimible",
+          scope: "maquina",
+          kind: "number",
+          unit: "cm",
+          description: "Reserva lateral derecha que no se usa para impresion.",
+          placeholder: "0.3",
+        }),
+        field({
+          key: "margenInicioNoImprimible",
+          label: "Margen inicio no imprimible",
+          scope: "maquina",
+          kind: "number",
+          unit: "cm",
+          description: "Avance inicial de film que no se utiliza para impresion.",
+          placeholder: "5",
+        }),
+        field({
+          key: "margenFinalNoImprimible",
+          label: "Margen final no imprimible",
+          scope: "maquina",
+          kind: "number",
+          unit: "cm",
+          description: "Reserva de film al final de tirada que no se imprime.",
+          placeholder: "3",
+        }),
+        field({
           key: "configuracionCanales",
           label: "Configuracion de canales",
           scope: "maquina",
@@ -1368,28 +1440,10 @@ function buildDtfSections(kind: "dtf" | "dtf_uv"): MaquinariaTemplateSection[] {
             kind === "dtf"
               ? dtfInkOptions
               : [
-                  option("cmyk_blanco_barniz", "CMYK + Blanco + Barniz"),
-                  option("cmyk_blanco", "CMYK + Blanco"),
+                  option("cmyk_blanco_barniz", "CMYK + W + V"),
+                  option("cmyk_blanco", "CMYK + W"),
                 ],
         }),
-        field({
-          key: "blancoDisponible",
-          label: "Blanco disponible",
-          scope: "maquina",
-          kind: "boolean",
-          description: "Indica si la maquina cuenta con canal de tinta blanca.",
-        }),
-        ...(kind === "dtf_uv"
-          ? [
-              field({
-                key: "barnizDisponible",
-                label: "Barniz disponible",
-                scope: "maquina",
-                kind: "boolean",
-                description: "Indica si la maquina aplica barniz UV.",
-              }),
-            ]
-          : []),
         field({
           key: "tipoFilm",
           label: "Tipo de film",
@@ -2840,7 +2894,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
         "Conviene separar perfiles por calidad y tipo de prenda.",
         "Carga film y polvo como consumibles distintos.",
       ],
-      examples: ["DTF 60 cm CMYK + Blanco para remeras y buzos"],
+      examples: ["DTF 60 cm CMYK + W para remeras y buzos"],
     },
   }),
   template({
@@ -2875,7 +2929,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
       summary:
         "Usa esta plantilla para UV con mesa extensora o alimentacion por cinta, util en piezas largas o flujos semicontinuos.",
       tips: [
-        "Refleja el tipo de mesa correcto para distinguirla de una flatbed fija.",
+        "Carga ancho de boca y dimensiones reales de cama para no mezclar capacidad fisica con area util generica.",
         "Crea perfiles separados si el equipo cambia mucho entre rigidos y piezas largas.",
       ],
       examples: ["UV con mesa extensora para PVC espumado y corrugado"],
@@ -2913,7 +2967,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
       summary:
         "Usa esta plantilla para impresoras UV de cama plana donde la superficie util, la altura de objeto y los canales especiales marcan la capacidad.",
       tips: [
-        "Carga solo materiales que el equipo pueda imprimir con estabilidad.",
+        "Carga ancho de boca, ancho de cama, largo de cama y altura maxima real del objeto.",
         "Separa perfiles por uso de blanco y barniz porque alteran mucho el rendimiento.",
       ],
       examples: ["UV flatbed 250x130 cm con blanco y barniz"],

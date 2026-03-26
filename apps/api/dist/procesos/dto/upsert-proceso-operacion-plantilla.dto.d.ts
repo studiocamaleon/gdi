@@ -1,4 +1,4 @@
-import { ModoProductividadProcesoDto, ProcesoOperacionNivelDto, TipoOperacionProcesoDto, UnidadProcesoDto } from './upsert-proceso.dto';
+import { BaseCalculoProductividadDto, ModoProductividadProcesoDto, ProcesoOperacionNivelDto, TipoOperacionProcesoDto, UnidadProcesoDto } from './upsert-proceso.dto';
 export declare class UpsertProcesoOperacionPlantillaDto {
     nombre: string;
     tipoOperacion: TipoOperacionProcesoDto;
@@ -16,6 +16,7 @@ export declare class UpsertProcesoOperacionPlantillaDto {
     mermaRunPct?: number;
     reglaVelocidad?: Record<string, unknown>;
     reglaMerma?: Record<string, unknown>;
+    baseCalculoProductividad?: BaseCalculoProductividadDto;
     observaciones?: string;
     niveles?: ProcesoOperacionNivelDto[];
     activo: boolean;

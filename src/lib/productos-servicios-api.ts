@@ -5,9 +5,16 @@ import {
   PliegoImpresionCatalogItem,
   CotizacionProductoSnapshotResumen,
   ProductoChecklist,
+  ProductoChecklistPayload,
+  GranFormatoChecklistConfig,
+  GranFormatoImposicionConfig,
+  GranFormatoCostosResponse,
   CotizacionProductoVariante,
   EstadoProductoServicio,
   FamiliaProducto,
+  GranFormatoConfig,
+  GranFormatoRutaBase,
+  GranFormatoVariante,
   MetodoCalculoPrecioProducto,
   MotorCostoCatalogItem,
   ProductoImpuestoCatalogo,
@@ -21,6 +28,8 @@ import {
   ProductoVariante,
   ProductoServicio,
   SubfamiliaProducto,
+  PreviewGranFormatoCostosPayload,
+  UnidadComercialProducto,
   VarianteOpcionesProductivas,
   ValorOpcionProductiva,
   TipoImpresionProductoVariante,
@@ -66,6 +75,12 @@ export async function updateFamiliaProducto(
   });
 }
 
+export async function deleteFamiliaProducto(familiaId: string) {
+  return apiRequest<{ id: string; deleted: boolean }>(`/productos-servicios/familias/${familiaId}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function getSubfamiliasProducto(familiaId?: string) {
   const suffix = familiaId ? `?familiaId=${encodeURIComponent(familiaId)}` : '';
   return apiRequest<SubfamiliaProducto[]>(`/productos-servicios/subfamilias${suffix}`);
@@ -97,6 +112,12 @@ export async function updateSubfamiliaProducto(
   return apiRequest<SubfamiliaProducto>(`/productos-servicios/subfamilias/${subfamiliaId}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteSubfamiliaProducto(subfamiliaId: string) {
+  return apiRequest<{ id: string; deleted: boolean }>(`/productos-servicios/subfamilias/${subfamiliaId}`, {
+    method: 'DELETE',
   });
 }
 
@@ -187,6 +208,7 @@ export async function createProductoServicio(payload: {
   motorVersion: number;
   familiaProductoId: string;
   subfamiliaProductoId?: string;
+  unidadComercial: UnidadComercialProducto;
   estado: EstadoProductoServicio;
   activo: boolean;
 }) {
@@ -207,6 +229,7 @@ export async function updateProductoServicio(
     motorVersion?: number;
     familiaProductoId: string;
     subfamiliaProductoId?: string;
+    unidadComercial: UnidadComercialProducto;
     estado: EstadoProductoServicio;
     activo: boolean;
   },
@@ -221,8 +244,127 @@ export async function getProductoVariantes(productoId: string) {
   return apiRequest<ProductoVariante[]>(`/productos-servicios/${productoId}/variantes`);
 }
 
+export async function getGranFormatoConfig(productoId: string) {
+  return apiRequest<GranFormatoConfig>(`/productos-servicios/${productoId}/gran-formato-config`);
+}
+
+export async function getGranFormatoRutaBase(productoId: string) {
+  return apiRequest<GranFormatoRutaBase>(`/productos-servicios/${productoId}/gran-formato-ruta-base`);
+}
+
+export async function updateGranFormatoConfig(
+  productoId: string,
+  payload: {
+    tecnologiasCompatibles: string[];
+    maquinasCompatibles: string[];
+    perfilesCompatibles: string[];
+    materialBaseId?: string | null;
+    materialesCompatibles: string[];
+    imposicion?: Partial<GranFormatoImposicionConfig>;
+  },
+) {
+  return apiRequest<GranFormatoConfig>(`/productos-servicios/${productoId}/gran-formato-config`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateGranFormatoRutaBase(
+  productoId: string,
+  payload: {
+    procesoDefinicionId?: string | null;
+    reglasImpresion: Array<{
+      tecnologia: string;
+      maquinaId?: string | null;
+      pasoPlantillaId: string;
+      perfilOperativoDefaultId?: string | null;
+    }>;
+  },
+) {
+  return apiRequest<GranFormatoRutaBase>(`/productos-servicios/${productoId}/gran-formato-ruta-base`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function previewGranFormatoCostos(
+  productoId: string,
+  payload: PreviewGranFormatoCostosPayload,
+) {
+  return apiRequest<GranFormatoCostosResponse>(
+    `/productos-servicios/${productoId}/gran-formato-costos/preview`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function getCotizacionesProductoServicio(productoId: string) {
+  return apiRequest<CotizacionProductoSnapshotResumen[]>(
+    `/productos-servicios/${productoId}/cotizaciones`,
+  );
+}
+
+export async function getGranFormatoVariantes(productoId: string) {
+  return apiRequest<GranFormatoVariante[]>(`/productos-servicios/${productoId}/gran-formato-variantes`);
+}
+
+export async function createGranFormatoVariante(
+  productoId: string,
+  payload: {
+    nombre: string;
+    maquinaId: string;
+    perfilOperativoId: string;
+    materiaPrimaVarianteId: string;
+    esDefault?: boolean;
+    permiteOverrideEnCotizacion?: boolean;
+    activo?: boolean;
+    observaciones?: string;
+  },
+) {
+  return apiRequest<GranFormatoVariante>(`/productos-servicios/${productoId}/gran-formato-variantes`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateGranFormatoVariante(
+  varianteId: string,
+  payload: {
+    nombre?: string;
+    maquinaId?: string;
+    perfilOperativoId?: string;
+    materiaPrimaVarianteId?: string;
+    esDefault?: boolean;
+    permiteOverrideEnCotizacion?: boolean;
+    activo?: boolean;
+    observaciones?: string;
+  },
+) {
+  return apiRequest<GranFormatoVariante>(`/productos-servicios/gran-formato-variantes/${varianteId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteGranFormatoVariante(varianteId: string) {
+  return apiRequest<{ id: string; deleted: boolean }>(
+    `/productos-servicios/gran-formato-variantes/${varianteId}`,
+    {
+      method: 'DELETE',
+    },
+  );
+}
+
 export async function getProductoChecklist(productoId: string) {
   return apiRequest<ProductoChecklist>(`/productos-servicios/${productoId}/checklist`);
+}
+
+export async function getGranFormatoChecklist(productoId: string) {
+  return apiRequest<GranFormatoChecklistConfig>(
+    `/productos-servicios/${productoId}/gran-formato-checklist`,
+  );
 }
 
 export async function getProductoAdicionales(productoId: string) {
@@ -291,49 +433,32 @@ export async function updateAdicionalEfecto(
 
 export async function upsertProductoChecklist(
   productoId: string,
-  payload: {
-    activo?: boolean;
-    preguntas: Array<{
-      id?: string;
-      texto: string;
-      tipoPregunta?: 'binaria' | 'single_select';
-      orden?: number;
-      activo?: boolean;
-      respuestas: Array<{
-        id?: string;
-        texto: string;
-        codigo?: string;
-        preguntaSiguienteId?: string;
-        orden?: number;
-        activo?: boolean;
-        reglas?: Array<{
-          id?: string;
-          accion:
-            | 'activar_paso'
-            | 'seleccionar_variante_paso'
-            | 'costo_extra'
-            | 'material_extra';
-          orden?: number;
-          activo?: boolean;
-          pasoPlantillaId?: string;
-          variantePasoId?: string;
-          costoRegla?: 'tiempo_min' | 'flat' | 'por_unidad' | 'por_pliego' | 'porcentaje_sobre_total';
-          costoValor?: number;
-          costoCentroCostoId?: string;
-          materiaPrimaVarianteId?: string;
-          tipoConsumo?: 'por_unidad' | 'por_pliego' | 'por_m2';
-          factorConsumo?: number;
-          mermaPct?: number;
-          detalle?: Record<string, unknown>;
-        }>;
-      }>;
-    }>;
-  },
+  payload: ProductoChecklistPayload,
 ) {
   return apiRequest<ProductoChecklist>(`/productos-servicios/${productoId}/checklist`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   });
+}
+
+export async function updateGranFormatoChecklist(
+  productoId: string,
+  payload: {
+    aplicaATodasLasTecnologias: boolean;
+    checklistComun?: ProductoChecklistPayload;
+    checklistsPorTecnologia?: Array<{
+      tecnologia: string;
+      checklist: ProductoChecklistPayload;
+    }>;
+  },
+) {
+  return apiRequest<GranFormatoChecklistConfig>(
+    `/productos-servicios/${productoId}/gran-formato-checklist`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export async function createProductoVariante(

@@ -601,7 +601,7 @@ export function validateProductividadRulesByMode(args: {
       });
     }
 
-    if (!parseFormulaRule(args.reglaVelocidadJson)) {
+    if (args.reglaVelocidadJson && !parseFormulaRule(args.reglaVelocidadJson)) {
       errors.push({
         field: 'reglaVelocidad',
         message:
@@ -611,7 +611,7 @@ export function validateProductividadRulesByMode(args: {
   }
 
   if (args.modoProductividad === ModoProductividadProceso.TABLA) {
-    if (!parseTablaRule(args.reglaVelocidadJson)) {
+    if (args.reglaVelocidadJson && !parseTablaRule(args.reglaVelocidadJson)) {
       errors.push({
         field: 'reglaVelocidad',
         message:
@@ -702,6 +702,13 @@ export function evaluateProductividad(
         mermaSetup: mermaSetupAplicada,
         contexto: input.contexto,
       });
+    } else if (productividadBase > 0) {
+      productividadAplicada = productividadBase;
+      if (input.reglaVelocidadJson) {
+        warnings.push(
+          'Regla de velocidad formula invalida. Se usa productividad base como fallback.',
+        );
+      }
     } else {
       warnings.push(
         'Regla de velocidad formula invalida. Se usa run manual como fallback.',
@@ -718,6 +725,13 @@ export function evaluateProductividad(
       if (productividadAplicada === null) {
         warnings.push(
           'La tabla de velocidad no encontro coincidencia ni fallback valido. Se usa run manual.',
+        );
+      }
+    } else if (productividadBase > 0) {
+      productividadAplicada = productividadBase;
+      if (input.reglaVelocidadJson) {
+        warnings.push(
+          'Regla de velocidad tabla invalida. Se usa productividad base como fallback.',
         );
       }
     } else {

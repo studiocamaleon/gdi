@@ -26,8 +26,8 @@ export declare class InventarioController {
             nombreVariante: string;
             activo: boolean;
             atributosVariante: import("@prisma/client/runtime/library").JsonValue;
-            unidadStock: string | null;
-            unidadCompra: string | null;
+            unidadStock: null;
+            unidadCompra: null;
             precioReferencia: number | null;
             moneda: string;
             proveedorReferenciaId: string | null;
@@ -57,8 +57,8 @@ export declare class InventarioController {
             nombreVariante: string;
             activo: boolean;
             atributosVariante: import("@prisma/client/runtime/library").JsonValue;
-            unidadStock: string | null;
-            unidadCompra: string | null;
+            unidadStock: null;
+            unidadCompra: null;
             precioReferencia: number | null;
             moneda: string;
             proveedorReferenciaId: string | null;
@@ -88,8 +88,8 @@ export declare class InventarioController {
             nombreVariante: string;
             activo: boolean;
             atributosVariante: import("@prisma/client/runtime/library").JsonValue;
-            unidadStock: string | null;
-            unidadCompra: string | null;
+            unidadStock: null;
+            unidadCompra: null;
             precioReferencia: number | null;
             moneda: string;
             proveedorReferenciaId: string | null;
@@ -119,8 +119,8 @@ export declare class InventarioController {
             nombreVariante: string;
             activo: boolean;
             atributosVariante: import("@prisma/client/runtime/library").JsonValue;
-            unidadStock: string | null;
-            unidadCompra: string | null;
+            unidadStock: null;
+            unidadCompra: null;
             precioReferencia: number | null;
             moneda: string;
             proveedorReferenciaId: string | null;
@@ -150,8 +150,8 @@ export declare class InventarioController {
             nombreVariante: string;
             activo: boolean;
             atributosVariante: import("@prisma/client/runtime/library").JsonValue;
-            unidadStock: string | null;
-            unidadCompra: string | null;
+            unidadStock: null;
+            unidadCompra: null;
             precioReferencia: number | null;
             moneda: string;
             proveedorReferenciaId: string | null;

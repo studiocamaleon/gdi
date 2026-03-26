@@ -154,6 +154,8 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
     'margenFinalNoImprimible',
     'margenInferior',
     'margenInicioNoImprimible',
+    'margenLateralDerechoNoImprimible',
+    'margenLateralIzquierdoNoImprimible',
     'margenIzquierdo',
     'margenSuperior',
     'materialesCompatibles',
@@ -188,6 +190,7 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
     'anchoImprimibleMaximo',
     'altoImprimibleMaximo',
     'altoBocaMm',
+    'anchoBoca',
     'anchoRolloMm',
     'soportaDobleRollo',
     'velocidadMmSeg',
@@ -517,7 +520,7 @@ let MaquinariaService = class MaquinariaService {
         }
     }
     buildMaquinaWriteData(auth, payload, forcedCodigo) {
-        const estadoConfiguracion = this.getDerivedEstadoConfiguracion(payload);
+        const estadoConfiguracion = this.resolvePersistedEstadoConfiguracion(payload);
         const parametrosTecnicos = this.withDerivedTemplateParams(payload);
         const dimensionesDerivadas = this.getDerivedMachineDimensions(payload, parametrosTecnicos);
         return {
@@ -623,6 +626,12 @@ let MaquinariaService = class MaquinariaService {
         }
         return upsert_maquina_dto_1.EstadoConfiguracionMaquinaDto.lista;
     }
+    resolvePersistedEstadoConfiguracion(payload) {
+        if (payload.estadoConfiguracion === upsert_maquina_dto_1.EstadoConfiguracionMaquinaDto.borrador) {
+            return upsert_maquina_dto_1.EstadoConfiguracionMaquinaDto.borrador;
+        }
+        return this.getDerivedEstadoConfiguracion(payload);
+    }
     hasMinimumBaseData(payload) {
         return Boolean(payload.nombre?.trim() &&
             payload.plantaId &&
@@ -665,6 +674,8 @@ let MaquinariaService = class MaquinariaService {
         return true;
     }
     async validateReferences(auth, payload) {
+        const isDraft = this.resolvePersistedEstadoConfiguracion(payload) ===
+            upsert_maquina_dto_1.EstadoConfiguracionMaquinaDto.borrador;
         const templateRule = TEMPLATE_CATALOG_RULES[payload.plantilla];
         if (!templateRule) {
             throw new common_1.BadRequestException(`La plantilla ${payload.plantilla} no existe en el catalogo del sistema.`);
@@ -677,13 +688,15 @@ let MaquinariaService = class MaquinariaService {
             throw new common_1.BadRequestException(`La unidad ${payload.unidadProduccionPrincipal} no coincide con la plantilla ${payload.plantilla}. Debe ser una de: ${allowedProductionUnits.join(', ')}.`);
         }
         this.validateTechnicalPayload(payload);
-        try {
-            (0, maquinaria_template_machine_rules_1.validateMachinePayloadByTemplate)(payload);
-        }
-        catch (error) {
-            throw new common_1.BadRequestException(error instanceof Error
-                ? error.message
-                : `Maquina invalida para la plantilla ${payload.plantilla}.`);
+        if (!isDraft) {
+            try {
+                (0, maquinaria_template_machine_rules_1.validateMachinePayloadByTemplate)(payload);
+            }
+            catch (error) {
+                throw new common_1.BadRequestException(error instanceof Error
+                    ? error.message
+                    : `Maquina invalida para la plantilla ${payload.plantilla}.`);
+            }
         }
         const planta = await this.prisma.planta.findFirst({
             where: {
@@ -889,6 +902,9 @@ let MaquinariaService = class MaquinariaService {
         return maquina;
     }
     toMaquinaResponse(maquina) {
+        const parametrosTecnicos = maquina.parametrosTecnicosJson ?? null;
+        const anchoImprimibleMaximo = this.toNumeric(parametrosTecnicos?.anchoImprimibleMaximo) ??
+            this.toNumber(maquina.anchoUtil);
         return {
             id: maquina.id,
             codigo: maquina.codigo,
@@ -906,7 +922,7 @@ let MaquinariaService = class MaquinariaService {
             estadoConfiguracion: this.toApiEnum(maquina.estadoConfiguracion),
             geometriaTrabajo: this.toApiEnum(maquina.geometriaTrabajo),
             unidadProduccionPrincipal: this.toApiEnum(maquina.unidadProduccionPrincipal),
-            anchoUtil: this.toNumber(maquina.anchoUtil),
+            anchoUtil: anchoImprimibleMaximo,
             largoUtil: this.toNumber(maquina.largoUtil),
             altoUtil: this.toNumber(maquina.altoUtil),
             espesorMaximo: this.toNumber(maquina.espesorMaximo),
@@ -914,8 +930,7 @@ let MaquinariaService = class MaquinariaService {
             fechaAlta: maquina.fechaAlta?.toISOString().slice(0, 10) ?? '',
             activo: maquina.activo,
             observaciones: maquina.observaciones ?? '',
-            parametrosTecnicos: maquina.parametrosTecnicosJson ??
-                null,
+            parametrosTecnicos,
             capacidadesAvanzadas: maquina.capacidadesAvanzadasJson ??
                 null,
             perfilesOperativos: maquina.perfilesOperativos.map((perfil) => ({
@@ -1160,6 +1175,22 @@ let MaquinariaService = class MaquinariaService {
         return Number.isFinite(parsed) ? parsed : null;
     }
     getDerivedMachineDimensions(payload, parametrosTecnicos) {
+        if ([
+            upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_dtf,
+            upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_dtf_uv,
+            upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_uv_rollo,
+            upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_solvente,
+            upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_inyeccion_tinta,
+            upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_latex,
+            upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_sublimacion_gran_formato,
+        ].includes(payload.plantilla) &&
+            parametrosTecnicos) {
+            const ancho = this.toNumeric(parametrosTecnicos.anchoImprimibleMaximo);
+            return {
+                anchoUtil: ancho ?? payload.anchoUtil,
+                largoUtil: payload.largoUtil,
+            };
+        }
         if (payload.plantilla !== upsert_maquina_dto_1.PlantillaMaquinariaDto.impresora_laser ||
             !parametrosTecnicos) {
             return {

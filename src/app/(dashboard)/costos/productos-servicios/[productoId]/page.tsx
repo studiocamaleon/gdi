@@ -20,8 +20,8 @@ import {
 
 const ProductoServicioFichaTabs = dynamicImport(
   () =>
-    import("@/components/productos-servicios/producto-servicio-ficha-tabs").then(
-      (module) => module.ProductoServicioFichaTabs,
+    import("@/components/productos-servicios/producto-servicio-detail-shell").then(
+      (module) => module.ProductoServicioDetailShell,
     ),
   {
     loading: () => <ModulePageSkeleton variant="detail" />,

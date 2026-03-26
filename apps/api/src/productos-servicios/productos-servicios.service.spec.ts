@@ -49,6 +49,25 @@ describe('ProductosServiciosService V1 adicionales', () => {
     timingOverride: { trace?: Record<string, unknown> | null } | null;
     warnings: string[];
   }) => { materiales: Array<Record<string, unknown>>; costo: number };
+  let resolveMateriaPrimaVariantUnitCost: (input: {
+    materiaPrimaVariante: {
+      sku: string;
+      precioReferencia: number | null;
+      atributosVarianteJson?: unknown;
+      unidadStock?: string | null;
+      unidadCompra?: string | null;
+      materiaPrima: {
+        nombre: string;
+        subfamilia?: string | null;
+        templateId?: string | null;
+        unidadStock?: string | null;
+        unidadCompra?: string | null;
+      };
+    };
+    targetUnit?: string | null;
+    warnings?: string[];
+    contextLabel?: string;
+  }) => number;
   let buildOperacionesCotizadasOrdenadas: (
     operacionesBase: Array<{ orden: number; nombre: string; detalleJson?: unknown }>,
     routeEffects: Array<{
@@ -154,6 +173,53 @@ describe('ProductosServiciosService V1 adicionales', () => {
     }>,
     selectedByPreguntaId: Map<string, string>,
   ) => Set<string>;
+  let evaluateGranFormatoImposicionCandidates: (input: {
+    maquina: {
+      anchoUtil: unknown;
+      parametrosTecnicosJson?: unknown;
+      plantilla: string;
+      capacidadesAvanzadasJson?: unknown;
+    } | null;
+    medidas: Array<{
+      anchoMm: number;
+      altoMm: number;
+      cantidad: number;
+    }>;
+    config: {
+      permitirRotacion: boolean;
+      separacionHorizontalMm: number;
+      separacionVerticalMm: number;
+      margenLateralIzquierdoMmOverride: number | null;
+      margenLateralDerechoMmOverride: number | null;
+      margenInicioMmOverride: number | null;
+      margenFinalMmOverride: number | null;
+      criterioOptimizacion: string;
+    };
+    variants: Array<Record<string, unknown>>;
+  }) => Array<Record<string, any>>;
+  let parseChecklistProductoMutacionDetalle: (
+    value: unknown,
+    throwOnError?: boolean,
+  ) => {
+    tipo: 'agregar_demasia_por_lado';
+    ejes: 'ancho' | 'alto' | 'ambos';
+    valorMmPorLado: number;
+  } | null;
+  let applyGranFormatoChecklistProductMutations: (input: {
+    medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
+    activeChecklistRules: Array<{
+      preguntaId: string;
+      pregunta: string;
+      respuestaId: string;
+      respuesta: string;
+      regla: { id: string; accion: string; detalle?: unknown };
+    }>;
+  }) => {
+    medidasOriginales: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
+    medidasEfectivas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
+    mutacionesAplicadas: Array<Record<string, unknown>>;
+    traceChecklist: Array<Record<string, unknown>>;
+  };
 
   beforeEach(() => {
     service = new ProductosServiciosService({} as never);
@@ -169,6 +235,10 @@ describe('ProductosServiciosService V1 adicionales', () => {
       service as unknown as Record<string, unknown>,
       'calculateLaminadoraFilmConsumables',
     ) as typeof calculateLaminadoraFilmConsumables;
+    resolveMateriaPrimaVariantUnitCost = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'resolveMateriaPrimaVariantUnitCost',
+    ) as typeof resolveMateriaPrimaVariantUnitCost;
     buildOperacionesCotizadasOrdenadas = Reflect.get(
       service as unknown as Record<string, unknown>,
       'buildOperacionesCotizadasOrdenadas',
@@ -201,6 +271,18 @@ describe('ProductosServiciosService V1 adicionales', () => {
       service as unknown as Record<string, unknown>,
       'resolveChecklistPreguntaIdsActivas',
     ) as typeof resolveChecklistPreguntaIdsActivas;
+    evaluateGranFormatoImposicionCandidates = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'evaluateGranFormatoImposicionCandidates',
+    ) as typeof evaluateGranFormatoImposicionCandidates;
+    parseChecklistProductoMutacionDetalle = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'parseChecklistProductoMutacionDetalle',
+    ) as typeof parseChecklistProductoMutacionDetalle;
+    applyGranFormatoChecklistProductMutations = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'applyGranFormatoChecklistProductMutations',
+    ) as typeof applyGranFormatoChecklistProductMutations;
   });
 
   it('usa la ruta completa para márgenes de imposición aunque haya filtros por addon', () => {
@@ -427,6 +509,60 @@ describe('ProductosServiciosService V1 adicionales', () => {
     expect(result?.runMin).toBeGreaterThan(0);
   });
 
+  it('convierte precio de referencia por litro a costo por ml para consumibles de maquinaria', () => {
+    const warnings: string[] = [];
+
+    const costoMl = resolveMateriaPrimaVariantUnitCost.call(service, {
+      materiaPrimaVariante: {
+        sku: 'TINTA-CMYK',
+        precioReferencia: 12000,
+        unidadCompra: 'LITRO',
+        unidadStock: 'ML',
+        materiaPrima: {
+          nombre: 'Tinta UV',
+          unidadCompra: 'LITRO',
+          unidadStock: 'ML',
+        },
+      },
+      targetUnit: 'ML',
+      warnings,
+      contextLabel: 'Consumible',
+    });
+
+    expect(costoMl).toBeCloseTo(12, 6);
+    expect(warnings).toEqual([]);
+  });
+
+  it('convierte precio de referencia por rollo a costo por m2 en sustrato flexible', () => {
+    const warnings: string[] = [];
+
+    const costoM2 = resolveMateriaPrimaVariantUnitCost.call(service, {
+      materiaPrimaVariante: {
+        sku: 'VINILO-152',
+        precioReferencia: 150000,
+        atributosVarianteJson: {
+          ancho: 1.5,
+          largo: 50,
+          acabado: 'Brillante',
+        },
+        unidadCompra: 'ROLLO',
+        unidadStock: 'M2',
+        materiaPrima: {
+          nombre: 'Vinilo polimérico',
+          subfamilia: 'sustrato_rollo_flexible',
+          unidadCompra: 'ROLLO',
+          unidadStock: 'M2',
+        },
+      },
+      targetUnit: 'M2',
+      warnings,
+      contextLabel: 'Sustrato',
+    });
+
+    expect(costoM2).toBeCloseTo(2000, 6);
+    expect(warnings).toEqual([]);
+  });
+
   it('rechaza perfil de doble rollo cuando la maquina no lo soporta', () => {
     expect(() =>
       calculateTerminatingOperationTiming.call(service, {
@@ -494,6 +630,142 @@ describe('ProductosServiciosService V1 adicionales', () => {
         ],
       }),
     ).toThrow('El configurador no puede contener ciclos entre preguntas.');
+  });
+
+  it('acepta mutaciones de producto válidas en el checklist', () => {
+    expect(() =>
+      validateProductoChecklistPayload.call(service, {
+        preguntas: [
+          {
+            id: 'preg-1',
+            texto: '¿Lleva tensado?',
+            tipoPregunta: 'binaria',
+            respuestas: [
+              {
+                texto: 'Si',
+                reglas: [
+                  {
+                    accion: 'mutar_producto_base',
+                    detalle: {
+                      tipo: 'agregar_demasia_por_lado',
+                      ejes: 'ambos',
+                      valorMmPorLado: 100,
+                    },
+                  },
+                ],
+              },
+              {
+                texto: 'No',
+                reglas: [],
+              },
+            ],
+          },
+        ],
+      }),
+    ).not.toThrow();
+  });
+
+  it('rechaza mutaciones de producto inválidas en el checklist', () => {
+    expect(() =>
+      validateProductoChecklistPayload.call(service, {
+        preguntas: [
+          {
+            id: 'preg-1',
+            texto: '¿Lleva tensado?',
+            tipoPregunta: 'binaria',
+            respuestas: [
+              {
+                texto: 'Si',
+                reglas: [
+                  {
+                    accion: 'mutar_producto_base',
+                    detalle: {
+                      tipo: 'agregar_demasia_por_lado',
+                      ejes: 'ambos',
+                      valorMmPorLado: 0,
+                    },
+                  },
+                ],
+              },
+              {
+                texto: 'No',
+                reglas: [],
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow('valorMmPorLado mayor a 0');
+  });
+
+  it('parsea la mutación agregar demasía por lado', () => {
+    expect(
+      parseChecklistProductoMutacionDetalle.call(service, {
+        tipo: 'agregar_demasia_por_lado',
+        ejes: 'ancho',
+        valorMmPorLado: 50,
+      }),
+    ).toEqual({
+      tipo: 'agregar_demasia_por_lado',
+      ejes: 'ancho',
+      valorMmPorLado: 50,
+    });
+  });
+
+  it('aplica mutaciones acumulativas sobre las medidas efectivas', () => {
+    const result = applyGranFormatoChecklistProductMutations.call(service, {
+      medidas: [{ anchoMm: 1000, altoMm: 2000, cantidad: 1 }],
+      activeChecklistRules: [
+        {
+          preguntaId: 'preg-1',
+          pregunta: '¿Lleva tensado?',
+          respuestaId: 'resp-1',
+          respuesta: 'Si',
+          regla: {
+            id: 'regla-1',
+            accion: 'mutar_producto_base',
+            detalle: {
+              tipo: 'agregar_demasia_por_lado',
+              ejes: 'ambos',
+              valorMmPorLado: 100,
+            },
+          },
+        },
+        {
+          preguntaId: 'preg-2',
+          pregunta: '¿Refuerzo adicional?',
+          respuestaId: 'resp-2',
+          respuesta: 'Si',
+          regla: {
+            id: 'regla-2',
+            accion: 'mutar_producto_base',
+            detalle: {
+              tipo: 'agregar_demasia_por_lado',
+              ejes: 'alto',
+              valorMmPorLado: 50,
+            },
+          },
+        },
+      ],
+    });
+
+    expect(result.medidasOriginales).toEqual([{ anchoMm: 1000, altoMm: 2000, cantidad: 1 }]);
+    expect(result.medidasEfectivas).toEqual([{ anchoMm: 1200, altoMm: 2300, cantidad: 1 }]);
+    expect(result.mutacionesAplicadas).toHaveLength(2);
+    expect(result.traceChecklist).toEqual([
+      {
+        preguntaId: 'preg-1',
+        pregunta: '¿Lleva tensado?',
+        respuestaId: 'resp-1',
+        respuesta: 'Si',
+      },
+      {
+        preguntaId: 'preg-2',
+        pregunta: '¿Refuerzo adicional?',
+        respuestaId: 'resp-2',
+        respuesta: 'Si',
+      },
+    ]);
   });
 
   it('activa preguntas hijas solo cuando la respuesta padre las abre', () => {
@@ -1132,4 +1404,513 @@ describe('ProductosServiciosService V1 adicionales', () => {
       ),
     ).toThrow('La configuración de precio contiene cantidades duplicadas.');
   });
+
+  it('guarda y devuelve una ruta base de gran formato normalizada', async () => {
+    const prisma = {
+      productoServicio: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValueOnce({
+            id: 'prod-gf-1',
+            motorCodigo: 'gran_formato',
+            motorVersion: 1,
+            detalleJson: {
+              granFormato: {
+                tecnologiasCompatibles: ['uv', 'eco_solvente'],
+                maquinasCompatibles: ['maq-uv-1', 'maq-eco-1'],
+                perfilesCompatibles: ['perfil-uv-4'],
+              },
+            },
+            familiaProducto: { nombre: 'GF' },
+            subfamiliaProducto: null,
+            procesoDefinicionDefault: null,
+            updatedAt: new Date('2026-03-23T00:00:00.000Z'),
+          })
+          .mockResolvedValueOnce({
+            id: 'prod-gf-1',
+            detalleJson: {
+              granFormatoRutaBase: {
+                procesoDefinicionId: 'ruta-base-1',
+                reglasImpresion: [
+                  {
+                    tecnologia: 'uv',
+                    maquinaId: 'maq-uv-1',
+                    pasoPlantillaId: 'paso-uv',
+                    perfilOperativoDefaultId: 'perfil-uv-4',
+                  },
+                ],
+              },
+            },
+            updatedAt: new Date('2026-03-24T00:00:00.000Z'),
+          }),
+        update: jest.fn().mockResolvedValue({
+          id: 'prod-gf-1',
+          detalleJson: {
+            granFormatoRutaBase: {
+              procesoDefinicionId: 'ruta-base-1',
+              reglasImpresion: [
+                {
+                  tecnologia: 'uv',
+                  maquinaId: 'maq-uv-1',
+                  pasoPlantillaId: 'paso-uv',
+                  perfilOperativoDefaultId: 'perfil-uv-4',
+                },
+              ],
+            },
+          },
+          updatedAt: new Date('2026-03-24T00:00:00.000Z'),
+        }),
+      },
+      procesoOperacionPlantilla: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([{ id: 'paso-uv', nombre: 'Impresión UV', activo: true, maquinaId: 'maq-uv-1' }])
+          .mockResolvedValueOnce([{ id: 'paso-uv', nombre: 'Impresión UV' }]),
+      },
+      maquina: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              id: 'maq-uv-1',
+              nombre: 'UV principal',
+              activo: true,
+              plantilla: 'IMPRESORA_UV_ROLLO',
+              geometriaTrabajo: 'ROLLO',
+              capacidadesAvanzadasJson: null,
+            },
+          ])
+          .mockResolvedValueOnce([
+            {
+              id: 'maq-corte-1',
+              nombre: 'Mesa de corte',
+              activo: true,
+              plantilla: 'MESA_CORTE_DIGITAL_PLANO',
+              geometriaTrabajo: 'PLANO',
+              capacidadesAvanzadasJson: null,
+            },
+            {
+              id: 'maq-uv-1',
+              nombre: 'UV principal',
+              activo: true,
+              plantilla: 'IMPRESORA_UV_ROLLO',
+              geometriaTrabajo: 'ROLLO',
+              capacidadesAvanzadasJson: null,
+            },
+          ])
+          .mockResolvedValueOnce([{ id: 'maq-uv-1', nombre: 'UV principal' }]),
+      },
+      maquinaPerfilOperativo: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([{ id: 'perfil-uv-4', nombre: '4 pasadas', activo: true, maquinaId: 'maq-uv-1' }])
+          .mockResolvedValueOnce([{ id: 'perfil-uv-4', nombre: '4 pasadas' }]),
+      },
+      procesoDefinicion: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValueOnce({
+            id: 'ruta-base-1',
+            nombre: 'Ruta base GF',
+            operaciones: [
+              { id: 'op-corte', nombre: 'Refilado de sustratos', maquinaId: 'maq-corte-1', detalleJson: { pasoPlantillaId: 'paso-corte' } },
+              { id: 'op-uv', nombre: 'Impresión UV', maquinaId: 'maq-uv-1', detalleJson: { pasoPlantillaId: 'paso-uv' } },
+            ],
+          })
+          .mockResolvedValueOnce({
+            id: 'ruta-base-1',
+            nombre: 'Ruta base GF',
+          }),
+      },
+    };
+
+    service = new ProductosServiciosService(prisma as never);
+
+    const result = await service.updateGranFormatoRutaBase(
+      { tenantId: 'tenant-1' } as never,
+      'prod-gf-1',
+      {
+        procesoDefinicionId: 'ruta-base-1',
+        reglasImpresion: [
+          {
+            tecnologia: 'uv',
+            maquinaId: 'maq-uv-1',
+            pasoPlantillaId: 'paso-uv',
+            perfilOperativoDefaultId: 'perfil-uv-4',
+          },
+        ],
+      },
+    );
+
+    expect(result).toEqual({
+      productoId: 'prod-gf-1',
+      procesoDefinicionId: 'ruta-base-1',
+      procesoDefinicionNombre: 'Ruta base GF',
+      reglasImpresion: [
+        {
+          id: 'uv:maq-uv-1:paso-uv',
+          tecnologia: 'uv',
+          maquinaId: 'maq-uv-1',
+          maquinaNombre: 'UV principal',
+          pasoPlantillaId: 'paso-uv',
+          pasoPlantillaNombre: 'Impresión UV',
+          perfilOperativoDefaultId: 'perfil-uv-4',
+          perfilOperativoDefaultNombre: '4 pasadas',
+        },
+      ],
+      updatedAt: '2026-03-24T00:00:00.000Z',
+    });
+  });
+
+  it('prioriza la regla específica por máquina sobre el fallback por tecnología', () => {
+    const resolveGranFormatoRutaBaseReglaImpresion = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'resolveGranFormatoRutaBaseReglaImpresion',
+    ) as (
+      detalleJson: unknown,
+      tecnologia: string,
+      maquinaId?: string | null,
+    ) => Record<string, unknown> | null;
+
+    const detalle = {
+      granFormatoRutaBase: {
+        reglasImpresion: [
+          {
+            tecnologia: 'uv',
+            maquinaId: null,
+            pasoPlantillaId: 'paso-uv-default',
+            perfilOperativoDefaultId: 'perfil-default',
+          },
+          {
+            tecnologia: 'uv',
+            maquinaId: 'maq-uv-1',
+            pasoPlantillaId: 'paso-uv-1',
+            perfilOperativoDefaultId: 'perfil-uv-4',
+          },
+        ],
+      },
+    };
+
+    expect(resolveGranFormatoRutaBaseReglaImpresion.call(service, detalle, 'uv', 'maq-uv-1')).toMatchObject({
+      tecnologia: 'uv',
+      maquinaId: 'maq-uv-1',
+      pasoPlantillaId: 'paso-uv-1',
+    });
+    expect(resolveGranFormatoRutaBaseReglaImpresion.call(service, detalle, 'uv', 'maq-uv-9')).toMatchObject({
+      tecnologia: 'uv',
+      maquinaId: null,
+      pasoPlantillaId: 'paso-uv-default',
+    });
+  });
+
+  it('rechaza reglas de impresión con máquina fuera de las compatibles', async () => {
+    const validateGranFormatoRutaBasePayload = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'validateGranFormatoRutaBasePayload',
+    ) as (
+      auth: { tenantId: string },
+      detalleJson: unknown,
+      payload: {
+        procesoDefinicionId?: string | null;
+        reglasImpresion: Array<{
+          tecnologia: string;
+          maquinaId?: string | null;
+          pasoPlantillaId: string;
+          perfilOperativoDefaultId?: string | null;
+        }>;
+      },
+    ) => Promise<unknown>;
+
+    (service as unknown as { prisma: Record<string, unknown> }).prisma = {
+      procesoOperacionPlantilla: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'paso-uv', nombre: 'Impresión UV', activo: true, maquinaId: 'maq-uv-1' },
+        ]),
+      },
+      maquina: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              id: 'maq-uv-1',
+              nombre: 'UV principal',
+              activo: true,
+              plantilla: 'IMPRESORA_UV_ROLLO',
+              geometriaTrabajo: 'ROLLO',
+              capacidadesAvanzadasJson: null,
+            },
+          ])
+          .mockResolvedValueOnce([
+            {
+              id: 'maq-uv-1',
+              nombre: 'UV principal',
+              activo: true,
+              plantilla: 'IMPRESORA_UV_ROLLO',
+              geometriaTrabajo: 'ROLLO',
+              capacidadesAvanzadasJson: null,
+            },
+          ]),
+      },
+      maquinaPerfilOperativo: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      procesoDefinicion: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'ruta-base-1',
+          nombre: 'Ruta base GF',
+          operaciones: [{ id: 'op-uv', nombre: 'Impresión UV', maquinaId: 'maq-uv-1', detalleJson: { pasoPlantillaId: 'paso-uv' } }],
+        }),
+      },
+    } as never;
+
+    await expect(
+      validateGranFormatoRutaBasePayload.call(
+        service,
+        { tenantId: 'tenant-1' },
+        {
+          granFormato: {
+            tecnologiasCompatibles: ['uv'],
+            maquinasCompatibles: ['maq-uv-9'],
+            perfilesCompatibles: [],
+          },
+        },
+        {
+          procesoDefinicionId: 'ruta-base-1',
+          reglasImpresion: [
+            {
+              tecnologia: 'uv',
+              maquinaId: 'maq-uv-1',
+              pasoPlantillaId: 'paso-uv',
+            },
+          ],
+        },
+      ),
+    ).rejects.toThrow('no está dentro de las máquinas compatibles');
+  });
+
+  it('rechaza perfiles default que no pertenecen a la máquina del paso', async () => {
+    const validateGranFormatoRutaBasePayload = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'validateGranFormatoRutaBasePayload',
+    ) as (
+      auth: { tenantId: string },
+      detalleJson: unknown,
+      payload: {
+        procesoDefinicionId?: string | null;
+        reglasImpresion: Array<{
+          tecnologia: string;
+          maquinaId?: string | null;
+          pasoPlantillaId: string;
+          perfilOperativoDefaultId?: string | null;
+        }>;
+      },
+    ) => Promise<unknown>;
+
+    (service as unknown as { prisma: Record<string, unknown> }).prisma = {
+      procesoOperacionPlantilla: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'paso-uv', nombre: 'Impresión UV', activo: true, maquinaId: 'maq-uv-1' },
+        ]),
+      },
+      maquina: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              id: 'maq-uv-1',
+              nombre: 'UV principal',
+              activo: true,
+              plantilla: 'IMPRESORA_UV_ROLLO',
+              geometriaTrabajo: 'ROLLO',
+              capacidadesAvanzadasJson: null,
+            },
+          ])
+          .mockResolvedValueOnce([
+            {
+              id: 'maq-uv-1',
+              nombre: 'UV principal',
+              activo: true,
+              plantilla: 'IMPRESORA_UV_ROLLO',
+              geometriaTrabajo: 'ROLLO',
+              capacidadesAvanzadasJson: null,
+            },
+          ]),
+      },
+      maquinaPerfilOperativo: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'perfil-otro', nombre: '6 pasadas', activo: true, maquinaId: 'maq-uv-2' },
+        ]),
+      },
+      procesoDefinicion: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'ruta-base-1',
+          nombre: 'Ruta base GF',
+          operaciones: [{ id: 'op-uv', nombre: 'Impresión UV', maquinaId: 'maq-uv-1', detalleJson: { pasoPlantillaId: 'paso-uv' } }],
+        }),
+      },
+    } as never;
+
+    await expect(
+      validateGranFormatoRutaBasePayload.call(
+        service,
+        { tenantId: 'tenant-1' },
+        {
+          granFormato: {
+            tecnologiasCompatibles: ['uv'],
+            maquinasCompatibles: ['maq-uv-1'],
+            perfilesCompatibles: ['perfil-otro'],
+          },
+        },
+        {
+          procesoDefinicionId: 'ruta-base-1',
+          reglasImpresion: [
+            {
+              tecnologia: 'uv',
+              maquinaId: 'maq-uv-1',
+              pasoPlantillaId: 'paso-uv',
+              perfilOperativoDefaultId: 'perfil-otro',
+            },
+          ],
+        },
+      ),
+    ).rejects.toThrow('no pertenece a la misma máquina del paso');
+  });
+
+  it('rechaza reglas duplicadas para la misma combinación tecnología y máquina', async () => {
+    const validateGranFormatoRutaBasePayload = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'validateGranFormatoRutaBasePayload',
+    ) as (
+      auth: { tenantId: string },
+      detalleJson: unknown,
+      payload: {
+        procesoDefinicionId?: string | null;
+        reglasImpresion: Array<{
+          tecnologia: string;
+          maquinaId?: string | null;
+          pasoPlantillaId: string;
+          perfilOperativoDefaultId?: string | null;
+        }>;
+      },
+    ) => Promise<unknown>;
+
+    (service as unknown as { prisma: Record<string, unknown> }).prisma = {
+      procesoOperacionPlantilla: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'paso-uv-1', nombre: 'Impresión UV 1', activo: true, maquinaId: 'maq-uv-1' },
+          { id: 'paso-uv-2', nombre: 'Impresión UV 2', activo: true, maquinaId: 'maq-uv-1' },
+        ]),
+      },
+      maquina: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              id: 'maq-uv-1',
+              nombre: 'UV principal',
+              activo: true,
+              plantilla: 'IMPRESORA_UV_ROLLO',
+              geometriaTrabajo: 'ROLLO',
+              capacidadesAvanzadasJson: null,
+            },
+          ])
+          .mockResolvedValueOnce([
+            {
+              id: 'maq-uv-1',
+              nombre: 'UV principal',
+              activo: true,
+              plantilla: 'IMPRESORA_UV_ROLLO',
+              geometriaTrabajo: 'ROLLO',
+              capacidadesAvanzadasJson: null,
+            },
+          ]),
+      },
+      maquinaPerfilOperativo: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      procesoDefinicion: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'ruta-base-1',
+          nombre: 'Ruta base GF',
+          operaciones: [
+            { id: 'op-uv-1', nombre: 'Impresión UV 1', maquinaId: 'maq-uv-1', detalleJson: { pasoPlantillaId: 'paso-uv-1' } },
+            { id: 'op-uv-2', nombre: 'Impresión UV 2', maquinaId: 'maq-uv-1', detalleJson: { pasoPlantillaId: 'paso-uv-2' } },
+          ],
+        }),
+      },
+    } as never;
+
+    await expect(
+      validateGranFormatoRutaBasePayload.call(
+        service,
+        { tenantId: 'tenant-1' },
+        {
+          granFormato: {
+            tecnologiasCompatibles: ['uv'],
+            maquinasCompatibles: ['maq-uv-1'],
+            perfilesCompatibles: [],
+          },
+        },
+        {
+          procesoDefinicionId: 'ruta-base-1',
+          reglasImpresion: [
+            { tecnologia: 'uv', maquinaId: 'maq-uv-1', pasoPlantillaId: 'paso-uv-1' },
+            { tecnologia: 'uv', maquinaId: 'maq-uv-1', pasoPlantillaId: 'paso-uv-2' },
+          ],
+        },
+      ),
+    ).rejects.toThrow('reglas de impresión duplicadas');
+  });
+
+  it('permite rotar piezas individualmente para generar un layout mixto más eficiente', () => {
+    const candidates = evaluateGranFormatoImposicionCandidates.call(service, {
+      maquina: {
+        anchoUtil: 100,
+        plantilla: 'impresora_uv_rollo',
+        parametrosTecnicosJson: {
+          anchoImprimibleMaximo: 100,
+        },
+        capacidadesAvanzadasJson: {},
+      },
+      medidas: [
+        {
+          anchoMm: 700,
+          altoMm: 400,
+          cantidad: 3,
+        },
+      ],
+      config: {
+        permitirRotacion: true,
+        separacionHorizontalMm: 0,
+        separacionVerticalMm: 0,
+        margenLateralIzquierdoMmOverride: null,
+        margenLateralDerechoMmOverride: null,
+        margenInicioMmOverride: null,
+        margenFinalMmOverride: null,
+        criterioOptimizacion: 'menor_desperdicio',
+      },
+      variants: [
+        {
+          id: 'variant-roll-100',
+          atributosVarianteJson: {
+            ancho: 1,
+          },
+        },
+      ],
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toEqual(
+      expect.objectContaining({
+        orientacion: 'mixta',
+        piecesPerRow: 2,
+        rows: 2,
+        consumedLengthMm: 1100,
+      }),
+    );
+    expect(candidates[0].placements).toHaveLength(3);
+    expect(candidates[0].placements.some((item: { rotated: boolean }) => item.rotated)).toBe(true);
+    expect(candidates[0].placements.some((item: { rotated: boolean }) => !item.rotated)).toBe(true);
+  });
+
 });

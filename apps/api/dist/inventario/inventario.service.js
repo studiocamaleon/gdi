@@ -17,6 +17,7 @@ const crypto_1 = require("crypto");
 const prisma_service_1 = require("../prisma/prisma.service");
 const registrar_movimiento_stock_dto_1 = require("./dto/registrar-movimiento-stock.dto");
 const unidades_canonicas_1 = require("./unidades-canonicas");
+const unidades_derivadas_1 = require("./unidades-derivadas");
 let InventarioService = class InventarioService {
     prisma;
     constructor(prisma) {
@@ -399,9 +400,7 @@ let InventarioService = class InventarioService {
             const costoPromedioPrevio = stockActual ? this.decimalToNumber(stockActual.costoPromedio) : 0;
             if (tipo === client_1.TipoMovimientoStockMateriaPrima.INGRESO ||
                 tipo === client_1.TipoMovimientoStockMateriaPrima.AJUSTE_ENTRADA) {
-                const precioReferenciaVariante = variante.precioReferencia
-                    ? this.roundToScale(this.decimalToNumber(variante.precioReferencia))
-                    : null;
+                const precioReferenciaVariante = this.resolvePrecioReferenciaPorUnidadStock(variante);
                 if ((unitCost === null || unitCost <= 0) && precioReferenciaVariante && precioReferenciaVariante > 0) {
                     unitCost = precioReferenciaVariante;
                 }
@@ -722,6 +721,18 @@ let InventarioService = class InventarioService {
                 id: true,
                 sku: true,
                 precioReferencia: true,
+                atributosVarianteJson: true,
+                unidadStock: true,
+                unidadCompra: true,
+                materiaPrima: {
+                    select: {
+                        nombre: true,
+                        subfamilia: true,
+                        templateId: true,
+                        unidadStock: true,
+                        unidadCompra: true,
+                    },
+                },
             },
         });
         if (!item) {
@@ -740,6 +751,65 @@ let InventarioService = class InventarioService {
     }
     toDecimal(value) {
         return new client_1.Prisma.Decimal(value);
+    }
+    toCanonicalUnitCode(value) {
+        if (typeof value !== 'string' || !value.trim()) {
+            return null;
+        }
+        const normalized = value.trim().toLowerCase();
+        const supported = [
+            'unidad',
+            'pack',
+            'caja',
+            'kit',
+            'hoja',
+            'pliego',
+            'resma',
+            'rollo',
+            'pieza',
+            'par',
+            'metro_lineal',
+            'mm',
+            'cm',
+            'm2',
+            'm3',
+            'litro',
+            'ml',
+            'kg',
+            'gramo',
+        ];
+        return supported.includes(normalized) ? normalized : null;
+    }
+    resolvePrecioReferenciaPorUnidadStock(variante) {
+        const precio = variante.precioReferencia
+            ? this.roundToScale(this.decimalToNumber(variante.precioReferencia), 6)
+            : null;
+        if (!precio || precio <= 0) {
+            return null;
+        }
+        const sourceUnit = this.toCanonicalUnitCode(variante.unidadCompra) ??
+            this.toCanonicalUnitCode(variante.unidadStock) ??
+            this.toCanonicalUnitCode(variante.materiaPrima.unidadCompra) ??
+            this.toCanonicalUnitCode(variante.materiaPrima.unidadStock);
+        const targetUnit = this.toCanonicalUnitCode(variante.unidadStock) ??
+            this.toCanonicalUnitCode(variante.materiaPrima.unidadStock);
+        if (!sourceUnit || !targetUnit) {
+            return precio;
+        }
+        if ((0, unidades_canonicas_1.unitsAreCompatible)(sourceUnit, targetUnit)) {
+            return this.roundToScale((0, unidades_canonicas_1.convertUnitPrice)(precio, sourceUnit, targetUnit), 6);
+        }
+        const derived = (0, unidades_derivadas_1.convertFlexibleRollUnitPrice)({
+            pricePerFromUnit: precio,
+            from: sourceUnit,
+            to: targetUnit,
+            subfamilia: String(variante.materiaPrima.subfamilia ?? ''),
+            attributes: variante.atributosVarianteJson,
+        });
+        if (derived != null) {
+            return this.roundToScale(derived, 6);
+        }
+        return precio;
     }
     roundToScale(value, scale = 2) {
         return Number(value.toFixed(scale));
@@ -785,13 +855,28 @@ let InventarioService = class InventarioService {
         return item;
     }
     normalizePayload(payload) {
-        if (!(0, unidades_canonicas_1.unitsAreCompatible)(payload.unidadStock, payload.unidadCompra)) {
-            throw new common_1.BadRequestException('Unidad de uso y unidad de compra deben ser compatibles para conversion.');
+        const canUseCanonicalUnits = (0, unidades_canonicas_1.unitsAreCompatible)(payload.unidadStock, payload.unidadCompra);
+        const canUseDerivedUnits = (0, unidades_derivadas_1.canUseFlexibleRollDerivedUnits)({
+            subfamilia: payload.subfamilia,
+            from: payload.unidadCompra,
+            to: payload.unidadStock,
+            attributes: payload.variantes[0]?.atributosVariante,
+        }) &&
+            payload.variantes.every((variante) => (0, unidades_derivadas_1.canUseFlexibleRollDerivedUnits)({
+                subfamilia: payload.subfamilia,
+                from: variante.unidadCompra ?? payload.unidadCompra,
+                to: variante.unidadStock ?? payload.unidadStock,
+                attributes: variante.atributosVariante,
+            }));
+        if (!canUseCanonicalUnits && !canUseDerivedUnits) {
+            throw new common_1.BadRequestException('Unidad de uso y unidad de compra deben ser compatibles para conversión. En sustrato rollo flexible también se permite rollo, m2 o metro lineal si cada variante tiene ancho y largo válidos.');
         }
         const variantes = payload.variantes.map((variante) => ({
             ...variante,
             sku: variante.sku.trim(),
             nombreVariante: variante.nombreVariante?.trim() || null,
+            unidadStock: null,
+            unidadCompra: null,
             precioReferencia: variante.precioReferencia === undefined || variante.precioReferencia === null
                 ? null
                 : this.toDecimal(this.roundToScale(variante.precioReferencia, 6)),
@@ -837,12 +922,8 @@ let InventarioService = class InventarioService {
                 nombreVariante: variante.nombreVariante ?? '',
                 activo: variante.activo,
                 atributosVariante: variante.atributosVarianteJson,
-                unidadStock: variante.unidadStock
-                    ? this.toApiEnum(variante.unidadStock)
-                    : null,
-                unidadCompra: variante.unidadCompra
-                    ? this.toApiEnum(variante.unidadCompra)
-                    : null,
+                unidadStock: null,
+                unidadCompra: null,
                 precioReferencia: variante.precioReferencia
                     ? this.decimalToNumber(variante.precioReferencia)
                     : null,

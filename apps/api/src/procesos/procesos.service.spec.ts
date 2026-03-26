@@ -3,6 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ProcesosService } from './procesos.service';
 import {
+  BaseCalculoProductividadDto,
   ModoProductividadProcesoDto,
   PlantillaMaquinariaDto,
   TipoOperacionProcesoDto,
@@ -56,6 +57,27 @@ describe('ProcesosService business rules', () => {
     setupMin: Prisma.Decimal | null;
     cleanupMin: Prisma.Decimal | null;
   };
+  let buildBibliotecaOperacionData: (
+    tenantId: string,
+    payload: {
+      nombre: string;
+      tipoOperacion: TipoOperacionProcesoDto;
+      unidadEntrada?: UnidadProcesoDto;
+      unidadSalida?: UnidadProcesoDto;
+      unidadTiempo?: UnidadProcesoDto;
+      baseCalculoProductividad?: BaseCalculoProductividadDto;
+      activo: boolean;
+    },
+    refs: {
+      centroCostoId: string | null;
+      maquinaId: string | null;
+      perfilOperativoId: string | null;
+    },
+  ) => { detalleJson: Prisma.JsonValue | null };
+  let resolveReferenceContext: (
+    auth: { tenantId: string },
+    payload: UpsertProcesoDto,
+  ) => Promise<ReferenceShape>;
 
   beforeEach(() => {
     service = new ProcesosService({} as never);
@@ -70,6 +92,14 @@ describe('ProcesosService business rules', () => {
       payload: UpsertProcesoDto['operaciones'][number],
       references: ReferenceShape,
     ) => { setupMin: Prisma.Decimal | null; cleanupMin: Prisma.Decimal | null };
+    buildBibliotecaOperacionData = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'buildBibliotecaOperacionData',
+    ) as typeof buildBibliotecaOperacionData;
+    resolveReferenceContext = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'resolveReferenceContext',
+    ) as typeof resolveReferenceContext;
   });
 
   it('acepta modo variable con productividad base', () => {
@@ -225,6 +255,7 @@ describe('ProcesosService business rules', () => {
           centroCostoId: 'centro-1',
           maquinaId: 'maq-1',
           modoProductividad: ModoProductividadProcesoDto.fija,
+          tiempoFijoMin: 10,
           productividadBase: 120,
           unidadSalida: UnidadProcesoDto.ninguna,
           unidadTiempo: UnidadProcesoDto.minuto,
@@ -375,5 +406,147 @@ describe('ProcesosService business rules', () => {
     expect(() =>
       validateBusinessRules.call(service, payload, references),
     ).not.toThrow();
+  });
+
+  it('rechaza base de calculo por perimetro si la unidad no es metro lineal', () => {
+    const payload: UpsertProcesoDto = {
+      nombre: 'Proceso perimetral',
+      plantillaMaquinaria: PlantillaMaquinariaDto.impresora_laser,
+      activo: true,
+      operaciones: [
+        {
+          nombre: 'Refilado',
+          tipoOperacion: TipoOperacionProcesoDto.postprensa,
+          centroCostoId: 'centro-1',
+          modoProductividad: ModoProductividadProcesoDto.variable,
+          productividadBase: 8,
+          unidadSalida: UnidadProcesoDto.pieza,
+          unidadTiempo: UnidadProcesoDto.minuto,
+          baseCalculoProductividad:
+            BaseCalculoProductividadDto.perimetro_total_ml,
+          activo: true,
+        },
+      ],
+    };
+
+    const references: ReferenceShape = {
+      centrosById: new Map([
+        [
+          'centro-1',
+          {
+            id: 'centro-1',
+            nombre: 'Centro 1',
+            unidadBaseFutura: UnidadBaseCentroCosto.HORA_HOMBRE,
+          },
+        ],
+      ]),
+      maquinasById: new Map(),
+      perfilesById: new Map(),
+    };
+
+    expect(() =>
+      validateBusinessRules.call(service, payload, references),
+    ).toThrow(BadRequestException);
+  });
+
+  it('persiste baseCalculoProductividad en el detalle de la plantilla', () => {
+    const result = buildBibliotecaOperacionData.call(
+      service,
+      'tenant-1',
+      {
+        nombre: 'Refilado',
+        tipoOperacion: TipoOperacionProcesoDto.postprensa,
+        unidadEntrada: UnidadProcesoDto.ninguna,
+        unidadSalida: UnidadProcesoDto.metro_lineal,
+        unidadTiempo: UnidadProcesoDto.minuto,
+        baseCalculoProductividad:
+          BaseCalculoProductividadDto.perimetro_total_ml,
+        activo: true,
+      },
+      {
+        centroCostoId: 'centro-1',
+        maquinaId: null,
+        perfilOperativoId: null,
+      },
+    );
+
+    expect(result.detalleJson).toEqual({
+      baseCalculoProductividad:
+        BaseCalculoProductividadDto.perimetro_total_ml,
+      niveles: [],
+    });
+  });
+
+  it('carga referencias de maquina y perfil definidos a nivel de variante', async () => {
+    const prisma = {
+      centroCosto: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'centro-1',
+            nombre: 'Centro 1',
+            unidadBaseFutura: UnidadBaseCentroCosto.HORA_MAQUINA,
+          },
+        ]),
+      },
+      maquina: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'maq-uv',
+            nombre: 'UV',
+            plantilla: 'IMPRESORA_LASER',
+            centroCostoPrincipalId: 'centro-1',
+            unidadProduccionPrincipal: UnidadProduccionMaquina.M2_H,
+          },
+        ]),
+      },
+      maquinaPerfilOperativo: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'perfil-6-pass',
+            nombre: '6 PASS',
+            maquinaId: 'maq-uv',
+            productivityValue: new Prisma.Decimal(20),
+            productivityUnit: UnidadProduccionMaquina.M2_H,
+            setupMin: new Prisma.Decimal(10),
+            cleanupMin: null,
+            detalleJson: null,
+          },
+        ]),
+      },
+    };
+    service = new ProcesosService(prisma as never);
+    resolveReferenceContext = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'resolveReferenceContext',
+    ) as typeof resolveReferenceContext;
+
+    const references = await resolveReferenceContext.call(service, { tenantId: 'tenant-1' }, {
+      nombre: 'Proceso con variantes',
+      plantillaMaquinaria: PlantillaMaquinariaDto.impresora_laser,
+      activo: true,
+      operaciones: [
+        {
+          nombre: 'Impresion Gran Formato: UV',
+          tipoOperacion: TipoOperacionProcesoDto.prensa,
+          centroCostoId: 'centro-1',
+          modoProductividad: ModoProductividadProcesoDto.variable,
+          productividadBase: 10,
+          unidadSalida: UnidadProcesoDto.m2,
+          unidadTiempo: UnidadProcesoDto.hora,
+          niveles: [
+            {
+              nombre: '6 Pasadas',
+              modoProductividadNivel: 'variable_perfil',
+              maquinaId: 'maq-uv',
+              perfilOperativoId: 'perfil-6-pass',
+            },
+          ],
+          activo: true,
+        },
+      ],
+    });
+
+    expect(references.maquinasById.has('maq-uv')).toBe(true);
+    expect(references.perfilesById.has('perfil-6-pass')).toBe(true);
   });
 });
