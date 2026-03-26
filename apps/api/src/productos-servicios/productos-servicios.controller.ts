@@ -184,6 +184,11 @@ export class ProductosServiciosController {
     return this.service.updateFamilia(auth, id, payload);
   }
 
+  @Delete('familias/:id')
+  deleteFamilia(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    return this.service.deleteFamilia(auth, id);
+  }
+
   @Get('subfamilias')
   getSubfamilias(
     @CurrentSession() auth: CurrentAuth,
@@ -207,6 +212,11 @@ export class ProductosServiciosController {
     @Body() payload: UpsertSubfamiliaProductoDto,
   ) {
     return this.service.updateSubfamilia(auth, id, payload);
+  }
+
+  @Delete('subfamilias/:id')
+  deleteSubfamilia(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    return this.service.deleteSubfamilia(auth, id);
   }
 
   @Get()

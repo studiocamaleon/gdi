@@ -136,13 +136,13 @@ function formatCurrencyUnit(value: number, unitLabel: string) {
 }
 
 function resolveVarianteUnits(
-  variante: LocalVariante,
+  _variante: LocalVariante,
   fallbackStock: UnidadMateriaPrima,
   fallbackCompra: UnidadMateriaPrima,
 ) {
   return {
-    unidadStock: variante.unidadStock ?? fallbackStock,
-    unidadCompra: variante.unidadCompra ?? fallbackCompra,
+    unidadStock: fallbackStock,
+    unidadCompra: fallbackCompra,
   };
 }
 
@@ -305,8 +305,8 @@ function mapMateriaPrimaToForm(materiaPrima: MateriaPrima): FormState {
               null,
               2,
             ),
-            unidadStock: variante.unidadStock ?? undefined,
-            unidadCompra: variante.unidadCompra ?? undefined,
+            unidadStock: undefined,
+            unidadCompra: undefined,
             precioReferencia: variante.precioReferencia ?? undefined,
             proveedorReferenciaId: variante.proveedorReferenciaId ?? undefined,
           }))
@@ -368,8 +368,8 @@ function buildPayload(
           sku: variante.sku.trim() || generatedSku,
           activo: variante.activo,
           atributosVariante: attrs,
-          unidadStock: variante.unidadStock,
-          unidadCompra: variante.unidadCompra,
+          unidadStock: undefined,
+          unidadCompra: undefined,
           precioReferencia: variante.precioReferencia,
           proveedorReferenciaId: variante.proveedorReferenciaId,
         };

@@ -33,8 +33,8 @@ export declare class InventarioService {
             nombreVariante: string;
             activo: boolean;
             atributosVariante: Prisma.JsonValue;
-            unidadStock: string | null;
-            unidadCompra: string | null;
+            unidadStock: null;
+            unidadCompra: null;
             precioReferencia: number | null;
             moneda: string;
             proveedorReferenciaId: string | null;
@@ -64,8 +64,8 @@ export declare class InventarioService {
             nombreVariante: string;
             activo: boolean;
             atributosVariante: Prisma.JsonValue;
-            unidadStock: string | null;
-            unidadCompra: string | null;
+            unidadStock: null;
+            unidadCompra: null;
             precioReferencia: number | null;
             moneda: string;
             proveedorReferenciaId: string | null;
@@ -95,8 +95,8 @@ export declare class InventarioService {
             nombreVariante: string;
             activo: boolean;
             atributosVariante: Prisma.JsonValue;
-            unidadStock: string | null;
-            unidadCompra: string | null;
+            unidadStock: null;
+            unidadCompra: null;
             precioReferencia: number | null;
             moneda: string;
             proveedorReferenciaId: string | null;
@@ -126,8 +126,8 @@ export declare class InventarioService {
             nombreVariante: string;
             activo: boolean;
             atributosVariante: Prisma.JsonValue;
-            unidadStock: string | null;
-            unidadCompra: string | null;
+            unidadStock: null;
+            unidadCompra: null;
             precioReferencia: number | null;
             moneda: string;
             proveedorReferenciaId: string | null;
@@ -157,8 +157,8 @@ export declare class InventarioService {
             nombreVariante: string;
             activo: boolean;
             atributosVariante: Prisma.JsonValue;
-            unidadStock: string | null;
-            unidadCompra: string | null;
+            unidadStock: null;
+            unidadCompra: null;
             precioReferencia: number | null;
             moneda: string;
             proveedorReferenciaId: string | null;

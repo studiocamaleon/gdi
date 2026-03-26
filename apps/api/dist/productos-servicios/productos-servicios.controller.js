@@ -79,6 +79,9 @@ let ProductosServiciosController = class ProductosServiciosController {
     updateFamilia(auth, id, payload) {
         return this.service.updateFamilia(auth, id, payload);
     }
+    deleteFamilia(auth, id) {
+        return this.service.deleteFamilia(auth, id);
+    }
     getSubfamilias(auth, familiaId) {
         return this.service.findSubfamilias(auth, familiaId);
     }
@@ -87,6 +90,9 @@ let ProductosServiciosController = class ProductosServiciosController {
     }
     updateSubfamilia(auth, id, payload) {
         return this.service.updateSubfamilia(auth, id, payload);
+    }
+    deleteSubfamilia(auth, id) {
+        return this.service.deleteSubfamilia(auth, id);
     }
     getProductos(auth) {
         return this.service.findProductos(auth);
@@ -374,6 +380,14 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], ProductosServiciosController.prototype, "updateFamilia", null);
 __decorate([
+    (0, common_1.Delete)('familias/:id'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "deleteFamilia", null);
+__decorate([
     (0, common_1.Get)('subfamilias'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),
     __param(1, (0, common_1.Query)('familiaId')),
@@ -398,6 +412,14 @@ __decorate([
     __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.UpsertSubfamiliaProductoDto]),
     __metadata("design:returntype", void 0)
 ], ProductosServiciosController.prototype, "updateSubfamilia", null);
+__decorate([
+    (0, common_1.Delete)('subfamilias/:id'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "deleteSubfamilia", null);
 __decorate([
     (0, common_1.Get)(),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),

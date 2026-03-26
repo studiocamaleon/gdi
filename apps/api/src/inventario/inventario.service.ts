@@ -1109,6 +1109,8 @@ export class InventarioService {
       ...variante,
       sku: variante.sku.trim(),
       nombreVariante: variante.nombreVariante?.trim() || null,
+      unidadStock: null,
+      unidadCompra: null,
       precioReferencia:
         variante.precioReferencia === undefined || variante.precioReferencia === null
           ? null
@@ -1157,12 +1159,8 @@ export class InventarioService {
         nombreVariante: variante.nombreVariante ?? '',
         activo: variante.activo,
         atributosVariante: variante.atributosVarianteJson,
-        unidadStock: variante.unidadStock
-          ? this.toApiEnum(variante.unidadStock)
-          : null,
-        unidadCompra: variante.unidadCompra
-          ? this.toApiEnum(variante.unidadCompra)
-          : null,
+        unidadStock: null,
+        unidadCompra: null,
         precioReferencia: variante.precioReferencia
           ? this.decimalToNumber(variante.precioReferencia)
           : null,

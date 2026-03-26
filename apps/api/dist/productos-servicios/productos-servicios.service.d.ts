@@ -424,6 +424,10 @@ export declare class ProductosServiciosService {
         createdAt: string;
         updatedAt: string;
     }>;
+    deleteFamilia(auth: CurrentAuth, id: string): Promise<{
+        id: string;
+        deleted: boolean;
+    }>;
     findSubfamilias(auth: CurrentAuth, familiaId?: string): Promise<{
         id: string;
         codigo: string;
@@ -456,6 +460,10 @@ export declare class ProductosServiciosService {
         familiaProductoNombre: string;
         createdAt: string;
         updatedAt: string;
+    }>;
+    deleteSubfamilia(auth: CurrentAuth, id: string): Promise<{
+        id: string;
+        deleted: boolean;
     }>;
     findProductos(auth: CurrentAuth): Promise<{
         matchingBasePorVariante: never[];

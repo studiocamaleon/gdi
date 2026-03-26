@@ -583,6 +583,30 @@ let ProductosServiciosService = class ProductosServiciosService {
             this.handleWriteError(error);
         }
     }
+    async deleteFamilia(auth, id) {
+        await this.findFamiliaOrThrow(auth, id, this.prisma);
+        const [subfamiliasCount, productosDirectosCount] = await Promise.all([
+            this.prisma.subfamiliaProducto.count({
+                where: {
+                    tenantId: auth.tenantId,
+                    familiaProductoId: id,
+                },
+            }),
+            this.prisma.productoServicio.count({
+                where: {
+                    tenantId: auth.tenantId,
+                    familiaProductoId: id,
+                },
+            }),
+        ]);
+        if (subfamiliasCount > 0 || productosDirectosCount > 0) {
+            throw new common_1.BadRequestException('No se puede borrar la familia porque tiene subfamilias o productos asociados.');
+        }
+        await this.prisma.familiaProducto.delete({
+            where: { id },
+        });
+        return { id, deleted: true };
+    }
     async findSubfamilias(auth, familiaId) {
         await this.ensureCatalogoInicialImprentaDigital(auth);
         const rows = await this.prisma.subfamiliaProducto.findMany({
@@ -641,6 +665,22 @@ let ProductosServiciosService = class ProductosServiciosService {
         catch (error) {
             this.handleWriteError(error);
         }
+    }
+    async deleteSubfamilia(auth, id) {
+        await this.findSubfamiliaOrThrow(auth, id, this.prisma);
+        const productosCount = await this.prisma.productoServicio.count({
+            where: {
+                tenantId: auth.tenantId,
+                subfamiliaProductoId: id,
+            },
+        });
+        if (productosCount > 0) {
+            throw new common_1.BadRequestException('No se puede borrar la subfamilia porque tiene productos asociados.');
+        }
+        await this.prisma.subfamiliaProducto.delete({
+            where: { id },
+        });
+        return { id, deleted: true };
     }
     async findProductos(auth) {
         const rows = await this.prisma.productoServicio.findMany({

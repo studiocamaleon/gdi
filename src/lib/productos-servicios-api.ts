@@ -75,6 +75,12 @@ export async function updateFamiliaProducto(
   });
 }
 
+export async function deleteFamiliaProducto(familiaId: string) {
+  return apiRequest<{ id: string; deleted: boolean }>(`/productos-servicios/familias/${familiaId}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function getSubfamiliasProducto(familiaId?: string) {
   const suffix = familiaId ? `?familiaId=${encodeURIComponent(familiaId)}` : '';
   return apiRequest<SubfamiliaProducto[]>(`/productos-servicios/subfamilias${suffix}`);
@@ -106,6 +112,12 @@ export async function updateSubfamiliaProducto(
   return apiRequest<SubfamiliaProducto>(`/productos-servicios/subfamilias/${subfamiliaId}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteSubfamiliaProducto(subfamiliaId: string) {
+  return apiRequest<{ id: string; deleted: boolean }>(`/productos-servicios/subfamilias/${subfamiliaId}`, {
+    method: 'DELETE',
   });
 }
 
