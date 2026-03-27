@@ -9,6 +9,7 @@ import { getMaquinas } from "@/lib/maquinaria-api";
 import { getMateriasPrimas } from "@/lib/materias-primas-api";
 import { getProcesoOperacionPlantillas, getProcesos } from "@/lib/procesos-api";
 import {
+  getProductoComisionesCatalogo,
   getFamiliasProducto,
   getMotoresCostoCatalogo,
   getProductoImpuestosCatalogo,
@@ -18,7 +19,7 @@ import {
   getSubfamiliasProducto,
 } from "@/lib/productos-servicios-api";
 
-const ProductoServicioFichaTabs = dynamicImport(
+const ProductoServicioDetailShell = dynamicImport(
   () =>
     import("@/components/productos-servicios/producto-servicio-detail-shell").then(
       (module) => module.ProductoServicioDetailShell,
@@ -52,7 +53,7 @@ async function ProductoServicioDetallePageContent({
   const { productoId } = await params;
 
   try {
-    const [producto, variantes, procesos, plantillasPaso, materiasPrimas, familias, subfamilias, motores, checklist, maquinas, impuestosCatalogo, clientes] = await Promise.all([
+  const [producto, variantes, procesos, plantillasPaso, materiasPrimas, familias, subfamilias, motores, checklist, maquinas, impuestosCatalogo, comisionesCatalogo, clientes] = await Promise.all([
       getProductoServicio(productoId),
       getProductoVariantes(productoId),
       getProcesos(),
@@ -64,12 +65,13 @@ async function ProductoServicioDetallePageContent({
       getProductoChecklist(productoId),
       getMaquinas(),
       getProductoImpuestosCatalogo(),
+      getProductoComisionesCatalogo(),
       getClientes(),
     ]);
 
     return (
       <section className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-        <ProductoServicioFichaTabs
+        <ProductoServicioDetailShell
           producto={producto}
           initialVariantes={variantes}
           procesos={procesos}
@@ -81,6 +83,7 @@ async function ProductoServicioDetallePageContent({
           checklist={checklist}
           maquinas={maquinas}
           initialImpuestosCatalogo={impuestosCatalogo}
+          initialComisionesCatalogo={comisionesCatalogo}
           initialClientes={clientes}
         />
       </section>

@@ -220,6 +220,18 @@ describe('ProductosServiciosService V1 adicionales', () => {
     mutacionesAplicadas: Array<Record<string, unknown>>;
     traceChecklist: Array<Record<string, unknown>>;
   };
+  let normalizeVinylCutMeasures: (
+    raw: unknown,
+    cantidadTrabajos: number,
+  ) => Array<{
+    anchoMm: number;
+    altoMm: number;
+    cantidad: number;
+    rotacionPermitida: boolean;
+  }>;
+  let buildVinylCutMaterialsCompatibilitySet: (maquina: {
+    parametrosTecnicosJson?: unknown;
+  }) => Set<string>;
 
   beforeEach(() => {
     service = new ProductosServiciosService({} as never);
@@ -283,6 +295,14 @@ describe('ProductosServiciosService V1 adicionales', () => {
       service as unknown as Record<string, unknown>,
       'applyGranFormatoChecklistProductMutations',
     ) as typeof applyGranFormatoChecklistProductMutations;
+    normalizeVinylCutMeasures = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'normalizeVinylCutMeasures',
+    ) as typeof normalizeVinylCutMeasures;
+    buildVinylCutMaterialsCompatibilitySet = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'buildVinylCutMaterialsCompatibilitySet',
+    ) as typeof buildVinylCutMaterialsCompatibilitySet;
   });
 
   it('usa la ruta completa para márgenes de imposición aunque haya filtros por addon', () => {
@@ -1911,6 +1931,32 @@ describe('ProductosServiciosService V1 adicionales', () => {
     expect(candidates[0].placements).toHaveLength(3);
     expect(candidates[0].placements.some((item: { rotated: boolean }) => item.rotated)).toBe(true);
     expect(candidates[0].placements.some((item: { rotated: boolean }) => !item.rotated)).toBe(true);
+  });
+
+  it('normaliza medidas de vinilo de corte y multiplica por cantidad de trabajos', () => {
+    const medidas = normalizeVinylCutMeasures.call(
+      service,
+      [
+        { anchoMm: 1200, altoMm: 300, cantidad: 2, rotacionPermitida: false },
+        { anchoMm: 500, altoMm: 200, cantidad: 1 },
+      ],
+      3,
+    );
+
+    expect(medidas).toEqual([
+      { anchoMm: 1200, altoMm: 300, cantidad: 6, rotacionPermitida: false },
+      { anchoMm: 500, altoMm: 200, cantidad: 3, rotacionPermitida: true },
+    ]);
+  });
+
+  it('lee materiales compatibles del plotter de corte', () => {
+    const compatible = buildVinylCutMaterialsCompatibilitySet.call(service, {
+      parametrosTecnicosJson: {
+        materialesCompatibles: ['vinilo', 'film', 'papel'],
+      },
+    });
+
+    expect(Array.from(compatible)).toEqual(['vinilo', 'film', 'papel']);
   });
 
 });

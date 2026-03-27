@@ -2269,8 +2269,11 @@ function buildCuttingTableSections(kind: "mesa" | "plotter"): MaquinariaTemplate
           label: "Productividad",
           scope: "perfil_operativo",
           kind: "number",
-          unit: "m2_h",
-          description: "Rendimiento nominal del perfil.",
+          unit: kind === "plotter" ? "metro_lineal" : "m2_h",
+          description:
+            kind === "plotter"
+              ? "Rendimiento nominal del perfil en metros lineales por hora."
+              : "Rendimiento nominal del perfil.",
           placeholder: kind === "mesa" ? "35" : "12",
         }),
         field({

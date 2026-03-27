@@ -3184,7 +3184,7 @@ export function ProcesosPanel({
                                 <TableCell>{operacion.runMin.toFixed(2)}</TableCell>
                                 <TableCell>
                                   {operacion.productividadAplicada !== null
-                                    ? operacion.productividadAplicada.toFixed(4)
+                                    ? operacion.productividadAplicada.toFixed(2)
                                     : "-"}
                                 </TableCell>
                                 <TableCell>

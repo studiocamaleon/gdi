@@ -575,6 +575,28 @@ export class UpsertProductoImpuestoDto {
   activo: boolean;
 }
 
+export class UpsertProductoComisionDto {
+  @IsString()
+  @IsNotEmpty()
+  codigo: string;
+
+  @IsString()
+  @IsNotEmpty()
+  nombre: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  porcentaje: number;
+
+  @IsOptional()
+  @IsObject()
+  detalle?: Record<string, unknown>;
+
+  @IsBoolean()
+  activo: boolean;
+}
+
 export class UpsertSubfamiliaProductoDto {
   @IsUUID()
   familiaProductoId: string;
@@ -1434,6 +1456,10 @@ export class CotizarProductoVarianteDto {
   @ValidateNested({ each: true })
   @Type(() => CotizarSeleccionBaseDto)
   seleccionesBase?: CotizarSeleccionBaseDto[];
+
+  @IsOptional()
+  @IsObject()
+  parametros?: Record<string, unknown>;
 }
 
 export class PreviewImposicionProductoVarianteDto {

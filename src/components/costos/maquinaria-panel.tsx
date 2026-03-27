@@ -638,7 +638,7 @@ function getDerivedPrintableAreaParams(source: Record<string, unknown> | undefin
     return null;
   }
 
-  const areaImprimibleMaxima = Number(((anchoImprimible * altoImprimible) / 10000).toFixed(4));
+  const areaImprimibleMaxima = Number(((anchoImprimible * altoImprimible) / 10000).toFixed(2));
 
   return {
     anchoImprimible,
@@ -5716,7 +5716,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                                           unidadCompraConsumible !== unidadObjetivoConsumible ? (
                                             <p>
                                               Costo interno para este consumo: $
-                                              {precioNormalizadoConsumible.toFixed(4)} por{" "}
+                                              {precioNormalizadoConsumible.toFixed(2)} por{" "}
                                               {getUnidadMateriaPrimaLabel(consumible.unidad)}
                                             </p>
                                           ) : unidadStockConsumible ? (
@@ -5942,13 +5942,13 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                                   <p className="text-muted-foreground">
                                     ISO al {coverageIsoFabricantePercent}%:{" "}
                                     <span className="font-medium text-foreground">
-                                      {consumoCalculado.consumoIsoPorM2.toFixed(4)} {unitSymbol}/m2
+                                      {consumoCalculado.consumoIsoPorM2.toFixed(2)} {unitSymbol}/m2
                                     </span>
                                   </p>
                                   <p className="text-muted-foreground">
                                     Full Color ({coveragePercent}%):{" "}
                                     <span className="font-medium text-foreground">
-                                      {consumoCalculado.consumoObjetivoPorM2.toFixed(4)} {unitSymbol}/m2
+                                      {consumoCalculado.consumoObjetivoPorM2.toFixed(2)} {unitSymbol}/m2
                                     </span>
                                   </p>
                                 </div>
@@ -5974,7 +5974,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                                     return;
                                   }
                                   updatePrinterConsumibleRow(activeConsumibleCalculator.id, {
-                                    consumoBase: Number(consumoCalculado.consumoObjetivoPorM2.toFixed(4)),
+                                    consumoBase: Number(consumoCalculado.consumoObjetivoPorM2.toFixed(2)),
                                   });
                                   setOpenConsumibleCalculatorId(null);
                                 }}

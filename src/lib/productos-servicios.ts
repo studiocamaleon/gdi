@@ -1,6 +1,6 @@
 export type TipoProductoServicio = 'producto' | 'servicio';
 export type EstadoProductoServicio = 'activo' | 'inactivo';
-export type MotorCategory = 'digital_sheet' | 'wide_format';
+export type MotorCategory = 'digital_sheet' | 'wide_format' | 'vinyl_cut';
 export type TipoVentaGranFormato = 'm2' | 'metro_lineal';
 export type UnidadComercialProducto = 'unidad' | 'm2' | 'metro_lineal';
 export const unidadComercialProductoItems: Array<{
@@ -61,6 +61,24 @@ export type ProductoImpuestoCatalogo = {
   updatedAt: string;
 };
 
+export type ProductoComisionCatalogo = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  porcentaje: number;
+  detalle: {
+    items: Array<{
+      nombre: string;
+      tipo: ProductoPrecioComisionTipo;
+      porcentaje: number;
+      activo: boolean;
+    }>;
+  };
+  activo: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ProductoPrecioImpuestoItem = {
   nombre: string;
   porcentaje: number;
@@ -84,6 +102,8 @@ export type ProductoPrecioComisionItem = {
 };
 
 export type ProductoPrecioComisionesConfig = {
+  esquemaId: string | null;
+  esquemaNombre: string;
   items: ProductoPrecioComisionItem[];
   porcentajeTotal: number;
 };
@@ -375,6 +395,22 @@ export type GranFormatoConfig = {
   materialBaseId: string | null;
   materialesCompatibles: string[];
   imposicion: GranFormatoImposicionConfig;
+  updatedAt: string | null;
+};
+
+export type ViniloCorteImposicionMedida = {
+  anchoMm: number | null;
+  altoMm: number | null;
+  cantidad: number;
+  rotacionPermitida?: boolean;
+};
+
+export type ViniloCorteConfig = {
+  productoId: string;
+  plottersCompatibles: string[];
+  perfilesCompatibles: string[];
+  materialBaseId: string | null;
+  materialesCompatibles: string[];
   updatedAt: string | null;
 };
 

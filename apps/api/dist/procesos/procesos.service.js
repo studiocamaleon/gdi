@@ -216,7 +216,7 @@ let ProcesosService = class ProcesosService {
             const totalMin = setupMin + runMin + cleanupMin + tiempoFijoMin;
             const horasEfectivas = totalMin / 60;
             const costoTiempo = tarifa
-                ? Number(tarifa.mul(horasEfectivas).toFixed(4))
+                ? Number(tarifa.mul(horasEfectivas).toFixed(2))
                 : 0;
             const warnings = [
                 ...productividadWarnings,
@@ -246,8 +246,8 @@ let ProcesosService = class ProcesosService {
                 runMin,
                 cleanupMin,
                 tiempoFijoMin,
-                totalMin: Number(totalMin.toFixed(4)),
-                horasEfectivas: Number(horasEfectivas.toFixed(4)),
+                totalMin: Number(totalMin.toFixed(2)),
+                horasEfectivas: Number(horasEfectivas.toFixed(2)),
                 tarifaCentro: tarifaNumero,
                 costoTiempo,
                 productividadAplicada,
@@ -260,7 +260,7 @@ let ProcesosService = class ProcesosService {
         });
         const totalCostoTiempo = Number(operationSnapshots
             .reduce((acc, item) => acc + item.costoTiempo, 0)
-            .toFixed(4));
+            .toFixed(2));
         const advertencias = Array.from(new Set(operationSnapshots.flatMap((item) => item.warnings)));
         return {
             procesoId: proceso.id,

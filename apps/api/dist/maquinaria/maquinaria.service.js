@@ -1070,7 +1070,7 @@ let MaquinariaService = class MaquinariaService {
         if (!partes.length) {
             return null;
         }
-        return Number(partes.reduce((acc, item) => acc + item, 0).toFixed(4));
+        return Number(partes.reduce((acc, item) => acc + item, 0).toFixed(2));
     }
     collectExtraSetupMin(detalle) {
         const extras = [];
@@ -1164,7 +1164,7 @@ let MaquinariaService = class MaquinariaService {
             ...params,
             anchoImprimibleMaximo: anchoImprimible,
             altoImprimibleMaximo: altoImprimible,
-            areaImprimibleMaxima: Number(((anchoImprimible * altoImprimible) / 10000).toFixed(4)),
+            areaImprimibleMaxima: Number(((anchoImprimible * altoImprimible) / 10000).toFixed(2)),
         };
     }
     toNumeric(value) {

@@ -329,7 +329,7 @@ export class ProcesosService {
       const totalMin = setupMin + runMin + cleanupMin + tiempoFijoMin;
       const horasEfectivas = totalMin / 60;
       const costoTiempo = tarifa
-        ? Number(tarifa.mul(horasEfectivas).toFixed(4))
+        ? Number(tarifa.mul(horasEfectivas).toFixed(2))
         : 0;
 
       const warnings: string[] = [
@@ -369,8 +369,8 @@ export class ProcesosService {
         runMin,
         cleanupMin,
         tiempoFijoMin,
-        totalMin: Number(totalMin.toFixed(4)),
-        horasEfectivas: Number(horasEfectivas.toFixed(4)),
+        totalMin: Number(totalMin.toFixed(2)),
+        horasEfectivas: Number(horasEfectivas.toFixed(2)),
         tarifaCentro: tarifaNumero,
         costoTiempo,
         productividadAplicada,
@@ -387,7 +387,7 @@ export class ProcesosService {
     const totalCostoTiempo = Number(
       operationSnapshots
         .reduce((acc, item) => acc + item.costoTiempo, 0)
-        .toFixed(4),
+        .toFixed(2),
     );
 
     const advertencias = Array.from(

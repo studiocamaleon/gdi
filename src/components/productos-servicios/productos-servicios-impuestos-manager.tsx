@@ -18,6 +18,8 @@ import { cn } from "@/lib/utils";
 
 type Props = {
   initialImpuestos: ProductoImpuestoCatalogo[];
+  embedded?: boolean;
+  onImpuestosChange?: (items: ProductoImpuestoCatalogo[]) => void;
 };
 
 function buildCodigoFromNombre(nombre: string) {
@@ -29,7 +31,11 @@ function buildCodigoFromNombre(nombre: string) {
     .slice(0, 24);
 }
 
-export function ProductosServiciosImpuestosManager({ initialImpuestos }: Props) {
+export function ProductosServiciosImpuestosManager({
+  initialImpuestos,
+  embedded = false,
+  onImpuestosChange,
+}: Props) {
   const [impuestos, setImpuestos] = React.useState(initialImpuestos);
   const [nuevoNombre, setNuevoNombre] = React.useState("");
   const [nuevoPorcentaje, setNuevoPorcentaje] = React.useState("0");
@@ -39,6 +45,21 @@ export function ProductosServiciosImpuestosManager({ initialImpuestos }: Props) 
   const sorted = React.useMemo(
     () => [...impuestos].sort((a, b) => a.nombre.localeCompare(b.nombre)),
     [impuestos],
+  );
+
+  React.useEffect(() => {
+    setImpuestos(initialImpuestos);
+  }, [initialImpuestos]);
+
+  const syncImpuestos = React.useCallback(
+    (updater: (current: ProductoImpuestoCatalogo[]) => ProductoImpuestoCatalogo[]) => {
+      setImpuestos((current) => {
+        const next = updater(current);
+        onImpuestosChange?.(next);
+        return next;
+      });
+    },
+    [onImpuestosChange],
   );
 
   const handleCreate = () => {
@@ -56,7 +77,7 @@ export function ProductosServiciosImpuestosManager({ initialImpuestos }: Props) 
           porcentaje,
           activo: true,
         });
-        setImpuestos((prev) => [...prev, created]);
+        syncImpuestos((prev) => [...prev, created]);
         setNuevoNombre("");
         setNuevoPorcentaje("0");
         toast.success("Impuesto creado.");
@@ -78,7 +99,7 @@ export function ProductosServiciosImpuestosManager({ initialImpuestos }: Props) 
           porcentaje,
           activo: item.activo,
         });
-        setImpuestos((prev) => prev.map((current) => (current.id === updated.id ? updated : current)));
+        syncImpuestos((prev) => prev.map((current) => (current.id === updated.id ? updated : current)));
         toast.success("Impuesto guardado.");
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "No se pudo guardar el impuesto.");
@@ -95,7 +116,7 @@ export function ProductosServiciosImpuestosManager({ initialImpuestos }: Props) 
           porcentaje: item.porcentaje,
           activo,
         });
-        setImpuestos((prev) => prev.map((current) => (current.id === updated.id ? updated : current)));
+        syncImpuestos((prev) => prev.map((current) => (current.id === updated.id ? updated : current)));
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "No se pudo actualizar el impuesto.");
       }
@@ -104,16 +125,18 @@ export function ProductosServiciosImpuestosManager({ initialImpuestos }: Props) 
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <Link href="/costos/productos-servicios" className={cn(buttonVariants({ variant: "ghost" }), "-ml-3")}>
-          <ArrowLeftIcon data-icon="inline-start" />
-          Volver a catalogo de productos
-        </Link>
-        <h1 className="text-xl font-semibold">Catálogo de impuestos</h1>
-        <p className="text-sm text-muted-foreground">
-          Administra impuestos comerciales reutilizables para productos.
-        </p>
-      </div>
+      {embedded ? null : (
+        <div>
+          <Link href="/costos/productos-servicios" className={cn(buttonVariants({ variant: "ghost" }), "-ml-3")}>
+            <ArrowLeftIcon data-icon="inline-start" />
+            Volver a catalogo de productos
+          </Link>
+          <h1 className="text-xl font-semibold">Catálogo de impuestos</h1>
+          <p className="text-sm text-muted-foreground">
+            Administra impuestos comerciales reutilizables para productos.
+          </p>
+        </div>
+      )}
 
       <Card>
         <CardHeader>

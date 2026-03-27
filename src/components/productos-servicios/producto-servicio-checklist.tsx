@@ -601,6 +601,7 @@ type ChecklistEditorProps = {
   onSaved: (checklist: ProductoChecklist) => void;
   onSaveChecklist?: (payload: ProductoChecklistPayload, draft: ProductoChecklist) => Promise<ProductoChecklist>;
   onDirtyChange?: (dirty: boolean) => void;
+  hideInternalPreviewHeader?: boolean;
 };
 
 type RouteInsertionMode = "append" | "before_step" | "after_step";
@@ -744,8 +745,13 @@ export function ProductoServicioChecklistEditor({
   onSaved,
   onSaveChecklist,
   onDirtyChange,
+  hideInternalPreviewHeader = false,
 }: ChecklistEditorProps) {
-  const [draft, setDraft] = React.useState<ProductoChecklist>(initialChecklist);
+  const normalizedInitialChecklist = React.useMemo(
+    () => normalizeChecklistRouteInsertions(initialChecklist),
+    [initialChecklist],
+  );
+  const [draft, setDraft] = React.useState<ProductoChecklist>(normalizedInitialChecklist);
   const [isSaving, startSaving] = React.useTransition();
   const [preguntasAbiertas, setPreguntasAbiertas] = React.useState<Record<string, boolean>>({});
   const [reglasAbiertas, setReglasAbiertas] = React.useState<Record<string, boolean>>({});
@@ -757,12 +763,12 @@ export function ProductoServicioChecklistEditor({
   } | null>(null);
 
   React.useEffect(() => {
-    setDraft(normalizeChecklistRouteInsertions(initialChecklist));
+    setDraft(normalizedInitialChecklist);
     setPreguntasAbiertas(
       Object.fromEntries(initialChecklist.preguntas.map((pregunta) => [pregunta.id, true])),
     );
     setReglasAbiertas({});
-  }, [initialChecklist]);
+  }, [initialChecklist, normalizedInitialChecklist]);
 
   const operaciones = React.useMemo(
     () =>
@@ -802,8 +808,8 @@ export function ProductoServicioChecklistEditor({
   );
 
   const isDirty = React.useMemo(
-    () => JSON.stringify(draft) !== JSON.stringify(initialChecklist),
-    [draft, initialChecklist],
+    () => JSON.stringify(draft) !== JSON.stringify(normalizedInitialChecklist),
+    [draft, normalizedInitialChecklist],
   );
 
   React.useEffect(() => {
@@ -1529,10 +1535,25 @@ export function ProductoServicioChecklistEditor({
             dependencyMeta ? "border-orange-200 bg-orange-50/20" : "",
           )}
         >
-          <div className="flex items-center justify-between gap-3 border-b bg-muted/30 px-4 py-3">
+          <div
+            className={cn(
+              "relative flex items-center justify-between gap-3 border-b px-4 py-3",
+              dependencyMeta
+                ? "bg-[linear-gradient(135deg,rgba(255,247,237,0.96)_0%,rgba(255,237,213,0.92)_55%,rgba(255,251,235,0.96)_100%)]"
+                : "bg-[linear-gradient(135deg,rgba(239,246,255,0.96)_0%,rgba(224,231,255,0.9)_52%,rgba(240,249,255,0.96)_100%)]",
+            )}
+          >
+            <div
+              className={cn(
+                "pointer-events-none absolute inset-y-0 left-0 w-1.5",
+                dependencyMeta
+                  ? "bg-[linear-gradient(180deg,rgba(249,115,22,0.95)_0%,rgba(251,191,36,0.92)_100%)]"
+                  : "bg-[linear-gradient(180deg,rgba(14,165,233,0.95)_0%,rgba(99,102,241,0.9)_100%)]",
+              )}
+            />
             <button
               type="button"
-              className="flex flex-1 items-center gap-2 text-left"
+              className="flex flex-1 items-center gap-2 pl-1 text-left"
               onClick={() => togglePregunta(pregunta.id)}
             >
               {preguntasAbiertas[pregunta.id] ?? true ? (
@@ -1540,18 +1561,27 @@ export function ProductoServicioChecklistEditor({
               ) : (
                 <ChevronRightIcon className="size-4 text-muted-foreground" />
               )}
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium">Pregunta {preguntaIndex + 1}</p>
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span
+                    className={cn(
+                      "inline-flex min-w-24 items-center justify-center rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]",
+                      dependencyMeta
+                        ? "bg-orange-100 text-orange-800 ring-1 ring-orange-200"
+                        : "bg-sky-100 text-sky-800 ring-1 ring-sky-200",
+                    )}
+                  >
+                    Pregunta {preguntaIndex + 1}
+                  </span>
+                  <p className="truncate text-sm font-medium text-slate-900">
+                    {pregunta.texto.trim() || "Sin texto todavía"}
+                  </p>
                   {dependencyMeta ? (
                     <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-medium text-orange-700">
                       Pregunta hija
                     </span>
                   ) : null}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {pregunta.texto.trim() || "Sin texto todavía"}
-                </p>
                 {dependencyMeta ? (
                   <p className="mt-1 text-[11px] text-orange-700/90">
                     Se muestra si: {dependencyMeta.parentQuestionTitle} → {dependencyMeta.parentResponseText}
@@ -1591,7 +1621,14 @@ export function ProductoServicioChecklistEditor({
 
           {(preguntasAbiertas[pregunta.id] ?? true) ? (
             <div className="space-y-4 p-4">
-              <div className="grid gap-3 rounded-md border bg-muted/20 p-3 md:grid-cols-[minmax(0,1fr)_220px_140px] md:items-end">
+              <div className="space-y-3 rounded-lg border border-border/70 bg-muted/15 p-3">
+                <div>
+                  <p className="text-sm font-medium">Pregunta</p>
+                  <p className="text-xs text-muted-foreground">
+                    Definí el texto visible, el tipo de respuesta y si esta pregunta está activa dentro del configurador.
+                  </p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_140px] md:items-end">
                 <Field>
                   <FieldLabel>Pregunta</FieldLabel>
                   <Input
@@ -1641,13 +1678,17 @@ export function ProductoServicioChecklistEditor({
                   />
                 </div>
               </div>
+              </div>
 
-              <div className="space-y-3">
+              <div className="space-y-3 rounded-lg border border-border/70 bg-background/70 p-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">Respuestas</p>
+                    <p className="text-sm font-medium">Respuestas y acciones</p>
+                    <p className="text-xs text-muted-foreground">
+                      En cada respuesta definís la acción principal. Las dependencias y reglas extra quedan como configuración secundaria.
+                    </p>
                     {!reachableQuestionIds.has(pregunta.id) ? (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         Esta pregunta no se activa desde ninguna respuesta anterior.
                       </p>
                     ) : null}
@@ -1676,13 +1717,13 @@ export function ProductoServicioChecklistEditor({
                 </div>
 
                 <div className="overflow-x-auto rounded-md border">
-                  <Table>
+                    <Table>
                     <TableHeader className="bg-muted/30">
                       <TableRow className="hover:bg-transparent">
                         <TableHead className="w-[160px] lg:w-[200px] text-xs uppercase tracking-wide text-muted-foreground">Respuesta</TableHead>
-                        <TableHead className="w-[220px] lg:w-[280px] text-xs uppercase tracking-wide text-muted-foreground">Acción</TableHead>
-                        <TableHead className="text-xs uppercase tracking-wide text-muted-foreground">Configuración</TableHead>
-                        <TableHead className="w-[72px] lg:w-[96px] text-right text-xs uppercase tracking-wide text-muted-foreground">Acciones</TableHead>
+                        <TableHead className="w-[220px] lg:w-[280px] text-xs uppercase tracking-wide text-muted-foreground">Acción principal</TableHead>
+                        <TableHead className="text-xs uppercase tracking-wide text-muted-foreground">Cómo se aplica</TableHead>
+                        <TableHead className="w-[96px] lg:w-[112px] text-right text-xs uppercase tracking-wide text-muted-foreground">Más opciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1758,13 +1799,16 @@ export function ProductoServicioChecklistEditor({
                                 </div>
                               )}
                               {childQuestion ? (
-                                <p className="text-[11px] text-muted-foreground">
-                                  Abre:{" "}
-                                  {getPreguntaTitulo(
-                                    childQuestion,
-                                    draft.preguntas.findIndex((item) => item.id === childQuestion.id),
-                                  )}
-                                </p>
+                                <div className="inline-flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50 px-2 py-1 text-[11px] text-orange-700">
+                                  <GitBranchIcon className="size-3.5" />
+                                  <span>
+                                    Abre:{" "}
+                                    {getPreguntaTitulo(
+                                      childQuestion,
+                                      draft.preguntas.findIndex((item) => item.id === childQuestion.id),
+                                    )}
+                                  </span>
+                                </div>
                               ) : null}
                             </div>
                           </TableCell>
@@ -1772,24 +1816,26 @@ export function ProductoServicioChecklistEditor({
                             <div className="flex items-start justify-end gap-1">
                               <DropdownMenu>
                                 <Tooltip>
-                                  <TooltipTrigger render={
-                                    <DropdownMenuTrigger
-                                      render={
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon"
-                                          aria-label="Configurar pregunta hija"
-                                          title="Configurar pregunta hija"
-                                          className={cn(
-                                            childQuestion ? "text-orange-600" : "text-muted-foreground",
-                                          )}
-                                        >
-                                          <GitBranchIcon className="size-4" />
-                                        </Button>
-                                      }
-                                    />
-                                  } />
+                                  <TooltipTrigger
+                                    render={
+                                      <DropdownMenuTrigger
+                                        render={
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            aria-label="Configurar pregunta hija"
+                                            title="Configurar pregunta hija"
+                                            className={cn(
+                                              childQuestion ? "text-orange-600" : "text-muted-foreground",
+                                            )}
+                                          >
+                                            <GitBranchIcon className="size-4" />
+                                          </Button>
+                                        }
+                                      />
+                                    }
+                                  />
                                   <TooltipContent>
                                     {childQuestion ? "Editar pregunta hija" : "Vincular pregunta hija"}
                                   </TooltipContent>
@@ -1990,12 +2036,14 @@ export function ProductoServicioChecklistEditor({
       </div>
 
       <div className="rounded-lg border bg-muted/10 xl:sticky xl:top-4">
-        <div className="border-b px-4 py-3">
-          <p className="text-sm font-medium">Preview de ruta</p>
-          <p className="text-xs text-muted-foreground">
-            Simula la ruta con todos los pasos opcionales y arrastrá cada contenedor para definir el orden final.
-          </p>
-        </div>
+        {!hideInternalPreviewHeader ? (
+          <div className="border-b px-4 py-3">
+            <p className="text-sm font-medium">Vista previa de la ruta final</p>
+            <p className="text-xs text-muted-foreground">
+              Simula el orden final de la ruta base más los pasos opcionales y arrastrá cada paso opcional para ajustar su posición.
+            </p>
+          </div>
+        ) : null}
         <div className="space-y-2 p-3">
           {routePreviewItems.length === 0 ? (
             <div className="rounded-md border border-dashed bg-background px-3 py-6 text-center text-sm text-muted-foreground">
@@ -2099,7 +2147,7 @@ export function ProductoServicioChecklistEditor({
                                 {item.questionLabels.length > 2 ? ` +${item.questionLabels.length - 2}` : ""}
                               </p>
                               <p className="text-[11px] text-muted-foreground">
-                                {item.responseLabels.length} respuesta(s) usan este paso
+                                Usado por {item.responseLabels.length} respuesta(s)
                               </p>
                             </div>
                           ) : (

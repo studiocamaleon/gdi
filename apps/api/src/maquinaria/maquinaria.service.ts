@@ -1437,7 +1437,7 @@ export class MaquinariaService {
       return null;
     }
 
-    return Number(partes.reduce((acc, item) => acc + item, 0).toFixed(4));
+    return Number(partes.reduce((acc, item) => acc + item, 0).toFixed(2));
   }
 
   private collectExtraSetupMin(detalle: Record<string, unknown>) {
@@ -1554,7 +1554,7 @@ export class MaquinariaService {
       anchoImprimibleMaximo: anchoImprimible,
       altoImprimibleMaximo: altoImprimible,
       areaImprimibleMaxima: Number(
-        ((anchoImprimible * altoImprimible) / 10000).toFixed(4),
+        ((anchoImprimible * altoImprimible) / 10000).toFixed(2),
       ),
     };
   }
