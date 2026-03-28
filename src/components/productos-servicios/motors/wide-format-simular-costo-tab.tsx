@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { PlusIcon, Trash2Icon } from "lucide-react";
+import { ActivityIcon, ChevronDownIcon, InfoIcon, Layers3Icon, PlusIcon, SigmaIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 import type { ProductTabProps } from "@/components/productos-servicios/product-detail-types";
@@ -13,9 +13,11 @@ import {
   cloneWideFormatManualLayout,
 } from "@/components/productos-servicios/motors/wide-format-nesting.helpers";
 import { WideFormatPanelEditorSheet } from "@/components/productos-servicios/motors/wide-format-panel-editor-sheet";
+import { ProductoTabSection } from "@/components/productos-servicios/producto-tab-section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -24,7 +26,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ProductoServicioChecklistCotizador } from "@/components/productos-servicios/producto-servicio-checklist";
 import { getGranFormatoChecklist, getGranFormatoConfig, getCotizacionesProductoServicio, previewGranFormatoCostos } from "@/lib/productos-servicios-api";
 import { getVarianteOptionChips } from "@/lib/materias-primas-variantes-display";
-import { getMaquinaTecnologia } from "@/lib/maquinaria";
+import { getMaquinaTecnologia, tecnologiaMaquinaItems } from "@/lib/maquinaria";
 import type { GranFormatoCostosResponse, GranFormatoImposicionConfig, GranFormatoPanelizadoModo, ProductoChecklist } from "@/lib/productos-servicios";
 
 function createGranFormatoImposicionMedida() {
@@ -132,6 +134,22 @@ function getWideFormatMaterialLabel(tipo: string) {
   return tipo;
 }
 
+function normalizeBreakdownOrigin(value: string | null | undefined) {
+  if (!value) return "-";
+  const [base] = value.split("·");
+  return base?.trim() || value;
+}
+
+function getTechnologyLabel(value: string | null | undefined) {
+  if (!value) return "Sin definir";
+  return getMaquinaTecnologiaLabel(value);
+}
+
+function getMaquinaTecnologiaLabel(value: string) {
+  const label = tecnologiaMaquinaItems.find((item) => item.value === value)?.label;
+  return label ?? value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 function renderGranFormatoMaterialDisplay(item: GranFormatoCostosResponse["materiasPrimas"][number]) {
   if (item.variantChips?.length) {
     return (
@@ -150,6 +168,76 @@ function renderGranFormatoMaterialDisplay(item: GranFormatoCostosResponse["mater
   if (item.sku) return `${item.nombre} · ${item.sku}`;
   return item.nombre;
 }
+
+function filterManualLayoutBySourcePieceIds(
+  layout: GranFormatoImposicionConfig["panelizadoManualLayout"],
+  sourcePieceIds: string[],
+) {
+  if (!layout) return null;
+  const ids = new Set(sourcePieceIds);
+  const items = layout.items
+    .filter((item) => ids.has(item.sourcePieceId))
+    .map((item) => ({ ...item, panels: item.panels.map((panel) => ({ ...panel })) }));
+  return items.length ? { items } : null;
+}
+
+function removeManualLayoutItemsBySourcePieceIds(
+  layout: GranFormatoImposicionConfig["panelizadoManualLayout"],
+  sourcePieceIds: string[],
+) {
+  if (!layout) return null;
+  const ids = new Set(sourcePieceIds);
+  const items = layout.items
+    .filter((item) => !ids.has(item.sourcePieceId))
+    .map((item) => ({ ...item, panels: item.panels.map((panel) => ({ ...panel })) }));
+  return items.length ? { items } : null;
+}
+
+function mergeManualLayoutItems(
+  current: GranFormatoImposicionConfig["panelizadoManualLayout"],
+  next: NonNullable<GranFormatoImposicionConfig["panelizadoManualLayout"]>,
+  sourcePieceIds: string[],
+) {
+  const preserved = removeManualLayoutItemsBySourcePieceIds(current, sourcePieceIds)?.items ?? [];
+  return {
+    items: [...preserved, ...next.items.map((item) => ({ ...item, panels: item.panels.map((panel) => ({ ...panel })) }))].sort((a, b) =>
+      a.sourcePieceId.localeCompare(b.sourcePieceId),
+    ),
+  };
+}
+
+type ConsolidatedCenterRow = {
+  key: string;
+  paso: string;
+  centro: string;
+  origen: string;
+  minutos: number;
+  tarifaHora: number;
+  costo: number;
+  detalles: Array<{
+    groupLabel: string;
+    minutos: number;
+    costo: number;
+  }>;
+};
+
+type ConsolidatedMaterialRow = {
+  key: string;
+  nombre: string;
+  origen: string;
+  unidad: string | null | undefined;
+  tipo: string;
+  cantidad: number;
+  costoUnitario: number;
+  costo: number;
+  variantChips?: Array<{ label: string; value: string }>;
+  sku: string;
+  detalles: Array<{
+    groupLabel: string;
+    cantidad: number;
+    costo: number;
+  }>;
+};
 
 export function WideFormatSimularCostoTab(props: ProductTabProps) {
   const [tecnologiasCompatibles, setTecnologiasCompatibles] = React.useState<string[]>([]);
@@ -172,6 +260,16 @@ export function WideFormatSimularCostoTab(props: ProductTabProps) {
   const [isCalculatingCosts, startCalculatingCosts] = React.useTransition();
   const [isPanelEditorOpen, setIsPanelEditorOpen] = React.useState(false);
   const [isCostos3dOpen, setIsCostos3dOpen] = React.useState(false);
+  const [expandedCorridas, setExpandedCorridas] = React.useState<Record<string, boolean>>({});
+  const [costos3dPreview, setCostos3dPreview] = React.useState<GranFormatoCostosResponse["nestingPreview"]>(null);
+  const [costos3dTitle, setCostos3dTitle] = React.useState("Vista 3D del nesting");
+  const [panelEditorSelection, setPanelEditorSelection] = React.useState<{
+    title: string;
+    sourcePieceIds: string[];
+    printableWidthMm: number;
+    currentMode: GranFormatoPanelizadoModo | null | undefined;
+    initialLayout: NonNullable<GranFormatoImposicionConfig["panelizadoManualLayout"]> | null;
+  } | null>(null);
 
   const loadConfig = React.useCallback(async () => {
     setIsLoadingConfig(true);
@@ -263,7 +361,6 @@ export function WideFormatSimularCostoTab(props: ProductTabProps) {
       );
     return items.filter((profile, index, list) => list.findIndex((item) => item.id === profile.id) === index);
   }, [costosTechnology, perfilesCompatiblesIds, selectedMachines]);
-  const costosTechnologyLabel = React.useMemo(() => costosTechnology || "Seleccionar tecnología", [costosTechnology]);
   const costosPerfilOverrideLabel = React.useMemo(() => {
     if (!costosPerfilOverrideId) return "Usar perfil default del producto";
     return costosProfileOptions.find((item) => item.id === costosPerfilOverrideId)?.nombre ?? "Usar perfil default del producto";
@@ -301,6 +398,156 @@ export function WideFormatSimularCostoTab(props: ProductTabProps) {
     }
     return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label));
   }, [costosPreview]);
+  const isHybridSimulation = React.useMemo(
+    () => costosPreview?.simulacionHibrida === true && (costosPreview.gruposTrabajo?.length ?? 0) > 1,
+    [costosPreview],
+  );
+  const medidasValidas = React.useMemo(
+    () => costosMedidas.filter((item) => (item.anchoMm ?? 0) > 0 && (item.altoMm ?? 0) > 0 && (item.cantidad ?? 0) > 0),
+    [costosMedidas],
+  );
+  const costoTotal = costosPreview?.totales.tecnico ?? null;
+  const cantidadTotalReferencia = React.useMemo(
+    () => medidasValidas.reduce((total, item) => total + (item.cantidad ?? 0), 0),
+    [medidasValidas],
+  );
+  const costoUnitario =
+    costosPreview && cantidadTotalReferencia > 0 ? costosPreview.totales.tecnico / cantidadTotalReferencia : null;
+  const resumenCards = [
+    {
+      label: "Tecnología",
+      value: getTechnologyLabel(costosTechnology),
+    },
+    {
+      label: "Medidas válidas",
+      value: `${formatNumber(medidasValidas.length, 0)}`,
+    },
+    {
+      label: "Estado",
+      value: costosPreview ? "Simulación calculada" : "Sin simulación",
+    },
+    {
+      label: "Costo total",
+      value: formatCurrency(costoTotal),
+    },
+    {
+      label: "Costo unitario",
+      value: formatCurrency(costoUnitario),
+    },
+  ];
+  const corridasTrabajo = costosPreview?.corridasTrabajo ?? [];
+  const gruposTrabajo = costosPreview?.gruposTrabajo ?? [];
+  const groupsByCorrida = React.useMemo(
+    () =>
+      Object.fromEntries(
+        corridasTrabajo.map((corrida) => [
+          corrida.corridaId,
+          gruposTrabajo.filter((grupo) => grupo.corridaId === corrida.corridaId),
+        ]),
+      ) as Record<string, NonNullable<GranFormatoCostosResponse["gruposTrabajo"]>>,
+    [corridasTrabajo, gruposTrabajo],
+  );
+  const consolidatedGlobalBreakdown = React.useMemo(() => {
+    const centerMap = new Map<string, ConsolidatedCenterRow>();
+    const materialMap = new Map<string, ConsolidatedMaterialRow>();
+
+    (costosPreview?.centrosCosto ?? []).forEach((item) => {
+      const detailGroup =
+        item.detalleTecnico && typeof item.detalleTecnico === "object" && "grupoTrabajo" in item.detalleTecnico
+          ? String(item.detalleTecnico.grupoTrabajo ?? "")
+          : "";
+      const detailLabel = detailGroup || normalizeBreakdownOrigin(item.origen);
+      const key = [
+        item.paso,
+        item.centroCostoId || item.centroCostoNombre || "-",
+        normalizeBreakdownOrigin(item.origen),
+        Number(item.tarifaHora ?? 0).toFixed(2),
+      ].join("|");
+      const current = centerMap.get(key) ?? {
+        key,
+        paso: item.paso,
+        centro: item.centroCostoNombre || "-",
+        origen: normalizeBreakdownOrigin(item.origen),
+        minutos: 0,
+        tarifaHora: Number(item.tarifaHora ?? 0),
+        costo: 0,
+        detalles: [],
+      };
+      current.minutos += Number(item.minutos ?? 0);
+      current.costo += Number(item.costo ?? 0);
+      current.detalles.push({
+        groupLabel: detailLabel,
+        minutos: Number(item.minutos ?? 0),
+        costo: Number(item.costo ?? 0),
+      });
+      centerMap.set(key, current);
+    });
+
+    (costosPreview?.materiasPrimas ?? []).forEach((item) => {
+      const detailGroup =
+        item.detalle && typeof item.detalle === "object" && "grupoTrabajo" in item.detalle
+          ? String(item.detalle.grupoTrabajo ?? "")
+          : "";
+      const detailLabel = detailGroup || normalizeBreakdownOrigin(item.origen);
+      const scope =
+        typeof item.detalle === "object" && item.detalle && "scope" in item.detalle
+          ? String(item.detalle.scope ?? "")
+          : "";
+      const key = [item.tipo, item.sku, normalizeBreakdownOrigin(item.origen), scope].join("|");
+      const current = materialMap.get(key) ?? {
+        key,
+        nombre: item.nombre,
+        origen: normalizeBreakdownOrigin(item.origen),
+        unidad: item.unidad,
+        tipo: item.tipo,
+        cantidad: 0,
+        costoUnitario: Number(item.costoUnitario ?? 0),
+        costo: 0,
+        variantChips: item.variantChips,
+        sku: item.sku,
+        detalles: [],
+      };
+      current.cantidad += Number(item.cantidad ?? 0);
+      current.costo += Number(item.costo ?? 0);
+      current.detalles.push({
+        groupLabel: detailLabel,
+        cantidad: Number(item.cantidad ?? 0),
+        costo: Number(item.costo ?? 0),
+      });
+      materialMap.set(key, current);
+    });
+
+    return {
+      centros: Array.from(centerMap.values()).sort((a, b) => a.paso.localeCompare(b.paso)),
+      materiales: Array.from(materialMap.values()).sort((a, b) => a.nombre.localeCompare(b.nombre)),
+    };
+  }, [costosPreview]);
+  const consolidatedGlobalMaterialGroups = React.useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        tipo: string;
+        label: string;
+        items: ConsolidatedMaterialRow[];
+        totalCosto: number;
+      }
+    >();
+
+    consolidatedGlobalBreakdown.materiales.forEach((item) => {
+      const current =
+        groups.get(item.tipo) ?? {
+          tipo: item.tipo,
+          label: getWideFormatMaterialLabel(item.tipo),
+          items: [],
+          totalCosto: 0,
+        };
+      current.items.push(item);
+      current.totalCosto += item.costo;
+      groups.set(item.tipo, current);
+    });
+
+    return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [consolidatedGlobalBreakdown]);
 
   React.useEffect(() => {
     if (!costosTecnologia && costosTechnologies.length > 0) {
@@ -392,204 +639,309 @@ export function WideFormatSimularCostoTab(props: ProductTabProps) {
       toast.error("Simulá primero un costo con panelizado para poder editar los paneles.");
       return;
     }
+    setPanelEditorSelection(null);
     setIsPanelEditorOpen(true);
   };
 
+  const handleOpenGroupPanelEditor = React.useCallback(
+    (group: NonNullable<GranFormatoCostosResponse["gruposTrabajo"]>[number], index: number) => {
+      const sourcePieceIds = (group.nestingPreview?.pieces ?? [])
+        .map((piece) => piece.sourcePieceId)
+        .filter((value): value is string => Boolean(value));
+      if (!sourcePieceIds.length || !group.nestingPreview) {
+        toast.error("No hay paneles disponibles para editar en este grupo.");
+        return;
+      }
+      const existingGroupLayout = filterManualLayoutBySourcePieceIds(
+        imposicionConfig.panelizadoManualLayout,
+        sourcePieceIds,
+      );
+      setPanelEditorSelection({
+        title: `Editor visual de paneles · Rollo ${index + 1}`,
+        sourcePieceIds,
+        printableWidthMm: Math.round(
+          (group.nestingPreview.rollWidth - group.nestingPreview.marginLeft - group.nestingPreview.marginRight) * 10,
+        ),
+        currentMode: existingGroupLayout ? "manual" : "automatico",
+        initialLayout:
+          cloneWideFormatManualLayout(existingGroupLayout) ??
+          buildManualLayoutFromNestingPieces(group.nestingPreview.pieces),
+      });
+      setIsPanelEditorOpen(true);
+    },
+    [imposicionConfig.panelizadoManualLayout],
+  );
+
+  const handleOpenCostos3d = React.useCallback(
+    (preview: GranFormatoCostosResponse["nestingPreview"], title = "Vista 3D del nesting") => {
+      if (!preview) {
+        toast.error("No hay un nesting 3D disponible para este resultado.");
+        return;
+      }
+      setCostos3dPreview(preview);
+      setCostos3dTitle(title);
+      setIsCostos3dOpen(true);
+    },
+    [],
+  );
+
   const handleApplyPanelEditor = (layout: NonNullable<typeof costosManualLayoutActual>) => {
+    const nextLayout =
+      panelEditorSelection?.sourcePieceIds?.length
+        ? mergeManualLayoutItems(
+            imposicionConfig.panelizadoManualLayout,
+            layout,
+            panelEditorSelection.sourcePieceIds,
+          )
+        : layout;
     const nextConfig = {
       ...imposicionConfig,
       panelizadoActivo: true,
       panelizadoModo: "manual" as const,
-      panelizadoManualLayout: layout,
+      panelizadoManualLayout: nextLayout,
     };
     setImposicionConfig((prev) => ({
       ...prev,
       panelizadoActivo: true,
       panelizadoModo: "manual",
-      panelizadoManualLayout: layout,
+      panelizadoManualLayout: nextLayout,
     }));
+    setPanelEditorSelection(null);
     setIsPanelEditorOpen(false);
     void calculateCosts(nextConfig);
   };
 
   const handleRestoreAutomaticPanelLayout = () => {
+    const restoredLayout =
+      panelEditorSelection?.sourcePieceIds?.length
+        ? removeManualLayoutItemsBySourcePieceIds(
+            imposicionConfig.panelizadoManualLayout,
+            panelEditorSelection.sourcePieceIds,
+          )
+        : cloneWideFormatManualLayout(persistedImposicionConfig.panelizadoManualLayout);
+    const restoredMode =
+      restoredLayout?.items?.length ? "manual" : (persistedImposicionConfig.panelizadoModo ?? "automatico");
     setImposicionConfig((prev) => ({
       ...prev,
-      panelizadoModo: persistedImposicionConfig.panelizadoModo ?? "automatico",
-      panelizadoManualLayout: cloneWideFormatManualLayout(persistedImposicionConfig.panelizadoManualLayout),
+      panelizadoModo: restoredMode,
+      panelizadoManualLayout: restoredLayout,
     }));
+    setPanelEditorSelection(null);
     setIsPanelEditorOpen(false);
     void calculateCosts({
       ...imposicionConfig,
-      panelizadoModo: persistedImposicionConfig.panelizadoModo ?? "automatico",
-      panelizadoManualLayout: cloneWideFormatManualLayout(persistedImposicionConfig.panelizadoManualLayout),
+      panelizadoModo: restoredMode,
+      panelizadoManualLayout: restoredLayout,
     });
   };
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>Simulador de costos</CardTitle>
-          <CardDescription>
-            Ejecuta una simulación operativa del trabajo usando la base técnica definida en Imposición.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isLoadingConfig ? (
-            <div className="flex items-center gap-2 rounded-lg border p-4 text-sm text-muted-foreground">
-              <GdiSpinner className="size-4" />
-              Cargando configuración de costos...
+      <ProductoTabSection
+        title="Resumen de simulación"
+        description="Lectura rápida del contexto actual y del último costo técnico calculado."
+        icon={ActivityIcon}
+      >
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          {resumenCards.map((item) => (
+            <div key={item.label} className="rounded-lg border bg-background/80 p-4">
+              <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">{item.label}</p>
+              <p className="mt-2 text-sm font-semibold text-foreground">{item.value}</p>
             </div>
-          ) : (
-            <>
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.95fr)]">
-                <div className="rounded-lg border p-3">
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium">Medidas del trabajo</p>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="hidden gap-2 px-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px_40px]">
-                      <span>Ancho (cm)</span>
-                      <span>Alto (cm)</span>
-                      <span>Cantidad</span>
-                      <span />
-                      <span />
+          ))}
+        </div>
+      </ProductoTabSection>
+
+      <ProductoTabSection
+        title="Contexto de cotización"
+        description="Definí la tecnología, el perfil operativo y el período de costos con el que se va a ejecutar la simulación."
+        icon={InfoIcon}
+      >
+        {isLoadingConfig ? (
+          <div className="flex items-center gap-2 rounded-lg border p-4 text-sm text-muted-foreground">
+            <GdiSpinner className="size-4" />
+            Cargando configuración de costos...
+          </div>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+            <div className="rounded-lg border p-3">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">Medidas del trabajo</p>
+              </div>
+              <div className="space-y-2">
+                <div className="hidden gap-2 px-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px_40px]">
+                  <span>Ancho (cm)</span>
+                  <span>Alto (cm)</span>
+                  <span>Cantidad</span>
+                  <span />
+                  <span />
+                </div>
+                {costosMedidas.map((medida, index) => (
+                  <div key={`costos-medida-${index}`} className="grid gap-2 rounded-lg border p-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px_40px]">
+                    <Field>
+                      <Input
+                        aria-label={`Ancho (cm) fila ${index + 1}`}
+                        value={formatMmAsCm(medida.anchoMm)}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setCostosMedidas((prev) =>
+                            prev.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, anchoMm: value.trim() ? Math.round(Number(value) * 10) : null } : item,
+                            ),
+                          );
+                        }}
+                      />
+                    </Field>
+                    <Field>
+                      <Input
+                        aria-label={`Alto (cm) fila ${index + 1}`}
+                        value={formatMmAsCm(medida.altoMm)}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setCostosMedidas((prev) =>
+                            prev.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, altoMm: value.trim() ? Math.round(Number(value) * 10) : null } : item,
+                            ),
+                          );
+                        }}
+                      />
+                    </Field>
+                    <Field>
+                      <Input
+                        aria-label={`Cantidad fila ${index + 1}`}
+                        type="number"
+                        min={1}
+                        value={medida.cantidad}
+                        onChange={(event) => {
+                          const value = Number(event.target.value);
+                          setCostosMedidas((prev) =>
+                            prev.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, cantidad: Number.isFinite(value) && value > 0 ? value : 1 } : item,
+                            ),
+                          );
+                        }}
+                      />
+                    </Field>
+                    <div className="flex items-end">
+                      <Button type="button" variant="ghost" size="icon" aria-label="Agregar nueva medida" onClick={() => setCostosMedidas((prev) => [...prev, createGranFormatoImposicionMedida()])}>
+                        <PlusIcon className="size-4" />
+                      </Button>
                     </div>
-                    {costosMedidas.map((medida, index) => (
-                      <div key={`costos-medida-${index}`} className="grid gap-2 rounded-lg border p-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px_40px]">
-                        <Field>
-                          <Input
-                            aria-label={`Ancho (cm) fila ${index + 1}`}
-                            value={formatMmAsCm(medida.anchoMm)}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setCostosMedidas((prev) =>
-                                prev.map((item, itemIndex) =>
-                                  itemIndex === index ? { ...item, anchoMm: value.trim() ? Math.round(Number(value) * 10) : null } : item,
-                                ),
-                              );
-                            }}
-                          />
-                        </Field>
-                        <Field>
-                          <Input
-                            aria-label={`Alto (cm) fila ${index + 1}`}
-                            value={formatMmAsCm(medida.altoMm)}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setCostosMedidas((prev) =>
-                                prev.map((item, itemIndex) =>
-                                  itemIndex === index ? { ...item, altoMm: value.trim() ? Math.round(Number(value) * 10) : null } : item,
-                                ),
-                              );
-                            }}
-                          />
-                        </Field>
-                        <Field>
-                          <Input
-                            aria-label={`Cantidad fila ${index + 1}`}
-                            type="number"
-                            min={1}
-                            value={medida.cantidad}
-                            onChange={(event) => {
-                              const value = Number(event.target.value);
-                              setCostosMedidas((prev) =>
-                                prev.map((item, itemIndex) =>
-                                  itemIndex === index ? { ...item, cantidad: Number.isFinite(value) && value > 0 ? value : 1 } : item,
-                                ),
-                              );
-                            }}
-                          />
-                        </Field>
-                        <div className="flex items-end">
-                          <Button type="button" variant="ghost" size="icon" aria-label="Agregar nueva medida" onClick={() => setCostosMedidas((prev) => [...prev, createGranFormatoImposicionMedida()])}>
-                            <PlusIcon className="size-4" />
-                          </Button>
-                        </div>
-                        <div className="flex items-end">
-                          <Button type="button" variant="ghost" size="icon" disabled={costosMedidas.length === 1} onClick={() => setCostosMedidas((prev) => (prev.length === 1 ? prev : prev.filter((_, itemIndex) => itemIndex !== index)))}>
-                            <Trash2Icon className="size-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                    <div className="flex items-end">
+                      <Button type="button" variant="ghost" size="icon" disabled={costosMedidas.length === 1} onClick={() => setCostosMedidas((prev) => (prev.length === 1 ? prev : prev.filter((_, itemIndex) => itemIndex !== index)))}>
+                        <Trash2Icon className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-lg border p-3">
+              <div className="space-y-3">
+                <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                  <FieldLabel className="sm:mb-0">Tecnología</FieldLabel>
+                  <Select value={costosTechnology} onValueChange={(value) => setCostosTecnologia(value ?? "")}>
+                    <SelectTrigger>
+                      <SelectValue>{getTechnologyLabel(costosTechnology)}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {costosTechnologies.map((item) => (
+                        <SelectItem key={item} value={item}>
+                          {getTechnologyLabel(item)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                  <FieldLabel className="sm:mb-0">Perfil operativo</FieldLabel>
+                  <Select value={costosPerfilOverrideId || "__default__"} onValueChange={(value) => setCostosPerfilOverrideId(value === "__default__" || value == null ? "" : value)}>
+                    <SelectTrigger>
+                      <SelectValue>{costosPerfilOverrideLabel}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__default__">Usar perfil default del producto</SelectItem>
+                      {costosProfileOptions.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                  <FieldLabel className="sm:mb-0">Período de costos</FieldLabel>
+                  <div className="space-y-1">
+                    <Input value={costosPeriodo} placeholder="YYYY-MM" onChange={(event) => setCostosPeriodo(event.target.value)} />
+                    <p className="text-xs text-muted-foreground">Formato esperado: YYYY-MM.</p>
                   </div>
                 </div>
 
-                <div className="rounded-lg border p-3">
-                  <div className="space-y-3">
-                    <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
-                      <FieldLabel className="sm:mb-0">Tecnología</FieldLabel>
-                      <Select value={costosTechnology} onValueChange={(value) => setCostosTecnologia(value ?? "")}>
-                        <SelectTrigger>
-                          <SelectValue>{costosTechnologyLabel}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {costosTechnologies.map((item) => (
-                            <SelectItem key={item} value={item}>
-                              {item}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
-                      <FieldLabel className="sm:mb-0">Perfil operativo</FieldLabel>
-                      <Select value={costosPerfilOverrideId || "__default__"} onValueChange={(value) => setCostosPerfilOverrideId(value === "__default__" || value == null ? "" : value)}>
-                        <SelectTrigger>
-                          <SelectValue>{costosPerfilOverrideLabel}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__default__">Usar perfil default del producto</SelectItem>
-                          {costosProfileOptions.map((item) => (
-                            <SelectItem key={item.id} value={item.id}>
-                              {item.nombre}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
-                      <FieldLabel className="sm:mb-0">Período tarifa</FieldLabel>
-                      <Input value={costosPeriodo} placeholder="YYYY-MM" onChange={(event) => setCostosPeriodo(event.target.value)} />
-                    </div>
-                  </div>
+                <div className="flex justify-end pt-2">
+                  <Button type="button" onClick={handleCalcularCostos} disabled={isCalculatingCosts}>
+                    {isCalculatingCosts ? <GdiSpinner className="size-4" data-icon="inline-start" /> : null}
+                    Simular costo
+                  </Button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+      </ProductoTabSection>
 
-              <div className="rounded-lg border p-3">
-                <p className="mb-2 text-sm font-medium">Opcionales para costear</p>
-                <ProductoServicioChecklistCotizador checklist={checklistCotizadorGranFormato} value={costosChecklistRespuestas} onChange={setCostosChecklistRespuestas} />
+      <ProductoTabSection
+        title="Parámetros de simulación"
+        description="Definí las respuestas opcionales que agregan materiales, mutaciones o pasos al trabajo actual."
+        icon={Layers3Icon}
+      >
+        {isLoadingConfig ? (
+          <div className="flex items-center gap-2 rounded-lg border p-4 text-sm text-muted-foreground">
+            <GdiSpinner className="size-4" />
+            Preparando parámetros de simulación...
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="rounded-lg border p-3">
+              <p className="text-sm font-medium">Configuración técnica de la variante</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                La simulación usa la base técnica definida en Imposición y las medidas válidas cargadas arriba.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Badge variant="outline">Tecnología: {getTechnologyLabel(costosTechnology)}</Badge>
+                <Badge variant="outline">Perfil: {costosPerfilOverrideLabel}</Badge>
+                <Badge variant="outline">Medidas válidas: {formatNumber(medidasValidas.length, 0)}</Badge>
               </div>
+            </div>
 
+            <div className="rounded-lg border p-3">
+              <p className="mb-2 text-sm font-medium">Opcionales para costear</p>
+              <ProductoServicioChecklistCotizador checklist={checklistCotizadorGranFormato} value={costosChecklistRespuestas} onChange={setCostosChecklistRespuestas} />
+            </div>
+          </div>
+        )}
+      </ProductoTabSection>
+
+      <ProductoTabSection
+        title="Resultado y desglose"
+        description="Revisá el resultado técnico de la simulación, el material consumido y el costo de cada etapa."
+        icon={SigmaIcon}
+      >
+        {costosPreview?.warnings?.length ? (
+          <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+            {costosPreview.warnings.map((warning, index) => (
+              <p key={`costos-warning-${index}`}>{warning}</p>
+            ))}
+          </div>
+        ) : null}
+
+        {costosPreview ? (
+          <div className="space-y-4">
+            {!isHybridSimulation && costosPreview.nestingPreview ? (
               <div className="flex justify-end gap-2">
-                <Button type="button" onClick={handleCalcularCostos} disabled={isCalculatingCosts}>
-                  {isCalculatingCosts ? <GdiSpinner className="size-4" data-icon="inline-start" /> : null}
-                  Simular costo
-                </Button>
-              </div>
-
-              {costosPreview?.warnings?.length ? (
-                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                  {costosPreview.warnings.map((warning, index) => (
-                    <p key={`costos-warning-${index}`}>{warning}</p>
-                  ))}
-                </div>
-              ) : null}
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {costosPreview ? (
-        <>
-          {costosPreview.nestingPreview ? (
-            <div className="space-y-3">
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setIsCostos3dOpen(true)}>
+                <Button type="button" variant="outline" onClick={() => handleOpenCostos3d(costosPreview.nestingPreview)}>
                   Ver nesting 3D
                 </Button>
                 {costosPreview.resumenTecnico.panelizado ? (
@@ -598,201 +950,527 @@ export function WideFormatSimularCostoTab(props: ProductTabProps) {
                   </Button>
                 ) : null}
               </div>
-            </div>
-          ) : null}
+            ) : null}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Resumen técnico</CardTitle>
-              <CardDescription>Candidato elegido para costear material, tinta y tiempo operativo.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="rounded-lg border bg-muted/20 p-4 text-sm">
-                <p><span className="font-medium">Original:</span> {formatMeasureSummary(costosPreview.medidasOriginales)}</p>
-                <p><span className="font-medium">Efectiva:</span> {formatMeasureSummary(costosPreview.medidasEfectivas)}</p>
-                {costosPreview.mutacionesAplicadas.length > 0 ? (
-                  <div className="mt-2 space-y-1 text-muted-foreground">
-                    {costosPreview.mutacionesAplicadas.map((item) => (
-                      <p key={`${item.reglaId}-${item.respuestaId}`}>{formatChecklistMutationSummary(item)}</p>
-                    ))}
+            <Card>
+              <CardHeader>
+                <CardTitle>Resumen técnico</CardTitle>
+                <CardDescription>Candidato elegido para costear material, tinta y tiempo operativo.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="rounded-lg border bg-muted/20 p-4 text-sm">
+                  <p><span className="font-medium">Original:</span> {formatMeasureSummary(costosPreview.medidasOriginales)}</p>
+                  <p><span className="font-medium">Efectiva:</span> {formatMeasureSummary(costosPreview.medidasEfectivas)}</p>
+                  {costosPreview.mutacionesAplicadas.length > 0 ? (
+                    <div className="mt-2 space-y-1 text-muted-foreground">
+                      {costosPreview.mutacionesAplicadas.map((item) => (
+                        <p key={`${item.reglaId}-${item.respuestaId}`}>{formatChecklistMutationSummary(item)}</p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-muted-foreground">No se aplicaron mutaciones sobre la medida.</p>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {costosPreview.resumenTecnico.varianteChips.map((chip) => (
+                    <Badge key={`${chip.label}-${chip.value}`} variant="outline">
+                      {chip.label}: {chip.value}
+                    </Badge>
+                  ))}
+                </div>
+                {isHybridSimulation ? (
+                  <div className="space-y-3">
+                    <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-sm text-sky-950">
+                      Esta simulación combinó más de un grupo de rollo para evitar panelizar piezas que sí entran enteras.
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-sm font-semibold">Corridas reales de costo</p>
+                        <p className="text-xs text-muted-foreground">
+                          Cada corrida consolida grupos que usan la misma variante exacta del rollo y comparten el costo estructural de impresión.
+                        </p>
+                      </div>
+                      <div className="space-y-3">
+                        {corridasTrabajo.map((corrida, corridaIndex) => {
+                          const corridaGroups = groupsByCorrida[corrida.corridaId] ?? [];
+                          const isOpen = expandedCorridas[corrida.corridaId] === true;
+                          return (
+                            <Collapsible
+                              key={corrida.corridaId}
+                              open={isOpen}
+                              onOpenChange={(open) =>
+                                setExpandedCorridas((prev) => ({ ...prev, [corrida.corridaId]: open }))
+                              }
+                            >
+                              <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/5">
+                                <div className="flex items-start justify-between gap-3 p-4">
+                                  <CollapsibleTrigger className="flex min-w-0 flex-1 cursor-pointer items-start justify-between gap-3 text-left">
+                                    <div className="space-y-3">
+                                      <div className="space-y-1">
+                                        <p className="text-sm font-semibold">Corrida {corridaIndex + 1}</p>
+                                        <p className="text-sm text-muted-foreground">Variante de rollo: {corrida.varianteNombre}</p>
+                                      </div>
+                                      <div className="flex flex-wrap gap-2">
+                                        {corrida.varianteChips.map((chip) => (
+                                          <Badge key={`${corrida.corridaId}-${chip.label}-${chip.value}`} variant="outline">
+                                            {chip.label}: {chip.value}
+                                          </Badge>
+                                        ))}
+                                        <Badge variant="secondary">Grupos: {formatNumber(corrida.groupCount, 0)}</Badge>
+                                        <Badge variant="secondary">Completos: {formatNumber(corrida.gruposCompletos, 0)}</Badge>
+                                        <Badge variant="secondary">Panelizados: {formatNumber(corrida.gruposPanelizados, 0)}</Badge>
+                                      </div>
+                                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                        <div className="rounded-lg border bg-background/80 p-3">
+                                          <p className="text-xs text-muted-foreground">Piezas en corrida</p>
+                                          <p className="mt-1 font-semibold">{formatNumber(corrida.piecesCount, 0)}</p>
+                                        </div>
+                                        <div className="rounded-lg border bg-background/80 p-3">
+                                          <p className="text-xs text-muted-foreground">Largo consolidado</p>
+                                          <p className="mt-1 font-semibold">{formatNumber(corrida.largoConsumidoMm / 1000, 2)} m</p>
+                                        </div>
+                                        <div className="rounded-lg border bg-background/80 p-3">
+                                          <p className="text-xs text-muted-foreground">Desperdicio</p>
+                                          <p className="mt-1 font-semibold">{formatNumber(corrida.desperdicioPct, 2)}%</p>
+                                        </div>
+                                        <div className="rounded-lg border bg-background/80 p-3">
+                                          <p className="text-xs text-muted-foreground">Costo consolidado</p>
+                                          <p className="mt-1 font-semibold">{formatCurrency(corrida.costoTotal)}</p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <span className="inline-flex items-center gap-1 rounded-md border bg-background/80 px-3 py-2 text-sm">
+                                      Ver detalle
+                                      <ChevronDownIcon className={`size-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                                    </span>
+                                  </CollapsibleTrigger>
+                                  {corrida.nestingPreview ? (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleOpenCostos3d(corrida.nestingPreview, `Vista 3D · Corrida ${corridaIndex + 1}`)}
+                                    >
+                                      Ver nesting 3D
+                                    </Button>
+                                  ) : null}
+                                </div>
+                                <CollapsibleContent className="border-t bg-background/70 p-4">
+                                  <div className="space-y-4">
+                                    <div>
+                                      <p className="text-sm font-semibold">Composición de la corrida</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        Estos grupos explican qué subconjunto salió completo o panelizado. La edición manual sigue disponible solo donde hay panelizado.
+                                      </p>
+                                    </div>
+                                    <div className="grid gap-3 xl:grid-cols-2">
+                                      {corridaGroups.map((grupo, groupIndex) => (
+                                        <div key={grupo.grupoId} className="rounded-lg border p-4">
+                                          <div className="flex items-start justify-between gap-3">
+                                            <div className="space-y-1">
+                                              <p className="text-sm font-semibold">Grupo {groupIndex + 1}</p>
+                                              <p className="text-sm text-muted-foreground">Variante de rollo: {grupo.varianteNombre}</p>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2 justify-end">
+                                              <Badge variant={grupo.panelizado ? "default" : "outline"}>
+                                                {grupo.panelizado ? "Panelizado" : "Completo"}
+                                              </Badge>
+                                              {grupo.nestingPreview ? (
+                                                <Button
+                                                  type="button"
+                                                  variant="outline"
+                                                  size="sm"
+                                                  onClick={() => handleOpenCostos3d(grupo.nestingPreview, `Vista 3D · Corrida ${corridaIndex + 1} · Grupo ${groupIndex + 1}`)}
+                                                >
+                                                  Ver nesting 3D
+                                                </Button>
+                                              ) : null}
+                                              {grupo.panelizado ? (
+                                                <Button
+                                                  type="button"
+                                                  variant="outline"
+                                                  size="sm"
+                                                  onClick={() => handleOpenGroupPanelEditor(grupo, groupIndex)}
+                                                >
+                                                  Editar paneles
+                                                </Button>
+                                              ) : null}
+                                            </div>
+                                          </div>
+                                          <div className="mt-3 flex flex-wrap gap-2">
+                                            {grupo.varianteChips.map((chip) => (
+                                              <Badge key={`${grupo.grupoId}-${chip.label}-${chip.value}`} variant="outline">
+                                                {chip.label}: {chip.value}
+                                              </Badge>
+                                            ))}
+                                          </div>
+                                          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                            <div className="rounded-lg border bg-muted/20 p-3">
+                                              <p className="text-xs text-muted-foreground">Piezas asignadas</p>
+                                              <p className="mt-1 font-semibold">{formatNumber(grupo.piecesCount, 0)}</p>
+                                            </div>
+                                            <div className="rounded-lg border bg-muted/20 p-3">
+                                              <p className="text-xs text-muted-foreground">Largo parcial</p>
+                                              <p className="mt-1 font-semibold">{formatNumber(grupo.largoConsumidoMm / 1000, 2)} m</p>
+                                            </div>
+                                            <div className="rounded-lg border bg-muted/20 p-3">
+                                              <p className="text-xs text-muted-foreground">Desperdicio parcial</p>
+                                              <p className="mt-1 font-semibold">{formatNumber(grupo.desperdicioPct, 2)}%</p>
+                                            </div>
+                                            <div className="rounded-lg border bg-muted/20 p-3">
+                                              <p className="text-xs text-muted-foreground">Costo parcial</p>
+                                              <p className="mt-1 font-semibold">{formatCurrency(grupo.costoTotal)}</p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </CollapsibleContent>
+                              </div>
+                            </Collapsible>
+                          );
+                        })}
+                      </div>
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-sm font-semibold">Desglose económico consolidado</p>
+                          <p className="text-xs text-muted-foreground">
+                            Este desglose consolida todas las corridas del trabajo. Si querés ver cómo se compone, podés expandir cada categoría.
+                          </p>
+                        </div>
+
+                        <Collapsible>
+                          <div className="rounded-lg border">
+                            <CollapsibleTrigger className="flex w-full cursor-pointer items-center justify-between px-4 py-3 text-left">
+                              <div>
+                                <p className="font-medium">Centros de costo</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {consolidatedGlobalBreakdown.centros.length} paso{consolidatedGlobalBreakdown.centros.length === 1 ? "" : "s"} consolidados
+                                </p>
+                              </div>
+                              <ChevronDownIcon className="size-4" />
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="border-t p-4">
+                              <Table>
+                                <TableHeader className="bg-muted/50">
+                                  <TableRow>
+                                    <TableHead>Paso</TableHead>
+                                    <TableHead>Centro</TableHead>
+                                    <TableHead>Origen</TableHead>
+                                    <TableHead className="text-right">Minutos</TableHead>
+                                    <TableHead className="text-right">Tarifa/h</TableHead>
+                                    <TableHead className="text-right">Costo</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {consolidatedGlobalBreakdown.centros.map((item) => (
+                                    <React.Fragment key={item.key}>
+                                      <TableRow>
+                                        <TableCell>{item.paso}</TableCell>
+                                        <TableCell>{item.centro}</TableCell>
+                                        <TableCell>{item.origen}</TableCell>
+                                        <TableCell className="text-right tabular-nums">{formatNumber(item.minutos, 2)}</TableCell>
+                                        <TableCell className="text-right tabular-nums">{formatCurrency(item.tarifaHora)}</TableCell>
+                                        <TableCell className="text-right tabular-nums">{formatCurrency(item.costo)}</TableCell>
+                                      </TableRow>
+                                      {item.detalles.map((detail) => (
+                                        <TableRow key={`${item.key}-${detail.groupLabel}`} className="bg-muted/20">
+                                          <TableCell colSpan={3} className="pl-8 text-xs text-muted-foreground">
+                                            {detail.groupLabel}
+                                          </TableCell>
+                                          <TableCell className="text-right tabular-nums text-xs">{formatNumber(detail.minutos, 2)}</TableCell>
+                                          <TableCell />
+                                          <TableCell className="text-right tabular-nums text-xs">{formatCurrency(detail.costo)}</TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </React.Fragment>
+                                  ))}
+                                  <TableRow>
+                                    <TableCell colSpan={5} className="text-right font-medium">
+                                      Total centro de costos
+                                    </TableCell>
+                                    <TableCell className="text-right font-semibold tabular-nums">{formatCurrency(costosPreview.totales.centrosCosto)}</TableCell>
+                                  </TableRow>
+                                </TableBody>
+                              </Table>
+                            </CollapsibleContent>
+                          </div>
+                        </Collapsible>
+
+                        {consolidatedGlobalMaterialGroups.map((group) => (
+                          <Collapsible key={group.tipo}>
+                            <div className="rounded-lg border">
+                              <CollapsibleTrigger className="flex w-full cursor-pointer items-center justify-between px-4 py-3 text-left">
+                                <div>
+                                  <p className="font-medium">{group.label}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {group.items.length} componente{group.items.length === 1 ? "" : "s"} consolidados
+                                  </p>
+                                </div>
+                                <ChevronDownIcon className="size-4" />
+                              </CollapsibleTrigger>
+                              <CollapsibleContent className="border-t p-4">
+                                <Table className="table-fixed">
+                                  <colgroup>
+                                    <col className="w-auto" />
+                                    <col className="w-[140px]" />
+                                    <col className="w-[140px]" />
+                                    <col className="w-[160px]" />
+                                    <col className="w-[160px]" />
+                                  </colgroup>
+                                  <TableHeader className="bg-muted/50">
+                                    <TableRow>
+                                      <TableHead>Componente</TableHead>
+                                      <TableHead>Origen</TableHead>
+                                      <TableHead className="text-right">Cantidad</TableHead>
+                                      <TableHead className="text-right">Costo unitario</TableHead>
+                                      <TableHead className="text-right">Costo</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {group.items.map((item) => (
+                                      <React.Fragment key={item.key}>
+                                        <TableRow>
+                                          <TableCell>{renderGranFormatoMaterialDisplay({
+                                            nombre: item.nombre,
+                                            tipo: item.tipo,
+                                            sku: item.sku,
+                                            cantidad: item.cantidad,
+                                            costoUnitario: item.costoUnitario,
+                                            costo: item.costo,
+                                            origen: item.origen,
+                                            unidad: item.unidad,
+                                            variantChips: item.variantChips,
+                                          } as GranFormatoCostosResponse["materiasPrimas"][number])}</TableCell>
+                                          <TableCell>{item.origen}</TableCell>
+                                          <TableCell className="text-right tabular-nums">
+                                            {formatNumber(item.cantidad, 2)}{item.unidad ? ` ${item.unidad}` : ""}
+                                          </TableCell>
+                                          <TableCell className="text-right tabular-nums">{formatCurrency(item.costoUnitario)}</TableCell>
+                                          <TableCell className="text-right tabular-nums">{formatCurrency(item.costo)}</TableCell>
+                                        </TableRow>
+                                        {item.detalles.map((detail) => (
+                                          <TableRow key={`${item.key}-${detail.groupLabel}`} className="bg-muted/20">
+                                            <TableCell colSpan={2} className="pl-8 text-xs text-muted-foreground">
+                                              {detail.groupLabel}
+                                            </TableCell>
+                                            <TableCell className="text-right tabular-nums text-xs">
+                                              {formatNumber(detail.cantidad, 2)}{item.unidad ? ` ${item.unidad}` : ""}
+                                            </TableCell>
+                                            <TableCell />
+                                            <TableCell className="text-right tabular-nums text-xs">{formatCurrency(detail.costo)}</TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </React.Fragment>
+                                    ))}
+                                    <TableRow>
+                                      <TableCell colSpan={4} className="text-right font-medium">
+                                        Total {group.label}
+                                      </TableCell>
+                                      <TableCell className="text-right font-semibold tabular-nums">{formatCurrency(group.totalCosto)}</TableCell>
+                                    </TableRow>
+                                  </TableBody>
+                                </Table>
+                              </CollapsibleContent>
+                            </div>
+                          </Collapsible>
+                        ))}
+
+                        <div className="rounded-lg border bg-muted/20 p-4">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">Total materias primas</span>
+                            <span className="font-semibold">{formatCurrency(costosPreview.totales.materiales)}</span>
+                          </div>
+                          <div className="mt-2 flex items-center justify-between">
+                            <span className="font-medium">Total centros de costo</span>
+                            <span className="font-semibold">{formatCurrency(costosPreview.totales.centrosCosto)}</span>
+                          </div>
+                          <div className="mt-2 flex items-center justify-between">
+                            <span className="font-medium">Costo técnico total</span>
+                            <span className="text-lg font-semibold">{formatCurrency(costosPreview.totales.tecnico)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : (
-                  <p className="mt-2 text-muted-foreground">No se aplicaron mutaciones sobre la medida.</p>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {costosPreview.resumenTecnico.varianteChips.map((chip) => (
-                  <Badge key={`${chip.label}-${chip.value}`} variant="outline">
-                    {chip.label}: {chip.value}
-                  </Badge>
-                ))}
-              </div>
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    <TableHead>Ancho rollo</TableHead>
-                    <TableHead>Ancho imprimible</TableHead>
-                    <TableHead>Orientación</TableHead>
-                    <TableHead className="text-right">Piezas/fila</TableHead>
-                    <TableHead className="text-right">Filas</TableHead>
-                    <TableHead className="text-right">Largo consumido</TableHead>
-                    <TableHead className="text-right">Desperdicio</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell>{formatMmAsCm(costosPreview.resumenTecnico.anchoRolloMm)} cm</TableCell>
-                    <TableCell>{formatMmAsCm(costosPreview.resumenTecnico.anchoImprimibleMm)} cm</TableCell>
-                    <TableCell>
-                      <div>
-                        <p>
-                          {costosPreview.resumenTecnico.orientacion === "mixta"
-                            ? "Mixta"
-                            : costosPreview.resumenTecnico.orientacion === "rotada"
-                              ? "Rotada"
-                              : "Normal"}
-                        </p>
-                        {costosPreview.resumenTecnico.panelizado ? (
-                          <p className="text-xs text-muted-foreground">
-                            Panelizado {costosPreview.resumenTecnico.panelAxis === "vertical" ? "vertical" : "horizontal"} · {formatNumber(costosPreview.resumenTecnico.panelCount, 0)} paneles · {costosPreview.resumenTecnico.panelDistribution === "libre" ? "Libre" : "Equilibrada"}
-                            {costosPreview.resumenTecnico.panelMaxWidthMm != null ? ` · Máx. ${formatMmAsCm(costosPreview.resumenTecnico.panelMaxWidthMm)} cm` : ""}
-                            {costosPreview.resumenTecnico.panelWidthInterpretation ? ` · ${getPanelizadoInterpretacionLabel(costosPreview.resumenTecnico.panelWidthInterpretation)}` : ""}
-                            {costosPreview.resumenTecnico.panelMode ? ` · ${getPanelizadoModoLabel(costosPreview.resumenTecnico.panelMode)}` : ""}
-                          </p>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{formatNumber(costosPreview.resumenTecnico.piezasPorFila, 0)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatNumber(costosPreview.resumenTecnico.filas, 0)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatNumber(costosPreview.resumenTecnico.largoConsumidoMm / 1000, 2)} m</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatNumber(costosPreview.resumenTecnico.desperdicioPct, 2)}% · {formatNumber(costosPreview.resumenTecnico.areaDesperdicioM2, 2)} m2
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Centro de costos</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    <TableHead>#</TableHead>
-                    <TableHead>Paso</TableHead>
-                    <TableHead>Centro</TableHead>
-                    <TableHead>Origen</TableHead>
-                    <TableHead className="text-right">Minutos</TableHead>
-                    <TableHead className="text-right">Tarifa/h</TableHead>
-                    <TableHead className="text-right">Costo</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {costosPreview.centrosCosto.map((item) => (
-                    <TableRow key={`${item.codigo}-${item.orden}`}>
-                      <TableCell>{item.orden}</TableCell>
-                      <TableCell>{item.paso}</TableCell>
-                      <TableCell>{item.centroCostoNombre || "-"}</TableCell>
-                      <TableCell>{item.origen}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatNumber(item.minutos, 2)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatCurrency(item.tarifaHora)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatCurrency(item.costo)}</TableCell>
-                    </TableRow>
-                  ))}
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-right font-medium">
-                      Total centro de costos
-                    </TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">{formatCurrency(costosPreview.totales.centrosCosto)}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Materias primas</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {costosMaterialesAgrupados.map((grupo) => (
-                <div key={grupo.tipo} className="rounded-lg border">
-                  <div className="flex items-center justify-between gap-3 border-b px-3 py-3">
-                    <div>
-                      <p className="font-medium">{grupo.label}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {grupo.items.length} componente{grupo.items.length === 1 ? "" : "s"}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground">Costo total</p>
-                      <p className="font-medium tabular-nums">{formatCurrency(grupo.totalCosto)}</p>
-                    </div>
-                  </div>
-                  <Table className="table-fixed">
-                    <colgroup>
-                      <col className="w-auto" />
-                      <col className="w-[140px]" />
-                      <col className="w-[140px]" />
-                      <col className="w-[160px]" />
-                      <col className="w-[160px]" />
-                    </colgroup>
+                  <Table>
                     <TableHeader className="bg-muted/50">
                       <TableRow>
-                        <TableHead>Componente</TableHead>
-                        <TableHead className="whitespace-nowrap">Origen</TableHead>
-                        <TableHead className="text-right whitespace-nowrap">Cantidad</TableHead>
-                        <TableHead className="text-right whitespace-nowrap">Costo unitario</TableHead>
-                        <TableHead className="text-right whitespace-nowrap">Costo</TableHead>
+                        <TableHead>Ancho rollo</TableHead>
+                        <TableHead>Ancho imprimible</TableHead>
+                        <TableHead>Orientación</TableHead>
+                        <TableHead className="text-right">Piezas/fila</TableHead>
+                        <TableHead className="text-right">Filas</TableHead>
+                        <TableHead className="text-right">Largo consumido</TableHead>
+                        <TableHead className="text-right">Desperdicio</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {grupo.items.map((item, index) => (
-                        <TableRow key={`${grupo.tipo}-${index}`}>
-                          <TableCell className="align-top">{renderGranFormatoMaterialDisplay(item)}</TableCell>
-                          <TableCell className="align-top whitespace-nowrap">{item.origen}</TableCell>
-                          <TableCell className="align-top text-right tabular-nums whitespace-nowrap">
-                            {formatNumber(item.cantidad, 2)}{item.unidad ? ` ${item.unidad}` : ""}
-                          </TableCell>
-                          <TableCell className="align-top text-right tabular-nums whitespace-nowrap">{formatCurrency(item.costoUnitario)}</TableCell>
-                          <TableCell className="align-top text-right tabular-nums whitespace-nowrap">{formatCurrency(item.costo)}</TableCell>
-                        </TableRow>
-                      ))}
                       <TableRow>
-                        <TableCell colSpan={4} className="text-right font-medium">
-                          Total {grupo.label}
+                        <TableCell>{formatMmAsCm(costosPreview.resumenTecnico.anchoRolloMm)} cm</TableCell>
+                        <TableCell>{formatMmAsCm(costosPreview.resumenTecnico.anchoImprimibleMm)} cm</TableCell>
+                        <TableCell>
+                          <div>
+                            <p>
+                              {costosPreview.resumenTecnico.orientacion === "mixta"
+                                ? "Mixta"
+                                : costosPreview.resumenTecnico.orientacion === "rotada"
+                                  ? "Rotada"
+                                  : "Normal"}
+                            </p>
+                            {costosPreview.resumenTecnico.panelizado ? (
+                              <p className="text-xs text-muted-foreground">
+                                Panelizado {costosPreview.resumenTecnico.panelAxis === "vertical" ? "vertical" : "horizontal"} · {formatNumber(costosPreview.resumenTecnico.panelCount, 0)} paneles · {costosPreview.resumenTecnico.panelDistribution === "libre" ? "Libre" : "Equilibrada"}
+                                {costosPreview.resumenTecnico.panelMaxWidthMm != null ? ` · Máx. ${formatMmAsCm(costosPreview.resumenTecnico.panelMaxWidthMm)} cm` : ""}
+                                {costosPreview.resumenTecnico.panelWidthInterpretation ? ` · ${getPanelizadoInterpretacionLabel(costosPreview.resumenTecnico.panelWidthInterpretation)}` : ""}
+                                {costosPreview.resumenTecnico.panelMode ? ` · ${getPanelizadoModoLabel(costosPreview.resumenTecnico.panelMode)}` : ""}
+                              </p>
+                            ) : null}
+                          </div>
                         </TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums">{formatCurrency(grupo.totalCosto)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatNumber(costosPreview.resumenTecnico.piezasPorFila, 0)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatNumber(costosPreview.resumenTecnico.filas, 0)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatNumber(costosPreview.resumenTecnico.largoConsumidoMm / 1000, 2)} m</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatNumber(costosPreview.resumenTecnico.desperdicioPct, 2)}% · {formatNumber(costosPreview.resumenTecnico.areaDesperdicioM2, 2)} m2
+                        </TableCell>
                       </TableRow>
                     </TableBody>
                   </Table>
+                )}
+              </CardContent>
+            </Card>
+
+            {!isHybridSimulation ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Centro de costos</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader className="bg-muted/50">
+                    <TableRow>
+                      <TableHead>#</TableHead>
+                      <TableHead>Paso</TableHead>
+                      <TableHead>Centro</TableHead>
+                      <TableHead>Origen</TableHead>
+                      <TableHead className="text-right">Minutos</TableHead>
+                      <TableHead className="text-right">Tarifa/h</TableHead>
+                      <TableHead className="text-right">Costo</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {costosPreview.centrosCosto.map((item) => (
+                      <TableRow key={`${item.codigo}-${item.orden}`}>
+                        <TableCell>{item.orden}</TableCell>
+                        <TableCell>{item.paso}</TableCell>
+                        <TableCell>{item.centroCostoNombre || "-"}</TableCell>
+                        <TableCell>{item.origen}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatNumber(item.minutos, 2)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatCurrency(item.tarifaHora)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatCurrency(item.costo)}</TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-right font-medium">
+                        Total centro de costos
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">{formatCurrency(costosPreview.totales.centrosCosto)}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+            ) : null}
+
+            {!isHybridSimulation ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Materias primas</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {costosMaterialesAgrupados.map((grupo) => (
+                  <div key={grupo.tipo} className="rounded-lg border">
+                    <div className="flex items-center justify-between gap-3 border-b px-3 py-3">
+                      <div>
+                        <p className="font-medium">{grupo.label}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {grupo.items.length} componente{grupo.items.length === 1 ? "" : "s"}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">Costo total</p>
+                        <p className="font-medium tabular-nums">{formatCurrency(grupo.totalCosto)}</p>
+                      </div>
+                    </div>
+                    <Table className="table-fixed">
+                      <colgroup>
+                        <col className="w-auto" />
+                        <col className="w-[140px]" />
+                        <col className="w-[140px]" />
+                        <col className="w-[160px]" />
+                        <col className="w-[160px]" />
+                      </colgroup>
+                      <TableHeader className="bg-muted/50">
+                        <TableRow>
+                          <TableHead>Componente</TableHead>
+                          <TableHead className="whitespace-nowrap">Origen</TableHead>
+                          <TableHead className="text-right whitespace-nowrap">Cantidad</TableHead>
+                          <TableHead className="text-right whitespace-nowrap">Costo unitario</TableHead>
+                          <TableHead className="text-right whitespace-nowrap">Costo</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {grupo.items.map((item, index) => (
+                          <TableRow key={`${grupo.tipo}-${index}`}>
+                            <TableCell className="align-top">{renderGranFormatoMaterialDisplay(item)}</TableCell>
+                            <TableCell className="align-top whitespace-nowrap">{item.origen}</TableCell>
+                            <TableCell className="align-top text-right tabular-nums whitespace-nowrap">
+                              {formatNumber(item.cantidad, 2)}{item.unidad ? ` ${item.unidad}` : ""}
+                            </TableCell>
+                            <TableCell className="align-top text-right tabular-nums whitespace-nowrap">{formatCurrency(item.costoUnitario)}</TableCell>
+                            <TableCell className="align-top text-right tabular-nums whitespace-nowrap">{formatCurrency(item.costo)}</TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-right font-medium">
+                            Total {grupo.label}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold tabular-nums">{formatCurrency(grupo.totalCosto)}</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                ))}
+                <div className="rounded-lg border bg-muted/20 p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">Total materias primas</span>
+                    <span className="font-semibold">{formatCurrency(costosPreview.totales.materiales)}</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="font-medium">Costo técnico total</span>
+                    <span className="text-lg font-semibold">{formatCurrency(costosPreview.totales.tecnico)}</span>
+                  </div>
                 </div>
-              ))}
-              <div className="rounded-lg border bg-muted/20 p-4">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">Total materias primas</span>
-                  <span className="font-semibold">{formatCurrency(costosPreview.totales.materiales)}</span>
-                </div>
-                <div className="mt-2 flex items-center justify-between">
-                  <span className="font-medium">Costo técnico total</span>
-                  <span className="text-lg font-semibold">{formatCurrency(costosPreview.totales.tecnico)}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      ) : null}
+              </CardContent>
+            </Card>
+            ) : null}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+            Todavía no hay una simulación calculada. Definí el contexto, completá las medidas y ejecutá <span className="font-medium text-foreground">Simular costo</span>.
+          </div>
+        )}
+      </ProductoTabSection>
       <WideFormatPanelEditorSheet
         open={isPanelEditorOpen}
         onOpenChange={setIsPanelEditorOpen}
         context="costos"
-        initialLayout={costosManualLayoutActual}
-        currentMode={imposicionConfig.panelizadoModo}
-        printableWidthMm={costosPreview?.resumenTecnico.anchoImprimibleMm ?? 0}
+        initialLayout={panelEditorSelection?.initialLayout ?? costosManualLayoutActual}
+        currentMode={panelEditorSelection?.currentMode ?? imposicionConfig.panelizadoModo}
+        printableWidthMm={panelEditorSelection?.printableWidthMm ?? (costosPreview?.resumenTecnico.anchoImprimibleMm ?? 0)}
         panelizadoSolapeMm={imposicionConfig.panelizadoSolapeMm}
         panelizadoDistribucion={imposicionConfig.panelizadoDistribucion}
         panelizadoAnchoMaxPanelMm={imposicionConfig.panelizadoAnchoMaxPanelMm}
@@ -803,17 +1481,17 @@ export function WideFormatSimularCostoTab(props: ProductTabProps) {
       <Sheet open={isCostos3dOpen} onOpenChange={setIsCostos3dOpen}>
         <SheetContent side="right" className="!w-[72vw] !max-w-none md:!w-[68vw] lg:!w-[64vw] xl:!w-[62vw] sm:!max-w-none">
           <SheetHeader>
-            <SheetTitle>Visualización 3D del nesting</SheetTitle>
+            <SheetTitle>{costos3dTitle}</SheetTitle>
             <SheetDescription>
               Render del candidato técnico elegido para costear el producto, con márgenes y distribución sobre el rollo.
             </SheetDescription>
           </SheetHeader>
           <div className="px-4 pb-4">
-            {costosPreview?.nestingPreview ? (
+            {costos3dPreview ? (
               <WideFormatNestingCard
-                title="Vista 3D del nesting"
+                title={costos3dTitle}
                 description="Representación del candidato técnico elegido para costear el producto."
-                simulator={buildWideFormatSimulatorDataFromPreview(costosPreview.nestingPreview)}
+                simulator={buildWideFormatSimulatorDataFromPreview(costos3dPreview)}
               />
             ) : null}
           </div>

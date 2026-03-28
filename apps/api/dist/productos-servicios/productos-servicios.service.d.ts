@@ -1331,6 +1331,7 @@ export declare class ProductosServiciosService {
         cantidadTotal: number;
         periodo: string;
         tecnologia: string;
+        simulacionHibrida: boolean;
         medidasOriginales: {
             anchoMm: number;
             altoMm: number;
@@ -1353,91 +1354,17 @@ export declare class ProductosServiciosService {
         perfilId: any;
         perfilNombre: any;
         warnings: string[];
-        resumenTecnico: {
-            varianteId: any;
-            varianteNombre: any;
-            varianteChips: {
-                label: string;
-                value: string;
-            }[];
-            anchoRolloMm: number;
-            anchoImprimibleMm: number;
-            orientacion: GranFormatoNestingOrientation;
-            panelizado: boolean;
-            panelAxis: "vertical" | "horizontal" | null;
-            panelCount: number;
-            panelOverlapMm: number | null;
-            panelMaxWidthMm: number | null;
-            panelDistribution: "equilibrada" | "libre" | null;
-            panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "manual" | "automatico" | null;
-            piezasPorFila: number;
-            filas: number;
-            largoConsumidoMm: number;
-            areaUtilM2: number;
-            areaConsumidaM2: number;
-            areaDesperdicioM2: number;
-            desperdicioPct: number;
-            costoSustrato: number;
-            costoTinta: number;
-            costoTiempo: number;
-            costoTotal: number;
-        };
+        resumenTecnico: Record<string, unknown>;
+        gruposTrabajo: Record<string, unknown>[] | undefined;
+        corridasTrabajo: Record<string, unknown>[] | undefined;
         materiasPrimas: Record<string, unknown>[];
-        centrosCosto: {
-            orden: number;
-            codigo: string;
-            paso: string;
-            centroCostoId: string;
-            centroCostoNombre: string;
-            origen: string;
-            minutos: number;
-            tarifaHora: number;
-            costo: number;
-            detalleTecnico: Record<string, unknown> | null;
-        }[];
+        centrosCosto: Record<string, unknown>[];
         totales: {
             materiales: number;
             centrosCosto: number;
             tecnico: number;
         };
-        nestingPreview: {
-            rollWidth: number;
-            rollLength: number;
-            marginLeft: number;
-            marginRight: number;
-            marginStart: number;
-            marginEnd: number;
-            panelizado: boolean;
-            panelAxis: "vertical" | "horizontal" | null;
-            panelCount: number;
-            panelOverlap: number | null;
-            panelMaxWidth: number | null;
-            panelDistribution: "equilibrada" | "libre" | null;
-            panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "manual" | "automatico" | null;
-            pieces: {
-                id: string;
-                w: number;
-                h: number;
-                originalW: number;
-                originalH: number;
-                usefulW: number;
-                usefulH: number;
-                cx: number;
-                cy: number;
-                color: string;
-                label: string;
-                textColor: string;
-                rotated: boolean;
-                panelIndex: number | null;
-                panelCount: number | null;
-                panelAxis: "vertical" | "horizontal" | null;
-                sourcePieceId: string | null;
-                overlapStart: number;
-                overlapEnd: number;
-            }[];
-        };
+        nestingPreview: Record<string, unknown> | null;
     } | {
         candidatos: {
             variantId: any;
@@ -1493,6 +1420,7 @@ export declare class ProductosServiciosService {
         cantidadTotal: number;
         periodo: string;
         tecnologia: string;
+        simulacionHibrida: boolean;
         medidasOriginales: {
             anchoMm: number;
             altoMm: number;
@@ -1515,91 +1443,17 @@ export declare class ProductosServiciosService {
         perfilId: any;
         perfilNombre: any;
         warnings: string[];
-        resumenTecnico: {
-            varianteId: any;
-            varianteNombre: any;
-            varianteChips: {
-                label: string;
-                value: string;
-            }[];
-            anchoRolloMm: number;
-            anchoImprimibleMm: number;
-            orientacion: GranFormatoNestingOrientation;
-            panelizado: boolean;
-            panelAxis: "vertical" | "horizontal" | null;
-            panelCount: number;
-            panelOverlapMm: number | null;
-            panelMaxWidthMm: number | null;
-            panelDistribution: "equilibrada" | "libre" | null;
-            panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "manual" | "automatico" | null;
-            piezasPorFila: number;
-            filas: number;
-            largoConsumidoMm: number;
-            areaUtilM2: number;
-            areaConsumidaM2: number;
-            areaDesperdicioM2: number;
-            desperdicioPct: number;
-            costoSustrato: number;
-            costoTinta: number;
-            costoTiempo: number;
-            costoTotal: number;
-        };
+        resumenTecnico: Record<string, unknown>;
+        gruposTrabajo: Record<string, unknown>[] | undefined;
+        corridasTrabajo: Record<string, unknown>[] | undefined;
         materiasPrimas: Record<string, unknown>[];
-        centrosCosto: {
-            orden: number;
-            codigo: string;
-            paso: string;
-            centroCostoId: string;
-            centroCostoNombre: string;
-            origen: string;
-            minutos: number;
-            tarifaHora: number;
-            costo: number;
-            detalleTecnico: Record<string, unknown> | null;
-        }[];
+        centrosCosto: Record<string, unknown>[];
         totales: {
             materiales: number;
             centrosCosto: number;
             tecnico: number;
         };
-        nestingPreview: {
-            rollWidth: number;
-            rollLength: number;
-            marginLeft: number;
-            marginRight: number;
-            marginStart: number;
-            marginEnd: number;
-            panelizado: boolean;
-            panelAxis: "vertical" | "horizontal" | null;
-            panelCount: number;
-            panelOverlap: number | null;
-            panelMaxWidth: number | null;
-            panelDistribution: "equilibrada" | "libre" | null;
-            panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "manual" | "automatico" | null;
-            pieces: {
-                id: string;
-                w: number;
-                h: number;
-                originalW: number;
-                originalH: number;
-                usefulW: number;
-                usefulH: number;
-                cx: number;
-                cy: number;
-                color: string;
-                label: string;
-                textColor: string;
-                rotated: boolean;
-                panelIndex: number | null;
-                panelCount: number | null;
-                panelAxis: "vertical" | "horizontal" | null;
-                sourcePieceId: string | null;
-                overlapStart: number;
-                overlapEnd: number;
-            }[];
-        };
+        nestingPreview: Record<string, unknown> | null;
     }>;
     findGranFormatoVariantes(auth: CurrentAuth, productoId: string): Promise<{
         id: string;
@@ -2706,6 +2560,7 @@ export declare class ProductosServiciosService {
     private getChecklistAtributoTecnicoValor;
     private toPrismaUnidadProceso;
     private calculateMachineConsumables;
+    private shouldApplyCarasFactorToDigitalLaserConsumables;
     private normalizeColor;
     private validateGranFormatoVarianteRelations;
     private validateGranFormatoConfigPayload;
@@ -2725,6 +2580,12 @@ export declare class ProductosServiciosService {
     private buildGranFormatoManualPieces;
     private evaluateGranFormatoMixedShelfLayout;
     private buildGranFormatoNestingPreview;
+    private expandGranFormatoMeasuresToSinglePieces;
+    private buildGranFormatoHybridGroupKey;
+    private buildGranFormatoHybridCandidates;
+    private buildGranFormatoPreparedPiecesFromCandidatePlacements;
+    private evaluateGranFormatoPreparedShelfLayout;
+    private buildGranFormatoHybridPhysicalRuns;
     private getGranFormatoCandidateAveragePanelUsefulSpanMm;
     private compareGranFormatoPreviewCandidates;
     private getGranFormatoCandidateResumenAveragePanelUsefulSpanMm;

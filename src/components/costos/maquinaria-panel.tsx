@@ -110,6 +110,7 @@ type TemplateFieldEntry = {
 const EMPTY_SELECT_VALUE = "__none__";
 const OTHER_SELECT_VALUE = "__other__";
 const PRESET_FIELD_CLASSNAME = "border-sky-300 bg-sky-50/70";
+const LASER_SAME_CONSUMPTION_ALL_PROFILES_PARAM_KEY = "laserSameConsumptionAllProfiles";
 const PERFIL_DIRECT_FIELD_KEYS = new Set([
   "nombre",
   "productivityValue",
@@ -1055,6 +1056,47 @@ function createMaquinaForm(plantaId = ""): MaquinaPayload {
   };
 }
 
+function getLaserSameConsumptionAllProfilesFlag(
+  parametrosTecnicos: Record<string, unknown> | null | undefined,
+) {
+  const raw = parametrosTecnicos?.[LASER_SAME_CONSUMPTION_ALL_PROFILES_PARAM_KEY];
+  return typeof raw === "boolean" ? raw : null;
+}
+
+function inferLaserSameConsumptionAllProfiles(consumibles: LocalConsumible[]) {
+  const tonerByChannel = new Map<
+    string,
+    Array<Pick<LocalConsumible, "consumoBase" | "materiaPrimaVarianteId" | "unidad">>
+  >();
+  for (const item of consumibles) {
+    if (item.tipo !== "toner") continue;
+    const channel = String(item.detalle?.color ?? "").trim().toLowerCase();
+    if (!channel) continue;
+    const rows = tonerByChannel.get(channel) ?? [];
+    rows.push({
+      consumoBase: item.consumoBase,
+      materiaPrimaVarianteId: item.materiaPrimaVarianteId,
+      unidad: item.unidad,
+    });
+    tonerByChannel.set(channel, rows);
+  }
+  if (tonerByChannel.size === 0) {
+    return true;
+  }
+  return Array.from(tonerByChannel.values()).every((rows) => {
+    if (rows.length <= 1) {
+      return true;
+    }
+    const [anchor, ...rest] = rows;
+    return rest.every(
+      (row) =>
+        row.consumoBase === anchor.consumoBase &&
+        row.materiaPrimaVarianteId === anchor.materiaPrimaVarianteId &&
+        row.unidad === anchor.unidad,
+    );
+  });
+}
+
 function getEditableCompatibleGeometries(form: MaquinaPayload) {
   return getMaquinaGeometriasCompatibles({
     geometriaTrabajo: form.geometriaTrabajo,
@@ -1074,6 +1116,7 @@ function toPayload(
   perfiles: LocalPerfilOperativo[],
   consumibles: LocalConsumible[],
   desgastes: LocalDesgaste[],
+  sameConsumptionAllProfiles: boolean,
   options?: { asDraft?: boolean },
 ): MaquinaPayload {
   const derivedPrintableArea =
@@ -1082,6 +1125,9 @@ function toPayload(
       : null;
   const asDraft = options?.asDraft === true;
   const parametrosTecnicos = { ...(form.parametrosTecnicos ?? {}) };
+  if (form.plantilla === "impresora_laser") {
+    parametrosTecnicos[LASER_SAME_CONSUMPTION_ALL_PROFILES_PARAM_KEY] = sameConsumptionAllProfiles;
+  }
   if (ROLL_WIDE_FORMAT_PRINTER_TEMPLATES.has(form.plantilla) && form.anchoUtil != null) {
     parametrosTecnicos.anchoImprimibleMaximo = form.anchoUtil;
   }
@@ -1159,10 +1205,28 @@ function fromMaquina(maquina: Maquina): {
   perfiles: LocalPerfilOperativo[];
   consumibles: LocalConsumible[];
   desgastes: LocalDesgaste[];
+  sameConsumptionAllProfiles: boolean;
 } {
   const normalizedParametrosTecnicos = normalizeMachineChannelConfiguration(
     maquina.parametrosTecnicos ?? undefined,
   );
+  const consumibles = maquina.consumibles.map((item) => ({
+    id: item.id,
+    materiaPrimaVarianteId: item.materiaPrimaVarianteId,
+    nombre: item.nombre,
+    tipo: item.tipo,
+    unidad: item.unidad,
+    rendimientoEstimado: item.rendimientoEstimado ?? undefined,
+    consumoBase: item.consumoBase ?? undefined,
+    perfilOperativoNombre: item.perfilOperativoNombre || undefined,
+    perfilOperativoLocalId:
+      maquina.perfilesOperativos.find(
+        (perfil) => perfil.nombre.trim() === (item.perfilOperativoNombre ?? "").trim(),
+      )?.id ?? undefined,
+    activo: item.activo,
+    detalle: item.detalle ?? undefined,
+    observaciones: item.observaciones || undefined,
+  }));
   return {
     form: {
       codigo: maquina.codigo,
@@ -1222,23 +1286,7 @@ function fromMaquina(maquina: Maquina): {
       dobleFaz: item.dobleFaz,
       detalle: item.detalle ?? undefined,
     })),
-    consumibles: maquina.consumibles.map((item) => ({
-      id: item.id,
-      materiaPrimaVarianteId: item.materiaPrimaVarianteId,
-      nombre: item.nombre,
-      tipo: item.tipo,
-      unidad: item.unidad,
-      rendimientoEstimado: item.rendimientoEstimado ?? undefined,
-      consumoBase: item.consumoBase ?? undefined,
-      perfilOperativoNombre: item.perfilOperativoNombre || undefined,
-      perfilOperativoLocalId:
-        maquina.perfilesOperativos.find(
-          (perfil) => perfil.nombre.trim() === (item.perfilOperativoNombre ?? "").trim(),
-        )?.id ?? undefined,
-      activo: item.activo,
-      detalle: item.detalle ?? undefined,
-      observaciones: item.observaciones || undefined,
-    })),
+    consumibles,
     desgastes: maquina.componentesDesgaste.map((item) => ({
       id: item.id,
       materiaPrimaVarianteId: item.materiaPrimaVarianteId,
@@ -1251,6 +1299,9 @@ function fromMaquina(maquina: Maquina): {
       detalle: item.detalle ?? undefined,
       observaciones: item.observaciones || undefined,
     })),
+    sameConsumptionAllProfiles:
+      getLaserSameConsumptionAllProfilesFlag(normalizedParametrosTecnicos) ??
+      inferLaserSameConsumptionAllProfiles(consumibles),
   };
 }
 
@@ -1966,7 +2017,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
         perfil.channels.forEach((channel) => {
           const existing = currentByPerfilYCanal.get(`${perfil.id}::${channel}`);
           const anchor = anchorByCanal.get(channel);
-          const base = existing ?? anchor;
+          const base = sameConsumptionAllProfiles ? anchor ?? existing : existing ?? anchor;
           const syncKey = String(base?.detalle?.syncKey ?? "") || createLocalId();
 
           if (base) {
@@ -2026,6 +2077,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
     form.plantilla,
     perfiles,
     requiredPrinterChannels,
+    sameConsumptionAllProfiles,
     showPrinterConsumiblesStep,
   ]);
 
@@ -2066,7 +2118,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
     setPerfiles(parsed.perfiles);
     setSelectedPerfilId(parsed.perfiles[0]?.id ?? null);
     setSelectedConsumiblePerfilId(parsed.perfiles[0]?.id ?? null);
-    setSameConsumptionAllProfiles(true);
+    setSameConsumptionAllProfiles(parsed.sameConsumptionAllProfiles);
     setConsumibles(parsed.consumibles);
     setDesgastes(parsed.desgastes);
     setLastAppliedPresetKey("");
@@ -2190,6 +2242,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
       perfiles,
       showConsumiblesStep ? consumibles : [],
       desgastes,
+      sameConsumptionAllProfiles,
       { asDraft },
     );
 
@@ -2218,6 +2271,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
     form,
     perfiles,
     resetEditor,
+    sameConsumptionAllProfiles,
     showConsumiblesStep,
   ]);
 
@@ -2471,6 +2525,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
         parsed.perfiles,
         parsed.consumibles,
         parsed.desgastes,
+        parsed.sameConsumptionAllProfiles,
       );
 
       startSaving(async () => {

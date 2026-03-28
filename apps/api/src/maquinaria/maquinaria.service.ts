@@ -288,6 +288,7 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
   'radio',
   'lineasPerforado',
   'tipoPerforado',
+  'laserSameConsumptionAllProfiles',
 ]);
 
 const ALLOWED_CONSUMABLE_DETAIL_KEYS = new Set(['dependePerfilOperativo', 'color']);

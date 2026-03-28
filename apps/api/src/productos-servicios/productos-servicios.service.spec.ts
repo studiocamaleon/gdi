@@ -49,6 +49,56 @@ describe('ProductosServiciosService V1 adicionales', () => {
     timingOverride: { trace?: Record<string, unknown> | null } | null;
     warnings: string[];
   }) => { materiales: Array<Record<string, unknown>>; costo: number };
+  let calculateMachineConsumables: (input: {
+    operation: {
+      maquinaId: string | null;
+      perfilOperativoId: string | null;
+      productividadBase: number | null;
+      maquina?: { plantilla?: string | null; parametrosTecnicosJson?: unknown } | null;
+    };
+    tipoImpresion: string;
+    carasFactor: number;
+    pliegos: number;
+    pliegosEfectivos?: number;
+    areaPliegoM2: number;
+    a4EqFactor: number;
+    warnings: string[];
+    consumibles: Array<{
+      maquinaId: string;
+      perfilOperativoId: string | null;
+      unidad: string;
+      consumoBase: number | null;
+      detalleJson: unknown;
+      materiaPrimaVariante: {
+        sku: string;
+        precioReferencia: number | null;
+        unidadStock?: string | null;
+        unidadCompra?: string | null;
+        materiaPrima: {
+          nombre: string;
+          unidadStock?: string | null;
+          unidadCompra?: string | null;
+        };
+      };
+      perfilOperativo: { productivityValue: number | null } | null;
+    }>;
+    desgastes: Array<{
+      maquinaId: string;
+      unidadDesgaste: string;
+      vidaUtilEstimada: number | null;
+      materiaPrimaVariante: {
+        sku: string;
+        precioReferencia: number | null;
+        unidadStock?: string | null;
+        unidadCompra?: string | null;
+        materiaPrima: {
+          nombre: string;
+          unidadStock?: string | null;
+          unidadCompra?: string | null;
+        };
+      };
+    }>;
+  }) => { costoToner: number; costoDesgaste: number; materiales: Array<Record<string, unknown>> };
   let resolveMateriaPrimaVariantUnitCost: (input: {
     materiaPrimaVariante: {
       sku: string;
@@ -197,6 +247,46 @@ describe('ProductosServiciosService V1 adicionales', () => {
     };
     variants: Array<Record<string, unknown>>;
   }) => Array<Record<string, any>>;
+  let buildGranFormatoHybridCandidates: (input: {
+    maquina: {
+      anchoUtil: unknown;
+      parametrosTecnicosJson?: unknown;
+      plantilla: string;
+      capacidadesAvanzadasJson?: unknown;
+    } | null;
+    medidas: Array<{
+      anchoMm: number;
+      altoMm: number;
+      cantidad: number;
+    }>;
+    config: {
+      permitirRotacion: boolean;
+      separacionHorizontalMm: number;
+      separacionVerticalMm: number;
+      margenLateralIzquierdoMmOverride: number | null;
+      margenLateralDerechoMmOverride: number | null;
+      margenInicioMmOverride: number | null;
+      margenFinalMmOverride: number | null;
+      criterioOptimizacion: string;
+      panelizadoActivo: boolean;
+      panelizadoDireccion: string;
+      panelizadoSolapeMm: number | null;
+      panelizadoAnchoMaxPanelMm: number | null;
+      panelizadoDistribucion: string;
+      panelizadoInterpretacionAnchoMaximo: string;
+      panelizadoModo: string;
+      panelizadoManualLayout: Record<string, unknown> | null;
+    };
+    variants: Array<Record<string, unknown>>;
+  }) => Array<Record<string, any>>;
+  let buildGranFormatoHybridPhysicalRuns: (input: {
+    groups: Array<Record<string, any>>;
+    config: {
+      permitirRotacion: boolean;
+      separacionHorizontalMm: number;
+      separacionVerticalMm: number;
+    };
+  }) => Array<Record<string, any>>;
   let parseChecklistProductoMutacionDetalle: (
     value: unknown,
     throwOnError?: boolean,
@@ -247,6 +337,10 @@ describe('ProductosServiciosService V1 adicionales', () => {
       service as unknown as Record<string, unknown>,
       'calculateLaminadoraFilmConsumables',
     ) as typeof calculateLaminadoraFilmConsumables;
+    calculateMachineConsumables = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'calculateMachineConsumables',
+    ) as typeof calculateMachineConsumables;
     resolveMateriaPrimaVariantUnitCost = Reflect.get(
       service as unknown as Record<string, unknown>,
       'resolveMateriaPrimaVariantUnitCost',
@@ -287,6 +381,14 @@ describe('ProductosServiciosService V1 adicionales', () => {
       service as unknown as Record<string, unknown>,
       'evaluateGranFormatoImposicionCandidates',
     ) as typeof evaluateGranFormatoImposicionCandidates;
+    buildGranFormatoHybridCandidates = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'buildGranFormatoHybridCandidates',
+    ) as typeof buildGranFormatoHybridCandidates;
+    buildGranFormatoHybridPhysicalRuns = Reflect.get(
+      service as unknown as Record<string, unknown>,
+      'buildGranFormatoHybridPhysicalRuns',
+    ) as typeof buildGranFormatoHybridPhysicalRuns;
     parseChecklistProductoMutacionDetalle = Reflect.get(
       service as unknown as Record<string, unknown>,
       'parseChecklistProductoMutacionDetalle',
@@ -551,6 +653,222 @@ describe('ProductosServiciosService V1 adicionales', () => {
 
     expect(costoMl).toBeCloseTo(12, 6);
     expect(warnings).toEqual([]);
+  });
+
+  it('usa carasFactor para toner y desgaste cuando la maquina láser tiene consumo común entre perfiles', () => {
+    const simple = calculateMachineConsumables.call(service, {
+      operation: {
+        maquinaId: 'maq-1',
+        perfilOperativoId: 'perfil-simple',
+        productividadBase: 40,
+        maquina: {
+          plantilla: 'IMPRESORA_LASER',
+          parametrosTecnicosJson: {
+            laserSameConsumptionAllProfiles: true,
+          },
+        },
+      },
+      tipoImpresion: 'CMYK',
+      carasFactor: 1,
+      pliegos: 10,
+      pliegosEfectivos: 12,
+      areaPliegoM2: 0.06237,
+      a4EqFactor: 0.30876376811594205,
+      warnings: [],
+      consumibles: ['cian', 'magenta', 'amarillo', 'negro'].map((color) => ({
+        maquinaId: 'maq-1',
+        perfilOperativoId: 'perfil-simple',
+        unidad: 'GRAMO',
+        consumoBase: 1.76,
+        detalleJson: { color },
+        materiaPrimaVariante: {
+          sku: `TONER-${color}`,
+          precioReferencia: 182000,
+          unidadStock: 'KG',
+          unidadCompra: 'KG',
+          materiaPrima: {
+            nombre: `Toner ${color}`,
+            unidadStock: 'KG',
+            unidadCompra: 'KG',
+          },
+        },
+        perfilOperativo: { productivityValue: 40 },
+      })),
+      desgastes: [
+        {
+          maquinaId: 'maq-1',
+          unidadDesgaste: 'COPIAS_A4_EQUIV',
+          vidaUtilEstimada: 100000,
+          materiaPrimaVariante: {
+            sku: 'DRUM-1',
+            precioReferencia: 5000,
+            materiaPrima: { nombre: 'Drum' },
+          },
+        },
+      ],
+    });
+    const doble = calculateMachineConsumables.call(service, {
+      operation: {
+        maquinaId: 'maq-1',
+        perfilOperativoId: 'perfil-doble',
+        productividadBase: 20,
+        maquina: {
+          plantilla: 'IMPRESORA_LASER',
+          parametrosTecnicosJson: {
+            laserSameConsumptionAllProfiles: true,
+          },
+        },
+      },
+      tipoImpresion: 'CMYK',
+      carasFactor: 2,
+      pliegos: 10,
+      pliegosEfectivos: 12,
+      areaPliegoM2: 0.06237,
+      a4EqFactor: 0.30876376811594205,
+      warnings: [],
+      consumibles: ['cian', 'magenta', 'amarillo', 'negro'].map((color) => ({
+        maquinaId: 'maq-1',
+        perfilOperativoId: 'perfil-doble',
+        unidad: 'GRAMO',
+        consumoBase: 1.76,
+        detalleJson: { color },
+        materiaPrimaVariante: {
+          sku: `TONER-${color}`,
+          precioReferencia: 182000,
+          unidadStock: 'KG',
+          unidadCompra: 'KG',
+          materiaPrima: {
+            nombre: `Toner ${color}`,
+            unidadStock: 'KG',
+            unidadCompra: 'KG',
+          },
+        },
+        perfilOperativo: { productivityValue: 20 },
+      })),
+      desgastes: [
+        {
+          maquinaId: 'maq-1',
+          unidadDesgaste: 'COPIAS_A4_EQUIV',
+          vidaUtilEstimada: 100000,
+          materiaPrimaVariante: {
+            sku: 'DRUM-1',
+            precioReferencia: 5000,
+            materiaPrima: { nombre: 'Drum' },
+          },
+        },
+      ],
+    });
+
+    expect(doble.costoToner).toBeCloseTo(simple.costoToner * 2, 6);
+    expect(doble.costoDesgaste).toBeCloseTo(simple.costoDesgaste * 2, 6);
+  });
+
+  it('no usa carasFactor para toner y desgaste cuando el consumo se define por perfil', () => {
+    const simple = calculateMachineConsumables.call(service, {
+      operation: {
+        maquinaId: 'maq-1',
+        perfilOperativoId: 'perfil-simple',
+        productividadBase: 40,
+        maquina: {
+          plantilla: 'IMPRESORA_LASER',
+          parametrosTecnicosJson: {
+            laserSameConsumptionAllProfiles: false,
+          },
+        },
+      },
+      tipoImpresion: 'CMYK',
+      carasFactor: 1,
+      pliegos: 10,
+      pliegosEfectivos: 12,
+      areaPliegoM2: 0.06237,
+      a4EqFactor: 0.30876376811594205,
+      warnings: [],
+      consumibles: ['cian', 'magenta', 'amarillo', 'negro'].map((color) => ({
+        maquinaId: 'maq-1',
+        perfilOperativoId: 'perfil-simple',
+        unidad: 'GRAMO',
+        consumoBase: 1.76,
+        detalleJson: { color },
+          materiaPrimaVariante: {
+            sku: `TONER-${color}`,
+            precioReferencia: 182000,
+            unidadStock: 'KG',
+            unidadCompra: 'KG',
+            materiaPrima: {
+              nombre: `Toner ${color}`,
+              unidadStock: 'KG',
+              unidadCompra: 'KG',
+            },
+          },
+        perfilOperativo: { productivityValue: 40 },
+      })),
+      desgastes: [
+        {
+          maquinaId: 'maq-1',
+          unidadDesgaste: 'COPIAS_A4_EQUIV',
+          vidaUtilEstimada: 100000,
+          materiaPrimaVariante: {
+            sku: 'DRUM-1',
+            precioReferencia: 5000,
+            materiaPrima: { nombre: 'Drum' },
+          },
+        },
+      ],
+    });
+    const doble = calculateMachineConsumables.call(service, {
+      operation: {
+        maquinaId: 'maq-1',
+        perfilOperativoId: 'perfil-doble',
+        productividadBase: 20,
+        maquina: {
+          plantilla: 'IMPRESORA_LASER',
+          parametrosTecnicosJson: {
+            laserSameConsumptionAllProfiles: false,
+          },
+        },
+      },
+      tipoImpresion: 'CMYK',
+      carasFactor: 2,
+      pliegos: 10,
+      pliegosEfectivos: 12,
+      areaPliegoM2: 0.06237,
+      a4EqFactor: 0.30876376811594205,
+      warnings: [],
+      consumibles: ['cian', 'magenta', 'amarillo', 'negro'].map((color) => ({
+        maquinaId: 'maq-1',
+        perfilOperativoId: 'perfil-doble',
+        unidad: 'GRAMO',
+        consumoBase: 3.52,
+        detalleJson: { color },
+        materiaPrimaVariante: {
+          sku: `TONER-${color}`,
+          precioReferencia: 182000,
+          unidadStock: 'KG',
+          unidadCompra: 'KG',
+          materiaPrima: {
+            nombre: `Toner ${color}`,
+            unidadStock: 'KG',
+            unidadCompra: 'KG',
+          },
+        },
+        perfilOperativo: { productivityValue: 20 },
+      })),
+      desgastes: [
+        {
+          maquinaId: 'maq-1',
+          unidadDesgaste: 'COPIAS_A4_EQUIV',
+          vidaUtilEstimada: 100000,
+          materiaPrimaVariante: {
+            sku: 'DRUM-1',
+            precioReferencia: 5000,
+            materiaPrima: { nombre: 'Drum' },
+          },
+        },
+      ],
+    });
+
+    expect(doble.costoToner).toBeCloseTo(simple.costoToner * 2, 6);
+    expect(doble.costoDesgaste).toBeCloseTo(simple.costoDesgaste, 6);
   });
 
   it('convierte precio de referencia por rollo a costo por m2 en sustrato flexible', () => {
@@ -999,6 +1317,8 @@ describe('ProductosServiciosService V1 adicionales', () => {
         porcentajeTotal: 0,
       },
       comisiones: {
+        esquemaId: null,
+        esquemaNombre: '',
         items: [],
         porcentajeTotal: 0,
       },
@@ -1021,6 +1341,8 @@ describe('ProductosServiciosService V1 adicionales', () => {
         porcentajeTotal: 0,
       },
       comisiones: {
+        esquemaId: null,
+        esquemaNombre: '',
         items: [],
         porcentajeTotal: 0,
       },
@@ -1045,6 +1367,8 @@ describe('ProductosServiciosService V1 adicionales', () => {
         porcentajeTotal: 0,
       },
       comisiones: {
+        esquemaId: null,
+        esquemaNombre: '',
         items: [],
         porcentajeTotal: 0,
       },
@@ -1109,6 +1433,8 @@ describe('ProductosServiciosService V1 adicionales', () => {
         porcentajeTotal: 0,
       },
       comisiones: {
+        esquemaId: null,
+        esquemaNombre: '',
         items: [],
         porcentajeTotal: 0,
       },
@@ -1143,6 +1469,8 @@ describe('ProductosServiciosService V1 adicionales', () => {
         porcentajeTotal: 21,
       },
       comisiones: {
+        esquemaId: null,
+        esquemaNombre: '',
         items: [],
         porcentajeTotal: 0,
       },
@@ -1175,6 +1503,8 @@ describe('ProductosServiciosService V1 adicionales', () => {
         porcentajeTotal: 0,
       },
       comisiones: {
+        esquemaId: null,
+        esquemaNombre: '',
         items: [
           { id: 'com-1', nombre: 'Mercado Pago', tipo: 'financiera', porcentaje: 8.5, activo: true },
           { id: 'com-2', nombre: 'Vendedor', tipo: 'vendedor', porcentaje: 5, activo: false },
@@ -1221,6 +1551,8 @@ describe('ProductosServiciosService V1 adicionales', () => {
           porcentajeTotal: 0,
         },
         comisiones: {
+          esquemaId: null,
+          esquemaNombre: '',
           items: [],
           porcentajeTotal: 0,
         },
@@ -1284,6 +1616,8 @@ describe('ProductosServiciosService V1 adicionales', () => {
           porcentajeTotal: 0,
         },
         comisiones: {
+          esquemaId: null,
+          esquemaNombre: '',
           items: [],
           porcentajeTotal: 0,
         },
@@ -1931,6 +2265,200 @@ describe('ProductosServiciosService V1 adicionales', () => {
     expect(candidates[0].placements).toHaveLength(3);
     expect(candidates[0].placements.some((item: { rotated: boolean }) => item.rotated)).toBe(true);
     expect(candidates[0].placements.some((item: { rotated: boolean }) => !item.rotated)).toBe(true);
+  });
+
+  it('arma grupos híbridos cuando una pieza entra entera y otra requiere panelizado', () => {
+    const groups = buildGranFormatoHybridCandidates.call(service, {
+      maquina: {
+        anchoUtil: 100,
+        plantilla: 'impresora_uv_rollo',
+        parametrosTecnicosJson: {
+          anchoImprimibleMaximo: 100,
+        },
+        capacidadesAvanzadasJson: {},
+      },
+      medidas: [
+        {
+          anchoMm: 900,
+          altoMm: 500,
+          cantidad: 1,
+        },
+        {
+          anchoMm: 1300,
+          altoMm: 1200,
+          cantidad: 1,
+        },
+      ],
+      config: {
+        permitirRotacion: true,
+        separacionHorizontalMm: 0,
+        separacionVerticalMm: 0,
+        margenLateralIzquierdoMmOverride: null,
+        margenLateralDerechoMmOverride: null,
+        margenInicioMmOverride: null,
+        margenFinalMmOverride: null,
+        criterioOptimizacion: 'menor_costo_total',
+        panelizadoActivo: true,
+        panelizadoDireccion: 'automatica',
+        panelizadoSolapeMm: 20,
+        panelizadoAnchoMaxPanelMm: 1000,
+        panelizadoDistribucion: 'equilibrada',
+        panelizadoInterpretacionAnchoMaximo: 'total',
+        panelizadoModo: 'automatico',
+        panelizadoManualLayout: null,
+      },
+      variants: [
+        {
+          id: 'variant-roll-100',
+          atributosVarianteJson: {
+            ancho: 1,
+          },
+        },
+      ],
+    });
+
+    expect(groups).toHaveLength(2);
+    expect(groups.some((item: { panelizado: boolean }) => item.panelizado)).toBe(true);
+    expect(groups.some((item: { panelizado: boolean }) => !item.panelizado)).toBe(true);
+  });
+
+  it('puede mezclar variantes de rollo distintas dentro del mismo material base', () => {
+    const groups = buildGranFormatoHybridCandidates.call(service, {
+      maquina: {
+        anchoUtil: 150,
+        plantilla: 'impresora_uv_rollo',
+        parametrosTecnicosJson: {
+          anchoImprimibleMaximo: 150,
+        },
+        capacidadesAvanzadasJson: {},
+      },
+      medidas: [
+        {
+          anchoMm: 900,
+          altoMm: 500,
+          cantidad: 1,
+        },
+        {
+          anchoMm: 1300,
+          altoMm: 1200,
+          cantidad: 1,
+        },
+      ],
+      config: {
+        permitirRotacion: true,
+        separacionHorizontalMm: 0,
+        separacionVerticalMm: 0,
+        margenLateralIzquierdoMmOverride: null,
+        margenLateralDerechoMmOverride: null,
+        margenInicioMmOverride: null,
+        margenFinalMmOverride: null,
+        criterioOptimizacion: 'menor_costo_total',
+        panelizadoActivo: true,
+        panelizadoDireccion: 'automatica',
+        panelizadoSolapeMm: 20,
+        panelizadoAnchoMaxPanelMm: 1000,
+        panelizadoDistribucion: 'equilibrada',
+        panelizadoInterpretacionAnchoMaximo: 'total',
+        panelizadoModo: 'automatico',
+        panelizadoManualLayout: null,
+      },
+      variants: [
+        {
+          id: 'variant-roll-100',
+          atributosVarianteJson: {
+            ancho: 1,
+          },
+        },
+        {
+          id: 'variant-roll-150',
+          atributosVarianteJson: {
+            ancho: 1.5,
+          },
+        },
+      ],
+    });
+
+    expect(groups).toHaveLength(2);
+    expect(new Set(groups.map((item: { variant: { id: string } }) => item.variant.id))).toEqual(
+      new Set(['variant-roll-100', 'variant-roll-150']),
+    );
+    expect(groups.find((item: { variant: { id: string } }) => item.variant.id === 'variant-roll-150')?.panelizado).toBe(false);
+  });
+
+  it('consolida en una sola corrida física grupos híbridos de la misma variante exacta', () => {
+    const groups = buildGranFormatoHybridCandidates.call(service, {
+      maquina: {
+        anchoUtil: 100,
+        plantilla: 'impresora_uv_rollo',
+        parametrosTecnicosJson: {
+          anchoImprimibleMaximo: 100,
+        },
+        capacidadesAvanzadasJson: {},
+      },
+      medidas: [
+        {
+          anchoMm: 900,
+          altoMm: 500,
+          cantidad: 1,
+        },
+        {
+          anchoMm: 1300,
+          altoMm: 1200,
+          cantidad: 1,
+        },
+      ],
+      config: {
+        permitirRotacion: true,
+        separacionHorizontalMm: 0,
+        separacionVerticalMm: 0,
+        margenLateralIzquierdoMmOverride: null,
+        margenLateralDerechoMmOverride: null,
+        margenInicioMmOverride: null,
+        margenFinalMmOverride: null,
+        criterioOptimizacion: 'menor_costo_total',
+        panelizadoActivo: true,
+        panelizadoDireccion: 'automatica',
+        panelizadoSolapeMm: 20,
+        panelizadoAnchoMaxPanelMm: 1000,
+        panelizadoDistribucion: 'equilibrada',
+        panelizadoInterpretacionAnchoMaximo: 'total',
+        panelizadoModo: 'automatico',
+        panelizadoManualLayout: null,
+      },
+      variants: [
+        {
+          id: 'variant-roll-100',
+          atributosVarianteJson: {
+            ancho: 1,
+          },
+        },
+      ],
+    });
+
+    expect(groups).toHaveLength(2);
+    const runs = buildGranFormatoHybridPhysicalRuns.call(service, {
+      groups,
+      config: {
+        permitirRotacion: true,
+        separacionHorizontalMm: 0,
+        separacionVerticalMm: 0,
+      },
+    });
+
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toEqual(
+      expect.objectContaining({
+        piecesCount: 2,
+      }),
+    );
+    expect(runs[0].groups).toHaveLength(2);
+    expect(runs[0].candidate.consumedLengthMm).toBeLessThanOrEqual(
+      groups.reduce(
+        (acc: number, group: { candidate: { consumedLengthMm: number } }) =>
+          acc + group.candidate.consumedLengthMm,
+        0,
+      ),
+    );
   });
 
   it('normaliza medidas de vinilo de corte y multiplica por cantidad de trabajos', () => {

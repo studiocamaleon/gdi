@@ -926,6 +926,62 @@ export type GranFormatoCostosNestingPreview = {
   pieces: GranFormatoCostosNestingPiece[];
 };
 
+export type GranFormatoCostosGrupoTrabajo = {
+  grupoId: string;
+  corridaId?: string | null;
+  variantId: string;
+  varianteNombre: string;
+  varianteChips: Array<{
+    label: string;
+    value: string;
+  }>;
+  panelizado: boolean;
+  panelAxis: "vertical" | "horizontal" | null;
+  panelCount: number;
+  piecesCount: number;
+  orientacion: "normal" | "rotada" | "mixta";
+  anchoRolloMm: number;
+  anchoImprimibleMm: number;
+  largoConsumidoMm: number;
+  areaUtilM2: number;
+  areaConsumidaM2: number;
+  areaDesperdicioM2: number;
+  desperdicioPct: number;
+  costoSustrato: number;
+  costoTinta: number;
+  costoTiempo: number;
+  costoTotal: number;
+  materiasPrimas?: GranFormatoCostosMaterialItem[];
+  centrosCosto?: GranFormatoCostosCentroItem[];
+  nestingPreview: GranFormatoCostosNestingPreview | null;
+};
+
+export type GranFormatoCostosCorridaTrabajo = {
+  corridaId: string;
+  variantId: string;
+  varianteNombre: string;
+  varianteChips: Array<{
+    label: string;
+    value: string;
+  }>;
+  piecesCount: number;
+  groupCount: number;
+  gruposCompletos: number;
+  gruposPanelizados: number;
+  anchoRolloMm: number;
+  anchoImprimibleMm: number;
+  largoConsumidoMm: number;
+  areaUtilM2: number;
+  areaConsumidaM2: number;
+  areaDesperdicioM2: number;
+  desperdicioPct: number;
+  costoSustrato: number;
+  costoTinta: number;
+  costoTiempo: number;
+  costoTotal: number;
+  nestingPreview: GranFormatoCostosNestingPreview | null;
+};
+
 export type GranFormatoCostosResumenTecnico = {
   varianteId: string;
   varianteNombre: string;
@@ -990,6 +1046,7 @@ export type GranFormatoCostosResponse = {
   productoId: string;
   snapshotId?: string;
   createdAt?: string;
+  simulacionHibrida?: boolean;
   cantidadTotal: number;
   periodo: string;
   tecnologia: string;
@@ -1019,6 +1076,8 @@ export type GranFormatoCostosResponse = {
   perfilNombre: string;
   warnings: string[];
   resumenTecnico: GranFormatoCostosResumenTecnico;
+  gruposTrabajo?: GranFormatoCostosGrupoTrabajo[];
+  corridasTrabajo?: GranFormatoCostosCorridaTrabajo[];
   materiasPrimas: GranFormatoCostosMaterialItem[];
   centrosCosto: GranFormatoCostosCentroItem[];
   totales: {

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { InfoIcon, PrinterIcon, SaveIcon, Trash2Icon, TrophyIcon, PlusIcon } from "lucide-react";
+import { ChevronDownIcon, InfoIcon, PrinterIcon, SaveIcon, Trash2Icon, TrophyIcon, PlusIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import type { ProductTabProps } from "@/components/productos-servicios/product-detail-types";
@@ -10,6 +10,8 @@ import { WideFormatNestingCard } from "@/components/productos-servicios/motors/w
 import {
   buildDefaultManualLayout,
   buildManualLayoutFromPlacements,
+  buildManualLayoutFromNestingPieces,
+  buildWideFormatSimulatorDataFromPreview,
   buildWideFormatSimulatorDataFromCandidate,
   cloneWideFormatManualLayout,
 } from "@/components/productos-servicios/motors/wide-format-nesting.helpers";
@@ -18,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { ProductoTabSection } from "@/components/productos-servicios/producto-tab-section";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -31,6 +34,8 @@ import { getMaquinaTecnologia, tecnologiaMaquinaItems } from "@/lib/maquinaria";
 import { getGranFormatoChecklist, getGranFormatoConfig, previewGranFormatoCostos, updateGranFormatoConfig } from "@/lib/productos-servicios-api";
 import type {
   GranFormatoCostosCandidateResumen,
+  GranFormatoCostosCorridaTrabajo,
+  GranFormatoCostosGrupoTrabajo,
   GranFormatoCostosResponse,
   GranFormatoImposicionConfig,
   GranFormatoImposicionCriterioOptimizacion,
@@ -110,6 +115,9 @@ type GranFormatoImposicionPreviewItem = {
 
 type GranFormatoImposicionPreviewResultState = {
   items: GranFormatoImposicionPreviewItem[];
+  simulacionHibrida: boolean;
+  corridasTrabajo: GranFormatoCostosCorridaTrabajo[];
+  gruposTrabajo: GranFormatoCostosGrupoTrabajo[];
   rejected: Array<{
     variant: MateriaPrimaVariante;
     reason: string;
@@ -184,6 +192,9 @@ function createEmptyChecklist(productoId: string): ProductoChecklist {
 function createEmptyImposicionPreviewResult(machineIssue: string | null): GranFormatoImposicionPreviewResultState {
   return {
     items: [],
+    simulacionHibrida: false,
+    corridasTrabajo: [],
+    gruposTrabajo: [],
     rejected: [],
     machineIssue,
     medidasOriginales: [],
@@ -362,6 +373,13 @@ export function WideFormatImposicionTab(props: ProductTabProps) {
   const [selectedPreviewCandidateKey, setSelectedPreviewCandidateKey] = React.useState("");
   const [isPanelEditorOpen, setIsPanelEditorOpen] = React.useState(false);
   const [isImposicion3dOpen, setIsImposicion3dOpen] = React.useState(false);
+  const [expandedCorridas, setExpandedCorridas] = React.useState<Record<string, boolean>>({});
+  const [imposicion3dPreview, setImposicion3dPreview] = React.useState<GranFormatoCostosResponse["nestingPreview"] | GranFormatoCostosGrupoTrabajo["nestingPreview"]>(null);
+  const [imposicion3dTitle, setImposicion3dTitle] = React.useState("Visualización 3D del nesting");
+  const [panelEditorSelection, setPanelEditorSelection] = React.useState<{
+    printableWidthMm: number;
+    initialLayout: NonNullable<GranFormatoImposicionConfig["panelizadoManualLayout"]> | null;
+  } | null>(null);
 
   const loadConfig = React.useCallback(async () => {
     setIsLoadingConfig(true);
@@ -556,6 +574,19 @@ export function WideFormatImposicionTab(props: ProductTabProps) {
     (imposicionSimulationSnapshot !== normalizeImposicionSnapshot(imposicionConfig) ||
       imposicionSimulationChecklistSnapshot !== imposicionChecklistSnapshot);
   const imposicionPreview = imposicionPreviewResult.items;
+  const imposicionCorridasTrabajo = imposicionPreviewResult.corridasTrabajo;
+  const imposicionGruposTrabajo = imposicionPreviewResult.gruposTrabajo;
+  const isHybridImposicion = imposicionPreviewResult.simulacionHibrida && imposicionCorridasTrabajo.length > 0;
+  const groupsByCorrida = React.useMemo(
+    () =>
+      Object.fromEntries(
+        imposicionCorridasTrabajo.map((corrida) => [
+          corrida.corridaId,
+          imposicionGruposTrabajo.filter((grupo) => grupo.corridaId === corrida.corridaId),
+        ]),
+      ) as Record<string, GranFormatoCostosGrupoTrabajo[]>,
+    [imposicionCorridasTrabajo, imposicionGruposTrabajo],
+  );
   const imposicionRejectedVariants = imposicionPreviewResult.rejected;
   const imposicionBestCandidate = imposicionPreview[0] ?? null;
   const selectedPreviewCandidate =
@@ -750,8 +781,14 @@ export function WideFormatImposicionTab(props: ProductTabProps) {
 
         setImposicionPreviewResult({
           items,
+          simulacionHibrida: result.simulacionHibrida === true,
+          corridasTrabajo: result.corridasTrabajo ?? [],
+          gruposTrabajo: result.gruposTrabajo ?? [],
           rejected: [],
-          machineIssue: items.length > 0 ? null : "No se pudo resolver la imposición con la configuración actual.",
+          machineIssue:
+            items.length > 0 || (result.corridasTrabajo?.length ?? 0) > 0
+              ? null
+              : "No se pudo resolver la imposición con la configuración actual.",
           medidasOriginales: result.medidasOriginales ?? [],
           medidasEfectivas: result.medidasEfectivas ?? [],
           mutacionesAplicadas: result.mutacionesAplicadas ?? [],
@@ -782,8 +819,53 @@ export function WideFormatImposicionTab(props: ProductTabProps) {
       toast.error("No hay paneles disponibles para editar. Simulá una imposición con panelizado primero.");
       return;
     }
+    setPanelEditorSelection({
+      printableWidthMm: panelEditorPrintableWidthMm,
+      initialLayout: imposicionManualLayoutActual,
+    });
     setIsPanelEditorOpen(true);
   };
+
+  const handleOpenImposicion3d = React.useCallback(
+    (
+      preview: GranFormatoCostosResponse["nestingPreview"] | GranFormatoCostosGrupoTrabajo["nestingPreview"],
+      title = "Visualización 3D del nesting",
+    ) => {
+      if (!preview) {
+        toast.error("No hay un nesting 3D disponible para este resultado.");
+        return;
+      }
+      setImposicion3dPreview(preview);
+      setImposicion3dTitle(title);
+      setIsImposicion3dOpen(true);
+    },
+    [],
+  );
+
+  const handleOpenHybridGroupPanelEditor = React.useCallback(
+    (grupo: GranFormatoCostosGrupoTrabajo) => {
+      const sourcePieceIds = (grupo.nestingPreview?.pieces ?? [])
+        .map((piece) => piece.sourcePieceId)
+        .filter((value): value is string => Boolean(value));
+      if (!sourcePieceIds.length || !grupo.nestingPreview) {
+        toast.error("No hay paneles disponibles para editar en este grupo.");
+        return;
+      }
+      const existingItems =
+        imposicionConfig.panelizadoManualLayout?.items.filter((item) => sourcePieceIds.includes(item.sourcePieceId)) ?? [];
+      setPanelEditorSelection({
+        printableWidthMm: Math.round(
+          (grupo.nestingPreview.rollWidth - grupo.nestingPreview.marginLeft - grupo.nestingPreview.marginRight) * 10,
+        ),
+        initialLayout:
+          existingItems.length > 0
+            ? { items: existingItems.map((item) => ({ ...item, panels: item.panels.map((panel) => ({ ...panel })) })) }
+            : buildManualLayoutFromNestingPieces(grupo.nestingPreview.pieces),
+      });
+      setIsPanelEditorOpen(true);
+    },
+    [imposicionConfig],
+  );
 
   const handleApplyPanelEditor = (layout: NonNullable<typeof imposicionManualLayoutActual>) => {
     const nextConfig = {
@@ -793,6 +875,7 @@ export function WideFormatImposicionTab(props: ProductTabProps) {
       panelizadoManualLayout: layout,
     };
     setImposicionConfig(nextConfig);
+    setPanelEditorSelection(null);
     setIsPanelEditorOpen(false);
     void simulateImposition(nextConfig);
   };
@@ -804,6 +887,7 @@ export function WideFormatImposicionTab(props: ProductTabProps) {
       panelizadoManualLayout: null,
     };
     setImposicionConfig(nextConfig);
+    setPanelEditorSelection(null);
     setIsPanelEditorOpen(false);
     void simulateImposition(nextConfig);
   };
@@ -1377,7 +1461,7 @@ export function WideFormatImposicionTab(props: ProductTabProps) {
                       </div>
                     ) : null}
 
-                    {imposicionBestCandidate ? (
+                    {!isHybridImposicion && imposicionBestCandidate ? (
                       <div className="rounded-lg border bg-muted/20 p-4">
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                           <div>
@@ -1408,9 +1492,17 @@ export function WideFormatImposicionTab(props: ProductTabProps) {
                       </div>
                     ) : null}
 
-                    {selectedPreviewCandidate ? (
+                    {!isHybridImposicion && selectedPreviewCandidate ? (
                       <div className="flex justify-end gap-2">
-                        <Button type="button" variant="outline" onClick={() => setIsImposicion3dOpen(true)}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setImposicion3dPreview(null);
+                            setImposicion3dTitle("Visualización 3D del nesting");
+                            setIsImposicion3dOpen(true);
+                          }}
+                        >
                           Ver nesting 3D
                         </Button>
                         {selectedPreviewCandidate?.panelizado ? (
@@ -1421,71 +1513,227 @@ export function WideFormatImposicionTab(props: ProductTabProps) {
                       </div>
                     ) : null}
 
-                    <div className="overflow-x-auto rounded-lg border">
-                      <table className="min-w-full text-sm">
-                        <thead className="bg-muted/30 text-left">
-                          <tr>
-                            <th className="px-3 py-2 font-medium">Variante</th>
-                            <th className="px-3 py-2 font-medium">Ancho rollo</th>
-                            <th className="px-3 py-2 font-medium">Ancho imprimible</th>
-                            <th className="px-3 py-2 font-medium">Orientación</th>
-                            <th className="px-3 py-2 font-medium">Piezas/fila</th>
-                            <th className="px-3 py-2 font-medium">Filas</th>
-                            <th className="px-3 py-2 font-medium">Largo consumido</th>
-                            <th className="px-3 py-2 font-medium">Desperdicio</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {imposicionPreview.map((item) => {
-                            const rowKey = `${item.variant.id}-${item.panelizado ? item.panelAxis ?? "panel" : "normal"}-${item.panelMode ?? "na"}-${Math.round(item.consumedLengthMm)}`;
-                            const isSelected =
-                              selectedPreviewCandidate != null &&
-                              rowKey ===
-                                `${selectedPreviewCandidate.variant.id}-${selectedPreviewCandidate.panelizado ? selectedPreviewCandidate.panelAxis ?? "panel" : "normal"}-${selectedPreviewCandidate.panelMode ?? "na"}-${Math.round(selectedPreviewCandidate.consumedLengthMm)}`;
+                    {isHybridImposicion ? (
+                      <div className="space-y-4">
+                        <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-sm text-sky-950">
+                          Esta imposición se resolvió como una simulación híbrida. El resultado principal ahora está organizado por corridas consolidadas y no por candidatos sueltos por rollo.
+                        </div>
+                        <div className="space-y-3">
+                          <div>
+                            <p className="text-sm font-semibold">Corridas resultantes</p>
+                            <p className="text-xs text-muted-foreground">
+                              Cada corrida agrupa grupos completos y/o panelizados que comparten la misma variante exacta del rollo.
+                            </p>
+                          </div>
+                          {imposicionCorridasTrabajo.map((corrida, corridaIndex) => {
+                            const groups = groupsByCorrida[corrida.corridaId] ?? [];
+                            const isOpen = expandedCorridas[corrida.corridaId] === true;
                             return (
-                            <tr
-                              key={rowKey}
-                              className={`border-t cursor-pointer ${isSelected ? "bg-orange-50" : ""}`}
-                              onClick={() => setSelectedPreviewCandidateKey(rowKey)}
-                            >
-                              <td className="px-3 py-2">
-                                <div className="flex flex-wrap gap-1">
-                                  {selectedBaseMaterial
-                                    ? getVarianteOptionChips(selectedBaseMaterial, item.variant).map((chip) => (
-                                        <span key={`${item.variant.id}-${chip.key}`} className="rounded border px-2 py-0.5 text-xs">
-                                          {chip.label}: {chip.value}
-                                        </span>
-                                      ))
-                                    : (
-                                        <span className="font-medium">{item.variant.sku}</span>
-                                      )}
+                              <Collapsible
+                                key={corrida.corridaId}
+                                open={isOpen}
+                                onOpenChange={(open) =>
+                                  setExpandedCorridas((prev) => ({ ...prev, [corrida.corridaId]: open }))
+                                }
+                              >
+                                <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/5">
+                                  <div className="flex items-start justify-between gap-3 p-4">
+                                    <CollapsibleTrigger className="flex min-w-0 flex-1 cursor-pointer items-start justify-between gap-3 text-left">
+                                      <div className="space-y-3">
+                                        <div className="space-y-1">
+                                          <p className="text-sm font-semibold">Corrida {corridaIndex + 1}</p>
+                                          <p className="text-sm text-muted-foreground">Variante de rollo: {corrida.varianteNombre}</p>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                          {corrida.varianteChips.map((chip) => (
+                                            <Badge key={`${corrida.corridaId}-${chip.label}-${chip.value}`} variant="outline">
+                                              {chip.label}: {chip.value}
+                                            </Badge>
+                                          ))}
+                                          <Badge variant="secondary">Grupos: {corrida.groupCount}</Badge>
+                                          <Badge variant="secondary">Completos: {corrida.gruposCompletos}</Badge>
+                                          <Badge variant="secondary">Panelizados: {corrida.gruposPanelizados}</Badge>
+                                        </div>
+                                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                          <div className="rounded-lg border bg-background/80 p-3">
+                                            <p className="text-xs text-muted-foreground">Piezas en corrida</p>
+                                            <p className="mt-1 font-semibold">{corrida.piecesCount}</p>
+                                          </div>
+                                          <div className="rounded-lg border bg-background/80 p-3">
+                                            <p className="text-xs text-muted-foreground">Largo consolidado</p>
+                                            <p className="mt-1 font-semibold">{formatMmAsCm(corrida.largoConsumidoMm)} cm</p>
+                                          </div>
+                                          <div className="rounded-lg border bg-background/80 p-3">
+                                            <p className="text-xs text-muted-foreground">Desperdicio</p>
+                                            <p className="mt-1 font-semibold">{corrida.desperdicioPct.toLocaleString("es-AR", { maximumFractionDigits: 2 })}%</p>
+                                          </div>
+                                          <div className="rounded-lg border bg-background/80 p-3">
+                                            <p className="text-xs text-muted-foreground">Ancho imprimible</p>
+                                            <p className="mt-1 font-semibold">{formatMmAsCm(corrida.anchoImprimibleMm)} cm</p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <span className="inline-flex items-center gap-1 rounded-md border bg-background/80 px-3 py-2 text-sm">
+                                        Ver detalle
+                                        <ChevronDownIcon className={`size-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                                      </span>
+                                    </CollapsibleTrigger>
+                                    {corrida.nestingPreview ? (
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleOpenImposicion3d(corrida.nestingPreview, `Visualización 3D · Corrida ${corridaIndex + 1}`)}
+                                      >
+                                        Ver nesting 3D
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                  <CollapsibleContent className="border-t bg-background/70 p-4">
+                                    <div className="space-y-4">
+                                      <div>
+                                        <p className="text-sm font-semibold">Detalle de composición</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          Cada grupo explica qué subconjunto salió completo o panelizado dentro de la corrida.
+                                        </p>
+                                      </div>
+                                      <div className="grid gap-3 xl:grid-cols-2">
+                                        {groups.map((grupo, groupIndex) => (
+                                          <div key={grupo.grupoId} className="rounded-lg border p-4">
+                                            <div className="flex items-start justify-between gap-3">
+                                              <div className="space-y-1">
+                                                <p className="text-sm font-semibold">Grupo {groupIndex + 1}</p>
+                                                <p className="text-sm text-muted-foreground">Variante de rollo: {grupo.varianteNombre}</p>
+                                              </div>
+                                              <div className="flex flex-wrap justify-end gap-2">
+                                                <Badge variant={grupo.panelizado ? "default" : "outline"}>
+                                                  {grupo.panelizado ? "Panelizado" : "Completo"}
+                                                </Badge>
+                                                {grupo.nestingPreview ? (
+                                                  <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleOpenImposicion3d(grupo.nestingPreview, `Visualización 3D · Corrida ${corridaIndex + 1} · Grupo ${groupIndex + 1}`)}
+                                                  >
+                                                    Ver nesting 3D
+                                                  </Button>
+                                                ) : null}
+                                                {grupo.panelizado ? (
+                                                  <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleOpenHybridGroupPanelEditor(grupo)}
+                                                  >
+                                                    Editar paneles
+                                                  </Button>
+                                                ) : null}
+                                              </div>
+                                            </div>
+                                            <div className="mt-3 flex flex-wrap gap-2">
+                                              {grupo.varianteChips.map((chip) => (
+                                                <Badge key={`${grupo.grupoId}-${chip.label}-${chip.value}`} variant="outline">
+                                                  {chip.label}: {chip.value}
+                                                </Badge>
+                                              ))}
+                                            </div>
+                                            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                              <div className="rounded-lg border bg-muted/20 p-3">
+                                                <p className="text-xs text-muted-foreground">Piezas asignadas</p>
+                                                <p className="mt-1 font-semibold">{grupo.piecesCount}</p>
+                                              </div>
+                                              <div className="rounded-lg border bg-muted/20 p-3">
+                                                <p className="text-xs text-muted-foreground">Largo parcial</p>
+                                                <p className="mt-1 font-semibold">{formatMmAsCm(grupo.largoConsumidoMm)} cm</p>
+                                              </div>
+                                              <div className="rounded-lg border bg-muted/20 p-3">
+                                                <p className="text-xs text-muted-foreground">Desperdicio parcial</p>
+                                                <p className="mt-1 font-semibold">{grupo.desperdicioPct.toLocaleString("es-AR", { maximumFractionDigits: 2 })}%</p>
+                                              </div>
+                                              <div className="rounded-lg border bg-muted/20 p-3">
+                                                <p className="text-xs text-muted-foreground">Ancho imprimible</p>
+                                                <p className="mt-1 font-semibold">{formatMmAsCm(grupo.anchoImprimibleMm)} cm</p>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </CollapsibleContent>
                                 </div>
-                              </td>
-                              <td className="px-3 py-2">{(item.rollWidthMm / 10).toLocaleString("es-AR")} cm</td>
-                              <td className="px-3 py-2">{(item.printableWidthMm / 10).toLocaleString("es-AR")} cm</td>
-                              <td className="px-3 py-2">
-                                <div>
-                                  <p>{item.orientacion === "mixta" ? "Mixta" : item.orientacion === "rotada" ? "Rotada" : "Normal"}</p>
-                                  {item.panelizado ? (
-                                    <p className="text-xs text-muted-foreground">
-                                      {getPanelizadoModoLabel(item.panelMode)} · Panelizado {item.panelAxis === "vertical" ? "vertical" : "horizontal"} · {item.panelCount} paneles · {item.panelDistribution === "libre" ? "Libre" : "Equilibrada"}
-                                      {item.panelMaxWidthMm != null ? ` · Máx. ${formatMmAsCm(item.panelMaxWidthMm)} cm` : ""}
-                                      {item.panelWidthInterpretation ? ` · ${getPanelizadoInterpretacionLabel(item.panelWidthInterpretation)}` : ""}
-                                    </p>
-                                  ) : null}
-                                </div>
-                              </td>
-                              <td className="px-3 py-2">{item.piecesPerRow}</td>
-                              <td className="px-3 py-2">{item.rows}</td>
-                              <td className="px-3 py-2">{(item.consumedLengthMm / 1000).toLocaleString("es-AR", { maximumFractionDigits: 3 })} m</td>
-                              <td className="px-3 py-2">
-                                {item.wastePct.toLocaleString("es-AR", { maximumFractionDigits: 2 })}% · {item.wasteAreaM2.toLocaleString("es-AR", { maximumFractionDigits: 3 })} m2
-                              </td>
+                              </Collapsible>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto rounded-lg border">
+                        <table className="min-w-full text-sm">
+                          <thead className="bg-muted/30 text-left">
+                            <tr>
+                              <th className="px-3 py-2 font-medium">Variante</th>
+                              <th className="px-3 py-2 font-medium">Ancho rollo</th>
+                              <th className="px-3 py-2 font-medium">Ancho imprimible</th>
+                              <th className="px-3 py-2 font-medium">Orientación</th>
+                              <th className="px-3 py-2 font-medium">Piezas/fila</th>
+                              <th className="px-3 py-2 font-medium">Filas</th>
+                              <th className="px-3 py-2 font-medium">Largo consumido</th>
+                              <th className="px-3 py-2 font-medium">Desperdicio</th>
                             </tr>
-                          )})}
-                        </tbody>
-                      </table>
-                    </div>
+                          </thead>
+                          <tbody>
+                            {imposicionPreview.map((item) => {
+                              const rowKey = `${item.variant.id}-${item.panelizado ? item.panelAxis ?? "panel" : "normal"}-${item.panelMode ?? "na"}-${Math.round(item.consumedLengthMm)}`;
+                              const isSelected =
+                                selectedPreviewCandidate != null &&
+                                rowKey ===
+                                  `${selectedPreviewCandidate.variant.id}-${selectedPreviewCandidate.panelizado ? selectedPreviewCandidate.panelAxis ?? "panel" : "normal"}-${selectedPreviewCandidate.panelMode ?? "na"}-${Math.round(selectedPreviewCandidate.consumedLengthMm)}`;
+                              return (
+                              <tr
+                                key={rowKey}
+                                className={`border-t cursor-pointer ${isSelected ? "bg-orange-50" : ""}`}
+                                onClick={() => setSelectedPreviewCandidateKey(rowKey)}
+                              >
+                                <td className="px-3 py-2">
+                                  <div className="flex flex-wrap gap-1">
+                                    {selectedBaseMaterial
+                                      ? getVarianteOptionChips(selectedBaseMaterial, item.variant).map((chip) => (
+                                          <span key={`${item.variant.id}-${chip.key}`} className="rounded border px-2 py-0.5 text-xs">
+                                            {chip.label}: {chip.value}
+                                          </span>
+                                        ))
+                                      : (
+                                          <span className="font-medium">{item.variant.sku}</span>
+                                        )}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">{(item.rollWidthMm / 10).toLocaleString("es-AR")} cm</td>
+                                <td className="px-3 py-2">{(item.printableWidthMm / 10).toLocaleString("es-AR")} cm</td>
+                                <td className="px-3 py-2">
+                                  <div>
+                                    <p>{item.orientacion === "mixta" ? "Mixta" : item.orientacion === "rotada" ? "Rotada" : "Normal"}</p>
+                                    {item.panelizado ? (
+                                      <p className="text-xs text-muted-foreground">
+                                        {getPanelizadoModoLabel(item.panelMode)} · Panelizado {item.panelAxis === "vertical" ? "vertical" : "horizontal"} · {item.panelCount} paneles · {item.panelDistribution === "libre" ? "Libre" : "Equilibrada"}
+                                        {item.panelMaxWidthMm != null ? ` · Máx. ${formatMmAsCm(item.panelMaxWidthMm)} cm` : ""}
+                                        {item.panelWidthInterpretation ? ` · ${getPanelizadoInterpretacionLabel(item.panelWidthInterpretation)}` : ""}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">{item.piecesPerRow}</td>
+                                <td className="px-3 py-2">{item.rows}</td>
+                                <td className="px-3 py-2">{(item.consumedLengthMm / 1000).toLocaleString("es-AR", { maximumFractionDigits: 3 })} m</td>
+                                <td className="px-3 py-2">
+                                  {item.wastePct.toLocaleString("es-AR", { maximumFractionDigits: 2 })}% · {item.wasteAreaM2.toLocaleString("es-AR", { maximumFractionDigits: 3 })} m2
+                                </td>
+                              </tr>
+                            )})}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -1507,11 +1755,14 @@ export function WideFormatImposicionTab(props: ProductTabProps) {
       </CardContent>
       <WideFormatPanelEditorSheet
         open={isPanelEditorOpen}
-        onOpenChange={setIsPanelEditorOpen}
+        onOpenChange={(open) => {
+          setIsPanelEditorOpen(open);
+          if (!open) setPanelEditorSelection(null);
+        }}
         context="imposicion"
-        initialLayout={imposicionManualLayoutActual}
+        initialLayout={panelEditorSelection?.initialLayout ?? imposicionManualLayoutActual}
         currentMode={imposicionConfig.panelizadoModo}
-        printableWidthMm={panelEditorPrintableWidthMm}
+        printableWidthMm={panelEditorSelection?.printableWidthMm ?? panelEditorPrintableWidthMm}
         panelizadoSolapeMm={imposicionConfig.panelizadoSolapeMm}
         panelizadoDistribucion={imposicionConfig.panelizadoDistribucion}
         panelizadoAnchoMaxPanelMm={imposicionConfig.panelizadoAnchoMaxPanelMm}
@@ -1522,15 +1773,21 @@ export function WideFormatImposicionTab(props: ProductTabProps) {
       <Sheet open={isImposicion3dOpen} onOpenChange={setIsImposicion3dOpen}>
         <SheetContent side="right" className="!w-[72vw] !max-w-none md:!w-[68vw] lg:!w-[64vw] xl:!w-[62vw] sm:!max-w-none">
           <SheetHeader>
-            <SheetTitle>Visualización 3D del nesting</SheetTitle>
+            <SheetTitle>{imposicion3dTitle}</SheetTitle>
             <SheetDescription>
               Render del candidato seleccionado, con márgenes no imprimibles y distribución de piezas sobre el rollo.
             </SheetDescription>
           </SheetHeader>
           <div className="px-4 pb-4">
-            {selectedPreviewCandidate ? (
+            {imposicion3dPreview ? (
               <WideFormatNestingCard
-                title="Vista 3D del nesting"
+                title={imposicion3dTitle}
+                description="Representación visual del resultado seleccionado sobre el rollo y el área imprimible."
+                simulator={buildWideFormatSimulatorDataFromPreview(imposicion3dPreview)}
+              />
+            ) : selectedPreviewCandidate ? (
+              <WideFormatNestingCard
+                title={imposicion3dTitle}
                 description="Representación visual del candidato seleccionado sobre el rollo y el área imprimible."
                 simulator={buildWideFormatSimulatorDataFromCandidate(selectedPreviewCandidate)}
               />
