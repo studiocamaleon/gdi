@@ -226,6 +226,9 @@ let ProductosServiciosController = class ProductosServiciosController {
     previewImposicionVariante(auth, varianteId, payload) {
         return this.service.previewVarianteImposicion(auth, varianteId, payload);
     }
+    previewViniloCortImposicion(auth, productoId, payload) {
+        return this.service.previewVinylCutByProducto(auth, productoId, payload);
+    }
     getVarianteCotizaciones(auth, varianteId) {
         return this.service.getVarianteCotizaciones(auth, varianteId);
     }
@@ -804,6 +807,15 @@ __decorate([
     __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.PreviewImposicionProductoVarianteDto]),
     __metadata("design:returntype", void 0)
 ], ProductosServiciosController.prototype, "previewImposicionVariante", null);
+__decorate([
+    (0, common_1.Post)(':productoId/vinilo-corte/imposicion-preview'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('productoId')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.PreviewImposicionProductoVarianteDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "previewViniloCortImposicion", null);
 __decorate([
     (0, common_1.Get)('variantes/:varianteId/cotizaciones'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),

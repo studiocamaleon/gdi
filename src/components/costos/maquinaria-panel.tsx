@@ -112,6 +112,12 @@ const EMPTY_SELECT_VALUE = "__none__";
 const OTHER_SELECT_VALUE = "__other__";
 const PRESET_FIELD_CLASSNAME = "border-sky-300 bg-sky-50/70";
 const LASER_SAME_CONSUMPTION_ALL_PROFILES_PARAM_KEY = "laserSameConsumptionAllProfiles";
+const VINYL_CUT_K_COEFFICIENTS: Record<string, number> = {
+  facil: 0.1057,
+  intermedio: 0.0325,
+  dificil: 0.012,
+};
+
 const PERFIL_DIRECT_FIELD_KEYS = new Set([
   "nombre",
   "productivityValue",
@@ -1932,15 +1938,21 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
     }
 
     setForm((current) => {
+      const { anchoUtil, largoUtil, altoUtil, espesorMaximo, ...restPresetParams } =
+        preset.parametrosTecnicos;
       const currentParams = current.parametrosTecnicos ?? {};
       const nextParams = normalizeMachineChannelConfiguration({
         ...currentParams,
-        ...preset.parametrosTecnicos,
+        ...restPresetParams,
       });
       const derived = getDerivedPrintableAreaParams(nextParams);
 
       return {
         ...current,
+        ...(anchoUtil !== undefined ? { anchoUtil: Number(anchoUtil) } : {}),
+        ...(largoUtil !== undefined ? { largoUtil: Number(largoUtil) } : {}),
+        ...(altoUtil !== undefined ? { altoUtil: Number(altoUtil) } : {}),
+        ...(espesorMaximo !== undefined ? { espesorMaximo: Number(espesorMaximo) } : {}),
         parametrosTecnicos: derived
           ? { ...nextParams, areaImprimibleMaxima: derived.areaImprimibleMaxima }
           : nextParams,
@@ -2654,6 +2666,15 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
             pesoMaximo: false,
           };
         }
+        if (form.plantilla === "plotter_de_corte") {
+          return {
+            anchoUtil: true,
+            largoUtil: false,
+            altoUtil: false,
+            espesorMaximo: false,
+            pesoMaximo: false,
+          };
+        }
         return {
           anchoUtil: true,
           largoUtil: false,
@@ -2694,7 +2715,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
           pesoMaximo: true,
         };
     }
-  }, [form.geometriaTrabajo]);
+  }, [form.geometriaTrabajo, form.plantilla]);
   const generalSectionNumberByKey = React.useMemo(() => {
     const sections = [
       "identificacion",
@@ -3198,6 +3219,37 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
               } else {
                 detail[fieldItem.key] = normalized;
               }
+            }
+          }
+
+          // Plotter de corte: when marcaRegistro switches to "si", initialize margin fields to 0
+          if (fieldItem.key === "marcaRegistro" && String(value || "").trim() === "si") {
+            const PROFILE_MARGIN_KEYS = [
+              "margenIzquierdoPerf",
+              "margenDerechoPerf",
+              "margenSuperiorPerf",
+              "margenInferiorPerf",
+            ] as const;
+            for (const key of PROFILE_MARGIN_KEYS) {
+              if (detail[key] === undefined || detail[key] === null || detail[key] === "") {
+                detail[key] = 0;
+              }
+            }
+          }
+
+          if (fieldItem.key === "velocidadCortePerf" || fieldItem.key === "nivelComplejidad") {
+            const velocidad =
+              fieldItem.key === "velocidadCortePerf"
+                ? toFiniteNumberOrUndefined(String(value))
+                : toFiniteNumberOrUndefined(String(item.detalle?.velocidadCortePerf ?? ""));
+            const complejidad =
+              fieldItem.key === "nivelComplejidad"
+                ? String(value || "").trim()
+                : String(item.detalle?.nivelComplejidad ?? "");
+            const k = VINYL_CUT_K_COEFFICIENTS[complejidad];
+            if (velocidad !== undefined && velocidad > 0 && k !== undefined) {
+              next.productivityValue = Math.round(k * velocidad * 100) / 100;
+              next.productivityUnit = "m2_h" as LocalPerfilOperativo["productivityUnit"];
             }
           }
 
@@ -3942,7 +3994,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                           }
                         />
                       </Field>
-                      {form.plantilla === "impresora_laser" ? (
+                      {fabricantesCatalogo.length > 0 ? (
                         <>
                           <Field>
                             <div className="flex items-center gap-1">
@@ -4967,6 +5019,12 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                             }
                             if (isGuillotinaTemplate) {
                               return fieldItem.key !== "operationMode";
+                            }
+                            // Plotter de corte: hide profile margin fields unless marcaRegistro === "si"
+                            if (
+                              ["margenIzquierdoPerf", "margenDerechoPerf", "margenSuperiorPerf", "margenInferiorPerf"].includes(fieldItem.key)
+                            ) {
+                              return String(selectedPerfil.detalle?.marcaRegistro ?? "no").trim() === "si";
                             }
                             return fieldItem.key !== "productivityValue";
                           })

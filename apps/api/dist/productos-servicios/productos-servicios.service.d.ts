@@ -2261,7 +2261,7 @@ export declare class ProductosServiciosService {
         motorVersion: number;
         periodo: string;
         cantidad: number;
-        piezasPorPliego: number;
+        piezasPorPliego: any;
         pliegos: number;
         warnings: string[];
         bloques: {
@@ -2282,7 +2282,7 @@ export declare class ProductosServiciosService {
                 tarifaHora: number;
                 costo: number;
             }[];
-            materiales: any[];
+            materiales: any[] | never[];
         };
         subtotales: {
             procesos: number;
@@ -2303,6 +2303,15 @@ export declare class ProductosServiciosService {
             configVersionOverride: number | null;
             resumenTecnico: Record<string, unknown>;
             nestingPreview: {} | null;
+            coloresResumen: {
+                colorId: any;
+                colorLabel: any;
+                materialVarianteId: any;
+                nestingPreview: {} | null;
+                resumenTecnico: Record<string, unknown> | null;
+                totales: Record<string, unknown> | null;
+                materiasPrimas: unknown;
+            }[];
         };
         snapshotId: string;
     }>;
@@ -2376,16 +2385,39 @@ export declare class ProductosServiciosService {
     }[]>;
     previewVinylCutVariant(auth: CurrentAuth, varianteId: string, payload: PreviewImposicionProductoVarianteDto): Promise<{
         config: Record<string, unknown>;
+        periodo: string;
+        colorResults: Array<Record<string, unknown>>;
         items: Array<Record<string, unknown>>;
         rejected: Array<Record<string, unknown>>;
         warnings: string[];
-        periodo?: undefined;
+        aggregated: {
+            totalMateriales: number;
+            totalCentrosCosto: number;
+            totalTecnico: number;
+            centrosCosto: never[];
+            materiasPrimas: never[];
+        };
     } | {
         config: Record<string, unknown>;
         periodo: string;
+        colorResults: {
+            colorId: string;
+            colorLabel: string;
+            materialVarianteId: string | null;
+            items: Array<Record<string, unknown>>;
+            winner: Record<string, unknown> | null;
+            warnings: string[];
+        }[];
         items: Record<string, unknown>[];
         rejected: Record<string, unknown>[];
         warnings: string[];
+        aggregated: {
+            totalMateriales: number;
+            totalCentrosCosto: number;
+            totalTecnico: number;
+            centrosCosto: Record<string, unknown>[];
+            materiasPrimas: any[];
+        };
     }>;
     private getVarianteCotizacionesBase;
     getProductoCotizaciones(auth: CurrentAuth, productoId: string): Promise<{
@@ -2591,7 +2623,8 @@ export declare class ProductosServiciosService {
     private getGranFormatoCandidateResumenAveragePanelUsefulSpanMm;
     private buildGranFormatoCostosCandidateResumen;
     private normalizeVinylCutMeasures;
-    private buildVinylCutMaterialsCompatibilitySet;
+    private normalizeVinylCutColores;
+    private mergeVinylCutCentrosCosto;
     private buildVinylCutSimulation;
     private resolveGranFormatoCantidadObjetivoSalida;
     private calculateGranFormatoSustratoCost;

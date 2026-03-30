@@ -2145,7 +2145,9 @@ function buildCuttingTableSections(kind: "mesa" | "plotter"): MaquinariaTemplate
     section({
       id: "capacidades_fisicas",
       title: "Capacidades fisicas",
-      description: "Area util de trabajo y espesor maximo del material.",
+      description: kind === "mesa"
+        ? "Area util de trabajo y espesor maximo del material."
+        : "Area util de trabajo del plotter.",
       fields: [
         field({
           key: "anchoUtil",
@@ -2157,25 +2159,33 @@ function buildCuttingTableSections(kind: "mesa" | "plotter"): MaquinariaTemplate
           description: "Ancho util de trabajo.",
           placeholder: kind === "mesa" ? "160" : "140",
         }),
-        field({
-          key: "largoUtil",
-          label: "Largo util",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Largo util de trabajo.",
-          placeholder: kind === "mesa" ? "300" : "1000",
-        }),
-        field({
-          key: "espesorMaximo",
-          label: "Espesor maximo",
-          scope: "maquina",
-          kind: "number",
-          unit: "mm",
-          description: "Espesor maximo procesable.",
-          placeholder: kind === "mesa" ? "20" : "2",
-        }),
+        ...(kind === "mesa"
+          ? [
+              field({
+                key: "largoUtil",
+                label: "Largo util",
+                scope: "maquina",
+                kind: "number",
+                required: true,
+                unit: "cm",
+                description: "Largo util de trabajo.",
+                placeholder: "300",
+              }),
+            ]
+          : []),
+        ...(kind === "mesa"
+          ? [
+              field({
+                key: "espesorMaximo",
+                label: "Espesor maximo",
+                scope: "maquina",
+                kind: "number",
+                unit: "mm",
+                description: "Espesor maximo procesable.",
+                placeholder: "20",
+              }),
+            ]
+          : []),
       ],
     }),
     section({
@@ -2184,23 +2194,29 @@ function buildCuttingTableSections(kind: "mesa" | "plotter"): MaquinariaTemplate
       description:
         kind === "mesa"
           ? "Herramientas, vacio y materiales del equipo de corte."
-          : "Herramientas, fuerza y materiales del plotter de corte.",
+          : "Velocidad de referencia y sujecion del plotter de corte.",
       fields: [
-        field({
-          key: "herramientasCompatibles",
-          label: "Herramientas compatibles",
-          scope: "maquina",
-          kind: "multiselect",
-          description: "Herramientas disponibles para esta maquina.",
-          options: cuttingToolOptions,
-        }),
+        ...(kind === "mesa"
+          ? [
+              field({
+                key: "herramientasCompatibles",
+                label: "Herramientas compatibles",
+                scope: "maquina",
+                kind: "multiselect",
+                description: "Herramientas disponibles para esta maquina.",
+                options: cuttingToolOptions,
+              }),
+            ]
+          : []),
         field({
           key: "velocidadCorte",
-          label: "Velocidad corte",
+          label: kind === "mesa" ? "Velocidad corte" : "Velocidad maxima de corte",
           scope: "maquina",
           kind: "number",
           unit: "mm_s",
-          description: "Velocidad maxima de corte.",
+          description: kind === "mesa"
+            ? "Velocidad maxima de corte."
+            : "Velocidad maxima del equipo (referencia). La velocidad efectiva se define en cada perfil operativo.",
           placeholder: "600",
         }),
         field({
@@ -2210,28 +2226,64 @@ function buildCuttingTableSections(kind: "mesa" | "plotter"): MaquinariaTemplate
           kind: "boolean",
           description: "Activalo si cuenta con cama de vacio o sujecion asistida.",
         }),
-        field({
-          key: "materialesCompatibles",
-          label: "Materiales compatibles",
-          scope: "maquina",
-          kind: "multiselect",
-          description: "Materiales procesables por este equipo.",
-          options:
-            kind === "mesa"
-              ? [
+        ...(kind === "plotter"
+          ? [
+              field({
+                key: "margenIzquierdo",
+                label: "Margen izquierdo no trazable",
+                scope: "maquina",
+                kind: "number",
+                unit: "cm",
+                description: "Zona izquierda del rollo donde la cuchilla no puede trazar (en cm). Se aplica a todos los jobs salvo que el perfil tenga marca de registro propia.",
+                placeholder: "0.5",
+              }),
+              field({
+                key: "margenDerecho",
+                label: "Margen derecho no trazable",
+                scope: "maquina",
+                kind: "number",
+                unit: "cm",
+                description: "Zona derecha del rollo donde la cuchilla no puede trazar (en cm).",
+                placeholder: "0.5",
+              }),
+              field({
+                key: "margenSuperior",
+                label: "Margen superior (inicio job)",
+                scope: "maquina",
+                kind: "number",
+                unit: "cm",
+                description: "Espacio no trazable al inicio de cada job, en cm. Ej: 1 = 1 cm.",
+                placeholder: "1",
+              }),
+              field({
+                key: "margenInferior",
+                label: "Margen inferior (fin job)",
+                scope: "maquina",
+                kind: "number",
+                unit: "cm",
+                description: "Espacio no trazable al final de cada job, en cm. Ej: 1 = 1 cm.",
+                placeholder: "1",
+              }),
+            ]
+          : []),
+        ...(kind === "mesa"
+          ? [
+              field({
+                key: "materialesCompatibles",
+                label: "Materiales compatibles",
+                scope: "maquina",
+                kind: "multiselect",
+                description: "Materiales procesables por este equipo.",
+                options: [
                   option("carton", "Carton"),
                   option("corrugado", "Corrugado"),
                   option("foamboard", "Foamboard"),
                   option("vinilo", "Vinilo"),
                   option("pvc", "PVC"),
-                ]
-              : [
-                  option("vinilo", "Vinilo"),
-                  option("papel", "Papel"),
-                  option("film", "Film"),
-                  option("transfer", "Transfer"),
                 ],
-        }),
+              }),
+            ]
+          : []),
       ],
     }),
     section({
@@ -2248,33 +2300,112 @@ function buildCuttingTableSections(kind: "mesa" | "plotter"): MaquinariaTemplate
           description: "Nombre del perfil de corte.",
           placeholder: kind === "mesa" ? "Corrugado corte rapido" : "Vinilo rotulacion fino",
         }),
-        field({
-          key: "materialObjetivo",
-          label: "Material objetivo",
-          scope: "perfil_operativo",
-          kind: "text",
-          description: "Material principal del perfil.",
-          placeholder: kind === "mesa" ? "Corrugado doble canal" : "Vinilo calandrado",
-        }),
-        field({
-          key: "herramienta",
-          label: "Herramienta",
-          scope: "perfil_operativo",
-          kind: "text",
-          description: "Herramienta principal del perfil.",
-          placeholder: kind === "mesa" ? "Cuchilla tangencial" : "Cuchilla 45 grados",
-        }),
+        ...(kind === "mesa"
+          ? [
+              field({
+                key: "materialObjetivo",
+                label: "Material objetivo",
+                scope: "perfil_operativo",
+                kind: "text",
+                description: "Material principal del perfil.",
+                placeholder: "Corrugado doble canal",
+              }),
+              field({
+                key: "herramienta",
+                label: "Herramienta",
+                scope: "perfil_operativo",
+                kind: "text",
+                description: "Herramienta principal del perfil.",
+                placeholder: "Cuchilla tangencial",
+              }),
+            ]
+          : []),
+        ...(kind === "plotter"
+          ? [
+              field({
+                key: "velocidadCortePerf",
+                label: "Velocidad de corte",
+                scope: "perfil_operativo",
+                kind: "number",
+                unit: "mm_s",
+                description:
+                  "Velocidad de corte para este perfil. El sistema calcula la productividad en m²/h automáticamente.",
+                placeholder: "350",
+              }),
+              field({
+                key: "nivelComplejidad",
+                label: "Complejidad del diseño",
+                scope: "perfil_operativo",
+                kind: "select",
+                description:
+                  "Define la densidad de trayectoria del diseño. Determina cuántos metros de corte hay por m² de material.",
+                options: [
+                  option("facil", "Fácil (~37 m²/h a 350 mm/s)"),
+                  option("intermedio", "Intermedio (~6.5 m²/h a 200 mm/s)"),
+                  option("dificil", "Complejo (~1.2 m²/h a 100 mm/s)"),
+                ],
+              }),
+              field({
+                key: "marcaRegistro",
+                label: "Marca de registro",
+                scope: "perfil_operativo",
+                kind: "select",
+                description:
+                  "Define si este perfil tiene sus propios márgenes de trabajo. Si es No, se usan los márgenes no trazables definidos a nivel máquina.",
+                options: [
+                  option("no", "No (usar márgenes de la máquina)"),
+                  option("si", "Sí (márgenes propios del perfil)"),
+                ],
+              }),
+              field({
+                key: "margenIzquierdoPerf",
+                label: "Margen izquierdo",
+                scope: "perfil_operativo",
+                kind: "number",
+                unit: "cm",
+                description: "Zona izquierda no trazable, en cm. Solo aplica cuando Marca de registro es Sí.",
+                placeholder: "0.5",
+              }),
+              field({
+                key: "margenDerechoPerf",
+                label: "Margen derecho",
+                scope: "perfil_operativo",
+                kind: "number",
+                unit: "cm",
+                description: "Zona derecha no trazable, en cm. Solo aplica cuando Marca de registro es Sí.",
+                placeholder: "0.5",
+              }),
+              field({
+                key: "margenSuperiorPerf",
+                label: "Margen superior (inicio job)",
+                scope: "perfil_operativo",
+                kind: "number",
+                unit: "cm",
+                description: "Espacio no trazable al inicio del job, en cm. Solo aplica cuando Marca de registro es Sí.",
+                placeholder: "1",
+              }),
+              field({
+                key: "margenInferiorPerf",
+                label: "Margen inferior (fin job)",
+                scope: "perfil_operativo",
+                kind: "number",
+                unit: "cm",
+                description: "Espacio no trazable al final del job. Solo aplica cuando Marca de registro es Sí.",
+                placeholder: "0",
+              }),
+            ]
+          : []),
         field({
           key: "productivityValue",
           label: "Productividad",
           scope: "perfil_operativo",
           kind: "number",
-          unit: kind === "plotter" ? "metro_lineal" : "m2_h",
+          unit: "m2_h",
           description:
             kind === "plotter"
-              ? "Rendimiento nominal del perfil en metros lineales por hora."
+              ? "Productividad en m²/h. Se calcula automáticamente desde velocidad y complejidad, o puede ingresarse manualmente."
               : "Rendimiento nominal del perfil.",
-          placeholder: kind === "mesa" ? "35" : "12",
+          placeholder: kind === "mesa" ? "35" : "37",
         }),
         field({
           key: "setupMin",

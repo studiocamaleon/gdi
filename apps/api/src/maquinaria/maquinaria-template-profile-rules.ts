@@ -184,7 +184,15 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
     requiredFieldKeys: ['nombre'],
   }),
   [PlantillaMaquinariaDto.plotter_de_corte]: buildRule({
-    profileFieldKeys: ['materialObjetivo', 'herramienta'],
+    profileFieldKeys: [
+      'velocidadCortePerf',
+      'nivelComplejidad',
+      'marcaRegistro',
+      'margenIzquierdoPerf',
+      'margenDerechoPerf',
+      'margenSuperiorPerf',
+      'margenInferiorPerf',
+    ],
     requiredFieldKeys: ['nombre'],
   }),
 };

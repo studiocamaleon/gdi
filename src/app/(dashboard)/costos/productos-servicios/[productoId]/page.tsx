@@ -1,4 +1,3 @@
-import dynamicImport from "next/dynamic";
 import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 
@@ -18,16 +17,7 @@ import {
   getProductoVariantes,
   getSubfamiliasProducto,
 } from "@/lib/productos-servicios-api";
-
-const ProductoServicioDetailShell = dynamicImport(
-  () =>
-    import("@/components/productos-servicios/producto-servicio-detail-shell").then(
-      (module) => module.ProductoServicioDetailShell,
-    ),
-  {
-    loading: () => <ModulePageSkeleton variant="detail" />,
-  },
-);
+import { ProductoServicioDetailShell } from "@/components/productos-servicios/producto-servicio-detail-shell";
 
 export const dynamic = "force-dynamic";
 

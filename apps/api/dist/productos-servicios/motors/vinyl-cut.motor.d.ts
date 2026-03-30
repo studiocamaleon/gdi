@@ -36,7 +36,7 @@ export declare class VinylCutMotorModule implements ProductMotorModule {
         motorVersion: number;
         periodo: string;
         cantidad: number;
-        piezasPorPliego: number;
+        piezasPorPliego: any;
         pliegos: number;
         warnings: string[];
         bloques: {
@@ -57,7 +57,7 @@ export declare class VinylCutMotorModule implements ProductMotorModule {
                 tarifaHora: number;
                 costo: number;
             }[];
-            materiales: any[];
+            materiales: any[] | never[];
         };
         subtotales: {
             procesos: number;
@@ -78,20 +78,52 @@ export declare class VinylCutMotorModule implements ProductMotorModule {
             configVersionOverride: number | null;
             resumenTecnico: Record<string, unknown>;
             nestingPreview: {} | null;
+            coloresResumen: {
+                colorId: any;
+                colorLabel: any;
+                materialVarianteId: any;
+                nestingPreview: {} | null;
+                resumenTecnico: Record<string, unknown> | null;
+                totales: Record<string, unknown> | null;
+                materiasPrimas: unknown;
+            }[];
         };
         snapshotId: string;
     }>;
     previewVariant(auth: CurrentAuth, varianteId: string, payload: PreviewImposicionProductoVarianteDto): Promise<{
         config: Record<string, unknown>;
+        periodo: string;
+        colorResults: Array<Record<string, unknown>>;
         items: Array<Record<string, unknown>>;
         rejected: Array<Record<string, unknown>>;
         warnings: string[];
-        periodo?: undefined;
+        aggregated: {
+            totalMateriales: number;
+            totalCentrosCosto: number;
+            totalTecnico: number;
+            centrosCosto: never[];
+            materiasPrimas: never[];
+        };
     } | {
         config: Record<string, unknown>;
         periodo: string;
+        colorResults: {
+            colorId: string;
+            colorLabel: string;
+            materialVarianteId: string | null;
+            items: Array<Record<string, unknown>>;
+            winner: Record<string, unknown> | null;
+            warnings: string[];
+        }[];
         items: Record<string, unknown>[];
         rejected: Record<string, unknown>[];
         warnings: string[];
+        aggregated: {
+            totalMateriales: number;
+            totalCentrosCosto: number;
+            totalTecnico: number;
+            centrosCosto: Record<string, unknown>[];
+            materiasPrimas: any[];
+        };
     }>;
 }

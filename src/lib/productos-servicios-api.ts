@@ -724,6 +724,19 @@ export async function previewImposicionProductoVariante(
   );
 }
 
+export async function previewVinylCutImposicionByProducto(
+  productoId: string,
+  parametros: Record<string, unknown>,
+) {
+  return apiRequest<Record<string, unknown>>(
+    `/productos-servicios/${productoId}/vinilo-corte/imposicion-preview`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ parametros }),
+    },
+  );
+}
+
 export async function getCotizacionesProductoVariante(varianteId: string) {
   return apiRequest<CotizacionProductoSnapshotResumen[]>(
     `/productos-servicios/variantes/${varianteId}/cotizaciones`,

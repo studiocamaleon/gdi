@@ -582,6 +582,15 @@ export class ProductosServiciosController {
     return this.service.previewVarianteImposicion(auth, varianteId, payload);
   }
 
+  @Post(':productoId/vinilo-corte/imposicion-preview')
+  previewViniloCortImposicion(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('productoId') productoId: string,
+    @Body() payload: PreviewImposicionProductoVarianteDto,
+  ) {
+    return this.service.previewVinylCutByProducto(auth, productoId, payload);
+  }
+
   @Get('variantes/:varianteId/cotizaciones')
   getVarianteCotizaciones(
     @CurrentSession() auth: CurrentAuth,

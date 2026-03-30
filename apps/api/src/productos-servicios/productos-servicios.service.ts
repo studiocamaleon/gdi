@@ -5638,22 +5638,28 @@ export class ProductosServiciosService {
       periodo,
       cantidadTrabajos,
     );
-    const winner = simulation.items[0] as Record<string, unknown> | undefined;
-    if (!winner) {
+
+    const { aggregated } = simulation;
+    const colorResults = (simulation.colorResults ?? []) as any[];
+    if (!aggregated || aggregated.totalTecnico === 0 && !colorResults.some((cr: any) => cr.winner)) {
       throw new BadRequestException('No se encontró una combinación válida de material y plotter para el trabajo.');
     }
 
-    const winnerTotales = this.asObject(winner.totales);
-    const winnerResumenTecnico = this.asObject(winner.resumenTecnico);
-    const winnerWarnings = Array.isArray(winner.warnings) ? winner.warnings.map((item) => String(item)) : [];
-    const winnerCentrosCosto = Array.isArray(winner.centrosCosto) ? winner.centrosCosto : [];
-    const winnerMateriasPrimas = Array.isArray(winner.materiasPrimas) ? winner.materiasPrimas : [];
+    const allWarnings = colorResults.flatMap((cr: any) => cr.warnings ?? []) as string[];
+    const firstWinner = colorResults.find((cr: any) => cr.winner)?.winner as Record<string, unknown> | undefined;
+    const firstWinnerResumenTecnico = firstWinner ? this.asObject(firstWinner.resumenTecnico) : {};
 
-    const total = Number(winnerTotales.tecnico ?? 0);
-    const largoConsumidoMl = this.roundProductNumber(
-      Number(winnerResumenTecnico.largoConsumidoMm ?? 0) / 1000,
+    const total = aggregated.totalTecnico;
+    // unitario en base al largo consumido total sumado de todos los colores
+    const totalLargoConsumidoMl = this.roundProductNumber(
+      colorResults.reduce((acc: number, cr: any) => {
+        const w = cr.winner as Record<string, unknown> | null;
+        return acc + Number(this.asObject(w?.resumenTecnico).largoConsumidoMl ?? 0);
+      }, 0),
     );
-    const unitario = largoConsumidoMl > 0 ? this.roundProductNumber(total / largoConsumidoMl) : total;
+    const unitario = totalLargoConsumidoMl > 0
+      ? this.roundProductNumber(total / totalLargoConsumidoMl)
+      : total;
 
     const result = {
       varianteId: variante.id,
@@ -5664,11 +5670,14 @@ export class ProductosServiciosService {
       motorVersion: motor.version,
       periodo,
       cantidad: cantidadTrabajos,
-      piezasPorPliego: Number(winnerResumenTecnico.totalPiezas ?? 0),
-      pliegos: 1,
-      warnings: winnerWarnings,
+      piezasPorPliego: colorResults.reduce((acc: number, cr: any) => {
+        const w = cr.winner as Record<string, unknown> | null;
+        return acc + Number(this.asObject(w?.resumenTecnico).totalPiezas ?? 0);
+      }, 0),
+      pliegos: colorResults.length,
+      warnings: allWarnings,
       bloques: {
-        procesos: winnerCentrosCosto.map((item: any) => ({
+        procesos: aggregated.centrosCosto.map((item: any) => ({
           orden: item.orden,
           codigo: item.codigo,
           nombre: item.paso,
@@ -5685,11 +5694,11 @@ export class ProductosServiciosService {
           tarifaHora: Number(item.tarifaHora ?? 0),
           costo: Number(item.costo ?? 0),
         })),
-        materiales: winnerMateriasPrimas,
+        materiales: aggregated.materiasPrimas,
       },
       subtotales: {
-        procesos: Number(winnerTotales.centrosCosto ?? 0),
-        papel: Number(winnerTotales.materiales ?? 0),
+        procesos: aggregated.totalCentrosCosto,
+        papel: aggregated.totalMateriales,
         toner: 0,
         desgaste: 0,
         consumiblesTerminacion: 0,
@@ -5702,8 +5711,19 @@ export class ProductosServiciosService {
         config: effectiveConfig,
         configVersionBase,
         configVersionOverride,
-        resumenTecnico: winnerResumenTecnico,
-        nestingPreview: winner.nestingPreview ?? null,
+        resumenTecnico: firstWinnerResumenTecnico,
+        nestingPreview: firstWinner?.nestingPreview ?? null,
+        coloresResumen: colorResults.map((cr: any) => ({
+          colorId: cr.colorId,
+          colorLabel: cr.colorLabel,
+          materialVarianteId: cr.materialVarianteId,
+          nestingPreview: (cr.winner as Record<string, unknown> | null)?.nestingPreview ?? null,
+          resumenTecnico: cr.winner ? this.asObject((cr.winner as Record<string, unknown>).resumenTecnico) : null,
+          totales: cr.winner ? this.asObject((cr.winner as Record<string, unknown>).totales) : null,
+          materiasPrimas: cr.winner && Array.isArray((cr.winner as Record<string, unknown>).materiasPrimas)
+            ? (cr.winner as Record<string, unknown>).materiasPrimas
+            : [],
+        })),
       },
     };
 
@@ -5835,6 +5855,52 @@ export class ProductosServiciosService {
     return this.buildVinylCutSimulation(
       auth,
       variante,
+      effectiveConfig,
+      this.normalizePeriodo(undefined),
+      1,
+    );
+  }
+
+  async previewVinylCutByProducto(
+    auth: CurrentAuth,
+    productoId: string,
+    payload: PreviewImposicionProductoVarianteDto,
+  ) {
+    const producto = await this.prisma.productoServicio.findFirst({
+      where: { tenantId: auth.tenantId, id: productoId },
+      select: {
+        id: true,
+        motorCodigo: true,
+        motorVersion: true,
+        usarRutaComunVariantes: true,
+        procesoDefinicionDefaultId: true,
+      },
+    });
+    if (!producto) {
+      throw new NotFoundException('Producto no encontrado.');
+    }
+    const motor = this.resolveMotorOrThrow(producto.motorCodigo, producto.motorVersion);
+    const { config } = await this.getEffectiveMotorConfig(
+      auth,
+      producto.id,
+      producto.id,
+      motor,
+    );
+    const effectiveConfig = this.mergeMotorConfig(
+      motor.code,
+      config as Prisma.JsonValue,
+      payload.parametros ?? {},
+    );
+    const fakeVariante = {
+      procesoDefinicionId: null,
+      productoServicio: {
+        usarRutaComunVariantes: true,
+        procesoDefinicionDefaultId: producto.procesoDefinicionDefaultId,
+      },
+    } as any;
+    return this.buildVinylCutSimulation(
+      auth,
+      fakeVariante,
       effectiveConfig,
       this.normalizePeriodo(undefined),
       1,
@@ -9644,7 +9710,14 @@ export class ProductosServiciosService {
       separacionHorizontalMm: 10,
       separacionVerticalMm: 10,
       materialOverrideId: null,
-      medidas: [{ anchoMm: 1000, altoMm: 300, cantidad: 1, rotacionPermitida: true }],
+      colores: [
+        {
+          id: 'color-1',
+          label: 'Color 1',
+          materialVarianteId: null,
+          medidas: [{ anchoMm: 1000, altoMm: 300, cantidad: 1, rotacionPermitida: true }],
+        },
+      ],
     };
   }
 
@@ -13365,14 +13438,87 @@ export class ProductosServiciosService {
       : [{ anchoMm: 1000, altoMm: 300, cantidad: Math.max(1, cantidadTrabajos), rotacionPermitida: true }];
   }
 
-  private buildVinylCutMaterialsCompatibilitySet(maquina: {
-    parametrosTecnicosJson?: Prisma.JsonValue | null;
-  }) {
-    const raw = this.asObject(maquina.parametrosTecnicosJson).materialesCompatibles;
-    if (!Array.isArray(raw)) {
-      return new Set<string>();
+  private normalizeVinylCutColores(
+    effectiveConfig: Record<string, unknown>,
+    cantidadTrabajos: number,
+  ): Array<{
+    id: string;
+    label: string;
+    materialVarianteId: string | null;
+    medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number; rotacionPermitida: boolean }>;
+  }> {
+    const coloresRaw = Array.isArray(effectiveConfig.colores) ? effectiveConfig.colores : null;
+
+    if (coloresRaw && coloresRaw.length > 0) {
+      const entries = coloresRaw
+        .map((entry: unknown, idx: number) => {
+          const e = this.asObject(entry);
+          const id = String(e.id ?? '').trim() || `color-${idx}`;
+          const label = String(e.label ?? 'Color').trim() || 'Color';
+          const materialVarianteId = this.getGranFormatoNullableString(e.materialVarianteId);
+          const medidas = this.normalizeVinylCutMeasures(e.medidas, cantidadTrabajos);
+          return { id, label, materialVarianteId, medidas };
+        })
+        .filter((entry) => entry.medidas.length > 0);
+
+      if (entries.length > 0) {
+        return entries;
+      }
     }
-    return new Set(raw.map((item) => String(item ?? '').trim().toLowerCase()).filter(Boolean));
+
+    // Legacy fallback: flat medidas[] → single color
+    const legacyMedidas = this.normalizeVinylCutMeasures(effectiveConfig.medidas, cantidadTrabajos);
+    return [{ id: 'legacy', label: 'Color 1', materialVarianteId: null, medidas: legacyMedidas }];
+  }
+
+  private mergeVinylCutCentrosCosto(
+    winners: Array<Record<string, unknown>>,
+  ): Array<Record<string, unknown>> {
+    const merged = new Map<
+      string,
+      {
+        orden: number;
+        codigo: string;
+        paso: string;
+        centroCostoId: string;
+        centroCostoNombre: string;
+        origen: string;
+        minutos: number;
+        tarifaHora: number;
+        costo: number;
+        detalleTecnico: unknown;
+      }
+    >();
+
+    for (const winner of winners) {
+      const centrosCosto = Array.isArray(winner.centrosCosto) ? winner.centrosCosto : [];
+      for (const cc of centrosCosto) {
+        const entry = this.asObject(cc);
+        const key = String(entry.centroCostoId ?? entry.paso ?? '');
+        const existing = merged.get(key);
+        const minutos = Number(entry.minutos ?? 0);
+        const costo = Number(entry.costo ?? 0);
+        if (existing) {
+          existing.minutos = this.roundProductNumber(existing.minutos + minutos);
+          existing.costo = this.roundProductNumber(existing.costo + costo);
+        } else {
+          merged.set(key, {
+            orden: Number(entry.orden ?? 0),
+            codigo: String(entry.codigo ?? ''),
+            paso: String(entry.paso ?? ''),
+            centroCostoId: String(entry.centroCostoId ?? ''),
+            centroCostoNombre: String(entry.centroCostoNombre ?? ''),
+            origen: String(entry.origen ?? ''),
+            minutos,
+            tarifaHora: Number(entry.tarifaHora ?? 0),
+            costo,
+            detalleTecnico: entry.detalleTecnico ?? null,
+          });
+        }
+      }
+    }
+
+    return Array.from(merged.values()).sort((a, b) => a.orden - b.orden);
   }
 
   private async buildVinylCutSimulation(
@@ -13387,12 +13533,13 @@ export class ProductosServiciosService {
       throw new BadRequestException('No hay ruta de producción efectiva para la variante seleccionada.');
     }
 
-    const medidas = this.normalizeVinylCutMeasures(effectiveConfig.medidas, cantidadTrabajos);
+    // Normalize to multi-color structure (handles legacy flat medidas[])
+    const colores = this.normalizeVinylCutColores(effectiveConfig, cantidadTrabajos);
+
     const plotterIds = this.getGranFormatoStringArray(effectiveConfig.plottersCompatibles);
     const perfilIds = new Set(this.getGranFormatoStringArray(effectiveConfig.perfilesCompatibles));
     const materialIds = new Set(this.getGranFormatoStringArray(effectiveConfig.materialesCompatibles));
     const materialBaseId = this.getGranFormatoNullableString(effectiveConfig.materialBaseId);
-    const materialOverrideId = this.getGranFormatoNullableString(effectiveConfig.materialOverrideId);
     const maquinaOverrideId = this.getGranFormatoNullableString(effectiveConfig.maquinaDefaultId);
     const perfilOverrideId = this.getGranFormatoNullableString(effectiveConfig.perfilDefaultId);
     const permitirRotacion = effectiveConfig.permitirRotacion !== false;
@@ -13407,6 +13554,7 @@ export class ProductosServiciosService {
           ? GranFormatoImposicionCriterioOptimizacionDto.menor_desperdicio
           : GranFormatoImposicionCriterioOptimizacionDto.menor_costo_total;
 
+    // Load shared resources ONCE
     const machines = await this.prisma.maquina.findMany({
       where: {
         tenantId: auth.tenantId,
@@ -13425,13 +13573,17 @@ export class ProductosServiciosService {
     if (!machines.length) {
       return {
         config: effectiveConfig,
+        periodo,
+        colorResults: [] as Array<Record<string, unknown>>,
         items: [] as Array<Record<string, unknown>>,
         rejected: [] as Array<Record<string, unknown>>,
         warnings: ['No hay plotters de corte compatibles configurados.'],
+        aggregated: { totalMateriales: 0, totalCentrosCosto: 0, totalTecnico: 0, centrosCosto: [], materiasPrimas: [] },
       };
     }
 
-    const materials = await this.prisma.materiaPrima.findMany({
+    // Load global pool of material variants
+    const globalMaterials = await this.prisma.materiaPrima.findMany({
       where: {
         tenantId: auth.tenantId,
         activo: true,
@@ -13441,29 +13593,43 @@ export class ProductosServiciosService {
       },
       include: {
         variantes: {
-          where: {
-            activo: true,
-            ...(materialOverrideId ? { id: materialOverrideId } : {}),
-          },
-          include: {
-            materiaPrima: true,
-          },
+          where: { activo: true },
+          include: { materiaPrima: true },
         },
       },
       orderBy: [{ nombre: 'asc' }],
     });
-    const materialVariants = materials.flatMap((item) =>
-      item.variantes.map((variant) => ({
-        ...variant,
-        materiaPrima: item,
-      })),
+    const globalMaterialVariants = globalMaterials.flatMap((mp) =>
+      mp.variantes.map((v) => ({ ...v, materiaPrima: mp })),
     );
-    if (!materialVariants.length) {
+
+    // Load any per-color specific variants that may not be in the global pool
+    const perColorVariantIds = [
+      ...new Set(colores.map((c) => c.materialVarianteId).filter((id): id is string => Boolean(id))),
+    ];
+    const extraVariants = perColorVariantIds.length
+      ? await this.prisma.materiaPrimaVariante.findMany({
+          where: { id: { in: perColorVariantIds }, activo: true },
+          include: { materiaPrima: true },
+        })
+      : [];
+
+    // Merge global + per-color variants (deduplicated by id)
+    const allVariantsById = new Map([
+      ...globalMaterialVariants.map((v) => [v.id, v] as const),
+      ...extraVariants.map((v) => [v.id, v] as const),
+    ]);
+    const allMaterialVariants = Array.from(allVariantsById.values());
+
+    if (!allMaterialVariants.length) {
       return {
         config: effectiveConfig,
+        periodo,
+        colorResults: [] as Array<Record<string, unknown>>,
         items: [] as Array<Record<string, unknown>>,
         rejected: [] as Array<Record<string, unknown>>,
         warnings: ['No hay variantes activas de vinilo compatibles configuradas.'],
+        aggregated: { totalMateriales: 0, totalCentrosCosto: 0, totalTecnico: 0, centrosCosto: [], materiasPrimas: [] },
       };
     }
 
@@ -13481,223 +13647,325 @@ export class ProductosServiciosService {
     });
     const tarifaByCentro = new Map(tarifas.map((item) => [item.centroCostoId, item.tarifaCalculada]));
 
-    const totalPiezas = medidas.reduce((acc, item) => acc + item.cantidad, 0);
-    const perimetroTotalMl = this.roundProductNumber(
-      medidas.reduce((acc, item) => acc + (((item.anchoMm + item.altoMm) * 2) / 1000) * item.cantidad, 0) /
-        1000,
-    );
+    // Process each color independently — each color = independent roll + nesting
+    const colorResults: Array<{
+      colorId: string;
+      colorLabel: string;
+      materialVarianteId: string | null;
+      items: Array<Record<string, unknown>>;
+      winner: Record<string, unknown> | null;
+      warnings: string[];
+    }> = [];
+    const globalRejected: Array<Record<string, unknown>> = [];
 
-    const resultItems: Array<Record<string, unknown>> = [];
-    const rejected: Array<Record<string, unknown>> = [];
+    for (const colorEntry of colores) {
+      // Resolve material variants for this color
+      const colorMaterialVariants = colorEntry.materialVarianteId
+        ? allMaterialVariants.filter((v) => v.id === colorEntry.materialVarianteId)
+        : allMaterialVariants;
 
-    for (const machine of machines) {
-      if (maquinaOverrideId && machine.id !== maquinaOverrideId) {
-        continue;
-      }
-      const machineMaterials = this.buildVinylCutMaterialsCompatibilitySet(machine);
-      if (machineMaterials.size > 0 && !machineMaterials.has('vinilo')) {
-        rejected.push({
-          maquinaId: machine.id,
-          maquinaNombre: machine.nombre,
-          reason: 'La máquina no admite vinilo en sus materiales compatibles.',
+      if (!colorMaterialVariants.length) {
+        colorResults.push({
+          colorId: colorEntry.id,
+          colorLabel: colorEntry.label,
+          materialVarianteId: colorEntry.materialVarianteId,
+          items: [],
+          winner: null,
+          warnings: [`Color "${colorEntry.label}": No hay variantes de vinilo compatibles configuradas.`],
         });
         continue;
       }
-      const compatibleProfiles = machine.perfilesOperativos.filter((profile) => {
-        if (perfilOverrideId && profile.id !== perfilOverrideId) return false;
-        if (perfilIds.size > 0 && !perfilIds.has(profile.id)) return false;
-        return true;
-      });
-      const profilesToEvaluate = compatibleProfiles.length ? compatibleProfiles : [null];
 
-      const candidates = this.evaluateGranFormatoImposicionCandidates({
-        maquina: machine,
-        medidas,
-        config: {
-          permitirRotacion,
-          separacionHorizontalMm,
-          separacionVerticalMm,
-          margenLateralIzquierdoMmOverride: null,
-          margenLateralDerechoMmOverride: null,
-          margenInicioMmOverride: null,
-          margenFinalMmOverride: null,
-          criterioOptimizacion: criterio,
-          panelizadoActivo: false,
-          panelizadoDireccion: GranFormatoPanelizadoDireccionDto.automatica,
-          panelizadoSolapeMm: null,
-          panelizadoAnchoMaxPanelMm: null,
-          panelizadoDistribucion: GranFormatoPanelizadoDistribucionDto.equilibrada,
-          panelizadoInterpretacionAnchoMaximo: GranFormatoPanelizadoInterpretacionAnchoMaximoDto.total,
-          panelizadoModo: GranFormatoPanelizadoModoDto.automatico,
-          panelizadoManualLayout: null,
-        },
-        variants: materialVariants,
-      });
+      const colorTotalPiezas = colorEntry.medidas.reduce((acc, m) => acc + m.cantidad, 0);
+      const colorPerimetroTotalMl = this.roundProductNumber(
+        colorEntry.medidas.reduce(
+          (acc, m) => acc + (((m.anchoMm + m.altoMm) * 2) / 1000) * m.cantidad,
+          0,
+        ) / 1000,
+      );
 
-      for (const profile of profilesToEvaluate) {
-        for (const candidate of candidates) {
-          const warnings: string[] = [];
-          const largoConsumidoMl = this.roundProductNumber(candidate.consumedLengthMm / 1000);
-          const substrateTotalCost = this.calculateGranFormatoSustratoCost({
-            variant: candidate.variant,
-            consumedAreaM2: candidate.consumedAreaM2,
-            consumedLengthMl: largoConsumidoMl,
-            warnings,
+      const colorResultItems: Array<Record<string, unknown>> = [];
+      const colorRejected: Array<Record<string, unknown>> = [];
+
+      for (const machine of machines) {
+        if (maquinaOverrideId && machine.id !== maquinaOverrideId) {
+          continue;
+        }
+        const compatibleProfiles = machine.perfilesOperativos.filter((profile: any) => {
+          if (perfilOverrideId && profile.id !== perfilOverrideId) return false;
+          if (perfilIds.size > 0 && !perfilIds.has(profile.id)) return false;
+          return true;
+        });
+        const profilesToEvaluate = compatibleProfiles.length ? compatibleProfiles : [null];
+
+        for (const profile of profilesToEvaluate) {
+          // Read profile-level margin overrides (active only when marcaRegistro === 'si')
+          const profileDetail = ((profile as any)?.detalle ?? {}) as Record<string, unknown>;
+          const marcaRegistroVal = String(profileDetail?.marcaRegistro ?? 'no').toLowerCase().trim();
+          // Profile margin fields are stored in cm — convert to mm with ×10 (same as machine margins)
+          const toMmFromCm = (v: number | null) => (v == null ? null : v * 10);
+          const margenIzqOverride = marcaRegistroVal === 'si'
+            ? toMmFromCm(this.getGranFormatoNullableNumber(profileDetail?.margenIzquierdoPerf) ?? null)
+            : null;
+          const margenDerOverride = marcaRegistroVal === 'si'
+            ? toMmFromCm(this.getGranFormatoNullableNumber(profileDetail?.margenDerechoPerf) ?? null)
+            : null;
+          const margenSupOverride = marcaRegistroVal === 'si'
+            ? toMmFromCm(this.getGranFormatoNullableNumber(profileDetail?.margenSuperiorPerf) ?? null)
+            : null;
+          const margenInfOverride = marcaRegistroVal === 'si'
+            ? toMmFromCm(this.getGranFormatoNullableNumber(profileDetail?.margenInferiorPerf) ?? null)
+            : null;
+
+          const candidates = this.evaluateGranFormatoImposicionCandidates({
+            maquina: machine,
+            medidas: colorEntry.medidas,
+            config: {
+              permitirRotacion,
+              separacionHorizontalMm,
+              separacionVerticalMm,
+              margenLateralIzquierdoMmOverride: margenIzqOverride,
+              margenLateralDerechoMmOverride: margenDerOverride,
+              margenInicioMmOverride: margenSupOverride,
+              margenFinalMmOverride: margenInfOverride,
+              criterioOptimizacion: criterio,
+              panelizadoActivo: false,
+              panelizadoDireccion: GranFormatoPanelizadoDireccionDto.automatica,
+              panelizadoSolapeMm: null,
+              panelizadoAnchoMaxPanelMm: null,
+              panelizadoDistribucion: GranFormatoPanelizadoDistribucionDto.equilibrada,
+              panelizadoInterpretacionAnchoMaximo: GranFormatoPanelizadoInterpretacionAnchoMaximoDto.total,
+              panelizadoModo: GranFormatoPanelizadoModoDto.automatico,
+              panelizadoManualLayout: null,
+            },
+            variants: colorMaterialVariants,
           });
-          const usefulFactor =
-            candidate.consumedAreaM2 > 0 ? candidate.usefulAreaM2 / candidate.consumedAreaM2 : 0;
-          const usefulCost = this.roundProductNumber(substrateTotalCost * usefulFactor);
-          const wasteCost = this.roundProductNumber(substrateTotalCost - usefulCost);
-          const usefulLengthMl =
-            candidate.rollWidthMm > 0
-              ? this.roundProductNumber(candidate.usefulAreaM2 / (candidate.rollWidthMm / 1000))
-              : 0;
-          const wasteLengthMl = this.roundProductNumber(Math.max(0, largoConsumidoMl - usefulLengthMl));
 
-          const centrosCosto = proceso.operaciones.map((op, index) => {
-            const cantidadObjetivoSalida = this.resolveGranFormatoCantidadObjetivoSalida({
-              operacion: op,
-              totalPiezas,
-              areaUtilM2: candidate.usefulAreaM2,
-              largoConsumidoMl,
-              perimetroTotalMl,
+          for (const candidate of candidates) {
+            const warnings: string[] = [];
+            const largoConsumidoMl = this.roundProductNumber(candidate.consumedLengthMm / 1000);
+            const substrateTotalCost = this.calculateGranFormatoSustratoCost({
+              variant: candidate.variant,
+              consumedAreaM2: candidate.consumedAreaM2,
+              consumedLengthMl: largoConsumidoMl,
+              warnings,
             });
-            const productividad = evaluateProductividad({
-              modoProductividad: op.modoProductividad ?? ModoProductividadProceso.FIJA,
-              productividadBase: op.productividadBase,
-              reglaVelocidadJson: op.reglaVelocidadJson ?? null,
-              reglaMermaJson: op.reglaMermaJson ?? null,
-              runMin: op.runMin,
-              unidadTiempo: op.unidadTiempo,
-              mermaRunPct: op.mermaRunPct,
-              mermaSetup: op.mermaSetup,
-              cantidadObjetivoSalida,
-              contexto: {
-                cantidad: totalPiezas,
-                areaTotalM2: candidate.usefulAreaM2,
-                largoTotalMl: largoConsumidoMl,
-                perimetroTotalMl,
-              },
-            });
-            warnings.push(...productividad.warnings.map((item) => `Paso ${op.nombre}: ${item}`));
-            const minutos = this.roundProductNumber(
-              Number(op.setupMin ?? 0) +
-                Number(op.cleanupMin ?? 0) +
-                Number(op.tiempoFijoMin ?? 0) +
-                productividad.runMin,
-            );
-            const tarifa = op.centroCostoId ? tarifaByCentro.get(op.centroCostoId) ?? null : null;
-            const costo = tarifa ? this.roundProductNumber(Number(tarifa.mul(minutos / 60))) : 0;
-            return {
-              orden: index + 1,
-              codigo: op.codigo,
-              paso: op.nombre,
-              centroCostoId: op.centroCostoId ?? '',
-              centroCostoNombre: op.centroCosto?.nombre ?? '',
-              origen: 'Producto base',
-              minutos,
-              tarifaHora: tarifa ? Number(tarifa) : 0,
-              costo,
-              detalleTecnico: {
-                maquina: machine.nombre,
-                perfilOperativo: profile?.nombre ?? null,
+            const usefulFactor =
+              candidate.consumedAreaM2 > 0 ? candidate.usefulAreaM2 / candidate.consumedAreaM2 : 0;
+            const usefulCost = this.roundProductNumber(substrateTotalCost * usefulFactor);
+            const wasteCost = this.roundProductNumber(substrateTotalCost - usefulCost);
+            const usefulLengthMl =
+              candidate.rollWidthMm > 0
+                ? this.roundProductNumber(candidate.usefulAreaM2 / (candidate.rollWidthMm / 1000))
+                : 0;
+            const wasteLengthMl = this.roundProductNumber(Math.max(0, largoConsumidoMl - usefulLengthMl));
+
+            const centrosCosto = proceso.operaciones.map((op: any, index: number) => {
+              const cantidadObjetivoSalida = this.resolveGranFormatoCantidadObjetivoSalida({
+                operacion: op,
+                totalPiezas: colorTotalPiezas,
+                areaUtilM2: candidate.usefulAreaM2,
+                largoConsumidoMl,
+                perimetroTotalMl: colorPerimetroTotalMl,
+              });
+              const effectiveProductividadBase =
+                profile?.productivityValue !== null && profile?.productivityValue !== undefined
+                  ? new Prisma.Decimal(Number(profile.productivityValue))
+                  : op.productividadBase;
+              const productividad = evaluateProductividad({
+                modoProductividad: op.modoProductividad ?? ModoProductividadProceso.FIJA,
+                productividadBase: effectiveProductividadBase,
+                reglaVelocidadJson: op.reglaVelocidadJson ?? null,
+                reglaMermaJson: op.reglaMermaJson ?? null,
+                runMin: op.runMin,
+                unidadTiempo: op.unidadTiempo,
+                mermaRunPct: op.mermaRunPct,
+                mermaSetup: op.mermaSetup,
                 cantidadObjetivoSalida,
-              },
+                contexto: {
+                  cantidad: colorTotalPiezas,
+                  areaTotalM2: candidate.usefulAreaM2,
+                  largoTotalMl: largoConsumidoMl,
+                  perimetroTotalMl: colorPerimetroTotalMl,
+                },
+              });
+              warnings.push(...productividad.warnings.map((item: string) => `Paso ${op.nombre}: ${item}`));
+              const minutos = this.roundProductNumber(
+                Number(op.setupMin ?? 0) +
+                  Number(op.cleanupMin ?? 0) +
+                  Number(op.tiempoFijoMin ?? 0) +
+                  productividad.runMin,
+              );
+              const tarifa = op.centroCostoId ? tarifaByCentro.get(op.centroCostoId) ?? null : null;
+              const costo = tarifa ? this.roundProductNumber(Number(tarifa.mul(minutos / 60))) : 0;
+              return {
+                orden: index + 1,
+                codigo: op.codigo,
+                paso: op.nombre,
+                centroCostoId: op.centroCostoId ?? '',
+                centroCostoNombre: op.centroCosto?.nombre ?? '',
+                origen: 'Producto base',
+                minutos,
+                tarifaHora: tarifa ? Number(tarifa) : 0,
+                costo,
+                detalleTecnico: {
+                  maquina: machine.nombre,
+                  perfilOperativo: profile?.nombre ?? null,
+                  cantidadObjetivoSalida,
+                },
+              };
+            });
+
+            const totalCentrosCosto = this.roundProductNumber(
+              centrosCosto.reduce((acc: number, item: any) => acc + Number(item.costo ?? 0), 0),
+            );
+            const totalMateriales = this.roundProductNumber(usefulCost + wasteCost);
+            const totalTecnico = this.roundProductNumber(totalMateriales + totalCentrosCosto);
+            const candidateWithCosts: GranFormatoCostosPreviewCandidate = {
+              ...candidate,
+              substrateCost: substrateTotalCost,
+              inkCost: 0,
+              timeCost: totalCentrosCosto,
+              totalCost: totalTecnico,
             };
-          });
 
-          const totalCentrosCosto = this.roundProductNumber(
-            centrosCosto.reduce((acc, item) => acc + Number(item.costo ?? 0), 0),
-          );
-          const totalMateriales = this.roundProductNumber(usefulCost + wasteCost);
-          const totalTecnico = this.roundProductNumber(totalMateriales + totalCentrosCosto);
-          const candidateWithCosts: GranFormatoCostosPreviewCandidate = {
-            ...candidate,
-            substrateCost: substrateTotalCost,
-            inkCost: 0,
-            timeCost: totalCentrosCosto,
-            totalCost: totalTecnico,
-          };
-
-          resultItems.push({
-            maquinaId: machine.id,
-            maquinaNombre: machine.nombre,
-            perfilId: profile?.id ?? null,
-            perfilNombre: profile?.nombre ?? '',
-            warnings: Array.from(new Set(warnings)),
-            resumenTecnico: {
-              ...this.buildGranFormatoCostosCandidateResumen(candidateWithCosts),
-              cantidadTrabajos,
-              totalPiezas,
-              unidadComercial: 'metro_lineal',
-              largoConsumidoMl,
-            },
-            materiasPrimas: [
-              {
-                tipo: 'VINILO',
-                nombre: candidate.variant.materiaPrima.nombre,
-                sku: candidate.variant.sku,
-                variantChips: this.buildMateriaPrimaVariantDisplayChips(candidate.variant),
-                cantidad: usefulLengthMl,
-                costoUnitario: usefulLengthMl > 0 ? this.roundProductNumber(usefulCost / usefulLengthMl) : 0,
-                costo: usefulCost,
-                origen: 'Base',
-                unidad: 'metro_lineal',
+            colorResultItems.push({
+              maquinaId: machine.id,
+              maquinaNombre: machine.nombre,
+              perfilId: profile?.id ?? null,
+              perfilNombre: profile?.nombre ?? '',
+              colorId: colorEntry.id,
+              colorLabel: colorEntry.label,
+              warnings: Array.from(new Set(warnings)),
+              resumenTecnico: {
+                ...this.buildGranFormatoCostosCandidateResumen(candidateWithCosts),
+                cantidadTrabajos,
+                totalPiezas: colorTotalPiezas,
+                unidadComercial: 'metro_lineal',
+                largoConsumidoMl,
               },
-              {
-                tipo: 'VINILO',
-                nombre: `${candidate.variant.materiaPrima.nombre} · Desperdicio`,
-                sku: candidate.variant.sku,
-                variantChips: this.buildMateriaPrimaVariantDisplayChips(candidate.variant),
-                cantidad: wasteLengthMl,
-                costoUnitario: wasteLengthMl > 0 ? this.roundProductNumber(wasteCost / wasteLengthMl) : 0,
-                costo: wasteCost,
-                origen: 'Desperdicio',
-                unidad: 'metro_lineal',
+              materiasPrimas: [
+                {
+                  tipo: 'VINILO',
+                  nombre: candidate.variant.materiaPrima.nombre,
+                  sku: candidate.variant.sku,
+                  variantChips: this.buildMateriaPrimaVariantDisplayChips(candidate.variant),
+                  cantidad: usefulLengthMl,
+                  costoUnitario: usefulLengthMl > 0 ? this.roundProductNumber(usefulCost / usefulLengthMl) : 0,
+                  costo: usefulCost,
+                  origen: 'Base',
+                  unidad: 'metro_lineal',
+                  colorId: colorEntry.id,
+                  colorLabel: colorEntry.label,
+                },
+                {
+                  tipo: 'VINILO',
+                  nombre: `${candidate.variant.materiaPrima.nombre} · Desperdicio`,
+                  sku: candidate.variant.sku,
+                  variantChips: this.buildMateriaPrimaVariantDisplayChips(candidate.variant),
+                  cantidad: wasteLengthMl,
+                  costoUnitario: wasteLengthMl > 0 ? this.roundProductNumber(wasteCost / wasteLengthMl) : 0,
+                  costo: wasteCost,
+                  origen: 'Desperdicio',
+                  unidad: 'metro_lineal',
+                  colorId: colorEntry.id,
+                  colorLabel: colorEntry.label,
+                },
+              ],
+              centrosCosto,
+              totales: {
+                materiales: totalMateriales,
+                centrosCosto: totalCentrosCosto,
+                tecnico: totalTecnico,
               },
-            ],
-            centrosCosto,
-            totales: {
-              materiales: totalMateriales,
-              centrosCosto: totalCentrosCosto,
-              tecnico: totalTecnico,
-            },
-            nestingPreview: this.buildGranFormatoNestingPreview(candidateWithCosts),
-          });
+              nestingPreview: {
+                  ...this.buildGranFormatoNestingPreview(candidateWithCosts),
+                  separacionHorizontalCm: separacionHorizontalMm / 10,
+                  separacionVerticalCm: separacionVerticalMm / 10,
+                },
+            });
+          }
         }
       }
+
+      // Sort by criteria
+      colorResultItems.sort((left, right) => {
+        const lc = {
+          totalCost: Number(this.asObject(left.totales).tecnico ?? 0),
+          consumedLengthMm: Number(
+            this.asObject(left.resumenTecnico).consumedLengthMm ??
+              this.asObject(left.resumenTecnico).largoConsumidoMm ??
+              0,
+          ),
+          wasteAreaM2: Number(
+            this.asObject(left.resumenTecnico).wasteAreaM2 ??
+              this.asObject(left.resumenTecnico).areaDesperdicioM2 ??
+              0,
+          ),
+        };
+        const rc = {
+          totalCost: Number(this.asObject(right.totales).tecnico ?? 0),
+          consumedLengthMm: Number(
+            this.asObject(right.resumenTecnico).consumedLengthMm ??
+              this.asObject(right.resumenTecnico).largoConsumidoMm ??
+              0,
+          ),
+          wasteAreaM2: Number(
+            this.asObject(right.resumenTecnico).wasteAreaM2 ??
+              this.asObject(right.resumenTecnico).areaDesperdicioM2 ??
+              0,
+          ),
+        };
+        if (criterio === GranFormatoImposicionCriterioOptimizacionDto.menor_largo_consumido)
+          return lc.consumedLengthMm - rc.consumedLengthMm;
+        if (criterio === GranFormatoImposicionCriterioOptimizacionDto.menor_desperdicio)
+          return lc.wasteAreaM2 - rc.wasteAreaM2;
+        return (
+          lc.totalCost - rc.totalCost ||
+          lc.consumedLengthMm - rc.consumedLengthMm ||
+          lc.wasteAreaM2 - rc.wasteAreaM2
+        );
+      });
+
+      globalRejected.push(...colorRejected);
+      colorResults.push({
+        colorId: colorEntry.id,
+        colorLabel: colorEntry.label,
+        materialVarianteId: colorEntry.materialVarianteId,
+        items: colorResultItems,
+        winner: colorResultItems[0] ?? null,
+        warnings: colorResultItems[0] ? (colorResultItems[0].warnings as string[]) : [],
+      });
     }
 
-    resultItems.sort((left, right) => {
-      const leftCandidate = {
-        totalCost: Number(this.asObject(left.totales).tecnico ?? 0),
-        consumedLengthMm: Number(this.asObject(left.resumenTecnico).consumedLengthMm ?? this.asObject(left.resumenTecnico).largoConsumidoMm ?? 0),
-        wasteAreaM2: Number(this.asObject(left.resumenTecnico).wasteAreaM2 ?? this.asObject(left.resumenTecnico).areaDesperdicioM2 ?? 0),
-      };
-      const rightCandidate = {
-        totalCost: Number(this.asObject(right.totales).tecnico ?? 0),
-        consumedLengthMm: Number(this.asObject(right.resumenTecnico).consumedLengthMm ?? this.asObject(right.resumenTecnico).largoConsumidoMm ?? 0),
-        wasteAreaM2: Number(this.asObject(right.resumenTecnico).wasteAreaM2 ?? this.asObject(right.resumenTecnico).areaDesperdicioM2 ?? 0),
-      };
-      if (criterio === GranFormatoImposicionCriterioOptimizacionDto.menor_largo_consumido) {
-        return leftCandidate.consumedLengthMm - rightCandidate.consumedLengthMm;
-      }
-      if (criterio === GranFormatoImposicionCriterioOptimizacionDto.menor_desperdicio) {
-        return leftCandidate.wasteAreaM2 - rightCandidate.wasteAreaM2;
-      }
-      return (
-        leftCandidate.totalCost - rightCandidate.totalCost ||
-        leftCandidate.consumedLengthMm - rightCandidate.consumedLengthMm ||
-        leftCandidate.wasteAreaM2 - rightCandidate.wasteAreaM2
-      );
-    });
+    // Aggregate results from all colors' winners
+    const winners = colorResults
+      .map((cr) => cr.winner)
+      .filter((w): w is Record<string, unknown> => Boolean(w));
+    const aggregatedMateriales = this.roundProductNumber(
+      winners.reduce((acc, w) => acc + Number(this.asObject(w.totales).materiales ?? 0), 0),
+    );
+    const aggregatedCentrosCosto = this.roundProductNumber(
+      winners.reduce((acc, w) => acc + Number(this.asObject(w.totales).centrosCosto ?? 0), 0),
+    );
+    const aggregatedTecnico = this.roundProductNumber(aggregatedMateriales + aggregatedCentrosCosto);
 
     return {
       config: effectiveConfig,
       periodo,
-      items: resultItems,
-      rejected,
-      warnings: resultItems[0] ? (resultItems[0].warnings as string[]) : [],
+      colorResults,
+      items: colorResults[0]?.items ?? [],  // backward compat
+      rejected: globalRejected,
+      warnings: colorResults[0]?.warnings ?? [],
+      aggregated: {
+        totalMateriales: aggregatedMateriales,
+        totalCentrosCosto: aggregatedCentrosCosto,
+        totalTecnico: aggregatedTecnico,
+        centrosCosto: this.mergeVinylCutCentrosCosto(winners),
+        materiasPrimas: winners.flatMap((w) =>
+          Array.isArray(w.materiasPrimas) ? w.materiasPrimas : [],
+        ),
+      },
     };
   }
 

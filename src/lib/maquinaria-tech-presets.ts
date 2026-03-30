@@ -283,6 +283,71 @@ const LASER_PRESETS: MaquinariaTechnicalPreset[] = [
   ),
 ];
 
+function createPlotterCortePresets(
+  fabricante: string,
+  modelos: string[],
+  params: Record<string, number | string | boolean>,
+): MaquinariaTechnicalPreset[] {
+  return modelos.map((modelo) => ({
+    fabricante,
+    modelo,
+    parametrosTecnicos: { vacioSujecion: false, ...params },
+  }));
+}
+
+// anchoUtil en cm, velocidadCorte en mm/s
+const PLOTTER_DE_CORTE_PRESETS: MaquinariaTechnicalPreset[] = [
+  // Graphtec CE7000 — serie entry/mid professional
+  ...createPlotterCortePresets("Graphtec", ["CE7000-40"], { anchoUtil: 37.5, velocidadCorte: 1000 }),
+  ...createPlotterCortePresets("Graphtec", ["CE7000-60"], { anchoUtil: 58.4, velocidadCorte: 1000 }),
+  ...createPlotterCortePresets("Graphtec", ["CE7000-130"], { anchoUtil: 127, velocidadCorte: 1000 }),
+  ...createPlotterCortePresets("Graphtec", ["CE7000-160"], { anchoUtil: 157.5, velocidadCorte: 1000 }),
+  // Graphtec FC9000 — serie high-production
+  ...createPlotterCortePresets("Graphtec", ["FC9000-75"], { anchoUtil: 76.2, velocidadCorte: 1485 }),
+  ...createPlotterCortePresets("Graphtec", ["FC9000-140"], { anchoUtil: 137.2, velocidadCorte: 1485 }),
+  ...createPlotterCortePresets("Graphtec", ["FC9000-160"], { anchoUtil: 160, velocidadCorte: 1485 }),
+  // Roland VersaSTUDIO / CAMM-1 GR2
+  ...createPlotterCortePresets("Roland", ["VersaSTUDIO GS2-24"], { anchoUtil: 58.4, velocidadCorte: 850 }),
+  ...createPlotterCortePresets("Roland", ["CAMM-1 GR2-540"], { anchoUtil: 137.2, velocidadCorte: 1530 }),
+  ...createPlotterCortePresets("Roland", ["CAMM-1 GR2-640"], { anchoUtil: 162.5, velocidadCorte: 1530 }),
+  // Mimaki CG-AR
+  ...createPlotterCortePresets("Mimaki", ["CG-60AR"], { anchoUtil: 60.6, velocidadCorte: 1000 }),
+  ...createPlotterCortePresets("Mimaki", ["CG-100AR"], { anchoUtil: 107, velocidadCorte: 1000 }),
+  ...createPlotterCortePresets("Mimaki", ["CG-130AR"], { anchoUtil: 137, velocidadCorte: 1000 }),
+  // Summa D/T-Series
+  ...createPlotterCortePresets("Summa", ["SummaCut D60", "S2 D60"], { anchoUtil: 58.4, velocidadCorte: 1131 }),
+  ...createPlotterCortePresets("Summa", ["S2 D120"], { anchoUtil: 120, velocidadCorte: 1414 }),
+  ...createPlotterCortePresets("Summa", ["S2 D160"], { anchoUtil: 160, velocidadCorte: 1414 }),
+  ...createPlotterCortePresets("Summa", ["S2 T160"], { anchoUtil: 158, velocidadCorte: 1414 }),
+  // USCutter TITAN
+  ...createPlotterCortePresets("USCutter", ["TITAN 2 (28\")", "TITAN 3 ARMS (28\")"], { anchoUtil: 71.1, velocidadCorte: 940 }),
+  ...createPlotterCortePresets("USCutter", ["TITAN 2 (53\")", "TITAN 3 ARMS (53\")"], { anchoUtil: 134.6, velocidadCorte: 940 }),
+  ...createPlotterCortePresets("USCutter", ["TITAN 3 ARMS (68\")"], { anchoUtil: 172.7, velocidadCorte: 940 }),
+  // Mutoh ValueCut 2
+  ...createPlotterCortePresets("Mutoh", ["ValueCut 2 VC2-600"], { anchoUtil: 61, velocidadCorte: 1080 }),
+  ...createPlotterCortePresets("Mutoh", ["ValueCut 2 VC2-1300"], { anchoUtil: 130, velocidadCorte: 1080 }),
+  ...createPlotterCortePresets("Mutoh", ["ValueCut 2 VC2-1800"], { anchoUtil: 180, velocidadCorte: 1080 }),
+  // GCC Expert II
+  ...createPlotterCortePresets("GCC", ["Expert II 24"], { anchoUtil: 60, velocidadCorte: 705 }),
+  ...createPlotterCortePresets("GCC", ["Expert II 52 LX"], { anchoUtil: 132, velocidadCorte: 400 }),
+  // Skycut C Series (stepper, desktop/semi-pro)
+  ...createPlotterCortePresets("Skycut", ["C10"], { anchoUtil: 26, velocidadCorte: 600 }),
+  ...createPlotterCortePresets("Skycut", ["C16"], { anchoUtil: 39, velocidadCorte: 600 }),
+  ...createPlotterCortePresets("Skycut", ["C24"], { anchoUtil: 61, velocidadCorte: 600 }),
+  // Skycut D Series (doble cabezal, stepper)
+  ...createPlotterCortePresets("Skycut", ["D24"], { anchoUtil: 56, velocidadCorte: 600 }),
+  ...createPlotterCortePresets("Skycut", ["D48"], { anchoUtil: 119, velocidadCorte: 600 }),
+  ...createPlotterCortePresets("Skycut", ["D60"], { anchoUtil: 150, velocidadCorte: 600 }),
+  // Skycut V Series (alta fuerza, stepper)
+  ...createPlotterCortePresets("Skycut", ["V24"], { anchoUtil: 61, velocidadCorte: 600 }),
+  ...createPlotterCortePresets("Skycut", ["V48"], { anchoUtil: 124, velocidadCorte: 600 }),
+  ...createPlotterCortePresets("Skycut", ["V60"], { anchoUtil: 154, velocidadCorte: 600 }),
+  // Skycut VH Series (servo motor, alta velocidad — profesional)
+  ...createPlotterCortePresets("Skycut", ["VH24"], { anchoUtil: 61, velocidadCorte: 1200 }),
+  ...createPlotterCortePresets("Skycut", ["VH48"], { anchoUtil: 124, velocidadCorte: 1200 }),
+  ...createPlotterCortePresets("Skycut", ["VH60"], { anchoUtil: 154, velocidadCorte: 1200 }),
+];
+
 export function getTechnicalPresetForMachine(
   plantilla: PlantillaMaquinaria,
   fabricante?: string,
@@ -295,12 +360,19 @@ export function getTechnicalPresetForMachine(
     return null;
   }
 
-  if (plantilla !== "impresora_laser") {
+  const presetList =
+    plantilla === "impresora_laser"
+      ? LASER_PRESETS
+      : plantilla === "plotter_de_corte"
+        ? PLOTTER_DE_CORTE_PRESETS
+        : null;
+
+  if (!presetList) {
     return null;
   }
 
   return (
-    LASER_PRESETS.find(
+    presetList.find(
       (item) =>
         item.fabricante.trim().toLowerCase() === normalizedFabricante &&
         item.modelo.trim().toLowerCase() === normalizedModelo,

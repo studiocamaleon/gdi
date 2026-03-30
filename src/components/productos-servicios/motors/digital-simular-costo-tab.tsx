@@ -155,6 +155,18 @@ export function DigitalSimularCostoTab(props: ProductTabProps) {
       const values = getValoresOpcionesBase(props.selectedVariant!, dimension);
       if (values.length === 1) {
         next[dimension] = values[0];
+      } else if (values.length > 1) {
+        // Pre-select the variant's own base value so the user always has a default
+        const baseValue =
+          dimension === "caras"
+            ? props.selectedVariant!.caras
+            : props.selectedVariant!.tipoImpresion;
+        if (baseValue && (values as string[]).includes(baseValue)) {
+          next[dimension] = baseValue as ValorOpcionProductiva;
+        } else {
+          // Fallback to the first available value
+          next[dimension] = values[0];
+        }
       }
     });
     setCotizacionSeleccionesBase(next);

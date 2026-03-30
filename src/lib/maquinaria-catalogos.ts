@@ -74,11 +74,63 @@ const CATALOGO_IMPRESORA_LASER: CatalogoFabricanteModelos[] = [
   },
 ];
 
+const CATALOGO_PLOTTER_DE_CORTE: CatalogoFabricanteModelos[] = [
+  {
+    fabricante: "Graphtec",
+    modelos: [
+      "CE7000-40",
+      "CE7000-60",
+      "CE7000-130",
+      "CE7000-160",
+      "FC9000-75",
+      "FC9000-140",
+      "FC9000-160",
+    ],
+  },
+  {
+    fabricante: "Roland",
+    modelos: ["VersaSTUDIO GS2-24", "CAMM-1 GR2-540", "CAMM-1 GR2-640"],
+  },
+  {
+    fabricante: "Mimaki",
+    modelos: ["CG-60AR", "CG-100AR", "CG-130AR"],
+  },
+  {
+    fabricante: "Summa",
+    modelos: ["SummaCut D60", "S2 D60", "S2 D120", "S2 D160", "S2 T160"],
+  },
+  {
+    fabricante: "USCutter",
+    modelos: ["TITAN 2 (28\")", "TITAN 2 (53\")", "TITAN 3 ARMS (28\")", "TITAN 3 ARMS (53\")", "TITAN 3 ARMS (68\")"],
+  },
+  {
+    fabricante: "Mutoh",
+    modelos: ["ValueCut 2 VC2-600", "ValueCut 2 VC2-1300", "ValueCut 2 VC2-1800"],
+  },
+  {
+    fabricante: "GCC",
+    modelos: ["Expert II 24", "Expert II 52 LX"],
+  },
+  {
+    fabricante: "Skycut",
+    modelos: [
+      "C10", "C16", "C24",
+      "D24", "D48", "D60",
+      "V24", "V48", "V60",
+      "VH24", "VH48", "VH60",
+    ],
+  },
+];
+
 export function getCatalogoFabricantesPorPlantilla(
   plantilla: PlantillaMaquinaria,
 ): CatalogoFabricanteModelos[] {
   if (plantilla === "impresora_laser") {
     return CATALOGO_IMPRESORA_LASER;
+  }
+
+  if (plantilla === "plotter_de_corte") {
+    return CATALOGO_PLOTTER_DE_CORTE;
   }
 
   return [];

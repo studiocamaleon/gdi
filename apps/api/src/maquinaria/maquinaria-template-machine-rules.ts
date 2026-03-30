@@ -101,7 +101,7 @@ const RULES: Record<PlantillaMaquinariaDto, MachineTemplateRule> = {
     requiredMachineKeys: ['anchoUtil', 'largoUtil'],
   },
   [PlantillaMaquinariaDto.plotter_de_corte]: {
-    requiredMachineKeys: ['anchoUtil', 'largoUtil'],
+    requiredMachineKeys: ['anchoUtil'],
   },
 };
 

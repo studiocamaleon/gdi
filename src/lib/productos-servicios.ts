@@ -405,6 +405,35 @@ export type ViniloCorteImposicionMedida = {
   rotacionPermitida?: boolean;
 };
 
+export type VinylCutMedida = {
+  anchoMm: number;
+  altoMm: number;
+  cantidad: number;
+  rotacionPermitida?: boolean;
+};
+
+export type VinylCutColorEntry = {
+  id: string;
+  label: string;
+  materialVarianteId: string | null;
+  medidas: VinylCutMedida[];
+};
+
+export type VinylCutConfig = {
+  tipoPlantilla: 'vinilo_de_corte';
+  criterioSeleccionMaterial: 'menor_costo_total' | 'menor_largo_consumido' | 'menor_desperdicio';
+  plottersCompatibles: string[];
+  perfilesCompatibles: string[];
+  materialesCompatibles: string[];
+  materialBaseId: string | null;
+  maquinaDefaultId: string | null;
+  perfilDefaultId: string | null;
+  permitirRotacion: boolean;
+  separacionHorizontalMm: number;
+  separacionVerticalMm: number;
+  colores: VinylCutColorEntry[];
+};
+
 export type ViniloCorteConfig = {
   productoId: string;
   plottersCompatibles: string[];

@@ -170,7 +170,15 @@ const RULES = {
         requiredFieldKeys: ['nombre'],
     }),
     [upsert_maquina_dto_1.PlantillaMaquinariaDto.plotter_de_corte]: buildRule({
-        profileFieldKeys: ['materialObjetivo', 'herramienta'],
+        profileFieldKeys: [
+            'velocidadCortePerf',
+            'nivelComplejidad',
+            'marcaRegistro',
+            'margenIzquierdoPerf',
+            'margenDerechoPerf',
+            'margenSuperiorPerf',
+            'margenInferiorPerf',
+        ],
         requiredFieldKeys: ['nombre'],
     }),
 };

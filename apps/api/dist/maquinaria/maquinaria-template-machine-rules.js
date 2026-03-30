@@ -98,7 +98,7 @@ const RULES = {
         requiredMachineKeys: ['anchoUtil', 'largoUtil'],
     },
     [upsert_maquina_dto_1.PlantillaMaquinariaDto.plotter_de_corte]: {
-        requiredMachineKeys: ['anchoUtil', 'largoUtil'],
+        requiredMachineKeys: ['anchoUtil'],
     },
 };
 function hasValue(value) {
