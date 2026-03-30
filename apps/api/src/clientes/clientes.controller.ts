@@ -7,8 +7,10 @@ import {
   Param,
   Post,
   Put,
+  Query,
 } from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { UpsertClienteDto } from './dto/upsert-cliente.dto';
 import { ClientesService } from './clientes.service';
 import type { CurrentAuth } from '../auth/auth.types';
@@ -18,8 +20,11 @@ export class ClientesController {
   constructor(private readonly clientesService: ClientesService) {}
 
   @Get()
-  findAll(@CurrentSession() auth: CurrentAuth) {
-    return this.clientesService.findAll(auth);
+  findAll(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() pagination: PaginationDto,
+  ) {
+    return this.clientesService.findAll(auth, pagination);
   }
 
   @Get(':id')

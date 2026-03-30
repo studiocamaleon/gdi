@@ -7,8 +7,10 @@ import {
   Param,
   Post,
   Put,
+  Query,
 } from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { InvitarAccesoDto } from './dto/invitar-acceso.dto';
 import { EmpleadosService } from './empleados.service';
 import { UpsertEmpleadoDto } from './dto/upsert-empleado.dto';
@@ -19,8 +21,11 @@ export class EmpleadosController {
   constructor(private readonly empleadosService: EmpleadosService) {}
 
   @Get()
-  findAll(@CurrentSession() auth: CurrentAuth) {
-    return this.empleadosService.findAll(auth);
+  findAll(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() pagination: PaginationDto,
+  ) {
+    return this.empleadosService.findAll(auth, pagination);
   }
 
   @Get(':id')

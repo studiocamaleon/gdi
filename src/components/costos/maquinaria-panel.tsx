@@ -85,6 +85,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -1785,6 +1786,15 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
         return a.codigo.localeCompare(b.codigo, "es", { sensitivity: "base" });
       });
   }, [filterEstado, filterPlantilla, filterPlantaId, filterText, maquinas]);
+
+  const {
+    paged: pagedMaquinas,
+    page: maquinasPage,
+    total: maquinasTotal,
+    setPage: setMaquinasPage,
+    pageSize: maquinasPageSize,
+  } = usePagination(filteredMaquinas);
+
   const selectedConsumiblePerfil = React.useMemo(
     () => perfiles.find((perfil) => perfil.id === selectedConsumiblePerfilId) ?? null,
     [perfiles, selectedConsumiblePerfilId],
@@ -3651,7 +3661,7 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredMaquinas.map((maquina) => (
+                {pagedMaquinas.map((maquina) => (
                   <TableRow key={maquina.id}>
                     <TableCell className="font-medium">{maquina.codigo}</TableCell>
                     <TableCell>
@@ -3746,6 +3756,12 @@ export function MaquinariaPanel({ initialMaquinas, plantas, centrosCosto }: Maqu
                 ))}
               </TableBody>
             </Table>
+            <TablePagination
+              total={maquinasTotal}
+              page={maquinasPage}
+              pageSize={maquinasPageSize}
+              onPageChange={(p) => { setMaquinasPage(p); }}
+            />
           </CardContent>
         </Card>
       )}

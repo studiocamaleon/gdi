@@ -2,7 +2,8 @@ import { ApiError, apiRequest } from "@/lib/api";
 import { ProveedorDetalle, ProveedorPayload } from "@/lib/proveedores";
 
 export async function getProveedores() {
-  return apiRequest<ProveedorDetalle[]>("/proveedores");
+  const res = await apiRequest<{ data: ProveedorDetalle[] }>("/proveedores?limit=200");
+  return res.data;
 }
 
 export async function getProveedorById(id: string) {

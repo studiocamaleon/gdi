@@ -59,7 +59,8 @@ export type EvaluarProcesoCostoPayload = {
 };
 
 export async function getProcesos() {
-  return apiRequest<Proceso[]>('/procesos');
+  const res = await apiRequest<{ data: Proceso[] }>('/procesos?limit=200');
+  return res.data;
 }
 
 export async function getProceso(id: string) {
