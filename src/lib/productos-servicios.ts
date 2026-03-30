@@ -1,6 +1,6 @@
 export type TipoProductoServicio = 'producto' | 'servicio';
 export type EstadoProductoServicio = 'activo' | 'inactivo';
-export type MotorCategory = 'digital_sheet' | 'wide_format';
+export type MotorCategory = 'digital_sheet' | 'wide_format' | 'vinyl_cut';
 export type TipoVentaGranFormato = 'm2' | 'metro_lineal';
 export type UnidadComercialProducto = 'unidad' | 'm2' | 'metro_lineal';
 export const unidadComercialProductoItems: Array<{
@@ -61,6 +61,24 @@ export type ProductoImpuestoCatalogo = {
   updatedAt: string;
 };
 
+export type ProductoComisionCatalogo = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  porcentaje: number;
+  detalle: {
+    items: Array<{
+      nombre: string;
+      tipo: ProductoPrecioComisionTipo;
+      porcentaje: number;
+      activo: boolean;
+    }>;
+  };
+  activo: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ProductoPrecioImpuestoItem = {
   nombre: string;
   porcentaje: number;
@@ -84,6 +102,8 @@ export type ProductoPrecioComisionItem = {
 };
 
 export type ProductoPrecioComisionesConfig = {
+  esquemaId: string | null;
+  esquemaNombre: string;
   items: ProductoPrecioComisionItem[];
   porcentajeTotal: number;
 };
@@ -375,6 +395,22 @@ export type GranFormatoConfig = {
   materialBaseId: string | null;
   materialesCompatibles: string[];
   imposicion: GranFormatoImposicionConfig;
+  updatedAt: string | null;
+};
+
+export type ViniloCorteImposicionMedida = {
+  anchoMm: number | null;
+  altoMm: number | null;
+  cantidad: number;
+  rotacionPermitida?: boolean;
+};
+
+export type ViniloCorteConfig = {
+  productoId: string;
+  plottersCompatibles: string[];
+  perfilesCompatibles: string[];
+  materialBaseId: string | null;
+  materialesCompatibles: string[];
   updatedAt: string | null;
 };
 
@@ -890,6 +926,62 @@ export type GranFormatoCostosNestingPreview = {
   pieces: GranFormatoCostosNestingPiece[];
 };
 
+export type GranFormatoCostosGrupoTrabajo = {
+  grupoId: string;
+  corridaId?: string | null;
+  variantId: string;
+  varianteNombre: string;
+  varianteChips: Array<{
+    label: string;
+    value: string;
+  }>;
+  panelizado: boolean;
+  panelAxis: "vertical" | "horizontal" | null;
+  panelCount: number;
+  piecesCount: number;
+  orientacion: "normal" | "rotada" | "mixta";
+  anchoRolloMm: number;
+  anchoImprimibleMm: number;
+  largoConsumidoMm: number;
+  areaUtilM2: number;
+  areaConsumidaM2: number;
+  areaDesperdicioM2: number;
+  desperdicioPct: number;
+  costoSustrato: number;
+  costoTinta: number;
+  costoTiempo: number;
+  costoTotal: number;
+  materiasPrimas?: GranFormatoCostosMaterialItem[];
+  centrosCosto?: GranFormatoCostosCentroItem[];
+  nestingPreview: GranFormatoCostosNestingPreview | null;
+};
+
+export type GranFormatoCostosCorridaTrabajo = {
+  corridaId: string;
+  variantId: string;
+  varianteNombre: string;
+  varianteChips: Array<{
+    label: string;
+    value: string;
+  }>;
+  piecesCount: number;
+  groupCount: number;
+  gruposCompletos: number;
+  gruposPanelizados: number;
+  anchoRolloMm: number;
+  anchoImprimibleMm: number;
+  largoConsumidoMm: number;
+  areaUtilM2: number;
+  areaConsumidaM2: number;
+  areaDesperdicioM2: number;
+  desperdicioPct: number;
+  costoSustrato: number;
+  costoTinta: number;
+  costoTiempo: number;
+  costoTotal: number;
+  nestingPreview: GranFormatoCostosNestingPreview | null;
+};
+
 export type GranFormatoCostosResumenTecnico = {
   varianteId: string;
   varianteNombre: string;
@@ -954,6 +1046,7 @@ export type GranFormatoCostosResponse = {
   productoId: string;
   snapshotId?: string;
   createdAt?: string;
+  simulacionHibrida?: boolean;
   cantidadTotal: number;
   periodo: string;
   tecnologia: string;
@@ -983,6 +1076,8 @@ export type GranFormatoCostosResponse = {
   perfilNombre: string;
   warnings: string[];
   resumenTecnico: GranFormatoCostosResumenTecnico;
+  gruposTrabajo?: GranFormatoCostosGrupoTrabajo[];
+  corridasTrabajo?: GranFormatoCostosCorridaTrabajo[];
   materiasPrimas: GranFormatoCostosMaterialItem[];
   centrosCosto: GranFormatoCostosCentroItem[];
   totales: {

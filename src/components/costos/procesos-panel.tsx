@@ -90,6 +90,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -945,6 +946,14 @@ export function ProcesosPanel({
       );
     });
   }, [procesos, searchTerm, showInactiveRutas]);
+
+  const {
+    paged: pagedProcesos,
+    page: procesosPage,
+    total: procesosTotal,
+    setPage: setProcesosPage,
+    pageSize: procesosPageSize,
+  } = usePagination(procesosFiltrados);
 
   const resumen = React.useMemo(() => {
     const activos = procesos.filter((item) => item.activo).length;
@@ -2086,7 +2095,7 @@ export function ProcesosPanel({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {procesosFiltrados.map((proceso) => (
+                  {pagedProcesos.map((proceso) => (
                     <TableRow key={proceso.id}>
                       <TableCell className="font-medium">{proceso.codigo}</TableCell>
                       <TableCell>{proceso.nombre}</TableCell>
@@ -2126,6 +2135,12 @@ export function ProcesosPanel({
                   ))}
                 </TableBody>
               </Table>
+              <TablePagination
+                total={procesosTotal}
+                page={procesosPage}
+                pageSize={procesosPageSize}
+                onPageChange={(p) => { setProcesosPage(p); }}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -3184,7 +3199,7 @@ export function ProcesosPanel({
                                 <TableCell>{operacion.runMin.toFixed(2)}</TableCell>
                                 <TableCell>
                                   {operacion.productividadAplicada !== null
-                                    ? operacion.productividadAplicada.toFixed(4)
+                                    ? operacion.productividadAplicada.toFixed(2)
                                     : "-"}
                                 </TableCell>
                                 <TableCell>

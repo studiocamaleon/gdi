@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
-import { AssignProductoVariantesRutaMasivaDto, AssignProductoAdicionalDto, AssignProductoMotorDto, AssignVarianteRutaDto, DimensionOpcionProductivaDto, CarasProductoVarianteDto, ReglaCostoAdicionalEfectoDto, MetodoCostoProductoAdicionalDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, TipoProductoAdicionalEfectoDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, TipoConsumoAdicionalMaterialDto, TipoProductoAdicionalDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, UpsertProductoAdicionalDto, UpsertProductoChecklistDto, PreviewGranFormatoCostosDto, PreviewImposicionProductoVarianteDto, MetodoCalculoPrecioProductoDto, ReglaCostoChecklistDto, TipoChecklistPreguntaDto, TipoChecklistAccionReglaDto, GranFormatoImposicionCriterioOptimizacionDto, GranFormatoPanelizadoInterpretacionAnchoMaximoDto, GranFormatoPanelizadoModoDto, GranFormatoPanelizadoDireccionDto, GranFormatoPanelizadoDistribucionDto, UpdateProductoPrecioDto, UpdateProductoPrecioEspecialClientesDto, UpdateGranFormatoConfigDto, UpdateGranFormatoChecklistDto, UpdateGranFormatoRutaBaseDto, UpdateProductoRutaPolicyDto, EstadoProductoServicioDto, TipoImpresionProductoVarianteDto, TipoProductoServicioDto, ValorOpcionProductivaDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, CreateGranFormatoVarianteDto, UpdateGranFormatoVarianteDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoImpuestoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
+import { AssignProductoVariantesRutaMasivaDto, AssignProductoAdicionalDto, AssignProductoMotorDto, AssignVarianteRutaDto, DimensionOpcionProductivaDto, CarasProductoVarianteDto, ReglaCostoAdicionalEfectoDto, MetodoCostoProductoAdicionalDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, TipoProductoAdicionalEfectoDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, TipoConsumoAdicionalMaterialDto, TipoProductoAdicionalDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, UpsertProductoAdicionalDto, UpsertProductoChecklistDto, PreviewGranFormatoCostosDto, PreviewImposicionProductoVarianteDto, MetodoCalculoPrecioProductoDto, ReglaCostoChecklistDto, TipoChecklistPreguntaDto, TipoChecklistAccionReglaDto, GranFormatoImposicionCriterioOptimizacionDto, GranFormatoPanelizadoInterpretacionAnchoMaximoDto, GranFormatoPanelizadoModoDto, GranFormatoPanelizadoDireccionDto, GranFormatoPanelizadoDistribucionDto, UpdateProductoPrecioDto, UpdateProductoPrecioEspecialClientesDto, UpdateGranFormatoConfigDto, UpdateGranFormatoChecklistDto, UpdateGranFormatoRutaBaseDto, UpdateProductoRutaPolicyDto, EstadoProductoServicioDto, TipoImpresionProductoVarianteDto, TipoProductoServicioDto, ValorOpcionProductivaDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, CreateGranFormatoVarianteDto, UpdateGranFormatoVarianteDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoComisionDto, UpsertProductoImpuestoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
 import type { ProductMotorDefinition } from './motors/product-motor.contract';
 type ServicioPricingNivel = {
     id: string;
@@ -31,6 +31,8 @@ type ProductoPrecioConfig = {
         porcentajeTotal: number;
     };
     comisiones: {
+        esquemaId: string | null;
+        esquemaNombre: string;
         items: Array<{
             id: string;
             nombre: string;
@@ -86,6 +88,7 @@ export declare class ProductosServiciosService {
     private static readonly SUBFAMILIA_BASE_CODIGO_LEGACY;
     private static readonly DIGITAL_SHEET_MOTOR_DEFINITION;
     private static readonly WIDE_FORMAT_MOTOR_DEFINITION;
+    private static readonly VINYL_CUT_MOTOR_DEFINITION;
     private static readonly DEFAULT_A4_AREA_M2;
     private static readonly TERMINACION_PLANTILLAS_SOPORTADAS;
     private static readonly WIDE_FORMAT_MACHINE_TEMPLATES;
@@ -108,18 +111,7 @@ export declare class ProductosServiciosService {
         schema: Record<string, unknown>;
     }[];
     getDigitalMotorDefinition(): {
-        schema: {
-            tipoCorte: string;
-            demasiaCorteMm: number;
-            lineaCorteMm: number;
-            tamanoPliegoImpresion: {
-                codigo: string;
-                nombre: string;
-                anchoMm: number;
-                altoMm: number;
-            };
-            mermaAdicionalPct: number;
-        };
+        schema: Record<string, unknown>;
         code: string;
         version: number;
         label: string;
@@ -128,6 +120,7 @@ export declare class ProductosServiciosService {
         exposedInCatalog: boolean;
     };
     getWideFormatMotorDefinition(): ProductMotorDefinition;
+    getVinylCutMotorDefinition(): ProductMotorDefinition;
     findAdicionalesCatalogo(auth: CurrentAuth): Promise<{
         id: string;
         codigo: string;
@@ -386,6 +379,24 @@ export declare class ProductosServiciosService {
         createdAt: string;
         updatedAt: string;
     }[]>;
+    findComisiones(auth: CurrentAuth): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        porcentaje: number;
+        detalle: {
+            items: {
+                id: string;
+                nombre: string;
+                tipo: "financiera" | "vendedor";
+                porcentaje: number;
+                activo: boolean;
+            }[];
+        };
+        activo: boolean;
+        createdAt: string;
+        updatedAt: string;
+    }[]>;
     createImpuesto(auth: CurrentAuth, payload: UpsertProductoImpuestoDto): Promise<{
         id: string;
         codigo: string;
@@ -410,6 +421,42 @@ export declare class ProductosServiciosService {
             items: {
                 nombre: string;
                 porcentaje: number;
+            }[];
+        };
+        activo: boolean;
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    createComision(auth: CurrentAuth, payload: UpsertProductoComisionDto): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        porcentaje: number;
+        detalle: {
+            items: {
+                id: string;
+                nombre: string;
+                tipo: "financiera" | "vendedor";
+                porcentaje: number;
+                activo: boolean;
+            }[];
+        };
+        activo: boolean;
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    updateComision(auth: CurrentAuth, id: string, payload: UpsertProductoComisionDto): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        porcentaje: number;
+        detalle: {
+            items: {
+                id: string;
+                nombre: string;
+                tipo: "financiera" | "vendedor";
+                porcentaje: number;
+                activo: boolean;
             }[];
         };
         activo: boolean;
@@ -760,18 +807,7 @@ export declare class ProductosServiciosService {
         productoId: string;
         motorCodigo: string;
         motorVersion: number;
-        parametros: string | number | boolean | Prisma.JsonObject | Prisma.JsonArray | {
-            tipoCorte: string;
-            demasiaCorteMm: number;
-            lineaCorteMm: number;
-            tamanoPliegoImpresion: {
-                codigo: string;
-                nombre: string;
-                anchoMm: number;
-                altoMm: number;
-            };
-            mermaAdicionalPct: number;
-        };
+        parametros: string | number | boolean | Record<string, unknown> | Prisma.JsonArray;
         versionConfig: number;
         activo: boolean;
         updatedAt: string | null;
@@ -790,12 +826,30 @@ export declare class ProductosServiciosService {
         productoId: string;
         motorCodigo: string;
         motorVersion: number;
-        parametros: string | number | boolean | Prisma.JsonObject | Prisma.JsonArray;
+        parametros: string | number | boolean | Record<string, unknown> | Prisma.JsonArray;
         versionConfig: number;
         activo: boolean;
         updatedAt: string | null;
     }>;
     upsertWideFormatProductMotorConfig(auth: CurrentAuth, productoId: string, payload: UpsertProductoMotorConfigDto): Promise<{
+        productoId: string;
+        motorCodigo: string;
+        motorVersion: number;
+        parametros: Prisma.JsonValue;
+        versionConfig: number;
+        activo: boolean;
+        updatedAt: string;
+    }>;
+    getVinylCutProductMotorConfig(auth: CurrentAuth, productoId: string): Promise<{
+        productoId: string;
+        motorCodigo: string;
+        motorVersion: number;
+        parametros: string | number | boolean | Record<string, unknown> | Prisma.JsonArray;
+        versionConfig: number;
+        activo: boolean;
+        updatedAt: string | null;
+    }>;
+    upsertVinylCutProductMotorConfig(auth: CurrentAuth, productoId: string, payload: UpsertProductoMotorConfigDto): Promise<{
         productoId: string;
         motorCodigo: string;
         motorVersion: number;
@@ -1277,6 +1331,7 @@ export declare class ProductosServiciosService {
         cantidadTotal: number;
         periodo: string;
         tecnologia: string;
+        simulacionHibrida: boolean;
         medidasOriginales: {
             anchoMm: number;
             altoMm: number;
@@ -1299,91 +1354,17 @@ export declare class ProductosServiciosService {
         perfilId: any;
         perfilNombre: any;
         warnings: string[];
-        resumenTecnico: {
-            varianteId: any;
-            varianteNombre: any;
-            varianteChips: {
-                label: string;
-                value: string;
-            }[];
-            anchoRolloMm: number;
-            anchoImprimibleMm: number;
-            orientacion: GranFormatoNestingOrientation;
-            panelizado: boolean;
-            panelAxis: "vertical" | "horizontal" | null;
-            panelCount: number;
-            panelOverlapMm: number | null;
-            panelMaxWidthMm: number | null;
-            panelDistribution: "equilibrada" | "libre" | null;
-            panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "manual" | "automatico" | null;
-            piezasPorFila: number;
-            filas: number;
-            largoConsumidoMm: number;
-            areaUtilM2: number;
-            areaConsumidaM2: number;
-            areaDesperdicioM2: number;
-            desperdicioPct: number;
-            costoSustrato: number;
-            costoTinta: number;
-            costoTiempo: number;
-            costoTotal: number;
-        };
+        resumenTecnico: Record<string, unknown>;
+        gruposTrabajo: Record<string, unknown>[] | undefined;
+        corridasTrabajo: Record<string, unknown>[] | undefined;
         materiasPrimas: Record<string, unknown>[];
-        centrosCosto: {
-            orden: number;
-            codigo: string;
-            paso: string;
-            centroCostoId: string;
-            centroCostoNombre: string;
-            origen: string;
-            minutos: number;
-            tarifaHora: number;
-            costo: number;
-            detalleTecnico: Record<string, unknown> | null;
-        }[];
+        centrosCosto: Record<string, unknown>[];
         totales: {
             materiales: number;
             centrosCosto: number;
             tecnico: number;
         };
-        nestingPreview: {
-            rollWidth: number;
-            rollLength: number;
-            marginLeft: number;
-            marginRight: number;
-            marginStart: number;
-            marginEnd: number;
-            panelizado: boolean;
-            panelAxis: "vertical" | "horizontal" | null;
-            panelCount: number;
-            panelOverlap: number | null;
-            panelMaxWidth: number | null;
-            panelDistribution: "equilibrada" | "libre" | null;
-            panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "manual" | "automatico" | null;
-            pieces: {
-                id: string;
-                w: number;
-                h: number;
-                originalW: number;
-                originalH: number;
-                usefulW: number;
-                usefulH: number;
-                cx: number;
-                cy: number;
-                color: string;
-                label: string;
-                textColor: string;
-                rotated: boolean;
-                panelIndex: number | null;
-                panelCount: number | null;
-                panelAxis: "vertical" | "horizontal" | null;
-                sourcePieceId: string | null;
-                overlapStart: number;
-                overlapEnd: number;
-            }[];
-        };
+        nestingPreview: Record<string, unknown> | null;
     } | {
         candidatos: {
             variantId: any;
@@ -1439,6 +1420,7 @@ export declare class ProductosServiciosService {
         cantidadTotal: number;
         periodo: string;
         tecnologia: string;
+        simulacionHibrida: boolean;
         medidasOriginales: {
             anchoMm: number;
             altoMm: number;
@@ -1461,91 +1443,17 @@ export declare class ProductosServiciosService {
         perfilId: any;
         perfilNombre: any;
         warnings: string[];
-        resumenTecnico: {
-            varianteId: any;
-            varianteNombre: any;
-            varianteChips: {
-                label: string;
-                value: string;
-            }[];
-            anchoRolloMm: number;
-            anchoImprimibleMm: number;
-            orientacion: GranFormatoNestingOrientation;
-            panelizado: boolean;
-            panelAxis: "vertical" | "horizontal" | null;
-            panelCount: number;
-            panelOverlapMm: number | null;
-            panelMaxWidthMm: number | null;
-            panelDistribution: "equilibrada" | "libre" | null;
-            panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "manual" | "automatico" | null;
-            piezasPorFila: number;
-            filas: number;
-            largoConsumidoMm: number;
-            areaUtilM2: number;
-            areaConsumidaM2: number;
-            areaDesperdicioM2: number;
-            desperdicioPct: number;
-            costoSustrato: number;
-            costoTinta: number;
-            costoTiempo: number;
-            costoTotal: number;
-        };
+        resumenTecnico: Record<string, unknown>;
+        gruposTrabajo: Record<string, unknown>[] | undefined;
+        corridasTrabajo: Record<string, unknown>[] | undefined;
         materiasPrimas: Record<string, unknown>[];
-        centrosCosto: {
-            orden: number;
-            codigo: string;
-            paso: string;
-            centroCostoId: string;
-            centroCostoNombre: string;
-            origen: string;
-            minutos: number;
-            tarifaHora: number;
-            costo: number;
-            detalleTecnico: Record<string, unknown> | null;
-        }[];
+        centrosCosto: Record<string, unknown>[];
         totales: {
             materiales: number;
             centrosCosto: number;
             tecnico: number;
         };
-        nestingPreview: {
-            rollWidth: number;
-            rollLength: number;
-            marginLeft: number;
-            marginRight: number;
-            marginStart: number;
-            marginEnd: number;
-            panelizado: boolean;
-            panelAxis: "vertical" | "horizontal" | null;
-            panelCount: number;
-            panelOverlap: number | null;
-            panelMaxWidth: number | null;
-            panelDistribution: "equilibrada" | "libre" | null;
-            panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "manual" | "automatico" | null;
-            pieces: {
-                id: string;
-                w: number;
-                h: number;
-                originalW: number;
-                originalH: number;
-                usefulW: number;
-                usefulH: number;
-                cx: number;
-                cy: number;
-                color: string;
-                label: string;
-                textColor: string;
-                rotated: boolean;
-                panelIndex: number | null;
-                panelCount: number | null;
-                panelAxis: "vertical" | "horizontal" | null;
-                sourcePieceId: string | null;
-                overlapStart: number;
-                overlapEnd: number;
-            }[];
-        };
+        nestingPreview: Record<string, unknown> | null;
     }>;
     findGranFormatoVariantes(auth: CurrentAuth, productoId: string): Promise<{
         id: string;
@@ -2336,19 +2244,65 @@ export declare class ProductosServiciosService {
                 addonId: string | null;
             }[];
             config: {
-                tipoCorte: string;
-                demasiaCorteMm: number;
-                lineaCorteMm: number;
-                tamanoPliegoImpresion: {
-                    codigo: string;
-                    nombre: string;
-                    anchoMm: number;
-                    altoMm: number;
-                };
-                mermaAdicionalPct: number;
+                [x: string]: unknown;
             };
             configVersionBase: number | null;
             configVersionOverride: number | null;
+        };
+        snapshotId: string;
+    }>;
+    quoteVinylCutVariant(auth: CurrentAuth, varianteId: string, payload: CotizarProductoVarianteDto): Promise<{
+        createdAt: string;
+        varianteId: string;
+        productoServicioId: string;
+        productoNombre: string;
+        varianteNombre: string;
+        motorCodigo: string;
+        motorVersion: number;
+        periodo: string;
+        cantidad: number;
+        piezasPorPliego: number;
+        pliegos: number;
+        warnings: string[];
+        bloques: {
+            procesos: {
+                orden: any;
+                codigo: any;
+                nombre: any;
+                centroCostoId: any;
+                centroCostoNombre: any;
+                origen: any;
+                addonId: null;
+                detalleTecnico: any;
+                setupMin: number;
+                runMin: number;
+                cleanupMin: number;
+                tiempoFijoMin: number;
+                totalMin: number;
+                tarifaHora: number;
+                costo: number;
+            }[];
+            materiales: any[];
+        };
+        subtotales: {
+            procesos: number;
+            papel: number;
+            toner: number;
+            desgaste: number;
+            consumiblesTerminacion: number;
+            adicionalesMateriales: number;
+            adicionalesCostEffects: number;
+        };
+        total: number;
+        unitario: number;
+        trazabilidad: {
+            config: {
+                [x: string]: unknown;
+            };
+            configVersionBase: number | null;
+            configVersionOverride: number | null;
+            resumenTecnico: Record<string, unknown>;
+            nestingPreview: {} | null;
         };
         snapshotId: string;
     }>;
@@ -2405,16 +2359,7 @@ export declare class ProductosServiciosService {
             orientacion: string;
         };
         config: {
-            tipoCorte: string;
-            demasiaCorteMm: number;
-            lineaCorteMm: number;
-            tamanoPliegoImpresion: {
-                codigo: string;
-                nombre: string;
-                anchoMm: number;
-                altoMm: number;
-            };
-            mermaAdicionalPct: number;
+            [x: string]: unknown;
         };
     }>;
     getVarianteCotizaciones(auth: CurrentAuth, varianteId: string): Promise<{
@@ -2429,6 +2374,20 @@ export declare class ProductosServiciosService {
         unitario: number;
         createdAt: string;
     }[]>;
+    previewVinylCutVariant(auth: CurrentAuth, varianteId: string, payload: PreviewImposicionProductoVarianteDto): Promise<{
+        config: Record<string, unknown>;
+        items: Array<Record<string, unknown>>;
+        rejected: Array<Record<string, unknown>>;
+        warnings: string[];
+        periodo?: undefined;
+    } | {
+        config: Record<string, unknown>;
+        periodo: string;
+        items: Record<string, unknown>[];
+        rejected: Record<string, unknown>[];
+        warnings: string[];
+    }>;
+    private getVarianteCotizacionesBase;
     getProductoCotizaciones(auth: CurrentAuth, productoId: string): Promise<{
         id: string;
         cantidad: number;
@@ -2458,6 +2417,7 @@ export declare class ProductosServiciosService {
     private findFamiliaOrThrow;
     private findSubfamiliaOrThrow;
     private findImpuestoOrThrow;
+    private findComisionOrThrow;
     private findProductoOrThrow;
     private findVarianteOrThrow;
     private findPapelVarianteOrThrow;
@@ -2499,6 +2459,7 @@ export declare class ProductosServiciosService {
     private buildGranFormatoRutaBaseResponse;
     private toAdicionalCatalogoResponse;
     private toImpuestoResponse;
+    private toComisionResponse;
     private toFamiliaResponse;
     private toSubfamiliaResponse;
     private toProductoResponseBase;
@@ -2521,10 +2482,12 @@ export declare class ProductosServiciosService {
     private getProductoPrecioEspecialClientes;
     private normalizeProductoPrecioImpuestos;
     private normalizeProductoPrecioComisiones;
+    private resolveProductoPrecioComisiones;
     private normalizeProductoPrecioEspecialClienteStored;
     private resolveProductoPrecioEspecialClientes;
     private resolveProductoPrecioImpuestos;
     private parseImpuestoDetalle;
+    private parseComisionDetalle;
     private normalizeMetodoCalculoPrecioProducto;
     private normalizeUnidadComercialProductoValue;
     private normalizeProductoPrecioDetalle;
@@ -2543,9 +2506,13 @@ export declare class ProductosServiciosService {
     private generateAdicionalCodigo;
     private ensureCatalogoInicialImprentaDigital;
     private ensureCatalogoInicialImpuestos;
+    private ensureCatalogoInicialComisiones;
     private resolveMotorOrThrow;
     private resolveProductMotorModule;
     private getDefaultMotorConfig;
+    private getDefaultWideFormatMotorConfig;
+    private getDefaultVinylCutMotorConfig;
+    private resolveDefaultMotorConfig;
     private mergeMotorConfig;
     private getEffectiveMotorConfig;
     private resolveRutaEfectivaId;
@@ -2565,6 +2532,8 @@ export declare class ProductosServiciosService {
     private calculateLaminadoraFilmConsumables;
     private asObject;
     private decimalToNumber;
+    private roundProductNumber;
+    private normalizeProductNumericPrecision;
     private toCanonicalUnitCode;
     private resolveMateriaPrimaVariantUnitCost;
     private enumToApiValue;
@@ -2591,6 +2560,7 @@ export declare class ProductosServiciosService {
     private getChecklistAtributoTecnicoValor;
     private toPrismaUnidadProceso;
     private calculateMachineConsumables;
+    private shouldApplyCarasFactorToDigitalLaserConsumables;
     private normalizeColor;
     private validateGranFormatoVarianteRelations;
     private validateGranFormatoConfigPayload;
@@ -2610,10 +2580,19 @@ export declare class ProductosServiciosService {
     private buildGranFormatoManualPieces;
     private evaluateGranFormatoMixedShelfLayout;
     private buildGranFormatoNestingPreview;
+    private expandGranFormatoMeasuresToSinglePieces;
+    private buildGranFormatoHybridGroupKey;
+    private buildGranFormatoHybridCandidates;
+    private buildGranFormatoPreparedPiecesFromCandidatePlacements;
+    private evaluateGranFormatoPreparedShelfLayout;
+    private buildGranFormatoHybridPhysicalRuns;
     private getGranFormatoCandidateAveragePanelUsefulSpanMm;
     private compareGranFormatoPreviewCandidates;
     private getGranFormatoCandidateResumenAveragePanelUsefulSpanMm;
     private buildGranFormatoCostosCandidateResumen;
+    private normalizeVinylCutMeasures;
+    private buildVinylCutMaterialsCompatibilitySet;
+    private buildVinylCutSimulation;
     private resolveGranFormatoCantidadObjetivoSalida;
     private calculateGranFormatoSustratoCost;
     private calculateGranFormatoInkConsumables;

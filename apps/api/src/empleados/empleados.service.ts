@@ -13,6 +13,7 @@ import {
 } from '@prisma/client';
 import { AuthService } from '../auth/auth.service';
 import { CurrentAuth } from '../auth/auth.types';
+import { PaginationDto, paginatedResponse } from '../common/dto/pagination.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmpleadoComisionDto, TipoComisionDto } from './dto/comision.dto';
 import { EmpleadoDireccionDto, TipoDireccionDto } from './dto/direccion.dto';
@@ -36,34 +37,39 @@ export class EmpleadosService {
     private readonly authService: AuthService,
   ) {}
 
-  async findAll(auth: CurrentAuth) {
-    const empleados = await this.prisma.empleado.findMany({
-      where: {
-        tenantId: auth.tenantId,
-      },
-      include: {
-        direcciones: {
-          orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
-        },
-        comisiones: {
-          orderBy: { createdAt: 'asc' },
-        },
-        user: {
-          include: {
-            memberships: {
-              where: {
-                tenantId: auth.tenantId,
+  async findAll(auth: CurrentAuth, pagination: PaginationDto) {
+    const where = { tenantId: auth.tenantId };
+
+    const [empleados, total] = await this.prisma.$transaction([
+      this.prisma.empleado.findMany({
+        where,
+        include: {
+          direcciones: {
+            orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
+          },
+          comisiones: {
+            orderBy: { createdAt: 'asc' },
+          },
+          user: {
+            include: {
+              memberships: {
+                where: { tenantId: auth.tenantId },
               },
             },
           },
         },
-      },
-      orderBy: {
-        nombreCompleto: 'asc',
-      },
-    });
+        orderBy: { nombreCompleto: 'asc' },
+        skip: pagination.skip,
+        take: pagination.limit,
+      }),
+      this.prisma.empleado.count({ where }),
+    ]);
 
-    return empleados.map((empleado) => this.toResponse(empleado));
+    return paginatedResponse(
+      empleados.map((empleado) => this.toResponse(empleado)),
+      total,
+      pagination,
+    );
   }
 
   async findOne(auth: CurrentAuth, id: string) {

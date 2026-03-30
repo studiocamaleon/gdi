@@ -526,6 +526,7 @@ model Tenant {
   empleadoComisions                      EmpleadoComision[]
   familiasProducto                       FamiliaProducto[]
   productosImpuestosCatalogo             ProductoImpuestoCatalogo[]
+  productosComisionesCatalogo            ProductoComisionCatalogo[]
   subfamiliasProducto                    SubfamiliaProducto[]
   productosServicio                      ProductoServicio[]
   productosVariantes                     ProductoVariante[]
@@ -1422,6 +1423,22 @@ model ProductoImpuestoCatalogo {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, codigo])
+  @@index([tenantId, nombre, activo])
+}
+
+model ProductoComisionCatalogo {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @db.Uuid
+  codigo     String
+  nombre     String
+  porcentaje Float
+  detalleJson Json?
+  activo     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, codigo])
   @@index([tenantId, nombre, activo])

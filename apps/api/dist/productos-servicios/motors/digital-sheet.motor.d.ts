@@ -10,18 +10,7 @@ export declare class DigitalSheetMotorModule implements ProductMotorModule {
         productoId: string;
         motorCodigo: string;
         motorVersion: number;
-        parametros: string | number | boolean | import("@prisma/client/runtime/library").JsonObject | import("@prisma/client/runtime/library").JsonArray | {
-            tipoCorte: string;
-            demasiaCorteMm: number;
-            lineaCorteMm: number;
-            tamanoPliegoImpresion: {
-                codigo: string;
-                nombre: string;
-                anchoMm: number;
-                altoMm: number;
-            };
-            mermaAdicionalPct: number;
-        };
+        parametros: string | number | boolean | Record<string, unknown> | import("@prisma/client/runtime/library").JsonArray;
         versionConfig: number;
         activo: boolean;
         updatedAt: string | null;
@@ -183,16 +172,7 @@ export declare class DigitalSheetMotorModule implements ProductMotorModule {
                 addonId: string | null;
             }[];
             config: {
-                tipoCorte: string;
-                demasiaCorteMm: number;
-                lineaCorteMm: number;
-                tamanoPliegoImpresion: {
-                    codigo: string;
-                    nombre: string;
-                    anchoMm: number;
-                    altoMm: number;
-                };
-                mermaAdicionalPct: number;
+                [x: string]: unknown;
             };
             configVersionBase: number | null;
             configVersionOverride: number | null;
@@ -251,16 +231,7 @@ export declare class DigitalSheetMotorModule implements ProductMotorModule {
             orientacion: string;
         };
         config: {
-            tipoCorte: string;
-            demasiaCorteMm: number;
-            lineaCorteMm: number;
-            tamanoPliegoImpresion: {
-                codigo: string;
-                nombre: string;
-                anchoMm: number;
-                altoMm: number;
-            };
-            mermaAdicionalPct: number;
+            [x: string]: unknown;
         };
     }>;
 }

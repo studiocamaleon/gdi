@@ -1,5 +1,5 @@
 import type { CurrentAuth } from '../auth/auth.types';
-import { AssignProductoAdicionalDto, AssignProductoVariantesRutaMasivaDto, AssignProductoMotorDto, UpdateProductoPrecioDto, UpdateProductoPrecioEspecialClientesDto, UpdateGranFormatoConfigDto, UpdateGranFormatoChecklistDto, UpdateGranFormatoRutaBaseDto, AssignVarianteRutaDto, CotizarProductoVarianteDto, PreviewGranFormatoCostosDto, CreateProductoVarianteDto, CreateGranFormatoVarianteDto, UpsertProductoChecklistDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, UpsertProductoAdicionalDto, PreviewImposicionProductoVarianteDto, UpdateProductoRutaPolicyDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, UpdateProductoVarianteDto, UpdateGranFormatoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoImpuestoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
+import { AssignProductoAdicionalDto, AssignProductoVariantesRutaMasivaDto, AssignProductoMotorDto, UpdateProductoPrecioDto, UpdateProductoPrecioEspecialClientesDto, UpdateGranFormatoConfigDto, UpdateGranFormatoChecklistDto, UpdateGranFormatoRutaBaseDto, AssignVarianteRutaDto, CotizarProductoVarianteDto, PreviewGranFormatoCostosDto, CreateProductoVarianteDto, CreateGranFormatoVarianteDto, UpsertProductoChecklistDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, UpsertProductoAdicionalDto, PreviewImposicionProductoVarianteDto, UpdateProductoRutaPolicyDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, UpdateProductoVarianteDto, UpdateGranFormatoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoComisionDto, UpsertProductoImpuestoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
 import { ProductosServiciosService } from './productos-servicios.service';
 export declare class ProductosServiciosController {
     private readonly service;
@@ -486,6 +486,24 @@ export declare class ProductosServiciosController {
         createdAt: string;
         updatedAt: string;
     }[]>;
+    getComisiones(auth: CurrentAuth): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        porcentaje: number;
+        detalle: {
+            items: {
+                id: string;
+                nombre: string;
+                tipo: "financiera" | "vendedor";
+                porcentaje: number;
+                activo: boolean;
+            }[];
+        };
+        activo: boolean;
+        createdAt: string;
+        updatedAt: string;
+    }[]>;
     createImpuesto(auth: CurrentAuth, payload: UpsertProductoImpuestoDto): Promise<{
         id: string;
         codigo: string;
@@ -510,6 +528,42 @@ export declare class ProductosServiciosController {
             items: {
                 nombre: string;
                 porcentaje: number;
+            }[];
+        };
+        activo: boolean;
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    createComision(auth: CurrentAuth, payload: UpsertProductoComisionDto): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        porcentaje: number;
+        detalle: {
+            items: {
+                id: string;
+                nombre: string;
+                tipo: "financiera" | "vendedor";
+                porcentaje: number;
+                activo: boolean;
+            }[];
+        };
+        activo: boolean;
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    updateComision(auth: CurrentAuth, id: string, payload: UpsertProductoComisionDto): Promise<{
+        id: string;
+        codigo: string;
+        nombre: string;
+        porcentaje: number;
+        detalle: {
+            items: {
+                id: string;
+                nombre: string;
+                tipo: "financiera" | "vendedor";
+                porcentaje: number;
+                activo: boolean;
             }[];
         };
         activo: boolean;
@@ -598,6 +652,8 @@ export declare class ProductosServiciosController {
                 porcentajeTotal: number;
             };
             comisiones: {
+                esquemaId: string | null;
+                esquemaNombre: string;
                 items: Array<{
                     id: string;
                     nombre: string;
@@ -622,6 +678,8 @@ export declare class ProductosServiciosController {
                 porcentajeTotal: number;
             };
             comisiones: {
+                esquemaId: string | null;
+                esquemaNombre: string;
                 items: Array<{
                     id: string;
                     nombre: string;
@@ -708,6 +766,8 @@ export declare class ProductosServiciosController {
                 porcentajeTotal: number;
             };
             comisiones: {
+                esquemaId: string | null;
+                esquemaNombre: string;
                 items: Array<{
                     id: string;
                     nombre: string;
@@ -732,6 +792,8 @@ export declare class ProductosServiciosController {
                 porcentajeTotal: number;
             };
             comisiones: {
+                esquemaId: string | null;
+                esquemaNombre: string;
                 items: Array<{
                     id: string;
                     nombre: string;
@@ -806,6 +868,8 @@ export declare class ProductosServiciosController {
                 porcentajeTotal: number;
             };
             comisiones: {
+                esquemaId: string | null;
+                esquemaNombre: string;
                 items: Array<{
                     id: string;
                     nombre: string;
@@ -830,6 +894,8 @@ export declare class ProductosServiciosController {
                 porcentajeTotal: number;
             };
             comisiones: {
+                esquemaId: string | null;
+                esquemaNombre: string;
                 items: Array<{
                     id: string;
                     nombre: string;
@@ -904,6 +970,8 @@ export declare class ProductosServiciosController {
                 porcentajeTotal: number;
             };
             comisiones: {
+                esquemaId: string | null;
+                esquemaNombre: string;
                 items: Array<{
                     id: string;
                     nombre: string;
@@ -928,6 +996,8 @@ export declare class ProductosServiciosController {
                 porcentajeTotal: number;
             };
             comisiones: {
+                esquemaId: string | null;
+                esquemaNombre: string;
                 items: Array<{
                     id: string;
                     nombre: string;
@@ -1002,6 +1072,8 @@ export declare class ProductosServiciosController {
                 porcentajeTotal: number;
             };
             comisiones: {
+                esquemaId: string | null;
+                esquemaNombre: string;
                 items: Array<{
                     id: string;
                     nombre: string;
@@ -1026,6 +1098,8 @@ export declare class ProductosServiciosController {
                 porcentajeTotal: number;
             };
             comisiones: {
+                esquemaId: string | null;
+                esquemaNombre: string;
                 items: Array<{
                     id: string;
                     nombre: string;
@@ -1100,6 +1174,8 @@ export declare class ProductosServiciosController {
                 porcentajeTotal: number;
             };
             comisiones: {
+                esquemaId: string | null;
+                esquemaNombre: string;
                 items: Array<{
                     id: string;
                     nombre: string;
@@ -1124,6 +1200,8 @@ export declare class ProductosServiciosController {
                 porcentajeTotal: number;
             };
             comisiones: {
+                esquemaId: string | null;
+                esquemaNombre: string;
                 items: Array<{
                     id: string;
                     nombre: string;
@@ -1198,6 +1276,8 @@ export declare class ProductosServiciosController {
                 porcentajeTotal: number;
             };
             comisiones: {
+                esquemaId: string | null;
+                esquemaNombre: string;
                 items: Array<{
                     id: string;
                     nombre: string;
@@ -1222,6 +1302,8 @@ export declare class ProductosServiciosController {
                 porcentajeTotal: number;
             };
             comisiones: {
+                esquemaId: string | null;
+                esquemaNombre: string;
                 items: Array<{
                     id: string;
                     nombre: string;
@@ -1720,6 +1802,7 @@ export declare class ProductosServiciosController {
         cantidadTotal: number;
         periodo: string;
         tecnologia: string;
+        simulacionHibrida: boolean;
         medidasOriginales: {
             anchoMm: number;
             altoMm: number;
@@ -1753,91 +1836,17 @@ export declare class ProductosServiciosController {
         perfilId: any;
         perfilNombre: any;
         warnings: string[];
-        resumenTecnico: {
-            varianteId: any;
-            varianteNombre: any;
-            varianteChips: {
-                label: string;
-                value: string;
-            }[];
-            anchoRolloMm: number;
-            anchoImprimibleMm: number;
-            orientacion: "rotada" | "normal" | "mixta";
-            panelizado: boolean;
-            panelAxis: "vertical" | "horizontal" | null;
-            panelCount: number;
-            panelOverlapMm: number | null;
-            panelMaxWidthMm: number | null;
-            panelDistribution: "equilibrada" | "libre" | null;
-            panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "manual" | "automatico" | null;
-            piezasPorFila: number;
-            filas: number;
-            largoConsumidoMm: number;
-            areaUtilM2: number;
-            areaConsumidaM2: number;
-            areaDesperdicioM2: number;
-            desperdicioPct: number;
-            costoSustrato: number;
-            costoTinta: number;
-            costoTiempo: number;
-            costoTotal: number;
-        };
+        resumenTecnico: Record<string, unknown>;
+        gruposTrabajo: Record<string, unknown>[] | undefined;
+        corridasTrabajo: Record<string, unknown>[] | undefined;
         materiasPrimas: Record<string, unknown>[];
-        centrosCosto: {
-            orden: number;
-            codigo: string;
-            paso: string;
-            centroCostoId: string;
-            centroCostoNombre: string;
-            origen: string;
-            minutos: number;
-            tarifaHora: number;
-            costo: number;
-            detalleTecnico: Record<string, unknown> | null;
-        }[];
+        centrosCosto: Record<string, unknown>[];
         totales: {
             materiales: number;
             centrosCosto: number;
             tecnico: number;
         };
-        nestingPreview: {
-            rollWidth: number;
-            rollLength: number;
-            marginLeft: number;
-            marginRight: number;
-            marginStart: number;
-            marginEnd: number;
-            panelizado: boolean;
-            panelAxis: "vertical" | "horizontal" | null;
-            panelCount: number;
-            panelOverlap: number | null;
-            panelMaxWidth: number | null;
-            panelDistribution: "equilibrada" | "libre" | null;
-            panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "manual" | "automatico" | null;
-            pieces: {
-                id: string;
-                w: number;
-                h: number;
-                originalW: number;
-                originalH: number;
-                usefulW: number;
-                usefulH: number;
-                cx: number;
-                cy: number;
-                color: string;
-                label: string;
-                textColor: string;
-                rotated: boolean;
-                panelIndex: number | null;
-                panelCount: number | null;
-                panelAxis: "vertical" | "horizontal" | null;
-                sourcePieceId: string | null;
-                overlapStart: number;
-                overlapEnd: number;
-            }[];
-        };
+        nestingPreview: Record<string, unknown> | null;
     } | {
         candidatos: {
             variantId: any;
@@ -1893,6 +1902,7 @@ export declare class ProductosServiciosController {
         cantidadTotal: number;
         periodo: string;
         tecnologia: string;
+        simulacionHibrida: boolean;
         medidasOriginales: {
             anchoMm: number;
             altoMm: number;
@@ -1926,91 +1936,17 @@ export declare class ProductosServiciosController {
         perfilId: any;
         perfilNombre: any;
         warnings: string[];
-        resumenTecnico: {
-            varianteId: any;
-            varianteNombre: any;
-            varianteChips: {
-                label: string;
-                value: string;
-            }[];
-            anchoRolloMm: number;
-            anchoImprimibleMm: number;
-            orientacion: "rotada" | "normal" | "mixta";
-            panelizado: boolean;
-            panelAxis: "vertical" | "horizontal" | null;
-            panelCount: number;
-            panelOverlapMm: number | null;
-            panelMaxWidthMm: number | null;
-            panelDistribution: "equilibrada" | "libre" | null;
-            panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "manual" | "automatico" | null;
-            piezasPorFila: number;
-            filas: number;
-            largoConsumidoMm: number;
-            areaUtilM2: number;
-            areaConsumidaM2: number;
-            areaDesperdicioM2: number;
-            desperdicioPct: number;
-            costoSustrato: number;
-            costoTinta: number;
-            costoTiempo: number;
-            costoTotal: number;
-        };
+        resumenTecnico: Record<string, unknown>;
+        gruposTrabajo: Record<string, unknown>[] | undefined;
+        corridasTrabajo: Record<string, unknown>[] | undefined;
         materiasPrimas: Record<string, unknown>[];
-        centrosCosto: {
-            orden: number;
-            codigo: string;
-            paso: string;
-            centroCostoId: string;
-            centroCostoNombre: string;
-            origen: string;
-            minutos: number;
-            tarifaHora: number;
-            costo: number;
-            detalleTecnico: Record<string, unknown> | null;
-        }[];
+        centrosCosto: Record<string, unknown>[];
         totales: {
             materiales: number;
             centrosCosto: number;
             tecnico: number;
         };
-        nestingPreview: {
-            rollWidth: number;
-            rollLength: number;
-            marginLeft: number;
-            marginRight: number;
-            marginStart: number;
-            marginEnd: number;
-            panelizado: boolean;
-            panelAxis: "vertical" | "horizontal" | null;
-            panelCount: number;
-            panelOverlap: number | null;
-            panelMaxWidth: number | null;
-            panelDistribution: "equilibrada" | "libre" | null;
-            panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "manual" | "automatico" | null;
-            pieces: {
-                id: string;
-                w: number;
-                h: number;
-                originalW: number;
-                originalH: number;
-                usefulW: number;
-                usefulH: number;
-                cx: number;
-                cy: number;
-                color: string;
-                label: string;
-                textColor: string;
-                rotated: boolean;
-                panelIndex: number | null;
-                panelCount: number | null;
-                panelAxis: "vertical" | "horizontal" | null;
-                sourcePieceId: string | null;
-                overlapStart: number;
-                overlapEnd: number;
-            }[];
-        };
+        nestingPreview: Record<string, unknown> | null;
     }>;
     getGranFormatoVariantes(auth: CurrentAuth, id: string): Promise<{
         id: string;
@@ -2151,6 +2087,8 @@ export declare class ProductosServiciosController {
                 porcentajeTotal: number;
             };
             comisiones: {
+                esquemaId: string | null;
+                esquemaNombre: string;
                 items: Array<{
                     id: string;
                     nombre: string;
@@ -2175,6 +2113,8 @@ export declare class ProductosServiciosController {
                 porcentajeTotal: number;
             };
             comisiones: {
+                esquemaId: string | null;
+                esquemaNombre: string;
                 items: Array<{
                     id: string;
                     nombre: string;

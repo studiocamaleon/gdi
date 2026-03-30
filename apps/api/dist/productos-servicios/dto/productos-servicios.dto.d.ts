@@ -241,6 +241,13 @@ export declare class UpsertProductoImpuestoDto {
     detalle?: Record<string, unknown>;
     activo: boolean;
 }
+export declare class UpsertProductoComisionDto {
+    codigo: string;
+    nombre: string;
+    porcentaje: number;
+    detalle?: Record<string, unknown>;
+    activo: boolean;
+}
 export declare class UpsertSubfamiliaProductoDto {
     familiaProductoId: string;
     codigo: string;
@@ -499,6 +506,7 @@ export declare class CotizarProductoVarianteDto {
     periodo?: string;
     checklistRespuestas?: CotizarChecklistRespuestaDto[];
     seleccionesBase?: CotizarSeleccionBaseDto[];
+    parametros?: Record<string, unknown>;
 }
 export declare class PreviewImposicionProductoVarianteDto {
     parametros?: Record<string, unknown>;

@@ -35,7 +35,7 @@ type SimularPrecioComercialInput = {
 };
 
 function roundMoney(value: number) {
-  return Number(value.toFixed(4));
+  return Number(value.toFixed(2));
 }
 
 function getImpuestosPct(precio: ProductoPrecioConfig) {

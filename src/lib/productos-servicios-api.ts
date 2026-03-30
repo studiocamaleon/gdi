@@ -17,6 +17,7 @@ import {
   GranFormatoVariante,
   MetodoCalculoPrecioProducto,
   MotorCostoCatalogItem,
+  ProductoComisionCatalogo,
   ProductoImpuestoCatalogo,
   ProductoPrecioComisionesConfig,
   ProductoPrecioImpuestosConfig,
@@ -133,6 +134,10 @@ export async function getProductoImpuestosCatalogo() {
   return apiRequest<ProductoImpuestoCatalogo[]>('/productos-servicios/impuestos');
 }
 
+export async function getProductoComisionesCatalogo() {
+  return apiRequest<ProductoComisionCatalogo[]>('/productos-servicios/comisiones');
+}
+
 export async function createProductoImpuesto(payload: {
   codigo: string;
   nombre: string;
@@ -167,6 +172,49 @@ export async function updateProductoImpuesto(
   },
 ) {
   return apiRequest<ProductoImpuestoCatalogo>(`/productos-servicios/impuestos/${impuestoId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createProductoComision(payload: {
+  codigo: string;
+  nombre: string;
+  porcentaje: number;
+  detalle?: {
+    items: Array<{
+      nombre: string;
+      tipo: "financiera" | "vendedor";
+      porcentaje: number;
+      activo: boolean;
+    }>;
+  };
+  activo: boolean;
+}) {
+  return apiRequest<ProductoComisionCatalogo>('/productos-servicios/comisiones', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateProductoComision(
+  comisionId: string,
+  payload: {
+    codigo: string;
+    nombre: string;
+    porcentaje: number;
+    detalle?: {
+      items: Array<{
+        nombre: string;
+        tipo: "financiera" | "vendedor";
+        porcentaje: number;
+        activo: boolean;
+      }>;
+    };
+    activo: boolean;
+  },
+) {
+  return apiRequest<ProductoComisionCatalogo>(`/productos-servicios/comisiones/${comisionId}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   });
@@ -651,6 +699,7 @@ export async function cotizarProductoVariante(
     periodo?: string;
     seleccionesBase?: Array<{ dimension: DimensionOpcionProductiva; valor: ValorOpcionProductiva }>;
     checklistRespuestas?: Array<{ preguntaId: string; respuestaId: string }>;
+    parametros?: Record<string, unknown>;
   },
 ) {
   return apiRequest<CotizacionProductoVariante>(

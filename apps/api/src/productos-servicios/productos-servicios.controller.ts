@@ -28,6 +28,7 @@ import {
   UpdateProductoVarianteDto,
   UpdateGranFormatoVarianteDto,
   UpsertFamiliaProductoDto,
+  UpsertProductoComisionDto,
   UpsertProductoImpuestoDto,
   UpsertProductoServicioDto,
   UpsertSubfamiliaProductoDto,
@@ -158,6 +159,11 @@ export class ProductosServiciosController {
     return this.service.findImpuestos(auth);
   }
 
+  @Get('comisiones')
+  getComisiones(@CurrentSession() auth: CurrentAuth) {
+    return this.service.findComisiones(auth);
+  }
+
   @Post('impuestos')
   createImpuesto(
     @CurrentSession() auth: CurrentAuth,
@@ -173,6 +179,23 @@ export class ProductosServiciosController {
     @Body() payload: UpsertProductoImpuestoDto,
   ) {
     return this.service.updateImpuesto(auth, id, payload);
+  }
+
+  @Post('comisiones')
+  createComision(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: UpsertProductoComisionDto,
+  ) {
+    return this.service.createComision(auth, payload);
+  }
+
+  @Put('comisiones/:id')
+  updateComision(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: UpsertProductoComisionDto,
+  ) {
+    return this.service.updateComision(auth, id, payload);
   }
 
   @Put('familias/:id')

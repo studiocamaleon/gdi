@@ -39,6 +39,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TablePagination, usePagination } from "@/components/ui/table-pagination";
+import { Input } from "@/components/ui/input";
 
 type ClientesTableProps = {
   initialClientes: ClienteDetalle[];
@@ -65,18 +67,33 @@ export function ClientesTable({ initialClientes }: ClientesTableProps) {
   const router = useRouter();
   const { startNavigation } = useNavigationFeedback();
   const [clientes, setClientes] = React.useState(initialClientes);
+  const [search, setSearch] = React.useState("");
   const [selectedClientes, setSelectedClientes] = React.useState<Set<string>>(
     new Set(),
   );
   const [isDeleting, startDeleteTransition] = React.useTransition();
 
+  const filtered = React.useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return clientes;
+    return clientes.filter(
+      (c) =>
+        c.nombre.toLowerCase().includes(q) ||
+        c.razonSocial.toLowerCase().includes(q) ||
+        c.email.toLowerCase().includes(q) ||
+        c.ciudad.toLowerCase().includes(q),
+    );
+  }, [clientes, search]);
+
+  const { paged, page, pages, total, setPage, pageSize } = usePagination(filtered);
+
   const selectedCount = selectedClientes.size;
-  const allSelected = clientes.length > 0 && selectedCount === clientes.length;
+  const allSelected = paged.length > 0 && paged.every((c) => selectedClientes.has(c.id));
   const selectedRows = clientes.filter((cliente) => selectedClientes.has(cliente.id));
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedClientes(new Set(clientes.map((cliente) => cliente.id)));
+      setSelectedClientes(new Set(paged.map((cliente) => cliente.id)));
       return;
     }
 
@@ -155,6 +172,12 @@ export function ClientesTable({ initialClientes }: ClientesTableProps) {
                 estructura para futuras altas, ediciones y acciones masivas.
               </CardDescription>
             </div>
+            <Input
+              placeholder="Buscar por nombre, email o ciudad..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              className="max-w-xs"
+            />
 
             <div className="flex flex-col gap-2 sm:flex-row">
               {selectedCount > 0 ? (
@@ -231,7 +254,7 @@ export function ClientesTable({ initialClientes }: ClientesTableProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {clientes.map((cliente) => {
+              {paged.map((cliente) => {
                 const isSelected = selectedClientes.has(cliente.id);
 
                 return (
@@ -265,6 +288,7 @@ export function ClientesTable({ initialClientes }: ClientesTableProps) {
               })}
             </TableBody>
           </Table>
+          <TablePagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} />
         </CardContent>
       </Card>
     </div>

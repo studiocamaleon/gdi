@@ -1456,9 +1456,9 @@ let CostosService = class CostosService {
         const valorCompra = item ? this.decimalToNumber(item.valorCompra) : 0;
         const valorResidual = item ? this.decimalToNumber(item.valorResidual) : 0;
         const vidaUtilMeses = item?.vidaUtilMeses ?? 60;
-        const potenciaNominalKw = item ? Number(item.potenciaNominalKw.toFixed(4)) : 0;
+        const potenciaNominalKw = item ? Number(item.potenciaNominalKw.toFixed(2)) : 0;
         const factorCargaPct = item ? this.decimalToNumber(item.factorCargaPct) : 100;
-        const tarifaEnergiaKwh = item ? Number(item.tarifaEnergiaKwh.toFixed(4)) : 0;
+        const tarifaEnergiaKwh = item ? Number(item.tarifaEnergiaKwh.toFixed(2)) : 0;
         const horasProgramadasMes = item
             ? this.decimalToNumber(item.horasProgramadasMes)
             : 160;
@@ -1497,7 +1497,7 @@ let CostosService = class CostosService {
                 : Number((Math.max(0, valorCompra - valorResidual) / Math.max(1, vidaUtilMeses)).toFixed(2)),
             energiaMensual: item ? this.decimalToNumber(item.energiaMensualCalc) : 0,
             costoMensualTotal: item ? this.decimalToNumber(item.costoMensualTotalCalc) : 0,
-            tarifaHora: item ? Number(item.tarifaHoraCalc.toFixed(4)) : 0,
+            tarifaHora: item ? Number(item.tarifaHoraCalc.toFixed(2)) : 0,
             updatedAt: item?.updatedAt.toISOString() ?? '',
         };
     }

@@ -39,6 +39,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TablePagination, usePagination } from "@/components/ui/table-pagination";
+import { Input } from "@/components/ui/input";
 
 type ProveedoresTableProps = {
   initialProveedores: ProveedorDetalle[];
@@ -65,18 +67,33 @@ export function ProveedoresTable({ initialProveedores }: ProveedoresTableProps) 
   const router = useRouter();
   const { startNavigation } = useNavigationFeedback();
   const [proveedores, setProveedores] = React.useState(initialProveedores);
+  const [search, setSearch] = React.useState("");
   const [selectedProveedores, setSelectedProveedores] = React.useState<Set<string>>(
     new Set(),
   );
   const [isDeleting, startDeleteTransition] = React.useTransition();
 
+  const filtered = React.useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return proveedores;
+    return proveedores.filter(
+      (p) =>
+        p.nombre.toLowerCase().includes(q) ||
+        p.razonSocial.toLowerCase().includes(q) ||
+        p.email.toLowerCase().includes(q) ||
+        p.ciudad.toLowerCase().includes(q),
+    );
+  }, [proveedores, search]);
+
+  const { paged, page, pages, total, setPage, pageSize } = usePagination(filtered);
+
   const selectedCount = selectedProveedores.size;
-  const allSelected = proveedores.length > 0 && selectedCount === proveedores.length;
+  const allSelected = paged.length > 0 && paged.every((p) => selectedProveedores.has(p.id));
   const selectedRows = proveedores.filter((proveedor) => selectedProveedores.has(proveedor.id));
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedProveedores(new Set(proveedores.map((proveedor) => proveedor.id)));
+      setSelectedProveedores(new Set(paged.map((proveedor) => proveedor.id)));
       return;
     }
 
@@ -155,6 +172,12 @@ export function ProveedoresTable({ initialProveedores }: ProveedoresTableProps) 
                 estructura para futuras altas, ediciones y acciones masivas.
               </CardDescription>
             </div>
+            <Input
+              placeholder="Buscar por nombre, email o ciudad..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              className="max-w-xs"
+            />
 
             <div className="flex flex-col gap-2 sm:flex-row">
               {selectedCount > 0 ? (
@@ -231,7 +254,7 @@ export function ProveedoresTable({ initialProveedores }: ProveedoresTableProps) 
               </TableRow>
             </TableHeader>
             <TableBody>
-              {proveedores.map((proveedor) => {
+              {paged.map((proveedor) => {
                 const isSelected = selectedProveedores.has(proveedor.id);
 
                 return (
@@ -265,6 +288,7 @@ export function ProveedoresTable({ initialProveedores }: ProveedoresTableProps) 
               })}
             </TableBody>
           </Table>
+          <TablePagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} />
         </CardContent>
       </Card>
     </div>

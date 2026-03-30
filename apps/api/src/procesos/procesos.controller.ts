@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import type { CurrentAuth } from '../auth/auth.types';
 import { CurrentSession } from '../auth/current-auth.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { EvaluarProcesoCostoDto } from './dto/evaluar-proceso-costo.dto';
 import { UpsertProcesoOperacionPlantillaDto } from './dto/upsert-proceso-operacion-plantilla.dto';
 import { UpsertProcesoDto } from './dto/upsert-proceso.dto';
@@ -20,8 +21,11 @@ export class ProcesosController {
   constructor(private readonly procesosService: ProcesosService) {}
 
   @Get()
-  findAll(@CurrentSession() auth: CurrentAuth) {
-    return this.procesosService.findAll(auth);
+  findAll(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() pagination: PaginationDto,
+  ) {
+    return this.procesosService.findAll(auth, pagination);
   }
 
   @Get('biblioteca-operaciones')

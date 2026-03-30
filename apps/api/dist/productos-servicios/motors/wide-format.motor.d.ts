@@ -10,7 +10,7 @@ export declare class WideFormatMotorModule implements ProductMotorModule {
         productoId: string;
         motorCodigo: string;
         motorVersion: number;
-        parametros: string | number | boolean | import("@prisma/client/runtime/library").JsonObject | import("@prisma/client/runtime/library").JsonArray;
+        parametros: string | number | boolean | Record<string, unknown> | import("@prisma/client/runtime/library").JsonArray;
         versionConfig: number;
         activo: boolean;
         updatedAt: string | null;

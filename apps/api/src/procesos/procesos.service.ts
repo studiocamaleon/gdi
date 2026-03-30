@@ -18,6 +18,7 @@ import {
 } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import type { CurrentAuth } from '../auth/auth.types';
+import { PaginationDto, paginatedResponse } from '../common/dto/pagination.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   BaseCalculoProductividadDto,
@@ -100,27 +101,34 @@ export class ProcesosService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(auth: CurrentAuth) {
-    const procesos = await this.prisma.procesoDefinicion.findMany({
-      where: {
-        tenantId: auth.tenantId,
-      },
-      include: {
-        operaciones: {
-          include: {
-            centroCosto: true,
-            maquina: true,
-            perfilOperativo: true,
-          },
-          orderBy: {
-            orden: 'asc',
+  async findAll(auth: CurrentAuth, pagination: PaginationDto) {
+    const where = { tenantId: auth.tenantId };
+
+    const [procesos, total] = await this.prisma.$transaction([
+      this.prisma.procesoDefinicion.findMany({
+        where,
+        include: {
+          operaciones: {
+            include: {
+              centroCosto: true,
+              maquina: true,
+              perfilOperativo: true,
+            },
+            orderBy: { orden: 'asc' },
           },
         },
-      },
-      orderBy: [{ nombre: 'asc' }],
-    });
+        orderBy: [{ nombre: 'asc' }],
+        skip: pagination.skip,
+        take: pagination.limit,
+      }),
+      this.prisma.procesoDefinicion.count({ where }),
+    ]);
 
-    return procesos.map((proceso) => this.toProcesoResponse(proceso));
+    return paginatedResponse(
+      procesos.map((proceso) => this.toProcesoResponse(proceso)),
+      total,
+      pagination,
+    );
   }
 
   async findAllBibliotecaOperaciones(auth: CurrentAuth) {
@@ -329,7 +337,7 @@ export class ProcesosService {
       const totalMin = setupMin + runMin + cleanupMin + tiempoFijoMin;
       const horasEfectivas = totalMin / 60;
       const costoTiempo = tarifa
-        ? Number(tarifa.mul(horasEfectivas).toFixed(4))
+        ? Number(tarifa.mul(horasEfectivas).toFixed(2))
         : 0;
 
       const warnings: string[] = [
@@ -369,8 +377,8 @@ export class ProcesosService {
         runMin,
         cleanupMin,
         tiempoFijoMin,
-        totalMin: Number(totalMin.toFixed(4)),
-        horasEfectivas: Number(horasEfectivas.toFixed(4)),
+        totalMin: Number(totalMin.toFixed(2)),
+        horasEfectivas: Number(horasEfectivas.toFixed(2)),
         tarifaCentro: tarifaNumero,
         costoTiempo,
         productividadAplicada,
@@ -387,7 +395,7 @@ export class ProcesosService {
     const totalCostoTiempo = Number(
       operationSnapshots
         .reduce((acc, item) => acc + item.costoTiempo, 0)
-        .toFixed(4),
+        .toFixed(2),
     );
 
     const advertencias = Array.from(

@@ -511,13 +511,13 @@ function evaluateProductividad(input) {
         runMin = 0;
     }
     return {
-        runMin: Number(runMin.toFixed(4)),
+        runMin: Number(runMin.toFixed(2)),
         productividadAplicada: productividadAplicada === null
             ? null
-            : Number(productividadAplicada.toFixed(6)),
-        cantidadRun: Number(Math.max(cantidadRun, 0).toFixed(4)),
-        mermaRunPctAplicada: Number(mermaRunPctAplicada.toFixed(4)),
-        mermaSetupAplicada: Number(mermaSetupAplicada.toFixed(4)),
+            : Number(productividadAplicada.toFixed(2)),
+        cantidadRun: Number(Math.max(cantidadRun, 0).toFixed(2)),
+        mermaRunPctAplicada: Number(mermaRunPctAplicada.toFixed(2)),
+        mermaSetupAplicada: Number(mermaSetupAplicada.toFixed(2)),
         warnings,
     };
 }

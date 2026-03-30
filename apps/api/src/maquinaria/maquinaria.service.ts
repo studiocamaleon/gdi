@@ -25,6 +25,7 @@ import {
   PrismaClientUnknownRequestError,
 } from '@prisma/client/runtime/library';
 import type { CurrentAuth } from '../auth/auth.types';
+import { PaginationDto, paginatedResponse } from '../common/dto/pagination.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   EstadoConfiguracionMaquinaDto,
@@ -288,6 +289,7 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
   'radio',
   'lineasPerforado',
   'tipoPerforado',
+  'laserSameConsumptionAllProfiles',
 ]);
 
 const ALLOWED_CONSUMABLE_DETAIL_KEYS = new Set(['dependePerfilOperativo', 'color']);
@@ -323,37 +325,48 @@ export class MaquinariaService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(auth: CurrentAuth) {
-    const maquinas = await this.prisma.maquina.findMany({
-      where: { tenantId: auth.tenantId },
-      include: {
-        planta: true,
-        centroCostoPrincipal: true,
-        perfilesOperativos: true,
-        consumibles: {
-          include: {
-            perfilOperativo: true,
-            materiaPrimaVariante: {
-              include: {
-                materiaPrima: true,
-              },
-            },
-          },
-        },
-        componentesDesgaste: {
-          include: {
-            materiaPrimaVariante: {
-              include: {
-                materiaPrima: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: [{ nombre: 'asc' }],
-    });
+  async findAll(auth: CurrentAuth, pagination: PaginationDto) {
+    const where = { tenantId: auth.tenantId };
 
-    return maquinas.map((maquina) => this.toMaquinaResponse(maquina));
+    const [maquinas, total] = await this.prisma.$transaction([
+      this.prisma.maquina.findMany({
+        where,
+        include: {
+          planta: true,
+          centroCostoPrincipal: true,
+          perfilesOperativos: true,
+          consumibles: {
+            include: {
+              perfilOperativo: true,
+              materiaPrimaVariante: {
+                include: {
+                  materiaPrima: true,
+                },
+              },
+            },
+          },
+          componentesDesgaste: {
+            include: {
+              materiaPrimaVariante: {
+                include: {
+                  materiaPrima: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: [{ nombre: 'asc' }],
+        skip: pagination.skip,
+        take: pagination.limit,
+      }),
+      this.prisma.maquina.count({ where }),
+    ]);
+
+    return paginatedResponse(
+      maquinas.map((maquina) => this.toMaquinaResponse(maquina)),
+      total,
+      pagination,
+    );
   }
 
   async findOne(auth: CurrentAuth, id: string) {
@@ -1437,7 +1450,7 @@ export class MaquinariaService {
       return null;
     }
 
-    return Number(partes.reduce((acc, item) => acc + item, 0).toFixed(4));
+    return Number(partes.reduce((acc, item) => acc + item, 0).toFixed(2));
   }
 
   private collectExtraSetupMin(detalle: Record<string, unknown>) {
@@ -1554,7 +1567,7 @@ export class MaquinariaService {
       anchoImprimibleMaximo: anchoImprimible,
       altoImprimibleMaximo: altoImprimible,
       areaImprimibleMaxima: Number(
-        ((anchoImprimible * altoImprimible) / 10000).toFixed(4),
+        ((anchoImprimible * altoImprimible) / 10000).toFixed(2),
       ),
     };
   }

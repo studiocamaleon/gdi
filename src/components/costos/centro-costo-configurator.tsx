@@ -286,7 +286,7 @@ function calculateMachineCostPreview(item: CentroCostoRecursoMaquinariaPeriodo) 
     ).toFixed(2),
   );
   const tarifaHora = Number(
-    (horasProductivas > 0 ? costoMensualTotal / horasProductivas : 0).toFixed(4),
+    (horasProductivas > 0 ? costoMensualTotal / horasProductivas : 0).toFixed(2),
   );
 
   return {

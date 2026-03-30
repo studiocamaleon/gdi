@@ -70,11 +70,20 @@ let ProductosServiciosController = class ProductosServiciosController {
     getImpuestos(auth) {
         return this.service.findImpuestos(auth);
     }
+    getComisiones(auth) {
+        return this.service.findComisiones(auth);
+    }
     createImpuesto(auth, payload) {
         return this.service.createImpuesto(auth, payload);
     }
     updateImpuesto(auth, id, payload) {
         return this.service.updateImpuesto(auth, id, payload);
+    }
+    createComision(auth, payload) {
+        return this.service.createComision(auth, payload);
+    }
+    updateComision(auth, id, payload) {
+        return this.service.updateComision(auth, id, payload);
     }
     updateFamilia(auth, id, payload) {
         return this.service.updateFamilia(auth, id, payload);
@@ -354,6 +363,13 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], ProductosServiciosController.prototype, "getImpuestos", null);
 __decorate([
+    (0, common_1.Get)('comisiones'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "getComisiones", null);
+__decorate([
     (0, common_1.Post)('impuestos'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),
     __param(1, (0, common_1.Body)()),
@@ -370,6 +386,23 @@ __decorate([
     __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.UpsertProductoImpuestoDto]),
     __metadata("design:returntype", void 0)
 ], ProductosServiciosController.prototype, "updateImpuesto", null);
+__decorate([
+    (0, common_1.Post)('comisiones'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, productos_servicios_dto_1.UpsertProductoComisionDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "createComision", null);
+__decorate([
+    (0, common_1.Put)('comisiones/:id'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.UpsertProductoComisionDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "updateComision", null);
 __decorate([
     (0, common_1.Put)('familias/:id'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),

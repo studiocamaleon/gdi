@@ -517,7 +517,7 @@ export class AuthService {
 
   private async issueToken(payload: JwtPayload) {
     return this.jwtService.signAsync(payload, {
-      secret: process.env.JWT_SECRET ?? 'gdi-dev-secret',
+      secret: process.env.JWT_SECRET,
       expiresIn: '7d',
     });
   }

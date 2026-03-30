@@ -2,7 +2,8 @@ import { apiRequest } from "@/lib/api";
 import { Maquina, MaquinaPayload } from "@/lib/maquinaria";
 
 export async function getMaquinas() {
-  return apiRequest<Maquina[]>("/maquinaria");
+  const res = await apiRequest<{ data: Maquina[] }>("/maquinaria?limit=200");
+  return res.data;
 }
 
 export async function getMaquina(id: string) {
