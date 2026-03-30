@@ -49,6 +49,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 
 type ProductosServiciosTableProps = {
   initialProductos: ProductoServicio[];
@@ -99,7 +100,21 @@ export function ProductosServiciosTable({
   const router = useRouter();
   const { startNavigation } = useNavigationFeedback();
   const [productos, setProductos] = React.useState(initialProductos);
+  const [search, setSearch] = React.useState("");
   const [openCreate, setOpenCreate] = React.useState(false);
+
+  const filtered = React.useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return productos;
+    return productos.filter(
+      (p) =>
+        p.codigo.toLowerCase().includes(q) ||
+        p.nombre.toLowerCase().includes(q) ||
+        (p.familiaProductoNombre ?? "").toLowerCase().includes(q),
+    );
+  }, [productos, search]);
+
+  const { paged, page, pages, total, setPage, pageSize } = usePagination(filtered);
   const [isSaving, startSaving] = React.useTransition();
   const [form, setForm] = React.useState<ProductoFormState>(() =>
     createEmptyProductoForm(familias, motores),
@@ -184,9 +199,15 @@ export function ProductosServiciosTable({
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-row items-center justify-between gap-4">
           <CardTitle>Catalogo de productos</CardTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-1 items-center justify-end gap-2">
+            <Input
+              placeholder="Buscar por codigo, nombre o familia..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              className="max-w-xs"
+            />
             <Button
               type="button"
               variant="outline"
@@ -213,7 +234,7 @@ export function ProductosServiciosTable({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {productos.map((item) => (
+              {paged.map((item) => (
                 <TableRow
                   key={item.id}
                   className="cursor-pointer"
@@ -235,6 +256,7 @@ export function ProductosServiciosTable({
               ))}
             </TableBody>
           </Table>
+          <TablePagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} />
         </CardContent>
       </Card>
 

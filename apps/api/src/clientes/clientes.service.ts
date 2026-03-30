@@ -7,6 +7,7 @@ import {
   TipoDireccion,
 } from '@prisma/client';
 import { CurrentAuth } from '../auth/auth.types';
+import { PaginationDto, paginatedResponse } from '../common/dto/pagination.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ClienteContactoDto } from './dto/contacto.dto';
 import { ClienteDireccionDto, TipoDireccionDto } from './dto/direccion.dto';
@@ -21,25 +22,32 @@ type ClienteCompleto = Cliente & {
 export class ClientesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(auth: CurrentAuth) {
-    const clientes = await this.prisma.cliente.findMany({
-      where: {
-        tenantId: auth.tenantId,
-      },
-      include: {
-        contactos: {
-          orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
-        },
-        direcciones: {
-          orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
-        },
-      },
-      orderBy: {
-        nombre: 'asc',
-      },
-    });
+  async findAll(auth: CurrentAuth, pagination: PaginationDto) {
+    const where = { tenantId: auth.tenantId };
 
-    return clientes.map((cliente) => this.toResponse(cliente));
+    const [clientes, total] = await this.prisma.$transaction([
+      this.prisma.cliente.findMany({
+        where,
+        include: {
+          contactos: {
+            orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
+          },
+          direcciones: {
+            orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
+          },
+        },
+        orderBy: { nombre: 'asc' },
+        skip: pagination.skip,
+        take: pagination.limit,
+      }),
+      this.prisma.cliente.count({ where }),
+    ]);
+
+    return paginatedResponse(
+      clientes.map((cliente) => this.toResponse(cliente)),
+      total,
+      pagination,
+    );
   }
 
   async findOne(auth: CurrentAuth, id: string) {

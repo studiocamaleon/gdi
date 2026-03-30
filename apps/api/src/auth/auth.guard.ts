@@ -43,7 +43,7 @@ export class AuthGuard implements CanActivate {
 
     try {
       payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
-        secret: process.env.JWT_SECRET ?? 'gdi-dev-secret',
+        secret: process.env.JWT_SECRET,
       });
     } catch {
       throw new UnauthorizedException('Sesion invalida.');

@@ -25,6 +25,7 @@ import {
   PrismaClientUnknownRequestError,
 } from '@prisma/client/runtime/library';
 import type { CurrentAuth } from '../auth/auth.types';
+import { PaginationDto, paginatedResponse } from '../common/dto/pagination.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   EstadoConfiguracionMaquinaDto,
@@ -324,37 +325,48 @@ export class MaquinariaService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(auth: CurrentAuth) {
-    const maquinas = await this.prisma.maquina.findMany({
-      where: { tenantId: auth.tenantId },
-      include: {
-        planta: true,
-        centroCostoPrincipal: true,
-        perfilesOperativos: true,
-        consumibles: {
-          include: {
-            perfilOperativo: true,
-            materiaPrimaVariante: {
-              include: {
-                materiaPrima: true,
-              },
-            },
-          },
-        },
-        componentesDesgaste: {
-          include: {
-            materiaPrimaVariante: {
-              include: {
-                materiaPrima: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: [{ nombre: 'asc' }],
-    });
+  async findAll(auth: CurrentAuth, pagination: PaginationDto) {
+    const where = { tenantId: auth.tenantId };
 
-    return maquinas.map((maquina) => this.toMaquinaResponse(maquina));
+    const [maquinas, total] = await this.prisma.$transaction([
+      this.prisma.maquina.findMany({
+        where,
+        include: {
+          planta: true,
+          centroCostoPrincipal: true,
+          perfilesOperativos: true,
+          consumibles: {
+            include: {
+              perfilOperativo: true,
+              materiaPrimaVariante: {
+                include: {
+                  materiaPrima: true,
+                },
+              },
+            },
+          },
+          componentesDesgaste: {
+            include: {
+              materiaPrimaVariante: {
+                include: {
+                  materiaPrima: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: [{ nombre: 'asc' }],
+        skip: pagination.skip,
+        take: pagination.limit,
+      }),
+      this.prisma.maquina.count({ where }),
+    ]);
+
+    return paginatedResponse(
+      maquinas.map((maquina) => this.toMaquinaResponse(maquina)),
+      total,
+      pagination,
+    );
   }
 
   async findOne(auth: CurrentAuth, id: string) {

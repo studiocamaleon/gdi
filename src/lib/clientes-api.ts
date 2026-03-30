@@ -2,7 +2,8 @@ import { ApiError, apiRequest } from "@/lib/api";
 import { ClienteDetalle, ClientePayload } from "@/lib/clientes";
 
 export async function getClientes() {
-  return apiRequest<ClienteDetalle[]>("/clientes");
+  const res = await apiRequest<{ data: ClienteDetalle[] }>("/clientes?limit=200");
+  return res.data;
 }
 
 export async function getClienteById(id: string) {

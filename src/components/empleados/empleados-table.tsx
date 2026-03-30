@@ -40,6 +40,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TablePagination, usePagination } from "@/components/ui/table-pagination";
+import { Input } from "@/components/ui/input";
 
 type EmpleadosTableProps = {
   initialEmpleados: EmpleadoDetalle[];
@@ -74,20 +76,35 @@ export function EmpleadosTable({ initialEmpleados }: EmpleadosTableProps) {
   const router = useRouter();
   const { startNavigation } = useNavigationFeedback();
   const [empleados, setEmpleados] = React.useState(initialEmpleados);
+  const [search, setSearch] = React.useState("");
   const [selectedEmpleados, setSelectedEmpleados] = React.useState<Set<string>>(
     new Set(),
   );
   const [isDeleting, startDeleteTransition] = React.useTransition();
 
+  const filtered = React.useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return empleados;
+    return empleados.filter(
+      (e) =>
+        e.nombreCompleto.toLowerCase().includes(q) ||
+        e.sector.toLowerCase().includes(q) ||
+        e.email.toLowerCase().includes(q) ||
+        (e.ciudad ?? "").toLowerCase().includes(q),
+    );
+  }, [empleados, search]);
+
+  const { paged, page, pages, total, setPage, pageSize } = usePagination(filtered);
+
   const selectedCount = selectedEmpleados.size;
-  const allSelected = empleados.length > 0 && selectedCount === empleados.length;
+  const allSelected = paged.length > 0 && paged.every((e) => selectedEmpleados.has(e.id));
   const selectedRows = empleados.filter((empleado) =>
     selectedEmpleados.has(empleado.id),
   );
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedEmpleados(new Set(empleados.map((empleado) => empleado.id)));
+      setSelectedEmpleados(new Set(paged.map((empleado) => empleado.id)));
       return;
     }
 
@@ -166,6 +183,12 @@ export function EmpleadosTable({ initialEmpleados }: EmpleadosTableProps) {
                 condiciones operativas asociadas a cada ficha.
               </CardDescription>
             </div>
+            <Input
+              placeholder="Buscar por nombre, sector o email..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              className="max-w-xs"
+            />
 
             <div className="flex flex-col gap-2 sm:flex-row">
               {selectedCount > 0 ? (
@@ -243,7 +266,7 @@ export function EmpleadosTable({ initialEmpleados }: EmpleadosTableProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {empleados.map((empleado) => {
+              {paged.map((empleado) => {
                 const isSelected = selectedEmpleados.has(empleado.id);
 
                 return (
@@ -284,6 +307,7 @@ export function EmpleadosTable({ initialEmpleados }: EmpleadosTableProps) {
               })}
             </TableBody>
           </Table>
+          <TablePagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} />
         </CardContent>
       </Card>
     </div>

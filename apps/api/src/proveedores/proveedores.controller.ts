@@ -7,8 +7,10 @@ import {
   Param,
   Post,
   Put,
+  Query,
 } from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { UpsertProveedorDto } from './dto/upsert-proveedor.dto';
 import { ProveedoresService } from './proveedores.service';
 import type { CurrentAuth } from '../auth/auth.types';
@@ -18,8 +20,11 @@ export class ProveedoresController {
   constructor(private readonly proveedoresService: ProveedoresService) {}
 
   @Get()
-  findAll(@CurrentSession() auth: CurrentAuth) {
-    return this.proveedoresService.findAll(auth);
+  findAll(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() pagination: PaginationDto,
+  ) {
+    return this.proveedoresService.findAll(auth, pagination);
   }
 
   @Get(':id')

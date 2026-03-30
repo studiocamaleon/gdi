@@ -2,7 +2,8 @@ import { ApiError, apiRequest } from "@/lib/api";
 import { EmpleadoDetalle, EmpleadoPayload } from "@/lib/empleados";
 
 export async function getEmpleados() {
-  return apiRequest<EmpleadoDetalle[]>("/empleados");
+  const res = await apiRequest<{ data: EmpleadoDetalle[] }>("/empleados?limit=200");
+  return res.data;
 }
 
 export async function getEmpleadoById(id: string) {
