@@ -2404,6 +2404,44 @@ export declare class ProductosServiciosService {
             colorId: string;
             colorLabel: string;
             materialVarianteId: string | null;
+            colorFiltro: string | null;
+            items: Array<Record<string, unknown>>;
+            winner: Record<string, unknown> | null;
+            warnings: string[];
+        }[];
+        items: Record<string, unknown>[];
+        rejected: Record<string, unknown>[];
+        warnings: string[];
+        aggregated: {
+            totalMateriales: number;
+            totalCentrosCosto: number;
+            totalTecnico: number;
+            centrosCosto: Record<string, unknown>[];
+            materiasPrimas: any[];
+        };
+    }>;
+    previewVinylCutByProducto(auth: CurrentAuth, productoId: string, payload: PreviewImposicionProductoVarianteDto): Promise<{
+        config: Record<string, unknown>;
+        periodo: string;
+        colorResults: Array<Record<string, unknown>>;
+        items: Array<Record<string, unknown>>;
+        rejected: Array<Record<string, unknown>>;
+        warnings: string[];
+        aggregated: {
+            totalMateriales: number;
+            totalCentrosCosto: number;
+            totalTecnico: number;
+            centrosCosto: never[];
+            materiasPrimas: never[];
+        };
+    } | {
+        config: Record<string, unknown>;
+        periodo: string;
+        colorResults: {
+            colorId: string;
+            colorLabel: string;
+            materialVarianteId: string | null;
+            colorFiltro: string | null;
             items: Array<Record<string, unknown>>;
             winner: Record<string, unknown> | null;
             warnings: string[];

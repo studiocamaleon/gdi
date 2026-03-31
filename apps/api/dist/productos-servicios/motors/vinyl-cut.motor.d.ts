@@ -111,6 +111,7 @@ export declare class VinylCutMotorModule implements ProductMotorModule {
             colorId: string;
             colorLabel: string;
             materialVarianteId: string | null;
+            colorFiltro: string | null;
             items: Array<Record<string, unknown>>;
             winner: Record<string, unknown> | null;
             warnings: string[];

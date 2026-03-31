@@ -2550,6 +2550,43 @@ export declare class ProductosServiciosController {
     upsertVarianteMotorOverride(auth: CurrentAuth, varianteId: string, payload: UpsertVarianteMotorOverrideDto): Promise<unknown>;
     cotizarVariante(auth: CurrentAuth, varianteId: string, payload: CotizarProductoVarianteDto): Promise<unknown>;
     previewImposicionVariante(auth: CurrentAuth, varianteId: string, payload: PreviewImposicionProductoVarianteDto): Promise<unknown>;
+    previewViniloCortImposicion(auth: CurrentAuth, productoId: string, payload: PreviewImposicionProductoVarianteDto): Promise<{
+        config: Record<string, unknown>;
+        periodo: string;
+        colorResults: Array<Record<string, unknown>>;
+        items: Array<Record<string, unknown>>;
+        rejected: Array<Record<string, unknown>>;
+        warnings: string[];
+        aggregated: {
+            totalMateriales: number;
+            totalCentrosCosto: number;
+            totalTecnico: number;
+            centrosCosto: never[];
+            materiasPrimas: never[];
+        };
+    } | {
+        config: Record<string, unknown>;
+        periodo: string;
+        colorResults: {
+            colorId: string;
+            colorLabel: string;
+            materialVarianteId: string | null;
+            colorFiltro: string | null;
+            items: Array<Record<string, unknown>>;
+            winner: Record<string, unknown> | null;
+            warnings: string[];
+        }[];
+        items: Record<string, unknown>[];
+        rejected: Record<string, unknown>[];
+        warnings: string[];
+        aggregated: {
+            totalMateriales: number;
+            totalCentrosCosto: number;
+            totalTecnico: number;
+            centrosCosto: Record<string, unknown>[];
+            materiasPrimas: any[];
+        };
+    }>;
     getVarianteCotizaciones(auth: CurrentAuth, varianteId: string): Promise<{
         id: string;
         cantidad: number;

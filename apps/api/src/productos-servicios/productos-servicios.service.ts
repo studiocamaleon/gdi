@@ -13445,6 +13445,7 @@ export class ProductosServiciosService {
     id: string;
     label: string;
     materialVarianteId: string | null;
+    colorFiltro: string | null;
     medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number; rotacionPermitida: boolean }>;
   }> {
     const coloresRaw = Array.isArray(effectiveConfig.colores) ? effectiveConfig.colores : null;
@@ -13456,8 +13457,12 @@ export class ProductosServiciosService {
           const id = String(e.id ?? '').trim() || `color-${idx}`;
           const label = String(e.label ?? 'Color').trim() || 'Color';
           const materialVarianteId = this.getGranFormatoNullableString(e.materialVarianteId);
+          const colorFiltro =
+            typeof e.colorFiltro === 'string' && e.colorFiltro.trim()
+              ? e.colorFiltro.trim()
+              : null;
           const medidas = this.normalizeVinylCutMeasures(e.medidas, cantidadTrabajos);
-          return { id, label, materialVarianteId, medidas };
+          return { id, label, materialVarianteId, colorFiltro, medidas };
         })
         .filter((entry) => entry.medidas.length > 0);
 
@@ -13468,7 +13473,7 @@ export class ProductosServiciosService {
 
     // Legacy fallback: flat medidas[] → single color
     const legacyMedidas = this.normalizeVinylCutMeasures(effectiveConfig.medidas, cantidadTrabajos);
-    return [{ id: 'legacy', label: 'Color 1', materialVarianteId: null, medidas: legacyMedidas }];
+    return [{ id: 'legacy', label: 'Color 1', materialVarianteId: null, colorFiltro: null, medidas: legacyMedidas }];
   }
 
   private mergeVinylCutCentrosCosto(
@@ -13652,6 +13657,7 @@ export class ProductosServiciosService {
       colorId: string;
       colorLabel: string;
       materialVarianteId: string | null;
+      colorFiltro: string | null;
       items: Array<Record<string, unknown>>;
       winner: Record<string, unknown> | null;
       warnings: string[];
@@ -13659,16 +13665,30 @@ export class ProductosServiciosService {
     const globalRejected: Array<Record<string, unknown>> = [];
 
     for (const colorEntry of colores) {
-      // Resolve material variants for this color
-      const colorMaterialVariants = colorEntry.materialVarianteId
-        ? allMaterialVariants.filter((v) => v.id === colorEntry.materialVarianteId)
-        : allMaterialVariants;
+      // Resolve material variants for this color — priority: colorFiltro > materialVarianteId > full pool
+      const colorMaterialVariants = (() => {
+        if (colorEntry.colorFiltro) {
+          const target = colorEntry.colorFiltro.toLowerCase();
+          const filtered = allMaterialVariants.filter((v) => {
+            const attrs = this.asObject(v.atributosVarianteJson);
+            const color = typeof attrs.color === 'string' ? attrs.color.trim().toLowerCase() : '';
+            return color === target;
+          });
+          // Graceful fallback: if color not found in pool, use full pool
+          return filtered.length ? filtered : allMaterialVariants;
+        }
+        if (colorEntry.materialVarianteId) {
+          return allMaterialVariants.filter((v) => v.id === colorEntry.materialVarianteId);
+        }
+        return allMaterialVariants;
+      })();
 
       if (!colorMaterialVariants.length) {
         colorResults.push({
           colorId: colorEntry.id,
           colorLabel: colorEntry.label,
           materialVarianteId: colorEntry.materialVarianteId,
+          colorFiltro: colorEntry.colorFiltro,
           items: [],
           winner: null,
           warnings: [`Color "${colorEntry.label}": No hay variantes de vinilo compatibles configuradas.`],
@@ -13932,6 +13952,7 @@ export class ProductosServiciosService {
         colorId: colorEntry.id,
         colorLabel: colorEntry.label,
         materialVarianteId: colorEntry.materialVarianteId,
+        colorFiltro: colorEntry.colorFiltro,
         items: colorResultItems,
         winner: colorResultItems[0] ?? null,
         warnings: colorResultItems[0] ? (colorResultItems[0].warnings as string[]) : [],

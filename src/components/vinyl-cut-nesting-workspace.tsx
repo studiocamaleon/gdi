@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { ChevronDownIcon } from "lucide-react";
 
 type NestingPiece = {
   id: string;
@@ -27,25 +28,32 @@ type VinylCutNestingWorkspaceProps = {
   separacionVerticalCm?: number;
 };
 
-// The canvas always fills this width in px. Scale is derived from this / rollWidthCm.
-// Machine and roll canvas share exactly this width so they align perfectly.
-const CANVAS_WIDTH_PX = 640;
+// ── Layout constants ──────────────────────────────────────────────────────────
+// Total machine width in px (outer container)
+const MACHINE_WIDTH_PX = 640;
+// Lateral arm widths — must match the inline styles in PlotterMachine below
+const LEFT_ARM_PX = 96;    // same as w-24 (6rem @ 16px)
+const RIGHT_PANEL_PX = 128; // same as w-32 (8rem @ 16px)
+// The "mouth" = dark center zone. The roll canvas aligns to this exactly.
+const MOUTH_WIDTH_PX = MACHINE_WIDTH_PX - LEFT_ARM_PX - RIGHT_PANEL_PX; // 416px
 const MAX_CANVAS_HEIGHT_PX = 900;
 
 function PlotterMachine({ machineLabel, rollWidthCm }: { machineLabel: string; rollWidthCm: number }) {
   return (
-    // w-full fills the parent container which is exactly CANVAS_WIDTH_PX
-    <div className="relative w-full select-none">
+    <div className="relative select-none" style={{ width: MACHINE_WIDTH_PX }}>
       <div className="absolute -top-9 left-0 w-full text-center font-mono text-base tracking-wide text-gray-700">
         {machineLabel} · {rollWidthCm.toLocaleString("es-AR", { maximumFractionDigits: 1 })} cm
       </div>
 
       <div className="relative flex h-40 drop-shadow-2xl">
-        {/* Left arm */}
-        <div className="z-10 h-full w-24 rounded-l-[36px] border-r border-gray-600 bg-gradient-to-br from-gray-200 via-gray-400 to-gray-500 shadow-[inset_-5px_0_15px_rgba(0,0,0,0.2)]" />
+        {/* Left arm — explicit px width so canvas can align precisely */}
+        <div
+          className="z-10 h-full rounded-l-[36px] border-r border-gray-600 bg-gradient-to-br from-gray-200 via-gray-400 to-gray-500 shadow-[inset_-5px_0_15px_rgba(0,0,0,0.2)] shrink-0"
+          style={{ width: LEFT_ARM_PX }}
+        />
 
-        {/* Center body — this is the "mouth" that should align with the roll below */}
-        <div className="relative z-0 flex flex-1 flex-col bg-gray-800">
+        {/* Center body — the "mouth" — width matches MOUTH_WIDTH_PX */}
+        <div className="relative z-0 flex flex-col bg-gray-800" style={{ width: MOUTH_WIDTH_PX }}>
           <div className="h-14 border-b-2 border-black bg-gradient-to-b from-gray-700 to-gray-900 shadow-inner" />
           <div className="relative flex-1 overflow-hidden bg-black shadow-[inset_0_10px_20px_rgba(0,0,0,0.8)]">
             <div className="absolute top-3 h-1.5 w-full bg-blue-500 shadow-[0_0_15px_3px_rgba(59,130,246,0.8)]" />
@@ -63,8 +71,11 @@ function PlotterMachine({ machineLabel, rollWidthCm }: { machineLabel: string; r
           <div className="h-7 border-t-2 border-black bg-gradient-to-b from-gray-800 to-gray-950 shadow-[0_-2px_10px_rgba(0,0,0,0.5)]" />
         </div>
 
-        {/* Right panel */}
-        <div className="relative z-10 h-full w-32 rounded-r-[36px] border-l border-gray-600 bg-gradient-to-bl from-gray-200 via-gray-400 to-gray-500 shadow-[inset_5px_0_15px_rgba(0,0,0,0.2)]">
+        {/* Right panel — explicit px width */}
+        <div
+          className="relative z-10 h-full rounded-r-[36px] border-l border-gray-600 bg-gradient-to-bl from-gray-200 via-gray-400 to-gray-500 shadow-[inset_5px_0_15px_rgba(0,0,0,0.2)] shrink-0"
+          style={{ width: RIGHT_PANEL_PX }}
+        >
           <div className="absolute left-1/2 top-1/2 flex h-24 w-18 -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-md border-4 border-gray-300 bg-blue-950 p-2 shadow-[inset_0_0_10px_rgba(0,0,0,0.8),_0_5px_10px_rgba(0,0,0,0.3)]">
             <div className="mb-2 flex h-9 w-full items-center justify-center rounded-sm border border-blue-400 bg-blue-200 shadow-inner">
               <div className="h-5 w-7 rounded-sm bg-blue-300/50" />
@@ -98,9 +109,8 @@ export function VinylCutNestingWorkspace({
   separacionHorizontalCm = 0,
   separacionVerticalCm = 0,
 }: VinylCutNestingWorkspaceProps) {
-  // Scale is ALWAYS derived from width so the roll fills the full canvas width.
-  // Canvas height is dynamic, capped at MAX_CANVAS_HEIGHT_PX with scroll for very long rolls.
-  const scale = CANVAS_WIDTH_PX / Math.max(rollWidthCm, 1);
+  // Scale is derived from the MOUTH width so the roll fills exactly the dark center zone.
+  const scale = MOUTH_WIDTH_PX / Math.max(rollWidthCm, 1);
   const totalHeightPx = Math.ceil(rollLengthCm * scale);
   const canvasHeightPx = Math.min(totalHeightPx, MAX_CANVAS_HEIGHT_PX);
   const needsScroll = totalHeightPx > MAX_CANVAS_HEIGHT_PX;
@@ -112,22 +122,23 @@ export function VinylCutNestingWorkspace({
 
   return (
     <div className="relative z-10 flex w-full flex-col items-center py-10">
-      {/* Both machine and canvas share the exact same width container */}
-      <div style={{ width: CANVAS_WIDTH_PX }}>
+      {/* Outer container — machine width */}
+      <div style={{ width: MACHINE_WIDTH_PX }}>
         <PlotterMachine machineLabel={machineLabel} rollWidthCm={rollWidthCm} />
 
-        {/* Roll canvas — no fixed height, grows with the roll length */}
+        {/* Roll canvas — offset by left arm, width = mouth width, sits under the dark zone */}
         <div
-          className="relative border-x border-b border-gray-300 bg-white shadow-[0_15px_40px_rgba(0,0,0,0.15)]"
+          className="relative border-x border-b border-gray-300 bg-[#fdf6e3] shadow-[0_15px_40px_rgba(0,0,0,0.15)]"
           style={{
-            width: CANVAS_WIDTH_PX,
+            marginLeft: LEFT_ARM_PX,
+            width: MOUTH_WIDTH_PX,
             height: canvasHeightPx,
             marginTop: "-4px",
             overflowY: needsScroll ? "auto" : "hidden",
           }}
         >
-          {/* Scrollable inner content at full height */}
-          <div className="relative" style={{ width: CANVAS_WIDTH_PX, height: totalHeightPx }}>
+          {/* Scrollable inner content at full roll height */}
+          <div className="relative" style={{ width: MOUTH_WIDTH_PX, height: totalHeightPx }}>
             {/* Background grid */}
             <div
               className="pointer-events-none absolute inset-0 opacity-[0.06]"
@@ -169,9 +180,7 @@ export function VinylCutNestingWorkspace({
                     className="pointer-events-none absolute bottom-0 left-0 top-0 z-20 bg-red-400/20 border-r border-dashed border-red-400/60"
                     style={{ width: marginLeftCm * scale }}
                   >
-                    <span
-                      className="absolute left-0 top-1/2 -translate-y-1/2 -rotate-90 whitespace-nowrap text-[9px] font-semibold text-red-500/80 leading-none"
-                    >
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 -rotate-90 whitespace-nowrap text-[9px] font-semibold text-red-500/80 leading-none">
                       {marginLeftCm.toFixed(1)} cm
                     </span>
                   </div>
@@ -181,9 +190,7 @@ export function VinylCutNestingWorkspace({
                     className="pointer-events-none absolute bottom-0 right-0 top-0 z-20 bg-red-400/20 border-l border-dashed border-red-400/60"
                     style={{ width: marginRightCm * scale }}
                   >
-                    <span
-                      className="absolute right-0 top-1/2 -translate-y-1/2 rotate-90 whitespace-nowrap text-[9px] font-semibold text-red-500/80 leading-none"
-                    >
+                    <span className="absolute right-0 top-1/2 -translate-y-1/2 rotate-90 whitespace-nowrap text-[9px] font-semibold text-red-500/80 leading-none">
                       {marginRightCm.toFixed(1)} cm
                     </span>
                   </div>
@@ -239,12 +246,21 @@ export function VinylCutNestingWorkspace({
               );
             })}
           </div>
+
+          {/* Scroll indicator — sticky at bottom of the visible scroll area */}
+          {needsScroll && (
+            <div className="sticky bottom-0 left-0 right-0 z-30 flex items-center justify-center gap-1.5 bg-gradient-to-t from-white/90 to-transparent py-2 pointer-events-none">
+              <ChevronDownIcon className="size-3.5 animate-bounce text-gray-500" />
+              <span className="text-[11px] font-medium text-gray-500">Deslizá para ver más piezas</span>
+              <ChevronDownIcon className="size-3.5 animate-bounce text-gray-500" />
+            </div>
+          )}
         </div>
       </div>
 
       {/* Legend */}
       {hasSep && (
-        <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+        <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground" style={{ marginLeft: LEFT_ARM_PX }}>
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-3 w-5 rounded-sm border border-orange-500/60 bg-orange-100/80" />
             Área de corte

@@ -10,6 +10,7 @@ import type {
 } from "@/components/productos-servicios/product-detail-types";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { VinylCutNestingWorkspace } from "@/components/vinyl-cut-nesting-workspace";
+import { VinylCutRutaOpcionalesTab } from "@/components/productos-servicios/motors/vinyl-cut-ruta-opcionales-tab";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +27,7 @@ import {
   upsertProductoMotorConfig,
 } from "@/lib/productos-servicios-api";
 import type { VinylCutColorEntry, VinylCutConfig } from "@/lib/productos-servicios";
-import { getVarianteOptionChips } from "@/lib/materias-primas-variantes-display";
+import { getMateriaPrimaVarianteLabel, getVarianteOptionChips } from "@/lib/materias-primas-variantes-display";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -475,7 +476,8 @@ function VinylCutEquiposMaterialesTab(props: ProductTabProps) {
 type ColorDraft = {
   id: string;
   label: string;
-  materialVarianteId: string | null;
+  materialVarianteId: string | null; // retrocompat
+  colorFiltro: string | null;        // nuevo campo principal
   medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
 };
 
@@ -485,6 +487,7 @@ function configToColores(config: Record<string, unknown>): ColorDraft[] {
       id: entry.id ?? newColorId(),
       label: entry.label ?? "Color",
       materialVarianteId: entry.materialVarianteId ?? null,
+      colorFiltro: entry.colorFiltro ?? null,
       medidas:
         Array.isArray(entry.medidas) && entry.medidas.length > 0
           ? entry.medidas.map((m) => ({
@@ -502,6 +505,7 @@ function configToColores(config: Record<string, unknown>): ColorDraft[] {
         id: "legacy",
         label: "Color 1",
         materialVarianteId: null,
+        colorFiltro: null,
         medidas: (config.medidas as Array<Record<string, unknown>>).map((m) => ({
           anchoMm: Number(m.anchoMm ?? 0),
           altoMm: Number(m.altoMm ?? 0),
@@ -510,7 +514,7 @@ function configToColores(config: Record<string, unknown>): ColorDraft[] {
       },
     ];
   }
-  return [{ id: newColorId(), label: "Color 1", materialVarianteId: null, medidas: [{ anchoMm: 0, altoMm: 0, cantidad: 1 }] }];
+  return [{ id: newColorId(), label: "Color 1", materialVarianteId: null, colorFiltro: null, medidas: [{ anchoMm: 0, altoMm: 0, cantidad: 1 }] }];
 }
 
 function buildColorNestingPreview(colorResult: Record<string, unknown> | null) {
@@ -572,8 +576,11 @@ function VinylCutImposicionTab(props: ProductTabProps) {
     setAltoUnit((u) => MEDIDA_UNITS[(MEDIDA_UNITS.indexOf(u) + 1) % MEDIDA_UNITS.length]);
 
   // Helpers: convert mm ↔ display unit
-  const toDisplay = (mm: number, unit: MedidaUnit) =>
-    unit === "mm" ? mm : convertUnitValue(mm, "mm", unit);
+  // parseFloat(toPrecision(8)) elimina artefactos de punto flotante (ej: 570*0.1 = 57.00000000000001)
+  const toDisplay = (mm: number, unit: MedidaUnit) => {
+    const raw = unit === "mm" ? mm : convertUnitValue(mm, "mm", unit);
+    return parseFloat(raw.toPrecision(8));
+  };
   const toMm = (display: number, unit: MedidaUnit) =>
     unit === "mm" ? display : convertUnitValue(display, unit, "mm");
 
@@ -602,10 +609,38 @@ function VinylCutImposicionTab(props: ProductTabProps) {
         .flatMap((m) =>
           (m.variantes ?? [])
             .filter((v) => v.activo && (enabledVariantIds.size === 0 || enabledVariantIds.has(v.id)))
-            .map((v) => ({ variantId: v.id, label: `${m.nombre} · ${v.sku}` })),
+            .map((v) => ({ variantId: v.id, label: getMateriaPrimaVarianteLabel(m, v) })),
         ),
     [props.materiasPrimas, enabledVariantIds],
   );
+
+  // Unique colors available from enabled vinyl variants
+  const vinylColorOptions = React.useMemo(() => {
+    const seen = new Set<string>();
+    const options: Array<{ color: string }> = [];
+    props.materiasPrimas
+      .filter(
+        (m) =>
+          m.activo &&
+          m.subfamilia === "sustrato_rollo_flexible" &&
+          (m.templateId === "vinilo_de_corte_rollo_v1" || m.tipoTecnico === "vinilo_de_corte_rollo"),
+      )
+      .forEach((m) => {
+        (m.variantes ?? [])
+          .filter((v) => v.activo && (enabledVariantIds.size === 0 || enabledVariantIds.has(v.id)))
+          .forEach((v) => {
+            const color =
+              typeof (v.atributosVariante as Record<string, unknown>)?.color === "string"
+                ? ((v.atributosVariante as Record<string, unknown>).color as string).trim()
+                : "";
+            if (color && !seen.has(color.toLowerCase())) {
+              seen.add(color.toLowerCase());
+              options.push({ color });
+            }
+          });
+      });
+    return options.sort((a, b) => a.color.localeCompare(b.color));
+  }, [props.materiasPrimas, enabledVariantIds]);
 
   const addColor = () =>
     setColores((prev) => [
@@ -614,6 +649,7 @@ function VinylCutImposicionTab(props: ProductTabProps) {
         id: newColorId(),
         label: `Color ${prev.length + 1}`,
         materialVarianteId: null,
+        colorFiltro: null,
         medidas: [{ anchoMm: 0, altoMm: 0, cantidad: 1 }],
       },
     ]);
@@ -717,36 +753,43 @@ function VinylCutImposicionTab(props: ProductTabProps) {
             return (
               <Card key={color.id} className="border-l-4 border-l-primary/40">
                 <CardContent className="pt-4 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 grid gap-3 sm:grid-cols-2">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Color {colorIdx + 1}{color.colorFiltro ? ` — ${color.colorFiltro}` : ""}
+                      </p>
                       <Field>
-                        <FieldLabel>Nombre del color</FieldLabel>
-                        <Input
-                          value={color.label}
-                          onChange={(e) => updateColor(color.id, { label: e.target.value })}
-                          placeholder={`Color ${colorIdx + 1}`}
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel>Material (variante)</FieldLabel>
+                        <FieldLabel>Color del vinilo</FieldLabel>
                         <Select
-                          value={color.materialVarianteId ?? "__global__"}
-                          onValueChange={(v) =>
+                          value={color.colorFiltro ?? "__sin_filtro__"}
+                          onValueChange={(v) => {
+                            const newColor = v === "__sin_filtro__" ? null : v;
                             updateColor(color.id, {
-                              materialVarianteId: v === "__global__" ? null : v,
-                            })
-                          }
+                              colorFiltro: newColor,
+                              label: newColor ?? `Color ${colorIdx + 1}`,
+                              materialVarianteId: null,
+                            });
+                          }}
                         >
                           <SelectTrigger>
-                            <SelectValue />
+                            <SelectValue>
+                              {color.colorFiltro ?? "Sin filtro (todos los rollos)"}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="__global__">Pool global de materiales</SelectItem>
-                            {vinylMaterialVariants.map((v) => (
-                              <SelectItem key={v.variantId} value={v.variantId}>
-                                {v.label}
-                              </SelectItem>
-                            ))}
+                            <SelectItem value="__sin_filtro__">Sin filtro (todos los rollos)</SelectItem>
+                            {vinylColorOptions.length === 0 ? (
+                              <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+                                No hay colores definidos.<br />
+                                Cargá el atributo "Color" en tus rollos de vinilo desde Materias primas.
+                              </div>
+                            ) : (
+                              vinylColorOptions.map((opt) => (
+                                <SelectItem key={opt.color} value={opt.color}>
+                                  {opt.color}
+                                </SelectItem>
+                              ))
+                            )}
                           </SelectContent>
                         </Select>
                       </Field>
@@ -754,7 +797,7 @@ function VinylCutImposicionTab(props: ProductTabProps) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="shrink-0 mt-5"
+                      className="shrink-0 mt-7"
                       onClick={() => removeColor(color.id)}
                       disabled={colores.length <= 1}
                     >
@@ -1176,6 +1219,7 @@ export const vinylCutMotorUi: ProductMotorUiContract = {
     "simular_venta",
   ],
   tabs: {
+    ruta_opcionales: VinylCutRutaOpcionalesTab,
     imposicion: VinylCutImposicionTab,
     simular_costo: VinylCutSimularCostoTab,
   },

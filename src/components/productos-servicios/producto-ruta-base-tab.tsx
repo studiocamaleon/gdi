@@ -83,7 +83,11 @@ export function ProductoRutaBaseTab(props: ProductTabProps) {
               <FieldLabel>Ruta principal</FieldLabel>
               <Select value={rutaId || "__none__"} onValueChange={(value) => setRutaId(value === "__none__" ? "" : value ?? "")}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccioná una ruta" />
+                  <SelectValue placeholder="Seleccioná una ruta">
+                    {procesoSeleccionado
+                      ? `${procesoSeleccionado.codigo} · ${procesoSeleccionado.nombre}`
+                      : "Seleccioná una ruta"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">Sin ruta</SelectItem>

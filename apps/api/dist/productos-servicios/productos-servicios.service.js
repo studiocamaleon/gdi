@@ -10153,8 +10153,11 @@ let ProductosServiciosService = class ProductosServiciosService {
                 const id = String(e.id ?? '').trim() || `color-${idx}`;
                 const label = String(e.label ?? 'Color').trim() || 'Color';
                 const materialVarianteId = this.getGranFormatoNullableString(e.materialVarianteId);
+                const colorFiltro = typeof e.colorFiltro === 'string' && e.colorFiltro.trim()
+                    ? e.colorFiltro.trim()
+                    : null;
                 const medidas = this.normalizeVinylCutMeasures(e.medidas, cantidadTrabajos);
-                return { id, label, materialVarianteId, medidas };
+                return { id, label, materialVarianteId, colorFiltro, medidas };
             })
                 .filter((entry) => entry.medidas.length > 0);
             if (entries.length > 0) {
@@ -10162,7 +10165,7 @@ let ProductosServiciosService = class ProductosServiciosService {
             }
         }
         const legacyMedidas = this.normalizeVinylCutMeasures(effectiveConfig.medidas, cantidadTrabajos);
-        return [{ id: 'legacy', label: 'Color 1', materialVarianteId: null, medidas: legacyMedidas }];
+        return [{ id: 'legacy', label: 'Color 1', materialVarianteId: null, colorFiltro: null, medidas: legacyMedidas }];
     }
     mergeVinylCutCentrosCosto(winners) {
         const merged = new Map();
@@ -10302,14 +10305,27 @@ let ProductosServiciosService = class ProductosServiciosService {
         const colorResults = [];
         const globalRejected = [];
         for (const colorEntry of colores) {
-            const colorMaterialVariants = colorEntry.materialVarianteId
-                ? allMaterialVariants.filter((v) => v.id === colorEntry.materialVarianteId)
-                : allMaterialVariants;
+            const colorMaterialVariants = (() => {
+                if (colorEntry.colorFiltro) {
+                    const target = colorEntry.colorFiltro.toLowerCase();
+                    const filtered = allMaterialVariants.filter((v) => {
+                        const attrs = this.asObject(v.atributosVarianteJson);
+                        const color = typeof attrs.color === 'string' ? attrs.color.trim().toLowerCase() : '';
+                        return color === target;
+                    });
+                    return filtered.length ? filtered : allMaterialVariants;
+                }
+                if (colorEntry.materialVarianteId) {
+                    return allMaterialVariants.filter((v) => v.id === colorEntry.materialVarianteId);
+                }
+                return allMaterialVariants;
+            })();
             if (!colorMaterialVariants.length) {
                 colorResults.push({
                     colorId: colorEntry.id,
                     colorLabel: colorEntry.label,
                     materialVarianteId: colorEntry.materialVarianteId,
+                    colorFiltro: colorEntry.colorFiltro,
                     items: [],
                     winner: null,
                     warnings: [`Color "${colorEntry.label}": No hay variantes de vinilo compatibles configuradas.`],
@@ -10333,10 +10349,8 @@ let ProductosServiciosService = class ProductosServiciosService {
                 });
                 const profilesToEvaluate = compatibleProfiles.length ? compatibleProfiles : [null];
                 for (const profile of profilesToEvaluate) {
-                    // Read profile-level margin overrides (active only when marcaRegistro === 'si')
                     const profileDetail = (profile?.detalle ?? {});
                     const marcaRegistroVal = String(profileDetail?.marcaRegistro ?? 'no').toLowerCase().trim();
-                    // Profile margin fields are stored in cm — convert to mm with ×10 (same as machine margins)
                     const toMmFromCm = (v) => (v == null ? null : v * 10);
                     const margenIzqOverride = marcaRegistroVal === 'si'
                         ? toMmFromCm(this.getGranFormatoNullableNumber(profileDetail?.margenIzquierdoPerf) ?? null)
@@ -10541,6 +10555,7 @@ let ProductosServiciosService = class ProductosServiciosService {
                 colorId: colorEntry.id,
                 colorLabel: colorEntry.label,
                 materialVarianteId: colorEntry.materialVarianteId,
+                colorFiltro: colorEntry.colorFiltro,
                 items: colorResultItems,
                 winner: colorResultItems[0] ?? null,
                 warnings: colorResultItems[0] ? colorResultItems[0].warnings : [],

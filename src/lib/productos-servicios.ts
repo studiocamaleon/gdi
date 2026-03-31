@@ -415,7 +415,8 @@ export type VinylCutMedida = {
 export type VinylCutColorEntry = {
   id: string;
   label: string;
-  materialVarianteId: string | null;
+  materialVarianteId: string | null; // conservado para retrocompatibilidad
+  colorFiltro: string | null;        // nuevo: filtra variantes por color; sistema elige el ancho óptimo
   medidas: VinylCutMedida[];
 };
 

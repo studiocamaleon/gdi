@@ -15,6 +15,8 @@ export type CampoTecnicoTemplate = {
   label: string;
   type: "text" | "number" | "boolean";
   unit?: UnitCode;
+  /** Unidad de visualización preferida por defecto (puede diferir de `unit` que es la canónica). */
+  preferredDisplayUnit?: UnitCode;
   options?: string[];
   required?: boolean;
   optional?: boolean;
@@ -262,7 +264,7 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
     unidadStock: "rollo",
     unidadCompra: "rollo",
     camposTecnicos: [
-      { key: "ancho", label: "Ancho de rollo", type: "number", unit: "m", required: true },
+      { key: "ancho", label: "Ancho de rollo", type: "number", unit: "m", preferredDisplayUnit: "cm", required: true },
       { key: "largo", label: "Largo de rollo", type: "number", unit: "m", required: true },
       { key: "color", label: "Color", type: "text", required: true },
       { key: "acabado", label: "Acabado", type: "text", options: ["Brillante", "Mate"], required: true },
