@@ -306,7 +306,11 @@ function ItemRow({
   return (
     <>
       <TableRow
-        className="cursor-pointer transition-colors hover:bg-muted/50"
+        className={`cursor-pointer transition-colors hover:bg-muted/50 ${
+          isExpanded
+            ? "bg-primary/5 border-l-2 border-l-primary"
+            : ""
+        }`}
         onClick={onToggle}
       >
         <TableCell className="w-10 pl-4 font-medium text-muted-foreground">
@@ -343,7 +347,7 @@ function ItemRow({
       </TableRow>
 
       {isExpanded && (
-        <TableRow className="bg-muted/30 hover:bg-muted/30">
+        <TableRow className="border-l-2 border-l-primary bg-muted/30 hover:bg-muted/30">
           <TableCell colSpan={8} className="px-6 py-4">
             <div className="flex items-start gap-6">
               {/* Especificaciones */}
