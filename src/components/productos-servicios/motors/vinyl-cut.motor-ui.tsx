@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { PlusIcon, RefreshCcwIcon, SaveIcon, Trash2Icon } from "lucide-react";
+import { ChevronDownIcon, ChevronRightIcon, EyeIcon, InfoIcon, PlusIcon, RefreshCcwIcon, SaveIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 import type {
@@ -11,8 +11,12 @@ import type {
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { VinylCutNestingWorkspace } from "@/components/vinyl-cut-nesting-workspace";
 import { VinylCutRutaOpcionalesTab } from "@/components/productos-servicios/motors/vinyl-cut-ruta-opcionales-tab";
+import { formatCurrency, formatNumber } from "@/components/productos-servicios/producto-comercial.helpers";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -50,6 +54,35 @@ function toStringArray(value: unknown): string[] {
 
 function newColorId() {
   return crypto.randomUUID();
+}
+
+function formatOrigenProcesoLabel(origen: unknown) {
+  const raw = String(origen ?? "Base").trim();
+  if (!raw) return "Producto base";
+  const normalized = raw.toLowerCase();
+  if (normalized === "base" || normalized === "producto base") return "Producto base";
+  if (normalized.startsWith("adicional")) return "Adicional";
+  return raw;
+}
+
+function getMaterialTipoLabel(tipo: unknown) {
+  const raw = String(tipo ?? "").trim().toUpperCase();
+  if (raw === "SUSTRATO") return "Sustrato";
+  if (raw === "VINILO" || raw === "VINILO_DE_CORTE") return "Vinilo de corte";
+  if (raw === "PAPEL") return "Papel";
+  if (raw === "TONER") return "Tóner";
+  if (raw === "FILM") return "Film";
+  if (raw === "DESGASTE") return "Desgaste";
+  if (raw === "CONSUMIBLE_FILM") return "Consumibles de terminación";
+  if (raw === "ADDITIONAL_MATERIAL_EFFECT") return "Material adicional";
+  return raw || "Otros";
+}
+
+function formatDetalleTecnico(detalle: Record<string, unknown> | null | undefined) {
+  if (!detalle || typeof detalle !== "object") return "";
+  return Object.entries(detalle)
+    .map(([key, value]) => `${key}: ${typeof value === "object" ? JSON.stringify(value) : String(value)}`)
+    .join("\n");
 }
 
 // ─── Shared state hook ───────────────────────────────────────────────────────
@@ -568,8 +601,8 @@ function VinylCutImposicionTab(props: ProductTabProps) {
   // Column-level unit display state (shared across all color blocks)
   const MEDIDA_UNITS = ["mm", "cm"] as const;
   type MedidaUnit = (typeof MEDIDA_UNITS)[number];
-  const [anchoUnit, setAnchoUnit] = React.useState<MedidaUnit>("mm");
-  const [altoUnit, setAltoUnit] = React.useState<MedidaUnit>("mm");
+  const [anchoUnit, setAnchoUnit] = React.useState<MedidaUnit>("cm");
+  const [altoUnit, setAltoUnit] = React.useState<MedidaUnit>("cm");
   const cycleAnchoUnit = () =>
     setAnchoUnit((u) => MEDIDA_UNITS[(MEDIDA_UNITS.indexOf(u) + 1) % MEDIDA_UNITS.length]);
   const cycleAltoUnit = () =>
@@ -991,39 +1024,143 @@ function VinylCutImposicionTab(props: ProductTabProps) {
 function VinylCutSimularCostoTab(props: ProductTabProps) {
   const { config } = useVinylCutConfig(props);
   const [isQuoting, startQuoting] = React.useTransition();
-  const [quoteResult, setQuoteResult] = React.useState<Record<string, unknown> | null>(null);
+  const [result, setResult] = React.useState<Record<string, unknown> | null>(null);
   const [cantidadTrabajo, setCantidadTrabajo] = React.useState("1");
+  const [materialesOpen, setMaterialesOpen] = React.useState<Record<string, boolean>>({});
+  const [materialesMermaOpen, setMaterialesMermaOpen] = React.useState<Record<string, boolean>>({});
+  const [nestingColorId, setNestingColorId] = React.useState<string | null>(null);
 
-  const quote = () => {
-    if (!props.selectedVariantId) return;
+  // ── Local colores draft (same pattern as imposición tab) ──
+  const [colores, setColores] = React.useState<ColorDraft[]>(() => configToColores(config));
+  React.useEffect(() => {
+    setColores(configToColores(config));
+  }, [props.motorConfig?.updatedAt, props.motorConfig?.versionConfig]);
+
+  const enabledVariantIds = React.useMemo(
+    () => new Set(toStringArray(config.variantesCompatibles)),
+    [config.variantesCompatibles],
+  );
+
+  const vinylColorOptions = React.useMemo(() => {
+    const seen = new Set<string>();
+    const options: Array<{ color: string }> = [];
+    props.materiasPrimas
+      .filter(
+        (m) =>
+          m.activo &&
+          m.subfamilia === "sustrato_rollo_flexible" &&
+          (m.templateId === "vinilo_de_corte_rollo_v1" || m.tipoTecnico === "vinilo_de_corte_rollo"),
+      )
+      .forEach((m) => {
+        (m.variantes ?? [])
+          .filter((v) => v.activo && (enabledVariantIds.size === 0 || enabledVariantIds.has(v.id)))
+          .forEach((v) => {
+            const color =
+              typeof (v.atributosVariante as Record<string, unknown>)?.color === "string"
+                ? ((v.atributosVariante as Record<string, unknown>).color as string).trim()
+                : "";
+            if (color && !seen.has(color.toLowerCase())) {
+              seen.add(color.toLowerCase());
+              options.push({ color });
+            }
+          });
+      });
+    return options.sort((a, b) => a.color.localeCompare(b.color));
+  }, [props.materiasPrimas, enabledVariantIds]);
+
+  // ── Color CRUD helpers ──
+  const addColor = () =>
+    setColores((prev) => [
+      ...prev,
+      { id: newColorId(), label: `Color ${prev.length + 1}`, materialVarianteId: null, colorFiltro: null, medidas: [{ anchoMm: 0, altoMm: 0, cantidad: 1 }] },
+    ]);
+  const removeColor = (colorId: string) => setColores((prev) => prev.filter((c) => c.id !== colorId));
+  const updateColor = (colorId: string, patch: Partial<Omit<ColorDraft, "id" | "medidas">>) =>
+    setColores((prev) => prev.map((c) => (c.id === colorId ? { ...c, ...patch } : c)));
+  const addMedida = (colorId: string) =>
+    setColores((prev) =>
+      prev.map((c) => (c.id === colorId ? { ...c, medidas: [...c.medidas, { anchoMm: 0, altoMm: 0, cantidad: 1 }] } : c)),
+    );
+  const removeMedida = (colorId: string, index: number) =>
+    setColores((prev) =>
+      prev.map((c) => (c.id === colorId ? { ...c, medidas: c.medidas.filter((_, i) => i !== index) } : c)),
+    );
+  const updateMedida = (colorId: string, index: number, patch: Partial<{ anchoMm: number; altoMm: number; cantidad: number }>) =>
+    setColores((prev) =>
+      prev.map((c) => (c.id === colorId ? { ...c, medidas: c.medidas.map((m, i) => (i === index ? { ...m, ...patch } : m)) } : c)),
+    );
+
+  // ── Unit toggle (cm default) ──
+  const MEDIDA_UNITS = ["mm", "cm"] as const;
+  type MedidaUnit = (typeof MEDIDA_UNITS)[number];
+  const [anchoUnit, setAnchoUnit] = React.useState<MedidaUnit>("cm");
+  const [altoUnit, setAltoUnit] = React.useState<MedidaUnit>("cm");
+  const cycleAnchoUnit = () => setAnchoUnit((u) => MEDIDA_UNITS[(MEDIDA_UNITS.indexOf(u) + 1) % MEDIDA_UNITS.length]);
+  const cycleAltoUnit = () => setAltoUnit((u) => MEDIDA_UNITS[(MEDIDA_UNITS.indexOf(u) + 1) % MEDIDA_UNITS.length]);
+  const toDisplay = (mm: number, unit: MedidaUnit) => {
+    const raw = unit === "mm" ? mm : convertUnitValue(mm, "mm", unit);
+    return parseFloat(raw.toPrecision(8));
+  };
+  const toMm = (display: number, unit: MedidaUnit) => (unit === "mm" ? display : convertUnitValue(display, unit, "mm"));
+
+  // ── API call using product-level endpoint (same as imposición) ──
+  const quote = () =>
     startQuoting(async () => {
       try {
-        const result = await cotizarProductoVariante(props.selectedVariantId, {
-          cantidad: Math.max(1, Number(cantidadTrabajo || 1)),
-          parametros: config,
-        });
-        setQuoteResult(result as Record<string, unknown>);
+        const payload = { ...config, colores };
+        const res = await previewVinylCutImposicionByProducto(props.producto.id, payload);
+        setResult(res as Record<string, unknown>);
       } catch (error) {
         console.error(error);
         toast.error("No se pudo simular el costo.");
       }
     });
-  };
 
-  const coloresResumen = React.useMemo(
-    () =>
-      Array.isArray(asRecord(quoteResult?.trazabilidad).coloresResumen)
-        ? (asRecord(quoteResult?.trazabilidad).coloresResumen as Array<Record<string, unknown>>)
-        : [],
-    [quoteResult],
+  // ── Derived data from result ──
+  const aggregated = React.useMemo(() => asRecord(result?.aggregated), [result]);
+  const colorResults = React.useMemo(
+    () => (Array.isArray(result?.colorResults) ? (result.colorResults as Array<Record<string, unknown>>) : []),
+    [result],
+  );
+  const procesosCotizados = React.useMemo(
+    () => (Array.isArray(aggregated.centrosCosto) ? (aggregated.centrosCosto as Array<Record<string, unknown>>) : []),
+    [aggregated],
+  );
+  const materialesCotizados = React.useMemo(
+    () => (Array.isArray(aggregated.materiasPrimas) ? (aggregated.materiasPrimas as Array<Record<string, unknown>>) : []),
+    [aggregated],
   );
 
-  const procesos = React.useMemo(
-    () =>
-      Array.isArray(asRecord(quoteResult?.bloques).procesos)
-        ? (asRecord(quoteResult?.bloques).procesos as Array<Record<string, unknown>>)
-        : [],
-    [quoteResult],
+  const materialesAgrupados = React.useMemo(() => {
+    const groups = new Map<string, { tipo: string; label: string; items: Array<Record<string, unknown>>; mermaOperativa: Array<Record<string, unknown>>; totalMermaCantidad: number; totalMermaCosto: number; totalCantidad: number; totalCosto: number }>();
+    for (const item of materialesCotizados) {
+      const tipo = String(item.tipo ?? "");
+      const current = groups.get(tipo) ?? { tipo, label: getMaterialTipoLabel(tipo), items: [], mermaOperativa: [], totalMermaCantidad: 0, totalMermaCosto: 0, totalCantidad: 0, totalCosto: 0 };
+      const cantidad = Number(item.cantidad ?? 0) || 0;
+      const costo = Number(item.costo ?? 0) || 0;
+      const origen = String(item.origen ?? "Base").trim().toLowerCase();
+      if (origen === "merma operativa") {
+        current.mermaOperativa.push(item);
+        current.totalMermaCantidad += cantidad;
+        current.totalMermaCosto += costo;
+      } else {
+        current.items.push(item);
+      }
+      current.totalCantidad += cantidad;
+      current.totalCosto += costo;
+      groups.set(tipo, current);
+    }
+    return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [materialesCotizados]);
+
+  const totalCentroCostos = procesosCotizados.reduce((acc, item) => acc + (Number(item.costo ?? 0) || 0), 0);
+  const totalMaterialesCosto = materialesCotizados.reduce((acc, item) => acc + (Number(item.costo ?? 0) || 0), 0);
+  const totalCostoGeneral = totalCentroCostos + totalMaterialesCosto;
+
+  // ── Warnings ──
+  const warnings = React.useMemo(
+    () => (Array.isArray(result?.warnings) ? (result.warnings as string[]) : []),
+    [result],
   );
 
   return (
@@ -1031,174 +1168,409 @@ function VinylCutSimularCostoTab(props: ProductTabProps) {
       <CardHeader>
         <CardTitle>Simular costo</CardTitle>
         <CardDescription>
-          Calcula materiales y centros de costo desde el nesting configurado. Cada color se simula
-          independientemente.
+          Definí los colores y medidas del trabajo, luego simulá el costo completo con desglose de materiales y centros de costo.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {!props.selectedVariant ? (
-          <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-            Creá y seleccioná una variante para habilitar la simulación de costos.
-          </div>
-        ) : null}
+        {/* ── Color cards (input) ── */}
+        <div className="space-y-4">
+          {colores.map((color, colorIdx) => (
+            <Card key={color.id} className="border-l-4 border-l-primary/40">
+              <CardContent className="pt-4 space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Color {colorIdx + 1}{color.colorFiltro ? ` — ${color.colorFiltro}` : ""}
+                    </p>
+                    <Field>
+                      <FieldLabel>Color del vinilo</FieldLabel>
+                      <Select
+                        value={color.colorFiltro ?? "__sin_filtro__"}
+                        onValueChange={(v) => {
+                          const newColor = v === "__sin_filtro__" ? null : v;
+                          updateColor(color.id, { colorFiltro: newColor, label: newColor ?? `Color ${colorIdx + 1}`, materialVarianteId: null });
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue>{color.colorFiltro ?? "Sin filtro (todos los rollos)"}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__sin_filtro__">Sin filtro (todos los rollos)</SelectItem>
+                          {vinylColorOptions.map((opt) => (
+                            <SelectItem key={opt.color} value={opt.color}>{opt.color}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  </div>
+                  <Button variant="ghost" size="icon" className="shrink-0 mt-7" onClick={() => removeColor(color.id)} disabled={colores.length <= 1}>
+                    <Trash2Icon className="size-4" />
+                  </Button>
+                </div>
 
-        <div className="flex items-end gap-4">
-          <Field className="max-w-xs">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>
+                        <div className="flex items-center gap-1.5">
+                          Ancho
+                          <button type="button" onClick={cycleAnchoUnit} title="Cambiar unidad de ancho" className="rounded border border-input bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">{anchoUnit}</button>
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1.5">
+                          Alto
+                          <button type="button" onClick={cycleAltoUnit} title="Cambiar unidad de alto" className="rounded border border-input bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">{altoUnit}</button>
+                        </div>
+                      </TableHead>
+                      <TableHead>Cantidad</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {color.medidas.map((medida, mIdx) => (
+                      <TableRow key={mIdx}>
+                        <TableCell>
+                          <Input type="number" min={0} step={anchoUnit === "mm" ? 1 : 0.1} value={toDisplay(medida.anchoMm, anchoUnit)} onChange={(e) => updateMedida(color.id, mIdx, { anchoMm: Math.round(toMm(Number(e.target.value || 0), anchoUnit)) })} />
+                        </TableCell>
+                        <TableCell>
+                          <Input type="number" min={0} step={altoUnit === "mm" ? 1 : 0.1} value={toDisplay(medida.altoMm, altoUnit)} onChange={(e) => updateMedida(color.id, mIdx, { altoMm: Math.round(toMm(Number(e.target.value || 0), altoUnit)) })} />
+                        </TableCell>
+                        <TableCell>
+                          <Input type="number" value={String(medida.cantidad)} onChange={(e) => updateMedida(color.id, mIdx, { cantidad: Number(e.target.value || 1) })} />
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="icon" onClick={() => removeMedida(color.id, mIdx)} disabled={color.medidas.length <= 1}>
+                            <Trash2Icon className="size-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <Button variant="outline" size="sm" onClick={() => addMedida(color.id)}>
+                  <PlusIcon className="mr-2 size-4" />
+                  Agregar medida
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* ── Actions ── */}
+        <div className="flex gap-3 flex-wrap items-end">
+          <Button variant="outline" onClick={addColor}>
+            <PlusIcon className="mr-2 size-4" />
+            Agregar color
+          </Button>
+          <Field className="max-w-[160px]">
             <FieldLabel>Cantidad de trabajos</FieldLabel>
-            <Input
-              type="number"
-              value={cantidadTrabajo}
-              onChange={(e) => setCantidadTrabajo(e.target.value)}
-            />
+            <Input type="number" value={cantidadTrabajo} onChange={(e) => setCantidadTrabajo(e.target.value)} />
           </Field>
-          <Button onClick={quote} disabled={isQuoting || !props.selectedVariantId}>
-            {isQuoting ? (
-              <GdiSpinner className="mr-2 size-4" />
-            ) : (
-              <RefreshCcwIcon className="mr-2 size-4" />
-            )}
+          <Button onClick={quote} disabled={isQuoting}>
+            {isQuoting ? <GdiSpinner className="mr-2 size-4" /> : <RefreshCcwIcon className="mr-2 size-4" />}
             Simular costo
           </Button>
         </div>
 
-        {quoteResult ? (
+        {/* ── Results ── */}
+        {result ? (
           <div className="space-y-6">
-            {/* Summary cards */}
-            <div className="grid gap-4 md:grid-cols-4">
-              <Card>
-                <CardContent className="pt-6">
-                  <p className="text-xs text-muted-foreground">Total</p>
-                  <p className="font-semibold">
-                    ${Number(quoteResult.total ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 2 })}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-6">
-                  <p className="text-xs text-muted-foreground">Unitario ML</p>
-                  <p className="font-semibold">
-                    ${Number(quoteResult.unitario ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 2 })}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-6">
-                  <p className="text-xs text-muted-foreground">Procesos</p>
-                  <p className="font-semibold">
-                    ${Number(asRecord(quoteResult.subtotales).procesos ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 2 })}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-6">
-                  <p className="text-xs text-muted-foreground">Materiales</p>
-                  <p className="font-semibold">
-                    ${Number(asRecord(quoteResult.subtotales).papel ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 2 })}
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Per-color material breakdown */}
-            {coloresResumen.length > 0 ? (
-              <div className="space-y-4">
-                <p className="text-sm font-semibold">Materiales por color</p>
-                {coloresResumen.map((cr, idx) => {
-                  const colorMateriales = Array.isArray(cr.materiasPrimas)
-                    ? (cr.materiasPrimas as Array<Record<string, unknown>>)
-                    : [];
-                  const colorTotales = asRecord(cr.totales);
-                  return (
-                    <Card key={String(cr.colorId ?? idx)}>
-                      <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-sm">{String(cr.colorLabel ?? `Color ${idx + 1}`)}</CardTitle>
-                          <span className="text-sm text-muted-foreground">
-                            Materiales: $
-                            {Number(colorTotales.materiales ?? 0).toLocaleString("es-AR", {
-                              maximumFractionDigits: 2,
-                            })}
-                          </span>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Material</TableHead>
-                              <TableHead>Cantidad</TableHead>
-                              <TableHead>Costo</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {colorMateriales.map((item, mIdx) => (
-                              <TableRow key={mIdx}>
-                                <TableCell>{String(item.nombre ?? "-")}</TableCell>
-                                <TableCell>
-                                  {Number(item.cantidad ?? 0).toLocaleString("es-AR", {
-                                    maximumFractionDigits: 3,
-                                  })}{" "}
-                                  {String(item.unidad ?? "")}
-                                </TableCell>
-                                <TableCell>
-                                  $
-                                  {Number(item.costo ?? 0).toLocaleString("es-AR", {
-                                    maximumFractionDigits: 2,
-                                  })}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+            {/* Warnings */}
+            {warnings.length > 0 ? (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                {warnings.map((w, i) => (<p key={i}>{w}</p>))}
               </div>
             ) : null}
 
-            {/* Procesos (single merged block) */}
-            {procesos.length > 0 ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Procesos de corte</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Paso</TableHead>
-                        <TableHead>Centro de costo</TableHead>
-                        <TableHead>Minutos</TableHead>
-                        <TableHead>Costo</TableHead>
+            {/* Summary cards */}
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-lg border bg-muted/20 p-4 text-center">
+                <p className="text-3xl font-semibold">{formatCurrency(Number(aggregated.totalTecnico ?? 0))}</p>
+                <p className="mt-1 text-sm text-muted-foreground">Costo técnico total</p>
+              </div>
+              <div className="rounded-lg border bg-muted/20 p-4 text-center">
+                <p className="text-3xl font-semibold">{formatCurrency(Number(aggregated.totalMateriales ?? 0))}</p>
+                <p className="mt-1 text-sm text-muted-foreground">Materiales</p>
+              </div>
+              <div className="rounded-lg border bg-muted/20 p-4 text-center">
+                <p className="text-3xl font-semibold">{formatCurrency(Number(aggregated.totalCentrosCosto ?? 0))}</p>
+                <p className="mt-1 text-sm text-muted-foreground">Centros de costo</p>
+              </div>
+            </div>
+
+            {/* Centro de costos */}
+            {procesosCotizados.length > 0 ? (
+              <div className="rounded-xl border bg-muted/10 p-4">
+                <div className="mb-4">
+                  <h4 className="text-sm font-semibold">Centro de costos</h4>
+                </div>
+                <Table>
+                  <TableHeader className="bg-muted/50 shadow-[inset_0_-1px_0_rgba(0,0,0,0.06)]">
+                    <TableRow className="border-b border-border/70">
+                      <TableHead>#</TableHead>
+                      <TableHead>Paso</TableHead>
+                      <TableHead>Centro</TableHead>
+                      <TableHead className="w-[180px]">Origen</TableHead>
+                      <TableHead className="w-[140px] text-right">Minutos</TableHead>
+                      <TableHead className="w-[140px] text-right">Tarifa/h</TableHead>
+                      <TableHead className="w-[140px] text-right">Costo</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {procesosCotizados.map((item, idx) => (
+                      <TableRow key={`${String(item.codigo)}-${idx}`}>
+                        <TableCell>{String(item.orden ?? idx + 1)}</TableCell>
+                        <TableCell>
+                          <span className="inline-flex items-center gap-1">
+                            <span>{String(item.paso ?? item.nombre ?? "-")}</span>
+                            {item.detalleTecnico ? (
+                              <Tooltip>
+                                <TooltipTrigger className="inline-flex size-5 items-center justify-center rounded border border-border/60 text-muted-foreground transition-colors hover:bg-muted" aria-label="Ver detalle técnico">
+                                  <InfoIcon className="size-3.5" />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-[360px] whitespace-pre-wrap text-xs">
+                                  {formatDetalleTecnico(item.detalleTecnico as Record<string, unknown>)}
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : null}
+                          </span>
+                        </TableCell>
+                        <TableCell>{String(item.centroCostoNombre ?? "-")}</TableCell>
+                        <TableCell>{formatOrigenProcesoLabel(item.origen)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatNumber(Number(item.minutos ?? item.totalMin ?? 0))}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatCurrency(Number(item.tarifaHora ?? 0))}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatCurrency(Number(item.costo ?? 0))}</TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {procesos.map((item, idx) => (
-                        <TableRow key={idx}>
-                          <TableCell>{String(item.nombre ?? "-")}</TableCell>
-                          <TableCell>{String(item.centroCostoNombre ?? "-")}</TableCell>
-                          <TableCell>
-                            {Number(item.runMin ?? 0).toLocaleString("es-AR", {
-                              maximumFractionDigits: 1,
-                            })}
-                          </TableCell>
-                          <TableCell>
-                            $
-                            {Number(item.costo ?? 0).toLocaleString("es-AR", {
-                              maximumFractionDigits: 2,
-                            })}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
+                    ))}
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-right font-medium">Total</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">{formatCurrency(totalCentroCostos)}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
             ) : null}
+
+            {/* Materias primas */}
+            {materialesAgrupados.length > 0 ? (
+              <div className="rounded-xl border bg-muted/10 p-4">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h4 className="text-sm font-semibold">Materias primas</h4>
+                  {colorResults.length > 0 ? (
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs bg-orange-500 hover:bg-orange-600 text-white"
+                      onClick={() => setNestingColorId(String(colorResults[0]?.colorId ?? "0"))}
+                    >
+                      <EyeIcon className="mr-1.5 size-3.5" />
+                      Ver nesting
+                    </Button>
+                  ) : null}
+                </div>
+                <div className="space-y-3">
+                  {materialesAgrupados.map((grupo) => (
+                    <Collapsible key={grupo.tipo} open={materialesOpen[grupo.tipo] ?? false} onOpenChange={(open) => setMaterialesOpen((prev) => ({ ...prev, [grupo.tipo]: open }))}>
+                      <div className="rounded-lg border bg-background">
+                        <div className="flex items-center gap-2 px-3 py-3 transition-colors hover:bg-muted/60">
+                          <CollapsibleTrigger className="flex w-full cursor-pointer items-center justify-between text-left">
+                            <div className="grid flex-1 gap-1 md:grid-cols-[minmax(0,1fr)_140px_140px] md:items-center">
+                              <div>
+                                <p className="font-medium">{grupo.label}</p>
+                                <p className="text-xs text-muted-foreground">{grupo.items.length} componente{grupo.items.length === 1 ? "" : "s"}</p>
+                              </div>
+                              <div className="text-left md:text-right">
+                                <p className="text-xs text-muted-foreground">Cantidad total</p>
+                                <p className="tabular-nums">{formatNumber(grupo.totalCantidad)}</p>
+                              </div>
+                              <div className="text-left md:text-right">
+                                <p className="text-xs text-muted-foreground">Costo total</p>
+                                <p className="font-medium tabular-nums">{formatCurrency(grupo.totalCosto)}</p>
+                              </div>
+                            </div>
+                            <span className="ml-3 inline-flex items-center text-muted-foreground">
+                              {materialesOpen[grupo.tipo] ? <ChevronDownIcon className="size-4" /> : <ChevronRightIcon className="size-4" />}
+                            </span>
+                          </CollapsibleTrigger>
+                        </div>
+                        <CollapsibleContent>
+                          <div className="border-t">
+                            <Table>
+                              <TableHeader className="bg-muted/50 shadow-[inset_0_-1px_0_rgba(0,0,0,0.06)]">
+                                <TableRow className="border-b border-border/70">
+                                  <TableHead>Componente</TableHead>
+                                  <TableHead className="w-[180px]">Origen</TableHead>
+                                  <TableHead className="w-[140px] text-right">Cantidad</TableHead>
+                                  <TableHead className="w-[140px] text-right">Costo unitario</TableHead>
+                                  <TableHead className="w-[140px] text-right">Costo</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {grupo.items.map((item, idx) => {
+                                  const nombre = String(item.nombre ?? "Componente");
+                                  const chips = Array.isArray(item.variantChips)
+                                    ? (item.variantChips as Array<{ label: string; value: string }>)
+                                        .map((c) => c.value)
+                                        .join(" · ")
+                                    : "";
+                                  const displayLabel = chips ? `${nombre} · ${chips}` : nombre;
+                                  return (
+                                    <TableRow key={`${grupo.tipo}-${idx}`}>
+                                      <TableCell>{displayLabel}</TableCell>
+                                      <TableCell>{formatOrigenProcesoLabel(item.origen)}</TableCell>
+                                      <TableCell className="text-right tabular-nums">{formatNumber(Number(item.cantidad ?? 0))} {String(item.unidad ?? "").replace("metro_lineal", "ml").replace("m2", "m²")}</TableCell>
+                                      <TableCell className="text-right tabular-nums">{formatCurrency(Number(item.costoUnitario ?? 0))}</TableCell>
+                                      <TableCell className="text-right tabular-nums">{formatCurrency(Number(item.costo ?? 0))}</TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                                {grupo.mermaOperativa.length > 0 ? (
+                                  <>
+                                    <TableRow className="cursor-pointer bg-amber-50/60 hover:bg-amber-50" onClick={() => setMaterialesMermaOpen((prev) => ({ ...prev, [grupo.tipo]: !(prev[grupo.tipo] ?? false) }))}>
+                                      <TableCell>
+                                        <div className="flex items-center gap-2">
+                                          {materialesMermaOpen[grupo.tipo] ? <ChevronDownIcon className="size-4 text-muted-foreground" /> : <ChevronRightIcon className="size-4 text-muted-foreground" />}
+                                          <span className="font-medium">Merma operativa</span>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell>Producto base</TableCell>
+                                      <TableCell className="text-right tabular-nums">{formatNumber(grupo.totalMermaCantidad)}</TableCell>
+                                      <TableCell className="text-right tabular-nums">-</TableCell>
+                                      <TableCell className="text-right tabular-nums">{formatCurrency(grupo.totalMermaCosto)}</TableCell>
+                                    </TableRow>
+                                    {materialesMermaOpen[grupo.tipo]
+                                      ? grupo.mermaOperativa.map((item, idx) => (
+                                          <TableRow key={`${grupo.tipo}-merma-${idx}`} className="bg-muted/20">
+                                            <TableCell className="pl-10">{(() => { const n = String(item.nombre ?? "Componente"); const c = Array.isArray(item.variantChips) ? (item.variantChips as Array<{ label: string; value: string }>).map((ch) => ch.value).join(" · ") : ""; return c ? `${n} · ${c}` : n; })()}</TableCell>
+                                            <TableCell>Merma operativa</TableCell>
+                                            <TableCell className="text-right tabular-nums">{formatNumber(Number(item.cantidad ?? 0))} {String(item.unidad ?? "").replace("metro_lineal", "ml").replace("m2", "m²")}</TableCell>
+                                            <TableCell className="text-right tabular-nums">{formatCurrency(Number(item.costoUnitario ?? 0))}</TableCell>
+                                            <TableCell className="text-right tabular-nums">{formatCurrency(Number(item.costo ?? 0))}</TableCell>
+                                          </TableRow>
+                                        ))
+                                      : null}
+                                  </>
+                                ) : null}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </CollapsibleContent>
+                      </div>
+                    </Collapsible>
+                  ))}
+
+                  {/* Totales generales */}
+                  <div className="rounded-lg border bg-background">
+                    <Table>
+                      <TableBody>
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-right font-medium">Total materiales</TableCell>
+                          <TableCell className="text-right font-semibold tabular-nums">{formatCurrency(totalMaterialesCosto)}</TableCell>
+                        </TableRow>
+                        <TableRow className="bg-amber-100/60">
+                          <TableCell colSpan={4} className="text-right font-semibold">Total costo</TableCell>
+                          <TableCell className="text-right font-bold tabular-nums">{formatCurrency(totalCostoGeneral)}</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
           </div>
         ) : null}
       </CardContent>
+
+      {/* Nesting Sheet */}
+      <Sheet open={nestingColorId != null} onOpenChange={(open) => { if (!open) setNestingColorId(null); }}>
+        <SheetContent side="right" className="!w-[72vw] !max-w-none md:!w-[68vw] lg:!w-[64vw] xl:!w-[62vw] sm:!max-w-none flex flex-col overflow-hidden">
+          <SheetHeader>
+            <SheetTitle>Nesting</SheetTitle>
+            <SheetDescription>
+              Visualización del acomodamiento de piezas en el rollo.
+            </SheetDescription>
+          </SheetHeader>
+
+          {/* Color tabs */}
+          {colorResults.length > 1 ? (
+            <div className="flex gap-1.5 border-b px-4 pb-3">
+              {colorResults.map((cr, idx) => {
+                const colorId = String(cr.colorId ?? idx);
+                const isActive = nestingColorId === colorId;
+                return (
+                  <button
+                    key={colorId}
+                    type="button"
+                    onClick={() => setNestingColorId(colorId)}
+                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${isActive ? "bg-primary text-primary-foreground" : "bg-muted/60 text-muted-foreground hover:bg-muted"}`}
+                  >
+                    {String(cr.colorLabel ?? `Color ${idx + 1}`)}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {/* Nesting content */}
+          <div className="flex-1 overflow-y-auto px-4 pb-4">
+            {(() => {
+              if (nestingColorId == null) return null;
+              const colorResult = colorResults.find((cr) => String(cr.colorId) === nestingColorId) ?? null;
+              const nestingData = buildColorNestingPreview(colorResult);
+              if (!nestingData) return <p className="text-sm text-muted-foreground">No hay datos de nesting para este color.</p>;
+              return (
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-4">
+                    <Card>
+                      <CardContent className="pt-4">
+                        <p className="text-xs text-muted-foreground">Plotter</p>
+                        <p className="font-semibold text-sm">{nestingData.machineLabel}</p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-4">
+                        <p className="text-xs text-muted-foreground">Perfil</p>
+                        <p className="font-semibold text-sm">{String(nestingData.winner.perfilNombre ?? "-")}</p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-4">
+                        <p className="text-xs text-muted-foreground">Largo consumido</p>
+                        <p className="font-semibold text-sm">
+                          {Number(asRecord(nestingData.winner.resumenTecnico).largoConsumidoMl ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 3 })} m
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-4">
+                        <p className="text-xs text-muted-foreground">Desperdicio</p>
+                        <p className="font-semibold text-sm">
+                          {Number(asRecord(nestingData.winner.resumenTecnico).wastePct ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 2 })}%
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                  <div className="max-h-[calc(100vh-320px)]">
+                    <VinylCutNestingWorkspace
+                      machineLabel={nestingData.machineLabel}
+                      rollWidthCm={nestingData.rollWidthCm}
+                      rollLengthCm={nestingData.rollLengthCm}
+                      pieces={nestingData.pieces}
+                      marginLeftCm={nestingData.marginLeftCm}
+                      marginRightCm={nestingData.marginRightCm}
+                      marginTopCm={nestingData.marginTopCm}
+                      marginBottomCm={nestingData.marginBottomCm}
+                      separacionHorizontalCm={nestingData.separacionHorizontalCm}
+                      separacionVerticalCm={nestingData.separacionVerticalCm}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </SheetContent>
+      </Sheet>
     </Card>
   );
 }

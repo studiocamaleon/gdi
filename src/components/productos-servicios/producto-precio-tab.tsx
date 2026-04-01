@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { PencilIcon, PlusIcon, SaveIcon, Trash2Icon } from "lucide-react";
+import { CheckIcon, ChevronsUpDownIcon, PencilIcon, PlusIcon, SaveIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 import type { ProductTabProps } from "@/components/productos-servicios/product-detail-types";
@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -356,26 +357,40 @@ export function ProductoPrecioTab(props: ProductTabProps) {
     }));
   }, [impuestosCatalogo, precioForm.impuestos.esquemaId]);
 
+  const comisionesEsquemaIdsKey = (precioForm.comisiones.esquemaIds ?? (precioForm.comisiones.esquemaId ? [precioForm.comisiones.esquemaId] : [])).join(",");
   React.useEffect(() => {
-    if (!precioForm.comisiones.esquemaId) return;
-    const esquema = comisionesCatalogo.find((item) => item.id === precioForm.comisiones.esquemaId);
-    if (!esquema) return;
-    setPrecioForm((current) => ({
-      ...current,
-      comisiones: {
-        esquemaId: esquema.id,
-        esquemaNombre: esquema.nombre,
-        items: esquema.detalle.items.map((item, index) => ({
-          id: `${esquema.id}-${index + 1}`,
+    const ids = (precioForm.comisiones.esquemaIds ?? (precioForm.comisiones.esquemaId ? [precioForm.comisiones.esquemaId] : []));
+    if (!ids.length) return;
+    const mergedItems: typeof precioForm.comisiones.items = [];
+    const nombres: string[] = [];
+    for (const id of ids) {
+      const esquema = comisionesCatalogo.find((c) => c.id === id);
+      if (!esquema) continue;
+      nombres.push(esquema.nombre);
+      esquema.detalle.items.forEach((item, index) => {
+        mergedItems.push({
+          id: `${id}-${index + 1}`,
           nombre: item.nombre,
           tipo: item.tipo,
           porcentaje: item.porcentaje,
           activo: item.activo,
-        })),
-        porcentajeTotal: esquema.porcentaje,
+          esquemaOrigenId: id,
+        });
+      });
+    }
+    const porcentajeTotal = Number(mergedItems.filter((i) => i.activo).reduce((s, i) => s + i.porcentaje, 0).toFixed(2));
+    setPrecioForm((current) => ({
+      ...current,
+      comisiones: {
+        esquemaId: ids[0] ?? null,
+        esquemaIds: ids,
+        esquemaNombre: nombres.join(", "),
+        items: mergedItems,
+        porcentajeTotal,
       },
     }));
-  }, [comisionesCatalogo, precioForm.comisiones.esquemaId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comisionesCatalogo, comisionesEsquemaIdsKey]);
 
   const handleChangeMetodoCalculoPrecio = (metodoCalculo: MetodoCalculoPrecioProducto) => {
     const nextMeasurementUnit = precioForm.measurementUnit ?? measurementUnitFallback;
@@ -498,30 +513,39 @@ export function ProductoPrecioTab(props: ProductTabProps) {
     });
   };
 
-  const handleSelectComision = (esquemaId: string | null) => {
-    const esquema = comisionesCatalogoActivos.find((item) => item.id === esquemaId) ?? null;
-    setPrecioForm((current) => ({
-      ...current,
-      comisiones: esquema
-        ? {
-            esquemaId: esquema.id,
-            esquemaNombre: esquema.nombre,
-            items: esquema.detalle.items.map((item, index) => ({
-              id: `${esquema.id}-${index + 1}`,
-              nombre: item.nombre,
-              tipo: item.tipo,
-              porcentaje: item.porcentaje,
-              activo: item.activo,
-            })),
-            porcentajeTotal: esquema.porcentaje,
-          }
-        : {
-            esquemaId: null,
-            esquemaNombre: "",
-            items: [],
-            porcentajeTotal: 0,
-          },
-    }));
+  const handleToggleComisionSchema = (esquemaId: string, checked: boolean) => {
+    setPrecioForm((current) => {
+      const currentIds = current.comisiones.esquemaIds ?? (current.comisiones.esquemaId ? [current.comisiones.esquemaId] : []);
+      const nextIds = checked ? [...currentIds, esquemaId] : currentIds.filter((id) => id !== esquemaId);
+      const mergedItems: typeof current.comisiones.items = [];
+      const nombres: string[] = [];
+      for (const id of nextIds) {
+        const esquema = comisionesCatalogoActivos.find((c) => c.id === id);
+        if (!esquema) continue;
+        nombres.push(esquema.nombre);
+        esquema.detalle.items.forEach((item, index) => {
+          mergedItems.push({
+            id: `${id}-${index + 1}`,
+            nombre: item.nombre,
+            tipo: item.tipo,
+            porcentaje: item.porcentaje,
+            activo: item.activo,
+            esquemaOrigenId: id,
+          });
+        });
+      }
+      const porcentajeTotal = Number(mergedItems.filter((i) => i.activo).reduce((s, i) => s + i.porcentaje, 0).toFixed(2));
+      return {
+        ...current,
+        comisiones: {
+          esquemaId: nextIds[0] ?? null,
+          esquemaIds: nextIds,
+          esquemaNombre: nombres.join(", "),
+          items: mergedItems,
+          porcentajeTotal,
+        },
+      };
+    });
   };
 
   const handleOpenComisionesEditor = () => {
@@ -592,21 +616,19 @@ export function ProductoPrecioTab(props: ProductTabProps) {
           const exists = current.some((item) => item.id === saved.id);
           return exists ? current.map((item) => (item.id === saved.id ? saved : item)) : [...current, saved];
         });
-        setPrecioForm((current) => ({
-          ...current,
-          comisiones: {
-            esquemaId: saved.id,
-            esquemaNombre: saved.nombre,
-            items: saved.detalle.items.map((item, index) => ({
-              id: `${saved.id}-${index + 1}`,
-              nombre: item.nombre,
-              tipo: item.tipo,
-              porcentaje: item.porcentaje,
-              activo: item.activo,
-            })),
-            porcentajeTotal: saved.porcentaje,
-          },
-        }));
+        setPrecioForm((current) => {
+          const currentIds = current.comisiones.esquemaIds ?? (current.comisiones.esquemaId ? [current.comisiones.esquemaId] : []);
+          const nextIds = currentIds.includes(saved.id) ? currentIds : [...currentIds, saved.id];
+          // The useEffect on comisionesEsquemaIdsKey will rebuild items from the updated catalog
+          return {
+            ...current,
+            comisiones: {
+              ...current.comisiones,
+              esquemaId: nextIds[0] ?? null,
+              esquemaIds: nextIds,
+            },
+          };
+        });
         setComisionesEditorDraft({
           ...saved,
           detalle: { items: saved.detalle.items.map((item) => ({ ...item })) },
@@ -683,7 +705,9 @@ export function ProductoPrecioTab(props: ProductTabProps) {
               <div className="flex gap-2">
                 <Select value={precioForm.metodoCalculo} onValueChange={(value) => handleChangeMetodoCalculoPrecio(value as MetodoCalculoPrecioProducto)}>
                   <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Selecciona método" />
+                    <SelectValue placeholder="Selecciona método">
+                      {getPrecioMethodLabel(precioForm.metodoCalculo)}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {metodoCalculoPrecioItems.map((item) => (
@@ -713,7 +737,11 @@ export function ProductoPrecioTab(props: ProductTabProps) {
               <div className="flex gap-2">
                 <Select value={precioForm.impuestos.esquemaId ?? "__none__"} onValueChange={(value) => handleSelectImpuesto(value === "__none__" ? null : value)}>
                   <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Seleccioná un esquema" />
+                    <SelectValue placeholder="Seleccioná un esquema">
+                      {precioForm.impuestos.esquemaId
+                        ? impuestosCatalogoActivos.find((i) => i.id === precioForm.impuestos.esquemaId)?.nombre ?? "Esquema seleccionado"
+                        : "Sin impuestos"}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">Sin impuestos</SelectItem>
@@ -741,22 +769,34 @@ export function ProductoPrecioTab(props: ProductTabProps) {
             <Field>
               <FieldLabel>Esquema de comisiones</FieldLabel>
               <div className="flex gap-2">
-                <Select
-                  value={precioForm.comisiones.esquemaId ?? "__none__"}
-                  onValueChange={(value) => handleSelectComision(value === "__none__" ? null : value)}
-                >
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Seleccioná un esquema" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Sin comisiones</SelectItem>
-                    {comisionesCatalogoActivos.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="flex h-9 flex-1 items-center justify-between rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]">
+                    <span className="truncate text-left">
+                      {(precioForm.comisiones.esquemaIds ?? []).length > 0
+                        ? precioForm.comisiones.esquemaNombre || "Esquemas seleccionados"
+                        : "Sin comisiones"}
+                    </span>
+                    <ChevronsUpDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-[var(--trigger-width)]">
+                    {comisionesCatalogoActivos.length === 0 ? (
+                      <p className="px-2 py-3 text-center text-xs text-muted-foreground">No hay esquemas de comisiones creados.</p>
+                    ) : (
+                      comisionesCatalogoActivos.map((item) => {
+                        const isSelected = (precioForm.comisiones.esquemaIds ?? []).includes(item.id);
+                        return (
+                          <DropdownMenuCheckboxItem
+                            key={item.id}
+                            checked={isSelected}
+                            onCheckedChange={(checked) => handleToggleComisionSchema(item.id, Boolean(checked))}
+                          >
+                            {item.nombre}
+                          </DropdownMenuCheckboxItem>
+                        );
+                      })
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button type="button" variant="outline" className="shrink-0" onClick={handleOpenComisionesEditor}>
                   Administrar comisiones
                 </Button>
@@ -860,7 +900,11 @@ export function ProductoPrecioTab(props: ProductTabProps) {
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Seleccioná un cliente" />
+                      <SelectValue placeholder="Seleccioná un cliente">
+                        {currentDraft.clienteId
+                          ? clientesOptions.find((c) => c.id === currentDraft.clienteId)?.nombre ?? "Cliente seleccionado"
+                          : "Seleccioná un cliente"}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">Seleccioná un cliente</SelectItem>
@@ -876,7 +920,9 @@ export function ProductoPrecioTab(props: ProductTabProps) {
                   <FieldLabel>Método de cálculo</FieldLabel>
                   <Select value={currentDraft.metodoCalculo} onValueChange={(value) => handleChangeMetodoCalculoPrecioEspecialCliente(value as MetodoCalculoPrecioProducto)}>
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue>
+                        {getPrecioMethodLabel(currentDraft.metodoCalculo)}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {metodoCalculoPrecioItems.map((item) => (
@@ -990,7 +1036,11 @@ export function ProductoPrecioTab(props: ProductTabProps) {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccioná un esquema" />
+                  <SelectValue placeholder="Seleccioná un esquema">
+                    {impuestosEditorDraft?.id
+                      ? impuestosCatalogoActivos.find((i) => i.id === impuestosEditorDraft.id)?.nombre ?? "Esquema seleccionado"
+                      : "Seleccioná un esquema"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">Seleccioná un esquema</SelectItem>
@@ -1167,7 +1217,11 @@ export function ProductoPrecioTab(props: ProductTabProps) {
                   }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Seleccioná un esquema" />
+                    <SelectValue placeholder="Seleccioná un esquema">
+                      {comisionesEditorDraft?.id
+                        ? (comisionesCatalogoActivos.find((i) => i.id === comisionesEditorDraft.id)?.nombre ?? comisionesEditorDraft.nombre) || "Nuevo esquema"
+                        : "Seleccioná un esquema"}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__new__">Nuevo esquema</SelectItem>
@@ -1298,7 +1352,9 @@ export function ProductoPrecioTab(props: ProductTabProps) {
                               }
                             >
                               <SelectTrigger>
-                                <SelectValue />
+                                <SelectValue>
+                                  {precioComisionTipoItems.find((t) => t.value === item.tipo)?.label ?? item.tipo}
+                                </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
                                 {precioComisionTipoItems.map((tipo) => (

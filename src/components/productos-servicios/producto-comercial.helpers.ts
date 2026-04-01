@@ -134,6 +134,7 @@ export function buildDefaultPrecioImpuestos() {
 export function buildDefaultPrecioComisiones() {
   return {
     esquemaId: null,
+    esquemaIds: [] as string[],
     esquemaNombre: "",
     items: [] as ProductoPrecioComisionItem[],
     porcentajeTotal: 0,
@@ -202,6 +203,7 @@ export function buildPrecioConfigDraft(
     comisiones: precio?.comisiones
       ? {
           esquemaId: precio.comisiones.esquemaId ?? null,
+          esquemaIds: precio.comisiones.esquemaIds ?? (precio.comisiones.esquemaId ? [precio.comisiones.esquemaId] : []),
           esquemaNombre: precio.comisiones.esquemaNombre ?? "",
           items: precio.comisiones.items.map((item) => ({ ...item })),
           porcentajeTotal: precio.comisiones.porcentajeTotal,

@@ -99,10 +99,12 @@ export type ProductoPrecioComisionItem = {
   tipo: ProductoPrecioComisionTipo;
   porcentaje: number;
   activo: boolean;
+  esquemaOrigenId?: string;
 };
 
 export type ProductoPrecioComisionesConfig = {
   esquemaId: string | null;
+  esquemaIds?: string[];
   esquemaNombre: string;
   items: ProductoPrecioComisionItem[];
   porcentajeTotal: number;

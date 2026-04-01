@@ -131,6 +131,7 @@ type ProductoPrecioConfig = {
   };
   comisiones: {
     esquemaId: string | null;
+    esquemaIds?: string[];
     esquemaNombre: string;
     items: Array<{
       id: string;
@@ -138,6 +139,7 @@ type ProductoPrecioConfig = {
       tipo: 'financiera' | 'vendedor';
       porcentaje: number;
       activo: boolean;
+      esquemaOrigenId?: string;
     }>;
     porcentajeTotal: number;
   };
@@ -5631,12 +5633,14 @@ export class ProductosServiciosService {
       config as Prisma.JsonValue,
       (payload.parametros ?? {}) as Record<string, unknown>,
     );
+    const unidadComercial = this.normalizeUnidadComercialProductoValue(variante.productoServicio.unidadComercial) === 'm2' ? 'm2' : 'metro_lineal';
     const simulation = await this.buildVinylCutSimulation(
       auth,
       variante,
       effectiveConfig,
       periodo,
       cantidadTrabajos,
+      unidadComercial,
     );
 
     const { aggregated } = simulation;
@@ -5650,15 +5654,22 @@ export class ProductosServiciosService {
     const firstWinnerResumenTecnico = firstWinner ? this.asObject(firstWinner.resumenTecnico) : {};
 
     const total = aggregated.totalTecnico;
-    // unitario en base al largo consumido total sumado de todos los colores
+    // unitario en base a la unidad comercial del producto
     const totalLargoConsumidoMl = this.roundProductNumber(
       colorResults.reduce((acc: number, cr: any) => {
         const w = cr.winner as Record<string, unknown> | null;
         return acc + Number(this.asObject(w?.resumenTecnico).largoConsumidoMl ?? 0);
       }, 0),
     );
-    const unitario = totalLargoConsumidoMl > 0
-      ? this.roundProductNumber(total / totalLargoConsumidoMl)
+    const totalAreaConsumidaM2 = this.roundProductNumber(
+      colorResults.reduce((acc: number, cr: any) => {
+        const w = cr.winner as Record<string, unknown> | null;
+        return acc + Number(this.asObject(w?.resumenTecnico).areaConsumidaM2 ?? this.asObject(w?.resumenTecnico).consumedAreaM2 ?? 0);
+      }, 0),
+    );
+    const unitarioDivisor = unidadComercial === 'm2' ? totalAreaConsumidaM2 : totalLargoConsumidoMl;
+    const unitario = unitarioDivisor > 0
+      ? this.roundProductNumber(total / unitarioDivisor)
       : total;
 
     const result = {
@@ -5874,6 +5885,7 @@ export class ProductosServiciosService {
         motorVersion: true,
         usarRutaComunVariantes: true,
         procesoDefinicionDefaultId: true,
+        unidadComercial: true,
       },
     });
     if (!producto) {
@@ -5898,13 +5910,46 @@ export class ProductosServiciosService {
         procesoDefinicionDefaultId: producto.procesoDefinicionDefaultId,
       },
     } as any;
-    return this.buildVinylCutSimulation(
+    const unidadComercial = this.normalizeUnidadComercialProductoValue(producto.unidadComercial) === 'm2' ? 'm2' : 'metro_lineal';
+    const periodo = this.normalizePeriodo(undefined);
+    const simulation = await this.buildVinylCutSimulation(
       auth,
       fakeVariante,
       effectiveConfig,
-      this.normalizePeriodo(undefined),
+      periodo,
       1,
+      unidadComercial,
     );
+
+    // Persist a snapshot so Simular Venta can pick it up
+    const { aggregated } = simulation;
+    const total = aggregated?.totalTecnico ?? 0;
+    const snapshotResult = this.normalizeProductNumericPrecision({
+      productoServicioId: producto.id,
+      motorCodigo: motor.code,
+      motorVersion: motor.version,
+      periodo,
+      cantidad: 1,
+      total,
+      aggregated,
+    });
+    await this.prisma.cotizacionProductoSnapshot.create({
+      data: {
+        tenantId: auth.tenantId,
+        productoServicioId: producto.id,
+        motorCodigo: motor.code,
+        motorVersion: motor.version,
+        configVersionBase: null,
+        configVersionOverride: null,
+        cantidad: 1,
+        periodoTarifa: periodo,
+        inputJson: ({ cantidad: 1, periodo, config: effectiveConfig } as unknown) as Prisma.InputJsonValue,
+        resultadoJson: (snapshotResult as unknown) as Prisma.InputJsonValue,
+        total: new Prisma.Decimal(Number(total)),
+      },
+    });
+
+    return simulation;
   }
 
   private async getVarianteCotizacionesBase(auth: CurrentAuth, varianteId: string) {
@@ -5922,8 +5967,7 @@ export class ProductosServiciosService {
   }
 
   async getProductoCotizaciones(auth: CurrentAuth, productoId: string) {
-    const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
-    this.ensureWideFormatProducto(producto);
+    await this.findProductoOrThrow(auth, productoId, this.prisma);
 
     const rows = await this.prisma.cotizacionProductoSnapshot.findMany({
       where: {
@@ -8714,6 +8758,10 @@ export class ProductosServiciosService {
               tipo,
               porcentaje: this.toSafeNumber(row.porcentaje, 0),
               activo: row.activo !== false,
+              esquemaOrigenId:
+                typeof row.esquemaOrigenId === 'string' && row.esquemaOrigenId.trim().length
+                  ? row.esquemaOrigenId.trim()
+                  : undefined,
             };
           })
           .filter(
@@ -8725,12 +8773,20 @@ export class ProductosServiciosService {
               tipo: 'financiera' | 'vendedor';
               porcentaje: number;
               activo: boolean;
+              esquemaOrigenId: string | undefined;
             } => Boolean(item),
           )
       : [];
+    const esquemaId =
+      typeof raw.esquemaId === 'string' && raw.esquemaId.trim().length ? raw.esquemaId.trim() : null;
+    const esquemaIds = Array.isArray(raw.esquemaIds)
+      ? raw.esquemaIds
+          .filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+          .map((id) => id.trim())
+      : (esquemaId ? [esquemaId] : []);
     return {
-      esquemaId:
-        typeof raw.esquemaId === 'string' && raw.esquemaId.trim().length ? raw.esquemaId.trim() : null,
+      esquemaId,
+      esquemaIds,
       esquemaNombre: typeof raw.esquemaNombre === 'string' ? raw.esquemaNombre : '',
       items,
       porcentajeTotal: Number(
@@ -8748,27 +8804,52 @@ export class ProductosServiciosService {
         ? (value as Record<string, unknown>)
         : null,
     );
-    if (!normalized.esquemaId) {
+    const ids = normalized.esquemaIds.length ? normalized.esquemaIds : (normalized.esquemaId ? [normalized.esquemaId] : []);
+    if (!ids.length) {
       return normalized;
     }
-    const row = await this.prisma.productoComisionCatalogo.findFirst({
-      where: { tenantId: auth.tenantId, id: normalized.esquemaId, activo: true },
+    const rows = await this.prisma.productoComisionCatalogo.findMany({
+      where: { tenantId: auth.tenantId, id: { in: ids }, activo: true },
     });
-    if (!row) {
-      throw new BadRequestException('El esquema de comisiones seleccionado es inválido o está inactivo.');
+    const foundIds = new Set(rows.map((r) => r.id));
+    const missing = ids.filter((id) => !foundIds.has(id));
+    if (missing.length) {
+      throw new BadRequestException('Uno o más esquemas de comisiones seleccionados son inválidos o están inactivos.');
     }
-    const detalle = this.parseComisionDetalle(row.detalleJson);
+    const mergedItems: Array<{
+      id: string;
+      nombre: string;
+      tipo: 'financiera' | 'vendedor';
+      porcentaje: number;
+      activo: boolean;
+      esquemaOrigenId: string;
+    }> = [];
+    const nombres: string[] = [];
+    for (const id of ids) {
+      const row = rows.find((r) => r.id === id);
+      if (!row) continue;
+      nombres.push(row.nombre);
+      const detalle = this.parseComisionDetalle(row.detalleJson);
+      for (const item of detalle.items) {
+        mergedItems.push({
+          id: item.id,
+          nombre: item.nombre,
+          tipo: item.tipo,
+          porcentaje: item.porcentaje,
+          activo: item.activo,
+          esquemaOrigenId: id,
+        });
+      }
+    }
+    const porcentajeTotal = Number(
+      mergedItems.filter((i) => i.activo).reduce((s, i) => s + i.porcentaje, 0).toFixed(2),
+    );
     return {
-      esquemaId: row.id,
-      esquemaNombre: row.nombre,
-      items: detalle.items.map((item) => ({
-        id: item.id,
-        nombre: item.nombre,
-        tipo: item.tipo,
-        porcentaje: item.porcentaje,
-        activo: item.activo,
-      })),
-      porcentajeTotal: Number(row.porcentaje),
+      esquemaId: ids[0] ?? null,
+      esquemaIds: ids,
+      esquemaNombre: nombres.join(', '),
+      items: mergedItems,
+      porcentajeTotal,
     };
   }
 
@@ -13532,6 +13613,7 @@ export class ProductosServiciosService {
     effectiveConfig: Record<string, unknown>,
     periodo: string,
     cantidadTrabajos: number,
+    unidadComercial: 'm2' | 'metro_lineal' = 'metro_lineal',
   ) {
     const procesoDefinicionId = this.resolveRutaEfectivaId(variante);
     if (!procesoDefinicionId) {
@@ -13770,15 +13852,40 @@ export class ProductosServiciosService {
               consumedLengthMl: largoConsumidoMl,
               warnings,
             });
-            const usefulFactor =
-              candidate.consumedAreaM2 > 0 ? candidate.usefulAreaM2 / candidate.consumedAreaM2 : 0;
-            const usefulCost = this.roundProductNumber(substrateTotalCost * usefulFactor);
-            const wasteCost = this.roundProductNumber(substrateTotalCost - usefulCost);
-            const usefulLengthMl =
-              candidate.rollWidthMm > 0
-                ? this.roundProductNumber(candidate.usefulAreaM2 / (candidate.rollWidthMm / 1000))
-                : 0;
+            // Piece-based length: sum of the actual piece dimensions (height in the roll direction)
+            const piecesLengthMl = this.roundProductNumber(
+              colorEntry.medidas.reduce((acc, m) => {
+                const effectiveHeight = m.anchoMm > candidate.rollWidthMm ? m.anchoMm : m.altoMm;
+                return acc + (effectiveHeight / 1000) * m.cantidad;
+              }, 0),
+            );
+            const usefulLengthMl = Math.min(piecesLengthMl, largoConsumidoMl);
             const wasteLengthMl = this.roundProductNumber(Math.max(0, largoConsumidoMl - usefulLengthMl));
+
+            // Compute quantities and unit cost based on the product's commercial unit
+            let usefulQuantity: number;
+            let wasteQuantity: number;
+            let costoUnitarioMaterial: number;
+            let materialUnidad: string;
+
+            if (unidadComercial === 'm2') {
+              usefulQuantity = this.roundProductNumber(candidate.usefulAreaM2);
+              wasteQuantity = this.roundProductNumber(candidate.wasteAreaM2);
+              costoUnitarioMaterial = candidate.consumedAreaM2 > 0
+                ? this.roundProductNumber(substrateTotalCost / candidate.consumedAreaM2)
+                : 0;
+              materialUnidad = 'm2';
+            } else {
+              // metro_lineal (default)
+              usefulQuantity = usefulLengthMl;
+              wasteQuantity = wasteLengthMl;
+              costoUnitarioMaterial = largoConsumidoMl > 0
+                ? this.roundProductNumber(substrateTotalCost / largoConsumidoMl)
+                : 0;
+              materialUnidad = 'metro_lineal';
+            }
+            const usefulCost = this.roundProductNumber(costoUnitarioMaterial * usefulQuantity);
+            const wasteCost = this.roundProductNumber(substrateTotalCost - usefulCost);
 
             const centrosCosto = proceso.operaciones.map((op: any, index: number) => {
               const cantidadObjetivoSalida = this.resolveGranFormatoCantidadObjetivoSalida({
@@ -13861,37 +13968,49 @@ export class ProductosServiciosService {
                 ...this.buildGranFormatoCostosCandidateResumen(candidateWithCosts),
                 cantidadTrabajos,
                 totalPiezas: colorTotalPiezas,
-                unidadComercial: 'metro_lineal',
+                unidadComercial,
                 largoConsumidoMl,
+                areaConsumidaM2: this.roundProductNumber(candidate.consumedAreaM2),
               },
-              materiasPrimas: [
-                {
-                  tipo: 'VINILO',
-                  nombre: candidate.variant.materiaPrima.nombre,
-                  sku: candidate.variant.sku,
-                  variantChips: this.buildMateriaPrimaVariantDisplayChips(candidate.variant),
-                  cantidad: usefulLengthMl,
-                  costoUnitario: usefulLengthMl > 0 ? this.roundProductNumber(usefulCost / usefulLengthMl) : 0,
-                  costo: usefulCost,
-                  origen: 'Base',
-                  unidad: 'metro_lineal',
-                  colorId: colorEntry.id,
-                  colorLabel: colorEntry.label,
-                },
-                {
-                  tipo: 'VINILO',
-                  nombre: `${candidate.variant.materiaPrima.nombre} · Desperdicio`,
-                  sku: candidate.variant.sku,
-                  variantChips: this.buildMateriaPrimaVariantDisplayChips(candidate.variant),
-                  cantidad: wasteLengthMl,
-                  costoUnitario: wasteLengthMl > 0 ? this.roundProductNumber(wasteCost / wasteLengthMl) : 0,
-                  costo: wasteCost,
-                  origen: 'Desperdicio',
-                  unidad: 'metro_lineal',
-                  colorId: colorEntry.id,
-                  colorLabel: colorEntry.label,
-                },
-              ],
+              materiasPrimas: (() => {
+                const rollWidthM = this.roundProductNumber(candidate.rollWidthMm / 1000);
+                const baseChips = this.buildMateriaPrimaVariantDisplayChips(candidate.variant);
+                // Replace generic roll dimensions with contextual consumed dimensions
+                const usefulChips = baseChips
+                  .filter((c) => c.label !== 'Ancho de rollo' && c.label !== 'Largo de rollo')
+                  .concat([{ label: 'Medida', value: `${rollWidthM} m × ${usefulLengthMl} m` }]);
+                const wasteChips = baseChips
+                  .filter((c) => c.label !== 'Ancho de rollo' && c.label !== 'Largo de rollo')
+                  .concat([{ label: 'Medida', value: `${rollWidthM} m × ${wasteLengthMl} m` }]);
+                return [
+                  {
+                    tipo: 'VINILO',
+                    nombre: candidate.variant.materiaPrima.nombre,
+                    sku: candidate.variant.sku,
+                    variantChips: usefulChips,
+                    cantidad: usefulQuantity,
+                    costoUnitario: costoUnitarioMaterial,
+                    costo: usefulCost,
+                    origen: 'Base',
+                    unidad: materialUnidad,
+                    colorId: colorEntry.id,
+                    colorLabel: colorEntry.label,
+                  },
+                  {
+                    tipo: 'VINILO',
+                    nombre: `${candidate.variant.materiaPrima.nombre} · Desperdicio`,
+                    sku: candidate.variant.sku,
+                    variantChips: wasteChips,
+                    cantidad: wasteQuantity,
+                    costoUnitario: costoUnitarioMaterial,
+                    costo: wasteCost,
+                    origen: 'Desperdicio',
+                    unidad: materialUnidad,
+                    colorId: colorEntry.id,
+                    colorLabel: colorEntry.label,
+                  },
+                ];
+              })(),
               centrosCosto,
               totales: {
                 materiales: totalMateriales,
