@@ -306,6 +306,12 @@ export type ProductoVariante = {
   papelVarianteId: string | null;
   papelVarianteSku: string;
   papelNombre: string;
+  papelVarianteNombre?: string;
+  papelAtributos?: {
+    material: string;
+    acabado: string;
+    gramaje: number | null;
+  };
   tipoImpresion: TipoImpresionProductoVariante;
   caras: CarasProductoVariante;
   opcionesProductivas: Array<{

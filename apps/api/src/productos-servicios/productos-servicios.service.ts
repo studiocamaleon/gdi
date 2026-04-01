@@ -9482,6 +9482,8 @@ export class ProductosServiciosService {
     papelVariante: {
       sku: string;
       materiaPrimaId: string;
+      nombreVariante: string | null;
+      atributosVarianteJson: Prisma.JsonValue;
       materiaPrima: {
         nombre: string;
       };
@@ -9511,6 +9513,15 @@ export class ProductosServiciosService {
       papelVarianteId: item.papelVarianteId,
       papelVarianteSku: item.papelVariante?.sku ?? '',
       papelNombre: item.papelVariante?.materiaPrima.nombre ?? '',
+      papelVarianteNombre: item.papelVariante?.nombreVariante ?? '',
+      papelAtributos: (() => {
+        const attrs = this.asObject(item.papelVariante?.atributosVarianteJson);
+        return {
+          material: typeof attrs.material === 'string' ? attrs.material : '',
+          acabado: typeof attrs.acabado === 'string' ? attrs.acabado : '',
+          gramaje: typeof attrs.gramaje === 'number' ? attrs.gramaje : (typeof attrs.gramajeGm2 === 'number' ? attrs.gramajeGm2 : null),
+        };
+      })(),
       tipoImpresion: this.fromTipoImpresion(item.tipoImpresion),
       caras: this.fromCaras(item.caras),
       opcionesProductivas,

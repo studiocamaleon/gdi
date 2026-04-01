@@ -4,12 +4,14 @@ import * as React from "react";
 import { usePathname } from "next/navigation";
 import {
   ArrowLeftRightIcon,
+  BriefcaseBusinessIcon,
   Building2Icon,
   CalendarClockIcon,
   CircleDollarSignIcon,
   ChevronRightIcon,
   CreditCardIcon,
   BoxesIcon,
+  FileTextIcon,
   GemIcon,
   FolderTreeIcon,
   IdCardIcon,
@@ -55,6 +57,14 @@ import {
   SidebarRail,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
+
+const comercial = [
+  {
+    title: "Crear propuesta",
+    href: "/comercial/crear-propuesta",
+    icon: FileTextIcon,
+  },
+];
 
 const registros = [
   {
@@ -263,6 +273,9 @@ function getSuscripcionProgress(diasRestantes: number | null | undefined) {
 export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
   const pathname = usePathname();
   const isDashboard = pathname === "/";
+  const isComercialRoute = comercial.some((item) =>
+    matchesRoute(pathname, item.href),
+  );
   const isRegistrosRoute = registros.some((item) =>
     matchesRoute(pathname, item.href),
   );
@@ -270,6 +283,7 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
   const isInventarioRoute = inventario.some((item) =>
     matchesRoute(pathname, item.href),
   );
+  const [isComercialOpen, setIsComercialOpen] = React.useState(isComercialRoute);
   const [isRegistrosOpen, setIsRegistrosOpen] = React.useState(isRegistrosRoute);
   const [isCostosOpen, setIsCostosOpen] = React.useState(isCostosRoute);
   const [isInventarioOpen, setIsInventarioOpen] = React.useState(isInventarioRoute);
@@ -277,6 +291,10 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
   const diasRestantes = currentUser.tenantActual.suscripcion?.diasRestantes ?? 18;
   const suscripcionEstado = formatDiasSuscripcion(diasRestantes);
   const suscripcionProgress = getSuscripcionProgress(diasRestantes);
+
+  React.useEffect(() => {
+    setIsComercialOpen(isComercialRoute);
+  }, [isComercialRoute]);
 
   React.useEffect(() => {
     setIsRegistrosOpen(isRegistrosRoute);
@@ -420,6 +438,46 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
         </SidebarMenu>
 
         <SidebarSeparator className="mx-2 my-2 w-auto" />
+
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <Collapsible
+              open={isComercialOpen}
+              onOpenChange={setIsComercialOpen}
+              className="group/collapsible"
+            >
+              <CollapsibleTrigger
+                render={
+                  <SidebarMenuButton
+                    tooltip="Comercial"
+                    className="font-medium"
+                    isActive={isComercialRoute}
+                  />
+                }
+              >
+                <BriefcaseBusinessIcon />
+                <span>Comercial</span>
+                <ChevronRightIcon className="ml-auto transition-transform group-data-[state=open]/menu-button:rotate-90" />
+              </CollapsibleTrigger>
+
+              <CollapsibleContent className="mt-1">
+                <SidebarMenuSub>
+                  {comercial.map((item) => (
+                    <SidebarMenuSubItem key={item.title}>
+                      <SidebarMenuSubButton
+                        render={<NavLink href={item.href} />}
+                        isActive={matchesRoute(pathname, item.href)}
+                      >
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  ))}
+                </SidebarMenuSub>
+              </CollapsibleContent>
+            </Collapsible>
+          </SidebarMenuItem>
+        </SidebarMenu>
 
         <SidebarMenu>
           <SidebarMenuItem>
