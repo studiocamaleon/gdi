@@ -32,6 +32,7 @@ import {
 } from "@/lib/propuestas";
 import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sheet";
 import { ImposicionPreviewDialog } from "@/components/comercial/imposicion-preview-dialog";
+import { GranFormatoNestingDialog } from "@/components/comercial/gran-formato-nesting-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -301,7 +302,11 @@ function ItemRow({
   onToggle: () => void;
 }) {
   const [imposicionOpen, setImposicionOpen] = React.useState(false);
+  const [nestingOpen, setNestingOpen] = React.useState(false);
   const isDigital = item.motorCodigo === "impresion_digital_laser";
+  const isGranFormato = item.motorCodigo === "gran_formato";
+  const gfMedidas = item.granFormato?.medidas;
+  const hasNesting = isGranFormato && !!item.granFormato?.costosResponse?.nestingPreview;
 
   return (
     <>
@@ -351,18 +356,38 @@ function ItemRow({
           <TableCell colSpan={8} className="px-6 py-4">
             <div className="flex items-start gap-6">
               {/* Especificaciones */}
-              <div className="grid flex-1 grid-cols-2 gap-x-8 gap-y-2 text-sm sm:grid-cols-4">
-                {Object.entries(item.especificaciones).map(([key, val]) => (
-                  <div key={key} className="flex flex-col gap-0.5">
+              <div className="flex flex-1 flex-col gap-3 text-sm sm:flex-row sm:gap-8">
+                {/* Standard key-value specs (excluding Medidas for GF) */}
+                <div className="grid flex-1 grid-cols-2 gap-x-8 gap-y-2 sm:grid-cols-3">
+                  {Object.entries(item.especificaciones)
+                    .filter(([key]) => !(isGranFormato && key === "Medidas"))
+                    .map(([key, val]) => (
+                      <div key={key} className="flex flex-col gap-0.5">
+                        <span className="text-xs text-muted-foreground">
+                          {key}
+                        </span>
+                        <span className="font-medium">{val}</span>
+                      </div>
+                    ))}
+                </div>
+
+                {/* Gran formato: medidas as vertical list */}
+                {isGranFormato && gfMedidas && gfMedidas.length > 0 && (
+                  <div className="flex flex-col gap-1">
                     <span className="text-xs text-muted-foreground">
-                      {key}
+                      Medidas
                     </span>
-                    <span className="font-medium">{val}</span>
+                    {gfMedidas.map((m, i) => (
+                      <span key={i} className="font-medium tabular-nums">
+                        {m.anchoMm / 10} × {m.altoMm / 10} cm{" "}
+                        <span className="text-muted-foreground">×{m.cantidad}</span>
+                      </span>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
 
-              {/* Imposicion button */}
+              {/* Imposicion buttons */}
               {isDigital && (
                 <Button
                   variant="outline"
@@ -377,21 +402,45 @@ function ItemRow({
                   Imposicion
                 </Button>
               )}
+              {hasNesting && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setNestingOpen(true);
+                  }}
+                >
+                  <GridIcon />
+                  Imposicion
+                </Button>
+              )}
             </div>
           </TableCell>
         </TableRow>
       )}
 
-      {/* Imposicion preview dialog */}
-      {isDigital && imposicionOpen && (
+      {/* Imposicion preview dialog — Digital */}
+      {isDigital && imposicionOpen && item.varianteId && item.anchoMm && item.altoMm && (
         <ImposicionPreviewDialog
           open={imposicionOpen}
           onOpenChange={setImposicionOpen}
           productoId={item.productoId}
           varianteId={item.varianteId}
-          varianteNombre={item.varianteNombre}
+          varianteNombre={item.varianteNombre ?? ""}
           anchoMm={item.anchoMm}
           altoMm={item.altoMm}
+        />
+      )}
+
+      {/* Nesting preview dialog — Gran Formato (always mounted to avoid 3D re-init glitch) */}
+      {hasNesting && (
+        <GranFormatoNestingDialog
+          open={nestingOpen}
+          onOpenChange={setNestingOpen}
+          productoNombre={item.productoNombre}
+          costosResponse={item.granFormato!.costosResponse}
         />
       )}
     </>
@@ -666,12 +715,12 @@ export function PropuestaFicha() {
 
         {/* Produccion tab */}
         <TabsContent value="produccion">
-          {items.length === 0 || items.every((i) => !i.cotizacion) ? (
+          {items.length === 0 || items.every((i) => !i.cotizacion && !i.granFormato?.costosResponse) ? (
             <TabPlaceholder icon={FactoryIcon} title="Produccion" />
           ) : (
             <div className="flex flex-col gap-4">
               {items
-                .filter((i) => i.cotizacion)
+                .filter((i) => i.cotizacion || i.granFormato?.costosResponse)
                 .map((item) => (
                   <Card
                     key={item.id}
@@ -683,7 +732,9 @@ export function PropuestaFicha() {
                           {item.productoNombre}
                         </CardTitle>
                         <p className="text-xs text-muted-foreground">
-                          {item.varianteNombre} &middot;{" "}
+                          {item.varianteNombre
+                            ? `${item.varianteNombre} · `
+                            : ""}
                           {item.cantidad.toLocaleString("es-AR")}{" "}
                           {item.unidadMedida === "unidad"
                             ? "u."
@@ -694,63 +745,82 @@ export function PropuestaFicha() {
                       </div>
                     </CardHeader>
                     <CardContent className="p-0">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-10 pl-4">#</TableHead>
-                            <TableHead>Paso</TableHead>
-                            <TableHead>Area</TableHead>
-                            <TableHead className="text-right pr-4">
-                              Tiempo est.
-                            </TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {item.cotizacion!.bloques.procesos.map(
-                            (paso, idx) => (
-                              <TableRow key={`${paso.codigo}-${idx}`}>
-                                <TableCell className="w-10 pl-4 text-muted-foreground">
-                                  {idx + 1}
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium">
-                                      {paso.nombre}
-                                    </span>
-                                    {(() => {
-                                      const o = String(paso.origen ?? "")
-                                        .trim()
-                                        .toLowerCase();
-                                      return (
-                                        o !== "" &&
-                                        o !== "base" &&
-                                        o !== "producto base" &&
-                                        !o.startsWith("base") &&
-                                        !o.startsWith("producto base")
-                                      );
-                                    })() && (
-                                      <Badge
-                                        variant="secondary"
-                                        className="px-1.5 py-0 text-[10px]"
-                                      >
-                                        Opcional
-                                      </Badge>
-                                    )}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-muted-foreground">
-                                  {paso.centroCostoNombre}
-                                </TableCell>
-                                <TableCell className="text-right tabular-nums pr-4">
-                                  {paso.totalMin > 0
-                                    ? `${paso.totalMin.toFixed(1)} min`
-                                    : "—"}
-                                </TableCell>
+                      {(() => {
+                        // Normalize production steps from either motor
+                        const pasos = item.cotizacion
+                          ? item.cotizacion.bloques.procesos.map((p) => ({
+                              key: `${p.codigo}-${p.orden}`,
+                              nombre: p.nombre,
+                              area: p.centroCostoNombre,
+                              minutos: p.totalMin,
+                              origen: p.origen,
+                            }))
+                          : item.granFormato?.costosResponse?.centrosCosto?.map(
+                              (c, idx) => ({
+                                key: `${c.centroCostoId ?? idx}`,
+                                nombre: c.paso,
+                                area: c.centroCostoNombre,
+                                minutos: c.minutos,
+                                origen: c.origen,
+                              }),
+                            ) ?? [];
+
+                        return (
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="w-10 pl-4">#</TableHead>
+                                <TableHead className="w-[40%]">Paso</TableHead>
+                                <TableHead className="w-[30%]">Centro de costos</TableHead>
+                                <TableHead className="w-28 pr-4 text-right">
+                                  Tiempo est.
+                                </TableHead>
                               </TableRow>
-                            ),
-                          )}
-                        </TableBody>
-                      </Table>
+                            </TableHeader>
+                            <TableBody>
+                              {pasos.map((paso, idx) => {
+                                const o = String(paso.origen ?? "")
+                                  .trim()
+                                  .toLowerCase();
+                                const esOpcional =
+                                  o !== "" &&
+                                  !o.startsWith("base") &&
+                                  !o.startsWith("producto base");
+                                return (
+                                  <TableRow key={paso.key}>
+                                    <TableCell className="w-10 pl-4 text-muted-foreground">
+                                      {idx + 1}
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm font-medium">
+                                          {paso.nombre}
+                                        </span>
+                                        {esOpcional && (
+                                          <Badge
+                                            variant="secondary"
+                                            className="px-1.5 py-0 text-[10px]"
+                                          >
+                                            Opcional
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground">
+                                      {paso.area}
+                                    </TableCell>
+                                    <TableCell className="pr-4 text-right tabular-nums">
+                                      {paso.minutos > 0
+                                        ? `${paso.minutos.toFixed(1)} min`
+                                        : "—"}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        );
+                      })()}
                     </CardContent>
                   </Card>
                 ))}

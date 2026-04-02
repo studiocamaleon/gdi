@@ -14,6 +14,10 @@ import type {
   ProductoServicio,
   ProductoVariante,
   ProductoChecklist,
+  GranFormatoConfig,
+  GranFormatoVariante,
+  GranFormatoChecklistConfig,
+  GranFormatoCostosResponse,
   TipoImpresionProductoVariante,
   CarasProductoVariante,
   DimensionOpcionProductiva,
@@ -23,8 +27,15 @@ import {
   getProductosServicios,
   getProductoVariantes,
   getProductoChecklist,
+  getGranFormatoConfig,
+  getGranFormatoRutaBase,
+  getGranFormatoVariantes,
+  getGranFormatoChecklist,
   cotizarProductoVariante,
+  previewGranFormatoCostos,
 } from "@/lib/productos-servicios-api";
+import { getMaquinas } from "@/lib/maquinaria-api";
+import { tecnologiaMaquinaItems, type Maquina, type MaquinaPerfilOperativo } from "@/lib/maquinaria";
 import { ProductoServicioChecklistCotizador } from "@/components/productos-servicios/producto-servicio-checklist";
 import { simularPrecioComercial } from "@/lib/productos-servicios-simulacion";
 import {
@@ -51,22 +62,33 @@ import {
   DigitalLaserConfig,
   type MotorProposalConfigProps,
 } from "@/components/comercial/motors/digital-laser-config";
+import {
+  GranFormatoProposalConfig,
+  type GranFormatoMedida,
+} from "@/components/comercial/motors/gran-formato-config";
 
 // ---------------------------------------------------------------------------
-// Motor config registry (extensible)
+// Supported motors
 // ---------------------------------------------------------------------------
+
+const SUPPORTED_MOTORS = ["impresion_digital_laser", "gran_formato"];
+
+const MOTOR_LABELS: Record<string, string> = {
+  impresion_digital_laser: "Digital",
+  gran_formato: "Gran Formato",
+};
 
 const motorConfigRegistry: Record<
   string,
   React.ComponentType<MotorProposalConfigProps> | null
 > = {
   impresion_digital_laser: DigitalLaserConfig,
-  gran_formato: null,
+  gran_formato: null, // gran formato uses its own panel
   vinilo_de_corte: null,
 };
 
 // ---------------------------------------------------------------------------
-// Build item especificaciones from real data
+// Helpers: digital laser
 // ---------------------------------------------------------------------------
 
 function formatPapelLabel(variante: ProductoVariante): string {
@@ -78,23 +100,18 @@ function formatPapelLabel(variante: ProductoVariante): string {
   return parts.length > 0 ? parts.join(" ") : (variante.papelNombre ?? "");
 }
 
-function buildItemEspecificaciones(
+function buildDigitalEspecificaciones(
   variante: ProductoVariante,
   tipoImpresion: TipoImpresionProductoVariante,
   caras: CarasProductoVariante,
 ): Record<string, string> {
-  // Build material label from paper variant attributes (material, acabado, gramaje)
   const attrs = variante.papelAtributos;
   const parts: string[] = [];
   if (attrs?.material) parts.push(attrs.material);
   if (attrs?.acabado) parts.push(attrs.acabado);
   if (attrs?.gramaje) parts.push(`${attrs.gramaje}g`);
-
-  const materialLabel =
-    parts.length > 0 ? parts.join(" ") : (variante.papelNombre ?? "");
-
   return {
-    Material: materialLabel,
+    Material: parts.length > 0 ? parts.join(" ") : (variante.papelNombre ?? ""),
     Medidas: `${Number(variante.anchoMm) / 10} x ${Number(variante.altoMm) / 10} cm`,
     Impresion: LABEL_TIPO_IMPRESION[tipoImpresion],
     Caras: LABEL_CARAS[caras],
@@ -102,7 +119,51 @@ function buildItemEspecificaciones(
 }
 
 // ---------------------------------------------------------------------------
-// Step types
+// Helpers: gran formato
+// ---------------------------------------------------------------------------
+
+function getTecnologiaLabel(value: string): string {
+  return tecnologiaMaquinaItems.find((t) => t.value === value)?.label ?? value;
+}
+
+function formatMedidas(medidas: GranFormatoMedida[]): string {
+  return medidas
+    .filter((m) => m.anchoMm && m.altoMm && m.cantidad > 0)
+    .map((m) => `${(m.anchoMm ?? 0) / 10}x${(m.altoMm ?? 0) / 10} cm x${m.cantidad}`)
+    .join(", ");
+}
+
+function calcGranFormatoCantidad(
+  medidas: GranFormatoMedida[],
+  unidadComercial: string,
+): number {
+  let total = 0;
+  for (const m of medidas) {
+    if (!m.anchoMm || !m.altoMm || m.cantidad <= 0) continue;
+    if (unidadComercial === "m2") {
+      total += (m.anchoMm * m.altoMm * m.cantidad) / 1_000_000;
+    } else if (unidadComercial === "metro_lineal") {
+      total += (m.altoMm * m.cantidad) / 1_000;
+    } else {
+      total += m.cantidad;
+    }
+  }
+  return Math.round(total * 100) / 100;
+}
+
+function hasValidMedidas(medidas: GranFormatoMedida[]): boolean {
+  return medidas.some(
+    (m) =>
+      m.anchoMm != null &&
+      m.anchoMm > 0 &&
+      m.altoMm != null &&
+      m.altoMm > 0 &&
+      m.cantidad >= 1,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Steps
 // ---------------------------------------------------------------------------
 
 type Step = "search" | "variant" | "configure" | "summary";
@@ -113,16 +174,14 @@ function hasMotorConfig(variante: ProductoVariante): boolean {
   return ops.some((o) => o.valores.length > 1);
 }
 
-function buildSteps(hasMultipleVariants: boolean): Step[] {
+function buildSteps(motorCodigo: string, hasMultipleVariants: boolean): Step[] {
   const steps: Step[] = ["search"];
-  if (hasMultipleVariants) steps.push("variant");
+  if (motorCodigo !== "gran_formato" && hasMultipleVariants) {
+    steps.push("variant");
+  }
   steps.push("configure", "summary");
   return steps;
 }
-
-// ---------------------------------------------------------------------------
-// Adapt ProductoVariante to CatalogoVariante shape for motor config panel
-// ---------------------------------------------------------------------------
 
 function adaptVarianteForConfig(v: ProductoVariante) {
   return {
@@ -138,7 +197,7 @@ function adaptVarianteForConfig(v: ProductoVariante) {
 }
 
 // ---------------------------------------------------------------------------
-// Step: Search (loads products from API)
+// Step: Search
 // ---------------------------------------------------------------------------
 
 function StepSearch({
@@ -156,13 +215,11 @@ function StepSearch({
     getProductosServicios()
       .then((data) => {
         if (!cancelled) {
-          // Filter only active digital laser products for now
-          const filtered = data.filter(
-            (p) =>
-              p.activo &&
-              p.motorCodigo === "impresion_digital_laser",
+          setProductos(
+            data.filter(
+              (p) => p.activo && SUPPORTED_MOTORS.includes(p.motorCodigo),
+            ),
           );
-          setProductos(filtered);
         }
       })
       .catch(() => {
@@ -177,7 +234,6 @@ function StepSearch({
   }, []);
 
   const isSearching = search.trim().length > 0;
-
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return productos;
@@ -187,8 +243,6 @@ function StepSearch({
         p.codigo.toLowerCase().includes(q),
     );
   }, [search, productos]);
-
-  // "Frecuentes" = first N products (placeholder until real usage tracking)
   const frecuentes = React.useMemo(
     () => productos.slice(0, Math.min(3, productos.length)),
     [productos],
@@ -221,7 +275,7 @@ function StepSearch({
           <p className="text-xs text-muted-foreground">{producto.codigo}</p>
         </div>
         <Badge variant="outline" className="shrink-0 text-xs">
-          Digital
+          {MOTOR_LABELS[producto.motorCodigo] ?? producto.motorCodigo}
         </Badge>
       </button>
     );
@@ -240,50 +294,33 @@ function StepSearch({
           autoFocus
         />
       </div>
-
       {isSearching ? (
-        /* Search results */
         <div className="flex flex-col gap-1">
           {filtered.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              Sin resultados
-            </p>
+            <p className="py-8 text-center text-sm text-muted-foreground">Sin resultados</p>
           ) : (
             filtered.map((p) => <ProductRow key={p.id} producto={p} />)
           )}
         </div>
       ) : (
-        /* Default view: Frecuentes + Todos */
         <div className="flex flex-col gap-4">
           {frecuentes.length > 0 && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-1.5 px-3 py-1">
                 <StarIcon className="size-3 text-amber-500" />
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Frecuentes
-                </p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Frecuentes</p>
               </div>
-              {frecuentes.map((p) => (
-                <ProductRow key={p.id} producto={p} compact />
-              ))}
+              {frecuentes.map((p) => <ProductRow key={p.id} producto={p} compact />)}
             </div>
           )}
-
           {productos.length > frecuentes.length && (
             <div className="flex flex-col gap-1">
-              <p className="px-3 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Todos los productos
-              </p>
-              {productos.slice(frecuentes.length).map((p) => (
-                <ProductRow key={p.id} producto={p} compact />
-              ))}
+              <p className="px-3 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Todos los productos</p>
+              {productos.slice(frecuentes.length).map((p) => <ProductRow key={p.id} producto={p} compact />)}
             </div>
           )}
-
           {productos.length === 0 && (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No hay productos de impresion digital configurados.
-            </p>
+            <p className="py-8 text-center text-sm text-muted-foreground">No hay productos configurados.</p>
           )}
         </div>
       )}
@@ -292,7 +329,7 @@ function StepSearch({
 }
 
 // ---------------------------------------------------------------------------
-// Step: Variant
+// Step: Variant (digital only)
 // ---------------------------------------------------------------------------
 
 function StepVariant({
@@ -311,39 +348,35 @@ function StepVariant({
         <span className="font-medium text-foreground">{producto.nombre}</span>
       </p>
       <div className="flex flex-col gap-2">
-        {variantes
-          .filter((v) => v.activo)
-          .map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              onClick={() => onSelect(v)}
-              className="flex flex-col gap-1 rounded-lg border px-4 py-3 text-left transition-colors hover:border-primary/50 hover:bg-muted/50"
-            >
-              <p className="text-sm font-medium">{v.nombre}</p>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>
-                  {Number(v.anchoMm) / 10} x {Number(v.altoMm) / 10} cm
-                </span>
-                {(v.papelAtributos?.material || v.papelNombre) && (
-                  <>
-                    <span>&middot;</span>
-                    <span>{formatPapelLabel(v)}</span>
-                  </>
-                )}
-              </div>
-            </button>
-          ))}
+        {variantes.filter((v) => v.activo).map((v) => (
+          <button
+            key={v.id}
+            type="button"
+            onClick={() => onSelect(v)}
+            className="flex flex-col gap-1 rounded-lg border px-4 py-3 text-left transition-colors hover:border-primary/50 hover:bg-muted/50"
+          >
+            <p className="text-sm font-medium">{v.nombre}</p>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>{Number(v.anchoMm) / 10} x {Number(v.altoMm) / 10} cm</span>
+              {(v.papelAtributos?.material || v.papelNombre) && (
+                <>
+                  <span>&middot;</span>
+                  <span>{formatPapelLabel(v)}</span>
+                </>
+              )}
+            </div>
+          </button>
+        ))}
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Step: Configure (motor options + quantity in one step)
+// Step: Configure Digital
 // ---------------------------------------------------------------------------
 
-function StepConfigure({
+function StepConfigureDigital({
   producto,
   variante,
   config,
@@ -356,14 +389,8 @@ function StepConfigure({
 }: {
   producto: ProductoServicio;
   variante: ProductoVariante;
-  config: {
-    tipoImpresion: TipoImpresionProductoVariante;
-    caras: CarasProductoVariante;
-  };
-  onConfigChange: (c: {
-    tipoImpresion: TipoImpresionProductoVariante;
-    caras: CarasProductoVariante;
-  }) => void;
+  config: { tipoImpresion: TipoImpresionProductoVariante; caras: CarasProductoVariante };
+  onConfigChange: (c: { tipoImpresion: TipoImpresionProductoVariante; caras: CarasProductoVariante }) => void;
   cantidad: number;
   onCantidadChange: (c: number) => void;
   checklist: ProductoChecklist | null;
@@ -375,43 +402,27 @@ function StepConfigure({
   const precio = producto.precio;
   const fija = precio ? esCantidadFija(precio.metodoCalculo) : false;
   const cantidades = precio ? getCantidadesFijas(precio) : [];
-  const hasChecklist =
-    checklist?.activo &&
-    checklist.preguntas &&
-    checklist.preguntas.length > 0;
+  const hasChecklistQ = checklist?.activo && checklist.preguntas?.length > 0;
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Variant info */}
       <div className="rounded-lg border bg-muted/30 px-3 py-2.5">
         <p className="text-sm font-medium">{variante.nombre}</p>
         <p className="text-xs text-muted-foreground">
           {Number(variante.anchoMm) / 10} x {Number(variante.altoMm) / 10} cm
-          {(variante.papelAtributos?.material || variante.papelNombre) &&
-            ` · ${formatPapelLabel(variante)}`}
+          {(variante.papelAtributos?.material || variante.papelNombre) && ` · ${formatPapelLabel(variante)}`}
         </p>
       </div>
 
-      {/* Motor-specific config */}
       {showMotorConfig && MotorConfigPanel && (
         <div className="flex flex-col gap-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Opciones de impresion
-          </p>
-          <MotorConfigPanel
-            variante={adaptVarianteForConfig(variante)}
-            config={config}
-            onConfigChange={onConfigChange}
-          />
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Opciones de impresion</p>
+          <MotorConfigPanel variante={adaptVarianteForConfig(variante)} config={config} onConfigChange={onConfigChange} />
         </div>
       )}
 
-      {/* Quantity */}
       <div className="flex flex-col gap-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Cantidad
-        </p>
-
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Cantidad</p>
         {fija ? (
           <div className="grid grid-cols-2 gap-2">
             {cantidades.map((q) => (
@@ -419,51 +430,26 @@ function StepConfigure({
                 key={q}
                 type="button"
                 onClick={() => onCantidadChange(q)}
-                className={`flex items-center justify-center rounded-lg border px-4 py-3 text-sm font-medium transition-colors ${
-                  cantidad === q
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "hover:border-primary/50 hover:bg-muted/50"
-                }`}
+                className={`flex items-center justify-center rounded-lg border px-4 py-3 text-sm font-medium transition-colors ${cantidad === q ? "border-primary bg-primary/10 text-primary" : "hover:border-primary/50 hover:bg-muted/50"}`}
               >
-                {q.toLocaleString("es-AR")}{" "}
-                {producto.unidadComercial === "unidad"
-                  ? "u."
-                  : producto.unidadComercial}
+                {q.toLocaleString("es-AR")} {producto.unidadComercial === "unidad" ? "u." : producto.unidadComercial}
               </button>
             ))}
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <Input
-              type="number"
-              min={1}
-              value={cantidad || ""}
-              onChange={(e) => onCantidadChange(Number(e.target.value))}
-              placeholder="Cantidad"
-              className="w-full"
-            />
-            <span className="shrink-0 text-sm text-muted-foreground">
-              {producto.unidadComercial === "unidad"
-                ? "unidades"
-                : producto.unidadComercial}
-            </span>
+            <Input type="number" min={1} value={cantidad || ""} onChange={(e) => onCantidadChange(Number(e.target.value))} placeholder="Cantidad" className="w-full" />
+            <span className="shrink-0 text-sm text-muted-foreground">{producto.unidadComercial === "unidad" ? "unidades" : producto.unidadComercial}</span>
           </div>
         )}
       </div>
 
-      {/* Separator + Checklist (opcionales) — after base config */}
-      {hasChecklist && (
+      {hasChecklistQ && (
         <>
           <Separator />
           <div className="flex flex-col gap-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Opcionales del producto
-            </p>
-            <ProductoServicioChecklistCotizador
-              checklist={checklist}
-              value={checklistRespuestas}
-              onChange={onChecklistRespuestasChange}
-            />
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Opcionales del producto</p>
+            <ProductoServicioChecklistCotizador checklist={checklist!} value={checklistRespuestas} onChange={onChecklistRespuestasChange} />
           </div>
         </>
       )}
@@ -472,10 +458,79 @@ function StepConfigure({
 }
 
 // ---------------------------------------------------------------------------
-// Step: Summary (uses real cotización API)
+// Step: Summary — shared price display
 // ---------------------------------------------------------------------------
 
-function StepSummary({
+function PriceBreakdown({
+  producto,
+  costoTotal,
+  cantidad,
+  error,
+}: {
+  producto: ProductoServicio;
+  costoTotal: number | null;
+  cantidad: number;
+  error: string | null;
+}) {
+  if (error || costoTotal == null) {
+    return (
+      <div className="rounded-lg border border-destructive/50 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+        {error ?? "No se pudo calcular el costo de produccion."}
+      </div>
+    );
+  }
+
+  const sim = producto.precio
+    ? simularPrecioComercial({ precio: producto.precio, costoTotal, cantidad })
+    : null;
+
+  if (sim && sim.status === "disponible" && sim.precioFinal != null) {
+    return (
+      <div className="flex flex-col gap-2 text-sm">
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>Costo produccion</span>
+          <span className="tabular-nums">{formatCurrency(costoTotal)}</span>
+        </div>
+        <Separator className="my-0.5" />
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Precio unitario</span>
+          <span className="tabular-nums">{formatCurrency((sim.precioFinal - (sim.impuestosMonto ?? 0)) / cantidad)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Subtotal</span>
+          <span className="tabular-nums">{formatCurrency(sim.precioFinal - (sim.impuestosMonto ?? 0))}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Impuestos ({sim.impuestosPct}%)</span>
+          <span className="tabular-nums">{formatCurrency(sim.impuestosMonto ?? 0)}</span>
+        </div>
+        <Separator />
+        <div className="flex justify-between text-base font-semibold">
+          <span>Total</span>
+          <span className="tabular-nums">{formatCurrency(sim.precioFinal)}</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      <div className="flex justify-between">
+        <span className="text-muted-foreground">Costo produccion</span>
+        <span className="tabular-nums">{formatCurrency(costoTotal)}</span>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {sim?.reason ?? "No se pudo calcular el precio de venta. Verifica la configuracion de precios del producto."}
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step: Summary Digital
+// ---------------------------------------------------------------------------
+
+function StepSummaryDigital({
   producto,
   variante,
   config,
@@ -486,10 +541,7 @@ function StepSummary({
 }: {
   producto: ProductoServicio;
   variante: ProductoVariante;
-  config: {
-    tipoImpresion: TipoImpresionProductoVariante;
-    caras: CarasProductoVariante;
-  };
+  config: { tipoImpresion: TipoImpresionProductoVariante; caras: CarasProductoVariante };
   cantidad: number;
   checklistRespuestas: Record<string, { respuestaId: string }>;
   onCostoCalculated: (costo: number | null) => void;
@@ -504,168 +556,139 @@ function StepSummary({
     setLoading(true);
     setError(null);
 
-    const seleccionesBase: Array<{
-      dimension: DimensionOpcionProductiva;
-      valor: ValorOpcionProductiva;
-    }> = [
+    const seleccionesBase: Array<{ dimension: DimensionOpcionProductiva; valor: ValorOpcionProductiva }> = [
       { dimension: "tipo_impresion", valor: config.tipoImpresion },
       { dimension: "caras", valor: config.caras },
     ];
-
-    const checklistPayload = Object.entries(checklistRespuestas)
+    const clPayload = Object.entries(checklistRespuestas)
       .filter(([, v]) => Boolean(v?.respuestaId))
-      .map(([preguntaId, v]) => ({
-        preguntaId,
-        respuestaId: v.respuestaId,
-      }));
+      .map(([preguntaId, v]) => ({ preguntaId, respuestaId: v.respuestaId }));
 
     cotizarProductoVariante(variante.id, {
       cantidad,
       seleccionesBase,
-      ...(checklistPayload.length > 0
-        ? { checklistRespuestas: checklistPayload }
-        : {}),
+      ...(clPayload.length > 0 ? { checklistRespuestas: clPayload } : {}),
     })
-      .then((cot) => {
+      .then((cot) => { if (!cancelled) { setCostoTotal(cot.total); onCostoCalculated(cot.total); onCotizacionCompleta(cot); } })
+      .catch((err) => { if (!cancelled) { setError(err instanceof Error ? err.message : "Error al cotizar."); onCostoCalculated(null); onCotizacionCompleta(null); } })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variante.id, cantidad, config.tipoImpresion, config.caras, JSON.stringify(checklistRespuestas)]);
+
+  if (loading) return <div className="flex flex-col items-center justify-center gap-2 py-12"><Loader2Icon className="size-5 animate-spin text-muted-foreground" /><p className="text-sm text-muted-foreground">Calculando costos...</p></div>;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <p className="text-sm font-medium">{producto.nombre}</p>
+        <p className="text-xs text-muted-foreground">{variante.nombre} &middot; {Number(variante.anchoMm) / 10} x {Number(variante.altoMm) / 10} cm</p>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        <Badge variant="secondary">{LABEL_TIPO_IMPRESION[config.tipoImpresion]}</Badge>
+        <Badge variant="secondary">{LABEL_CARAS[config.caras]}</Badge>
+        <Badge variant="secondary">{cantidad.toLocaleString("es-AR")} {producto.unidadComercial === "unidad" ? "u." : producto.unidadComercial}</Badge>
+      </div>
+      <Separator />
+      <PriceBreakdown producto={producto} costoTotal={costoTotal} cantidad={cantidad} error={error} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step: Summary Gran Formato
+// ---------------------------------------------------------------------------
+
+function StepSummaryGranFormato({
+  producto,
+  medidas,
+  tecnologia,
+  selectedPerfilId,
+  checklistRespuestas,
+  onCostoCalculated,
+  onCostosResponse,
+}: {
+  producto: ProductoServicio;
+  medidas: GranFormatoMedida[];
+  tecnologia: string;
+  selectedPerfilId: string;
+  checklistRespuestas: Record<string, { respuestaId: string }>;
+  onCostoCalculated: (costo: number | null) => void;
+  onCostosResponse: (res: GranFormatoCostosResponse | null) => void;
+}) {
+  const [loading, setLoading] = React.useState(true);
+  const [costoTotal, setCostoTotal] = React.useState<number | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [response, setResponse] = React.useState<GranFormatoCostosResponse | null>(null);
+
+  const validMedidas = React.useMemo(
+    () =>
+      medidas
+        .filter((m) => m.anchoMm && m.altoMm && m.cantidad > 0)
+        .map((m) => ({ anchoMm: m.anchoMm!, altoMm: m.altoMm!, cantidad: m.cantidad })),
+    [medidas],
+  );
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    const clPayload = Object.entries(checklistRespuestas)
+      .filter(([, v]) => Boolean(v?.respuestaId))
+      .map(([preguntaId, v]) => ({ preguntaId, respuestaId: v.respuestaId }));
+
+    previewGranFormatoCostos(producto.id, {
+      tecnologia,
+      perfilOverrideId: selectedPerfilId || undefined,
+      medidas: validMedidas,
+      ...(clPayload.length > 0 ? { checklistRespuestas: clPayload } : {}),
+    })
+      .then((res) => {
         if (!cancelled) {
-          setCostoTotal(cot.total);
-          onCostoCalculated(cot.total);
-          onCotizacionCompleta(cot);
+          const cost = res.totales.tecnico;
+          setCostoTotal(cost);
+          setResponse(res);
+          onCostoCalculated(cost);
+          onCostosResponse(res);
         }
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Error al cotizar el producto.",
-          );
+          setError(err instanceof Error ? err.message : "Error al calcular costos.");
           onCostoCalculated(null);
-          onCotizacionCompleta(null);
+          onCostosResponse(null);
         }
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [producto.id, tecnologia, selectedPerfilId, JSON.stringify(validMedidas), JSON.stringify(checklistRespuestas)]);
 
-    return () => {
-      cancelled = true;
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [variante.id, cantidad, config.tipoImpresion, config.caras, JSON.stringify(checklistRespuestas)]);
+  const cantidadPricing = calcGranFormatoCantidad(medidas, producto.unidadComercial);
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-2 py-12">
-        <Loader2Icon className="size-5 animate-spin text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">Calculando costos...</p>
-      </div>
-    );
-  }
-
-  if (error || costoTotal == null) {
-    return (
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium">{producto.nombre}</p>
-          <p className="text-xs text-muted-foreground">
-            {variante.nombre}
-          </p>
-        </div>
-        <div className="rounded-lg border border-destructive/50 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
-          {error ?? "No se pudo calcular el costo de produccion."}
-        </div>
-      </div>
-    );
-  }
-
-  const sim = producto.precio
-    ? simularPrecioComercial({
-        precio: producto.precio,
-        costoTotal,
-        cantidad,
-      })
-    : null;
+  if (loading) return <div className="flex flex-col items-center justify-center gap-2 py-12"><Loader2Icon className="size-5 animate-spin text-muted-foreground" /><p className="text-sm text-muted-foreground">Calculando costos...</p></div>;
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Product info */}
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium">{producto.nombre}</p>
         <p className="text-xs text-muted-foreground">
-          {variante.nombre} &middot; {Number(variante.anchoMm) / 10} x{" "}
-          {Number(variante.altoMm) / 10} cm
+          {getTecnologiaLabel(tecnologia)}
+          {response?.maquinaNombre && ` · ${response.maquinaNombre}`}
         </p>
       </div>
-
-      {/* Config badges */}
       <div className="flex flex-wrap gap-1.5">
-        <Badge variant="secondary">
-          {LABEL_TIPO_IMPRESION[config.tipoImpresion]}
-        </Badge>
-        <Badge variant="secondary">{LABEL_CARAS[config.caras]}</Badge>
-        <Badge variant="secondary">
-          {cantidad.toLocaleString("es-AR")}{" "}
-          {producto.unidadComercial === "unidad"
-            ? "u."
-            : producto.unidadComercial}
-        </Badge>
+        <Badge variant="secondary">{getTecnologiaLabel(tecnologia)}</Badge>
+        <Badge variant="secondary">{formatMedidas(medidas)}</Badge>
       </div>
-
-      <Separator />
-
-      {/* Price breakdown */}
-      {sim && sim.status === "disponible" && sim.precioFinal != null ? (
-        <div className="flex flex-col gap-2 text-sm">
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>Costo produccion</span>
-            <span className="tabular-nums">{formatCurrency(costoTotal)}</span>
-          </div>
-          <Separator className="my-0.5" />
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Precio unitario</span>
-            <span className="tabular-nums">
-              {formatCurrency(
-                (sim.precioFinal - (sim.impuestosMonto ?? 0)) / cantidad,
-              )}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Subtotal</span>
-            <span className="tabular-nums">
-              {formatCurrency(
-                sim.precioFinal - (sim.impuestosMonto ?? 0),
-              )}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">
-              Impuestos ({sim.impuestosPct}%)
-            </span>
-            <span className="tabular-nums">
-              {formatCurrency(sim.impuestosMonto ?? 0)}
-            </span>
-          </div>
-          <Separator />
-          <div className="flex justify-between text-base font-semibold">
-            <span>Total</span>
-            <span className="tabular-nums">
-              {formatCurrency(sim.precioFinal)}
-            </span>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Costo produccion</span>
-            <span className="tabular-nums">{formatCurrency(costoTotal)}</span>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {sim?.reason ??
-              "No se pudo calcular el precio de venta. Verifica la configuracion de precios del producto."}
-          </p>
+      {response?.warnings && response.warnings.length > 0 && (
+        <div className="rounded-lg border border-amber-500/50 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+          {response.warnings.map((w, i) => <p key={i}>{w}</p>)}
         </div>
       )}
+      <Separator />
+      <PriceBreakdown producto={producto} costoTotal={costoTotal} cantidad={cantidadPricing} error={error} />
     </div>
   );
 }
@@ -683,117 +706,187 @@ export function AgregarProductoSheet({
   onOpenChange: (open: boolean) => void;
   onAddItem: (item: PropuestaItem) => void;
 }) {
+  // Shared state
   const [producto, setProducto] = React.useState<ProductoServicio | null>(null);
+  const [currentStep, setCurrentStep] = React.useState<Step>("search");
+  const [loadingProduct, setLoadingProduct] = React.useState(false);
+  const [cotizacionCosto, setCotizacionCosto] = React.useState<number | null>(null);
+  const [checklistRespuestas, setChecklistRespuestas] = React.useState<Record<string, { respuestaId: string }>>({});
+
+  // Digital state
   const [variantes, setVariantes] = React.useState<ProductoVariante[]>([]);
   const [variante, setVariante] = React.useState<ProductoVariante | null>(null);
-  const [config, setConfig] = React.useState<{
-    tipoImpresion: TipoImpresionProductoVariante;
-    caras: CarasProductoVariante;
-  }>({ tipoImpresion: "cmyk", caras: "simple_faz" });
+  const [digitalConfig, setDigitalConfig] = React.useState<{ tipoImpresion: TipoImpresionProductoVariante; caras: CarasProductoVariante }>({ tipoImpresion: "cmyk", caras: "simple_faz" });
   const [cantidad, setCantidad] = React.useState(0);
-  const [currentStep, setCurrentStep] = React.useState<Step>("search");
-  const [loadingVariantes, setLoadingVariantes] = React.useState(false);
-  const [cotizacionCosto, setCotizacionCosto] = React.useState<number | null>(null);
-  const [cotizacionCompleta, setCotizacionCompleta] = React.useState<import("@/lib/productos-servicios").CotizacionProductoVariante | null>(null);
   const [checklist, setChecklist] = React.useState<ProductoChecklist | null>(null);
-  const [checklistRespuestas, setChecklistRespuestas] = React.useState<
-    Record<string, { respuestaId: string }>
-  >({});
+  const [cotizacionCompleta, setCotizacionCompleta] = React.useState<import("@/lib/productos-servicios").CotizacionProductoVariante | null>(null);
+
+  // Gran formato state
+  const [gfConfig, setGfConfig] = React.useState<GranFormatoConfig | null>(null);
+  const [gfVariantes, setGfVariantes] = React.useState<GranFormatoVariante[]>([]);
+  const [gfChecklist, setGfChecklist] = React.useState<GranFormatoChecklistConfig | null>(null);
+  const [gfMedidas, setGfMedidas] = React.useState<GranFormatoMedida[]>([{ anchoMm: null, altoMm: null, cantidad: 1 }]);
+  const [gfTecnologia, setGfTecnologia] = React.useState("");
+  const [gfVarianteId, setGfVarianteId] = React.useState("");
+  const [gfPerfilesCompatibles, setGfPerfilesCompatibles] = React.useState<Array<MaquinaPerfilOperativo & { maquinaNombre: string }>>([]);
+  const [gfRutaBase, setGfRutaBase] = React.useState<import("@/lib/productos-servicios").GranFormatoRutaBase | null>(null);
+  const [gfCostosResponse, setGfCostosResponse] = React.useState<GranFormatoCostosResponse | null>(null);
+
+  const motorCodigo = producto?.motorCodigo ?? "";
+  const isGranFormato = motorCodigo === "gran_formato";
 
   const steps = React.useMemo(
-    () => buildSteps(variantes.filter((v) => v.activo).length > 1),
-    [variantes],
+    () => buildSteps(motorCodigo, variantes.filter((v) => v.activo).length > 1),
+    [motorCodigo, variantes],
   );
 
-  const currentStepIndex = steps.indexOf(currentStep);
-  const isFirstStep = currentStepIndex === 0;
+  const isFirstStep = steps.indexOf(currentStep) === 0;
   const isLastStep = currentStep === "summary";
 
-  // Reset state when sheet closes
+  // Reset on close
   React.useEffect(() => {
     if (!open) {
       setProducto(null);
+      setCurrentStep("search");
+      setLoadingProduct(false);
+      setCotizacionCosto(null);
+      setChecklistRespuestas({});
+      // Digital
       setVariantes([]);
       setVariante(null);
-      setConfig({ tipoImpresion: "cmyk", caras: "simple_faz" });
+      setDigitalConfig({ tipoImpresion: "cmyk", caras: "simple_faz" });
       setCantidad(0);
-      setCurrentStep("search");
-      setLoadingVariantes(false);
-      setCotizacionCosto(null);
-      setCotizacionCompleta(null);
       setChecklist(null);
-      setChecklistRespuestas({});
+      setCotizacionCompleta(null);
+      // Gran formato
+      setGfConfig(null);
+      setGfVariantes([]);
+      setGfChecklist(null);
+      setGfMedidas([{ anchoMm: null, altoMm: null, cantidad: 1 }]);
+      setGfTecnologia("");
+      setGfVarianteId("");
+      setGfPerfilesCompatibles([]);
+      setGfRutaBase(null);
+      setGfCostosResponse(null);
     }
   }, [open]);
 
   function goNext() {
     const idx = steps.indexOf(currentStep);
-    if (idx < steps.length - 1) {
-      setCurrentStep(steps[idx + 1]);
-    }
+    if (idx < steps.length - 1) setCurrentStep(steps[idx + 1]);
   }
-
   function goBack() {
     const idx = steps.indexOf(currentStep);
-    if (idx > 0) {
-      setCurrentStep(steps[idx - 1]);
-    }
+    if (idx > 0) setCurrentStep(steps[idx - 1]);
   }
 
   function selectVarianteAndAdvance(v: ProductoVariante) {
     setVariante(v);
-    setConfig({ tipoImpresion: v.tipoImpresion, caras: v.caras });
+    setDigitalConfig({ tipoImpresion: v.tipoImpresion, caras: v.caras });
     setCantidad(0);
     setCurrentStep("configure");
   }
 
   async function handleSelectProducto(p: ProductoServicio) {
     setProducto(p);
-    setCantidad(0);
+    setCotizacionCosto(null);
     setChecklistRespuestas({});
-    setLoadingVariantes(true);
+    setLoadingProduct(true);
 
     try {
-      const [vars, cl] = await Promise.all([
-        getProductoVariantes(p.id),
-        getProductoChecklist(p.id).catch(() => null),
-      ]);
-      const activeVars = vars.filter((v) => v.activo);
-      setVariantes(vars);
-      setChecklist(cl);
+      if (p.motorCodigo === "gran_formato") {
+        const [cfg, vars, cl, maquinas, rutaBase] = await Promise.all([
+          getGranFormatoConfig(p.id),
+          getGranFormatoVariantes(p.id).catch(() => [] as GranFormatoVariante[]),
+          getGranFormatoChecklist(p.id).catch(() => null),
+          getMaquinas().catch(() => [] as Maquina[]),
+          getGranFormatoRutaBase(p.id).catch(() => null),
+        ]);
+        setGfConfig(cfg);
+        setGfVariantes(vars);
+        setGfChecklist(cl);
+        setGfRutaBase(rutaBase);
 
-      if (activeVars.length === 1) {
-        selectVarianteAndAdvance(activeVars[0]);
-      } else if (activeVars.length === 0) {
-        setCurrentStep("search");
+        // Build perfiles from compatible machines + profiles
+        const perfilesSet = new Set(cfg.perfilesCompatibles);
+        const perfiles: Array<MaquinaPerfilOperativo & { maquinaNombre: string }> = [];
+        for (const maq of maquinas) {
+          if (!cfg.maquinasCompatibles.includes(maq.id)) continue;
+          for (const perfil of maq.perfilesOperativos) {
+            if (perfilesSet.has(perfil.id) && perfil.activo) {
+              perfiles.push({ ...perfil, maquinaNombre: maq.nombre });
+            }
+          }
+        }
+        setGfPerfilesCompatibles(perfiles);
+        setGfMedidas([{ anchoMm: null, altoMm: null, cantidad: 1 }]);
+
+        // Resolve default technology + profile from ruta base
+        const defaultTec = cfg.imposicion?.tecnologiaDefault
+          ?? (cfg.tecnologiasCompatibles.length === 1 ? cfg.tecnologiasCompatibles[0] : "");
+        setGfTecnologia(defaultTec);
+
+        // Find default profile from ruta base's regla for this technology
+        const reglaDefault = defaultTec && rutaBase
+          ? rutaBase.reglasImpresion.find((r) => r.tecnologia === defaultTec)
+          : null;
+        const defaultPerfilId = reglaDefault?.perfilOperativoDefaultId ?? "";
+        // Only set if the profile is in the compatible list
+        setGfVarianteId(
+          defaultPerfilId && perfiles.some((p) => p.id === defaultPerfilId)
+            ? defaultPerfilId
+            : "",
+        );
+        setCurrentStep("configure");
       } else {
-        setVariante(null);
-        setCurrentStep("variant");
+        // Digital laser
+        const [vars, cl] = await Promise.all([
+          getProductoVariantes(p.id),
+          getProductoChecklist(p.id).catch(() => null),
+        ]);
+        const activeVars = vars.filter((v) => v.activo);
+        setVariantes(vars);
+        setChecklist(cl);
+        if (activeVars.length === 1) {
+          selectVarianteAndAdvance(activeVars[0]);
+        } else if (activeVars.length === 0) {
+          setCurrentStep("search");
+        } else {
+          setVariante(null);
+          setCurrentStep("variant");
+        }
       }
     } catch {
-      setVariantes([]);
-      setChecklist(null);
       setCurrentStep("search");
     } finally {
-      setLoadingVariantes(false);
+      setLoadingProduct(false);
     }
   }
 
   function handleConfirm() {
-    if (!producto || !variante || cantidad <= 0 || cotizacionCosto == null)
-      return;
+    if (!producto || cotizacionCosto == null) return;
 
     const precio = producto.precio;
+    const isGF = producto.motorCodigo === "gran_formato";
+
+    const cantidadFinal = isGF
+      ? calcGranFormatoCantidad(gfMedidas, producto.unidadComercial)
+      : cantidad;
+
+    if (cantidadFinal <= 0) return;
+
     const sim = precio
-      ? simularPrecioComercial({ precio, costoTotal: cotizacionCosto, cantidad })
+      ? simularPrecioComercial({ precio, costoTotal: cotizacionCosto, cantidad: cantidadFinal })
       : null;
 
-    // precioFinal = precio total incluyendo impuestos y comisiones
-    // subtotal para display = precioFinal - impuestos (incluye comisiones, excluye impuestos)
     const precioFinal = sim?.precioFinal ?? 0;
     const impuestosPct = sim?.impuestosPct ?? 0;
     const impuestosMonto = sim?.impuestosMonto ?? 0;
     const subtotalSinImpuestos = precioFinal - impuestosMonto;
+
+    const selectedGfPerfil = gfPerfilesCompatibles.find((p) => p.id === gfVarianteId) ?? null;
+    const perfilDetalle = selectedGfPerfil?.detalle as Record<string, unknown> | null;
+    const confTintas = typeof perfilDetalle?.configuracionTintas === "string" ? perfilDetalle.configuracionTintas : "";
 
     const item: PropuestaItem = {
       id: crypto.randomUUID(),
@@ -801,31 +894,67 @@ export function AgregarProductoSheet({
       productoNombre: producto.nombre,
       productoCodigo: producto.codigo,
       motorCodigo: producto.motorCodigo,
-      varianteId: variante.id,
-      varianteNombre: variante.nombre,
-      tipoImpresion: config.tipoImpresion,
-      caras: config.caras,
-      anchoMm: Number(variante.anchoMm),
-      altoMm: Number(variante.altoMm),
       unidadMedida: producto.unidadComercial as "unidad" | "m2" | "metro_lineal",
-      cantidad,
-      precioUnitario: cantidad > 0 ? subtotalSinImpuestos / cantidad : 0,
+      cantidad: cantidadFinal,
+      precioUnitario: cantidadFinal > 0 ? subtotalSinImpuestos / cantidadFinal : 0,
       subtotal: subtotalSinImpuestos,
       impuestoPorcentaje: impuestosPct,
       impuestoMonto: impuestosMonto,
       total: precioFinal,
-      especificaciones: buildItemEspecificaciones(
-        variante,
-        config.tipoImpresion,
-        config.caras,
-      ),
-      cotizacion: cotizacionCompleta,
+      cotizacion: isGF ? null : cotizacionCompleta,
+      especificaciones: isGF
+        ? {
+            Tecnologia: getTecnologiaLabel(gfTecnologia),
+            ...(confTintas
+              ? { "Modo impresion": confTintas }
+              : {}),
+            ...(selectedGfPerfil
+              ? { Perfil: selectedGfPerfil.nombre }
+              : {}),
+            Medidas: formatMedidas(gfMedidas),
+            ...(gfCostosResponse?.maquinaNombre
+              ? { Maquina: gfCostosResponse.maquinaNombre }
+              : {}),
+          }
+        : variante
+          ? buildDigitalEspecificaciones(variante, digitalConfig.tipoImpresion, digitalConfig.caras)
+          : {},
+      // Digital-specific
+      ...(isGF
+        ? {}
+        : {
+            varianteId: variante?.id,
+            varianteNombre: variante?.nombre,
+            tipoImpresion: digitalConfig.tipoImpresion,
+            caras: digitalConfig.caras,
+            anchoMm: variante ? Number(variante.anchoMm) : undefined,
+            altoMm: variante ? Number(variante.altoMm) : undefined,
+          }),
+      // Gran formato-specific
+      ...(isGF && gfCostosResponse
+        ? {
+            granFormato: {
+              tecnologia: gfTecnologia,
+              medidas: gfMedidas
+                .filter((m) => m.anchoMm && m.altoMm && m.cantidad > 0)
+                .map((m) => ({ anchoMm: m.anchoMm!, altoMm: m.altoMm!, cantidad: m.cantidad })),
+              costosResponse: gfCostosResponse,
+            },
+          }
+        : {}),
     };
 
     onAddItem(item);
   }
 
-  const canContinue = currentStep === "configure" && cantidad > 0;
+  // canContinue
+  const canContinue = (() => {
+    if (currentStep !== "configure") return false;
+    if (isGranFormato) {
+      return hasValidMedidas(gfMedidas) && gfTecnologia !== "";
+    }
+    return cantidad > 0;
+  })();
 
   const stepTitles: Record<Step, string> = {
     search: "Buscar producto",
@@ -840,38 +969,57 @@ export function AgregarProductoSheet({
         <SheetHeader>
           <SheetTitle>Agregar producto</SheetTitle>
           <SheetDescription>
-            {producto
-              ? `${producto.nombre} — ${stepTitles[currentStep]}`
-              : stepTitles[currentStep]}
+            {producto ? `${producto.nombre} — ${stepTitles[currentStep]}` : stepTitles[currentStep]}
           </SheetDescription>
         </SheetHeader>
 
-        {/* Step content */}
         <div className="flex-1 overflow-y-auto px-4">
-          {loadingVariantes ? (
+          {loadingProduct ? (
             <div className="flex items-center justify-center py-12">
               <Loader2Icon className="size-5 animate-spin text-muted-foreground" />
             </div>
           ) : (
             <>
-              {currentStep === "search" && (
-                <StepSearch onSelect={handleSelectProducto} />
-              )}
+              {currentStep === "search" && <StepSearch onSelect={handleSelectProducto} />}
 
               {currentStep === "variant" && producto && (
-                <StepVariant
+                <StepVariant producto={producto} variantes={variantes} onSelect={selectVarianteAndAdvance} />
+              )}
+
+              {currentStep === "configure" && producto && isGranFormato && gfConfig && (
+                <GranFormatoProposalConfig
                   producto={producto}
-                  variantes={variantes}
-                  onSelect={selectVarianteAndAdvance}
+                  config={gfConfig}
+                  perfilesCompatibles={gfPerfilesCompatibles}
+                  checklistConfig={gfChecklist}
+                  medidas={gfMedidas}
+                  onMedidasChange={setGfMedidas}
+                  tecnologia={gfTecnologia}
+                  onTecnologiaChange={(t) => {
+                    setGfTecnologia(t);
+                    setChecklistRespuestas({});
+                    // Auto-select default profile for this technology from ruta base
+                    const regla = gfRutaBase?.reglasImpresion.find((r) => r.tecnologia === t);
+                    const defaultId = regla?.perfilOperativoDefaultId ?? "";
+                    setGfVarianteId(
+                      defaultId && gfPerfilesCompatibles.some((p) => p.id === defaultId)
+                        ? defaultId
+                        : "",
+                    );
+                  }}
+                  selectedPerfilId={gfVarianteId}
+                  onSelectedPerfilIdChange={setGfVarianteId}
+                  checklistRespuestas={checklistRespuestas}
+                  onChecklistRespuestasChange={setChecklistRespuestas}
                 />
               )}
 
-              {currentStep === "configure" && producto && variante && (
-                <StepConfigure
+              {currentStep === "configure" && producto && !isGranFormato && variante && (
+                <StepConfigureDigital
                   producto={producto}
                   variante={variante}
-                  config={config}
-                  onConfigChange={setConfig}
+                  config={digitalConfig}
+                  onConfigChange={setDigitalConfig}
                   cantidad={cantidad}
                   onCantidadChange={setCantidad}
                   checklist={checklist}
@@ -880,35 +1028,43 @@ export function AgregarProductoSheet({
                 />
               )}
 
-              {currentStep === "summary" && producto && variante && (
-                <StepSummary
+              {currentStep === "summary" && producto && !isGranFormato && variante && (
+                <StepSummaryDigital
                   producto={producto}
                   variante={variante}
-                  config={config}
+                  config={digitalConfig}
                   cantidad={cantidad}
                   checklistRespuestas={checklistRespuestas}
                   onCostoCalculated={setCotizacionCosto}
                   onCotizacionCompleta={setCotizacionCompleta}
                 />
               )}
+
+              {currentStep === "summary" && producto && isGranFormato && (
+                <StepSummaryGranFormato
+                  producto={producto}
+                  medidas={gfMedidas}
+                  tecnologia={gfTecnologia}
+                  selectedPerfilId={gfVarianteId}
+                  checklistRespuestas={checklistRespuestas}
+                  onCostoCalculated={setCotizacionCosto}
+                  onCostosResponse={setGfCostosResponse}
+                />
+              )}
             </>
           )}
         </div>
 
-        {/* Footer */}
         <SheetFooter className="flex-row justify-between border-t pt-4">
           {!isFirstStep ? (
             <Button variant="outline" size="sm" onClick={goBack}>
               <ArrowLeftIcon />
               Volver
             </Button>
-          ) : (
-            <div />
-          )}
+          ) : <div />}
 
-          {currentStep !== "search" &&
-            currentStep !== "variant" &&
-            (isLastStep ? (
+          {currentStep !== "search" && currentStep !== "variant" && (
+            isLastStep ? (
               <Button size="sm" onClick={handleConfirm}>
                 <CheckIcon />
                 Agregar
@@ -917,7 +1073,8 @@ export function AgregarProductoSheet({
               <Button size="sm" onClick={goNext} disabled={!canContinue}>
                 Continuar
               </Button>
-            ))}
+            )
+          )}
         </SheetFooter>
       </SheetContent>
     </Sheet>

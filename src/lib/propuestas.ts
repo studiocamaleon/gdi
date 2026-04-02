@@ -5,6 +5,7 @@
 import type {
   ProductoPrecioConfig,
   CotizacionProductoVariante,
+  GranFormatoCostosResponse,
   TipoImpresionProductoVariante,
   CarasProductoVariante,
   DimensionOpcionProductiva,
@@ -55,16 +56,14 @@ export type PropuestaItem = {
   productoNombre: string;
   productoCodigo: string;
   motorCodigo: string;
-  // Variante
-  varianteId: string;
-  varianteNombre: string;
-  // Config elegida por el usuario
-  tipoImpresion: TipoImpresionProductoVariante;
-  caras: CarasProductoVariante;
-  // Dimensiones de la variante (mm)
-  anchoMm: number;
-  altoMm: number;
-  // Cantidad y precios
+  // Digital laser specific (opcional para otros motores)
+  varianteId?: string;
+  varianteNombre?: string;
+  tipoImpresion?: TipoImpresionProductoVariante;
+  caras?: CarasProductoVariante;
+  anchoMm?: number;
+  altoMm?: number;
+  // Cantidad y precios (compartido)
   unidadMedida: UnidadComercialProducto;
   cantidad: number;
   precioUnitario: number;
@@ -74,8 +73,14 @@ export type PropuestaItem = {
   total: number;
   // Display
   especificaciones: Record<string, string>;
-  // Cotizacion completa (ruta de produccion, materiales, etc.)
+  // Cotizacion digital (ruta de produccion, materiales, etc.)
   cotizacion: CotizacionProductoVariante | null;
+  // Gran formato specific
+  granFormato?: {
+    tecnologia: string;
+    medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
+    costosResponse: GranFormatoCostosResponse;
+  };
 };
 
 export type PropuestaResumen = {

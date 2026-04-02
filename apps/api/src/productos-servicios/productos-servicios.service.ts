@@ -2125,9 +2125,13 @@ export class ProductosServiciosService {
             (row) => row.id === item.regla.variantePasoId,
           );
           if (!nivel) {
+            const reglaDetalleFallback = item.regla.detalleJson ?? item.regla.detalle;
             return {
-              ...this.buildChecklistOperacionFromPlantilla(plantilla),
-              orden: 10_000 + activeChecklistRules.indexOf(item),
+              operacion: {
+                ...this.buildChecklistOperacionFromPlantilla(plantilla),
+                orden: this.getChecklistRouteOrden(reglaDetalleFallback),
+              },
+              insertion: this.parseChecklistRouteInsertion(reglaDetalleFallback),
             };
           }
           const perfilNivel =
@@ -2135,20 +2139,22 @@ export class ProductosServiciosService {
               ? checklistNivelPerfilById.get(nivel.perfilOperativoId) ?? null
               : null) ??
             plantilla.perfilOperativo;
+          const reglaDetalle = item.regla.detalleJson ?? item.regla.detalle;
           return {
             operacion: {
               ...this.buildChecklistOperacionFromPlantillaConNivel(plantilla, nivel, perfilNivel),
-              orden: 10_000 + activeChecklistRules.indexOf(item),
+              orden: this.getChecklistRouteOrden(reglaDetalle),
             },
-            insertion: this.parseChecklistRouteInsertion(item.regla.detalleJson),
+            insertion: this.parseChecklistRouteInsertion(reglaDetalle),
           };
         }
+        const reglaDetalle = item.regla.detalleJson ?? item.regla.detalle;
         return {
           operacion: {
             ...this.buildChecklistOperacionFromPlantilla(plantilla),
-            orden: 10_000 + activeChecklistRules.indexOf(item),
+            orden: this.getChecklistRouteOrden(reglaDetalle),
           },
-          insertion: this.parseChecklistRouteInsertion(item.regla.detalleJson),
+          insertion: this.parseChecklistRouteInsertion(reglaDetalle),
         };
       })
       .filter((item): item is any => Boolean(item));
