@@ -21,6 +21,8 @@ import { toast } from "sonner";
 
 import { getCentrosCosto } from "@/lib/costos-api";
 import type { CentroCosto } from "@/lib/costos";
+import { getEstaciones } from "@/lib/estaciones-api";
+import type { Estacion } from "@/lib/estaciones";
 import { getMaquinas } from "@/lib/maquinaria-api";
 import {
   getUnidadProduccionMaquinaLabel,
@@ -36,6 +38,7 @@ import {
   type ProcesoTemplateOperation,
 } from "@/lib/procesos-templates";
 import {
+  bulkAssignEstacionPlantillas,
   createProcesoOperacionPlantilla,
   createProceso,
   evaluarProcesoCosto,
@@ -63,6 +66,7 @@ import {
 } from "@/lib/procesos";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -100,6 +104,7 @@ type ProcesosPanelProps = {
   initialBibliotecaOperaciones: ProcesoOperacionPlantilla[];
   centrosCosto: CentroCosto[];
   maquinas: Maquina[];
+  estaciones: Estacion[];
 };
 
 type LocalOperacion = ProcesoOperacionPayload & {
@@ -135,6 +140,7 @@ type BibliotecaFormState = {
   centroCostoId: string;
   maquinaId: string;
   perfilOperativoId: string;
+  estacionId: string;
   setupMin?: number;
   cleanupMin?: number;
   tiempoFijoMin?: number;
@@ -344,6 +350,7 @@ function createEmptyBibliotecaForm(): BibliotecaFormState {
     centroCostoId: "",
     maquinaId: "",
     perfilOperativoId: "",
+    estacionId: "",
     modoProductividad: "variable",
     productividadModoUi: "variable",
     unidadEntrada: "ninguna",
@@ -888,6 +895,7 @@ export function ProcesosPanel({
   initialBibliotecaOperaciones,
   centrosCosto,
   maquinas,
+  estaciones,
 }: ProcesosPanelProps) {
   const [procesos, setProcesos] = React.useState(initialProcesos);
   const [bibliotecaOperaciones, setBibliotecaOperaciones] = React.useState(
@@ -903,8 +911,15 @@ export function ProcesosPanel({
   const [bibliotecaForm, setBibliotecaForm] = React.useState<BibliotecaFormState>(
     () => createEmptyBibliotecaForm(),
   );
+  const [bibliotecaFormSnapshot, setBibliotecaFormSnapshot] =
+    React.useState<BibliotecaFormState | null>(null);
   const [allCentrosCosto, setAllCentrosCosto] = React.useState(centrosCosto);
   const [allMaquinas, setAllMaquinas] = React.useState(maquinas);
+  const [allEstaciones, setAllEstaciones] = React.useState(estaciones);
+  const [selectedPlantillas, setSelectedPlantillas] = React.useState<Set<string>>(
+    new Set(),
+  );
+  const [bulkEstacionId, setBulkEstacionId] = React.useState("");
   const [searchTerm, setSearchTerm] = React.useState("");
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const [editingProcesoId, setEditingProcesoId] = React.useState<string | null>(null);
@@ -1028,6 +1043,9 @@ export function ProcesosPanel({
     bibliotecaForm.maquinaId && bibliotecaMaquinaSeleccionada?.centroCostoPrincipalId,
   );
   const bibliotecaUsaProductividadPerfil = Boolean(bibliotecaPerfilSeleccionado);
+  const bibliotecaFormDirty =
+    !bibliotecaFormSnapshot ||
+    JSON.stringify(bibliotecaForm) !== JSON.stringify(bibliotecaFormSnapshot);
   const bibliotecaPerfilResuelto = React.useMemo(
     () => resolveMachineProfile(bibliotecaPerfilSeleccionado, bibliotecaMaquinaSeleccionada),
     [bibliotecaMaquinaSeleccionada, bibliotecaPerfilSeleccionado],
@@ -1194,16 +1212,18 @@ export function ProcesosPanel({
   const reloadAll = React.useCallback(() => {
     startRefreshing(async () => {
       try {
-        const [nextProcesos, nextCentros, nextMaquinas, nextBiblioteca] = await Promise.all([
+        const [nextProcesos, nextCentros, nextMaquinas, nextBiblioteca, nextEstaciones] = await Promise.all([
           getProcesos(),
           getCentrosCosto(),
           getMaquinas(),
           getProcesoOperacionPlantillas(),
+          getEstaciones(),
         ]);
         setProcesos(nextProcesos);
         setAllCentrosCosto(nextCentros);
         setAllMaquinas(nextMaquinas);
         setBibliotecaOperaciones(nextBiblioteca);
+        setAllEstaciones(nextEstaciones);
       } catch (error) {
         toast.error(
           error instanceof Error ? error.message : "No se pudo refrescar rutas de produccion.",
@@ -1683,7 +1703,6 @@ export function ProcesosPanel({
     return {
       nombre: form.nombre.trim(),
       descripcion: form.descripcion.trim() || undefined,
-      plantillaMaquinaria: form.plantillaMaquinaria || undefined,
       activo: form.activo,
       observaciones: form.observaciones.trim() || undefined,
       operaciones: operations,
@@ -1771,6 +1790,7 @@ export function ProcesosPanel({
 
   const openCreateBibliotecaSheet = React.useCallback(() => {
     setEditingBibliotecaId(null);
+    setBibliotecaFormSnapshot(null);
     setBibliotecaForm(createEmptyBibliotecaForm());
     setBibliotecaSheetOpen(true);
   }, []);
@@ -1781,14 +1801,14 @@ export function ProcesosPanel({
         item.tiempoFijoMin && item.tiempoFijoMin > 0
             ? "manual"
             : "variable";
-      setEditingBibliotecaId(item.id);
-      setBibliotecaForm({
+      const formData: BibliotecaFormState = {
         nombre: item.nombre,
         tipoOperacion: item.tipoOperacion,
         usaNiveles: (item.niveles?.length ?? 0) > 0,
         centroCostoId: item.centroCostoId ?? "",
         maquinaId: item.maquinaId ?? "",
         perfilOperativoId: item.perfilOperativoId ?? "",
+        estacionId: item.estacionId ?? "",
         setupMin: item.setupMin ?? undefined,
         cleanupMin: item.cleanupMin ?? undefined,
         tiempoFijoMin: item.tiempoFijoMin ?? undefined,
@@ -1803,7 +1823,10 @@ export function ProcesosPanel({
         niveles: normalizeNiveles(item.niveles ?? []),
         activo: item.activo,
         observaciones: item.observaciones,
-      });
+      };
+      setEditingBibliotecaId(item.id);
+      setBibliotecaFormSnapshot(formData);
+      setBibliotecaForm(formData);
       setBibliotecaSheetOpen(true);
     },
     [],
@@ -1938,6 +1961,7 @@ export function ProcesosPanel({
         centroCostoId: bibliotecaForm.centroCostoId || undefined,
         maquinaId: bibliotecaForm.maquinaId || undefined,
         perfilOperativoId: bibliotecaForm.perfilOperativoId || undefined,
+        estacionId: bibliotecaForm.estacionId || undefined,
         setupMin: bibliotecaForm.setupMin,
         cleanupMin: bibliotecaForm.cleanupMin,
         tiempoFijoMin,
@@ -1986,6 +2010,50 @@ export function ProcesosPanel({
       }
     });
   }, [buildBibliotecaPayload, editingBibliotecaId]);
+
+  const allBibliotecaSelected =
+    bibliotecaFiltrada.length > 0 &&
+    bibliotecaFiltrada.every((item) => selectedPlantillas.has(item.id));
+
+  const handleSelectAllBiblioteca = (checked: boolean) => {
+    if (checked) {
+      setSelectedPlantillas(new Set(bibliotecaFiltrada.map((item) => item.id)));
+    } else {
+      setSelectedPlantillas(new Set());
+    }
+  };
+
+  const handleSelectPlantilla = (id: string, checked: boolean) => {
+    const next = new Set(selectedPlantillas);
+    if (checked) {
+      next.add(id);
+    } else {
+      next.delete(id);
+    }
+    setSelectedPlantillas(next);
+  };
+
+  const handleBulkAssignEstacion = React.useCallback(() => {
+    startSaving(async () => {
+      const estId = bulkEstacionId === EMPTY_SELECT_VALUE ? null : bulkEstacionId || null;
+      try {
+        const updated = await bulkAssignEstacionPlantillas(
+          Array.from(selectedPlantillas),
+          estId,
+        );
+        setBibliotecaOperaciones(updated);
+        setSelectedPlantillas(new Set());
+        setBulkEstacionId("");
+        toast.success("Estacion asignada correctamente.");
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Error al asignar estacion.",
+        );
+      }
+    });
+  }, [bulkEstacionId, selectedPlantillas]);
 
   const handleToggleBiblioteca = React.useCallback((id: string) => {
     startSaving(async () => {
@@ -2177,13 +2245,56 @@ export function ProcesosPanel({
                 </label>
               </div>
 
+              {selectedPlantillas.size > 0 && (
+                <div className="flex items-center gap-3 rounded-md border bg-muted/50 px-4 py-2">
+                  <span className="text-sm font-medium">
+                    {selectedPlantillas.size} seleccionada(s)
+                  </span>
+                  <Select value={bulkEstacionId} onValueChange={(value) => setBulkEstacionId(value ?? "")}>
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Asignar estacion...">
+                        {bulkEstacionId && bulkEstacionId !== EMPTY_SELECT_VALUE
+                          ? allEstaciones.find((e) => e.id === bulkEstacionId)?.nombre ?? "Estacion no disponible"
+                          : bulkEstacionId === EMPTY_SELECT_VALUE
+                            ? "Sin estacion"
+                            : "Asignar estacion..."}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={EMPTY_SELECT_VALUE}>Sin estacion</SelectItem>
+                      {allEstaciones
+                        .filter((e) => e.activo)
+                        .map((e) => (
+                          <SelectItem key={e.id} value={e.id}>
+                            {e.nombre}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="sm"
+                    disabled={!bulkEstacionId || isSaving}
+                    onClick={handleBulkAssignEstacion}
+                  >
+                    Asignar
+                  </Button>
+                </div>
+              )}
+
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={allBibliotecaSelected}
+                        onCheckedChange={(checked) => handleSelectAllBiblioteca(!!checked)}
+                      />
+                    </TableHead>
                     <TableHead>Nombre</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Centro costo</TableHead>
                     <TableHead>Maquina/Perfil</TableHead>
+                    <TableHead>Estacion</TableHead>
                     <TableHead>Modo prod.</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead className="w-[260px] text-right">Acciones</TableHead>
@@ -2193,6 +2304,14 @@ export function ProcesosPanel({
                   {bibliotecaFiltrada.length ? (
                     bibliotecaFiltrada.map((item) => (
                       <TableRow key={item.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedPlantillas.has(item.id)}
+                            onCheckedChange={(checked) =>
+                              handleSelectPlantilla(item.id, !!checked)
+                            }
+                          />
+                        </TableCell>
                         <TableCell className="font-medium">{item.nombre}</TableCell>
                         <TableCell>{getTipoOperacionLabel(item.tipoOperacion)}</TableCell>
                         <TableCell>{item.centroCostoNombre || "Sin centro"}</TableCell>
@@ -2201,6 +2320,7 @@ export function ProcesosPanel({
                             ? `${item.maquinaNombre}${item.perfilOperativoId ? ` / ${item.perfilOperativoNombre}` : ""}`
                             : "Sin maquina"}
                         </TableCell>
+                        <TableCell>{item.estacionNombre || "Sin estacion"}</TableCell>
                         <TableCell>
                           {modoProductividadProcesoItems.find(
                             (mode) => mode.value === item.modoProductividad,
@@ -2238,7 +2358,7 @@ export function ProcesosPanel({
                   ) : (
                     <TableRow>
                       <TableCell
-                        colSpan={7}
+                        colSpan={9}
                         className="text-center text-sm text-muted-foreground"
                       >
                         No hay plantillas que coincidan con la busqueda.
@@ -2304,30 +2424,6 @@ export function ProcesosPanel({
                           }
                           placeholder="Ruta UV rollo con corte"
                         />
-                      </Field>
-
-                      <Field>
-                        <FieldLabel>Plantilla de maquinaria</FieldLabel>
-                        <Select
-                          value={form.plantillaMaquinaria || EMPTY_SELECT_VALUE}
-                          onValueChange={handlePlantillaChange}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecciona plantilla">
-                              {form.plantillaMaquinaria
-                                ? getPlantillaMaquinariaLabel(form.plantillaMaquinaria)
-                                : "No aplica"}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value={EMPTY_SELECT_VALUE}>No aplica</SelectItem>
-                            {plantillaMaquinariaItems.map((item) => (
-                              <SelectItem key={item.value} value={item.value}>
-                                {item.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
                       </Field>
 
                       <Field className="md:col-span-2">
@@ -3341,6 +3437,40 @@ export function ProcesosPanel({
                     </Select>
                   </Field>
 
+                  <Field>
+                    <FieldLabel>Estacion</FieldLabel>
+                    <Select
+                      value={bibliotecaForm.estacionId || EMPTY_SELECT_VALUE}
+                      onValueChange={(value) =>
+                        setBibliotecaForm((prev) => ({
+                          ...prev,
+                          estacionId:
+                            !value || value === EMPTY_SELECT_VALUE ? "" : value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue>
+                          {bibliotecaForm.estacionId
+                            ? allEstaciones.find(
+                                (e) => e.id === bibliotecaForm.estacionId,
+                              )?.nombre ?? "Estacion no disponible"
+                            : "Selecciona estacion"}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={EMPTY_SELECT_VALUE}>Sin seleccionar</SelectItem>
+                        {allEstaciones
+                          .filter((e) => e.activo)
+                          .map((estacion) => (
+                            <SelectItem key={estacion.id} value={estacion.id}>
+                              {estacion.nombre}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+
                   <Field className="md:col-span-2">
                     <div className="flex items-center justify-between rounded-md border px-3 py-3">
                       <div>
@@ -4200,7 +4330,7 @@ export function ProcesosPanel({
             <Button variant="outline" onClick={() => setBibliotecaSheetOpen(false)}>
               Cancelar
             </Button>
-            <Button variant="brand" onClick={handleSaveBiblioteca} disabled={isSaving}>
+            <Button variant="brand" onClick={handleSaveBiblioteca} disabled={isSaving || !bibliotecaFormDirty}>
               <Settings2Icon />
               {isSaving ? "Guardando..." : "Guardar plantilla"}
             </Button>

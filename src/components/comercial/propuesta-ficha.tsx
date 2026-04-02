@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   ArrowLeftIcon,
   BanknoteIcon,
+  CalendarIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
@@ -17,6 +18,7 @@ import {
   PlusCircleIcon,
   PlusIcon,
   SearchIcon,
+  XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -296,14 +298,22 @@ function ItemRow({
   index,
   isExpanded,
   onToggle,
+  isOrdenTrabajo,
+  fechaEstimada,
+  onFechaEntregaChange,
 }: {
   item: PropuestaItem;
   index: number;
   isExpanded: boolean;
   onToggle: () => void;
+  isOrdenTrabajo: boolean;
+  fechaEstimada: string;
+  onFechaEntregaChange: (fecha: string | undefined) => void;
 }) {
   const [imposicionOpen, setImposicionOpen] = React.useState(false);
   const [nestingOpen, setNestingOpen] = React.useState(false);
+  const [fechaPopoverOpen, setFechaPopoverOpen] = React.useState(false);
+  const fechaBtnRef = React.useRef<HTMLButtonElement>(null);
   const isDigital = item.motorCodigo === "impresion_digital_laser";
   const isGranFormato = item.motorCodigo === "gran_formato";
   const gfMedidas = item.granFormato?.medidas;
@@ -441,6 +451,85 @@ function ItemRow({
                   <GridIcon />
                   Imposicion
                 </Button>
+              )}
+              {/* Fecha de entrega individual */}
+              {isOrdenTrabajo && (
+                <div className="relative shrink-0">
+                  <Button
+                    ref={fechaBtnRef}
+                    variant="outline"
+                    size="sm"
+                    className={item.fechaEntrega ? "border-primary text-primary" : ""}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFechaPopoverOpen((prev) => !prev);
+                    }}
+                  >
+                    <CalendarIcon />
+                    {item.fechaEntrega
+                      ? new Date(item.fechaEntrega + "T12:00:00").toLocaleDateString("es-AR", {
+                          day: "2-digit",
+                          month: "short",
+                        })
+                      : new Date(fechaEstimada + "T12:00:00").toLocaleDateString("es-AR", {
+                          day: "2-digit",
+                          month: "short",
+                        })}
+                  </Button>
+                  {fechaPopoverOpen &&
+                    createPortal(
+                      <>
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setFechaPopoverOpen(false)}
+                        />
+                        <div
+                          className="fixed z-50 rounded-lg border bg-popover p-3 shadow-md"
+                          style={{
+                            top: (fechaBtnRef.current?.getBoundingClientRect().bottom ?? 0) + 4,
+                            right: window.innerWidth - (fechaBtnRef.current?.getBoundingClientRect().right ?? 0),
+                          }}
+                        >
+                          <div className="flex flex-col gap-2">
+                            <label className="text-xs font-medium text-muted-foreground">
+                              Fecha de entrega
+                            </label>
+                            <Input
+                              type="date"
+                              value={item.fechaEntrega ?? fechaEstimada}
+                              onChange={(e) => {
+                                onFechaEntregaChange(e.target.value || undefined);
+                              }}
+                              onClick={(e) =>
+                                (e.currentTarget as HTMLInputElement).showPicker?.()
+                              }
+                              className="w-[160px] cursor-pointer"
+                            />
+                            {item.fechaEntrega && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="justify-start text-xs text-muted-foreground"
+                                onClick={() => {
+                                  onFechaEntregaChange(undefined);
+                                  setFechaPopoverOpen(false);
+                                }}
+                              >
+                                <XIcon />
+                                Usar fecha de la orden
+                              </Button>
+                            )}
+                            {!item.fechaEntrega && (
+                              <p className="text-xs text-muted-foreground">
+                                Hereda fecha de la orden
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </>,
+                      document.body,
+                    )}
+                </div>
               )}
             </div>
 
@@ -742,6 +831,17 @@ export function PropuestaFicha() {
                           onToggle={() =>
                             setExpandedItemId((prev) =>
                               prev === item.id ? null : item.id,
+                            )
+                          }
+                          isOrdenTrabajo={tipo === "orden_trabajo"}
+                          fechaEstimada={fechaEstimada}
+                          onFechaEntregaChange={(fecha) =>
+                            setItems((prev) =>
+                              prev.map((i) =>
+                                i.id === item.id
+                                  ? { ...i, fechaEntrega: fecha }
+                                  : i,
+                              ),
                             )
                           }
                         />

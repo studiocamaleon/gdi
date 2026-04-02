@@ -11010,7 +11010,7 @@ export class ProductosServiciosService {
 
     return {
       ...baseOperacion,
-      nombre: template.nombre,
+      nombre: `${template.nombre} (${nivel.nombre})`,
       maquinaId: nivel.maquinaId ?? baseOperacion.maquinaId,
       perfilOperativoId:
         nivel.modoProductividadNivel === 'variable_perfil'

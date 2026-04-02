@@ -100,6 +100,10 @@ export class UpsertProcesoOperacionPlantillaDto {
   @Type(() => ProcesoOperacionNivelDto)
   niveles?: ProcesoOperacionNivelDto[];
 
+  @IsOptional()
+  @IsUUID()
+  estacionId?: string;
+
   @IsBoolean()
   activo: boolean;
 }

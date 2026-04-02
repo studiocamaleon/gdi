@@ -274,10 +274,6 @@ export class UpsertProcesoDto {
   descripcion?: string;
 
   @IsOptional()
-  @IsEnum(PlantillaMaquinariaDto)
-  plantillaMaquinaria?: PlantillaMaquinariaDto;
-
-  @IsOptional()
   @IsEnum(EstadoConfiguracionProcesoDto)
   estadoConfiguracion?: EstadoConfiguracionProcesoDto;
 

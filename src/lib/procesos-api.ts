@@ -141,3 +141,16 @@ export async function toggleProcesoOperacionPlantilla(id: string) {
     },
   );
 }
+
+export async function bulkAssignEstacionPlantillas(
+  ids: string[],
+  estacionId: string | null,
+) {
+  return apiRequest<ProcesoOperacionPlantilla[]>(
+    '/procesos/biblioteca-operaciones/bulk-assign-estacion',
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ ids, estacionId }),
+    },
+  );
+}

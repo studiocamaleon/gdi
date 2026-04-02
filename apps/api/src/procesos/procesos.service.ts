@@ -31,6 +31,7 @@ import {
   UpsertProcesoDto,
 } from './dto/upsert-proceso.dto';
 import { UpsertProcesoOperacionPlantillaDto } from './dto/upsert-proceso-operacion-plantilla.dto';
+import { BulkAssignEstacionPlantillasDto } from './dto/bulk-assign-estacion-plantillas.dto';
 import {
   EvaluarProcesoCostoDto,
 } from './dto/evaluar-proceso-costo.dto';
@@ -58,6 +59,7 @@ type ProcesoOperacionPlantillaEntity = Prisma.ProcesoOperacionPlantillaGetPayloa
     centroCosto: true;
     maquina: true;
     perfilOperativo: true;
+    estacion: true;
   };
 }>;
 
@@ -141,6 +143,7 @@ export class ProcesosService {
           centroCosto: true,
           maquina: true,
           perfilOperativo: true,
+          estacion: true,
         },
         orderBy: [{ nombre: 'asc' }],
       });
@@ -219,6 +222,32 @@ export class ProcesosService {
 
     const saved = await this.findBibliotecaOperacionOrThrow(auth, updated.id);
     return this.toBibliotecaOperacionResponse(saved);
+  }
+
+  async bulkAssignEstacionPlantillas(
+    auth: CurrentAuth,
+    dto: BulkAssignEstacionPlantillasDto,
+  ) {
+    if (dto.estacionId) {
+      const estacion = await this.prisma.estacion.findFirst({
+        where: { id: dto.estacionId, tenantId: auth.tenantId },
+      });
+      if (!estacion) {
+        throw new BadRequestException('La estacion seleccionada no existe.');
+      }
+    }
+
+    await this.prisma.procesoOperacionPlantilla.updateMany({
+      where: {
+        id: { in: dto.ids },
+        tenantId: auth.tenantId,
+      },
+      data: {
+        estacionId: dto.estacionId ?? null,
+      },
+    });
+
+    return this.findAllBibliotecaOperaciones(auth);
   }
 
   async findOne(auth: CurrentAuth, id: string) {
@@ -622,7 +651,6 @@ export class ProcesosService {
     forcedCodigo: string,
     forcedVersion: number,
   ) {
-    const plantillaMaquinaria = this.getPlantillaFromPayload(payload);
     const estadoConfiguracion = this.getDerivedEstadoConfiguracion(
       payload,
       references,
@@ -633,9 +661,6 @@ export class ProcesosService {
       codigo: forcedCodigo,
       nombre: payload.nombre.trim(),
       descripcion: payload.descripcion?.trim() || null,
-      plantillaMaquinaria: plantillaMaquinaria
-        ? this.toPrismaEnum<PlantillaMaquinaria>(plantillaMaquinaria)
-        : null,
       currentVersion: forcedVersion,
       estadoConfiguracion:
         this.toPrismaEnum<EstadoConfiguracionProceso>(estadoConfiguracion),
@@ -702,6 +727,7 @@ export class ProcesosService {
       centroCostoId: string | null;
       maquinaId: string | null;
       perfilOperativoId: string | null;
+      estacionId: string | null;
     },
   ) {
     return {
@@ -711,6 +737,7 @@ export class ProcesosService {
       centroCostoId: refs.centroCostoId,
       maquinaId: refs.maquinaId,
       perfilOperativoId: refs.perfilOperativoId,
+      estacionId: refs.estacionId,
       setupMin: this.toDecimal(payload.setupMin),
       cleanupMin: this.toDecimal(payload.cleanupMin),
       tiempoFijoMin: this.toDecimal(payload.tiempoFijoMin),
@@ -1418,10 +1445,6 @@ export class ProcesosService {
     return values.map((item) => new Prisma.Decimal(item));
   }
 
-  private getPlantillaFromPayload(payload: UpsertProcesoDto) {
-    return payload.plantillaMaquinaria ?? null;
-  }
-
   private getDerivedEstadoConfiguracion(
     payload: UpsertProcesoDto,
     references: ReferenceContext,
@@ -1548,28 +1571,6 @@ export class ProcesosService {
         throw new BadRequestException(
           `El perfil operativo de ${operacion.nombre.trim()} no pertenece a la maquina seleccionada.`,
         );
-      }
-    }
-
-    if (payload.plantillaMaquinaria) {
-      for (const operacion of operaciones) {
-        if (!operacion.maquinaId) {
-          continue;
-        }
-
-        const maquina = references.maquinasById.get(operacion.maquinaId);
-        if (!maquina) {
-          continue;
-        }
-
-        if (
-          maquina.plantilla !==
-            this.toPrismaEnum<PlantillaMaquinaria>(payload.plantillaMaquinaria)
-        ) {
-          throw new BadRequestException(
-            `La maquina ${maquina.nombre} no coincide con la plantilla seleccionada del proceso.`,
-          );
-        }
       }
     }
 
@@ -1792,6 +1793,7 @@ export class ProcesosService {
         centroCosto: true,
         maquina: true,
         perfilOperativo: true,
+        estacion: true,
       },
     });
 
@@ -1830,12 +1832,37 @@ export class ProcesosService {
       return centro.id;
     };
 
+    const resolveEstacion = async (estacionId?: string) => {
+      if (!estacionId) {
+        return null;
+      }
+
+      const estacion = await this.prisma.estacion.findFirst({
+        where: {
+          id: estacionId,
+          tenantId: auth.tenantId,
+        },
+        select: { id: true },
+      });
+
+      if (!estacion) {
+        throw new BadRequestException(
+          'La estacion seleccionada no existe para este tenant.',
+        );
+      }
+
+      return estacion.id;
+    };
+
+    const estacionId = await resolveEstacion(payload.estacionId);
+
     if (!payload.maquinaId) {
       const centroCostoId = await resolveCentro(payload.centroCostoId);
       return {
         centroCostoId,
         maquinaId: null,
         perfilOperativoId: null,
+        estacionId,
       };
     }
 
@@ -1865,6 +1892,7 @@ export class ProcesosService {
         centroCostoId,
         maquinaId: payload.maquinaId,
         perfilOperativoId: null,
+        estacionId,
       };
     }
 
@@ -1889,6 +1917,7 @@ export class ProcesosService {
       centroCostoId,
       maquinaId: payload.maquinaId,
       perfilOperativoId: payload.perfilOperativoId,
+      estacionId,
     };
   }
 
@@ -2216,6 +2245,8 @@ export class ProcesosService {
         this.getOperacionDetalle(detalleJson)?.baseCalculoProductividad ?? null,
       observaciones: item.observaciones ?? '',
       niveles: this.getOperacionNiveles(detalleJson),
+      estacionId: item.estacionId ?? null,
+      estacionNombre: item.estacion?.nombre ?? '',
       activo: item.activo,
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),

@@ -2,6 +2,7 @@ import dynamicImport from "next/dynamic";
 import { Suspense } from "react";
 
 import { getCentrosCosto } from "@/lib/costos-api";
+import { getEstaciones } from "@/lib/estaciones-api";
 import { getMaquinas } from "@/lib/maquinaria-api";
 import { getProcesoOperacionPlantillas, getProcesos } from "@/lib/procesos-api";
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
@@ -27,10 +28,11 @@ export default function ProcesosPage() {
 }
 
 async function ProcesosPageContent() {
-  const [procesos, centrosCosto, maquinas] = await Promise.all([
+  const [procesos, centrosCosto, maquinas, estaciones] = await Promise.all([
     getProcesos(),
     getCentrosCosto(),
     getMaquinas(),
+    getEstaciones(),
   ]);
   let bibliotecaOperaciones = [] as Awaited<
     ReturnType<typeof getProcesoOperacionPlantillas>
@@ -48,6 +50,7 @@ async function ProcesosPageContent() {
         initialProcesos={procesos}
         centrosCosto={centrosCosto}
         maquinas={maquinas}
+        estaciones={estaciones}
         initialBibliotecaOperaciones={bibliotecaOperaciones}
       />
     </section>

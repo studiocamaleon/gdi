@@ -12,6 +12,7 @@ import type { CurrentAuth } from '../auth/auth.types';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { EvaluarProcesoCostoDto } from './dto/evaluar-proceso-costo.dto';
+import { BulkAssignEstacionPlantillasDto } from './dto/bulk-assign-estacion-plantillas.dto';
 import { UpsertProcesoOperacionPlantillaDto } from './dto/upsert-proceso-operacion-plantilla.dto';
 import { UpsertProcesoDto } from './dto/upsert-proceso.dto';
 import { ProcesosService } from './procesos.service';
@@ -56,6 +57,14 @@ export class ProcesosController {
     @Param('id') id: string,
   ) {
     return this.procesosService.toggleBibliotecaOperacion(auth, id);
+  }
+
+  @Patch('biblioteca-operaciones/bulk-assign-estacion')
+  bulkAssignEstacion(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: BulkAssignEstacionPlantillasDto,
+  ) {
+    return this.procesosService.bulkAssignEstacionPlantillas(auth, payload);
   }
 
   @Get(':id')

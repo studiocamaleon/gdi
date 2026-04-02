@@ -71,6 +71,8 @@ export type PropuestaItem = {
   impuestoPorcentaje: number;
   impuestoMonto: number;
   total: number;
+  // Fecha de entrega especifica (si no se define, hereda fechaEstimada de la orden)
+  fechaEntrega?: string;
   // Display
   especificaciones: Record<string, string>;
   // Cotizacion digital (ruta de produccion, materiales, etc.)
