@@ -46,9 +46,11 @@ export enum TipoOperacionProcesoDto {
   preprensa = 'preprensa',
   prensa = 'prensa',
   postprensa = 'postprensa',
+  instalacion = 'instalacion',
+  entrega_despacho = 'entrega_despacho',
+  // Legacy: accepted on input, remapped on output
   acabado = 'acabado',
   servicio = 'servicio',
-  instalacion = 'instalacion',
 }
 
 export enum ModoProductividadProcesoDto {

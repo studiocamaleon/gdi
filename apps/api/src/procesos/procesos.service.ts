@@ -747,13 +747,14 @@ export class ProcesosService {
       case TipoOperacionProcesoDto.prensa:
         return TipoOperacionProceso.IMPRESION;
       case TipoOperacionProcesoDto.postprensa:
+      case TipoOperacionProcesoDto.acabado: // legacy → postprensa
         return TipoOperacionProceso.TERMINACION;
-      case TipoOperacionProcesoDto.acabado:
-        return TipoOperacionProceso.LAMINADO;
-      case TipoOperacionProcesoDto.servicio:
-        return TipoOperacionProceso.OTRO;
       case TipoOperacionProcesoDto.instalacion:
         return TipoOperacionProceso.LOGISTICA;
+      case TipoOperacionProcesoDto.entrega_despacho:
+        return TipoOperacionProceso.EMPAQUE;
+      case TipoOperacionProcesoDto.servicio: // legacy → preprensa
+        return TipoOperacionProceso.OTRO;
       default:
         return TipoOperacionProceso.OTRO;
     }
@@ -763,26 +764,25 @@ export class ProcesosService {
     switch (value) {
       case TipoOperacionProceso.PREPRENSA:
       case TipoOperacionProceso.PREFLIGHT:
+      case TipoOperacionProceso.OTRO:
         return TipoOperacionProcesoDto.preprensa;
       case TipoOperacionProceso.IMPRESION:
         return TipoOperacionProcesoDto.prensa;
       case TipoOperacionProceso.LOGISTICA:
         return TipoOperacionProcesoDto.instalacion;
+      case TipoOperacionProceso.EMPAQUE:
+        return TipoOperacionProcesoDto.entrega_despacho;
       case TipoOperacionProceso.LAMINADO:
       case TipoOperacionProceso.CORTE:
       case TipoOperacionProceso.MECANIZADO:
       case TipoOperacionProceso.GRABADO:
       case TipoOperacionProceso.CURADO:
       case TipoOperacionProceso.TRANSFERENCIA:
-        return TipoOperacionProcesoDto.acabado;
       case TipoOperacionProceso.TERMINACION:
       case TipoOperacionProceso.CONTROL_CALIDAD:
-      case TipoOperacionProceso.EMPAQUE:
       case TipoOperacionProceso.TERCERIZADO:
-        return TipoOperacionProcesoDto.postprensa;
-      case TipoOperacionProceso.OTRO:
       default:
-        return TipoOperacionProcesoDto.servicio;
+        return TipoOperacionProcesoDto.postprensa;
     }
   }
 

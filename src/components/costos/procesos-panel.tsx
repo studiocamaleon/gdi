@@ -58,7 +58,7 @@ import {
   type ProcesoOperacionPlantillaPayload,
   type ProcesoOperacionPayload,
   type ProcesoPayload,
-  tipoOperacionProcesoItems,
+  etapaProcesoItems,
   unidadProcesoItems,
 } from "@/lib/procesos";
 import { Badge } from "@/components/ui/badge";
@@ -376,7 +376,7 @@ function getPlantillaProcesoLabel(plantilla: PlantillaMaquinaria | null) {
 
 function getTipoOperacionLabel(tipoOperacion: ProcesoOperacionPayload["tipoOperacion"]) {
   return (
-    tipoOperacionProcesoItems.find((item) => item.value === tipoOperacion)?.label ??
+    etapaProcesoItems.find((item) => item.value === tipoOperacion)?.label ??
     tipoOperacion
   );
 }
@@ -2604,7 +2604,7 @@ export function ProcesosPanel({
                           </Field>
 
                           <Field>
-                            <FieldLabel>Tipo de paso</FieldLabel>
+                            <FieldLabel>Etapa</FieldLabel>
                             <Select
                               value={operacion.tipoOperacion}
                               onValueChange={(value) =>
@@ -2617,13 +2617,13 @@ export function ProcesosPanel({
                             >
                               <SelectTrigger>
                                 <SelectValue>
-                                  {tipoOperacionProcesoItems.find(
+                                  {etapaProcesoItems.find(
                                     (item) => item.value === operacion.tipoOperacion,
                                   )?.label ?? operacion.tipoOperacion}
                                 </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
-                                {tipoOperacionProcesoItems.map((item) => (
+                                {etapaProcesoItems.map((item) => (
                                   <SelectItem key={item.value} value={item.value}>
                                     {item.label}
                                   </SelectItem>
@@ -3064,7 +3064,7 @@ export function ProcesosPanel({
                             <div>
                               <p className="text-xs text-muted-foreground">Tipo</p>
                               <p className="text-sm">
-                                {tipoOperacionProcesoItems.find(
+                                {etapaProcesoItems.find(
                                   (item) => item.value === operacion.tipoOperacion,
                                 )?.label ?? operacion.tipoOperacion}
                               </p>
@@ -3277,7 +3277,7 @@ export function ProcesosPanel({
                   </Field>
 
                   <Field>
-                    <FieldLabel>Tipo de paso</FieldLabel>
+                    <FieldLabel>Etapa</FieldLabel>
                     <Select
                       value={bibliotecaForm.tipoOperacion}
                       onValueChange={(value) =>
@@ -3294,7 +3294,7 @@ export function ProcesosPanel({
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        {tipoOperacionProcesoItems.map((item) => (
+                        {etapaProcesoItems.map((item) => (
                           <SelectItem key={item.value} value={item.value}>
                             {item.label}
                           </SelectItem>

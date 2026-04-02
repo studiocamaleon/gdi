@@ -53,7 +53,7 @@ const templates: ProcesoTemplateDefinition[] = [
     operations: [
       op("PRE-001", "Preflight archivo", "preprensa", "ninguna", "ninguna"),
       op("CNC-010", "Nesting", "preprensa", "ninguna", "hoja"),
-      op("CNC-020", "Mecanizado", "acabado", "m2", "pieza"),
+      op("CNC-020", "Mecanizado", "postprensa", "m2", "pieza"),
       op("CNC-030", "Control dimensional", "postprensa", "pieza", "pieza"),
     ],
   },
@@ -64,7 +64,7 @@ const templates: ProcesoTemplateDefinition[] = [
     description: "Flujo base para corte o grabado laser.",
     operations: [
       op("PRE-001", "Preflight vector", "preprensa", "ninguna", "ninguna"),
-      op("LAS-020", "Corte/Grabado laser", "acabado", "m2", "pieza"),
+      op("LAS-020", "Corte/Grabado laser", "postprensa", "m2", "pieza"),
       op("LAS-030", "Control y limpieza", "postprensa", "pieza", "pieza"),
     ],
   },
@@ -87,8 +87,8 @@ const templates: ProcesoTemplateDefinition[] = [
     operations: [
       op("PRE-001", "Preflight", "preprensa", "ninguna", "ninguna"),
       op("DTF-020", "Impresion film", "prensa", "m2", "m2"),
-      op("DTF-030", "Curado", "acabado", "m2", "m2"),
-      op("DTF-040", "Transferencia", "acabado", "unidad", "unidad"),
+      op("DTF-030", "Curado", "postprensa", "m2", "m2"),
+      op("DTF-040", "Transferencia", "postprensa", "unidad", "unidad"),
     ],
   },
   {
@@ -99,8 +99,8 @@ const templates: ProcesoTemplateDefinition[] = [
     operations: [
       op("PRE-001", "Preflight capas", "preprensa", "ninguna", "ninguna"),
       op("DUV-020", "Impresion UV film", "prensa", "m2", "m2"),
-      op("DUV-030", "Laminado transfer", "acabado", "m2", "m2"),
-      op("DUV-040", "Corte contorno", "acabado", "m2", "unidad"),
+      op("DUV-030", "Laminado transfer", "postprensa", "m2", "m2"),
+      op("DUV-040", "Corte contorno", "postprensa", "m2", "unidad"),
     ],
   },
   {
@@ -122,7 +122,7 @@ const templates: ProcesoTemplateDefinition[] = [
     operations: [
       op("PRE-001", "Preflight", "preprensa", "ninguna", "ninguna"),
       op("UVC-020", "Impresion cilindrica", "prensa", "pieza", "pieza"),
-      op("UVC-030", "Curado/control", "acabado", "pieza", "pieza"),
+      op("UVC-030", "Curado/control", "postprensa", "pieza", "pieza"),
     ],
   },
   {
@@ -144,7 +144,7 @@ const templates: ProcesoTemplateDefinition[] = [
     operations: [
       op("PRE-001", "Preflight", "preprensa", "ninguna", "ninguna"),
       op("UVR-020", "Impresion UV rollo", "prensa", "m2", "m2"),
-      op("UVR-030", "Corte contorno", "acabado", "m2", "unidad"),
+      op("UVR-030", "Corte contorno", "postprensa", "m2", "unidad"),
     ],
   },
   {
@@ -155,7 +155,7 @@ const templates: ProcesoTemplateDefinition[] = [
     operations: [
       op("PRE-001", "Preflight", "preprensa", "ninguna", "ninguna"),
       op("SOL-020", "Impresion solvente", "prensa", "m2", "m2"),
-      op("SOL-030", "Secado/estabilizacion", "acabado", "m2", "m2"),
+      op("SOL-030", "Secado/estabilizacion", "postprensa", "m2", "m2"),
       op("SOL-040", "Laminado/corte", "postprensa", "m2", "unidad"),
     ],
   },
@@ -178,7 +178,7 @@ const templates: ProcesoTemplateDefinition[] = [
     operations: [
       op("PRE-001", "Preflight", "preprensa", "ninguna", "ninguna"),
       op("LAT-020", "Impresion latex", "prensa", "m2", "m2"),
-      op("LAT-030", "Corte contorno", "acabado", "m2", "unidad"),
+      op("LAT-030", "Corte contorno", "postprensa", "m2", "unidad"),
     ],
   },
   {
@@ -189,7 +189,7 @@ const templates: ProcesoTemplateDefinition[] = [
     operations: [
       op("PRE-001", "Diseno espejado", "preprensa", "ninguna", "ninguna"),
       op("SUB-020", "Impresion transfer", "prensa", "m2", "m2"),
-      op("SUB-030", "Transferencia termica", "acabado", "m2", "m2"),
+      op("SUB-030", "Transferencia termica", "postprensa", "m2", "m2"),
     ],
   },
   {
@@ -222,7 +222,7 @@ const templates: ProcesoTemplateDefinition[] = [
     operations: [
       op("PRE-001", "Import corte", "preprensa", "ninguna", "ninguna"),
       op("MDC-020", "Registro marcas", "postprensa", "m2", "m2"),
-      op("MDC-030", "Corte/Hendido", "acabado", "m2", "unidad"),
+      op("MDC-030", "Corte/Hendido", "postprensa", "m2", "unidad"),
     ],
   },
   {
@@ -233,7 +233,7 @@ const templates: ProcesoTemplateDefinition[] = [
     operations: [
       op("PRE-001", "Carga contornos", "preprensa", "ninguna", "ninguna"),
       op("PDC-020", "Lectura marcas", "postprensa", "m2", "m2"),
-      op("PDC-030", "Corte", "acabado", "m2", "unidad"),
+      op("PDC-030", "Corte", "postprensa", "m2", "unidad"),
       op("PDC-040", "Pelado", "postprensa", "unidad", "unidad"),
     ],
   },

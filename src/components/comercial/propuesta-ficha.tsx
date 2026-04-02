@@ -14,6 +14,7 @@ import {
   FolderIcon,
   GridIcon,
   PackageIcon,
+  PlusCircleIcon,
   PlusIcon,
   SearchIcon,
 } from "lucide-react";
@@ -308,6 +309,24 @@ function ItemRow({
   const gfMedidas = item.granFormato?.medidas;
   const hasNesting = isGranFormato && !!item.granFormato?.costosResponse?.nestingPreview;
 
+  // Extract adicionales (non-base steps from cotización)
+  const adicionales = React.useMemo(() => {
+    const pasos = item.cotizacion?.bloques.procesos
+      ?? item.granFormato?.costosResponse?.centrosCosto
+      ?? [];
+    return pasos
+      .filter((p) => {
+        const o = String((p as Record<string, unknown>).origen ?? "").trim().toLowerCase();
+        return o !== "" && !o.startsWith("base") && !o.startsWith("producto base");
+      })
+      .map((p) => {
+        const obj = p as Record<string, unknown>;
+        return String(obj.nombre ?? obj.paso ?? "");
+      })
+      .filter((name) => name.length > 0);
+  }, [item.cotizacion, item.granFormato]);
+  const hasAdicionales = adicionales.length > 0;
+
   return (
     <>
       <TableRow
@@ -323,7 +342,14 @@ function ItemRow({
         </TableCell>
         <TableCell className="font-medium">
           <div className="flex flex-col">
-            <span>{item.productoNombre}</span>
+            <span className="flex items-center gap-1.5">
+              {item.productoNombre}
+              {hasAdicionales && !isExpanded && (
+                <span title={`${adicionales.length} adicional${adicionales.length > 1 ? "es" : ""} incluido${adicionales.length > 1 ? "s" : ""}`}>
+                  <PlusCircleIcon className="size-3.5 text-primary/70" />
+                </span>
+              )}
+            </span>
             <span className="text-xs text-muted-foreground">
               {item.productoCodigo}
             </span>
@@ -417,6 +443,21 @@ function ItemRow({
                 </Button>
               )}
             </div>
+
+            {/* Adicionales incluidos */}
+            {hasAdicionales && (
+              <div className="mt-3 flex items-start gap-2 border-t border-border/50 pt-3">
+                <PlusCircleIcon className="mt-0.5 size-3.5 shrink-0 text-primary/70" />
+                <div className="flex flex-col gap-0.5 text-sm">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Adicionales incluidos
+                  </span>
+                  {adicionales.map((nombre, i) => (
+                    <span key={i} className="font-medium">{nombre}</span>
+                  ))}
+                </div>
+              </div>
+            )}
           </TableCell>
         </TableRow>
       )}

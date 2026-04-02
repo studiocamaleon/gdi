@@ -22,9 +22,8 @@ export type TipoOperacionProceso =
   | 'preprensa'
   | 'prensa'
   | 'postprensa'
-  | 'acabado'
-  | 'servicio'
-  | 'instalacion';
+  | 'instalacion'
+  | 'entrega_despacho';
 
 export type ModoProductividadProceso = 'fija' | 'variable';
 export type ModoProductividadNivel =
@@ -222,16 +221,15 @@ export const estadoConfiguracionProcesoItems: Array<{
   { label: 'Lista', value: 'lista' },
 ];
 
-export const tipoOperacionProcesoItems: Array<{
+export const etapaProcesoItems: Array<{
   label: string;
   value: TipoOperacionProceso;
 }> = [
-  { label: 'Preprensa', value: 'preprensa' },
+  { label: 'Pre-prensa', value: 'preprensa' },
   { label: 'Prensa', value: 'prensa' },
   { label: 'Post-prensa', value: 'postprensa' },
-  { label: 'Acabado', value: 'acabado' },
-  { label: 'Servicio', value: 'servicio' },
   { label: 'Instalación', value: 'instalacion' },
+  { label: 'Entrega / Despacho', value: 'entrega_despacho' },
 ];
 
 export const modoProductividadProcesoItems: Array<{

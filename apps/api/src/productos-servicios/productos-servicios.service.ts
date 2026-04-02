@@ -2291,7 +2291,7 @@ export class ProductosServiciosService {
           paso: op.nombre,
           centroCostoId: op.centroCostoId,
           centroCostoNombre: op.centroCosto?.nombre ?? '',
-          origen: Number(op.orden) >= 10_000 ? 'Configurador' : 'Producto base',
+          origen: (op as any)._esChecklist ? 'Configurador' : 'Producto base',
           minutos,
           tarifaHora: tarifa ? Number(tarifa) : 0,
           costo,
@@ -11204,7 +11204,7 @@ export class ProductosServiciosService {
               : anchorIndex + 1;
         }
       }
-      ordered.splice(insertIndex, 0, checklistItem.operacion);
+      ordered.splice(insertIndex, 0, { ...checklistItem.operacion, _esChecklist: true });
     }
 
     return ordered.map((item, index) => ({
