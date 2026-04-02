@@ -12,9 +12,11 @@ import {
   CreditCardIcon,
   BoxesIcon,
   FileTextIcon,
+  FactoryIcon,
   GemIcon,
   FolderTreeIcon,
   IdCardIcon,
+  LandmarkIcon,
   LayoutDashboardIcon,
   PrinterIcon,
   UsersIcon,
@@ -104,6 +106,14 @@ const costos = [
     title: "Catalogo de productos",
     href: "/costos/productos-servicios",
     icon: BoxesIcon,
+  },
+];
+
+const produccion = [
+  {
+    title: "Estaciones",
+    href: "/produccion/estaciones",
+    icon: LandmarkIcon,
   },
 ];
 
@@ -280,12 +290,16 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
     matchesRoute(pathname, item.href),
   );
   const isCostosRoute = costos.some((item) => matchesRoute(pathname, item.href));
+  const isProduccionRoute = produccion.some((item) =>
+    matchesRoute(pathname, item.href),
+  );
   const isInventarioRoute = inventario.some((item) =>
     matchesRoute(pathname, item.href),
   );
   const [isComercialOpen, setIsComercialOpen] = React.useState(isComercialRoute);
   const [isRegistrosOpen, setIsRegistrosOpen] = React.useState(isRegistrosRoute);
   const [isCostosOpen, setIsCostosOpen] = React.useState(isCostosRoute);
+  const [isProduccionOpen, setIsProduccionOpen] = React.useState(isProduccionRoute);
   const [isInventarioOpen, setIsInventarioOpen] = React.useState(isInventarioRoute);
   const planNombre = currentUser.tenantActual.suscripcion?.planNombre?.trim() || "Plan diamante";
   const diasRestantes = currentUser.tenantActual.suscripcion?.diasRestantes ?? 18;
@@ -303,6 +317,10 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
   React.useEffect(() => {
     setIsCostosOpen(isCostosRoute);
   }, [isCostosRoute]);
+
+  React.useEffect(() => {
+    setIsProduccionOpen(isProduccionRoute);
+  }, [isProduccionRoute]);
 
   React.useEffect(() => {
     setIsInventarioOpen(isInventarioRoute);
@@ -543,6 +561,46 @@ export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
               <CollapsibleContent className="mt-1">
                 <SidebarMenuSub>
                   {costos.map((item) => (
+                    <SidebarMenuSubItem key={item.title}>
+                      <SidebarMenuSubButton
+                        render={<NavLink href={item.href} />}
+                        isActive={matchesRoute(pathname, item.href)}
+                      >
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  ))}
+                </SidebarMenuSub>
+              </CollapsibleContent>
+            </Collapsible>
+          </SidebarMenuItem>
+        </SidebarMenu>
+
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <Collapsible
+              open={isProduccionOpen}
+              onOpenChange={setIsProduccionOpen}
+              className="group/collapsible"
+            >
+              <CollapsibleTrigger
+                render={
+                  <SidebarMenuButton
+                    tooltip="Produccion"
+                    className="font-medium"
+                    isActive={isProduccionRoute}
+                  />
+                }
+              >
+                <FactoryIcon />
+                <span>Produccion</span>
+                <ChevronRightIcon className="ml-auto transition-transform group-data-[state=open]/menu-button:rotate-90" />
+              </CollapsibleTrigger>
+
+              <CollapsibleContent className="mt-1">
+                <SidebarMenuSub>
+                  {produccion.map((item) => (
                     <SidebarMenuSubItem key={item.title}>
                       <SidebarMenuSubButton
                         render={<NavLink href={item.href} />}

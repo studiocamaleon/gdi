@@ -110,7 +110,7 @@ describe('ProcesosService business rules', () => {
       operaciones: [
         {
           nombre: 'Operacion 1',
-          tipoOperacion: TipoOperacionProcesoDto.impresion,
+          tipoOperacion: TipoOperacionProcesoDto.prensa,
           centroCostoId: 'centro-1',
           modoProductividad: ModoProductividadProcesoDto.variable,
           productividadBase: 100,
@@ -149,7 +149,7 @@ describe('ProcesosService business rules', () => {
       operaciones: [
         {
           nombre: 'Operacion 1',
-          tipoOperacion: TipoOperacionProcesoDto.impresion,
+          tipoOperacion: TipoOperacionProcesoDto.prensa,
           centroCostoId: 'centro-1',
           modoProductividad: ModoProductividadProcesoDto.fija,
           productividadBase: 100,
@@ -188,7 +188,7 @@ describe('ProcesosService business rules', () => {
       operaciones: [
         {
           nombre: 'Operacion con perfil',
-          tipoOperacion: TipoOperacionProcesoDto.impresion,
+          tipoOperacion: TipoOperacionProcesoDto.prensa,
           centroCostoId: 'centro-1',
           maquinaId: 'maq-1',
           perfilOperativoId: 'perfil-1',
@@ -251,7 +251,7 @@ describe('ProcesosService business rules', () => {
       operaciones: [
         {
           nombre: 'Operacion sin perfil',
-          tipoOperacion: TipoOperacionProcesoDto.impresion,
+          tipoOperacion: TipoOperacionProcesoDto.prensa,
           centroCostoId: 'centro-1',
           maquinaId: 'maq-1',
           modoProductividad: ModoProductividadProcesoDto.fija,
@@ -330,7 +330,7 @@ describe('ProcesosService business rules', () => {
       service,
       {
         nombre: 'Operacion',
-        tipoOperacion: TipoOperacionProcesoDto.impresion,
+        tipoOperacion: TipoOperacionProcesoDto.prensa,
         maquinaId: 'maq-1',
         perfilOperativoId: 'perfil-1',
         modoProductividad: ModoProductividadProcesoDto.fija,
@@ -353,7 +353,7 @@ describe('ProcesosService business rules', () => {
       operaciones: [
         {
           nombre: 'Operacion con perfil',
-          tipoOperacion: TipoOperacionProcesoDto.impresion,
+          tipoOperacion: TipoOperacionProcesoDto.prensa,
           centroCostoId: 'centro-1',
           maquinaId: 'maq-1',
           perfilOperativoId: 'perfil-1',

@@ -554,6 +554,7 @@ model Tenant {
   productoChecklistReglas                ProductoChecklistRegla[]
   productoChecklistReglaNiveles          ProductoChecklistReglaNivel[]
   cotizacionChecklistRespuestas          CotizacionChecklistRespuestaSnapshot[]
+  estaciones                             Estacion[]
 }
 
 model User {
@@ -1189,12 +1190,31 @@ model ProcesoOperacionPlantilla {
   maquina            Maquina?                 @relation("ProcesoOperacionPlantillaMaquina", fields: [maquinaId], references: [id], onDelete: SetNull)
   perfilOperativo    MaquinaPerfilOperativo?  @relation("ProcesoOperacionPlantillaPerfil", fields: [perfilOperativoId], references: [id], onDelete: SetNull)
 
+  estacionId         String?                  @db.Uuid
+  estacion           Estacion?                @relation(fields: [estacionId], references: [id], onDelete: SetNull)
+
   @@index([tenantId, activo])
   @@index([tenantId, tipoOperacion])
   @@index([tenantId, centroCostoId])
   @@index([tenantId, maquinaId])
   @@index([tenantId, perfilOperativoId])
+  @@index([tenantId, estacionId])
   @@index([tenantId, nombre])
+}
+
+model Estacion {
+  id                             String                       @id @default(uuid()) @db.Uuid
+  tenantId                       String                       @db.Uuid
+  nombre                         String
+  descripcion                    String?
+  activo                         Boolean                      @default(true)
+  createdAt                      DateTime                     @default(now())
+  updatedAt                      DateTime                     @updatedAt
+  tenant                         Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  procesoOperacionPlantillas     ProcesoOperacionPlantilla[]
+
+  @@unique([tenantId, nombre])
+  @@index([tenantId, activo])
 }
 
 model ProcesoOperacion {

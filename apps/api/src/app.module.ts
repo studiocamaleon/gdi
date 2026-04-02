@@ -15,6 +15,7 @@ import { ProcesosModule } from './procesos/procesos.module';
 import { ProveedoresModule } from './proveedores/proveedores.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { InventarioModule } from './inventario/inventario.module';
+import { ProduccionModule } from './produccion/produccion.module';
 import { ProductosServiciosModule } from './productos-servicios/productos-servicios.module';
 
 @Module({
@@ -37,6 +38,7 @@ import { ProductosServiciosModule } from './productos-servicios/productos-servic
     MaquinariaModule,
     ProcesosModule,
     InventarioModule,
+    ProduccionModule,
     ProductosServiciosModule,
   ],
   controllers: [AppController],
