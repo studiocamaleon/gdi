@@ -31,7 +31,7 @@ export const CANONICAL_UNITS: Record<
   kit: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
   hoja: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
   pliego: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
-  resma: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
+  resma: { dimension: 'count', baseCode: 'unidad', factorToBase: 500 },
   rollo: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
   pieza: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
   par: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },

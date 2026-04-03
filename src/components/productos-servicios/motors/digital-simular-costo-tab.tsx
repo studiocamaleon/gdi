@@ -58,12 +58,20 @@ function buildDefaultPeriodo() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function getValoresOpcionesBase(variante: ProductoVariante, dimension: DimensionOpcionProductiva) {
+function getValoresOpcionesBase(variante: ProductoVariante, dimension: DimensionOpcionProductiva): ValorOpcionProductiva[] {
   if (dimension === "tipo_impresion") {
     return (
       variante.opcionesProductivas?.find((item) => item.dimension === "tipo_impresion")?.valores.filter(
         (value): value is "bn" | "cmyk" => value === "bn" || value === "cmyk",
       ) ?? [variante.tipoImpresion]
+    );
+  }
+  if (dimension === "tipo_copia") {
+    return (
+      variante.opcionesProductivas?.find((item) => item.dimension === "tipo_copia")?.valores.filter(
+        (value): value is ValorOpcionProductiva =>
+          value === "copia_simple" || value === "duplicado" || value === "triplicado" || value === "cuadruplicado",
+      ) ?? []
     );
   }
   return (
@@ -85,6 +93,8 @@ function formatOrigenProcesoLabel(origen: unknown) {
 function getMaterialTipoLabel(tipo: unknown) {
   const raw = String(tipo ?? "").trim().toUpperCase();
   if (raw === "PAPEL") return "Papel";
+  if (raw === "PAPEL_CAPA") return "Papel por capa";
+  if (raw === "MATERIAL_EXTRA") return "Material extra";
   if (raw === "TONER") return "Tóner";
   if (raw === "FILM") return "Film";
   if (raw === "DESGASTE") return "Desgaste";
@@ -122,7 +132,17 @@ function getDigitalVariantDisplayLabel(
 }
 
 export function DigitalSimularCostoTab(props: ProductTabProps) {
-  const dimensionesBaseConsumidas = props.producto.dimensionesBaseConsumidas ?? [];
+  const dimensionesBaseConsumidasRaw = props.producto.dimensionesBaseConsumidas ?? [];
+  // Para talonarios: incluir tipo_copia si la variante lo tiene configurado
+  const dimensionesBaseConsumidas = React.useMemo(() => {
+    const dims = [...dimensionesBaseConsumidasRaw];
+    if (!dims.includes("tipo_copia") && props.selectedVariant?.opcionesProductivas?.some(
+      (op) => op.dimension === "tipo_copia" && op.valores.length > 0,
+    )) {
+      dims.push("tipo_copia");
+    }
+    return dims;
+  }, [dimensionesBaseConsumidasRaw, props.selectedVariant]);
   const papelLabelById = React.useMemo(() => {
     const entries = props.materiasPrimas
       .filter((mp) => mp.subfamilia === "sustrato_hoja")
@@ -165,7 +185,9 @@ export function DigitalSimularCostoTab(props: ProductTabProps) {
         const baseValue =
           dimension === "caras"
             ? props.selectedVariant!.caras
-            : props.selectedVariant!.tipoImpresion;
+            : dimension === "tipo_impresion"
+              ? props.selectedVariant!.tipoImpresion
+              : null; // tipo_copia y otras dimensiones: no hay valor base en la variante
         if (baseValue && (values as string[]).includes(baseValue)) {
           next[dimension] = baseValue as ValorOpcionProductiva;
         } else {

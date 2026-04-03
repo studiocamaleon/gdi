@@ -74,9 +74,16 @@ const tipoCorteItems = [
 ] as const;
 
 const fallbackPliegosImpresion: PliegoImpresionCatalogItem[] = [
+  { codigo: "A6", nombre: "A6", anchoMm: 105, altoMm: 148, label: "A6 (105 x 148 mm)" },
+  { codigo: "A5", nombre: "A5", anchoMm: 148, altoMm: 210, label: "A5 (148 x 210 mm)" },
   { codigo: "A4", nombre: "A4", anchoMm: 210, altoMm: 297, label: "A4 (210 x 297 mm)" },
   { codigo: "A3", nombre: "A3", anchoMm: 297, altoMm: 420, label: "A3 (297 x 420 mm)" },
   { codigo: "SRA3", nombre: "SRA3", anchoMm: 320, altoMm: 450, label: "SRA3 (320 x 450 mm)" },
+  { codigo: "SRA3+", nombre: "SRA3+", anchoMm: 330, altoMm: 480, label: "SRA3+ (330 x 480 mm)" },
+  { codigo: "SRA3++", nombre: "SRA3++", anchoMm: 325, altoMm: 500, label: "SRA3++ (325 x 500 mm)" },
+  { codigo: "22x34", nombre: "22x34", anchoMm: 220, altoMm: 340, label: "22x34 (220 x 340 mm)" },
+  { codigo: "CARTA", nombre: "Carta", anchoMm: 216, altoMm: 279, label: "Carta (216 x 279 mm)" },
+  { codigo: "OFICIO", nombre: "Oficio", anchoMm: 216, altoMm: 356, label: "Oficio (216 x 356 mm)" },
 ];
 
 const uuidLikePattern =
@@ -240,32 +247,60 @@ function buildPreviewImposicion(params: {
   const serverPliego = readConfigRecord(server.pliegoImpresion);
   const piezaW = Math.max(1, Number(selectedVariante.anchoMm));
   const piezaH = Math.max(1, Number(selectedVariante.altoMm));
-  const hojaW = Math.max(1, Number(serverPliego.anchoMm ?? pliego.anchoMm));
-  const hojaH = Math.max(1, Number(serverPliego.altoMm ?? pliego.altoMm));
+  const hojaWRaw = Math.max(1, Number(serverPliego.anchoMm ?? pliego.anchoMm));
+  const hojaHRaw = Math.max(1, Number(serverPliego.altoMm ?? pliego.altoMm));
   const effectiveW = piezaW + demasiaCorteMm * 2;
   const effectiveH = piezaH + demasiaCorteMm * 2;
-  const margins = {
+
+  // Determinar si es motor talonario (tiene config de puntillado/encuadernacion)
+  const serverConfig = readConfigRecord(server.config);
+  const esTalonario = Boolean(serverConfig.puntillado || serverConfig.encuadernacion);
+
+  // Determinar orientación real del cálculo
+  const marginsRaw = {
     leftMm: Math.max(0, Number(serverMargins.leftMm ?? 0)),
     rightMm: Math.max(0, Number(serverMargins.rightMm ?? 0)),
     topMm: Math.max(0, Number(serverMargins.topMm ?? 0)),
     bottomMm: Math.max(0, Number(serverMargins.bottomMm ?? 0)),
   };
+  const printableWRaw = Math.max(0, hojaWRaw - marginsRaw.leftMm - marginsRaw.rightMm);
+  const printableHRaw = Math.max(0, hojaHRaw - marginsRaw.topMm - marginsRaw.bottomMm);
+  const utilWRaw = Math.max(0, printableWRaw - lineaCorteMm * 2);
+  const utilHRaw = Math.max(0, printableHRaw - lineaCorteMm * 2);
+  const normalCols = Math.max(0, Math.floor(utilWRaw / effectiveW));
+  const normalRows = Math.max(0, Math.floor(utilHRaw / effectiveH));
+  const normal = normalCols * normalRows;
+  const rotCols = Math.max(0, Math.floor(utilWRaw / effectiveH));
+  const rotRows = Math.max(0, Math.floor(utilHRaw / effectiveW));
+  const rotada = rotCols * rotRows;
+  const orientacionReal: "normal" | "rotada" =
+    String(serverImposicion.orientacion ?? "") === "rotada" || (rotada > normal && !Object.keys(serverImposicion).length)
+      ? "rotada"
+      : "normal";
+
+  // Para talonarios: si la orientación es rotada, giramos la hoja en vez de la pieza.
+  // Así la pieza siempre se ve en su orientación original (importante para puntillado/broches).
+  const hojaRotada = esTalonario && orientacionReal === "rotada";
+  const hojaW = hojaRotada ? hojaHRaw : hojaWRaw;
+  const hojaH = hojaRotada ? hojaWRaw : hojaHRaw;
+  const margins = hojaRotada
+    ? { leftMm: marginsRaw.topMm, rightMm: marginsRaw.bottomMm, topMm: marginsRaw.rightMm, bottomMm: marginsRaw.leftMm }
+    : marginsRaw;
   const printableW = Math.max(0, hojaW - margins.leftMm - margins.rightMm);
   const printableH = Math.max(0, hojaH - margins.topMm - margins.bottomMm);
   const utilW = Math.max(0, printableW - lineaCorteMm * 2);
   const utilH = Math.max(0, printableH - lineaCorteMm * 2);
-  const normalCols = Math.max(0, Math.floor(utilW / effectiveW));
-  const normalRows = Math.max(0, Math.floor(utilH / effectiveH));
-  const normal = normalCols * normalRows;
-  const rotCols = Math.max(0, Math.floor(utilW / effectiveH));
-  const rotRows = Math.max(0, Math.floor(utilH / effectiveW));
-  const rotada = rotCols * rotRows;
-  const orientacion: "normal" | "rotada" =
-    String(serverImposicion.orientacion ?? "") === "rotada" || (rotada > normal && !Object.keys(serverImposicion).length)
-      ? "rotada"
-      : "normal";
-  const cols = Math.max(0, Number(serverImposicion.cols ?? (orientacion === "rotada" ? rotCols : normalCols)));
-  const rows = Math.max(0, Number(serverImposicion.rows ?? (orientacion === "rotada" ? rotRows : normalRows)));
+
+  // Si rotamos la hoja, las piezas caben en orientación "normal" en la hoja girada.
+  // Además hay que intercambiar cols↔rows porque lo que eran filas en la hoja
+  // original ahora son columnas en la hoja girada.
+  const orientacion: "normal" | "rotada" = hojaRotada ? "normal" : orientacionReal;
+  const cols = Math.max(0, hojaRotada
+    ? Number(serverImposicion.rows ?? rotRows)
+    : Number(serverImposicion.cols ?? (orientacionReal === "rotada" ? rotCols : normalCols)));
+  const rows = Math.max(0, hojaRotada
+    ? Number(serverImposicion.cols ?? rotCols)
+    : Number(serverImposicion.rows ?? (orientacionReal === "rotada" ? rotRows : normalRows)));
   const papelSeleccionado = selectedVariante.papelVarianteId ? papelById.get(selectedVariante.papelVarianteId) : null;
   const sustratoAnchoMm = papelSeleccionado?.anchoMm ?? null;
   const sustratoAltoMm = papelSeleccionado?.altoMm ?? null;

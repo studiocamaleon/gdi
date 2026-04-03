@@ -298,20 +298,23 @@ export type ExtraMaterialCost = {
 export function calculateTalonarioExtraMaterials(input: {
   cantidadTalonarios: number;
   numerosXTalonario: number;
+  grouping: TalonarioGroupingResult;
   config: TalonarioMotorConfig;
   materialPrecioByVarianteId: Map<string, number>;
 }): { items: ExtraMaterialCost[]; total: number } {
   const items: ExtraMaterialCost[] = [];
   let total = 0;
 
-  // Cartón base: va cada `numerosXTalonario` pliegos, al tamaño del pliego.
-  // Cantidad = cantidadTalonarios (1 cartón por talonario, luego se guillotina)
-  // Pero el cartón es al tamaño del pliego, así que depende de la agrupación.
-  // Simplificación: 1 cartón por talonario
+  // Cartón base: va al tamaño del pliego, 1 por grupo de pliegos (no por talonario).
+  // Un "grupo" imprime N talonarios en un pliego. El cartón se pone al final
+  // de cada tanda de `numerosXTalonario` hojas y luego se guillotina con ellas.
+  // Cantidad de cartones = gruposCompletos + (residuo > 0 ? 1 : 0)
+  // Es decir, la misma cantidad de "tandas" de pliegos.
   if (input.config.materialesExtra.cartonBase.habilitado) {
     const varianteId = input.config.materialesExtra.cartonBase.materiaPrimaVarianteId;
     const precio = varianteId ? (input.materialPrecioByVarianteId.get(varianteId) ?? 0) : 0;
-    const cant = input.cantidadTalonarios;
+    const gruposTotales = input.grouping.gruposCompletos + (input.grouping.talonariosResiduo > 0 ? 1 : 0);
+    const cant = gruposTotales;
     const costo = cant * precio;
     items.push({
       tipo: 'carton_base',
@@ -323,11 +326,12 @@ export function calculateTalonarioExtraMaterials(input: {
     total += costo;
   }
 
-  // Hoja blanca superior: 1 por talonario
+  // Hoja blanca superior: misma lógica que el cartón (1 por grupo, tamaño pliego)
   if (input.config.materialesExtra.hojaBlancaSuperior.habilitado) {
     const varianteId = input.config.materialesExtra.hojaBlancaSuperior.materiaPrimaVarianteId;
     const precio = varianteId ? (input.materialPrecioByVarianteId.get(varianteId) ?? 0) : 0;
-    const cant = input.cantidadTalonarios;
+    const gruposTotales = input.grouping.gruposCompletos + (input.grouping.talonariosResiduo > 0 ? 1 : 0);
+    const cant = gruposTotales;
     const costo = cant * precio;
     items.push({
       tipo: 'hoja_blanca_superior',
@@ -385,8 +389,9 @@ export function resolveTipoCopia(
 ): TipoCopiaDefinicion | null {
   if (!config.tipoCopiaDefiniciones?.length) return null;
   if (tipoCopiaSeleccionado) {
+    const normalized = tipoCopiaSeleccionado.toUpperCase();
     const found = config.tipoCopiaDefiniciones.find(
-      (d) => d.valor === tipoCopiaSeleccionado,
+      (d) => d.valor.toUpperCase() === normalized,
     );
     if (found) return found;
   }

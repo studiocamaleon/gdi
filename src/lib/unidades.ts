@@ -56,7 +56,7 @@ export const UNIT_DEFINITIONS: Record<UnitCode, UnitDefinition> = {
   kit: { code: "kit", label: "Kit", symbol: "kit", dimension: "count", factorToBase: 1, baseCode: "unidad" },
   hoja: { code: "hoja", label: "Hoja", symbol: "hoja", dimension: "count", factorToBase: 1, baseCode: "unidad" },
   pliego: { code: "pliego", label: "Pliego", symbol: "pliego", dimension: "count", factorToBase: 1, baseCode: "unidad" },
-  resma: { code: "resma", label: "Resma", symbol: "resma", dimension: "count", factorToBase: 1, baseCode: "unidad" },
+  resma: { code: "resma", label: "Resma", symbol: "resma", dimension: "count", factorToBase: 500, baseCode: "unidad" },
   rollo: { code: "rollo", label: "Rollo", symbol: "rollo", dimension: "count", factorToBase: 1, baseCode: "unidad" },
   pieza: { code: "pieza", label: "Pieza", symbol: "pz", dimension: "count", factorToBase: 1, baseCode: "unidad" },
   par: { code: "par", label: "Par", symbol: "par", dimension: "count", factorToBase: 1, baseCode: "unidad" },

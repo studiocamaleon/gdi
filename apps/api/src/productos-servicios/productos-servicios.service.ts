@@ -37,6 +37,7 @@ import { randomUUID } from 'node:crypto';
 import type { CurrentAuth } from '../auth/auth.types';
 import {
   convertUnitPrice,
+  CANONICAL_UNITS,
   unitsAreCompatible,
   type UnitCode,
 } from '../inventario/unidades-canonicas';
@@ -449,6 +450,11 @@ export class ProductosServiciosService {
     { codigo: 'A4', nombre: 'A4', anchoMm: 210, altoMm: 297 },
     { codigo: 'A3', nombre: 'A3', anchoMm: 297, altoMm: 420 },
     { codigo: 'SRA3', nombre: 'SRA3', anchoMm: 320, altoMm: 450 },
+    { codigo: 'SRA3+', nombre: 'SRA3+', anchoMm: 330, altoMm: 480 },
+    { codigo: 'SRA3++', nombre: 'SRA3++', anchoMm: 325, altoMm: 500 },
+    { codigo: '22x34', nombre: '22x34', anchoMm: 220, altoMm: 340 },
+    { codigo: 'CARTA', nombre: 'Carta', anchoMm: 216, altoMm: 279 },
+    { codigo: 'OFICIO', nombre: 'Oficio', anchoMm: 216, altoMm: 356 },
   ];
 
   private readonly motorRegistry: ProductMotorRegistry;
@@ -663,7 +669,33 @@ export class ProductosServiciosService {
     const { config: rawConfig, configVersionBase, configVersionOverride } =
       await this.getEffectiveMotorConfig(auth, variante.productoServicio.id, variante.id, motor);
 
-    const talonarioConfig = TalonarioCalc.parseTalonarioMotorConfig(rawConfig);
+    // Para talonarios: los campos de composición (tipoCopiaDefiniciones, encuadernacion,
+    // puntillado, materialesExtra, numeracion) SIEMPRE vienen del config del producto,
+    // no del override de variante. El override solo afecta campos de imposición.
+    const productConfig = await this.prisma.productoMotorConfig.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        productoServicioId: variante.productoServicio.id,
+        motorCodigo: motor.code,
+        motorVersion: motor.version,
+        activo: true,
+      },
+      orderBy: [{ versionConfig: 'desc' }],
+    });
+    const productParams = this.asObject(productConfig?.parametrosJson);
+    const composicionFields = [
+      'tipoCopiaDefiniciones', 'encuadernacion', 'puntillado',
+      'materialesExtra', 'numeracion', 'numerosXTalonarioDefault',
+      'modoTalonarioIncompleto',
+    ] as const;
+    const effectiveConfig = { ...rawConfig } as Record<string, unknown>;
+    for (const field of composicionFields) {
+      if (productParams[field] !== undefined) {
+        effectiveConfig[field] = productParams[field];
+      }
+    }
+
+    const talonarioConfig = TalonarioCalc.parseTalonarioMotorConfig(effectiveConfig);
     const tipoCopiaSeleccionado =
       (payload as any).parametros?.tipoCopia ??
       (payload.seleccionesBase ?? []).find(
@@ -747,11 +779,25 @@ export class ProductosServiciosService {
     const papelVariantes = papelVarianteIds.length > 0
       ? await this.prisma.materiaPrimaVariante.findMany({
           where: { id: { in: papelVarianteIds }, tenantId: auth.tenantId },
-          select: { id: true, precioReferencia: true, atributosVarianteJson: true },
+          select: {
+            id: true,
+            precioReferencia: true,
+            atributosVarianteJson: true,
+            unidadStock: true,
+            unidadCompra: true,
+            materiaPrima: { select: { unidadStock: true, unidadCompra: true } },
+          },
         })
       : [];
     const papelPrecioByVarianteId = new Map(
-      papelVariantes.map((p) => [p.id, Number(p.precioReferencia ?? 0)]),
+      papelVariantes.map((p) => {
+        const precioRaw = Number(p.precioReferencia ?? 0);
+        const unidadCompra = (p.unidadCompra ?? p.materiaPrima.unidadCompra ?? 'hoja') as string;
+        const unidadStock = (p.unidadStock ?? p.materiaPrima.unidadStock ?? 'hoja') as string;
+        // Convertir precio de unidad de compra a unidad de stock (ej: resma → hoja)
+        const precioNormalizado = this.convertPrecioToStockUnit(precioRaw, unidadCompra, unidadStock);
+        return [p.id, precioNormalizado] as [string, number];
+      }),
     );
     const pliegosPorSustratoByVarianteId = new Map(
       papelVariantes.map((p) => {
@@ -784,6 +830,7 @@ export class ProductosServiciosService {
     const extraMaterials = TalonarioCalc.calculateTalonarioExtraMaterials({
       cantidadTalonarios,
       numerosXTalonario,
+      grouping,
       config: talonarioConfig,
       materialPrecioByVarianteId,
     });
@@ -802,40 +849,8 @@ export class ProductosServiciosService {
     const tarifaByCentro = new Map(tarifas.map((t) => [t.centroCostoId, t.tarifaCalculada]));
 
     const totalPliegosImpresion = grouping.pliegosXCapa * tipoCopia.capas;
-    let costoProcesos = 0;
-    const pasosDetalle: Array<Record<string, unknown>> = [];
-    const warnings: string[] = [];
 
-    for (const operacion of proceso.operaciones) {
-      const tarifa = tarifaByCentro.get(operacion.centroCostoId);
-      if (tarifa === undefined) {
-        warnings.push(`Sin tarifa para centro ${operacion.centroCosto?.nombre ?? operacion.centroCostoId} en ${periodo}.`);
-        continue;
-      }
-      const tarifaHora = Number(tarifa);
-      const productividadBase = Number(operacion.productividadBase ?? 0);
-      const setupMin = Number(operacion.setupMin ?? 0);
-      const cleanupMin = Number(operacion.cleanupMin ?? 0);
-      const runMin = productividadBase > 0
-        ? (totalPliegosImpresion / productividadBase)
-        : Number(operacion.runMin ?? 0);
-      const totalMin = setupMin + runMin + cleanupMin;
-      const costo = (totalMin / 60) * tarifaHora;
-      costoProcesos += costo;
-      pasosDetalle.push({
-        codigo: operacion.codigo,
-        nombre: operacion.nombre,
-        centroCostoNombre: (operacion as any).centroCosto?.nombre ?? '',
-        setupMin: this.roundProductNumber(setupMin),
-        runMin: this.roundProductNumber(runMin),
-        cleanupMin: this.roundProductNumber(cleanupMin),
-        totalMin: this.roundProductNumber(totalMin),
-        tarifaHora: this.roundProductNumber(tarifaHora),
-        costo: this.roundProductNumber(costo),
-      });
-    }
-
-    // Guillotinado
+    // Guillotinado (calculado antes de procesos porque se usa para determinar cortes)
     const guillotinado = TalonarioCalc.calculateTalonarioGuillotinado({
       cantidadTalonarios,
       numerosXTalonario,
@@ -845,11 +860,149 @@ export class ProductosServiciosService {
       capacidadMaxHojas: 500,
     });
 
+    let costoProcesos = 0;
+    let costoToner = 0;
+    let costoDesgaste = 0;
+    let costoConsumiblesTerminacion = 0;
+    const pasosDetalle: Array<Record<string, unknown>> = [];
+    const materialesConsumibles: Array<Record<string, unknown>> = [];
+    const warnings: string[] = [];
+
+    // Cargar consumibles y desgastes de máquinas para cálculo de toner/desgaste
+    const machineIds = Array.from(new Set(
+      proceso.operaciones.map((op) => op.maquinaId).filter((id): id is string => Boolean(id)),
+    ));
+    const [consumibles, consumiblesFilm, desgastes] = machineIds.length > 0
+      ? await Promise.all([
+          this.prisma.maquinaConsumible.findMany({
+            where: { tenantId: auth.tenantId, activo: true, tipo: TipoConsumibleMaquina.TONER, maquinaId: { in: machineIds } },
+            include: { perfilOperativo: true, materiaPrimaVariante: { include: { materiaPrima: true } } },
+          }),
+          this.prisma.maquinaConsumible.findMany({
+            where: { tenantId: auth.tenantId, activo: true, tipo: TipoConsumibleMaquina.FILM, maquinaId: { in: machineIds } },
+            include: { perfilOperativo: true, materiaPrimaVariante: { include: { materiaPrima: true } } },
+          }),
+          this.prisma.maquinaComponenteDesgaste.findMany({
+            where: { tenantId: auth.tenantId, activo: true, maquinaId: { in: machineIds } },
+            include: { materiaPrimaVariante: { include: { materiaPrima: true } } },
+          }),
+        ])
+      : [[], [], []];
+
+    const areaPliegoM2 = (pliegoImpresion.anchoMm / 1000) * (pliegoImpresion.altoMm / 1000);
+    const a4EqFactor = areaPliegoM2 / ProductosServiciosService.DEFAULT_A4_AREA_M2;
+    const tipoImpresionVariante = variante.tipoImpresion ?? TipoImpresionProductoVariante.CMYK;
+    const carasVariante = variante.caras ?? CarasProductoVariante.SIMPLE_FAZ;
+    const carasFactor = carasVariante === CarasProductoVariante.DOBLE_FAZ ? 2 : 1;
+
+    // La cantidad objetivo para cada operación depende de su tipo:
+    const cortesGuillotina = Math.max(0, (imposicion.cols - 1) + (imposicion.rows - 1)) * guillotinado.tandas;
+
+    for (const operacion of proceso.operaciones) {
+      const tarifa = tarifaByCentro.get(operacion.centroCostoId);
+      if (tarifa === undefined) {
+        warnings.push(`Sin tarifa para centro ${operacion.centroCosto?.nombre ?? operacion.centroCostoId} en ${periodo}.`);
+        continue;
+      }
+      const tarifaHora = Number(tarifa);
+
+      // Determinar la cantidad objetivo según el tipo de operación
+      const tipoOp = operacion.tipoOperacion;
+      let cantidadObjetivo: number;
+      if (tipoOp === TipoOperacionProceso.IMPRESION || tipoOp === TipoOperacionProceso.PREPRENSA) {
+        cantidadObjetivo = totalPliegosImpresion;
+      } else if (tipoOp === TipoOperacionProceso.CORTE) {
+        cantidadObjetivo = cortesGuillotina;
+      } else {
+        cantidadObjetivo = cantidadTalonarios;
+      }
+
+      const productividadBase = Number(operacion.productividadBase ?? 0);
+      const setupMin = Number(operacion.setupMin ?? 0);
+      const cleanupMin = Number(operacion.cleanupMin ?? 0);
+      const runMin = productividadBase > 0
+        ? (cantidadObjetivo / productividadBase)
+        : Number(operacion.runMin ?? 0);
+      const totalMin = setupMin + runMin + cleanupMin;
+      const costo = (totalMin / 60) * tarifaHora;
+      costoProcesos += costo;
+
+      // Calcular toner y desgaste para operaciones con máquina
+      if (operacion.maquinaId && (tipoOp === TipoOperacionProceso.IMPRESION || tipoOp === TipoOperacionProceso.PREPRENSA)) {
+        // Calcular merma operativa para incluir en consumibles
+        const prodResult = evaluateProductividad({
+          modoProductividad: ModoProductividadProceso.FIJA,
+          productividadBase: operacion.productividadBase,
+          reglaVelocidadJson: null,
+          reglaMermaJson: operacion.reglaMermaJson ?? null,
+          runMin: operacion.runMin,
+          unidadTiempo: operacion.unidadTiempo,
+          mermaRunPct: operacion.mermaRunPct,
+          mermaSetup: operacion.mermaSetup,
+          cantidadObjetivoSalida: cantidadObjetivo,
+          contexto: {
+            cantidad: cantidadTalonarios,
+            pliegos: totalPliegosImpresion,
+            piezasPorPliego: imposicion.piezasPorPliego,
+            areaPliegoM2,
+            a4EqFactor,
+            carasFactor,
+          },
+        });
+        const pliegosEfectivos = Math.max(totalPliegosImpresion, prodResult.cantidadRun);
+
+        const tonerAndWear = this.calculateMachineConsumables({
+          operation: operacion,
+          tipoImpresion: tipoImpresionVariante,
+          carasFactor,
+          pliegos: totalPliegosImpresion,
+          pliegosEfectivos,
+          areaPliegoM2,
+          a4EqFactor,
+          warnings,
+          consumibles,
+          desgastes,
+        });
+        costoToner += tonerAndWear.costoToner;
+        costoDesgaste += tonerAndWear.costoDesgaste;
+        materialesConsumibles.push(...tonerAndWear.materiales);
+
+        const laminadoFilm = this.calculateLaminadoraFilmConsumables({
+          operation: operacion,
+          consumiblesFilm,
+          timingOverride: null,
+          warnings,
+        });
+        materialesConsumibles.push(...laminadoFilm.materiales);
+        costoConsumiblesTerminacion += laminadoFilm.costo;
+      }
+
+      pasosDetalle.push({
+        codigo: operacion.codigo,
+        nombre: operacion.nombre,
+        centroCostoNombre: (operacion as any).centroCosto?.nombre ?? '',
+        tipoOperacion: tipoOp,
+        cantidadObjetivo: this.roundProductNumber(cantidadObjetivo),
+        setupMin: this.roundProductNumber(setupMin),
+        runMin: this.roundProductNumber(runMin),
+        cleanupMin: this.roundProductNumber(cleanupMin),
+        totalMin: this.roundProductNumber(totalMin),
+        tarifaHora: this.roundProductNumber(tarifaHora),
+        costo: this.roundProductNumber(costo),
+      });
+    }
+
     // Totales
     const costoPapelTotal = this.roundProductNumber(paperCosts.totalPapel);
     const costoMaterialesExtra = this.roundProductNumber(extraMaterials.total);
     costoProcesos = this.roundProductNumber(costoProcesos);
-    const total = this.roundProductNumber(costoPapelTotal + costoMaterialesExtra + costoProcesos);
+    costoToner = this.roundProductNumber(costoToner);
+    costoDesgaste = this.roundProductNumber(costoDesgaste);
+    costoConsumiblesTerminacion = this.roundProductNumber(costoConsumiblesTerminacion);
+    const total = this.roundProductNumber(
+      costoPapelTotal + costoMaterialesExtra + costoProcesos +
+      costoToner + costoDesgaste + costoConsumiblesTerminacion,
+    );
     const unitario = cantidadTalonarios > 0 ? this.roundProductNumber(total / cantidadTalonarios) : 0;
 
     const result = {
@@ -864,6 +1017,7 @@ export class ProductosServiciosService {
       capas: tipoCopia.capas,
       numerosXTalonario,
       piezasPorPliego: imposicion.piezasPorPliego,
+      pliegos: totalPliegosImpresion,
       pliegosXCapa: grouping.pliegosXCapa,
       pliegosTotales: totalPliegosImpresion,
       warnings,
@@ -877,6 +1031,7 @@ export class ProductosServiciosService {
             costoUnitario: l.costoUnitario,
             costo: l.costoTotal,
           })),
+          ...materialesConsumibles,
           ...extraMaterials.items.map((i) => ({
             tipo: 'MATERIAL_EXTRA',
             nombre: i.nombre,
@@ -890,9 +1045,9 @@ export class ProductosServiciosService {
         procesos: costoProcesos,
         papel: costoPapelTotal,
         materialesExtra: costoMaterialesExtra,
-        toner: 0,
-        desgaste: 0,
-        consumiblesTerminacion: 0,
+        toner: costoToner,
+        desgaste: costoDesgaste,
+        consumiblesTerminacion: costoConsumiblesTerminacion,
         adicionalesMateriales: 0,
         adicionalesCostEffects: 0,
       },
@@ -955,6 +1110,24 @@ export class ProductosServiciosService {
       persisted as Prisma.JsonValue,
       payload.parametros ?? {},
     );
+    // Composición siempre del config de producto (no del override de variante)
+    const productConfigPreview = await this.prisma.productoMotorConfig.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        productoServicioId: variante.productoServicio.id,
+        motorCodigo: motor.code,
+        motorVersion: motor.version,
+        activo: true,
+      },
+      orderBy: [{ versionConfig: 'desc' }],
+    });
+    const productParamsPreview = this.asObject(productConfigPreview?.parametrosJson);
+    for (const field of ['tipoCopiaDefiniciones', 'encuadernacion', 'puntillado',
+      'materialesExtra', 'numeracion', 'numerosXTalonarioDefault', 'modoTalonarioIncompleto'] as const) {
+      if (productParamsPreview[field] !== undefined) {
+        (config as Record<string, unknown>)[field] = productParamsPreview[field];
+      }
+    }
     const talonarioConfig = TalonarioCalc.parseTalonarioMotorConfig(config);
     const procesoDefinicionId = this.resolveRutaEfectivaId(variante);
     if (!procesoDefinicionId) {
@@ -5076,7 +5249,10 @@ export class ProductosServiciosService {
     const cantidadConMerma = Math.ceil(cantidad * (1 + mermaPct / 100));
     const pliegos = Math.ceil(cantidadConMerma / imposicion.piezasPorPliego);
 
-    const precioPapelBase = Number(variante.papelVariante.precioReferencia ?? 0);
+    const precioPapelRaw = Number(variante.papelVariante.precioReferencia ?? 0);
+    const papelUnidadCompra = (variante.papelVariante.unidadCompra ?? variante.papelVariante.materiaPrima.unidadCompra ?? 'hoja') as string;
+    const papelUnidadStock = (variante.papelVariante.unidadStock ?? variante.papelVariante.materiaPrima.unidadStock ?? 'hoja') as string;
+    const precioPapelBase = this.convertPrecioToStockUnit(precioPapelRaw, papelUnidadCompra, papelUnidadStock);
     const conversionPapel = this.calculateSustratoToPliegoConversion({
       sustrato: sustratoDims,
       pliegoImpresion,
@@ -10604,6 +10780,18 @@ export class ProductosServiciosService {
       anchoMm: this.normalizeToMm(anchoRaw),
       altoMm: this.normalizeToMm(altoRaw),
     };
+  }
+
+  private convertPrecioToStockUnit(precioRaw: number, unidadCompra: string, unidadStock: string): number {
+    const from = unidadCompra.toLowerCase();
+    const to = unidadStock.toLowerCase();
+    if (!precioRaw || from === to) return precioRaw;
+    const fromDef = CANONICAL_UNITS[from as UnitCode];
+    const toDef = CANONICAL_UNITS[to as UnitCode];
+    if (!fromDef || !toDef) return precioRaw;
+    if (fromDef.dimension !== toDef.dimension || fromDef.baseCode !== toDef.baseCode) return precioRaw;
+    if (fromDef.factorToBase === toDef.factorToBase) return precioRaw;
+    return precioRaw * (toDef.factorToBase / fromDef.factorToBase);
   }
 
   private normalizeToMm(value: number) {
