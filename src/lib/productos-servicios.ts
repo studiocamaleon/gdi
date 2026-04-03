@@ -13,8 +13,8 @@ export const unidadComercialProductoItems: Array<{
 ];
 export type TipoImpresionProductoVariante = 'bn' | 'cmyk';
 export type CarasProductoVariante = 'simple_faz' | 'doble_faz';
-export type DimensionOpcionProductiva = 'tipo_impresion' | 'caras';
-export type ValorOpcionProductiva = 'bn' | 'cmyk' | 'simple_faz' | 'doble_faz';
+export type DimensionOpcionProductiva = 'tipo_impresion' | 'caras' | 'tipo_copia';
+export type ValorOpcionProductiva = 'bn' | 'cmyk' | 'simple_faz' | 'doble_faz' | 'copia_simple' | 'duplicado' | 'triplicado' | 'cuadruplicado';
 export type TipoChecklistPregunta = 'binaria' | 'single_select';
 export type TipoChecklistAccionRegla =
   | 'activar_paso'

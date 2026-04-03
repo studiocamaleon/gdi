@@ -780,6 +780,33 @@ export function DigitalImposicionTab(props: ProductTabProps) {
                     const markLen = Math.max(0, lineaCorteMm * scale);
                     const markOffset = 1.6;
 
+                    // Puntillado config (para motor talonario)
+                    // El borde se define en la orientación ORIGINAL de la pieza.
+                    // Si la imposición rota la pieza 90° CW, mapeamos el borde:
+                    //   original superior → render derecho
+                    //   original inferior → render izquierdo
+                    //   original izquierdo → render superior
+                    //   original derecho → render inferior
+                    const puntilladoCfg = readConfigRecord(config.puntillado);
+                    const puntilladoHabilitado = puntilladoCfg.habilitado === true;
+                    const puntilladoDistMm = Number(puntilladoCfg.distanciaBordeMm ?? 0);
+                    const puntilladoBordeOriginal = String(puntilladoCfg.borde ?? "superior");
+                    const puntilladoBordeRender = (() => {
+                      if (previewImposicion.orientacion !== "rotada") return puntilladoBordeOriginal;
+                      const rotMap: Record<string, string> = {
+                        superior: "derecho",
+                        inferior: "izquierdo",
+                        izquierdo: "superior",
+                        derecho: "inferior",
+                      };
+                      return rotMap[puntilladoBordeOriginal] ?? puntilladoBordeOriginal;
+                    })();
+
+                    // Encuadernación config (broches para abrochado)
+                    const encCfg = readConfigRecord(config.encuadernacion);
+                    const esAbrochado = encCfg.tipo === "abrochado";
+                    const cantGrapas = Math.max(0, Number(encCfg.cantidadGrapas ?? 0));
+
                     const cells = [];
                     const cutXMap = new Map<string, number>();
                     const cutYMap = new Map<string, number>();
@@ -793,6 +820,67 @@ export function DigitalImposicionTab(props: ProductTabProps) {
                         cutXMap.set((trimX + pieceW).toFixed(2), trimX + pieceW);
                         cutYMap.set(trimY.toFixed(2), trimY);
                         cutYMap.set((trimY + pieceH).toFixed(2), trimY + pieceH);
+
+                        // Línea de puntillado dentro de la pieza
+                        // La distancia se mide en mm desde el borde ORIGINAL,
+                        // mapeado al borde de render según la orientación.
+                        let puntilladoLine: React.ReactNode = null;
+                        let puntilladoLinePx: { isHorizontal: boolean; pos: number; edgeStart: number; edgeEnd: number } | null = null;
+                        if (puntilladoHabilitado && puntilladoDistMm > 0) {
+                          const distPx = puntilladoDistMm * scale;
+                          if (puntilladoBordeRender === "superior" || puntilladoBordeRender === "inferior") {
+                            const ly = puntilladoBordeRender === "superior" ? trimY + distPx : trimY + pieceH - distPx;
+                            puntilladoLinePx = { isHorizontal: true, pos: ly, edgeStart: trimX, edgeEnd: trimX + pieceW };
+                            puntilladoLine = (
+                              <line x1={trimX} y1={ly} x2={trimX + pieceW} y2={ly}
+                                stroke="#d97706" strokeWidth="1.2" strokeDasharray="3 2" />
+                            );
+                          } else {
+                            const lx = puntilladoBordeRender === "izquierdo" ? trimX + distPx : trimX + pieceW - distPx;
+                            puntilladoLinePx = { isHorizontal: false, pos: lx, edgeStart: trimY, edgeEnd: trimY + pieceH };
+                            puntilladoLine = (
+                              <line x1={lx} y1={trimY} x2={lx} y2={trimY + pieceH}
+                                stroke="#d97706" strokeWidth="1.2" strokeDasharray="3 2" />
+                            );
+                          }
+                        }
+
+                        // Broches: se dibujan entre el puntillado y el borde de corte
+                        // (en la zona del "talón" que queda sujeto)
+                        const brochesNodes: React.ReactNode[] = [];
+                        if (esAbrochado && cantGrapas > 0 && puntilladoLinePx) {
+                          const br = 1.8; // radio visual del broche
+                          for (let gi = 0; gi < cantGrapas; gi++) {
+                            const t = cantGrapas === 1 ? 0.5 : (gi + 1) / (cantGrapas + 1);
+                            if (puntilladoLinePx.isHorizontal) {
+                              // Broches entre borde horizontal y línea de puntillado
+                              const bx = puntilladoLinePx.edgeStart + (puntilladoLinePx.edgeEnd - puntilladoLinePx.edgeStart) * t;
+                              // Punto medio entre la línea de puntillado y el borde de la pieza
+                              const byEdge = puntilladoBordeRender === "superior" ? trimY : trimY + pieceH;
+                              const by = (puntilladoLinePx.pos + byEdge) / 2;
+                              brochesNodes.push(
+                                <g key={`broche-${gi}`}>
+                                  <circle cx={bx} cy={by} r={br} fill="#7c3aed" fillOpacity="0.85" />
+                                  <line x1={bx - br * 0.7} y1={by} x2={bx + br * 0.7} y2={by}
+                                    stroke="#fff" strokeWidth="0.5" />
+                                </g>,
+                              );
+                            } else {
+                              // Broches entre borde vertical y línea de puntillado
+                              const by = puntilladoLinePx.edgeStart + (puntilladoLinePx.edgeEnd - puntilladoLinePx.edgeStart) * t;
+                              const bxEdge = puntilladoBordeRender === "izquierdo" ? trimX : trimX + pieceW;
+                              const bx = (puntilladoLinePx.pos + bxEdge) / 2;
+                              brochesNodes.push(
+                                <g key={`broche-${gi}`}>
+                                  <circle cx={bx} cy={by} r={br} fill="#7c3aed" fillOpacity="0.85" />
+                                  <line x1={bx} y1={by - br * 0.7} x2={bx} y2={by + br * 0.7}
+                                    stroke="#fff" strokeWidth="0.5" />
+                                </g>,
+                              );
+                            }
+                          }
+                        }
+
                         cells.push(
                           <g key={`cell-${r}-${c}`}>
                             <rect
@@ -805,6 +893,8 @@ export function DigitalImposicionTab(props: ProductTabProps) {
                               strokeWidth="0.8"
                             />
                             <rect x={trimX} y={trimY} width={pieceW} height={pieceH} fill="#22c55e" />
+                            {puntilladoLine}
+                            {brochesNodes}
                           </g>,
                         );
                       }

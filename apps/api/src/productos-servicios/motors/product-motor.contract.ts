@@ -6,7 +6,7 @@ import type {
   UpsertVarianteMotorOverrideDto,
 } from '../dto/productos-servicios.dto';
 
-export type MotorCategory = 'digital_sheet' | 'wide_format' | 'vinyl_cut';
+export type MotorCategory = 'digital_sheet' | 'wide_format' | 'vinyl_cut' | 'talonario';
 
 export type ProductMotorCapabilities = {
   hasProductConfig: boolean;

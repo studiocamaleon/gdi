@@ -29,6 +29,7 @@ import { ProductoRutaBaseTab } from "@/components/productos-servicios/producto-r
 import { ProductoSimularVentaTab } from "@/components/productos-servicios/producto-simular-venta-tab";
 import { ProductoRutaOpcionalesPlaceholder, ProductoStandardTabPlaceholder } from "@/components/productos-servicios/producto-standard-tab-placeholder";
 import { ProductoVariantesTab } from "@/components/productos-servicios/producto-variantes-tab";
+import { talonarioMotorUi } from "@/components/productos-servicios/motors/talonario.motor-ui";
 import { vinylCutMotorUi } from "@/components/productos-servicios/motors/vinyl-cut.motor-ui";
 import { wideFormatMotorUi } from "@/components/productos-servicios/motors/wide-format.motor-ui";
 import { Button } from "@/components/ui/button";
@@ -73,6 +74,7 @@ const productUiRegistry: Record<string, ProductMotorUiContract> = {
   "impresion_digital_laser@1": digitalMotorUi,
   "gran_formato@1": wideFormatMotorUi,
   "vinilo_de_corte@1": vinylCutMotorUi,
+  "talonario@1": talonarioMotorUi,
 };
 
 function ProductTabFallback({ title }: { title: string }) {

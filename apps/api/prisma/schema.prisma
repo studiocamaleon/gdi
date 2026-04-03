@@ -433,6 +433,7 @@ enum TipoConsumoAdicionalMaterial {
 enum DimensionOpcionProductiva {
   TIPO_IMPRESION
   CARAS
+  TIPO_COPIA
 }
 
 enum ValorOpcionProductiva {
@@ -440,6 +441,10 @@ enum ValorOpcionProductiva {
   CMYK
   SIMPLE_FAZ
   DOBLE_FAZ
+  COPIA_SIMPLE
+  DUPLICADO
+  TRIPLICADO
+  CUADRUPLICADO
 }
 
 enum TipoProductoAdicionalEfecto {

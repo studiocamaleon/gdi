@@ -162,6 +162,7 @@ export enum TipoConsumoAdicionalMaterialDto {
 export enum DimensionOpcionProductivaDto {
   tipo_impresion = 'tipo_impresion',
   caras = 'caras',
+  tipo_copia = 'tipo_copia',
 }
 
 export enum ValorOpcionProductivaDto {
@@ -169,6 +170,10 @@ export enum ValorOpcionProductivaDto {
   cmyk = 'cmyk',
   simple_faz = 'simple_faz',
   doble_faz = 'doble_faz',
+  copia_simple = 'copia_simple',
+  duplicado = 'duplicado',
+  triplicado = 'triplicado',
+  cuadruplicado = 'cuadruplicado',
 }
 
 export enum TipoProductoAdicionalEfectoDto {

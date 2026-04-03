@@ -36,6 +36,7 @@ import type {
 const dimensionBaseLabelByValue: Record<DimensionOpcionProductiva, string> = {
   tipo_impresion: "Tipo de impresión",
   caras: "Caras",
+  tipo_copia: "Tipo de copia",
 };
 
 const valorOpcionBaseLabelByValue: Record<ValorOpcionProductiva, string> = {
@@ -43,6 +44,10 @@ const valorOpcionBaseLabelByValue: Record<ValorOpcionProductiva, string> = {
   cmyk: "CMYK",
   simple_faz: "Simple faz",
   doble_faz: "Doble faz",
+  copia_simple: "Simple",
+  duplicado: "Duplicado",
+  triplicado: "Triplicado",
+  cuadruplicado: "Cuadruplicado",
 };
 
 const uuidLikePattern =

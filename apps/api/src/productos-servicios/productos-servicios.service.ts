@@ -101,6 +101,8 @@ import {
 import { DigitalSheetMotorModule } from './motors/digital-sheet.motor';
 import type { ProductMotorDefinition } from './motors/product-motor.contract';
 import { ProductMotorRegistry } from './motors/product-motor.registry';
+import * as TalonarioCalc from './motors/talonario.calculations';
+import { TalonarioMotorModule } from './motors/talonario.motor';
 import { VinylCutMotorModule } from './motors/vinyl-cut.motor';
 import { WideFormatMotorModule } from './motors/wide-format.motor';
 
@@ -407,6 +409,20 @@ export class ProductosServiciosService {
     },
     exposedInCatalog: true,
   };
+  private static readonly TALONARIO_MOTOR_DEFINITION: ProductMotorDefinition = {
+    code: 'talonario',
+    version: 1,
+    label: 'Talonario · v1',
+    category: 'talonario',
+    capabilities: {
+      hasProductConfig: true,
+      hasVariantOverride: true,
+      hasPreview: true,
+      hasQuote: true,
+    },
+    schema: {},
+    exposedInCatalog: true,
+  };
   private static readonly DEFAULT_A4_AREA_M2 = 0.06237;
   private static readonly TERMINACION_PLANTILLAS_SOPORTADAS = new Set<PlantillaMaquinaria>([
     PlantillaMaquinaria.GUILLOTINA,
@@ -442,6 +458,7 @@ export class ProductosServiciosService {
       new DigitalSheetMotorModule(this),
       new WideFormatMotorModule(this),
       new VinylCutMotorModule(this),
+      new TalonarioMotorModule(this),
     ]);
   }
 
@@ -476,6 +493,506 @@ export class ProductosServiciosService {
 
   getVinylCutMotorDefinition() {
     return ProductosServiciosService.VINYL_CUT_MOTOR_DEFINITION;
+  }
+
+  getTalonarioMotorDefinition() {
+    return {
+      ...ProductosServiciosService.TALONARIO_MOTOR_DEFINITION,
+      schema: this.getDefaultTalonarioMotorConfig(),
+    };
+  }
+
+  async getTalonarioProductMotorConfig(auth: CurrentAuth, productoId: string) {
+    const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+    const motor = this.resolveMotorOrThrow(producto.motorCodigo, producto.motorVersion);
+    const config = await this.prisma.productoMotorConfig.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        productoServicioId: producto.id,
+        motorCodigo: motor.code,
+        motorVersion: motor.version,
+        activo: true,
+      },
+      orderBy: [{ versionConfig: 'desc' }],
+    });
+
+    return {
+      productoId: producto.id,
+      motorCodigo: motor.code,
+      motorVersion: motor.version,
+      parametros:
+        config?.parametrosJson ??
+        this.resolveDefaultMotorConfig(ProductosServiciosService.TALONARIO_MOTOR_DEFINITION.code),
+      versionConfig: config?.versionConfig ?? 1,
+      activo: config?.activo ?? true,
+      updatedAt: config?.updatedAt?.toISOString() ?? null,
+    };
+  }
+
+  async upsertTalonarioProductMotorConfig(
+    auth: CurrentAuth,
+    productoId: string,
+    payload: UpsertProductoMotorConfigDto,
+  ) {
+    const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+    const motor = this.resolveMotorOrThrow(producto.motorCodigo, producto.motorVersion);
+    const current = await this.prisma.productoMotorConfig.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        productoServicioId: producto.id,
+        motorCodigo: motor.code,
+        motorVersion: motor.version,
+        activo: true,
+      },
+      orderBy: [{ versionConfig: 'desc' }],
+    });
+    const nextVersion = (current?.versionConfig ?? 0) + 1;
+    const merged = this.mergeMotorConfig(motor.code, current?.parametrosJson, payload.parametros);
+    const created = await this.prisma.productoMotorConfig.create({
+      data: {
+        tenantId: auth.tenantId,
+        productoServicioId: producto.id,
+        motorCodigo: motor.code,
+        motorVersion: motor.version,
+        parametrosJson: merged as Prisma.InputJsonValue,
+        versionConfig: nextVersion,
+        activo: true,
+      },
+    });
+    return {
+      productoId: producto.id,
+      motorCodigo: motor.code,
+      motorVersion: motor.version,
+      parametros: created.parametrosJson,
+      versionConfig: created.versionConfig,
+      activo: created.activo,
+      updatedAt: created.updatedAt.toISOString(),
+    };
+  }
+
+  async getTalonarioVariantMotorOverride(auth: CurrentAuth, varianteId: string) {
+    const variante = await this.findVarianteOrThrow(auth, varianteId, this.prisma);
+    const producto = await this.findProductoOrThrow(auth, variante.productoServicioId, this.prisma);
+    const motor = this.resolveMotorOrThrow(producto.motorCodigo, producto.motorVersion);
+    const config = await this.prisma.productoVarianteMotorOverride.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        productoVarianteId: variante.id,
+        motorCodigo: motor.code,
+        motorVersion: motor.version,
+        activo: true,
+      },
+      orderBy: [{ versionConfig: 'desc' }],
+    });
+
+    return {
+      varianteId: variante.id,
+      motorCodigo: motor.code,
+      motorVersion: motor.version,
+      parametros: config?.parametrosJson ?? {},
+      versionConfig: config?.versionConfig ?? 1,
+      activo: config?.activo ?? true,
+      updatedAt: config?.updatedAt?.toISOString() ?? null,
+    };
+  }
+
+  async upsertTalonarioVariantMotorOverride(
+    auth: CurrentAuth,
+    varianteId: string,
+    payload: UpsertVarianteMotorOverrideDto,
+  ) {
+    const variante = await this.findVarianteOrThrow(auth, varianteId, this.prisma);
+    const producto = await this.findProductoOrThrow(auth, variante.productoServicioId, this.prisma);
+    const motor = this.resolveMotorOrThrow(producto.motorCodigo, producto.motorVersion);
+    const current = await this.prisma.productoVarianteMotorOverride.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        productoVarianteId: variante.id,
+        motorCodigo: motor.code,
+        motorVersion: motor.version,
+        activo: true,
+      },
+      orderBy: [{ versionConfig: 'desc' }],
+    });
+
+    const nextVersion = (current?.versionConfig ?? 0) + 1;
+    const merged = this.mergeMotorConfig(motor.code, current?.parametrosJson, payload.parametros);
+
+    const created = await this.prisma.productoVarianteMotorOverride.create({
+      data: {
+        tenantId: auth.tenantId,
+        productoVarianteId: variante.id,
+        motorCodigo: motor.code,
+        motorVersion: motor.version,
+        parametrosJson: merged as Prisma.InputJsonValue,
+        versionConfig: nextVersion,
+        activo: true,
+      },
+    });
+
+    return {
+      varianteId: variante.id,
+      motorCodigo: motor.code,
+      motorVersion: motor.version,
+      parametros: created.parametrosJson,
+      versionConfig: created.versionConfig,
+      activo: created.activo,
+      updatedAt: created.updatedAt.toISOString(),
+    };
+  }
+
+  async quoteTalonarioVariant(
+    auth: CurrentAuth,
+    varianteId: string,
+    payload: CotizarProductoVarianteDto,
+  ) {
+    const cantidadTalonarios = Math.floor(Number(payload.cantidad));
+    if (!Number.isFinite(cantidadTalonarios) || cantidadTalonarios <= 0) {
+      throw new BadRequestException('La cantidad de talonarios debe ser mayor a 0.');
+    }
+    const periodo = this.normalizePeriodo(payload.periodo);
+    const variante = await this.findVarianteCompletaOrThrow(auth, varianteId, this.prisma);
+    const motor = this.resolveMotorOrThrow(
+      variante.productoServicio.motorCodigo,
+      variante.productoServicio.motorVersion,
+    );
+    const { config: rawConfig, configVersionBase, configVersionOverride } =
+      await this.getEffectiveMotorConfig(auth, variante.productoServicio.id, variante.id, motor);
+
+    const talonarioConfig = TalonarioCalc.parseTalonarioMotorConfig(rawConfig);
+    const tipoCopiaSeleccionado =
+      (payload as any).parametros?.tipoCopia ??
+      (payload.seleccionesBase ?? []).find(
+        (s) => s.dimension === DimensionOpcionProductivaDto.tipo_copia,
+      )?.valor ??
+      null;
+    const tipoCopia = TalonarioCalc.resolveTipoCopia(talonarioConfig, tipoCopiaSeleccionado);
+    if (!tipoCopia) {
+      throw new BadRequestException('No se encontró una definición de tipo de copia válida.');
+    }
+
+    const numerosXTalonario = tipoCopia.numerosXTalonarioSugerido || talonarioConfig.numerosXTalonarioDefault || 50;
+
+    // Imposición
+    const procesoDefinicionId = this.resolveRutaEfectivaId(variante);
+    if (!procesoDefinicionId) {
+      throw new BadRequestException('No hay ruta de producción efectiva para la variante.');
+    }
+    const proceso = await this.findProcesoConOperacionesOrThrow(auth, procesoDefinicionId, this.prisma);
+    if (proceso.operaciones.length === 0) {
+      throw new BadRequestException('La ruta seleccionada no tiene pasos operativos.');
+    }
+
+    const sustratoDims = variante.papelVariante
+      ? this.resolvePapelDimensionesMm(variante.papelVariante.atributosVarianteJson)
+      : { anchoMm: 210, altoMm: 297 };
+    const pliegoImpresion = this.resolvePliegoImpresion(rawConfig, sustratoDims);
+    const machineMargins = this.resolveMachineMarginsMm(proceso.operaciones);
+    const imposicionBase = this.calculateImposicion({
+      varianteAnchoMm: Number(variante.anchoMm),
+      varianteAltoMm: Number(variante.altoMm),
+      sheetAnchoMm: pliegoImpresion.anchoMm,
+      sheetAltoMm: pliegoImpresion.altoMm,
+      machineMargins,
+      config: rawConfig,
+    });
+    if (imposicionBase.piezasPorPliego <= 0) {
+      throw new BadRequestException('No entran piezas (talonarios) en el pliego con la configuración actual.');
+    }
+    const imposicion = TalonarioCalc.applyTalonarioImposicionConstraints(imposicionBase, talonarioConfig);
+
+    // Agrupamiento
+    const grouping = TalonarioCalc.calculateTalonarioGrouping({
+      cantidadTalonarios,
+      posesXPliego: imposicion.piezasPorPliego,
+      numerosXTalonario,
+      modoTalonarioIncompleto: talonarioConfig.modoTalonarioIncompleto,
+    });
+
+    // Aplicar overrides de papeles por variante (si existen en el motor override)
+    const variantOverrideRaw = this.asObject(
+      (await this.prisma.productoVarianteMotorOverride.findFirst({
+        where: {
+          tenantId: auth.tenantId,
+          productoVarianteId: variante.id,
+          motorCodigo: motor.code,
+          motorVersion: motor.version,
+          activo: true,
+        },
+        orderBy: [{ versionConfig: 'desc' }],
+        select: { parametrosJson: true },
+      }))?.parametrosJson,
+    );
+    const papelesCapasOverride = Array.isArray(variantOverrideRaw.papelesCapas)
+      ? (variantOverrideRaw.papelesCapas as Array<{ capaIndex: number; papelVarianteId: string }>)
+      : [];
+    if (papelesCapasOverride.length > 0) {
+      const overrideMap = new Map(papelesCapasOverride.map((o) => [o.capaIndex, o.papelVarianteId]));
+      for (const papel of tipoCopia.papeles) {
+        const override = overrideMap.get(papel.capaIndex);
+        if (override) {
+          papel.papelVarianteId = override;
+        }
+      }
+    }
+
+    // Costos de papel por capa
+    const papelVarianteIds = tipoCopia.papeles
+      .map((p) => p.papelVarianteId)
+      .filter((id): id is string => Boolean(id));
+    const papelVariantes = papelVarianteIds.length > 0
+      ? await this.prisma.materiaPrimaVariante.findMany({
+          where: { id: { in: papelVarianteIds }, tenantId: auth.tenantId },
+          select: { id: true, precioReferencia: true, atributosVarianteJson: true },
+        })
+      : [];
+    const papelPrecioByVarianteId = new Map(
+      papelVariantes.map((p) => [p.id, Number(p.precioReferencia ?? 0)]),
+    );
+    const pliegosPorSustratoByVarianteId = new Map(
+      papelVariantes.map((p) => {
+        const dims = this.resolvePapelDimensionesMm(p.atributosVarianteJson);
+        const conv = this.calculateSustratoToPliegoConversion({ sustrato: dims, pliegoImpresion });
+        return [p.id, conv.pliegosPorSustrato] as [string, number];
+      }),
+    );
+    const paperCosts = TalonarioCalc.calculateTalonarioPaperCosts({
+      pliegosXCapa: grouping.pliegosXCapa,
+      tipoCopiaDefinicion: tipoCopia,
+      papelPrecioByVarianteId,
+      pliegosPorSustratoByVarianteId,
+    });
+
+    // Materiales extra
+    const extraMatIds = [
+      talonarioConfig.materialesExtra.cartonBase.materiaPrimaVarianteId,
+      talonarioConfig.materialesExtra.hojaBlancaSuperior.materiaPrimaVarianteId,
+    ].filter((id): id is string => Boolean(id));
+    const extraMatVariantes = extraMatIds.length > 0
+      ? await this.prisma.materiaPrimaVariante.findMany({
+          where: { id: { in: extraMatIds }, tenantId: auth.tenantId },
+          select: { id: true, precioReferencia: true },
+        })
+      : [];
+    const materialPrecioByVarianteId = new Map(
+      extraMatVariantes.map((p) => [p.id, Number(p.precioReferencia ?? 0)]),
+    );
+    const extraMaterials = TalonarioCalc.calculateTalonarioExtraMaterials({
+      cantidadTalonarios,
+      numerosXTalonario,
+      config: talonarioConfig,
+      materialPrecioByVarianteId,
+    });
+
+    // Costos de proceso (ruta productiva)
+    const centroIds = Array.from(new Set(proceso.operaciones.map((op) => op.centroCostoId)));
+    const tarifas = await this.prisma.centroCostoTarifaPeriodo.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        periodo,
+        estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
+        centroCostoId: { in: centroIds },
+      },
+      select: { centroCostoId: true, tarifaCalculada: true },
+    });
+    const tarifaByCentro = new Map(tarifas.map((t) => [t.centroCostoId, t.tarifaCalculada]));
+
+    const totalPliegosImpresion = grouping.pliegosXCapa * tipoCopia.capas;
+    let costoProcesos = 0;
+    const pasosDetalle: Array<Record<string, unknown>> = [];
+    const warnings: string[] = [];
+
+    for (const operacion of proceso.operaciones) {
+      const tarifa = tarifaByCentro.get(operacion.centroCostoId);
+      if (tarifa === undefined) {
+        warnings.push(`Sin tarifa para centro ${operacion.centroCosto?.nombre ?? operacion.centroCostoId} en ${periodo}.`);
+        continue;
+      }
+      const tarifaHora = Number(tarifa);
+      const productividadBase = Number(operacion.productividadBase ?? 0);
+      const setupMin = Number(operacion.setupMin ?? 0);
+      const cleanupMin = Number(operacion.cleanupMin ?? 0);
+      const runMin = productividadBase > 0
+        ? (totalPliegosImpresion / productividadBase)
+        : Number(operacion.runMin ?? 0);
+      const totalMin = setupMin + runMin + cleanupMin;
+      const costo = (totalMin / 60) * tarifaHora;
+      costoProcesos += costo;
+      pasosDetalle.push({
+        codigo: operacion.codigo,
+        nombre: operacion.nombre,
+        centroCostoNombre: (operacion as any).centroCosto?.nombre ?? '',
+        setupMin: this.roundProductNumber(setupMin),
+        runMin: this.roundProductNumber(runMin),
+        cleanupMin: this.roundProductNumber(cleanupMin),
+        totalMin: this.roundProductNumber(totalMin),
+        tarifaHora: this.roundProductNumber(tarifaHora),
+        costo: this.roundProductNumber(costo),
+      });
+    }
+
+    // Guillotinado
+    const guillotinado = TalonarioCalc.calculateTalonarioGuillotinado({
+      cantidadTalonarios,
+      numerosXTalonario,
+      capas: tipoCopia.capas,
+      tieneCarton: talonarioConfig.materialesExtra.cartonBase.habilitado,
+      tieneHojaBlanca: talonarioConfig.materialesExtra.hojaBlancaSuperior.habilitado,
+      capacidadMaxHojas: 500,
+    });
+
+    // Totales
+    const costoPapelTotal = this.roundProductNumber(paperCosts.totalPapel);
+    const costoMaterialesExtra = this.roundProductNumber(extraMaterials.total);
+    costoProcesos = this.roundProductNumber(costoProcesos);
+    const total = this.roundProductNumber(costoPapelTotal + costoMaterialesExtra + costoProcesos);
+    const unitario = cantidadTalonarios > 0 ? this.roundProductNumber(total / cantidadTalonarios) : 0;
+
+    const result = {
+      status: 'disponible' as const,
+      varianteId: variante.id,
+      varianteNombre: variante.nombre,
+      motorCodigo: motor.code,
+      motorVersion: motor.version,
+      periodo,
+      cantidad: cantidadTalonarios,
+      tipoCopia: tipoCopia.valor,
+      capas: tipoCopia.capas,
+      numerosXTalonario,
+      piezasPorPliego: imposicion.piezasPorPliego,
+      pliegosXCapa: grouping.pliegosXCapa,
+      pliegosTotales: totalPliegosImpresion,
+      warnings,
+      bloques: {
+        procesos: pasosDetalle,
+        materiales: [
+          ...paperCosts.layers.map((l) => ({
+            tipo: 'PAPEL_CAPA',
+            nombre: `Papel ${l.capaLabel} (${l.colorPapel})`,
+            cantidad: l.pliegos,
+            costoUnitario: l.costoUnitario,
+            costo: l.costoTotal,
+          })),
+          ...extraMaterials.items.map((i) => ({
+            tipo: 'MATERIAL_EXTRA',
+            nombre: i.nombre,
+            cantidad: i.cantidad,
+            costoUnitario: i.costoUnitario,
+            costo: i.costoTotal,
+          })),
+        ],
+      },
+      subtotales: {
+        procesos: costoProcesos,
+        papel: costoPapelTotal,
+        materialesExtra: costoMaterialesExtra,
+        toner: 0,
+        desgaste: 0,
+        consumiblesTerminacion: 0,
+        adicionalesMateriales: 0,
+        adicionalesCostEffects: 0,
+      },
+      total,
+      unitario,
+      trazabilidad: {
+        imposicion,
+        grouping,
+        guillotinado,
+        paperCosts: paperCosts.layers,
+        extraMaterials: extraMaterials.items,
+        config: rawConfig,
+        configVersionBase,
+        configVersionOverride,
+      },
+    };
+
+    await this.prisma.cotizacionProductoSnapshot.create({
+      data: {
+        tenantId: auth.tenantId,
+        productoServicioId: variante.productoServicioId,
+        productoVarianteId: variante.id,
+        motorCodigo: motor.code,
+        motorVersion: motor.version,
+        configVersionBase,
+        configVersionOverride,
+        cantidad: cantidadTalonarios,
+        periodoTarifa: periodo,
+        inputJson: {
+          cantidad: cantidadTalonarios,
+          tipoCopia: tipoCopia.valor,
+          numerosXTalonario,
+        } as Prisma.InputJsonValue,
+        resultadoJson: result as unknown as Prisma.InputJsonValue,
+        total,
+      },
+    });
+
+    return result;
+  }
+
+  async previewTalonarioVariant(
+    auth: CurrentAuth,
+    varianteId: string,
+    payload: PreviewImposicionProductoVarianteDto,
+  ) {
+    const variante = await this.findVarianteCompletaOrThrow(auth, varianteId, this.prisma);
+    const motor = this.resolveMotorOrThrow(
+      variante.productoServicio.motorCodigo,
+      variante.productoServicio.motorVersion,
+    );
+    const { config: persisted } = await this.getEffectiveMotorConfig(
+      auth,
+      variante.productoServicio.id,
+      variante.id,
+      motor,
+    );
+    const config = this.mergeMotorConfig(
+      motor.code,
+      persisted as Prisma.JsonValue,
+      payload.parametros ?? {},
+    );
+    const talonarioConfig = TalonarioCalc.parseTalonarioMotorConfig(config);
+    const procesoDefinicionId = this.resolveRutaEfectivaId(variante);
+    if (!procesoDefinicionId) {
+      throw new BadRequestException('No hay ruta de producción efectiva para la variante.');
+    }
+    const proceso = await this.findProcesoConOperacionesOrThrow(auth, procesoDefinicionId, this.prisma);
+    const sustratoDims = variante.papelVariante
+      ? this.resolvePapelDimensionesMm(variante.papelVariante.atributosVarianteJson)
+      : { anchoMm: 210, altoMm: 297 };
+    const pliegoImpresion = this.resolvePliegoImpresion(config, sustratoDims);
+    const machineMargins = this.resolveMachineMarginsMm(proceso.operaciones);
+    const imposicionBase = this.calculateImposicion({
+      varianteAnchoMm: Number(variante.anchoMm),
+      varianteAltoMm: Number(variante.altoMm),
+      sheetAnchoMm: pliegoImpresion.anchoMm,
+      sheetAltoMm: pliegoImpresion.altoMm,
+      machineMargins,
+      config,
+    });
+    const imposicion = TalonarioCalc.applyTalonarioImposicionConstraints(imposicionBase, talonarioConfig);
+    const conversionPapel = this.calculateSustratoToPliegoConversion({
+      sustrato: sustratoDims,
+      pliegoImpresion,
+    });
+
+    return {
+      varianteId: variante.id,
+      varianteNombre: variante.nombre,
+      pliegoImpresion,
+      sustrato: sustratoDims,
+      machineMargins,
+      imposicion,
+      conversionPapel,
+      config,
+      talonario: {
+        encuadernacion: talonarioConfig.encuadernacion,
+        puntillado: talonarioConfig.puntillado,
+        teteBeche: imposicion.teteBeche,
+        puntilladoLineMm: imposicion.puntilladoLineMm,
+        puntilladoBorde: imposicion.puntilladoBorde,
+      },
+    };
   }
 
   async findAdicionalesCatalogo(auth: CurrentAuth) {
@@ -9445,7 +9962,7 @@ export class ProductosServiciosService {
   }
 
   private normalizeDimensionOpcionProductivaValue(value: unknown) {
-    return value === 'tipo_impresion' || value === 'caras' ? value : null;
+    return value === 'tipo_impresion' || value === 'caras' || value === 'tipo_copia' ? value : null;
   }
 
   private normalizeTipoImpresionProductoVarianteValue(value: unknown) {
@@ -9819,6 +10336,83 @@ export class ProductosServiciosService {
     };
   }
 
+  private getDefaultTalonarioMotorConfig(): Record<string, unknown> {
+    return {
+      tamanoPliegoImpresion: {
+        codigo: 'A4',
+        nombre: 'A4',
+        anchoMm: 210,
+        altoMm: 297,
+      },
+      tipoCorte: 'sin_demasia',
+      demasiaCorteMm: 0,
+      lineaCorteMm: 3,
+      mermaAdicionalPct: 0,
+      numerosXTalonarioDefault: 50,
+      tipoCopiaDefiniciones: [
+        {
+          valor: 'COPIA_SIMPLE',
+          capas: 1,
+          numerosXTalonarioSugerido: 100,
+          papeles: [
+            { capaIndex: 0, capaLabel: 'Original', papelVarianteId: null, colorPapel: 'blanco' },
+          ],
+        },
+        {
+          valor: 'DUPLICADO',
+          capas: 2,
+          numerosXTalonarioSugerido: 50,
+          papeles: [
+            { capaIndex: 0, capaLabel: 'Original', papelVarianteId: null, colorPapel: 'blanco' },
+            { capaIndex: 1, capaLabel: 'Duplicado', papelVarianteId: null, colorPapel: 'amarillo' },
+          ],
+        },
+        {
+          valor: 'TRIPLICADO',
+          capas: 3,
+          numerosXTalonarioSugerido: 25,
+          papeles: [
+            { capaIndex: 0, capaLabel: 'Original', papelVarianteId: null, colorPapel: 'blanco' },
+            { capaIndex: 1, capaLabel: 'Duplicado', papelVarianteId: null, colorPapel: 'amarillo' },
+            { capaIndex: 2, capaLabel: 'Triplicado', papelVarianteId: null, colorPapel: 'rosa' },
+          ],
+        },
+        {
+          valor: 'CUADRUPLICADO',
+          capas: 4,
+          numerosXTalonarioSugerido: 25,
+          papeles: [
+            { capaIndex: 0, capaLabel: 'Original', papelVarianteId: null, colorPapel: 'blanco' },
+            { capaIndex: 1, capaLabel: 'Duplicado', papelVarianteId: null, colorPapel: 'amarillo' },
+            { capaIndex: 2, capaLabel: 'Triplicado', papelVarianteId: null, colorPapel: 'rosa' },
+            { capaIndex: 3, capaLabel: 'Cuadruplicado', papelVarianteId: null, colorPapel: 'celeste' },
+          ],
+        },
+      ],
+      encuadernacion: {
+        tipo: 'abrochado',
+        cantidadGrapas: 2,
+        posicionGrapas: 'superior',
+        bordeEncolar: null,
+      },
+      puntillado: {
+        habilitado: false,
+        tipo: null,
+        distanciaBordeMm: null,
+        borde: null,
+      },
+      modoTalonarioIncompleto: 'pose_completa',
+      materialesExtra: {
+        cartonBase: { habilitado: true, materiaPrimaVarianteId: null },
+        hojaBlancaSuperior: { habilitado: false, materiaPrimaVarianteId: null },
+      },
+      numeracion: {
+        habilitado: true,
+        posicion: 'superior_derecho',
+      },
+    };
+  }
+
   private resolveDefaultMotorConfig(code: string): Record<string, unknown> {
     if (code === ProductosServiciosService.DIGITAL_SHEET_MOTOR_DEFINITION.code) {
       return this.getDefaultMotorConfig();
@@ -9828,6 +10422,9 @@ export class ProductosServiciosService {
     }
     if (code === ProductosServiciosService.VINYL_CUT_MOTOR_DEFINITION.code) {
       return this.getDefaultVinylCutMotorConfig();
+    }
+    if (code === ProductosServiciosService.TALONARIO_MOTOR_DEFINITION.code) {
+      return this.getDefaultTalonarioMotorConfig();
     }
     return {};
   }
@@ -14831,6 +15428,9 @@ export class ProductosServiciosService {
     if (value === DimensionOpcionProductivaDto.caras) {
       return DimensionOpcionProductiva.CARAS;
     }
+    if (value === DimensionOpcionProductivaDto.tipo_copia) {
+      return DimensionOpcionProductiva.TIPO_COPIA;
+    }
     return DimensionOpcionProductiva.TIPO_IMPRESION;
   }
 
@@ -14838,32 +15438,31 @@ export class ProductosServiciosService {
     if (value === DimensionOpcionProductiva.CARAS) {
       return DimensionOpcionProductivaDto.caras;
     }
+    if (value === DimensionOpcionProductiva.TIPO_COPIA) {
+      return DimensionOpcionProductivaDto.tipo_copia;
+    }
     return DimensionOpcionProductivaDto.tipo_impresion;
   }
 
   private toValorOpcionProductiva(value: ValorOpcionProductivaDto) {
-    if (value === ValorOpcionProductivaDto.bn) {
-      return ValorOpcionProductiva.BN;
-    }
-    if (value === ValorOpcionProductivaDto.simple_faz) {
-      return ValorOpcionProductiva.SIMPLE_FAZ;
-    }
-    if (value === ValorOpcionProductivaDto.doble_faz) {
-      return ValorOpcionProductiva.DOBLE_FAZ;
-    }
+    if (value === ValorOpcionProductivaDto.bn) return ValorOpcionProductiva.BN;
+    if (value === ValorOpcionProductivaDto.simple_faz) return ValorOpcionProductiva.SIMPLE_FAZ;
+    if (value === ValorOpcionProductivaDto.doble_faz) return ValorOpcionProductiva.DOBLE_FAZ;
+    if (value === ValorOpcionProductivaDto.copia_simple) return ValorOpcionProductiva.COPIA_SIMPLE;
+    if (value === ValorOpcionProductivaDto.duplicado) return ValorOpcionProductiva.DUPLICADO;
+    if (value === ValorOpcionProductivaDto.triplicado) return ValorOpcionProductiva.TRIPLICADO;
+    if (value === ValorOpcionProductivaDto.cuadruplicado) return ValorOpcionProductiva.CUADRUPLICADO;
     return ValorOpcionProductiva.CMYK;
   }
 
   private fromValorOpcionProductiva(value: ValorOpcionProductiva) {
-    if (value === ValorOpcionProductiva.BN) {
-      return ValorOpcionProductivaDto.bn;
-    }
-    if (value === ValorOpcionProductiva.SIMPLE_FAZ) {
-      return ValorOpcionProductivaDto.simple_faz;
-    }
-    if (value === ValorOpcionProductiva.DOBLE_FAZ) {
-      return ValorOpcionProductivaDto.doble_faz;
-    }
+    if (value === ValorOpcionProductiva.BN) return ValorOpcionProductivaDto.bn;
+    if (value === ValorOpcionProductiva.SIMPLE_FAZ) return ValorOpcionProductivaDto.simple_faz;
+    if (value === ValorOpcionProductiva.DOBLE_FAZ) return ValorOpcionProductivaDto.doble_faz;
+    if (value === ValorOpcionProductiva.COPIA_SIMPLE) return ValorOpcionProductivaDto.copia_simple;
+    if (value === ValorOpcionProductiva.DUPLICADO) return ValorOpcionProductivaDto.duplicado;
+    if (value === ValorOpcionProductiva.TRIPLICADO) return ValorOpcionProductivaDto.triplicado;
+    if (value === ValorOpcionProductiva.CUADRUPLICADO) return ValorOpcionProductivaDto.cuadruplicado;
     return ValorOpcionProductivaDto.cmyk;
   }
 
