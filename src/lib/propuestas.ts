@@ -56,11 +56,12 @@ export type PropuestaItem = {
   productoNombre: string;
   productoCodigo: string;
   motorCodigo: string;
-  // Digital laser specific (opcional para otros motores)
+  // Digital laser / talonario specific (opcional para otros motores)
   varianteId?: string;
   varianteNombre?: string;
   tipoImpresion?: TipoImpresionProductoVariante;
   caras?: CarasProductoVariante;
+  tipoCopia?: ValorOpcionProductiva;
   anchoMm?: number;
   altoMm?: number;
   // Cantidad y precios (compartido)
@@ -383,6 +384,13 @@ export const LABEL_TIPO_IMPRESION: Record<TipoImpresionProductoVariante, string>
 export const LABEL_CARAS: Record<CarasProductoVariante, string> = {
   simple_faz: "Simple faz",
   doble_faz: "Doble faz",
+};
+
+export const LABEL_TIPO_COPIA: Record<string, string> = {
+  copia_simple: "Solo original",
+  duplicado: "Duplicado",
+  triplicado: "Triplicado",
+  cuadruplicado: "Cuadruplicado",
 };
 
 /**

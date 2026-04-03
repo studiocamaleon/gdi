@@ -328,7 +328,7 @@ function ItemRow({
   const [costosOpen, setCostosOpen] = React.useState(false);
   const [fechaPopoverOpen, setFechaPopoverOpen] = React.useState(false);
   const fechaBtnRef = React.useRef<HTMLButtonElement>(null);
-  const isDigital = item.motorCodigo === "impresion_digital_laser";
+  const isDigital = item.motorCodigo === "impresion_digital_laser" || item.motorCodigo === "talonario";
   const isGranFormato = item.motorCodigo === "gran_formato";
   const isViniloCut = item.motorCodigo === "vinilo_de_corte";
   const hasVinylNesting = isViniloCut && !!(item.viniloCut?.costosResponse?.colorResults);
@@ -689,7 +689,7 @@ function CostosOrdenTab({ items }: { items: PropuestaItem[] }) {
 
   const filas = React.useMemo(() => {
     return itemsConCosto.map((item) => {
-      const isDigital = item.motorCodigo === "impresion_digital_laser";
+      const isDigital = item.motorCodigo === "impresion_digital_laser" || item.motorCodigo === "talonario";
       const isGf = item.motorCodigo === "gran_formato";
       const isVc = item.motorCodigo === "vinilo_de_corte";
       const vcAggItem = item.viniloCut?.costosResponse?.aggregated as Record<string, unknown> | undefined;

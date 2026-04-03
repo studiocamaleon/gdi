@@ -44,7 +44,7 @@ const valorOpcionBaseLabelByValue: Record<ValorOpcionProductiva, string> = {
   cmyk: "CMYK",
   simple_faz: "Simple faz",
   doble_faz: "Doble faz",
-  copia_simple: "Simple",
+  copia_simple: "Solo original",
   duplicado: "Duplicado",
   triplicado: "Triplicado",
   cuadruplicado: "Cuadruplicado",

@@ -234,7 +234,7 @@ export function CostosProductoDialog({
   onOpenChange: (open: boolean) => void;
   item: PropuestaItem;
 }) {
-  const isDigital = item.motorCodigo === "impresion_digital_laser";
+  const isDigital = item.motorCodigo === "impresion_digital_laser" || item.motorCodigo === "talonario";
   const isGf = item.motorCodigo === "gran_formato";
   const isVc = item.motorCodigo === "vinilo_de_corte";
   const vcAgg = item.viniloCut?.costosResponse?.aggregated as Record<string, unknown> | undefined;

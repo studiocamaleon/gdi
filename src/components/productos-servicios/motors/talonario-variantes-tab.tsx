@@ -26,7 +26,7 @@ import type { DimensionOpcionProductiva, ValorOpcionProductiva } from "@/lib/pro
 type TipoCopiaValor = "copia_simple" | "duplicado" | "triplicado" | "cuadruplicado";
 
 const TIPO_COPIA_LABELS: Record<TipoCopiaValor, string> = {
-  copia_simple: "Simple",
+  copia_simple: "Solo original",
   duplicado: "Duplicado",
   triplicado: "Triplicado",
   cuadruplicado: "Cuadruplicado",

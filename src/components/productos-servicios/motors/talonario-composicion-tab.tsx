@@ -124,7 +124,7 @@ type TalonarioMotorParams = {
 };
 
 const TIPO_COPIA_LABELS: Record<TipoCopiaValor, string> = {
-  COPIA_SIMPLE: "Simple (solo original)",
+  COPIA_SIMPLE: "Solo original",
   DUPLICADO: "Duplicado",
   TRIPLICADO: "Triplicado",
   CUADRUPLICADO: "Cuadruplicado",

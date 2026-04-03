@@ -45,6 +45,7 @@ import {
   type PropuestaItem,
   LABEL_TIPO_IMPRESION,
   LABEL_CARAS,
+  LABEL_TIPO_COPIA,
   esCantidadFija,
   getCantidadesFijas,
   formatCurrency,
@@ -66,6 +67,10 @@ import {
   type MotorProposalConfigProps,
 } from "@/components/comercial/motors/digital-laser-config";
 import {
+  TalonarioProposalConfigPanel,
+  type TalonarioProposalConfig,
+} from "@/components/comercial/motors/talonario-proposal-config";
+import {
   GranFormatoProposalConfig,
   type GranFormatoMedida,
 } from "@/components/comercial/motors/gran-formato-config";
@@ -80,10 +85,11 @@ import type { VinylCutConfig } from "@/lib/productos-servicios";
 // Supported motors
 // ---------------------------------------------------------------------------
 
-const SUPPORTED_MOTORS = ["impresion_digital_laser", "gran_formato", "vinilo_de_corte"];
+const SUPPORTED_MOTORS = ["impresion_digital_laser", "gran_formato", "vinilo_de_corte", "talonario"];
 
 const MOTOR_LABELS: Record<string, string> = {
   impresion_digital_laser: "Digital",
+  talonario: "Talonario",
   gran_formato: "Gran Formato",
   vinilo_de_corte: "Vinilo de corte",
 };
@@ -93,6 +99,7 @@ const motorConfigRegistry: Record<
   React.ComponentType<MotorProposalConfigProps> | null
 > = {
   impresion_digital_laser: DigitalLaserConfig,
+  talonario: null, // talonario uses its own panel with tipoCopia
   gran_formato: null, // gran formato uses its own panel
   vinilo_de_corte: null,
 };
@@ -396,6 +403,7 @@ function StepConfigureDigital({
   checklist,
   checklistRespuestas,
   onChecklistRespuestasChange,
+  motorConfigOverride,
 }: {
   producto: ProductoServicio;
   variante: ProductoVariante;
@@ -406,6 +414,7 @@ function StepConfigureDigital({
   checklist: ProductoChecklist | null;
   checklistRespuestas: Record<string, { respuestaId: string }>;
   onChecklistRespuestasChange: (v: Record<string, { respuestaId: string }>) => void;
+  motorConfigOverride?: React.ReactNode;
 }) {
   const showMotorConfig = hasMotorConfig(variante);
   const MotorConfigPanel = motorConfigRegistry[producto.motorCodigo];
@@ -424,12 +433,17 @@ function StepConfigureDigital({
         </p>
       </div>
 
-      {showMotorConfig && MotorConfigPanel && (
+      {motorConfigOverride ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Opciones de produccion</p>
+          {motorConfigOverride}
+        </div>
+      ) : showMotorConfig && MotorConfigPanel ? (
         <div className="flex flex-col gap-2">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Opciones de impresion</p>
           <MotorConfigPanel variante={adaptVarianteForConfig(variante)} config={config} onConfigChange={onConfigChange} />
         </div>
-      )}
+      ) : null}
 
       <div className="flex flex-col gap-2">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Cantidad</p>
@@ -551,7 +565,7 @@ function StepSummaryDigital({
 }: {
   producto: ProductoServicio;
   variante: ProductoVariante;
-  config: { tipoImpresion: TipoImpresionProductoVariante; caras: CarasProductoVariante };
+  config: { tipoImpresion: TipoImpresionProductoVariante; caras: CarasProductoVariante; tipoCopia?: ValorOpcionProductiva };
   cantidad: number;
   checklistRespuestas: Record<string, { respuestaId: string }>;
   onCostoCalculated: (costo: number | null) => void;
@@ -570,6 +584,9 @@ function StepSummaryDigital({
       { dimension: "tipo_impresion", valor: config.tipoImpresion },
       { dimension: "caras", valor: config.caras },
     ];
+    if (config.tipoCopia) {
+      seleccionesBase.push({ dimension: "tipo_copia", valor: config.tipoCopia });
+    }
     const clPayload = Object.entries(checklistRespuestas)
       .filter(([, v]) => Boolean(v?.respuestaId))
       .map(([preguntaId, v]) => ({ preguntaId, respuestaId: v.respuestaId }));
@@ -584,7 +601,7 @@ function StepSummaryDigital({
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [variante.id, cantidad, config.tipoImpresion, config.caras, JSON.stringify(checklistRespuestas)]);
+  }, [variante.id, cantidad, config.tipoImpresion, config.caras, config.tipoCopia, JSON.stringify(checklistRespuestas)]);
 
   if (loading) return <div className="flex flex-col items-center justify-center gap-2 py-12"><Loader2Icon className="size-5 animate-spin text-muted-foreground" /><p className="text-sm text-muted-foreground">Calculando costos...</p></div>;
 
@@ -876,6 +893,7 @@ export function AgregarProductoSheet({
   const [variantes, setVariantes] = React.useState<ProductoVariante[]>([]);
   const [variante, setVariante] = React.useState<ProductoVariante | null>(null);
   const [digitalConfig, setDigitalConfig] = React.useState<{ tipoImpresion: TipoImpresionProductoVariante; caras: CarasProductoVariante }>({ tipoImpresion: "cmyk", caras: "simple_faz" });
+  const [talonarioConfig, setTalonarioConfig] = React.useState<TalonarioProposalConfig>({ tipoImpresion: "cmyk", caras: "simple_faz", tipoCopia: "duplicado" as ValorOpcionProductiva });
   const [cantidad, setCantidad] = React.useState(0);
   const [checklist, setChecklist] = React.useState<ProductoChecklist | null>(null);
   const [cotizacionCompleta, setCotizacionCompleta] = React.useState<import("@/lib/productos-servicios").CotizacionProductoVariante | null>(null);
@@ -900,6 +918,7 @@ export function AgregarProductoSheet({
   const motorCodigo = producto?.motorCodigo ?? "";
   const isGranFormato = motorCodigo === "gran_formato";
   const isViniloCut = motorCodigo === "vinilo_de_corte";
+  const isTalonario = motorCodigo === "talonario";
 
   const steps = React.useMemo(
     () => buildSteps(motorCodigo, variantes.filter((v) => v.activo).length > 1),
@@ -1063,6 +1082,7 @@ export function AgregarProductoSheet({
     const precio = producto.precio;
     const isGF = producto.motorCodigo === "gran_formato";
     const isVC = producto.motorCodigo === "vinilo_de_corte";
+    const isTalonario = producto.motorCodigo === "talonario";
 
     const cantidadFinal = isGF
       ? calcGranFormatoCantidad(gfMedidas, producto.unidadComercial)
@@ -1116,16 +1136,24 @@ export function AgregarProductoSheet({
           }
         : isVC
           ? buildVinylCutEspecificaciones(vcColores)
+          : isTalonario && variante
+            ? {
+                Medidas: `${Number(variante.anchoMm) / 10} x ${Number(variante.altoMm) / 10} cm`,
+                Impresion: LABEL_TIPO_IMPRESION[talonarioConfig.tipoImpresion],
+                Caras: LABEL_CARAS[talonarioConfig.caras],
+                "Tipo de copia": LABEL_TIPO_COPIA[talonarioConfig.tipoCopia] ?? talonarioConfig.tipoCopia,
+              }
           : variante
             ? buildDigitalEspecificaciones(variante, digitalConfig.tipoImpresion, digitalConfig.caras)
             : {},
-      // Digital-specific
+      // Digital / Talonario specific
       ...(!isGF && !isVC
         ? {
             varianteId: variante?.id,
             varianteNombre: variante?.nombre,
-            tipoImpresion: digitalConfig.tipoImpresion,
-            caras: digitalConfig.caras,
+            tipoImpresion: isTalonario ? talonarioConfig.tipoImpresion : digitalConfig.tipoImpresion,
+            caras: isTalonario ? talonarioConfig.caras : digitalConfig.caras,
+            ...(isTalonario ? { tipoCopia: talonarioConfig.tipoCopia } : {}),
             anchoMm: variante ? Number(variante.anchoMm) : undefined,
             altoMm: variante ? Number(variante.altoMm) : undefined,
           }
@@ -1246,7 +1274,7 @@ export function AgregarProductoSheet({
                 />
               )}
 
-              {currentStep === "configure" && producto && !isGranFormato && !isViniloCut && variante && (
+              {currentStep === "configure" && producto && !isGranFormato && !isViniloCut && !isTalonario && variante && (
                 <StepConfigureDigital
                   producto={producto}
                   variante={variante}
@@ -1260,6 +1288,27 @@ export function AgregarProductoSheet({
                 />
               )}
 
+              {currentStep === "configure" && producto && isTalonario && variante && (
+                <StepConfigureDigital
+                  producto={producto}
+                  variante={variante}
+                  config={talonarioConfig}
+                  onConfigChange={(c) => setTalonarioConfig((prev) => ({ ...prev, ...c }))}
+                  cantidad={cantidad}
+                  onCantidadChange={setCantidad}
+                  checklist={checklist}
+                  checklistRespuestas={checklistRespuestas}
+                  onChecklistRespuestasChange={setChecklistRespuestas}
+                  motorConfigOverride={
+                    <TalonarioProposalConfigPanel
+                      variante={variante}
+                      config={talonarioConfig}
+                      onConfigChange={setTalonarioConfig}
+                    />
+                  }
+                />
+              )}
+
               {currentStep === "summary" && producto && isViniloCut && vcConfig && (
                 <StepSummaryVinylCut
                   producto={producto}
@@ -1270,11 +1319,23 @@ export function AgregarProductoSheet({
                 />
               )}
 
-              {currentStep === "summary" && producto && !isGranFormato && !isViniloCut && variante && (
+              {currentStep === "summary" && producto && !isGranFormato && !isViniloCut && !isTalonario && variante && (
                 <StepSummaryDigital
                   producto={producto}
                   variante={variante}
                   config={digitalConfig}
+                  cantidad={cantidad}
+                  checklistRespuestas={checklistRespuestas}
+                  onCostoCalculated={setCotizacionCosto}
+                  onCotizacionCompleta={setCotizacionCompleta}
+                />
+              )}
+
+              {currentStep === "summary" && producto && isTalonario && variante && (
+                <StepSummaryDigital
+                  producto={producto}
+                  variante={variante}
+                  config={talonarioConfig}
                   cantidad={cantidad}
                   checklistRespuestas={checklistRespuestas}
                   onCostoCalculated={setCotizacionCosto}
