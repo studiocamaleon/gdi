@@ -41,6 +41,7 @@ import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sh
 import { CostosProductoDialog } from "@/components/comercial/costos-producto-dialog";
 import { ImposicionPreviewDialog } from "@/components/comercial/imposicion-preview-dialog";
 import { GranFormatoNestingDialog } from "@/components/comercial/gran-formato-nesting-dialog";
+import { VinylCutNestingDialog } from "@/components/comercial/vinyl-cut-nesting-dialog";
 import { Badge } from "@/components/ui/badge";
 import {
   ChartContainer,
@@ -323,19 +324,24 @@ function ItemRow({
 }) {
   const [imposicionOpen, setImposicionOpen] = React.useState(false);
   const [nestingOpen, setNestingOpen] = React.useState(false);
+  const [vinylNestingOpen, setVinylNestingOpen] = React.useState(false);
   const [costosOpen, setCostosOpen] = React.useState(false);
   const [fechaPopoverOpen, setFechaPopoverOpen] = React.useState(false);
   const fechaBtnRef = React.useRef<HTMLButtonElement>(null);
   const isDigital = item.motorCodigo === "impresion_digital_laser";
   const isGranFormato = item.motorCodigo === "gran_formato";
-  const hasCostData = !!(item.cotizacion || item.granFormato?.costosResponse);
+  const isViniloCut = item.motorCodigo === "vinilo_de_corte";
+  const hasVinylNesting = isViniloCut && !!(item.viniloCut?.costosResponse?.colorResults);
+  const hasCostData = !!(item.cotizacion || item.granFormato?.costosResponse || item.viniloCut?.costosResponse);
   const gfMedidas = item.granFormato?.medidas;
   const hasNesting = isGranFormato && !!item.granFormato?.costosResponse?.nestingPreview;
 
   // Extract adicionales (non-base steps from cotización)
   const adicionales = React.useMemo(() => {
+    const vcAgg = item.viniloCut?.costosResponse?.aggregated as Record<string, unknown> | undefined;
     const pasos = item.cotizacion?.bloques.procesos
       ?? item.granFormato?.costosResponse?.centrosCosto
+      ?? (vcAgg?.centrosCosto as Array<Record<string, unknown>> | undefined)
       ?? [];
     return pasos
       .filter((p) => {
@@ -436,6 +442,20 @@ function ItemRow({
                           ))}
                         </div>
                       )}
+                      {isViniloCut && item.viniloCut?.colores.map((color, ci) => (
+                        <div
+                          key={color.id}
+                          className={`flex min-w-[140px] flex-col gap-0.5 px-4 ${ci > 0 || specs.length > 0 ? "border-l border-border/40" : "pl-0"}`}
+                        >
+                          <span className="text-xs text-muted-foreground">{color.colorFiltro || color.label}</span>
+                          {color.medidas.map((m, j) => (
+                            <span key={j} className="font-medium tabular-nums">
+                              {m.anchoMm / 10} × {m.altoMm / 10} cm{" "}
+                              <span className="text-muted-foreground">×{m.cantidad}</span>
+                            </span>
+                          ))}
+                        </div>
+                      ))}
                     </>
                   );
                 })()}
@@ -479,6 +499,20 @@ function ItemRow({
                   onClick={(e) => {
                     e.stopPropagation();
                     setNestingOpen(true);
+                  }}
+                >
+                  <GridIcon />
+                  Imposicion
+                </Button>
+              )}
+              {hasVinylNesting && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setVinylNestingOpen(true);
                   }}
                 >
                   <GridIcon />
@@ -608,6 +642,16 @@ function ItemRow({
         />
       )}
 
+      {/* Vinyl cut nesting dialog */}
+      {hasVinylNesting && vinylNestingOpen && (
+        <VinylCutNestingDialog
+          open={vinylNestingOpen}
+          onOpenChange={setVinylNestingOpen}
+          productoNombre={item.productoNombre}
+          costosResponse={item.viniloCut!.costosResponse}
+        />
+      )}
+
       {/* Costos dialog */}
       {hasCostData && costosOpen && (
         <CostosProductoDialog
@@ -640,18 +684,22 @@ const DISTRIBUCION_COLORS = [
 
 function CostosOrdenTab({ items }: { items: PropuestaItem[] }) {
   const itemsConCosto = items.filter(
-    (i) => i.cotizacion || i.granFormato?.costosResponse,
+    (i) => i.cotizacion || i.granFormato?.costosResponse || i.viniloCut?.costosResponse,
   );
 
   const filas = React.useMemo(() => {
     return itemsConCosto.map((item) => {
       const isDigital = item.motorCodigo === "impresion_digital_laser";
       const isGf = item.motorCodigo === "gran_formato";
+      const isVc = item.motorCodigo === "vinilo_de_corte";
+      const vcAggItem = item.viniloCut?.costosResponse?.aggregated as Record<string, unknown> | undefined;
       const costoTotal = isDigital
         ? item.cotizacion?.total ?? 0
         : isGf
           ? item.granFormato?.costosResponse?.totales.tecnico ?? 0
-          : 0;
+          : isVc
+            ? Number(vcAggItem?.totalTecnico ?? 0)
+            : 0;
       const sim = item.precioConfig
         ? simularPrecioComercial({ precio: item.precioConfig, costoTotal, cantidad: item.cantidad })
         : null;
@@ -666,7 +714,9 @@ function CostosOrdenTab({ items }: { items: PropuestaItem[] }) {
         ? item.cotizacion?.subtotales.procesos ?? 0
         : isGf
           ? item.granFormato?.costosResponse?.totales.centrosCosto ?? 0
-          : 0;
+          : isVc
+            ? Number(vcAggItem?.totalCentrosCosto ?? 0)
+            : 0;
       const costoMateriales = costoTotal - costoProcesos;
 
       return {
@@ -1193,7 +1243,7 @@ export function PropuestaFicha({
 
         {/* Produccion tab */}
         <TabsContent value="produccion">
-          {items.length === 0 || items.every((i) => !i.cotizacion && !i.granFormato?.costosResponse) ? (
+          {items.length === 0 || items.every((i) => !i.cotizacion && !i.granFormato?.costosResponse && !i.viniloCut?.costosResponse) ? (
             <TabPlaceholder icon={FactoryIcon} title="Produccion" />
           ) : (
             <div className="flex flex-col gap-4">
@@ -1224,7 +1274,9 @@ export function PropuestaFicha({
                     </CardHeader>
                     <CardContent className="p-0">
                       {(() => {
-                        // Normalize production steps from either motor
+                        // Normalize production steps from any motor
+                        const vcAggProd = item.viniloCut?.costosResponse?.aggregated as Record<string, unknown> | undefined;
+                        const vcCentros = (vcAggProd?.centrosCosto ?? []) as Array<Record<string, unknown>>;
                         const pasos = item.cotizacion
                           ? item.cotizacion.bloques.procesos.map((p) => ({
                               key: `${p.codigo}-${p.orden}`,
@@ -1241,7 +1293,16 @@ export function PropuestaFicha({
                                 minutos: c.minutos,
                                 origen: c.origen,
                               }),
-                            ) ?? [];
+                            )
+                          ?? vcCentros.map(
+                              (c, idx) => ({
+                                key: `${c.centroCostoId ?? idx}`,
+                                nombre: String(c.paso ?? c.nombre ?? ""),
+                                area: String(c.centroCostoNombre ?? ""),
+                                minutos: Number(c.minutos ?? 0),
+                                origen: String(c.origen ?? ""),
+                              }),
+                            );
 
                         return (
                           <Table>

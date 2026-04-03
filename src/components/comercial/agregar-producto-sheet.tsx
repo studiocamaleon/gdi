@@ -27,13 +27,16 @@ import {
   getProductosServicios,
   getProductoVariantes,
   getProductoChecklist,
+  getProductoMotorConfig,
   getGranFormatoConfig,
   getGranFormatoRutaBase,
   getGranFormatoVariantes,
   getGranFormatoChecklist,
   cotizarProductoVariante,
   previewGranFormatoCostos,
+  previewVinylCutImposicionByProducto,
 } from "@/lib/productos-servicios-api";
+import { getMateriasPrimas } from "@/lib/materias-primas-api";
 import { getMaquinas } from "@/lib/maquinaria-api";
 import { tecnologiaMaquinaItems, type Maquina, type MaquinaPerfilOperativo } from "@/lib/maquinaria";
 import { ProductoServicioChecklistCotizador } from "@/components/productos-servicios/producto-servicio-checklist";
@@ -66,16 +69,23 @@ import {
   GranFormatoProposalConfig,
   type GranFormatoMedida,
 } from "@/components/comercial/motors/gran-formato-config";
+import {
+  VinylCutProposalConfig,
+  buildDefaultColor,
+  type VinylCutColorDraft,
+} from "@/components/comercial/motors/vinyl-cut-config";
+import type { VinylCutConfig } from "@/lib/productos-servicios";
 
 // ---------------------------------------------------------------------------
 // Supported motors
 // ---------------------------------------------------------------------------
 
-const SUPPORTED_MOTORS = ["impresion_digital_laser", "gran_formato"];
+const SUPPORTED_MOTORS = ["impresion_digital_laser", "gran_formato", "vinilo_de_corte"];
 
 const MOTOR_LABELS: Record<string, string> = {
   impresion_digital_laser: "Digital",
   gran_formato: "Gran Formato",
+  vinilo_de_corte: "Vinilo de corte",
 };
 
 const motorConfigRegistry: Record<
@@ -176,7 +186,7 @@ function hasMotorConfig(variante: ProductoVariante): boolean {
 
 function buildSteps(motorCodigo: string, hasMultipleVariants: boolean): Step[] {
   const steps: Step[] = ["search"];
-  if (motorCodigo !== "gran_formato" && hasMultipleVariants) {
+  if (motorCodigo !== "gran_formato" && motorCodigo !== "vinilo_de_corte" && hasMultipleVariants) {
     steps.push("variant");
   }
   steps.push("configure", "summary");
@@ -599,6 +609,155 @@ function StepSummaryDigital({
 // Step: Summary Gran Formato
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Helpers: vinyl cut
+// ---------------------------------------------------------------------------
+
+function calcVinylCutCantidad(
+  colores: VinylCutColorDraft[],
+  unidadComercial: string,
+): number {
+  let total = 0;
+  for (const color of colores) {
+    for (const m of color.medidas) {
+      if (!m.anchoMm || !m.altoMm || m.cantidad <= 0) continue;
+      if (unidadComercial === "m2") {
+        total += (m.anchoMm * m.altoMm * m.cantidad) / 1_000_000;
+      } else if (unidadComercial === "metro_lineal") {
+        total += (m.altoMm * m.cantidad) / 1_000;
+      } else {
+        total += m.cantidad;
+      }
+    }
+  }
+  return Math.round(total * 100) / 100;
+}
+
+function buildVinylCutEspecificaciones(
+  colores: VinylCutColorDraft[],
+): Record<string, string> {
+  // Medidas por color se muestran en el desglose expandido, no aqui
+  return {
+    Motor: "Vinilo de corte",
+    Colores: String(colores.length),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Step: Summary Vinyl Cut
+// ---------------------------------------------------------------------------
+
+function StepSummaryVinylCut({
+  producto,
+  config,
+  colores,
+  onCostoCalculated,
+  onCostosResponse,
+}: {
+  producto: ProductoServicio;
+  config: VinylCutConfig;
+  colores: VinylCutColorDraft[];
+  onCostoCalculated: (costo: number | null) => void;
+  onCostosResponse: (res: Record<string, unknown> | null) => void;
+}) {
+  const [loading, setLoading] = React.useState(true);
+  const [costoTotal, setCostoTotal] = React.useState<number | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [warnings, setWarnings] = React.useState<string[]>([]);
+
+  const validColores = React.useMemo(
+    () =>
+      colores
+        .filter((c) => c.medidas.some((m) => m.anchoMm && m.altoMm && m.cantidad > 0))
+        .map((c) => ({
+          id: c.id,
+          label: c.label,
+          materialVarianteId: null,
+          colorFiltro: c.colorFiltro,
+          medidas: c.medidas
+            .filter((m) => m.anchoMm && m.altoMm && m.cantidad > 0)
+            .map((m) => ({
+              anchoMm: m.anchoMm!,
+              altoMm: m.altoMm!,
+              cantidad: m.cantidad,
+              rotacionPermitida: config.permitirRotacion,
+            })),
+        })),
+    [colores, config.permitirRotacion],
+  );
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    const payload = {
+      ...config,
+      colores: validColores,
+    };
+
+    previewVinylCutImposicionByProducto(producto.id, payload)
+      .then((res) => {
+        if (cancelled) return;
+        const aggregated = res.aggregated as Record<string, unknown> | undefined;
+        const cost = Number(aggregated?.totalTecnico ?? 0);
+        setCostoTotal(cost);
+        setWarnings((res.warnings as string[]) ?? []);
+        onCostoCalculated(cost);
+        onCostosResponse(res);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "Error al calcular costos.");
+        onCostoCalculated(null);
+        onCostosResponse(null);
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [producto.id, JSON.stringify(validColores)]);
+
+  const cantidadPricing = calcVinylCutCantidad(colores, producto.unidadComercial);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-12">
+        <Loader2Icon className="size-5 animate-spin text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">Calculando costos...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <p className="text-sm font-medium">{producto.nombre}</p>
+        <p className="text-xs text-muted-foreground">
+          {colores.length} color{colores.length !== 1 ? "es" : ""}
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {colores.map((c) => (
+          <Badge key={c.id} variant="secondary">
+            {c.colorFiltro || c.label}
+          </Badge>
+        ))}
+      </div>
+      {warnings.length > 0 && (
+        <div className="rounded-lg border border-amber-500/50 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+          {warnings.map((w, i) => <p key={i}>{w}</p>)}
+        </div>
+      )}
+      <Separator />
+      <PriceBreakdown producto={producto} costoTotal={costoTotal} cantidad={cantidadPricing} error={error} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step: Summary Gran Formato
+// ---------------------------------------------------------------------------
+
 function StepSummaryGranFormato({
   producto,
   medidas,
@@ -732,8 +891,15 @@ export function AgregarProductoSheet({
   const [gfRutaBase, setGfRutaBase] = React.useState<import("@/lib/productos-servicios").GranFormatoRutaBase | null>(null);
   const [gfCostosResponse, setGfCostosResponse] = React.useState<GranFormatoCostosResponse | null>(null);
 
+  // Vinyl cut state
+  const [vcConfig, setVcConfig] = React.useState<VinylCutConfig | null>(null);
+  const [vcColorOptions, setVcColorOptions] = React.useState<string[]>([]);
+  const [vcColores, setVcColores] = React.useState<VinylCutColorDraft[]>([buildDefaultColor(0)]);
+  const [vcCostosResponse, setVcCostosResponse] = React.useState<Record<string, unknown> | null>(null);
+
   const motorCodigo = producto?.motorCodigo ?? "";
   const isGranFormato = motorCodigo === "gran_formato";
+  const isViniloCut = motorCodigo === "vinilo_de_corte";
 
   const steps = React.useMemo(
     () => buildSteps(motorCodigo, variantes.filter((v) => v.activo).length > 1),
@@ -794,7 +960,35 @@ export function AgregarProductoSheet({
     setLoadingProduct(true);
 
     try {
-      if (p.motorCodigo === "gran_formato") {
+      if (p.motorCodigo === "vinilo_de_corte") {
+        const [motorConfig, materiasPrimas] = await Promise.all([
+          getProductoMotorConfig(p.id),
+          getMateriasPrimas(),
+        ]);
+        const config = motorConfig.parametros as unknown as VinylCutConfig;
+        setVcConfig(config);
+
+        // Extract color options from compatible material variants
+        const compatibleIds = new Set(config.materialesCompatibles ?? []);
+        const colorSet = new Set<string>();
+        for (const mp of materiasPrimas) {
+          if (!mp.activo || !compatibleIds.has(mp.id)) continue;
+          for (const v of mp.variantes) {
+            if (!v.activo) continue;
+            const color = typeof v.atributosVariante?.color === "string"
+              ? v.atributosVariante.color.trim()
+              : "";
+            if (color) colorSet.add(color);
+          }
+        }
+        const colors = Array.from(colorSet).sort();
+        setVcColorOptions(colors);
+
+        // Initialize with one default color
+        setVcColores([buildDefaultColor(0)]);
+        setVcCostosResponse(null);
+        setCurrentStep("configure");
+      } else if (p.motorCodigo === "gran_formato") {
         const [cfg, vars, cl, maquinas, rutaBase] = await Promise.all([
           getGranFormatoConfig(p.id),
           getGranFormatoVariantes(p.id).catch(() => [] as GranFormatoVariante[]),
@@ -868,10 +1062,13 @@ export function AgregarProductoSheet({
 
     const precio = producto.precio;
     const isGF = producto.motorCodigo === "gran_formato";
+    const isVC = producto.motorCodigo === "vinilo_de_corte";
 
     const cantidadFinal = isGF
       ? calcGranFormatoCantidad(gfMedidas, producto.unidadComercial)
-      : cantidad;
+      : isVC
+        ? calcVinylCutCantidad(vcColores, producto.unidadComercial)
+        : cantidad;
 
     if (cantidadFinal <= 0) return;
 
@@ -902,7 +1099,7 @@ export function AgregarProductoSheet({
       impuestoMonto: impuestosMonto,
       total: precioFinal,
       precioConfig: precio ?? undefined,
-      cotizacion: isGF ? null : cotizacionCompleta,
+      cotizacion: (isGF || isVC) ? null : cotizacionCompleta,
       especificaciones: isGF
         ? {
             Tecnologia: getTecnologiaLabel(gfTecnologia),
@@ -917,20 +1114,22 @@ export function AgregarProductoSheet({
               ? { Maquina: gfCostosResponse.maquinaNombre }
               : {}),
           }
-        : variante
-          ? buildDigitalEspecificaciones(variante, digitalConfig.tipoImpresion, digitalConfig.caras)
-          : {},
+        : isVC
+          ? buildVinylCutEspecificaciones(vcColores)
+          : variante
+            ? buildDigitalEspecificaciones(variante, digitalConfig.tipoImpresion, digitalConfig.caras)
+            : {},
       // Digital-specific
-      ...(isGF
-        ? {}
-        : {
+      ...(!isGF && !isVC
+        ? {
             varianteId: variante?.id,
             varianteNombre: variante?.nombre,
             tipoImpresion: digitalConfig.tipoImpresion,
             caras: digitalConfig.caras,
             anchoMm: variante ? Number(variante.anchoMm) : undefined,
             altoMm: variante ? Number(variante.altoMm) : undefined,
-          }),
+          }
+        : {}),
       // Gran formato-specific
       ...(isGF && gfCostosResponse
         ? {
@@ -940,6 +1139,24 @@ export function AgregarProductoSheet({
                 .filter((m) => m.anchoMm && m.altoMm && m.cantidad > 0)
                 .map((m) => ({ anchoMm: m.anchoMm!, altoMm: m.altoMm!, cantidad: m.cantidad })),
               costosResponse: gfCostosResponse,
+            },
+          }
+        : {}),
+      // Vinyl cut-specific
+      ...(isVC && vcCostosResponse
+        ? {
+            viniloCut: {
+              colores: vcColores
+                .filter((c) => c.medidas.some((m) => m.anchoMm && m.altoMm && m.cantidad > 0))
+                .map((c) => ({
+                  id: c.id,
+                  label: c.label,
+                  colorFiltro: c.colorFiltro,
+                  medidas: c.medidas
+                    .filter((m) => m.anchoMm && m.altoMm && m.cantidad > 0)
+                    .map((m) => ({ anchoMm: m.anchoMm!, altoMm: m.altoMm!, cantidad: m.cantidad })),
+                })),
+              costosResponse: vcCostosResponse,
             },
           }
         : {}),
@@ -953,6 +1170,11 @@ export function AgregarProductoSheet({
     if (currentStep !== "configure") return false;
     if (isGranFormato) {
       return hasValidMedidas(gfMedidas) && gfTecnologia !== "";
+    }
+    if (isViniloCut) {
+      return vcColores.length > 0 && vcColores.every(
+        (c) => c.colorFiltro && c.medidas.some((m) => m.anchoMm && m.anchoMm > 0 && m.altoMm && m.altoMm > 0 && m.cantidad > 0),
+      );
     }
     return cantidad > 0;
   })();
@@ -1015,7 +1237,16 @@ export function AgregarProductoSheet({
                 />
               )}
 
-              {currentStep === "configure" && producto && !isGranFormato && variante && (
+              {currentStep === "configure" && producto && isViniloCut && vcConfig && (
+                <VinylCutProposalConfig
+                  config={vcConfig}
+                  colorOptions={vcColorOptions}
+                  colores={vcColores}
+                  onColoresChange={setVcColores}
+                />
+              )}
+
+              {currentStep === "configure" && producto && !isGranFormato && !isViniloCut && variante && (
                 <StepConfigureDigital
                   producto={producto}
                   variante={variante}
@@ -1029,7 +1260,17 @@ export function AgregarProductoSheet({
                 />
               )}
 
-              {currentStep === "summary" && producto && !isGranFormato && variante && (
+              {currentStep === "summary" && producto && isViniloCut && vcConfig && (
+                <StepSummaryVinylCut
+                  producto={producto}
+                  config={vcConfig}
+                  colores={vcColores}
+                  onCostoCalculated={setCotizacionCosto}
+                  onCostosResponse={setVcCostosResponse}
+                />
+              )}
+
+              {currentStep === "summary" && producto && !isGranFormato && !isViniloCut && variante && (
                 <StepSummaryDigital
                   producto={producto}
                   variante={variante}

@@ -85,6 +85,16 @@ export type PropuestaItem = {
     medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
     costosResponse: GranFormatoCostosResponse;
   };
+  // Vinilo de corte specific
+  viniloCut?: {
+    colores: Array<{
+      id: string;
+      label: string;
+      colorFiltro: string | null;
+      medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
+    }>;
+    costosResponse: Record<string, unknown>;
+  };
 };
 
 export type PropuestaResumen = {

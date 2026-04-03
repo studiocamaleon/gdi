@@ -166,6 +166,53 @@ function buildGfMaterialGroups(item: PropuestaItem): MaterialGroup[] {
 }
 
 // ---------------------------------------------------------------------------
+// Vinyl cut helpers
+// ---------------------------------------------------------------------------
+
+function buildVcSlices(vcAgg: Record<string, unknown> | undefined): CostBreakdownSlice[] {
+  if (!vcAgg) return [];
+  const slices: CostBreakdownSlice[] = [];
+  const centros = Number(vcAgg.totalCentrosCosto ?? 0);
+  const materiales = Number(vcAgg.totalMateriales ?? 0);
+  if (centros > 0) slices.push({ name: "Procesos", value: centros });
+  if (materiales > 0) slices.push({ name: "Materiales", value: materiales });
+  return slices;
+}
+
+function buildVcMaterialGroups(vcAgg: Record<string, unknown> | undefined): MaterialGroup[] {
+  if (!vcAgg) return [];
+  const mats = (vcAgg.materiasPrimas ?? []) as Array<Record<string, unknown>>;
+  const byKey = new Map<string, MaterialGroup>();
+  for (const mat of mats) {
+    const tipo = String(mat.tipo ?? "Otro");
+    const origen = String(mat.origen ?? "");
+    const isMerma = origen.toLowerCase().includes("merma");
+    const baseLabel = tipo === "SUSTRATO" || tipo === "VINILO" ? "Vinilo"
+      : tipo === "TINTA" ? "Tinta"
+        : tipo;
+    const groupKey = isMerma ? `${baseLabel} · Merma operativa` : baseLabel;
+    if (!byKey.has(groupKey)) {
+      byKey.set(groupKey, { tipo: groupKey, items: [], subtotal: 0 });
+    }
+    const group = byKey.get(groupKey)!;
+    const costo = Number(mat.costo ?? 0);
+    const chips = (mat.variantChips ?? []) as Array<{ label: string; value: string }>;
+    const colorChip = chips.find((c) => c.label === "Color");
+    const nombre = String(mat.nombre ?? "");
+    const displayName = colorChip ? `${nombre} · ${colorChip.value}` : nombre;
+    group.items.push({
+      nombre: displayName,
+      origen,
+      cantidad: `${mat.cantidad ?? ""}${mat.unidad ? ` ${mat.unidad}` : ""}`,
+      costoUnitario: Number(mat.costoUnitario ?? 0),
+      costo,
+    });
+    group.subtotal += costo;
+  }
+  return Array.from(byKey.values());
+}
+
+// ---------------------------------------------------------------------------
 // Pie chart config
 // ---------------------------------------------------------------------------
 
@@ -189,13 +236,17 @@ export function CostosProductoDialog({
 }) {
   const isDigital = item.motorCodigo === "impresion_digital_laser";
   const isGf = item.motorCodigo === "gran_formato";
+  const isVc = item.motorCodigo === "vinilo_de_corte";
+  const vcAgg = item.viniloCut?.costosResponse?.aggregated as Record<string, unknown> | undefined;
 
   // Cost totals
   const costoTotal = isDigital
     ? item.cotizacion?.total ?? 0
     : isGf
       ? item.granFormato?.costosResponse?.totales.tecnico ?? 0
-      : 0;
+      : isVc
+        ? Number(vcAgg?.totalTecnico ?? 0)
+        : 0;
   const costoUnitario = isDigital
     ? item.cotizacion?.unitario ?? 0
     : item.cantidad > 0
@@ -216,7 +267,11 @@ export function CostosProductoDialog({
   const impuestosPct = sim?.impuestosPct ?? item.impuestoPorcentaje;
 
   // Pie chart
-  const pieSlices = isDigital ? buildDigitalSlices(item) : buildGfSlices(item);
+  const pieSlices = isDigital
+    ? buildDigitalSlices(item)
+    : isVc
+      ? buildVcSlices(vcAgg)
+      : buildGfSlices(item);
 
   // Donut: composicion del precio
   const precioSlices: CostBreakdownSlice[] = [];
@@ -233,6 +288,7 @@ export function CostosProductoDialog({
   ];
 
   // Process table
+  const vcCentros = (vcAgg?.centrosCosto ?? []) as Array<Record<string, unknown>>;
   const procesos = isDigital
     ? (item.cotizacion?.bloques.procesos ?? []).map((p) => ({
         nombre: p.nombre,
@@ -242,20 +298,31 @@ export function CostosProductoDialog({
         tarifaHora: p.tarifaHora,
         costo: p.costo,
       }))
-    : (item.granFormato?.costosResponse?.centrosCosto ?? []).map((c) => ({
-        nombre: c.paso,
-        centro: c.centroCostoNombre,
-        origen: c.origen,
-        minutos: c.minutos,
-        tarifaHora: c.tarifaHora,
-        costo: c.costo,
-      }));
+    : isVc
+      ? vcCentros.map((c) => ({
+          nombre: String(c.paso ?? c.nombre ?? ""),
+          centro: String(c.centroCostoNombre ?? ""),
+          origen: String(c.origen ?? ""),
+          minutos: Number(c.minutos ?? 0),
+          tarifaHora: Number(c.tarifaHora ?? 0),
+          costo: Number(c.costo ?? 0),
+        }))
+      : (item.granFormato?.costosResponse?.centrosCosto ?? []).map((c) => ({
+          nombre: c.paso,
+          centro: c.centroCostoNombre,
+          origen: c.origen,
+          minutos: c.minutos,
+          tarifaHora: c.tarifaHora,
+          costo: c.costo,
+        }));
   const totalProcesos = procesos.reduce((sum, p) => sum + p.costo, 0);
 
   // Material groups
   const materialGroups = isDigital
     ? buildDigitalMaterialGroups(item)
-    : buildGfMaterialGroups(item);
+    : isVc
+      ? buildVcMaterialGroups(vcAgg)
+      : buildGfMaterialGroups(item);
   const totalMateriales = materialGroups.reduce((sum, g) => sum + g.subtotal, 0);
 
   // GF resumen tecnico
