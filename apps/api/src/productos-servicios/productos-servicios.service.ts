@@ -616,7 +616,11 @@ export class ProductosServiciosService {
     });
 
     const nextVersion = (current?.versionConfig ?? 0) + 1;
-    const merged = this.mergeMotorConfig(motor.code, current?.parametrosJson, payload.parametros);
+    // Override de variante: NO inyectar defaults del motor.
+    // Solo guardar el merge del override previo + lo nuevo (sin base).
+    const currentObj = (current?.parametrosJson && typeof current.parametrosJson === 'object'
+      ? current.parametrosJson : {}) as Record<string, unknown>;
+    const merged = { ...currentObj, ...payload.parametros };
 
     const created = await this.prisma.productoVarianteMotorOverride.create({
       data: {

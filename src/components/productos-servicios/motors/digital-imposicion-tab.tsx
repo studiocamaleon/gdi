@@ -182,9 +182,15 @@ function normalizeDigitalImposicionSnapshot(config: Record<string, unknown>) {
 }
 
 function mergeImposicionConfig(baseConfig: Record<string, unknown> | null | undefined, overrideConfig: Record<string, unknown> | null | undefined) {
+  const base = baseConfig ?? {};
+  const override = overrideConfig ?? {};
   const incoming = {
-    ...(baseConfig ?? {}),
-    ...(overrideConfig ?? {}),
+    ...base,
+    ...override,
+    // Preserve product-level talonario config: these belong to the product,
+    // not the variant override. The variant override only has imposicion fields.
+    puntillado: base.puntillado ?? override.puntillado ?? undefined,
+    encuadernacion: base.encuadernacion ?? override.encuadernacion ?? undefined,
   } as Record<string, unknown>;
   const legacyTipoImposicion = String(incoming.tipoImposicion ?? "");
   const legacyPerimetral = Number(incoming.margenPerimetralCorteMm ?? 0);
@@ -788,7 +794,7 @@ export function DigitalImposicionTab(props: ProductTabProps) {
                     //   original izquierdo → render superior
                     //   original derecho → render inferior
                     const puntilladoCfg = readConfigRecord(config.puntillado);
-                    const puntilladoHabilitado = puntilladoCfg.habilitado === true;
+                    const puntilladoHabilitado = puntilladoCfg.habilitado === true || puntilladoCfg.habilitado === "true";
                     const puntilladoDistMm = Number(puntilladoCfg.distanciaBordeMm ?? 0);
                     const puntilladoBordeOriginal = String(puntilladoCfg.borde ?? "superior");
                     const puntilladoBordeRender = (() => {

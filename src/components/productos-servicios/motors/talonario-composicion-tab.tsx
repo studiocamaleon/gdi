@@ -130,12 +130,19 @@ const TIPO_COPIA_LABELS: Record<TipoCopiaValor, string> = {
   CUADRUPLICADO: "Cuadruplicado",
 };
 
-const COLORES_PAPEL = ["blanco", "amarillo", "rosa", "celeste", "verde"];
+const COLORES_PAPEL = [
+  { value: "blanco", label: "Blanco" },
+  { value: "amarillo", label: "Amarillo" },
+  { value: "rosa", label: "Rosa" },
+  { value: "celeste", label: "Celeste" },
+  { value: "verde", label: "Verde" },
+];
 
 const POSICIONES_BROCHES = [
   { value: "superior", label: "Superior" },
   { value: "lateral", label: "Lateral" },
 ];
+const POSICIONES_BROCHES_LABEL = new Map(POSICIONES_BROCHES.map((p) => [p.value, p.label]));
 
 const BORDES = [
   { value: "superior", label: "Superior" },
@@ -143,6 +150,7 @@ const BORDES = [
   { value: "izquierdo", label: "Izquierdo" },
   { value: "derecho", label: "Derecho" },
 ];
+const BORDES_LABEL = new Map(BORDES.map((b) => [b.value, b.label]));
 
 const POSICIONES_NUMERACION = [
   { value: "superior_derecho", label: "Superior derecho" },
@@ -150,6 +158,22 @@ const POSICIONES_NUMERACION = [
   { value: "inferior_derecho", label: "Inferior derecho" },
   { value: "inferior_izquierdo", label: "Inferior izquierdo" },
 ];
+const POSICIONES_NUMERACION_LABEL = new Map(POSICIONES_NUMERACION.map((p) => [p.value, p.label]));
+
+const ENCUADERNACION_LABELS: Record<string, string> = {
+  abrochado: "Abrochado (grapas)",
+  emblocado: "Emblocado (cola)",
+};
+
+const PUNTILLADO_TIPO_LABELS: Record<string, string> = {
+  lateral: "Lateral",
+  matriz_comprobante: "Matriz + comprobante",
+};
+
+const MODO_INCOMPLETO_LABELS: Record<string, string> = {
+  pose_completa: "Pose completa (desperdicio)",
+  aprovechar_pliego: "Aprovechar pliego (dividir)",
+};
 
 export function TalonarioComposicionTab(props: ProductTabProps) {
   const { producto, materiasPrimas } = props;
@@ -381,33 +405,37 @@ export function TalonarioComposicionTab(props: ProductTabProps) {
                     <div className="space-y-2">
                       <Label className="text-xs text-muted-foreground">Papeles por capa</Label>
                       {def.papeles.map((papel) => (
-                        <div key={papel.capaIndex} className="space-y-1 ml-2 rounded border p-2">
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs w-20 font-medium">{papel.capaLabel}</span>
-                            <Select
-                              value={papel.colorPapel}
-                              onValueChange={(v) => v && updatePapelColor(valor, papel.capaIndex, v)}
-                            >
-                              <SelectTrigger className="w-28 h-7 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {COLORES_PAPEL.map((color) => (
-                                  <SelectItem key={color} value={color} className="text-xs">
-                                    {color.charAt(0).toUpperCase() + color.slice(1)}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
+                        <div key={papel.capaIndex} className="flex items-center gap-3 ml-2">
+                          <span className="text-xs w-20 flex-shrink-0 font-medium">{papel.capaLabel}</span>
+                          <Select
+                            value={papel.colorPapel}
+                            onValueChange={(v) => v && updatePapelColor(valor, papel.capaIndex, v)}
+                          >
+                            <SelectTrigger className="w-28 h-7 text-xs flex-shrink-0">
+                              <SelectValue>
+                                {COLORES_PAPEL.find((c) => c.value === papel.colorPapel)?.label ?? papel.colorPapel}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {COLORES_PAPEL.map((color) => (
+                                <SelectItem key={color.value} value={color.value} className="text-xs">
+                                  {color.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <Select
                             value={papel.papelVarianteId ?? "__none__"}
                             onValueChange={(v) => updatePapelVarianteId(valor, papel.capaIndex, v === "__none__" ? null : v)}
                           >
-                            <SelectTrigger className="h-7 text-xs">
-                              <SelectValue placeholder="Seleccionar materia prima..." />
+                            <SelectTrigger className="h-7 text-xs min-w-0 flex-1">
+                              <SelectValue placeholder="Elegir materia prima...">
+                                {papel.papelVarianteId
+                                  ? (papelLabelById.get(papel.papelVarianteId) ?? "Materia prima seleccionada")
+                                  : "Elegir materia prima..."}
+                              </SelectValue>
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="min-w-[400px]">
                               <SelectItem value="__none__" className="text-xs text-muted-foreground">
                                 Sin asignar
                               </SelectItem>
@@ -418,11 +446,6 @@ export function TalonarioComposicionTab(props: ProductTabProps) {
                               ))}
                             </SelectContent>
                           </Select>
-                          {papel.papelVarianteId && (
-                            <p className="text-[10px] text-muted-foreground ml-1">
-                              {papelLabelById.get(papel.papelVarianteId) ?? papel.papelVarianteId}
-                            </p>
-                          )}
                         </div>
                       ))}
                     </div>
@@ -475,7 +498,7 @@ export function TalonarioComposicionTab(props: ProductTabProps) {
             }
           >
             <SelectTrigger className="w-48 h-8 text-sm">
-              <SelectValue />
+              <SelectValue>{ENCUADERNACION_LABELS[params.encuadernacion.tipo] ?? params.encuadernacion.tipo}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="abrochado">Abrochado (grapas)</SelectItem>
@@ -505,7 +528,7 @@ export function TalonarioComposicionTab(props: ProductTabProps) {
                   onValueChange={(v) => v && updateEncuadernacion({ posicionGrapas: v })}
                 >
                   <SelectTrigger className="w-28 h-8 text-xs">
-                    <SelectValue />
+                    <SelectValue>{POSICIONES_BROCHES_LABEL.get(params.encuadernacion.posicionGrapas ?? "superior") ?? "Superior"}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {POSICIONES_BROCHES.map((p) => (
@@ -527,7 +550,7 @@ export function TalonarioComposicionTab(props: ProductTabProps) {
                 onValueChange={(v) => v && updateEncuadernacion({ bordeEncolar: v })}
               >
                 <SelectTrigger className="w-28 h-8 text-xs">
-                  <SelectValue />
+                  <SelectValue>{BORDES_LABEL.get(params.encuadernacion.bordeEncolar ?? "superior") ?? "Superior"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {BORDES.map((b) => (
@@ -568,7 +591,7 @@ export function TalonarioComposicionTab(props: ProductTabProps) {
                   onValueChange={(v) => v && updatePuntillado({ tipo: v })}
                 >
                   <SelectTrigger className="w-40 h-8 text-xs">
-                    <SelectValue />
+                    <SelectValue>{PUNTILLADO_TIPO_LABELS[params.puntillado.tipo ?? "lateral"] ?? "Lateral"}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="lateral" className="text-xs">Lateral</SelectItem>
@@ -585,7 +608,7 @@ export function TalonarioComposicionTab(props: ProductTabProps) {
                   onValueChange={(v) => v && updatePuntillado({ borde: v })}
                 >
                   <SelectTrigger className="w-28 h-8 text-xs">
-                    <SelectValue />
+                    <SelectValue>{BORDES_LABEL.get(params.puntillado.borde ?? "superior") ?? "Superior"}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {BORDES.map((b) => (
@@ -633,7 +656,7 @@ export function TalonarioComposicionTab(props: ProductTabProps) {
               }
             >
               <SelectTrigger className="w-64 h-8 text-sm">
-                <SelectValue />
+                <SelectValue>{MODO_INCOMPLETO_LABELS[params.modoTalonarioIncompleto] ?? params.modoTalonarioIncompleto}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="pose_completa">Pose completa (desperdicio)</SelectItem>
@@ -680,9 +703,13 @@ export function TalonarioComposicionTab(props: ProductTabProps) {
                   onValueChange={(v) => updateMaterialExtra("cartonBase", v === "__none__" ? null : v)}
                 >
                   <SelectTrigger className="h-7 text-xs">
-                    <SelectValue placeholder="Seleccionar materia prima..." />
+                    <SelectValue placeholder="Elegir materia prima...">
+                      {params.materialesExtra.cartonBase.materiaPrimaVarianteId
+                        ? (materialLabelById.get(params.materialesExtra.cartonBase.materiaPrimaVarianteId) ?? "Materia prima seleccionada")
+                        : "Elegir materia prima..."}
+                    </SelectValue>
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="min-w-[400px]">
                     <SelectItem value="__none__" className="text-xs text-muted-foreground">
                       Sin asignar
                     </SelectItem>
@@ -722,9 +749,13 @@ export function TalonarioComposicionTab(props: ProductTabProps) {
                   onValueChange={(v) => updateMaterialExtra("hojaBlancaSuperior", v === "__none__" ? null : v)}
                 >
                   <SelectTrigger className="h-7 text-xs">
-                    <SelectValue placeholder="Seleccionar materia prima..." />
+                    <SelectValue placeholder="Elegir materia prima...">
+                      {params.materialesExtra.hojaBlancaSuperior.materiaPrimaVarianteId
+                        ? (materialLabelById.get(params.materialesExtra.hojaBlancaSuperior.materiaPrimaVarianteId) ?? "Materia prima seleccionada")
+                        : "Elegir materia prima..."}
+                    </SelectValue>
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="min-w-[400px]">
                     <SelectItem value="__none__" className="text-xs text-muted-foreground">
                       Sin asignar
                     </SelectItem>
@@ -762,7 +793,7 @@ export function TalonarioComposicionTab(props: ProductTabProps) {
                 onValueChange={(v) => v && updateNumeracion({ posicion: v })}
               >
                 <SelectTrigger className="w-40 h-8 text-xs">
-                  <SelectValue />
+                  <SelectValue>{POSICIONES_NUMERACION_LABEL.get(params.numeracion.posicion ?? "superior_derecho") ?? "Superior derecho"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {POSICIONES_NUMERACION.map((p) => (
