@@ -11,6 +11,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   ClipboardListIcon,
+  CoinsIcon,
   FactoryIcon,
   FolderIcon,
   GridIcon,
@@ -22,10 +23,13 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { Cell, Pie, PieChart } from "recharts";
+
+import type { ClienteDetalle } from "@/lib/clientes";
+import { simularPrecioComercial } from "@/lib/productos-servicios-simulacion";
 import {
   type TipoPropuesta,
   type PropuestaItem,
-  MOCK_CLIENTES,
   MOCK_VENDEDOR,
   CANALES_VENTA,
   MOCK_ITEMS,
@@ -34,9 +38,16 @@ import {
   offsetDate,
 } from "@/lib/propuestas";
 import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sheet";
+import { CostosProductoDialog } from "@/components/comercial/costos-producto-dialog";
 import { ImposicionPreviewDialog } from "@/components/comercial/imposicion-preview-dialog";
 import { GranFormatoNestingDialog } from "@/components/comercial/gran-formato-nesting-dialog";
 import { Badge } from "@/components/ui/badge";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -312,10 +323,12 @@ function ItemRow({
 }) {
   const [imposicionOpen, setImposicionOpen] = React.useState(false);
   const [nestingOpen, setNestingOpen] = React.useState(false);
+  const [costosOpen, setCostosOpen] = React.useState(false);
   const [fechaPopoverOpen, setFechaPopoverOpen] = React.useState(false);
   const fechaBtnRef = React.useRef<HTMLButtonElement>(null);
   const isDigital = item.motorCodigo === "impresion_digital_laser";
   const isGranFormato = item.motorCodigo === "gran_formato";
+  const hasCostData = !!(item.cotizacion || item.granFormato?.costosResponse);
   const gfMedidas = item.granFormato?.medidas;
   const hasNesting = isGranFormato && !!item.granFormato?.costosResponse?.nestingPreview;
 
@@ -365,9 +378,13 @@ function ItemRow({
             </span>
           </div>
         </TableCell>
-        <TableCell>{item.unidadMedida}</TableCell>
         <TableCell className="text-right tabular-nums">
-          {item.cantidad.toLocaleString("es-AR")}
+          {item.cantidad.toLocaleString("es-AR")}{" "}
+          <span className="text-muted-foreground">
+            {item.unidadMedida === "unidad"
+              ? item.cantidad === 1 ? "un." : "un."
+              : item.unidadMedida}
+          </span>
         </TableCell>
         <TableCell className="text-right tabular-nums">
           {formatCurrency(item.subtotal)}
@@ -389,41 +406,57 @@ function ItemRow({
 
       {isExpanded && (
         <TableRow className="border-l-2 border-l-primary bg-muted/30 hover:bg-muted/30">
-          <TableCell colSpan={8} className="px-6 py-4">
-            <div className="flex items-start gap-6">
+          <TableCell colSpan={7} className="px-6 py-4">
+            <div className="flex items-start justify-between gap-8">
               {/* Especificaciones */}
-              <div className="flex flex-1 flex-col gap-3 text-sm sm:flex-row sm:gap-8">
-                {/* Standard key-value specs (excluding Medidas for GF) */}
-                <div className="grid flex-1 grid-cols-2 gap-x-8 gap-y-2 sm:grid-cols-3">
-                  {Object.entries(item.especificaciones)
-                    .filter(([key]) => !(isGranFormato && key === "Medidas"))
-                    .map(([key, val]) => (
-                      <div key={key} className="flex flex-col gap-0.5">
-                        <span className="text-xs text-muted-foreground">
-                          {key}
-                        </span>
-                        <span className="font-medium">{val}</span>
-                      </div>
-                    ))}
-                </div>
-
-                {/* Gran formato: medidas as vertical list */}
-                {isGranFormato && gfMedidas && gfMedidas.length > 0 && (
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs text-muted-foreground">
-                      Medidas
-                    </span>
-                    {gfMedidas.map((m, i) => (
-                      <span key={i} className="font-medium tabular-nums">
-                        {m.anchoMm / 10} × {m.altoMm / 10} cm{" "}
-                        <span className="text-muted-foreground">×{m.cantidad}</span>
-                      </span>
-                    ))}
-                  </div>
-                )}
+              <div className="flex min-w-0 text-sm">
+                {(() => {
+                  const specs = Object.entries(item.especificaciones)
+                    .filter(([key]) => !(isGranFormato && key === "Medidas"));
+                  const hasGfMedidas = isGranFormato && gfMedidas && gfMedidas.length > 0;
+                  return (
+                    <>
+                      {specs.map(([key, val], i) => (
+                        <div
+                          key={key}
+                          className={`flex min-w-[120px] flex-col gap-0.5 px-4 ${i > 0 ? "border-l border-border/40" : "pl-0"}`}
+                        >
+                          <span className="text-xs text-muted-foreground">{key}</span>
+                          <span className="font-medium">{val}</span>
+                        </div>
+                      ))}
+                      {hasGfMedidas && (
+                        <div className={`flex min-w-[140px] flex-col gap-0.5 px-4 ${specs.length > 0 ? "border-l border-border/40" : "pl-0"}`}>
+                          <span className="text-xs text-muted-foreground">Medidas</span>
+                          {gfMedidas!.map((m, i) => (
+                            <span key={i} className="font-medium tabular-nums">
+                              {m.anchoMm / 10} × {m.altoMm / 10} cm{" "}
+                              <span className="text-muted-foreground">×{m.cantidad}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
 
-              {/* Imposicion buttons */}
+              {/* Action buttons */}
+              <div className="flex shrink-0 items-center gap-2">
+              {hasCostData && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCostosOpen(true);
+                  }}
+                >
+                  <CoinsIcon />
+                  Costos
+                </Button>
+              )}
               {isDigital && (
                 <Button
                   variant="outline"
@@ -531,6 +564,7 @@ function ItemRow({
                     )}
                 </div>
               )}
+              </div>
             </div>
 
             {/* Adicionales incluidos */}
@@ -573,7 +607,300 @@ function ItemRow({
           costosResponse={item.granFormato!.costosResponse}
         />
       )}
+
+      {/* Costos dialog */}
+      {hasCostData && costosOpen && (
+        <CostosProductoDialog
+          open={costosOpen}
+          onOpenChange={setCostosOpen}
+          item={item}
+        />
+      )}
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Costos orden tab
+// ---------------------------------------------------------------------------
+
+const COSTOS_PIE_CONFIG: ChartConfig = { value: { label: "Valor" } };
+
+const COMPOSICION_COLORS = [
+  "hsl(220 70% 55%)", // costo
+  "hsl(35 80% 55%)",  // impuestos
+  "hsl(280 55% 55%)", // comisiones
+  "hsl(160 60% 45%)", // margen
+];
+
+const DISTRIBUCION_COLORS = [
+  "hsl(220 70% 55%)", // procesos
+  "hsl(40 90% 55%)",  // materiales
+];
+
+function CostosOrdenTab({ items }: { items: PropuestaItem[] }) {
+  const itemsConCosto = items.filter(
+    (i) => i.cotizacion || i.granFormato?.costosResponse,
+  );
+
+  const filas = React.useMemo(() => {
+    return itemsConCosto.map((item) => {
+      const isDigital = item.motorCodigo === "impresion_digital_laser";
+      const isGf = item.motorCodigo === "gran_formato";
+      const costoTotal = isDigital
+        ? item.cotizacion?.total ?? 0
+        : isGf
+          ? item.granFormato?.costosResponse?.totales.tecnico ?? 0
+          : 0;
+      const sim = item.precioConfig
+        ? simularPrecioComercial({ precio: item.precioConfig, costoTotal, cantidad: item.cantidad })
+        : null;
+      const precioFinal = sim?.precioFinal ?? item.total;
+      const impuestos = sim?.impuestosMonto ?? item.impuestoMonto;
+      const comisiones = sim?.comisionesMonto ?? 0;
+      const margen = sim?.margenRealMonto ?? (item.subtotal - impuestos - costoTotal);
+      const margenPct = sim?.margenRealPct ?? (precioFinal > 0 ? (margen / precioFinal) * 100 : 0);
+
+      // Para distribucion del costo
+      const costoProcesos = isDigital
+        ? item.cotizacion?.subtotales.procesos ?? 0
+        : isGf
+          ? item.granFormato?.costosResponse?.totales.centrosCosto ?? 0
+          : 0;
+      const costoMateriales = costoTotal - costoProcesos;
+
+      return {
+        item,
+        costoTotal,
+        precioFinal,
+        impuestos,
+        comisiones,
+        margen,
+        margenPct,
+        costoProcesos,
+        costoMateriales,
+      };
+    });
+  }, [itemsConCosto]);
+
+  const totales = React.useMemo(() => {
+    const costo = filas.reduce((s, f) => s + f.costoTotal, 0);
+    const precio = filas.reduce((s, f) => s + f.precioFinal, 0);
+    const imp = filas.reduce((s, f) => s + f.impuestos, 0);
+    const com = filas.reduce((s, f) => s + f.comisiones, 0);
+    const margen = filas.reduce((s, f) => s + f.margen, 0);
+    const margenPct = precio > 0 ? (margen / precio) * 100 : 0;
+    const procesos = filas.reduce((s, f) => s + f.costoProcesos, 0);
+    const materiales = filas.reduce((s, f) => s + f.costoMateriales, 0);
+    return { costo, precio, imp, com, margen, margenPct, procesos, materiales };
+  }, [filas]);
+
+  if (itemsConCosto.length === 0) {
+    return (
+      <Empty className="border py-16">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <CoinsIcon />
+          </EmptyMedia>
+          <EmptyTitle>Sin datos de costos</EmptyTitle>
+          <EmptyDescription>
+            Agrega productos con cotizacion para ver el desglose de costos de la
+            orden.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+
+  const composicionSlices = [
+    ...(totales.costo > 0 ? [{ name: "Costo", value: totales.costo }] : []),
+    ...(totales.imp > 0 ? [{ name: "Impuestos", value: totales.imp }] : []),
+    ...(totales.com > 0 ? [{ name: "Comisiones", value: totales.com }] : []),
+    ...(totales.margen > 0 ? [{ name: "Margen", value: totales.margen }] : []),
+  ];
+
+  const distribucionSlices = [
+    ...(totales.procesos > 0 ? [{ name: "Procesos", value: totales.procesos }] : []),
+    ...(totales.materiales > 0 ? [{ name: "Materiales", value: totales.materiales }] : []),
+  ];
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Resumen global */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        <CostoMetricCard label="Costo total" value={formatCurrency(totales.costo)} />
+        <CostoMetricCard label="Precio total" value={formatCurrency(totales.precio)} />
+        <CostoMetricCard
+          label="Margen neto"
+          value={formatCurrency(totales.margen)}
+          subtitle={`${totales.margenPct.toFixed(1)}%`}
+          accent={totales.margen >= 0 ? "positive" : "negative"}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        <CostoMetricCard
+          label="Impuestos"
+          value={formatCurrency(totales.imp)}
+        />
+        <CostoMetricCard
+          label="Comisiones"
+          value={formatCurrency(totales.com)}
+        />
+        <CostoMetricCard
+          label="Cargos totales"
+          value={formatCurrency(totales.imp + totales.com)}
+        />
+      </div>
+
+      {/* Graficos */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {composicionSlices.length > 0 && (
+          <Card className="rounded-2xl border-border/70 shadow-sm">
+            <CardContent className="pt-4">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
+                Composicion del precio
+              </p>
+              <ChartContainer config={COSTOS_PIE_CONFIG} className="mx-auto aspect-square max-h-[200px]">
+                <PieChart>
+                  <ChartTooltip content={<ChartTooltipContent formatter={(v) => formatCurrency(Number(v))} />} />
+                  <Pie data={composicionSlices} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80} paddingAngle={2}>
+                    {composicionSlices.map((_, i) => (
+                      <Cell key={i} fill={COMPOSICION_COLORS[i % COMPOSICION_COLORS.length]} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ChartContainer>
+              <div className="mt-2 flex flex-wrap justify-center gap-3">
+                {composicionSlices.map((s, i) => (
+                  <span key={s.name} className="flex items-center gap-1.5 text-xs">
+                    <span className="inline-block size-2.5 rounded-full" style={{ backgroundColor: COMPOSICION_COLORS[i % COMPOSICION_COLORS.length] }} />
+                    {s.name} {formatCurrency(s.value)}
+                  </span>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        {distribucionSlices.length > 0 && (
+          <Card className="rounded-2xl border-border/70 shadow-sm">
+            <CardContent className="pt-4">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
+                Distribucion del costo
+              </p>
+              <ChartContainer config={COSTOS_PIE_CONFIG} className="mx-auto aspect-square max-h-[200px]">
+                <PieChart>
+                  <ChartTooltip content={<ChartTooltipContent formatter={(v) => formatCurrency(Number(v))} />} />
+                  <Pie data={distribucionSlices} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80} paddingAngle={2}>
+                    {distribucionSlices.map((_, i) => (
+                      <Cell key={i} fill={DISTRIBUCION_COLORS[i % DISTRIBUCION_COLORS.length]} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ChartContainer>
+              <div className="mt-2 flex flex-wrap justify-center gap-3">
+                {distribucionSlices.map((s, i) => (
+                  <span key={s.name} className="flex items-center gap-1.5 text-xs">
+                    <span className="inline-block size-2.5 rounded-full" style={{ backgroundColor: DISTRIBUCION_COLORS[i % DISTRIBUCION_COLORS.length] }} />
+                    {s.name} {formatCurrency(s.value)}
+                  </span>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Tabla por producto */}
+      <Card className="overflow-hidden rounded-2xl border-border/70 shadow-sm">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Producto</TableHead>
+                  <TableHead className="w-24 text-right">Costo</TableHead>
+                  <TableHead className="w-24 text-right">Precio</TableHead>
+                  <TableHead className="w-24 text-right">Impuestos</TableHead>
+                  <TableHead className="w-24 text-right">Comisiones</TableHead>
+                  <TableHead className="w-24 text-right">Margen</TableHead>
+                  <TableHead className="w-20 text-right">Margen %</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filas.map((f) => (
+                  <TableRow key={f.item.id}>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{f.item.productoNombre}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {f.item.cantidad.toLocaleString("es-AR")}{" "}
+                          {f.item.unidadMedida === "unidad" ? "un." : f.item.unidadMedida}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCurrency(f.costoTotal)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCurrency(f.precioFinal)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCurrency(f.impuestos)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCurrency(f.comisiones)}</TableCell>
+                    <TableCell className={`text-right tabular-nums font-medium ${f.margen >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                      {formatCurrency(f.margen)}
+                    </TableCell>
+                    <TableCell className={`text-right tabular-nums ${f.margenPct >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                      {f.margenPct.toFixed(1)}%
+                    </TableCell>
+                  </TableRow>
+                ))}
+                <TableRow className="border-t-2 font-medium">
+                  <TableCell>Total ({filas.length} productos)</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCurrency(totales.costo)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCurrency(totales.precio)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCurrency(totales.imp)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatCurrency(totales.com)}</TableCell>
+                  <TableCell className={`text-right tabular-nums ${totales.margen >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    {formatCurrency(totales.margen)}
+                  </TableCell>
+                  <TableCell className={`text-right tabular-nums ${totales.margenPct >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    {totales.margenPct.toFixed(1)}%
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function CostoMetricCard({
+  label,
+  value,
+  subtitle,
+  accent,
+}: {
+  label: string;
+  value: string;
+  subtitle?: string;
+  accent?: "positive" | "negative";
+}) {
+  return (
+    <Card className="rounded-2xl border-border/70 shadow-sm">
+      <CardContent className="px-4 py-3">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p
+          className={`text-lg font-semibold tabular-nums ${
+            accent === "positive"
+              ? "text-emerald-600"
+              : accent === "negative"
+                ? "text-red-600"
+                : ""
+          }`}
+        >
+          {value}
+        </p>
+        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -607,7 +934,11 @@ function TabPlaceholder({
 // Main component
 // ---------------------------------------------------------------------------
 
-export function PropuestaFicha() {
+export function PropuestaFicha({
+  initialClientes,
+}: {
+  initialClientes: ClienteDetalle[];
+}) {
   const [tipo, setTipo] = React.useState<TipoPropuesta>("orden_trabajo");
   const [clienteId, setClienteId] = React.useState("");
   const [canalVenta, setCanalVenta] = React.useState("");
@@ -628,8 +959,11 @@ export function PropuestaFicha() {
   const resumen = React.useMemo(() => calcularResumen(items), [items]);
 
   const clienteItems = React.useMemo(
-    () => MOCK_CLIENTES.map((c) => ({ value: c.id, label: c.nombre })),
-    [],
+    () =>
+      [...initialClientes]
+        .sort((a, b) => a.nombre.localeCompare(b.nombre))
+        .map((c) => ({ value: c.id, label: c.nombre })),
+    [initialClientes],
   );
 
   const canalItems = React.useMemo(
@@ -777,6 +1111,10 @@ export function PropuestaFicha() {
               <FolderIcon />
               Archivos
             </TabsTrigger>
+            <TabsTrigger value="costos">
+              <CoinsIcon />
+              Costos
+            </TabsTrigger>
           </TabsList>
 
           <Button
@@ -813,7 +1151,6 @@ export function PropuestaFicha() {
                       <TableRow>
                         <TableHead className="w-10 pl-4">#</TableHead>
                         <TableHead>Producto</TableHead>
-                        <TableHead>U. Medida</TableHead>
                         <TableHead className="text-right">Cantidad</TableHead>
                         <TableHead className="text-right">Subtotal</TableHead>
                         <TableHead className="text-right">Imp.</TableHead>
@@ -973,6 +1310,9 @@ export function PropuestaFicha() {
         </TabsContent>
         <TabsContent value="archivos">
           <TabPlaceholder icon={FolderIcon} title="Archivos" />
+        </TabsContent>
+        <TabsContent value="costos">
+          <CostosOrdenTab items={items} />
         </TabsContent>
       </Tabs>
 

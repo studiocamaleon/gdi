@@ -71,6 +71,8 @@ export type PropuestaItem = {
   impuestoPorcentaje: number;
   impuestoMonto: number;
   total: number;
+  // Configuracion de precio (para recalcular simulacion comercial)
+  precioConfig?: ProductoPrecioConfig;
   // Fecha de entrega especifica (si no se define, hereda fechaEstimada de la orden)
   fechaEntrega?: string;
   // Display

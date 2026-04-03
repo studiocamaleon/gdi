@@ -901,6 +901,7 @@ export function AgregarProductoSheet({
       impuestoPorcentaje: impuestosPct,
       impuestoMonto: impuestosMonto,
       total: precioFinal,
+      precioConfig: precio ?? undefined,
       cotizacion: isGF ? null : cotizacionCompleta,
       especificaciones: isGF
         ? {
