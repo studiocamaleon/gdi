@@ -430,10 +430,12 @@ export function ImposicionPreviewDialog({
         const overrideParams = (variantOverride?.parametros ?? {}) as Record<string, unknown>;
         // Merge: base + override, pero preservar campos de composición del producto
         const mergedParams = { ...baseParams, ...overrideParams };
-        // Composición siempre del producto (no del override)
+        // Composición: override de variante gana si existe, si no usa producto
         for (const field of ['tipoCopiaDefiniciones', 'encuadernacion', 'puntillado',
           'materialesExtra', 'numeracion', 'numerosXTalonarioDefault', 'modoTalonarioIncompleto']) {
-          if (baseParams[field] !== undefined) {
+          if (overrideParams[field] !== undefined) {
+            mergedParams[field] = overrideParams[field];
+          } else if (baseParams[field] !== undefined) {
             mergedParams[field] = baseParams[field];
           }
         }

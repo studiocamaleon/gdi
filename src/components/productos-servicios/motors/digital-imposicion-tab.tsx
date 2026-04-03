@@ -194,10 +194,9 @@ function mergeImposicionConfig(baseConfig: Record<string, unknown> | null | unde
   const incoming = {
     ...base,
     ...override,
-    // Preserve product-level talonario config: these belong to the product,
-    // not the variant override. The variant override only has imposicion fields.
-    puntillado: base.puntillado ?? override.puntillado ?? undefined,
-    encuadernacion: base.encuadernacion ?? override.encuadernacion ?? undefined,
+    // Composición talonario: override de variante gana si existe, si no usa producto
+    puntillado: override.puntillado ?? base.puntillado ?? undefined,
+    encuadernacion: override.encuadernacion ?? base.encuadernacion ?? undefined,
   } as Record<string, unknown>;
   const legacyTipoImposicion = String(incoming.tipoImposicion ?? "");
   const legacyPerimetral = Number(incoming.margenPerimetralCorteMm ?? 0);

@@ -669,20 +669,35 @@ export class ProductosServiciosService {
     const { config: rawConfig, configVersionBase, configVersionOverride } =
       await this.getEffectiveMotorConfig(auth, variante.productoServicio.id, variante.id, motor);
 
-    // Para talonarios: los campos de composición (tipoCopiaDefiniciones, encuadernacion,
-    // puntillado, materialesExtra, numeracion) SIEMPRE vienen del config del producto,
-    // no del override de variante. El override solo afecta campos de imposición.
-    const productConfig = await this.prisma.productoMotorConfig.findFirst({
-      where: {
-        tenantId: auth.tenantId,
-        productoServicioId: variante.productoServicio.id,
-        motorCodigo: motor.code,
-        motorVersion: motor.version,
-        activo: true,
-      },
-      orderBy: [{ versionConfig: 'desc' }],
-    });
-    const productParams = this.asObject(productConfig?.parametrosJson);
+    // Composición: producto define defaults, variante puede sobreescribir.
+    // rawConfig ya viene de getEffectiveMotorConfig que mergea base + override.
+    // Cargamos el productConfig y el variantOverride por separado para resolver
+    // correctamente: para cada campo de composición, si el override lo tiene
+    // explícitamente, gana; si no, se usa el del producto.
+    const [productConfigRow, variantOverrideRow] = await Promise.all([
+      this.prisma.productoMotorConfig.findFirst({
+        where: {
+          tenantId: auth.tenantId,
+          productoServicioId: variante.productoServicio.id,
+          motorCodigo: motor.code,
+          motorVersion: motor.version,
+          activo: true,
+        },
+        orderBy: [{ versionConfig: 'desc' }],
+      }),
+      this.prisma.productoVarianteMotorOverride.findFirst({
+        where: {
+          tenantId: auth.tenantId,
+          productoVarianteId: variante.id,
+          motorCodigo: motor.code,
+          motorVersion: motor.version,
+          activo: true,
+        },
+        orderBy: [{ versionConfig: 'desc' }],
+      }),
+    ]);
+    const productParams = this.asObject(productConfigRow?.parametrosJson);
+    const variantParams = this.asObject(variantOverrideRow?.parametrosJson);
     const composicionFields = [
       'tipoCopiaDefiniciones', 'encuadernacion', 'puntillado',
       'materialesExtra', 'numeracion', 'numerosXTalonarioDefault',
@@ -690,7 +705,10 @@ export class ProductosServiciosService {
     ] as const;
     const effectiveConfig = { ...rawConfig } as Record<string, unknown>;
     for (const field of composicionFields) {
-      if (productParams[field] !== undefined) {
+      // Override de variante gana si tiene el campo; si no, usar el del producto
+      if (variantParams[field] !== undefined) {
+        effectiveConfig[field] = variantParams[field];
+      } else if (productParams[field] !== undefined) {
         effectiveConfig[field] = productParams[field];
       }
     }
@@ -1110,21 +1128,36 @@ export class ProductosServiciosService {
       persisted as Prisma.JsonValue,
       payload.parametros ?? {},
     );
-    // Composición siempre del config de producto (no del override de variante)
-    const productConfigPreview = await this.prisma.productoMotorConfig.findFirst({
-      where: {
-        tenantId: auth.tenantId,
-        productoServicioId: variante.productoServicio.id,
-        motorCodigo: motor.code,
-        motorVersion: motor.version,
-        activo: true,
-      },
-      orderBy: [{ versionConfig: 'desc' }],
-    });
+    // Composición: producto = defaults, override de variante gana si tiene el campo
+    const [productConfigPreview, variantOverridePreview] = await Promise.all([
+      this.prisma.productoMotorConfig.findFirst({
+        where: {
+          tenantId: auth.tenantId,
+          productoServicioId: variante.productoServicio.id,
+          motorCodigo: motor.code,
+          motorVersion: motor.version,
+          activo: true,
+        },
+        orderBy: [{ versionConfig: 'desc' }],
+      }),
+      this.prisma.productoVarianteMotorOverride.findFirst({
+        where: {
+          tenantId: auth.tenantId,
+          productoVarianteId: variante.id,
+          motorCodigo: motor.code,
+          motorVersion: motor.version,
+          activo: true,
+        },
+        orderBy: [{ versionConfig: 'desc' }],
+      }),
+    ]);
     const productParamsPreview = this.asObject(productConfigPreview?.parametrosJson);
+    const variantParamsPreview = this.asObject(variantOverridePreview?.parametrosJson);
     for (const field of ['tipoCopiaDefiniciones', 'encuadernacion', 'puntillado',
       'materialesExtra', 'numeracion', 'numerosXTalonarioDefault', 'modoTalonarioIncompleto'] as const) {
-      if (productParamsPreview[field] !== undefined) {
+      if (variantParamsPreview[field] !== undefined) {
+        (config as Record<string, unknown>)[field] = variantParamsPreview[field];
+      } else if (productParamsPreview[field] !== undefined) {
         (config as Record<string, unknown>)[field] = productParamsPreview[field];
       }
     }
