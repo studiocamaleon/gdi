@@ -22,6 +22,7 @@ import type {
   CarasProductoVariante,
   DimensionOpcionProductiva,
   ValorOpcionProductiva,
+  ChecklistCotizadorValue,
 } from "@/lib/productos-servicios";
 import {
   getProductosServicios,
@@ -412,8 +413,8 @@ function StepConfigureDigital({
   cantidad: number;
   onCantidadChange: (c: number) => void;
   checklist: ProductoChecklist | null;
-  checklistRespuestas: Record<string, { respuestaId: string }>;
-  onChecklistRespuestasChange: (v: Record<string, { respuestaId: string }>) => void;
+  checklistRespuestas: ChecklistCotizadorValue;
+  onChecklistRespuestasChange: (v: ChecklistCotizadorValue) => void;
   motorConfigOverride?: React.ReactNode;
 }) {
   const showMotorConfig = hasMotorConfig(variante);
@@ -567,7 +568,7 @@ function StepSummaryDigital({
   variante: ProductoVariante;
   config: { tipoImpresion: TipoImpresionProductoVariante; caras: CarasProductoVariante; tipoCopia?: ValorOpcionProductiva; overrides?: Record<string, unknown> };
   cantidad: number;
-  checklistRespuestas: Record<string, { respuestaId: string }>;
+  checklistRespuestas: ChecklistCotizadorValue;
   onCostoCalculated: (costo: number | null) => void;
   onCotizacionCompleta: (cot: import("@/lib/productos-servicios").CotizacionProductoVariante | null) => void;
 }) {
@@ -589,7 +590,13 @@ function StepSummaryDigital({
     }
     const clPayload = Object.entries(checklistRespuestas)
       .filter(([, v]) => Boolean(v?.respuestaId))
-      .map(([preguntaId, v]) => ({ preguntaId, respuestaId: v.respuestaId }));
+      .map(([preguntaId, v]) => ({
+        preguntaId,
+        respuestaId: v.respuestaId,
+        ...(v.terminacionParams && Object.keys(v.terminacionParams).length > 0
+          ? { terminacionParams: v.terminacionParams }
+          : {}),
+      }));
 
     // Build parametros with per-order overrides if present
     const parametros = config.overrides && Object.keys(config.overrides).length > 0
@@ -794,7 +801,7 @@ function StepSummaryGranFormato({
   medidas: GranFormatoMedida[];
   tecnologia: string;
   selectedPerfilId: string;
-  checklistRespuestas: Record<string, { respuestaId: string }>;
+  checklistRespuestas: ChecklistCotizadorValue;
   onCostoCalculated: (costo: number | null) => void;
   onCostosResponse: (res: GranFormatoCostosResponse | null) => void;
 }) {
@@ -818,7 +825,13 @@ function StepSummaryGranFormato({
 
     const clPayload = Object.entries(checklistRespuestas)
       .filter(([, v]) => Boolean(v?.respuestaId))
-      .map(([preguntaId, v]) => ({ preguntaId, respuestaId: v.respuestaId }));
+      .map(([preguntaId, v]) => ({
+        preguntaId,
+        respuestaId: v.respuestaId,
+        ...(v.terminacionParams && Object.keys(v.terminacionParams).length > 0
+          ? { terminacionParams: v.terminacionParams }
+          : {}),
+      }));
 
     previewGranFormatoCostos(producto.id, {
       tecnologia,
@@ -893,7 +906,7 @@ export function AgregarProductoSheet({
   const [currentStep, setCurrentStep] = React.useState<Step>("search");
   const [loadingProduct, setLoadingProduct] = React.useState(false);
   const [cotizacionCosto, setCotizacionCosto] = React.useState<number | null>(null);
-  const [checklistRespuestas, setChecklistRespuestas] = React.useState<Record<string, { respuestaId: string }>>({});
+  const [checklistRespuestas, setChecklistRespuestas] = React.useState<ChecklistCotizadorValue>({});
 
   // Digital state
   const [variantes, setVariantes] = React.useState<ProductoVariante[]>([]);

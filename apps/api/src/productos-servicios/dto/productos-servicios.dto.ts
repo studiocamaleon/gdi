@@ -1148,6 +1148,10 @@ export class CotizarChecklistRespuestaDto {
 
   @IsUUID()
   respuestaId: string;
+
+  @IsOptional()
+  @IsObject()
+  terminacionParams?: Record<string, unknown>;
 }
 
 export class CotizarSeleccionBaseDto {

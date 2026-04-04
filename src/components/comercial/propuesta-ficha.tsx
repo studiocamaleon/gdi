@@ -336,14 +336,14 @@ function ItemRow({
   const gfMedidas = item.granFormato?.medidas;
   const hasNesting = isGranFormato && !!item.granFormato?.costosResponse?.nestingPreview;
 
-  // Extract adicionales (non-base steps from cotización)
+  // Extract adicionales (non-base steps from cotización + terminaciones configuradas)
   const adicionales = React.useMemo(() => {
     const vcAgg = item.viniloCut?.costosResponse?.aggregated as Record<string, unknown> | undefined;
     const pasos = item.cotizacion?.bloques.procesos
       ?? item.granFormato?.costosResponse?.centrosCosto
       ?? (vcAgg?.centrosCosto as Array<Record<string, unknown>> | undefined)
       ?? [];
-    return pasos
+    const fromPasos = pasos
       .filter((p) => {
         const o = String((p as Record<string, unknown>).origen ?? "").trim().toLowerCase();
         return o !== "" && !o.startsWith("base") && !o.startsWith("producto base");
@@ -353,6 +353,19 @@ function ItemRow({
         return String(obj.nombre ?? obj.paso ?? "");
       })
       .filter((name) => name.length > 0);
+    // Terminaciones configuradas (from checklist CONFIGURAR_TERMINACION)
+    const traz = item.cotizacion?.trazabilidad as Record<string, unknown> | undefined;
+    const terminaciones = Array.isArray(traz?.terminacionesConfiguradas)
+      ? (traz.terminacionesConfiguradas as Array<Record<string, unknown>>)
+      : [];
+    const TERMINACION_LABELS: Record<string, string> = {
+      perforacion: "Perforación",
+      puntas_redondeadas: "Puntas redondeadas",
+    };
+    const fromTerminaciones = terminaciones
+      .map((t) => TERMINACION_LABELS[String(t.tipoTerminacion ?? "")] ?? "")
+      .filter((name) => name.length > 0);
+    return [...fromPasos, ...fromTerminaciones];
   }, [item.cotizacion, item.granFormato]);
   const hasAdicionales = adicionales.length > 0;
 
@@ -629,6 +642,10 @@ function ItemRow({
           varianteNombre={item.varianteNombre ?? ""}
           anchoMm={item.anchoMm}
           altoMm={item.altoMm}
+          terminacionesConfiguradas={
+            (item.cotizacion?.trazabilidad as Record<string, unknown> | undefined)
+              ?.terminacionesConfiguradas as Array<Record<string, unknown>> | undefined
+          }
         />
       )}
 

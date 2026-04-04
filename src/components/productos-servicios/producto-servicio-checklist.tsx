@@ -17,6 +17,7 @@ import type { MateriaPrima } from "@/lib/materias-primas";
 import type { ProcesoOperacionPlantilla } from "@/lib/procesos";
 import { upsertProductoChecklist } from "@/lib/productos-servicios-api";
 import type {
+  ChecklistCotizadorValue,
   ProductoChecklistPayload,
   ProductoChecklist,
   ProductoChecklistMutacionEjes,
@@ -67,6 +68,7 @@ const accionItems: Array<{ value: TipoChecklistAccionRegla; label: string }> = [
   { value: "costo_extra", label: "Costo extra" },
   { value: "material_extra", label: "Material extra" },
   { value: "mutar_producto_base", label: "Modificar producto cotizable" },
+  { value: "configurar_terminacion", label: "Configurar terminación" },
 ];
 
 const reglaCostoItems: Array<{ value: ReglaCostoChecklist; label: string }> = [
@@ -217,6 +219,10 @@ function isReglaIncomplete(regla: ProductoChecklistRegla) {
       regla.detalle.valorMmPorLado <= 0
     );
   }
+  if (regla.accion === "configurar_terminacion") {
+    const det = regla.detalle as Record<string, unknown> | null;
+    return !det?.tipoTerminacion;
+  }
   return false;
 }
 
@@ -240,6 +246,11 @@ function getReglaResumen(regla: ProductoChecklistRegla) {
       ? regla.detalle
       : buildDefaultChecklistProductMutation();
     return `${getChecklistMutationTypeLabel(detalle.tipo)} · ${formatChecklistMutationMmAsCm(detalle.valorMmPorLado)} cm por lado · ${getChecklistMutationEjesLabel(detalle.ejes)}`;
+  }
+  if (regla.accion === "configurar_terminacion") {
+    const det = regla.detalle as Record<string, unknown> | null;
+    const tipo = String(det?.tipoTerminacion ?? "");
+    return tipo === "perforacion" ? "Perforación" : tipo === "puntas_redondeadas" ? "Puntas redondeadas" : "Terminación";
   }
   return getAccionLabel(regla.accion);
 }
@@ -288,7 +299,11 @@ function buildDefaultRegla(accion: TipoChecklistAccionRegla): ProductoChecklistR
     tipoConsumo: accion === "material_extra" ? "por_unidad" : null,
     factorConsumo: null,
     mermaPct: null,
-    detalle: accion === "mutar_producto_base" ? buildDefaultChecklistProductMutation() : null,
+    detalle: accion === "mutar_producto_base"
+      ? buildDefaultChecklistProductMutation()
+      : accion === "configurar_terminacion"
+        ? { tipoTerminacion: "perforacion" }
+        : null,
   };
 }
 
@@ -1415,6 +1430,34 @@ export function ProductoServicioChecklistEditor({
       );
     }
 
+    if (regla.accion === "configurar_terminacion") {
+      const det = (regla.detalle ?? { tipoTerminacion: "perforacion" }) as Record<string, unknown>;
+      return (
+        <div className={cn("grid gap-2", compact ? "xl:grid-cols-1" : "md:grid-cols-1")}>
+          <div className="grid gap-1">
+            {!compact ? <FieldLabel>Tipo terminación</FieldLabel> : null}
+            <Select
+              value={String(det.tipoTerminacion ?? "perforacion")}
+              onValueChange={(value) =>
+                updateRegla(pregunta.id, respuesta.id, regla.id, (current) => ({
+                  ...current,
+                  detalle: { tipoTerminacion: value },
+                }))
+              }
+            >
+              <SelectTrigger className="w-full min-w-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="perforacion">Perforación</SelectItem>
+                <SelectItem value="puntas_redondeadas">Puntas redondeadas</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className={cn("grid gap-2", compact ? "xl:grid-cols-4" : "md:grid-cols-4")}>
         <div className={cn("grid gap-1", compact ? "xl:col-span-2" : "md:col-span-2")}>
@@ -2214,8 +2257,8 @@ export function ProductoServicioChecklistEditor({
 
 type ChecklistCotizadorProps = {
   checklist: ProductoChecklist;
-  value: Record<string, { respuestaId: string }>;
-  onChange: (value: Record<string, { respuestaId: string }>) => void;
+  value: ChecklistCotizadorValue;
+  onChange: (value: ChecklistCotizadorValue) => void;
 };
 
 export function ProductoServicioChecklistCotizador({
@@ -2268,7 +2311,26 @@ export function ProductoServicioChecklistCotizador({
             if (!respuestaId) {
               delete next[pregunta.id];
             } else {
-              next[pregunta.id] = { respuestaId };
+              // Auto-populate default terminacion params if the answer has a CONFIGURAR_TERMINACION rule
+              const resp = respuestasActivas.find((r) => r.id === respuestaId);
+              const termRegla = resp?.reglas.find((r) => r.accion === "configurar_terminacion");
+              let terminacionParams: Record<string, unknown> | undefined;
+              if (termRegla) {
+                const det = (termRegla.detalle ?? {}) as Record<string, unknown>;
+                const tipo = String(det.tipoTerminacion ?? "");
+                if (tipo === "perforacion") {
+                  terminacionParams = {
+                    diametroMm: 6,
+                    posicion: { referenciaBorde: "superior", distanciaBordeMm: 10, centradoEnEje: true },
+                  };
+                } else if (tipo === "puntas_redondeadas") {
+                  terminacionParams = {
+                    radioMm: 3,
+                    esquinas: { superiorIzquierda: true, superiorDerecha: true, inferiorIzquierda: true, inferiorDerecha: true },
+                  };
+                }
+              }
+              next[pregunta.id] = { respuestaId, ...(terminacionParams ? { terminacionParams } : {}) };
             }
             onChange(next);
           };
@@ -2351,6 +2413,118 @@ export function ProductoServicioChecklistCotizador({
                     </SelectContent>
                     </Select>
                 )}
+                {/* Inputs condicionales para terminaciones */}
+                {selected?.respuestaId && (() => {
+                  const selectedResp = respuestasActivas.find((r) => r.id === selected.respuestaId);
+                  const terminacionRegla = selectedResp?.reglas.find(
+                    (r) => r.accion === "configurar_terminacion",
+                  );
+                  if (!terminacionRegla) return null;
+                  const det = (terminacionRegla.detalle ?? {}) as Record<string, unknown>;
+                  const tipo = String(det.tipoTerminacion ?? "");
+                  const params = (selected.terminacionParams ?? {}) as Record<string, unknown>;
+                  const updateParams = (patch: Record<string, unknown>) => {
+                    const next = { ...value };
+                    next[pregunta.id] = { ...selected, terminacionParams: { ...params, ...patch } };
+                    onChange(next);
+                  };
+                  if (tipo === "perforacion") {
+                    const posicion = (typeof params.posicion === "object" && params.posicion ? params.posicion : {}) as Record<string, unknown>;
+                    return (
+                      <div className="mt-2 grid grid-cols-2 gap-2 rounded-md border border-dashed border-orange-300 bg-orange-50/30 p-2">
+                        <p className="col-span-2 text-[11px] font-medium text-orange-700">Parámetros de perforación</p>
+                        <Field>
+                          <FieldLabel className="text-xs">Diámetro (mm)</FieldLabel>
+                          <Input
+                            type="number"
+                            min={1}
+                            step={0.5}
+                            value={String(params.diametroMm ?? "")}
+                            onChange={(e) => updateParams({ diametroMm: e.target.value ? Number(e.target.value) : undefined })}
+                            placeholder="6"
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel className="text-xs">Borde de referencia</FieldLabel>
+                          <Select
+                            value={String(posicion.referenciaBorde ?? params.referenciaBorde ?? "superior")}
+                            onValueChange={(v) => updateParams({ posicion: { ...posicion, referenciaBorde: v } })}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="superior">Superior</SelectItem>
+                              <SelectItem value="inferior">Inferior</SelectItem>
+                              <SelectItem value="izquierdo">Izquierdo</SelectItem>
+                              <SelectItem value="derecho">Derecho</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </Field>
+                        <Field>
+                          <FieldLabel className="text-xs">Distancia desde borde (mm)</FieldLabel>
+                          <Input
+                            type="number"
+                            min={0}
+                            step={0.5}
+                            value={String(posicion.distanciaBordeMm ?? params.distanciaBordeMm ?? "")}
+                            onChange={(e) => updateParams({ posicion: { ...posicion, distanciaBordeMm: e.target.value ? Number(e.target.value) : undefined } })}
+                            placeholder="10"
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel className="text-xs">Centrado en eje</FieldLabel>
+                          <div className="flex h-9 items-center">
+                            <Switch
+                              checked={(posicion.centradoEnEje ?? params.centradoEnEje) !== false}
+                              onCheckedChange={(v) => updateParams({ posicion: { ...posicion, centradoEnEje: v } })}
+                            />
+                          </div>
+                        </Field>
+                      </div>
+                    );
+                  }
+                  if (tipo === "puntas_redondeadas") {
+                    const esquinas = (typeof params.esquinas === "object" && params.esquinas
+                      ? params.esquinas
+                      : { superiorIzquierda: true, superiorDerecha: true, inferiorIzquierda: true, inferiorDerecha: true }) as Record<string, boolean>;
+                    return (
+                      <div className="mt-2 grid grid-cols-2 gap-2 rounded-md border border-dashed border-orange-300 bg-orange-50/30 p-2">
+                        <p className="col-span-2 text-[11px] font-medium text-orange-700">Parámetros de puntas redondeadas</p>
+                        <Field>
+                          <FieldLabel className="text-xs">Radio (mm)</FieldLabel>
+                          <Input
+                            type="number"
+                            min={1}
+                            step={0.5}
+                            value={String(params.radioMm ?? "")}
+                            onChange={(e) => updateParams({ radioMm: e.target.value ? Number(e.target.value) : undefined })}
+                            placeholder="3"
+                          />
+                        </Field>
+                        <div className="grid grid-cols-2 gap-1">
+                          <FieldLabel className="col-span-2 text-xs">Esquinas</FieldLabel>
+                          {(
+                            [
+                              ["superiorIzquierda", "Sup. izq."],
+                              ["superiorDerecha", "Sup. der."],
+                              ["inferiorIzquierda", "Inf. izq."],
+                              ["inferiorDerecha", "Inf. der."],
+                            ] as const
+                          ).map(([key, label]) => (
+                            <label key={key} className="flex items-center gap-1.5 text-xs">
+                              <Switch
+                                checked={esquinas[key] !== false}
+                                onCheckedChange={(v) => updateParams({ esquinas: { ...esquinas, [key]: v } })}
+                                className="scale-75"
+                              />
+                              {label}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </Field>
               </div>
             </div>

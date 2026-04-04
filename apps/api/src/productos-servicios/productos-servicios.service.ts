@@ -218,6 +218,26 @@ type ChecklistProductoMutacionDetalle = {
   ejes: 'ancho' | 'alto' | 'ambos';
   valorMmPorLado: number;
 };
+type ChecklistTerminacionDetalle = {
+  tipoTerminacion: 'perforacion' | 'puntas_redondeadas';
+  parametros: {
+    diametroMm?: number;
+    posicion?: {
+      referenciaBorde: 'superior' | 'inferior' | 'izquierdo' | 'derecho';
+      distanciaBordeMm: number;
+      centradoEnEje: boolean;
+    };
+    radioMm?: number;
+    esquinas?: {
+      superiorIzquierda: boolean;
+      superiorDerecha: boolean;
+      inferiorIzquierda: boolean;
+      inferiorDerecha: boolean;
+    };
+  };
+};
+const TIPOS_TERMINACION_VALIDOS = new Set(['perforacion', 'puntas_redondeadas']);
+const BORDES_VALIDOS = new Set(['superior', 'inferior', 'izquierdo', 'derecho']);
 type GranFormatoChecklistMutationTrace = {
   tipo: ChecklistProductoMutacionDetalle['tipo'];
   ejes: ChecklistProductoMutacionDetalle['ejes'];
@@ -5012,6 +5032,25 @@ export class ProductosServiciosService {
         respuesta: respuesta.texto,
       });
     }
+    // Acumular terminaciones configuradas desde reglas CONFIGURAR_TERMINACION
+    const terminacionParamsByPregunta = new Map<string, Record<string, unknown>>();
+    for (const sel of checklistRespuestasInput) {
+      if (sel.terminacionParams) {
+        terminacionParamsByPregunta.set(sel.preguntaId, sel.terminacionParams);
+      }
+    }
+    const terminacionesConfiguradas: ChecklistTerminacionDetalle[] = [];
+    for (const item of checklistReglasActivas) {
+      if (item.regla.accion !== TipoProductoChecklistReglaAccion.CONFIGURAR_TERMINACION) continue;
+      const reglaDet = this.asObject(item.regla.detalleJson);
+      const tipoTerminacion = String(reglaDet.tipoTerminacion ?? '');
+      const userParams = terminacionParamsByPregunta.get(item.preguntaId) ?? {};
+      const detalle = this.parseChecklistTerminacionDetalle(
+        { tipoTerminacion, parametros: userParams },
+        false,
+      );
+      if (detalle) terminacionesConfiguradas.push(detalle);
+    }
     const tipoImpresionSeleccionado = this.toTipoImpresionFromValor(
       atributosTecnicosSeleccionados.get(DimensionOpcionProductiva.TIPO_IMPRESION) ??
         this.toValorFromTipoImpresion(variante.tipoImpresion),
@@ -6315,6 +6354,7 @@ export class ProductosServiciosService {
             addonId: item.addonId,
           })),
         config,
+        terminacionesConfiguradas: terminacionesConfiguradas.length > 0 ? terminacionesConfiguradas : undefined,
         configVersionBase,
         configVersionOverride,
       },
@@ -7807,6 +7847,12 @@ export class ProductosServiciosService {
               );
             }
           }
+          if (regla.accion === TipoChecklistAccionReglaDto.configurar_terminacion) {
+            const det = this.asObject(regla.detalle);
+            if (!det.tipoTerminacion || !TIPOS_TERMINACION_VALIDOS.has(String(det.tipoTerminacion))) {
+              throw new BadRequestException('CONFIGURAR_TERMINACION requiere tipoTerminacion válido (perforacion o puntas_redondeadas).');
+            }
+          }
           if (regla.accion === TipoChecklistAccionReglaDto.set_atributo_tecnico) {
             throw new BadRequestException(
               'SET_ATRIBUTO_TECNICO ya no se admite en Ruta de opcionales.',
@@ -7884,6 +7930,72 @@ export class ProductosServiciosService {
       ejes,
       valorMmPorLado,
     };
+  }
+
+  private parseChecklistTerminacionDetalle(
+    value: unknown,
+    throwOnError = false,
+  ): ChecklistTerminacionDetalle | null {
+    const detalle = this.asObject(value);
+    const fail = (message: string) => {
+      if (throwOnError) {
+        throw new BadRequestException(message);
+      }
+      return null;
+    };
+    const tipoTerminacion = typeof detalle.tipoTerminacion === 'string' ? detalle.tipoTerminacion.trim() : '';
+    if (!TIPOS_TERMINACION_VALIDOS.has(tipoTerminacion)) {
+      return fail('CONFIGURAR_TERMINACION requiere tipoTerminacion válido (perforacion o puntas_redondeadas).');
+    }
+    const params = this.asObject(detalle.parametros);
+    if (tipoTerminacion === 'perforacion') {
+      const diametroMm = Number(params.diametroMm);
+      if (!Number.isFinite(diametroMm) || diametroMm <= 0) {
+        return fail('Perforación requiere diámetroMm mayor a 0.');
+      }
+      const posObj = this.asObject(params.posicion);
+      const referenciaBorde = typeof posObj.referenciaBorde === 'string' ? posObj.referenciaBorde.trim() : String(params.referenciaBorde ?? '');
+      if (!BORDES_VALIDOS.has(referenciaBorde)) {
+        return fail('Perforación requiere referenciaBorde válido.');
+      }
+      const distanciaBordeMm = Number(posObj.distanciaBordeMm ?? params.distanciaBordeMm ?? 0);
+      if (!Number.isFinite(distanciaBordeMm) || distanciaBordeMm < 0) {
+        return fail('Perforación requiere distanciaBordeMm válido.');
+      }
+      const centradoEnEje = (posObj.centradoEnEje ?? params.centradoEnEje) !== false;
+      return {
+        tipoTerminacion: 'perforacion',
+        parametros: {
+          diametroMm,
+          posicion: {
+            referenciaBorde: referenciaBorde as 'superior' | 'inferior' | 'izquierdo' | 'derecho',
+            distanciaBordeMm,
+            centradoEnEje,
+          },
+        },
+      };
+    }
+    if (tipoTerminacion === 'puntas_redondeadas') {
+      const radioMm = Number(params.radioMm);
+      if (!Number.isFinite(radioMm) || radioMm <= 0) {
+        return fail('Puntas redondeadas requiere radioMm mayor a 0.');
+      }
+      const esqObj = this.asObject(params.esquinas);
+      const esquinas = {
+        superiorIzquierda: esqObj.superiorIzquierda !== false,
+        superiorDerecha: esqObj.superiorDerecha !== false,
+        inferiorIzquierda: esqObj.inferiorIzquierda !== false,
+        inferiorDerecha: esqObj.inferiorDerecha !== false,
+      };
+      return {
+        tipoTerminacion: 'puntas_redondeadas',
+        parametros: {
+          radioMm,
+          esquinas,
+        },
+      };
+    }
+    return null;
   }
 
   private applyGranFormatoChecklistProductMutations(input: {

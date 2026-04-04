@@ -23,6 +23,10 @@ export type TipoChecklistAccionRegla =
   | 'material_extra'
   | 'mutar_producto_base'
   | 'configurar_terminacion';
+export type ChecklistCotizadorValue = Record<string, {
+  respuestaId: string;
+  terminacionParams?: Record<string, unknown>;
+}>;
 export type ProductoChecklistMutacionTipo = 'agregar_demasia_por_lado';
 export type ProductoChecklistMutacionEjes = 'ancho' | 'alto' | 'ambos';
 export type ProductoChecklistMutacionProductoBase =
@@ -813,12 +817,7 @@ export type ProductoChecklistPayload = {
       activo?: boolean;
       reglas?: Array<{
         id?: string;
-        accion:
-          | 'activar_paso'
-          | 'seleccionar_variante_paso'
-          | 'costo_extra'
-          | 'material_extra'
-          | 'mutar_producto_base';
+        accion: TipoChecklistAccionRegla;
         orden?: number;
         activo?: boolean;
         pasoPlantillaId?: string;

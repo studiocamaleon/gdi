@@ -54,6 +54,10 @@ type ImposicionPreview = {
     tipo: string;
     cantidadGrapas: number;
   };
+  terminaciones?: Array<{
+    tipoTerminacion: string;
+    parametros: Record<string, unknown>;
+  }>;
 };
 
 // ---------------------------------------------------------------------------
@@ -71,6 +75,35 @@ function num(val: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function buildRoundedRectPath(
+  x: number, y: number, w: number, h: number, r: number,
+  corners: { tl: boolean; tr: boolean; bl: boolean; br: boolean },
+): string {
+  const tl = corners.tl ? r : 0;
+  const tr = corners.tr ? r : 0;
+  const br = corners.br ? r : 0;
+  const bl = corners.bl ? r : 0;
+  return [
+    `M ${x + tl} ${y}`,
+    `L ${x + w - tr} ${y}`,
+    tr ? `A ${tr} ${tr} 0 0 1 ${x + w} ${y + tr}` : `L ${x + w} ${y}`,
+    `L ${x + w} ${y + h - br}`,
+    br ? `A ${br} ${br} 0 0 1 ${x + w - br} ${y + h}` : `L ${x + w} ${y + h}`,
+    `L ${x + bl} ${y + h}`,
+    bl ? `A ${bl} ${bl} 0 0 1 ${x} ${y + h - bl}` : `L ${x} ${y + h}`,
+    `L ${x} ${y + tl}`,
+    tl ? `A ${tl} ${tl} 0 0 1 ${x + tl} ${y}` : `L ${x} ${y}`,
+    "Z",
+  ].join(" ");
+}
+
+const ROTATED_BORDE_MAP: Record<string, string> = {
+  superior: "derecho",
+  inferior: "izquierdo",
+  izquierdo: "superior",
+  derecho: "inferior",
+};
+
 // ---------------------------------------------------------------------------
 // Build preview (mirrors digital-imposicion-tab.tsx logic)
 // ---------------------------------------------------------------------------
@@ -80,6 +113,7 @@ function buildPreview(
   piezaAltoMm: number,
   motorParams: Record<string, unknown>,
   apiResponse: Record<string, unknown>,
+  terminacionesConfiguradas?: Array<Record<string, unknown>>,
 ): ImposicionPreview | null {
   const tipoCorte = String(motorParams.tipoCorte ?? "sin_demasia");
   const demasiaMm =
@@ -192,6 +226,12 @@ function buildPreview(
           cantidadGrapas: num(encCfg.cantidadGrapas, 2),
         }
       : undefined,
+    terminaciones: terminacionesConfiguradas
+      ?.filter((t) => t && typeof t === "object" && typeof t.tipoTerminacion === "string")
+      .map((t) => ({
+        tipoTerminacion: String(t.tipoTerminacion),
+        parametros: readObj(t.parametros),
+      })),
   };
 }
 
@@ -213,8 +253,8 @@ function ImposicionSvg({ preview }: { preview: ImposicionPreview }) {
     demasiaMm,
   } = preview;
 
-  const canvasW = 520;
-  const canvasH = 380;
+  const canvasW = 680;
+  const canvasH = 480;
   const pad = 24;
   const scale = Math.min(
     (canvasW - pad * 2) / hojaW,
@@ -276,6 +316,50 @@ function ImposicionSvg({ preview }: { preview: ImposicionPreview }) {
         }
       }
 
+      // Terminaciones
+      const terminaciones = preview.terminaciones ?? [];
+      let termRoundedPath: string | null = null;
+      const termNodes: React.ReactNode[] = [];
+      for (let ti = 0; ti < terminaciones.length; ti++) {
+        const term = terminaciones[ti];
+        if (term.tipoTerminacion === "perforacion") {
+          const diam = Math.max(0, num(term.parametros.diametroMm)) * scale;
+          if (diam <= 0) continue;
+          const posObj = readObj(term.parametros.posicion);
+          const bordeOrig = String(posObj.referenciaBorde ?? term.parametros.referenciaBorde ?? "superior");
+          const borde = preview.orientacion === "rotada"
+            ? (ROTATED_BORDE_MAP[bordeOrig] ?? bordeOrig)
+            : bordeOrig;
+          const distPx = Math.max(0, num(posObj.distanciaBordeMm ?? term.parametros.distanciaBordeMm)) * scale;
+          const centrado = (posObj.centradoEnEje ?? term.parametros.centradoEnEje) !== false;
+          let cx: number;
+          let cy: number;
+          if (borde === "superior" || borde === "inferior") {
+            cy = borde === "superior" ? trimY + distPx : trimY + ph - distPx;
+            cx = centrado ? trimX + pw / 2 : trimX + distPx;
+          } else {
+            cx = borde === "izquierdo" ? trimX + distPx : trimX + pw - distPx;
+            cy = centrado ? trimY + ph / 2 : trimY + distPx;
+          }
+          termNodes.push(
+            <circle key={`perf-${ti}`} cx={cx} cy={cy} r={diam / 2}
+              fill="white" stroke="#dc2626" strokeWidth="0.6" strokeDasharray="2 1" />,
+          );
+        }
+        if (term.tipoTerminacion === "puntas_redondeadas") {
+          const radioMm = Math.max(0, num(term.parametros.radioMm));
+          if (radioMm <= 0) continue;
+          const rr = Math.min(radioMm * scale, pw / 3, ph / 3);
+          const esqObj = readObj(term.parametros.esquinas);
+          termRoundedPath = buildRoundedRectPath(trimX, trimY, pw, ph, rr, {
+            tl: esqObj.superiorIzquierda !== false,
+            tr: esqObj.superiorDerecha !== false,
+            bl: esqObj.inferiorIzquierda !== false,
+            br: esqObj.inferiorDerecha !== false,
+          });
+        }
+      }
+
       // Broches
       const brochesNodes: React.ReactNode[] = [];
       if (enc?.tipo === "abrochado" && cantGrapas > 0 && puntLinePx) {
@@ -309,18 +393,29 @@ function ImposicionSvg({ preview }: { preview: ImposicionPreview }) {
               strokeWidth="0.6"
             />
           )}
-          <rect
-            x={trimX}
-            y={trimY}
-            width={pw}
-            height={ph}
-            fill="#22c55e"
-            fillOpacity="0.65"
-            stroke="#16a34a"
-            strokeWidth="0.7"
-          />
+          {termRoundedPath ? (
+            <path
+              d={termRoundedPath}
+              fill="#22c55e"
+              fillOpacity="0.65"
+              stroke="#16a34a"
+              strokeWidth="0.7"
+            />
+          ) : (
+            <rect
+              x={trimX}
+              y={trimY}
+              width={pw}
+              height={ph}
+              fill="#22c55e"
+              fillOpacity="0.65"
+              stroke="#16a34a"
+              strokeWidth="0.7"
+            />
+          )}
           {puntLine}
           {brochesNodes}
+          {termNodes}
         </g>,
       );
     }
@@ -400,6 +495,7 @@ export function ImposicionPreviewDialog({
   varianteNombre,
   anchoMm,
   altoMm,
+  terminacionesConfiguradas,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -408,6 +504,7 @@ export function ImposicionPreviewDialog({
   varianteNombre: string;
   anchoMm: number;
   altoMm: number;
+  terminacionesConfiguradas?: Array<Record<string, unknown>>;
 }) {
   const [loading, setLoading] = React.useState(true);
   const [preview, setPreview] = React.useState<ImposicionPreview | null>(null);
@@ -446,7 +543,7 @@ export function ImposicionPreviewDialog({
         );
 
         if (!cancelled) {
-          const result = buildPreview(anchoMm, altoMm, mergedParams, apiRes);
+          const result = buildPreview(anchoMm, altoMm, mergedParams, apiRes, terminacionesConfiguradas);
           setPreview(result);
         }
       } catch (err) {
@@ -465,11 +562,11 @@ export function ImposicionPreviewDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, productoId, varianteId, anchoMm, altoMm]);
+  }, [open, productoId, varianteId, anchoMm, altoMm, terminacionesConfiguradas]);
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="max-w-lg">
+      <AlertDialogContent className="max-w-2xl">
         <AlertDialogHeader>
           <AlertDialogTitle>Imposicion</AlertDialogTitle>
           <AlertDialogDescription>

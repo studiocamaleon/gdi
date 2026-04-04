@@ -156,6 +156,125 @@ function readConfigRecord(value: unknown) {
   return value as Record<string, unknown>;
 }
 
+type TerminacionConfig = {
+  tipoTerminacion: string;
+  parametros: Record<string, unknown>;
+};
+
+function readTerminacionesArray(value: unknown): TerminacionConfig[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item) => item && typeof item === "object" && typeof (item as Record<string, unknown>).tipoTerminacion === "string")
+    .map((item) => {
+      const obj = item as Record<string, unknown>;
+      return {
+        tipoTerminacion: String(obj.tipoTerminacion),
+        parametros: (obj.parametros && typeof obj.parametros === "object" && !Array.isArray(obj.parametros)
+          ? obj.parametros
+          : {}) as Record<string, unknown>,
+      };
+    });
+}
+
+function buildRoundedRectPath(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+  corners: { tl: boolean; tr: boolean; bl: boolean; br: boolean },
+): string {
+  const tl = corners.tl ? r : 0;
+  const tr = corners.tr ? r : 0;
+  const br = corners.br ? r : 0;
+  const bl = corners.bl ? r : 0;
+  return [
+    `M ${x + tl} ${y}`,
+    `L ${x + w - tr} ${y}`,
+    tr ? `A ${tr} ${tr} 0 0 1 ${x + w} ${y + tr}` : `L ${x + w} ${y}`,
+    `L ${x + w} ${y + h - br}`,
+    br ? `A ${br} ${br} 0 0 1 ${x + w - br} ${y + h}` : `L ${x + w} ${y + h}`,
+    `L ${x + bl} ${y + h}`,
+    bl ? `A ${bl} ${bl} 0 0 1 ${x} ${y + h - bl}` : `L ${x} ${y + h}`,
+    `L ${x} ${y + tl}`,
+    tl ? `A ${tl} ${tl} 0 0 1 ${x + tl} ${y}` : `L ${x} ${y}`,
+    "Z",
+  ].join(" ");
+}
+
+const ROTATED_TERMINACION_BORDE_MAP: Record<string, string> = {
+  superior: "derecho",
+  inferior: "izquierdo",
+  izquierdo: "superior",
+  derecho: "inferior",
+};
+
+function renderTerminacionNodes(
+  terminaciones: TerminacionConfig[],
+  trimX: number,
+  trimY: number,
+  pieceW: number,
+  pieceH: number,
+  scale: number,
+  orientacion: "normal" | "rotada",
+): { nodes: React.ReactNode[]; roundedPath: string | null } {
+  const nodes: React.ReactNode[] = [];
+  let roundedPath: string | null = null;
+
+  for (let ti = 0; ti < terminaciones.length; ti++) {
+    const term = terminaciones[ti];
+    if (term.tipoTerminacion === "perforacion") {
+      const diam = Math.max(0, Number(term.parametros.diametroMm ?? 0)) * scale;
+      if (diam <= 0) continue;
+      const posObj = (term.parametros.posicion && typeof term.parametros.posicion === "object"
+        ? term.parametros.posicion
+        : term.parametros) as Record<string, unknown>;
+      const bordeOriginal = String(posObj.referenciaBorde ?? "superior");
+      const borde = orientacion === "rotada"
+        ? (ROTATED_TERMINACION_BORDE_MAP[bordeOriginal] ?? bordeOriginal)
+        : bordeOriginal;
+      const distPx = Math.max(0, Number(posObj.distanciaBordeMm ?? 0)) * scale;
+      const centrado = posObj.centradoEnEje !== false;
+      let cx: number;
+      let cy: number;
+      if (borde === "superior" || borde === "inferior") {
+        cy = borde === "superior" ? trimY + distPx : trimY + pieceH - distPx;
+        cx = centrado ? trimX + pieceW / 2 : trimX + distPx;
+      } else {
+        cx = borde === "izquierdo" ? trimX + distPx : trimX + pieceW - distPx;
+        cy = centrado ? trimY + pieceH / 2 : trimY + distPx;
+      }
+      nodes.push(
+        <circle
+          key={`perf-${ti}`}
+          cx={cx}
+          cy={cy}
+          r={diam / 2}
+          fill="white"
+          stroke="#dc2626"
+          strokeWidth="0.8"
+          strokeDasharray="2 1"
+        />,
+      );
+    }
+    if (term.tipoTerminacion === "puntas_redondeadas") {
+      const radioMm = Math.max(0, Number(term.parametros.radioMm ?? 0));
+      if (radioMm <= 0) continue;
+      const r = Math.min(radioMm * scale, pieceW / 3, pieceH / 3);
+      const esqObj = (term.parametros.esquinas && typeof term.parametros.esquinas === "object"
+        ? term.parametros.esquinas
+        : {}) as Record<string, boolean>;
+      roundedPath = buildRoundedRectPath(trimX, trimY, pieceW, pieceH, r, {
+        tl: esqObj.superiorIzquierda !== false,
+        tr: esqObj.superiorDerecha !== false,
+        bl: esqObj.inferiorIzquierda !== false,
+        br: esqObj.inferiorDerecha !== false,
+      });
+    }
+  }
+  return { nodes, roundedPath };
+}
+
 function buildDefaultConfig() {
   return {
     tipoCorte: "sin_demasia",
@@ -847,6 +966,9 @@ export function DigitalImposicionTab(props: ProductTabProps) {
                     const esAbrochado = encCfg.tipo === "abrochado";
                     const cantGrapas = Math.max(0, Number(encCfg.cantidadGrapas ?? 0));
 
+                    // Terminaciones configuradas (desde config o trazabilidad)
+                    const terminacionesCfg = readTerminacionesArray(config.terminaciones);
+
                     const cells = [];
                     const cutXMap = new Map<string, number>();
                     const cutYMap = new Map<string, number>();
@@ -921,6 +1043,11 @@ export function DigitalImposicionTab(props: ProductTabProps) {
                           }
                         }
 
+                        // Terminaciones
+                        const termResult = terminacionesCfg.length > 0
+                          ? renderTerminacionNodes(terminacionesCfg, trimX, trimY, pieceW, pieceH, scale, previewImposicion.orientacion)
+                          : null;
+
                         cells.push(
                           <g key={`cell-${r}-${c}`}>
                             <rect
@@ -932,9 +1059,14 @@ export function DigitalImposicionTab(props: ProductTabProps) {
                               stroke={demasiaCorteMm > 0 ? "#9ca3af" : "#16a34a"}
                               strokeWidth="0.8"
                             />
-                            <rect x={trimX} y={trimY} width={pieceW} height={pieceH} fill="#22c55e" />
+                            {termResult?.roundedPath ? (
+                              <path d={termResult.roundedPath} fill="#22c55e" />
+                            ) : (
+                              <rect x={trimX} y={trimY} width={pieceW} height={pieceH} fill="#22c55e" />
+                            )}
                             {puntilladoLine}
                             {brochesNodes}
+                            {termResult?.nodes}
                           </g>,
                         );
                       }

@@ -8,6 +8,7 @@ import type {
   GranFormatoConfig,
   GranFormatoChecklistConfig,
   ProductoChecklist,
+  ChecklistCotizadorValue,
 } from "@/lib/productos-servicios";
 import { tecnologiaMaquinaItems, type MaquinaPerfilOperativo } from "@/lib/maquinaria";
 import { Button } from "@/components/ui/button";
@@ -46,10 +47,8 @@ export type GranFormatoProposalConfigProps = {
   onTecnologiaChange: (tec: string) => void;
   selectedPerfilId: string;
   onSelectedPerfilIdChange: (id: string) => void;
-  checklistRespuestas: Record<string, { respuestaId: string }>;
-  onChecklistRespuestasChange: (
-    v: Record<string, { respuestaId: string }>,
-  ) => void;
+  checklistRespuestas: ChecklistCotizadorValue;
+  onChecklistRespuestasChange: (v: ChecklistCotizadorValue) => void;
 };
 
 // ---------------------------------------------------------------------------
