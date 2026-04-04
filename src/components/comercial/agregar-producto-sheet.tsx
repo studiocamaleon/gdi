@@ -565,7 +565,7 @@ function StepSummaryDigital({
 }: {
   producto: ProductoServicio;
   variante: ProductoVariante;
-  config: { tipoImpresion: TipoImpresionProductoVariante; caras: CarasProductoVariante; tipoCopia?: ValorOpcionProductiva };
+  config: { tipoImpresion: TipoImpresionProductoVariante; caras: CarasProductoVariante; tipoCopia?: ValorOpcionProductiva; overrides?: Record<string, unknown> };
   cantidad: number;
   checklistRespuestas: Record<string, { respuestaId: string }>;
   onCostoCalculated: (costo: number | null) => void;
@@ -591,17 +591,23 @@ function StepSummaryDigital({
       .filter(([, v]) => Boolean(v?.respuestaId))
       .map(([preguntaId, v]) => ({ preguntaId, respuestaId: v.respuestaId }));
 
+    // Build parametros with per-order overrides if present
+    const parametros = config.overrides && Object.keys(config.overrides).length > 0
+      ? config.overrides
+      : undefined;
+
     cotizarProductoVariante(variante.id, {
       cantidad,
       seleccionesBase,
       ...(clPayload.length > 0 ? { checklistRespuestas: clPayload } : {}),
+      ...(parametros ? { parametros } : {}),
     })
       .then((cot) => { if (!cancelled) { setCostoTotal(cot.total); onCostoCalculated(cot.total); onCotizacionCompleta(cot); } })
       .catch((err) => { if (!cancelled) { setError(err instanceof Error ? err.message : "Error al cotizar."); onCostoCalculated(null); onCotizacionCompleta(null); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [variante.id, cantidad, config.tipoImpresion, config.caras, config.tipoCopia, JSON.stringify(checklistRespuestas)]);
+  }, [variante.id, cantidad, config.tipoImpresion, config.caras, config.tipoCopia, JSON.stringify(config.overrides), JSON.stringify(checklistRespuestas)]);
 
   if (loading) return <div className="flex flex-col items-center justify-center gap-2 py-12"><Loader2Icon className="size-5 animate-spin text-muted-foreground" /><p className="text-sm text-muted-foreground">Calculando costos...</p></div>;
 
@@ -1138,10 +1144,13 @@ export function AgregarProductoSheet({
           ? buildVinylCutEspecificaciones(vcColores)
           : isTalonario && variante
             ? {
-                Medidas: `${Number(variante.anchoMm) / 10} x ${Number(variante.altoMm) / 10} cm`,
+                Medidas: talonarioConfig.overrides?.anchoMm && talonarioConfig.overrides?.altoMm
+                  ? `${talonarioConfig.overrides.anchoMm / 10} x ${talonarioConfig.overrides.altoMm / 10} cm *`
+                  : `${Number(variante.anchoMm) / 10} x ${Number(variante.altoMm) / 10} cm`,
                 Impresion: LABEL_TIPO_IMPRESION[talonarioConfig.tipoImpresion],
                 Caras: LABEL_CARAS[talonarioConfig.caras],
                 "Tipo de copia": LABEL_TIPO_COPIA[talonarioConfig.tipoCopia] ?? talonarioConfig.tipoCopia,
+                ...(talonarioConfig.overrides ? { "Ajustes": "Personalizado" } : {}),
               }
           : variante
             ? buildDigitalEspecificaciones(variante, digitalConfig.tipoImpresion, digitalConfig.caras)
@@ -1154,8 +1163,13 @@ export function AgregarProductoSheet({
             tipoImpresion: isTalonario ? talonarioConfig.tipoImpresion : digitalConfig.tipoImpresion,
             caras: isTalonario ? talonarioConfig.caras : digitalConfig.caras,
             ...(isTalonario ? { tipoCopia: talonarioConfig.tipoCopia } : {}),
-            anchoMm: variante ? Number(variante.anchoMm) : undefined,
-            altoMm: variante ? Number(variante.altoMm) : undefined,
+            ...(isTalonario && talonarioConfig.overrides ? { talonarioOverrides: talonarioConfig.overrides as Record<string, unknown> } : {}),
+            anchoMm: isTalonario && talonarioConfig.overrides?.anchoMm
+              ? talonarioConfig.overrides.anchoMm
+              : variante ? Number(variante.anchoMm) : undefined,
+            altoMm: isTalonario && talonarioConfig.overrides?.altoMm
+              ? talonarioConfig.overrides.altoMm
+              : variante ? Number(variante.altoMm) : undefined,
           }
         : {}),
       // Gran formato-specific

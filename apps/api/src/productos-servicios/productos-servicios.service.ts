@@ -713,21 +713,37 @@ export class ProductosServiciosService {
       }
     }
 
+    // Aplicar overrides puntuales del pedido (payload.parametros)
+    const payloadParams = this.asObject((payload as any).parametros);
+    if (payloadParams.encuadernacion && typeof payloadParams.encuadernacion === 'object') {
+      effectiveConfig.encuadernacion = payloadParams.encuadernacion;
+    }
+    if (payloadParams.puntillado && typeof payloadParams.puntillado === 'object') {
+      effectiveConfig.puntillado = payloadParams.puntillado;
+    }
+    // Override de medidas para imposición
+    const varianteAnchoMmOverride = Number(payloadParams.anchoMm);
+    const varianteAltoMmOverride = Number(payloadParams.altoMm);
+    const useAnchoOverride = Number.isFinite(varianteAnchoMmOverride) && varianteAnchoMmOverride > 0;
+    const useAltoOverride = Number.isFinite(varianteAltoMmOverride) && varianteAltoMmOverride > 0;
+
     const talonarioConfig = TalonarioCalc.parseTalonarioMotorConfig(effectiveConfig);
     const tipoCopiaSeleccionado =
-      (payload as any).parametros?.tipoCopia ??
+      payloadParams.tipoCopia ??
       (payload.seleccionesBase ?? []).find(
         (s) => s.dimension === DimensionOpcionProductivaDto.tipo_copia,
       )?.valor ??
       null;
-    const tipoCopia = TalonarioCalc.resolveTipoCopia(talonarioConfig, tipoCopiaSeleccionado);
+    const tipoCopia = TalonarioCalc.resolveTipoCopia(talonarioConfig, String(tipoCopiaSeleccionado ?? ''));
     if (!tipoCopia) {
       throw new BadRequestException('No se encontró una definición de tipo de copia válida.');
     }
 
     const numerosXTalonario = tipoCopia.numerosXTalonarioSugerido || talonarioConfig.numerosXTalonarioDefault || 50;
 
-    // Imposición
+    // Imposición (usar medidas override si existen)
+    const imposicionAnchoMm = useAnchoOverride ? varianteAnchoMmOverride : Number(variante.anchoMm);
+    const imposicionAltoMm = useAltoOverride ? varianteAltoMmOverride : Number(variante.altoMm);
     const procesoDefinicionId = this.resolveRutaEfectivaId(variante);
     if (!procesoDefinicionId) {
       throw new BadRequestException('No hay ruta de producción efectiva para la variante.');
@@ -743,8 +759,8 @@ export class ProductosServiciosService {
     const pliegoImpresion = this.resolvePliegoImpresion(rawConfig, sustratoDims);
     const machineMargins = this.resolveMachineMarginsMm(proceso.operaciones);
     const imposicionBase = this.calculateImposicion({
-      varianteAnchoMm: Number(variante.anchoMm),
-      varianteAltoMm: Number(variante.altoMm),
+      varianteAnchoMm: imposicionAnchoMm,
+      varianteAltoMm: imposicionAltoMm,
       sheetAnchoMm: pliegoImpresion.anchoMm,
       sheetAltoMm: pliegoImpresion.altoMm,
       machineMargins,

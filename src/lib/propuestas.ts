@@ -64,6 +64,8 @@ export type PropuestaItem = {
   tipoCopia?: ValorOpcionProductiva;
   anchoMm?: number;
   altoMm?: number;
+  // Per-order overrides (talonario: ajustes puntuales para este pedido)
+  talonarioOverrides?: Record<string, unknown>;
   // Cantidad y precios (compartido)
   unidadMedida: UnidadComercialProducto;
   cantidad: number;
