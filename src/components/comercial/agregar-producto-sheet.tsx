@@ -454,7 +454,7 @@ function StepConfigureDigital({
                 key={q}
                 type="button"
                 onClick={() => onCantidadChange(q)}
-                className={`flex items-center justify-center rounded-lg border px-4 py-3 text-sm font-medium transition-colors ${cantidad === q ? "border-primary bg-primary/10 text-primary" : "hover:border-primary/50 hover:bg-muted/50"}`}
+                className={`flex items-center justify-center rounded-lg border px-4 py-3 text-sm font-medium transition-colors cursor-pointer ${cantidad === q ? "border-primary bg-primary/10 text-primary" : "hover:border-primary/50 hover:bg-muted/50"}`}
               >
                 {q.toLocaleString("es-AR")} {producto.unidadComercial === "unidad" ? "u." : producto.unidadComercial}
               </button>
@@ -1230,7 +1230,7 @@ export function AgregarProductoSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex flex-col sm:max-w-lg">
+      <SheetContent side="right" className="flex flex-col sm:!max-w-xl">
         <SheetHeader>
           <SheetTitle>Agregar producto</SheetTitle>
           <SheetDescription>

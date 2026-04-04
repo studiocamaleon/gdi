@@ -2307,7 +2307,7 @@ export function ProductoServicioChecklistCotizador({
                   </p>
                 ) : null}
                 {useMiniCards ? (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex gap-1 rounded-lg border p-0.5">
                     {respuestasActivas.map((respuesta) => {
                       const isSelected = selected?.respuestaId === respuesta.id;
                       return (
@@ -2316,13 +2316,13 @@ export function ProductoServicioChecklistCotizador({
                           type="button"
                           onClick={() => handleSelectRespuesta(isSelected ? null : respuesta.id)}
                           className={cn(
-                            "inline-flex min-h-9 items-center rounded-full border px-3 py-1.5 text-sm transition-colors",
+                            "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer",
                             isSelected
-                              ? "border-primary bg-primary/10 text-foreground"
-                              : "border-border bg-background hover:border-primary/40 hover:bg-muted/50",
+                              ? "bg-primary text-primary-foreground shadow-sm"
+                              : "text-muted-foreground hover:text-foreground hover:bg-muted",
                           )}
                         >
-                          <span className="font-medium">{respuesta.texto}</span>
+                          {respuesta.texto}
                         </button>
                       );
                     })}

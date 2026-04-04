@@ -448,7 +448,7 @@ export function DigitalSimularCostoTab(props: ProductTabProps) {
                                       }))
                                     }
                                     className={cn(
-                                      "inline-flex min-h-9 items-center rounded-full border px-3 py-1.5 text-sm transition-colors",
+                                      "inline-flex min-h-9 items-center rounded-full border px-3 py-1.5 text-sm transition-colors cursor-pointer",
                                       isSelected
                                         ? "border-primary bg-primary/10 text-foreground"
                                         : "border-border bg-background hover:border-primary/40 hover:bg-muted/50",
