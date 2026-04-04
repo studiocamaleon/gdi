@@ -208,6 +208,7 @@ export enum TipoChecklistAccionReglaDto {
   material_extra = 'material_extra',
   mutar_producto_base = 'mutar_producto_base',
   set_atributo_tecnico = 'set_atributo_tecnico',
+  configurar_terminacion = 'configurar_terminacion',
 }
 
 export enum ReglaCostoChecklistDto {

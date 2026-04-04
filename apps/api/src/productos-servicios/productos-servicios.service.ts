@@ -15817,6 +15817,9 @@ export class ProductosServiciosService {
     if (value === TipoChecklistAccionReglaDto.set_atributo_tecnico) {
       return TipoProductoChecklistReglaAccion.SET_ATRIBUTO_TECNICO;
     }
+    if (value === TipoChecklistAccionReglaDto.configurar_terminacion) {
+      return TipoProductoChecklistReglaAccion.CONFIGURAR_TERMINACION;
+    }
     return TipoProductoChecklistReglaAccion.ACTIVAR_PASO;
   }
 
@@ -15835,6 +15838,9 @@ export class ProductosServiciosService {
     }
     if (value === TipoProductoChecklistReglaAccion.SET_ATRIBUTO_TECNICO) {
       return TipoChecklistAccionReglaDto.set_atributo_tecnico;
+    }
+    if (value === TipoProductoChecklistReglaAccion.CONFIGURAR_TERMINACION) {
+      return TipoChecklistAccionReglaDto.configurar_terminacion;
     }
     return TipoChecklistAccionReglaDto.activar_paso;
   }

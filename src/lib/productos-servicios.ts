@@ -21,7 +21,8 @@ export type TipoChecklistAccionRegla =
   | 'seleccionar_variante_paso'
   | 'costo_extra'
   | 'material_extra'
-  | 'mutar_producto_base';
+  | 'mutar_producto_base'
+  | 'configurar_terminacion';
 export type ProductoChecklistMutacionTipo = 'agregar_demasia_por_lado';
 export type ProductoChecklistMutacionEjes = 'ancho' | 'alto' | 'ambos';
 export type ProductoChecklistMutacionProductoBase =
