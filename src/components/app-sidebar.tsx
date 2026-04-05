@@ -16,7 +16,7 @@ import {
   GemIcon,
   FolderTreeIcon,
   IdCardIcon,
-  LandmarkIcon,
+  ClipboardListIcon,
   LayoutDashboardIcon,
   PrinterIcon,
   UsersIcon,
@@ -113,7 +113,7 @@ const produccion = [
   {
     title: "Estaciones",
     href: "/produccion/estaciones",
-    icon: LandmarkIcon,
+    icon: ClipboardListIcon,
   },
 ];
 
