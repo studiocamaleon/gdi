@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { ActivityIcon, ChevronDownIcon, ChevronRightIcon, InfoIcon, Layers3Icon, SigmaIcon } from "lucide-react";
+import { ActivityIcon, ChevronDownIcon, ChevronRightIcon, InfoIcon, Layers3Icon, PlusIcon, SigmaIcon, Trash2Icon } from "lucide-react";
 
 import type { ProductTabProps } from "@/components/productos-servicios/product-detail-types";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
@@ -68,13 +68,24 @@ type ProcesoBloque = {
   costo: number;
 };
 
+type MateriaPrimaBloque = {
+  tipo: string;
+  nombre: string;
+  origen: string;
+  unidad: string;
+  cantidad: number;
+  costoUnitario: number;
+  costo: number;
+  variantChips?: Array<{ label: string; value: string }>;
+};
+
 type QuoteResult = {
   total: number;
   unitario: number;
-  subtotales: { procesos: number; material: number };
+  subtotales: { procesos: number; material: number; tinta?: number };
   bloques: {
     procesos: ProcesoBloque[];
-    materiales: Array<{ nombre: string; cantidad: number; costoUnitario: number; costoTotal: number }>;
+    materiales: MateriaPrimaBloque[];
   };
   trazabilidad: {
     tipoImpresion: string;
@@ -394,14 +405,14 @@ export function RigidPrintedSimularCostoTab(props: ProductTabProps) {
           </ProductoTabSection>
         )}
 
-        {/* ── Desglose: Material rígido ── */}
+        {/* ── Desglose: Materias primas ── */}
         {quoteResult && (
           <ProductoTabSection
-            title="Material rígido"
-            description="Costo del sustrato según la estrategia de costeo."
+            title="Materias primas"
+            description="Desglose de sustrato rígido, tintas y consumibles."
             icon={SigmaIcon}
           >
-            <MaterialBreakdown result={quoteResult} anchoMm={anchoMm} altoMm={altoMm} cantidad={cantidad} />
+            <MateriasPrimasBreakdown result={quoteResult} />
           </ProductoTabSection>
         )}
 
@@ -433,88 +444,102 @@ export function RigidPrintedSimularCostoTab(props: ProductTabProps) {
   );
 }
 
-// ── Desglose de material según estrategia ─────────────────────────
+// ── Desglose de materias primas (tabla agrupada) ──────────────────
 
-function MaterialBreakdown({ result, anchoMm, altoMm, cantidad }: {
-  result: QuoteResult;
-  anchoMm: number;
-  altoMm: number;
-  cantidad: number;
-}) {
-  const { trazabilidad, subtotales } = result;
-  const { estrategiaCosteo, costeoDetalle, resumenTecnico } = trazabilidad;
-  const anchoCm = anchoMm / 10;
-  const altoCm = altoMm / 10;
+function MateriasPrimasBreakdown({ result }: { result: QuoteResult }) {
+  const materiales = result.bloques.materiales as MateriaPrimaBloque[];
 
-  // Área de piezas
-  const areaPiezasM2 = (anchoMm * altoMm * cantidad) / 1_000_000;
-
-  // Placas
-  const placaAnchoCm = (resumenTecnico.placaAnchoMm ?? 0) / 10;
-  const placaAltoCm = (resumenTecnico.placaAltoMm ?? 0) / 10;
+  // Agrupar por tipo
+  const grupos = React.useMemo(() => {
+    const map = new Map<string, { items: MateriaPrimaBloque[]; total: number }>();
+    for (const m of materiales) {
+      const key = m.tipo || "Otro";
+      if (!map.has(key)) map.set(key, { items: [], total: 0 });
+      const g = map.get(key)!;
+      g.items.push(m);
+      g.total += m.costo;
+    }
+    return Array.from(map.entries()).map(([tipo, data]) => ({
+      tipo,
+      items: data.items,
+      total: data.total,
+      count: data.items.length,
+    }));
+  }, [materiales]);
 
   return (
-    <div className="space-y-3">
-      {/* Lo que se cobra */}
-      <div className="rounded-lg border p-4 space-y-2">
-        {estrategiaCosteo === "m2_exacto" && (
-          <>
-            <p className="text-sm font-medium">M² exacto</p>
-            <p className="text-sm text-muted-foreground">
-              {cantidad} pieza{cantidad !== 1 ? "s" : ""} de {anchoCm} × {altoCm} cm = <strong>{formatNumber(areaPiezasM2)} m²</strong>
-            </p>
-            <p className="text-sm">
-              {formatNumber(areaPiezasM2)} m² × {formatCurrency(costeoDetalle.precioM2)}/m² = <strong className="text-base">{formatCurrency(subtotales.material)}</strong>
-            </p>
-          </>
-        )}
+    <div className="space-y-4">
+      {grupos.map((grupo) => (
+        <div key={grupo.tipo} className="rounded-lg border">
+          {/* Header del grupo */}
+          <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30 border-b">
+            <div>
+              <span className="text-sm font-semibold">{grupo.tipo}</span>
+              <span className="text-xs text-muted-foreground ml-2">{grupo.count} componente{grupo.count !== 1 ? "s" : ""}</span>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] text-muted-foreground">Costo total</span>
+              <p className="text-sm font-semibold tabular-nums">{formatCurrency(grupo.total)}</p>
+            </div>
+          </div>
 
-        {estrategiaCosteo === "largo_consumido" && (
-          <>
-            <p className="text-sm font-medium">Largo consumido</p>
-            {costeoDetalle.placasCompletas > 0 && (
-              <p className="text-sm text-muted-foreground">
-                {costeoDetalle.placasCompletas} placa{costeoDetalle.placasCompletas !== 1 ? "s" : ""} completa{costeoDetalle.placasCompletas !== 1 ? "s" : ""}: {formatCurrency(costeoDetalle.costoPlacasCompletas)}
-              </p>
-            )}
-            {costeoDetalle.ultimaPlaca && (
-              <p className="text-sm text-muted-foreground">
-                Placa parcial: {formatNumber(costeoDetalle.ultimaPlaca.ocupacionPct)}% del largo consumido = {formatCurrency(costeoDetalle.ultimaPlaca.costo)}
-              </p>
-            )}
-            <p className="text-sm">
-              Costo material: <strong className="text-base">{formatCurrency(subtotales.material)}</strong>
-            </p>
-          </>
-        )}
+          {/* Tabla de componentes */}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Componente</TableHead>
+                <TableHead>Origen</TableHead>
+                <TableHead className="text-right">Cantidad</TableHead>
+                <TableHead className="text-right">Costo unitario</TableHead>
+                <TableHead className="text-right">Costo</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {grupo.items.map((item, i) => (
+                <TableRow key={i}>
+                  <TableCell>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-medium text-sm">{item.nombre}</span>
+                      {item.variantChips && item.variantChips.length > 0 && (
+                        <div className="flex gap-1">
+                          {item.variantChips.map((chip, ci) => (
+                            <Badge key={ci} variant="outline" className="text-[10px] px-1.5 py-0">
+                              {chip.label}: {chip.value}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{item.origen}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatNumber(item.cantidad)} {item.unidad}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatCurrency(item.costoUnitario)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums font-medium">
+                    {formatCurrency(item.costo)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
 
-        {estrategiaCosteo === "segmentos_placa" && (
-          <>
-            <p className="text-sm font-medium">Segmentos de placa</p>
-            {costeoDetalle.placasCompletas > 0 && (
-              <p className="text-sm text-muted-foreground">
-                {costeoDetalle.placasCompletas} placa{costeoDetalle.placasCompletas !== 1 ? "s" : ""} al 100%: {formatCurrency(costeoDetalle.costoPlacasCompletas)}
-              </p>
-            )}
-            {costeoDetalle.ultimaPlaca && (
-              <p className="text-sm text-muted-foreground">
-                Placa parcial: ocupación {formatNumber(costeoDetalle.ultimaPlaca.ocupacionPct)}%
-                {costeoDetalle.ultimaPlaca.segmentoAplicado != null && <> → cobra <strong>{costeoDetalle.ultimaPlaca.segmentoAplicado}%</strong></>}
-                : {formatCurrency(costeoDetalle.ultimaPlaca.costo)}
-              </p>
-            )}
-            <p className="text-sm">
-              Costo material: <strong className="text-base">{formatCurrency(subtotales.material)}</strong>
-            </p>
-          </>
-        )}
-      </div>
+          {/* Total del grupo */}
+          <div className="flex justify-end px-4 py-2 border-t bg-muted/20">
+            <span className="text-sm font-semibold tabular-nums">
+              Total {grupo.tipo}: {formatCurrency(grupo.total)}
+            </span>
+          </div>
+        </div>
+      ))}
 
-      {/* Total */}
+      {/* Total general */}
       <div className="rounded-lg border border-primary bg-primary/5 p-4">
         <div className="flex justify-between items-center">
           <div>
-            <p className="text-xs text-muted-foreground">Costo total (material + procesos)</p>
+            <p className="text-xs text-muted-foreground">Costo total (materiales + procesos)</p>
             <p className="text-2xl font-bold tabular-nums mt-1">{formatCurrency(result.total)}</p>
           </div>
           <div className="text-right">

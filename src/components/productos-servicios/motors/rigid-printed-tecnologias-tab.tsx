@@ -198,6 +198,23 @@ export function RigidPrintedTecnologiasTab(props: ProductTabProps) {
     [],
   );
 
+  const setDefault = React.useCallback(
+    (tipo: "impresionDirecta" | "flexibleMontado", maquinaId: string | null, perfilId: string | null) => {
+      setConfig((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          [tipo]: {
+            ...prev[tipo],
+            maquinaDefaultId: maquinaId,
+            perfilDefaultId: perfilId,
+          },
+        };
+      });
+    },
+    [],
+  );
+
   const toggleVariante = React.useCallback((varianteId: string) => {
     setConfig((prev) => {
       if (!prev) return prev;
@@ -254,6 +271,7 @@ export function RigidPrintedTecnologiasTab(props: ProductTabProps) {
             tipoKey="impresionDirecta"
             onToggleMaquina={toggleMaquina}
             onTogglePerfil={togglePerfil}
+            onSetDefault={setDefault}
           />
         </ProductoTabSection>
       )}
@@ -270,6 +288,7 @@ export function RigidPrintedTecnologiasTab(props: ProductTabProps) {
             tipoKey="flexibleMontado"
             onToggleMaquina={toggleMaquina}
             onTogglePerfil={togglePerfil}
+            onSetDefault={setDefault}
           />
         </ProductoTabSection>
       )}
@@ -432,12 +451,14 @@ function MaquinasPerfilesSection({
   tipoKey,
   onToggleMaquina,
   onTogglePerfil,
+  onSetDefault,
 }: {
   maquinas: Maquina[];
   tipoConfig: ImpresionTipoConfig;
   tipoKey: "impresionDirecta" | "flexibleMontado";
   onToggleMaquina: (tipo: "impresionDirecta" | "flexibleMontado", maquinaId: string) => void;
   onTogglePerfil: (tipo: "impresionDirecta" | "flexibleMontado", perfilId: string) => void;
+  onSetDefault: (tipo: "impresionDirecta" | "flexibleMontado", maquinaId: string | null, perfilId: string | null) => void;
 }) {
   const compatibles = new Set(tipoConfig.maquinasCompatibles ?? []);
   const perfilesActivos = new Set(tipoConfig.perfilesCompatibles ?? []);
@@ -468,7 +489,7 @@ function MaquinasPerfilesSection({
               </div>
             </CardHeader>
             {isActive && perfiles.length > 0 && (
-              <CardContent className="pt-0 px-3 pb-2">
+              <CardContent className="pt-0 px-3 pb-2 space-y-2">
                 <p className="text-xs text-muted-foreground mb-1">Perfiles operativos:</p>
                 <div className="flex flex-wrap gap-2">
                   {perfiles.map((p) => (
@@ -481,6 +502,29 @@ function MaquinasPerfilesSection({
                     </div>
                   ))}
                 </div>
+                {/* Perfil default */}
+                {perfiles.filter((p) => perfilesActivos.has(p.id)).length > 0 && (
+                  <div className="pt-1">
+                    <Label className="text-[10px] text-muted-foreground">Perfil default</Label>
+                    <Select
+                      value={tipoConfig.perfilDefaultId ?? ""}
+                      onValueChange={(v) => onSetDefault(tipoKey, m.id, v || null)}
+                    >
+                      <SelectTrigger className="mt-0.5 h-8 text-xs">
+                        <SelectValue placeholder="Sin default">
+                          {tipoConfig.perfilDefaultId
+                            ? perfiles.find((p) => p.id === tipoConfig.perfilDefaultId)?.nombre ?? "Sin default"
+                            : "Sin default"}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {perfiles.filter((p) => perfilesActivos.has(p.id)).map((p) => (
+                          <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </CardContent>
             )}
           </Card>

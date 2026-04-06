@@ -894,6 +894,7 @@ export class ProductosServiciosService {
     }
     const placaVariante = await this.prisma.materiaPrimaVariante.findFirst({
       where: { id: placaVarianteId, tenantId: auth.tenantId },
+      include: { materiaPrima: true },
     });
     if (!placaVariante) {
       throw new BadRequestException('Placa no encontrada.');
@@ -997,7 +998,124 @@ export class ProductosServiciosService {
       }
     }
 
-    const total = this.roundProductNumber(costeoMaterial.costoTotal + costoProcesos);
+    // ── Materias primas: sustrato rígido ──
+    const areaPiezasM2 = this.roundProductNumber((anchoMm * altoMm * cantidad) / 1_000_000);
+    const areaPlacaTotalM2 = this.roundProductNumber((pAnchoTrabajo * pLargoTrabajo * plates.placas) / 1_000_000);
+    const areaDesperdicioM2 = this.roundProductNumber(Math.max(0, areaPlacaTotalM2 - areaPiezasM2));
+    const precioM2Placa = (pAnchoTrabajo * pLargoTrabajo) > 0
+      ? this.roundProductNumber(precioPlaca / ((pAnchoTrabajo * pLargoTrabajo) / 1_000_000))
+      : 0;
+
+    const materiasPrimas: Array<{
+      tipo: string; nombre: string; origen: string; unidad: string;
+      cantidad: number; costoUnitario: number; costo: number;
+      variantChips?: Array<{ label: string; value: string }>;
+    }> = [];
+
+    // Sustrato Base (piezas)
+    materiasPrimas.push({
+      tipo: 'Sustrato',
+      nombre: placaVariante.nombreVariante
+        ? `${(placaVariante as any).materiaPrima?.nombre ?? 'Sustrato'} — ${placaVariante.nombreVariante}`
+        : (placaVariante as any).materiaPrima?.nombre ?? 'Sustrato rígido',
+      origen: 'Base',
+      unidad: 'm2',
+      cantidad: areaPiezasM2,
+      costoUnitario: precioM2Placa,
+      costo: this.roundProductNumber(areaPiezasM2 * precioM2Placa),
+    });
+
+    // Sustrato Desperdicio (si aplica según estrategia)
+    if (costeoMaterial.costoTotal > this.roundProductNumber(areaPiezasM2 * precioM2Placa)) {
+      const costoBase = this.roundProductNumber(areaPiezasM2 * precioM2Placa);
+      const costoDesperdicio = this.roundProductNumber(costeoMaterial.costoTotal - costoBase);
+      const areaDesperdicioCobrada = precioM2Placa > 0
+        ? this.roundProductNumber(costoDesperdicio / precioM2Placa)
+        : areaDesperdicioM2;
+      materiasPrimas.push({
+        tipo: 'Sustrato',
+        nombre: materiasPrimas[0].nombre + ' · Desperdicio',
+        origen: 'Desperdicio',
+        unidad: 'm2',
+        cantidad: areaDesperdicioCobrada,
+        costoUnitario: precioM2Placa,
+        costo: costoDesperdicio,
+      });
+    }
+
+    // ── Tintas (solo sobre piezas impresas, NO sobre desperdicio) ──
+    let costoTintas = 0;
+    const areaImpresaM2 = areaPiezasM2 * multiplicadorCaras; // doble faz = x2
+
+    // Resolver máquina de impresión
+    const tipoCfg = tipoImpresion === 'flexible_montado'
+      ? rigidConfig.flexibleMontado as Record<string, unknown> | undefined
+      : rigidConfig.impresionDirecta as Record<string, unknown> | undefined;
+    const maquinaImpresionId = String(tipoCfg?.maquinaDefaultId ?? ((tipoCfg?.maquinasCompatibles as string[]) ?? [])[0] ?? '');
+    const perfilImpresionId = String(tipoCfg?.perfilDefaultId ?? '');
+
+    if (maquinaImpresionId) {
+      const consumibles = await this.prisma.maquinaConsumible.findMany({
+        where: {
+          tenantId: auth.tenantId,
+          maquinaId: maquinaImpresionId,
+          activo: true,
+          tipo: { in: ['TINTA', 'TONER'] },
+        },
+        include: {
+          materiaPrimaVariante: { include: { materiaPrima: true } },
+          perfilOperativo: true,
+        },
+      });
+
+      // Filtrar por perfil: usar el seleccionado, o el default, o los genéricos (sin perfil)
+      let perfilEfectivo = perfilImpresionId || '';
+      if (!perfilEfectivo) {
+        // Si no hay perfil seleccionado, usar los consumibles sin perfil (genéricos)
+        // Si no hay genéricos, usar los del primer perfil que tenga consumibles
+        const tieneGenericos = consumibles.some((c) => !c.perfilOperativoId);
+        if (!tieneGenericos && consumibles.length > 0) {
+          perfilEfectivo = consumibles[0].perfilOperativoId ?? '';
+        }
+      }
+      const consumiblesFiltrados = perfilEfectivo
+        ? consumibles.filter((c) => !c.perfilOperativoId || c.perfilOperativoId === perfilEfectivo)
+        : consumibles.filter((c) => !c.perfilOperativoId);
+
+      for (const cons of consumiblesFiltrados) {
+        const consumoBase = Number(cons.consumoBase ?? 0);
+        if (consumoBase <= 0) continue;
+
+        // Consumo = consumoBase (ml/m² o g/m²) × área impresa
+        const cantidadConsumida = this.roundProductNumber(consumoBase * areaImpresaM2);
+        const unidadTinta = cons.unidad === 'LITRO' ? 'l' : cons.unidad === 'GRAMO' ? 'g' : 'ml';
+
+        const costoUnitario = this.resolveMateriaPrimaVariantUnitCost({
+          materiaPrimaVariante: cons.materiaPrimaVariante,
+          targetUnit: unidadTinta,
+          contextLabel: 'Tinta',
+        });
+
+        const costoTinta = this.roundProductNumber(cantidadConsumida * costoUnitario);
+        costoTintas += costoTinta;
+
+        const detalle = (cons.detalleJson ?? {}) as Record<string, unknown>;
+        const colorLabel = detalle.color ? String(detalle.color).toUpperCase() : '';
+
+        materiasPrimas.push({
+          tipo: 'Tinta',
+          nombre: cons.materiaPrimaVariante.materiaPrima.nombre,
+          origen: 'Base',
+          unidad: unidadTinta,
+          cantidad: cantidadConsumida,
+          costoUnitario,
+          costo: costoTinta,
+          variantChips: colorLabel ? [{ label: 'Color', value: colorLabel }] : undefined,
+        });
+      }
+    }
+
+    const total = this.roundProductNumber(costeoMaterial.costoTotal + costoProcesos + costoTintas);
     const unitario = cantidad > 0 ? this.roundProductNumber(total / cantidad) : total;
 
     const result = {
@@ -1007,8 +1125,14 @@ export class ProductosServiciosService {
       varianteNombre: variante?.nombre ?? 'Medida libre',
       motorCodigo: motor.code, motorVersion: motor.version,
       periodo, cantidad,
-      bloques: { procesos: bloquesProcesos, materiales: [{ materiaPrimaVarianteId: placaVarianteId, nombre: placaVariante.nombreVariante ?? 'Placa', unidad: 'placa', cantidad: plates.placas, costoUnitario: precioPlaca, costoTotal: costeoMaterial.costoTotal }] },
-      subtotales: { procesos: costoProcesos, material: costeoMaterial.costoTotal, toner: 0, desgaste: 0, consumiblesTerminacion: 0, adicionalesMateriales: 0, adicionalesCostEffects: 0 },
+      bloques: { procesos: bloquesProcesos, materiales: materiasPrimas },
+      subtotales: {
+        procesos: costoProcesos,
+        material: costeoMaterial.costoTotal,
+        tinta: costoTintas,
+        toner: 0, desgaste: 0, consumiblesTerminacion: 0,
+        adicionalesMateriales: 0, adicionalesCostEffects: 0,
+      },
       total, unitario,
       trazabilidad: {
         config: rigidConfig, tipoImpresion, caras, multiplicadorCaras,
