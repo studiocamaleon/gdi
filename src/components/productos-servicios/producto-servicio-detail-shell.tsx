@@ -31,6 +31,7 @@ import { ProductoRutaOpcionalesPlaceholder, ProductoStandardTabPlaceholder } fro
 import { ProductoVariantesTab } from "@/components/productos-servicios/producto-variantes-tab";
 import { talonarioMotorUi } from "@/components/productos-servicios/motors/talonario.motor-ui";
 import { vinylCutMotorUi } from "@/components/productos-servicios/motors/vinyl-cut.motor-ui";
+import { rigidPrintedMotorUi } from "@/components/productos-servicios/motors/rigid-printed.motor-ui";
 import { wideFormatMotorUi } from "@/components/productos-servicios/motors/wide-format.motor-ui";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -75,6 +76,7 @@ const productUiRegistry: Record<string, ProductMotorUiContract> = {
   "gran_formato@1": wideFormatMotorUi,
   "vinilo_de_corte@1": vinylCutMotorUi,
   "talonario@1": talonarioMotorUi,
+  "rigidos_impresos@1": rigidPrintedMotorUi,
 };
 
 function ProductTabFallback({ title }: { title: string }) {

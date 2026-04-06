@@ -86,13 +86,14 @@ import type { VinylCutConfig } from "@/lib/productos-servicios";
 // Supported motors
 // ---------------------------------------------------------------------------
 
-const SUPPORTED_MOTORS = ["impresion_digital_laser", "gran_formato", "vinilo_de_corte", "talonario"];
+const SUPPORTED_MOTORS = ["impresion_digital_laser", "gran_formato", "vinilo_de_corte", "talonario", "rigidos_impresos"];
 
 const MOTOR_LABELS: Record<string, string> = {
   impresion_digital_laser: "Digital",
   talonario: "Talonario",
   gran_formato: "Gran Formato",
   vinilo_de_corte: "Vinilo de corte",
+  rigidos_impresos: "Rígidos impresos",
 };
 
 const motorConfigRegistry: Record<
@@ -100,9 +101,10 @@ const motorConfigRegistry: Record<
   React.ComponentType<MotorProposalConfigProps> | null
 > = {
   impresion_digital_laser: DigitalLaserConfig,
-  talonario: null, // talonario uses its own panel with tipoCopia
-  gran_formato: null, // gran formato uses its own panel
+  talonario: null,
+  gran_formato: null,
   vinilo_de_corte: null,
+  rigidos_impresos: null, // TODO: crear panel de propuesta específico
 };
 
 // ---------------------------------------------------------------------------
