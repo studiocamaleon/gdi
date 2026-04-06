@@ -32,7 +32,10 @@ import {
 import {
   getProductoMotorConfig,
   cotizarRigidPrintedByProducto,
+  getCotizacionesProductoServicio,
 } from "@/lib/productos-servicios-api";
+import type { CotizacionProductoSnapshotResumen } from "@/lib/productos-servicios";
+import { HistoryIcon } from "lucide-react";
 import type { MateriaPrima } from "@/lib/materias-primas";
 import type { Maquina } from "@/lib/maquinaria";
 
@@ -127,10 +130,11 @@ export function RigidPrintedSimularCostoTab(props: ProductTabProps) {
   const [quoting, setQuoting] = React.useState(false);
   const [config, setConfig] = React.useState<RigidPrintedConfig | null>(null);
   const [quoteResult, setQuoteResult] = React.useState<QuoteResult | null>(null);
+  const [snapshots, setSnapshots] = React.useState<CotizacionProductoSnapshotResumen[]>([]);
+  const [snapshotsOpen, setSnapshotsOpen] = React.useState(false);
 
-  const [anchoMm, setAnchoMm] = React.useState<number>(0);
-  const [altoMm, setAltoMm] = React.useState<number>(0);
-  const [cantidad, setCantidad] = React.useState<number>(10);
+  type MedidaRow = { anchoMm: number | null; altoMm: number | null; cantidad: number };
+  const [medidas, setMedidas] = React.useState<MedidaRow[]>([{ anchoMm: null, altoMm: null, cantidad: 1 }]);
   const [placaVarianteId, setPlacaVarianteId] = React.useState<string>("");
   const [tipoImpresion, setTipoImpresion] = React.useState<string>("directa");
   const [caras, setCaras] = React.useState<string>("simple_faz");
@@ -179,6 +183,8 @@ export function RigidPrintedSimularCostoTab(props: ProductTabProps) {
         setCaras(p.carasDefault ?? "simple_faz");
         if ((p.tiposImpresion ?? []).length > 0) setTipoImpresion(p.tiposImpresion[0]);
         setPlacaVarianteId(p.placaVarianteIdDefault ?? (p.variantesCompatibles ?? [])[0] ?? "");
+        // Cargar historial de snapshots
+        getCotizacionesProductoServicio(props.producto.id).then(setSnapshots).catch(() => {});
       } catch { toast.error("Error al cargar configuración."); }
       finally { setLoading(false); }
     })();
@@ -187,28 +193,42 @@ export function RigidPrintedSimularCostoTab(props: ProductTabProps) {
   // Pre-fill from variant
   React.useEffect(() => {
     const v = props.selectedVariant;
-    if (v && Number(v.anchoMm) > 0 && Number(v.altoMm) > 0 && anchoMm === 0) {
-      setAnchoMm(Number(v.anchoMm)); setAltoMm(Number(v.altoMm));
+    if (v && Number(v.anchoMm) > 0 && Number(v.altoMm) > 0 && medidas.length === 1 && !medidas[0].anchoMm) {
+      setMedidas([{ anchoMm: Number(v.anchoMm), altoMm: Number(v.altoMm), cantidad: 1 }]);
     }
   }, [props.selectedVariant]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Helpers
+  const fmtMmAsCm = (v: number | null) => (v != null && Number.isFinite(v) ? String(Number((v / 10).toFixed(2))) : "");
+  const totalCantidad = medidas.reduce((sum, m) => sum + m.cantidad, 0);
 
   // ── Cotizar ─────────────────────────────────────────────────────
 
   const handleCotizar = React.useCallback(async () => {
-    if (anchoMm <= 0 || altoMm <= 0) { toast.error("Ingresá ancho y alto de pieza."); return; }
+    const validMedidas = medidas.filter((m) => m.anchoMm && m.anchoMm > 0 && m.altoMm && m.altoMm > 0);
+    if (validMedidas.length === 0) { toast.error("Ingresá al menos una medida válida."); return; }
+    // Usar la primera medida (TODO: soporte multi-medida en backend)
+    const first = validMedidas[0];
+    const cantidadTotal = validMedidas.reduce((s, m) => s + m.cantidad, 0);
     try {
       setQuoting(true);
       const r = await cotizarRigidPrintedByProducto(props.producto.id, {
-        cantidad,
-        parametros: { anchoMm, altoMm, tipoImpresion, caras, ...(placaVarianteId ? { placaVarianteId } : {}) },
+        cantidad: cantidadTotal,
+        parametros: {
+          anchoMm: first.anchoMm,
+          altoMm: first.altoMm,
+          tipoImpresion, caras,
+          ...(placaVarianteId ? { placaVarianteId } : {}),
+        },
       });
       setQuoteResult(r as unknown as QuoteResult);
+      getCotizacionesProductoServicio(props.producto.id).then(setSnapshots).catch(() => {});
     } catch (err) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : "Error al cotizar.");
       setQuoteResult(null);
     } finally { setQuoting(false); }
-  }, [props.producto.id, anchoMm, altoMm, cantidad, tipoImpresion, caras, placaVarianteId]);
+  }, [props.producto.id, medidas, tipoImpresion, caras, placaVarianteId]);
 
   const clear = () => setQuoteResult(null);
 
@@ -248,111 +268,175 @@ export function RigidPrintedSimularCostoTab(props: ProductTabProps) {
           </div>
         </ProductoTabSection>
 
-        {/* ── Configuración ── */}
+        {/* ── Contexto de cotización (layout 2 columnas como gran formato) ── */}
         <ProductoTabSection
-          title="Configuración"
-          description="Definí las medidas, material y tipo de impresión."
-          icon={Layers3Icon}
+          title="Contexto de cotización"
+          description="Definí la tecnología, el perfil operativo y las medidas del trabajo."
+          icon={InfoIcon}
         >
-          <div className="space-y-4">
-            {/* Medidas + Cantidad */}
-            <div className="grid gap-3 md:grid-cols-3 max-w-lg">
-              <Field>
-                <FieldLabel>Ancho pieza (cm)</FieldLabel>
-                <Input type="number" placeholder="30"
-                  value={anchoMm ? anchoMm / 10 : ""}
-                  onChange={(e) => { setAnchoMm(Math.round((Number(e.target.value) || 0) * 10)); clear(); }} />
-              </Field>
-              <Field>
-                <FieldLabel>Alto pieza (cm)</FieldLabel>
-                <Input type="number" placeholder="40"
-                  value={altoMm ? altoMm / 10 : ""}
-                  onChange={(e) => { setAltoMm(Math.round((Number(e.target.value) || 0) * 10)); clear(); }} />
-              </Field>
-              <Field>
-                <FieldLabel>Cantidad</FieldLabel>
-                <Input type="number" min={1} value={cantidad}
-                  onChange={(e) => { setCantidad(Math.max(1, Number(e.target.value) || 1)); clear(); }} />
-              </Field>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+            {/* ── Columna izquierda: Medidas del trabajo ── */}
+            <div className="rounded-lg border p-3">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">Medidas del trabajo</p>
+              </div>
+              <div className="space-y-2">
+                <div className="hidden gap-2 px-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px_40px]">
+                  <span>Ancho (cm)</span>
+                  <span>Alto (cm)</span>
+                  <span>Cantidad</span>
+                  <span />
+                  <span />
+                </div>
+                {medidas.map((medida, index) => (
+                  <div key={`medida-${index}`} className="grid gap-2 rounded-lg border p-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px_40px]">
+                    <Field>
+                      <Input
+                        aria-label={`Ancho (cm) fila ${index + 1}`}
+                        placeholder="30"
+                        value={fmtMmAsCm(medida.anchoMm)}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setMedidas((prev) => prev.map((item, i) =>
+                            i === index ? { ...item, anchoMm: v.trim() ? Math.round(Number(v) * 10) : null } : item));
+                          clear();
+                        }}
+                      />
+                    </Field>
+                    <Field>
+                      <Input
+                        aria-label={`Alto (cm) fila ${index + 1}`}
+                        placeholder="40"
+                        value={fmtMmAsCm(medida.altoMm)}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setMedidas((prev) => prev.map((item, i) =>
+                            i === index ? { ...item, altoMm: v.trim() ? Math.round(Number(v) * 10) : null } : item));
+                          clear();
+                        }}
+                      />
+                    </Field>
+                    <Field>
+                      <Input
+                        aria-label={`Cantidad fila ${index + 1}`}
+                        type="number"
+                        min={1}
+                        value={medida.cantidad}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          setMedidas((prev) => prev.map((item, i) =>
+                            i === index ? { ...item, cantidad: Number.isFinite(v) && v > 0 ? v : 1 } : item));
+                          clear();
+                        }}
+                      />
+                    </Field>
+                    <div className="flex items-end">
+                      <Button type="button" variant="ghost" size="icon" aria-label="Agregar medida"
+                        onClick={() => { setMedidas((prev) => [...prev, { anchoMm: null, altoMm: null, cantidad: 1 }]); clear(); }}>
+                        <PlusIcon className="size-4" />
+                      </Button>
+                    </div>
+                    <div className="flex items-end">
+                      <Button type="button" variant="ghost" size="icon" disabled={medidas.length === 1}
+                        onClick={() => { setMedidas((prev) => prev.length === 1 ? prev : prev.filter((_, i) => i !== index)); clear(); }}>
+                        <Trash2Icon className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            {/* Placa */}
-            {placasCompatibles.length > 0 && (
-              <div className="max-w-lg">
-                <Field>
-                  <FieldLabel>Placa de material</FieldLabel>
-                  {placasCompatibles.length === 1 ? (
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="secondary">{placasCompatibles[0].label}</Badge>
-                      {placasCompatibles[0].precio > 0 && <span className="text-sm text-muted-foreground">{formatCurrency(placasCompatibles[0].precio)}</span>}
-                    </div>
-                  ) : (
+            {/* ── Columna derecha: Opciones ── */}
+            <div className="rounded-lg border p-3">
+              <div className="space-y-3">
+                {/* Tipo de impresión */}
+                {tiposDisponibles.length > 1 && (
+                  <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                    <FieldLabel className="sm:mb-0">Tipo impresión</FieldLabel>
+                    <Select value={tipoImpresion} onValueChange={(v) => { if (v) setTipoImpresion(v); clear(); }}>
+                      <SelectTrigger><SelectValue>{TIPO_LABELS[tipoImpresion] ?? tipoImpresion}</SelectValue></SelectTrigger>
+                      <SelectContent>{tiposDisponibles.map((t) => (<SelectItem key={t} value={t}>{TIPO_LABELS[t] ?? t}</SelectItem>))}</SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {tiposDisponibles.length === 1 && (
+                  <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                    <FieldLabel className="sm:mb-0">Tipo impresión</FieldLabel>
+                    <Select value={tiposDisponibles[0]} disabled>
+                      <SelectTrigger><SelectValue>{TIPO_LABELS[tiposDisponibles[0]] ?? tiposDisponibles[0]}</SelectValue></SelectTrigger>
+                      <SelectContent><SelectItem value={tiposDisponibles[0]}>{TIPO_LABELS[tiposDisponibles[0]] ?? tiposDisponibles[0]}</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Perfil operativo */}
+                {perfilesDisponibles.length > 0 && (
+                  <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                    <FieldLabel className="sm:mb-0">Perfil operativo</FieldLabel>
+                    <Select defaultValue="__default__">
+                      <SelectTrigger><SelectValue>Usar perfil default del producto</SelectValue></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__default__">Usar perfil default del producto</SelectItem>
+                        {perfilesDisponibles.map((p) => (<SelectItem key={p.id} value={p.id}>{p.nombre} ({p.maquinaNombre})</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Placa */}
+                {placasCompatibles.length > 1 && (
+                  <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                    <FieldLabel className="sm:mb-0">Placa</FieldLabel>
                     <Select value={placaVarianteId} onValueChange={(v) => { if (v) setPlacaVarianteId(v); clear(); }}>
-                      <SelectTrigger><SelectValue>{selectedPlaca ? `${selectedPlaca.label} · ${formatCurrency(selectedPlaca.precio)}` : "Seleccionar placa"}</SelectValue></SelectTrigger>
+                      <SelectTrigger><SelectValue>{selectedPlaca ? `${selectedPlaca.label}` : "Seleccionar"}</SelectValue></SelectTrigger>
                       <SelectContent>
                         {placasCompatibles.map((p) => (
                           <SelectItem key={p.id} value={p.id}>{p.label}{p.precio > 0 ? ` · ${formatCurrency(p.precio)}` : ""}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                  )}
-                </Field>
+                  </div>
+                )}
+                {placasCompatibles.length === 1 && (
+                  <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                    <FieldLabel className="sm:mb-0">Placa</FieldLabel>
+                    <Select value={placasCompatibles[0].id} disabled>
+                      <SelectTrigger><SelectValue>{placasCompatibles[0].label}{placasCompatibles[0].precio > 0 ? ` · ${formatCurrency(placasCompatibles[0].precio)}` : ""}</SelectValue></SelectTrigger>
+                      <SelectContent><SelectItem value={placasCompatibles[0].id}>{placasCompatibles[0].label}</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Caras */}
+                {carasDisponibles.length > 1 && (
+                  <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                    <FieldLabel className="sm:mb-0">Caras</FieldLabel>
+                    <Select value={caras} onValueChange={(v) => { if (v) setCaras(v); clear(); }}>
+                      <SelectTrigger><SelectValue>{CARAS_LABELS[caras] ?? caras}</SelectValue></SelectTrigger>
+                      <SelectContent>{carasDisponibles.map((c) => (<SelectItem key={c} value={c}>{CARAS_LABELS[c] ?? c}</SelectItem>))}</SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {carasDisponibles.length === 1 && (
+                  <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                    <FieldLabel className="sm:mb-0">Caras</FieldLabel>
+                    <Select value={carasDisponibles[0]} disabled>
+                      <SelectTrigger><SelectValue>{CARAS_LABELS[carasDisponibles[0]] ?? carasDisponibles[0]}</SelectValue></SelectTrigger>
+                      <SelectContent><SelectItem value={carasDisponibles[0]}>{CARAS_LABELS[carasDisponibles[0]] ?? carasDisponibles[0]}</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
-            )}
-
-            {/* Impresión */}
-            <div className="grid gap-3 md:grid-cols-3 max-w-2xl">
-              {tiposDisponibles.length > 1 ? (
-                <Field>
-                  <FieldLabel>Tipo de impresión</FieldLabel>
-                  <Select value={tipoImpresion} onValueChange={(v) => { if (v) setTipoImpresion(v); clear(); }}>
-                    <SelectTrigger><SelectValue>{TIPO_LABELS[tipoImpresion] ?? tipoImpresion}</SelectValue></SelectTrigger>
-                    <SelectContent>{tiposDisponibles.map((t) => (<SelectItem key={t} value={t}>{TIPO_LABELS[t] ?? t}</SelectItem>))}</SelectContent>
-                  </Select>
-                </Field>
-              ) : tiposDisponibles.length === 1 ? (
-                <Field>
-                  <FieldLabel>Tipo de impresión</FieldLabel>
-                  <Badge variant="outline" className="mt-1">{TIPO_LABELS[tiposDisponibles[0]] ?? tiposDisponibles[0]}</Badge>
-                </Field>
-              ) : null}
-
-              {perfilesDisponibles.length > 0 && (
-                <Field>
-                  <FieldLabel>Perfil de impresión</FieldLabel>
-                  <Select defaultValue="">
-                    <SelectTrigger><SelectValue placeholder="Default del producto" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Default del producto</SelectItem>
-                      {perfilesDisponibles.map((p) => (<SelectItem key={p.id} value={p.id}>{p.nombre} ({p.maquinaNombre})</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-              )}
-
-              {carasDisponibles.length > 1 ? (
-                <Field>
-                  <FieldLabel>Caras</FieldLabel>
-                  <Select value={caras} onValueChange={(v) => { if (v) setCaras(v); clear(); }}>
-                    <SelectTrigger><SelectValue>{CARAS_LABELS[caras] ?? caras}</SelectValue></SelectTrigger>
-                    <SelectContent>{carasDisponibles.map((c) => (<SelectItem key={c} value={c}>{CARAS_LABELS[c] ?? c}</SelectItem>))}</SelectContent>
-                  </Select>
-                </Field>
-              ) : carasDisponibles.length === 1 ? (
-                <Field>
-                  <FieldLabel>Caras</FieldLabel>
-                  <Badge variant="outline" className="mt-1">{CARAS_LABELS[carasDisponibles[0]] ?? carasDisponibles[0]}</Badge>
-                </Field>
-              ) : null}
             </div>
+          </div>
 
-            {/* Botón */}
-            <div className="flex items-center gap-3">
-              <Button onClick={handleCotizar} disabled={quoting || anchoMm <= 0 || altoMm <= 0}>
-                {quoting ? <><GdiSpinner className="size-4" /> Calculando...</> : "Simular costo"}
-              </Button>
-              {quoteResult && <span className="text-xs text-muted-foreground">Resultado calculado</span>}
-            </div>
+          {/* Botón simular */}
+          <div className="flex items-center gap-3 mt-4">
+            <Button onClick={handleCotizar} disabled={quoting || medidas.every((m) => !m.anchoMm || !m.altoMm)}>
+              {quoting ? <><GdiSpinner className="size-4" /> Calculando...</> : "Simular costo"}
+            </Button>
+            {quoteResult && <span className="text-xs text-muted-foreground">Resultado calculado</span>}
           </div>
         </ProductoTabSection>
 
@@ -415,6 +499,57 @@ export function RigidPrintedSimularCostoTab(props: ProductTabProps) {
             <MateriasPrimasBreakdown result={quoteResult} />
           </ProductoTabSection>
         )}
+
+        {/* ── Historial de simulaciones ── */}
+        <ProductoTabSection
+          title="Historial de simulaciones"
+          description="Snapshots de cotizaciones anteriores de este producto."
+          icon={HistoryIcon}
+        >
+          <Collapsible open={snapshotsOpen} onOpenChange={setSnapshotsOpen}>
+            <div className="rounded-lg border bg-background">
+              <CollapsibleTrigger className="flex w-full cursor-pointer items-center justify-between px-3 py-2 text-left transition-colors hover:bg-muted/60">
+                <span className="text-sm font-medium">Snapshots disponibles</span>
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  {snapshots.length}
+                  {snapshotsOpen ? <ChevronDownIcon className="size-4" /> : <ChevronRightIcon className="size-4" />}
+                </span>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="border-t">
+                  {snapshots.length === 0 ? (
+                    <p className="px-3 py-4 text-sm text-muted-foreground">No hay simulaciones anteriores.</p>
+                  ) : (
+                    <Table>
+                      <TableHeader className="bg-muted/50">
+                        <TableRow>
+                          <TableHead>Snapshot</TableHead>
+                          <TableHead>Cantidad</TableHead>
+                          <TableHead>Período</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
+                          <TableHead className="text-right">Unitario</TableHead>
+                          <TableHead>Fecha</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {snapshots.map((s) => (
+                          <TableRow key={s.id}>
+                            <TableCell className="font-mono text-xs">{s.id.slice(0, 8)}</TableCell>
+                            <TableCell>{s.cantidad}</TableCell>
+                            <TableCell>{s.periodoTarifa}</TableCell>
+                            <TableCell className="text-right tabular-nums">{formatCurrency(s.total)}</TableCell>
+                            <TableCell className="text-right tabular-nums">{formatCurrency(s.unitario)}</TableCell>
+                            <TableCell className="text-xs">{new Date(s.createdAt).toLocaleString()}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
+        </ProductoTabSection>
 
         {/* ── Trazabilidad ── */}
         {quoteResult && (

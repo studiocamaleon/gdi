@@ -2,12 +2,14 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { InfoIcon, PlusIcon, Trash2Icon } from "lucide-react";
 
 import type { ProductTabProps } from "@/components/productos-servicios/product-detail-types";
 import { ProductoTabSection } from "@/components/productos-servicios/producto-tab-section";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -106,10 +108,10 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
   const [config, setConfig] = React.useState<RigidPrintedConfig | null>(null);
   const [imposicion, setImposicion] = React.useState<ImposicionConfig>(DEFAULT_IMPOSICION);
 
-  // Simulación
-  const [anchoMm, setAnchoMm] = React.useState<number>(0);
-  const [altoMm, setAltoMm] = React.useState<number>(0);
-  const [cantidad, setCantidad] = React.useState<number>(10);
+  // Simulación — medidas dinámicas (mismo patrón que Simular Costo)
+  type MedidaRow = { anchoMm: number | null; altoMm: number | null; cantidad: number };
+  const [medidas, setMedidas] = React.useState<MedidaRow[]>([{ anchoMm: null, altoMm: null, cantidad: 1 }]);
+  const fmtMmAsCm = (v: number | null) => (v != null && Number.isFinite(v) ? String(Number((v / 10).toFixed(2))) : "");
 
   const materiasPrimas = (props.materiasPrimas ?? []) as MateriaPrima[];
   const maquinas = (props.maquinas ?? []) as Maquina[];
@@ -209,6 +211,10 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
     placaLargoTrabajo: number;
     margenMaquina: { arriba: number; abajo: number; izquierda: number; derecha: number };
   } | null>(() => {
+    const firstMedida = medidas[0];
+    const anchoMm = firstMedida?.anchoMm ?? 0;
+    const altoMm = firstMedida?.altoMm ?? 0;
+    const cantidad = medidas.reduce((s, m) => s + m.cantidad, 0);
     if (!placaInfo || anchoMm <= 0 || altoMm <= 0) return null;
 
     // Orientación de placa: el "ancho de trabajo" es el lado elegido por el admin
@@ -264,7 +270,7 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
       plates, costeo, placaAnchoTrabajo, placaLargoTrabajo,
       margenMaquina: mg,
     };
-  }, [placaInfo, anchoMm, altoMm, cantidad, imposicion]);
+  }, [placaInfo, medidas, imposicion]);
 
   const tieneFlexible = (config?.tiposImpresion ?? []).includes("flexible_montado");
 
@@ -441,23 +447,72 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
           <p className="text-sm text-muted-foreground">No hay placa configurada.</p>
         ) : (
           <>
-            <div className="flex gap-4 items-end mb-4">
-              <div>
-                <Label>Ancho pieza (cm)</Label>
-                <Input type="number" className="mt-1 w-28"
-                  value={anchoMm ? anchoMm / 10 : ""}
-                  onChange={(e) => setAnchoMm(Math.round((Number(e.target.value) || 0) * 10))} />
+            {/* Medidas dinámicas (mismo layout que Simular Costo) */}
+            <div className="rounded-lg border p-3 mb-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">Medidas del trabajo</p>
               </div>
-              <div>
-                <Label>Alto pieza (cm)</Label>
-                <Input type="number" className="mt-1 w-28"
-                  value={altoMm ? altoMm / 10 : ""}
-                  onChange={(e) => setAltoMm(Math.round((Number(e.target.value) || 0) * 10))} />
-              </div>
-              <div>
-                <Label>Cantidad</Label>
-                <Input type="number" className="mt-1 w-24" value={cantidad}
-                  onChange={(e) => setCantidad(Math.max(1, Number(e.target.value) || 1))} />
+              <div className="space-y-2">
+                <div className="hidden gap-2 px-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px_40px]">
+                  <span>Ancho (cm)</span>
+                  <span>Alto (cm)</span>
+                  <span>Cantidad</span>
+                  <span />
+                  <span />
+                </div>
+                {medidas.map((medida, index) => (
+                  <div key={`imp-medida-${index}`} className="grid gap-2 rounded-lg border p-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px_40px]">
+                    <Field>
+                      <Input
+                        aria-label={`Ancho (cm) fila ${index + 1}`}
+                        placeholder="30"
+                        value={fmtMmAsCm(medida.anchoMm)}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setMedidas((prev) => prev.map((item, i) =>
+                            i === index ? { ...item, anchoMm: v.trim() ? Math.round(Number(v) * 10) : null } : item));
+                        }}
+                      />
+                    </Field>
+                    <Field>
+                      <Input
+                        aria-label={`Alto (cm) fila ${index + 1}`}
+                        placeholder="40"
+                        value={fmtMmAsCm(medida.altoMm)}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setMedidas((prev) => prev.map((item, i) =>
+                            i === index ? { ...item, altoMm: v.trim() ? Math.round(Number(v) * 10) : null } : item));
+                        }}
+                      />
+                    </Field>
+                    <Field>
+                      <Input
+                        aria-label={`Cantidad fila ${index + 1}`}
+                        type="number"
+                        min={1}
+                        value={medida.cantidad}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          setMedidas((prev) => prev.map((item, i) =>
+                            i === index ? { ...item, cantidad: Number.isFinite(v) && v > 0 ? v : 1 } : item));
+                        }}
+                      />
+                    </Field>
+                    <div className="flex items-end">
+                      <Button type="button" variant="ghost" size="icon" aria-label="Agregar medida"
+                        onClick={() => setMedidas((prev) => [...prev, { anchoMm: null, altoMm: null, cantidad: 1 }])}>
+                        <PlusIcon className="size-4" />
+                      </Button>
+                    </div>
+                    <div className="flex items-end">
+                      <Button type="button" variant="ghost" size="icon" disabled={medidas.length === 1}
+                        onClick={() => setMedidas((prev) => prev.length === 1 ? prev : prev.filter((_, i) => i !== index))}>
+                        <Trash2Icon className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -486,7 +541,7 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
                     placaAnchoMm={preview.placaAnchoTrabajo}
                     placaAltoMm={preview.placaLargoTrabajo}
                     posiciones={preview.nesting.posiciones}
-                    cantidadPedida={cantidad}
+                    cantidadPedida={medidas.reduce((s, m) => s + m.cantidad, 0)}
                     estrategia={imposicion.estrategiaCosteo}
                     largoConsumidoMm={preview.nesting.largoConsumidoMm}
                     segmentoAplicadoPct={preview.costeo.segmentoAplicado}
