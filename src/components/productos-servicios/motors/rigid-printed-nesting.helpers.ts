@@ -206,3 +206,160 @@ export function calcularCosteoPreview(
 }
 
 function r2(n: number) { return Math.round(n * 100) / 100; }
+
+// ── Nesting multi-medida ─────────────────────────────────────────
+
+export type MedidaInput = {
+  anchoMm: number;
+  altoMm: number;
+  cantidad: number;
+  color?: string;
+};
+
+export type MultiMedidaPiece = {
+  x: number;
+  y: number;
+  anchoMm: number;
+  altoMm: number;
+  medidaIndex: number;
+  rotada: boolean;
+};
+
+export type MultiMedidaNestingResult = {
+  posiciones: MultiMedidaPiece[];
+  placas: number;
+  placaLayouts: Array<{
+    posiciones: MultiMedidaPiece[];
+    largoConsumidoMm: number;
+    areaUtilMm2: number;
+  }>;
+  totalPiezas: number;
+  aprovechamientoPct: number;
+  areaTotalMm2: number;
+  areaUtilMm2: number;
+};
+
+/**
+ * Nesting multi-medida por bandas horizontales.
+ * Cada medida se acomoda en filas consecutivas en la placa.
+ * Si no cabe más, abre nueva placa.
+ */
+export function nestMultiMedida(
+  medidas: MedidaInput[],
+  placaAnchoMm: number,
+  placaAltoMm: number,
+  sepH: number,
+  sepV: number,
+  margen: number,
+  permitirRotacion: boolean,
+): MultiMedidaNestingResult {
+  const placaLayouts: MultiMedidaNestingResult["placaLayouts"] = [];
+  let currentPlaca: MultiMedidaPiece[] = [];
+  let currentY = margen;
+  let totalPiezas = 0;
+  let totalAreaUtil = 0;
+  const areaW = placaAnchoMm - 2 * margen;
+
+  function flushPlaca() {
+    if (currentPlaca.length > 0) {
+      const areaUtil = currentPlaca.reduce((s, p) => s + p.anchoMm * p.altoMm, 0);
+      placaLayouts.push({
+        posiciones: currentPlaca,
+        largoConsumidoMm: currentY,
+        areaUtilMm2: areaUtil,
+      });
+      totalAreaUtil += areaUtil;
+    }
+    currentPlaca = [];
+    currentY = margen;
+  }
+
+  for (let mi = 0; mi < medidas.length; mi++) {
+    const m = medidas[mi];
+    if (m.anchoMm <= 0 || m.altoMm <= 0 || m.cantidad <= 0) continue;
+
+    // Decidir si rotar la pieza
+    let pW = m.anchoMm;
+    let pH = m.altoMm;
+    let rotada = false;
+
+    if (permitirRotacion && pW !== pH) {
+      const colsNormal = Math.floor((areaW + sepH) / (pW + sepH));
+      const colsRotada = Math.floor((areaW + sepH) / (pH + sepH));
+      if (colsRotada > colsNormal) {
+        const tmp = pW; pW = pH; pH = tmp;
+        rotada = true;
+      }
+    }
+
+    const columnas = Math.max(0, Math.floor((areaW + sepH) / (pW + sepH)));
+    if (columnas <= 0) continue;
+
+    let piezasRestantes = m.cantidad;
+
+    while (piezasRestantes > 0) {
+      const altoDisponible = placaAltoMm - currentY - margen;
+
+      if (altoDisponible < pH) {
+        // No cabe otra fila en esta placa → nueva placa
+        flushPlaca();
+        continue;
+      }
+
+      // Cuántas filas caben en el espacio restante
+      const filasQueCaben = Math.floor((altoDisponible + sepV) / (pH + sepV));
+      const piezasQueCaben = filasQueCaben * columnas;
+      const piezasEnEstaPlaca = Math.min(piezasRestantes, piezasQueCaben);
+      const filasUsadas = Math.ceil(piezasEnEstaPlaca / columnas);
+
+      for (let row = 0; row < filasUsadas; row++) {
+        const piezasEnFila = Math.min(columnas, piezasRestantes);
+        for (let col = 0; col < piezasEnFila; col++) {
+          currentPlaca.push({
+            x: margen + col * (pW + sepH),
+            y: currentY + row * (pH + sepV),
+            anchoMm: pW,
+            altoMm: pH,
+            medidaIndex: mi,
+            rotada,
+          });
+          piezasRestantes--;
+          totalPiezas++;
+        }
+      }
+
+      currentY += filasUsadas * pH + (filasUsadas - 1) * sepV + sepV;
+
+      if (piezasRestantes > 0) {
+        flushPlaca();
+      }
+    }
+  }
+
+  // Flush última placa
+  flushPlaca();
+
+  const areaTotalMm2 = placaAnchoMm * placaAltoMm * placaLayouts.length;
+
+  return {
+    posiciones: placaLayouts.flatMap((pl) => pl.posiciones),
+    placas: placaLayouts.length,
+    placaLayouts,
+    totalPiezas,
+    aprovechamientoPct: areaTotalMm2 > 0 ? r2((totalAreaUtil / areaTotalMm2) * 100) : 0,
+    areaTotalMm2,
+    areaUtilMm2: totalAreaUtil,
+  };
+}
+
+// Colores por medida para el SVG
+export const MEDIDA_COLORS = [
+  "#3b82f6", // azul
+  "#10b981", // verde
+  "#f59e0b", // ámbar
+  "#8b5cf6", // violeta
+  "#ec4899", // rosa
+  "#06b6d4", // cyan
+  "#f97316", // naranja
+  "#6366f1", // indigo
+];

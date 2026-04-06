@@ -31,8 +31,11 @@ import {
   calculatePlatesNeeded,
   calcularCosteoPreview,
   calcularLargoConsumido,
+  nestMultiMedida,
   type NestingResult,
   type CosteoPreview,
+  type MultiMedidaNestingResult,
+  MEDIDA_COLORS,
 } from "./rigid-printed-nesting.helpers";
 
 // ── Tipos ─────────────────────────────────────────────────────────
@@ -204,18 +207,14 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
 
   // Nesting + costeo preview
   const preview = React.useMemo<{
-    nesting: NestingResult;
-    plates: { placas: number; sobrantes: number };
-    costeo: CosteoPreview;
+    multiNesting: MultiMedidaNestingResult;
     placaAnchoTrabajo: number;
     placaLargoTrabajo: number;
     margenMaquina: { arriba: number; abajo: number; izquierda: number; derecha: number };
+    costeo: CosteoPreview;
   } | null>(() => {
-    const firstMedida = medidas[0];
-    const anchoMm = firstMedida?.anchoMm ?? 0;
-    const altoMm = firstMedida?.altoMm ?? 0;
-    const cantidad = medidas.reduce((s, m) => s + m.cantidad, 0);
-    if (!placaInfo || anchoMm <= 0 || altoMm <= 0) return null;
+    const validMedidas = medidas.filter((m) => m.anchoMm && m.anchoMm > 0 && m.altoMm && m.altoMm > 0);
+    if (!placaInfo || validMedidas.length === 0) return null;
 
     // Orientación de placa: el "ancho de trabajo" es el lado elegido por el admin
     const ladoCorto = Math.min(placaInfo.anchoMm, placaInfo.altoMm);
@@ -224,50 +223,55 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
     const placaLargoTrabajo = imposicion.orientacionPlaca === "usar_lado_largo" ? ladoCorto : ladoLargo;
 
     const mg = imposicion.margenMaquina ?? { arriba: 0, abajo: 0, izquierda: 0, derecha: 0 };
-    // Área imprimible = placa - márgenes de máquina
     const areaImprimibleAncho = placaAnchoTrabajo - mg.izquierda - mg.derecha;
     const areaImprimibleAlto = placaLargoTrabajo - mg.arriba - mg.abajo;
 
-    const nesting = nestRectangularGrid(
-      anchoMm, altoMm,
-      areaImprimibleAncho, areaImprimibleAlto,
+    // Multi-medida nesting
+    const multiNesting = nestMultiMedida(
+      validMedidas.map((m) => ({ anchoMm: m.anchoMm!, altoMm: m.altoMm!, cantidad: m.cantidad })),
+      areaImprimibleAncho,
+      areaImprimibleAlto,
       imposicion.separacionHorizontalMm,
       imposicion.separacionVerticalMm,
-      0, // margen ya descontado arriba
+      0,
       imposicion.permitirRotacion,
     );
-    const plates = calculatePlatesNeeded(cantidad, nesting.piezasPorPlaca);
 
-    // Largo consumido basado en la cantidad pedida (no toda la placa)
-    const pH = nesting.rotada ? anchoMm : altoMm;
-    const largoRealConsumido = calcularLargoConsumido(
-      cantidad, nesting.columnas, pH,
-      imposicion.separacionVerticalMm, mg.arriba,
-    );
+    // Desplazar posiciones por márgenes de máquina
+    const desplazadas: MultiMedidaNestingResult = {
+      ...multiNesting,
+      posiciones: multiNesting.posiciones.map((pos) => ({
+        ...pos,
+        x: pos.x + mg.izquierda,
+        y: pos.y + mg.arriba,
+      })),
+      placaLayouts: multiNesting.placaLayouts.map((pl) => ({
+        ...pl,
+        posiciones: pl.posiciones.map((pos) => ({
+          ...pos,
+          x: pos.x + mg.izquierda,
+          y: pos.y + mg.arriba,
+        })),
+      })),
+    };
 
+    // Costeo simplificado para preview (usa primera medida como referencia)
+    const firstM = validMedidas[0];
+    const totalCant = validMedidas.reduce((s, m) => s + m.cantidad, 0);
     const costeo = calcularCosteoPreview(
       imposicion.estrategiaCosteo,
       placaInfo.precio,
       placaAnchoTrabajo,
       placaLargoTrabajo,
-      anchoMm, altoMm,
-      cantidad,
-      nesting.piezasPorPlaca,
+      firstM.anchoMm!, firstM.altoMm!,
+      totalCant,
+      multiNesting.totalPiezas > 0 ? Math.ceil(multiNesting.totalPiezas / Math.max(1, multiNesting.placas)) : 0,
       imposicion.segmentosPlaca,
-      largoRealConsumido,
-      nesting.columnas,
     );
 
-    // Desplazar posiciones por márgenes de máquina
-    const posicionesDesplazadas = nesting.posiciones.map((pos) => ({
-      ...pos,
-      x: pos.x + mg.izquierda,
-      y: pos.y + mg.arriba,
-    }));
-
     return {
-      nesting: { ...nesting, posiciones: posicionesDesplazadas, largoConsumidoMm: largoRealConsumido },
-      plates, costeo, placaAnchoTrabajo, placaLargoTrabajo,
+      multiNesting: desplazadas,
+      costeo, placaAnchoTrabajo, placaLargoTrabajo,
       margenMaquina: mg,
     };
   }, [placaInfo, medidas, imposicion]);
@@ -521,13 +525,11 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
                 {/* Indicadores */}
                 <div className="flex gap-3 mb-4 flex-wrap">
                   <Badge className="text-sm py-1 px-3">
-                    {preview.plates.placas} placa{preview.plates.placas !== 1 ? "s" : ""}
+                    {preview.multiNesting.placas} placa{preview.multiNesting.placas !== 1 ? "s" : ""}
                   </Badge>
-                  {preview.costeo.segmentoAplicado != null && (
-                    <Badge variant="outline" className="text-sm py-1 px-3">
-                      Consumido: {preview.costeo.ultimaPlacaPct}% → Cobrado: {preview.costeo.segmentoAplicado}%
-                    </Badge>
-                  )}
+                  <Badge variant="secondary" className="text-sm py-1 px-3">
+                    {preview.multiNesting.totalPiezas} piezas
+                  </Badge>
                   {preview.costeo.costoTotal > 0 && (
                     <Badge variant="default" className="text-sm py-1 px-3 bg-emerald-600">
                       Material: ${preview.costeo.costoTotal.toLocaleString("es-AR", { minimumFractionDigits: 2 })}
@@ -535,21 +537,38 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
                   )}
                 </div>
 
-                {/* SVG */}
-                {preview.nesting.piezasPorPlaca > 0 && (
-                  <PlacaSvg
-                    placaAnchoMm={preview.placaAnchoTrabajo}
-                    placaAltoMm={preview.placaLargoTrabajo}
-                    posiciones={preview.nesting.posiciones}
-                    cantidadPedida={medidas.reduce((s, m) => s + m.cantidad, 0)}
-                    estrategia={imposicion.estrategiaCosteo}
-                    largoConsumidoMm={preview.nesting.largoConsumidoMm}
-                    segmentoAplicadoPct={preview.costeo.segmentoAplicado}
-                    margenMaquina={preview.margenMaquina}
-                  />
+                {/* Leyenda de medidas */}
+                {medidas.filter((m) => m.anchoMm && m.altoMm).length > 1 && (
+                  <div className="flex gap-3 mb-3 flex-wrap text-xs">
+                    {medidas.filter((m) => m.anchoMm && m.altoMm).map((m, i) => (
+                      <div key={i} className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: MEDIDA_COLORS[i % MEDIDA_COLORS.length], opacity: 0.85 }} />
+                        <span>{(m.anchoMm! / 10)} × {(m.altoMm! / 10)} cm × {m.cantidad}</span>
+                      </div>
+                    ))}
+                  </div>
                 )}
-                {preview.nesting.piezasPorPlaca === 0 && (
-                  <p className="text-sm text-destructive">La pieza no cabe en la placa.</p>
+
+                {/* SVG por placa */}
+                {preview.multiNesting.placaLayouts.map((layout, pi) => (
+                  <div key={pi} className={preview.multiNesting.placas > 1 ? "mb-4" : ""}>
+                    {preview.multiNesting.placas > 1 && (
+                      <p className="text-xs text-muted-foreground mb-1">Placa {pi + 1}</p>
+                    )}
+                    <MultiMedidaPlacaSvg
+                      placaAnchoMm={preview.placaAnchoTrabajo}
+                      placaAltoMm={preview.placaLargoTrabajo}
+                      posiciones={layout.posiciones}
+                      largoConsumidoMm={layout.largoConsumidoMm}
+                      estrategia={imposicion.estrategiaCosteo}
+                      segmentoAplicadoPct={preview.costeo.segmentoAplicado}
+                      margenMaquina={preview.margenMaquina}
+                    />
+                  </div>
+                ))}
+
+                {preview.multiNesting.totalPiezas === 0 && (
+                  <p className="text-sm text-destructive">Las piezas no caben en la placa.</p>
                 )}
               </>
             )}
@@ -636,6 +655,88 @@ function SegmentosChipEditor({
 }
 
 // ── SVG de placa ──────────────────────────────────────────────────
+
+function MultiMedidaPlacaSvg({
+  placaAnchoMm,
+  placaAltoMm,
+  posiciones,
+  largoConsumidoMm,
+  estrategia,
+  segmentoAplicadoPct,
+  margenMaquina,
+}: {
+  placaAnchoMm: number;
+  placaAltoMm: number;
+  posiciones: Array<{ x: number; y: number; anchoMm: number; altoMm: number; medidaIndex: number }>;
+  largoConsumidoMm: number;
+  estrategia: string;
+  segmentoAplicadoPct: number | null;
+  margenMaquina: { arriba: number; abajo: number; izquierda: number; derecha: number };
+}) {
+  const needsRotate = placaAltoMm > placaAnchoMm;
+  const displayW = needsRotate ? placaAltoMm : placaAnchoMm;
+  const displayH = needsRotate ? placaAnchoMm : placaAltoMm;
+  const maxWidth = 600;
+  const scale = maxWidth / displayW;
+  const svgW = displayW * scale;
+  const svgH = displayH * scale;
+
+  const mg = needsRotate
+    ? { arriba: margenMaquina.izquierda, abajo: margenMaquina.derecha, izquierda: margenMaquina.abajo, derecha: margenMaquina.arriba }
+    : margenMaquina;
+
+  const displayPositions = needsRotate
+    ? posiciones.map((pos) => ({ ...pos, x: pos.y, y: placaAnchoMm - pos.x - pos.anchoMm, anchoMm: pos.altoMm, altoMm: pos.anchoMm }))
+    : posiciones;
+
+  // Área cobrada
+  let cobradoW = 0, cobradoH = 0;
+  if (estrategia === "largo_consumido") {
+    if (needsRotate) { cobradoW = Math.min(largoConsumidoMm, displayW); cobradoH = displayH; }
+    else { cobradoW = displayW; cobradoH = Math.min(largoConsumidoMm, displayH); }
+  } else if (estrategia === "segmentos_placa" && segmentoAplicadoPct != null) {
+    const f = segmentoAplicadoPct / 100;
+    if (needsRotate) { cobradoW = displayW * f; cobradoH = displayH; }
+    else { cobradoW = displayW; cobradoH = displayH * f; }
+  }
+
+  const MARGEN_COLOR = "#fecaca";
+  const LIBRE_COLOR = "#e0e7ef";
+  const DESPERDICIO_COLOR = "#fbbf24";
+
+  return (
+    <div className="space-y-2">
+      <svg width={svgW} height={svgH} viewBox={`0 0 ${displayW} ${displayH}`} className="border rounded bg-white">
+        <rect x={0} y={0} width={displayW} height={displayH} fill={LIBRE_COLOR} stroke="#94a3b8" strokeWidth={1} />
+        {mg.arriba > 0 && <rect x={0} y={0} width={displayW} height={mg.arriba} fill={MARGEN_COLOR} opacity={0.8} />}
+        {mg.abajo > 0 && <rect x={0} y={displayH - mg.abajo} width={displayW} height={mg.abajo} fill={MARGEN_COLOR} opacity={0.8} />}
+        {mg.izquierda > 0 && <rect x={0} y={0} width={mg.izquierda} height={displayH} fill={MARGEN_COLOR} opacity={0.8} />}
+        {mg.derecha > 0 && <rect x={displayW - mg.derecha} y={0} width={mg.derecha} height={displayH} fill={MARGEN_COLOR} opacity={0.8} />}
+        {cobradoW > 0 && cobradoH > 0 && (
+          <rect x={0} y={0} width={cobradoW} height={cobradoH} fill={DESPERDICIO_COLOR} opacity={0.5} stroke="#f59e0b" strokeWidth={0.5} strokeDasharray="4 2" />
+        )}
+        {displayPositions.map((pos, i) => (
+          <rect key={i} x={pos.x} y={pos.y} width={pos.anchoMm} height={pos.altoMm}
+            fill={MEDIDA_COLORS[pos.medidaIndex % MEDIDA_COLORS.length]}
+            stroke={MEDIDA_COLORS[pos.medidaIndex % MEDIDA_COLORS.length]}
+            strokeWidth={0.5} opacity={0.85} />
+        ))}
+        {(mg.arriba > 0 || mg.abajo > 0 || mg.izquierda > 0 || mg.derecha > 0) && (
+          <rect x={mg.izquierda} y={mg.arriba}
+            width={displayW - mg.izquierda - mg.derecha} height={displayH - mg.arriba - mg.abajo}
+            fill="none" stroke="#64748b" strokeWidth={0.5} strokeDasharray="2 2" />
+        )}
+      </svg>
+      <div className="flex gap-4 flex-wrap text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-sm" style={{ backgroundColor: DESPERDICIO_COLOR, opacity: 0.5 }} /><span>Desperdicio cobrado</span></div>
+        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-sm" style={{ backgroundColor: LIBRE_COLOR }} /><span>Espacio libre</span></div>
+        {(mg.arriba > 0 || mg.abajo > 0 || mg.izquierda > 0 || mg.derecha > 0) && (
+          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-sm" style={{ backgroundColor: MARGEN_COLOR }} /><span>Margen no imprimible</span></div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function PlacaSvg({
   placaAnchoMm,
