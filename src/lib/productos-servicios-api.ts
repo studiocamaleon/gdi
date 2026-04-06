@@ -711,6 +711,23 @@ export async function cotizarProductoVariante(
   );
 }
 
+export async function cotizarRigidPrintedByProducto(
+  productoId: string,
+  payload: {
+    cantidad: number;
+    periodo?: string;
+    parametros?: Record<string, unknown>;
+  },
+) {
+  return apiRequest<CotizacionProductoVariante>(
+    `/productos-servicios/${productoId}/rigidos-impresos/cotizar`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 export async function previewImposicionProductoVariante(
   varianteId: string,
   parametros: Record<string, unknown>,

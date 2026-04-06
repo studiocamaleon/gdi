@@ -174,7 +174,10 @@ function UnifiedProductDetailShell(props: ProductDetailViewProps) {
   const motorKey = `${producto.motorCodigo}@${producto.motorVersion}`;
   const motorUi = productUiRegistry[motorKey] ?? null;
   const extraTabs = motorUi?.extraTabs ?? [];
-  const hiddenTabs = new Set(motorUi?.hiddenTabs ?? []);
+  const hiddenTabsRaw = typeof motorUi?.hiddenTabs === "function"
+    ? motorUi.hiddenTabs(motorConfig)
+    : (motorUi?.hiddenTabs ?? []);
+  const hiddenTabs = new Set(hiddenTabsRaw);
   const defaultVisibleStandardTabs = STANDARD_TABS.filter((tab) => !hiddenTabs.has(tab.value));
   const orderedTabs: DetailShellTab[] = (() => {
     const order = motorUi?.tabOrder;

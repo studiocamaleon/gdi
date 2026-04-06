@@ -369,6 +369,15 @@ export class ProductosServiciosController {
     return this.service.updateGranFormatoChecklist(auth, id, payload);
   }
 
+  @Post(':id/rigidos-impresos/cotizar')
+  cotizarRigidPrintedByProducto(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: CotizarProductoVarianteDto,
+  ) {
+    return this.service.cotizarRigidPrintedByProducto(auth, id, payload);
+  }
+
   @Post(':id/gran-formato-costos/preview')
   previewGranFormatoCostos(
     @CurrentSession() auth: CurrentAuth,

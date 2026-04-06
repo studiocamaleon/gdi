@@ -652,12 +652,14 @@ export class ProductosServiciosService {
       throw new BadRequestException('Debe especificar ancho y alto de pieza mayores a 0.');
     }
 
-    // ── Resolver placa ──
+    // ── Resolver placa: del payload, del default, o la primera variante compatible ──
+    const variantesCompat = Array.isArray(rigidConfig.variantesCompatibles)
+      ? (rigidConfig.variantesCompatibles as string[]) : [];
     const placaVarianteId = String(
-      params.placaVarianteId ?? rigidConfig.placaVarianteIdDefault ?? '',
+      params.placaVarianteId ?? rigidConfig.placaVarianteIdDefault ?? variantesCompat[0] ?? '',
     );
     if (!placaVarianteId) {
-      throw new BadRequestException('Debe especificar una placa.');
+      throw new BadRequestException('No hay placas configuradas. Asigná un material y variantes en el tab Tecnologías.');
     }
     const placaVariante = await this.prisma.materiaPrimaVariante.findFirst({
       where: { id: placaVarianteId, tenantId: auth.tenantId },
@@ -760,8 +762,8 @@ export class ProductosServiciosService {
           costoProcesos += costo;
           bloquesProcesos.push({
             orden: op.orden,
-            codigo: op.centroCosto.codigo,
-            nombre: op.centroCosto.nombre,
+            codigo: op.codigo,
+            nombre: op.nombre,
             centroCostoId: op.centroCostoId,
             centroCostoNombre: op.centroCosto.nombre,
             setupMin, runMin: totalRunMin, totalMin, tarifaHora, costo,
@@ -827,6 +829,204 @@ export class ProductosServiciosService {
         configVersionBase, configVersionOverride,
         cantidad, periodoTarifa: periodo,
         inputJson: ({ cantidad, periodo, anchoMm, altoMm, placaVarianteId, tipoImpresion, caras, config: effectiveConfig } as unknown) as Prisma.InputJsonValue,
+        resultadoJson: (roundedResult as unknown) as Prisma.InputJsonValue,
+        total: new Prisma.Decimal(Number((roundedResult as any).total ?? 0)),
+      },
+    });
+
+    return { snapshotId: snapshot.id, ...roundedResult, createdAt: snapshot.createdAt.toISOString() };
+  }
+
+  /**
+   * Cotización de rígidos impresos a nivel producto (sin necesidad de variante).
+   * Las medidas se reciben como parámetros, no de una variante.
+   */
+  async cotizarRigidPrintedByProducto(
+    auth: CurrentAuth,
+    productoId: string,
+    payload: CotizarProductoVarianteDto,
+  ) {
+    const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+    const motor = this.resolveMotorOrThrow(producto.motorCodigo, producto.motorVersion);
+
+    // Buscar una variante existente o usar null
+    const variante = await this.prisma.productoVariante.findFirst({
+      where: { tenantId: auth.tenantId, productoServicioId: productoId, activo: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const cantidad = Math.max(1, Math.floor(Number(payload.cantidad ?? 1)));
+    const periodo = this.normalizePeriodo(payload.periodo);
+    const params = (payload.parametros ?? {}) as Record<string, unknown>;
+
+    // Cargar motor config
+    const configRow = await this.prisma.productoMotorConfig.findFirst({
+      where: {
+        tenantId: auth.tenantId, productoServicioId: productoId,
+        motorCodigo: motor.code, motorVersion: motor.version, activo: true,
+      },
+      orderBy: [{ versionConfig: 'desc' }],
+    });
+    const rigidConfig = this.mergeMotorConfig(
+      motor.code, configRow?.parametrosJson, params,
+    ) as Record<string, unknown>;
+    const imposicionCfg = (rigidConfig.imposicion ?? {}) as Record<string, unknown>;
+
+    // Medidas del payload (obligatorias en modo libre)
+    const anchoMm = Number(params.anchoMm ?? 0);
+    const altoMm = Number(params.altoMm ?? 0);
+    if (anchoMm <= 0 || altoMm <= 0) {
+      throw new BadRequestException('Debe especificar ancho y alto de pieza mayores a 0.');
+    }
+
+    // Resolver placa: del payload, del default, o la primera variante compatible
+    const variantesCompatibles = Array.isArray(rigidConfig.variantesCompatibles)
+      ? (rigidConfig.variantesCompatibles as string[])
+      : [];
+    const placaVarianteId = String(
+      params.placaVarianteId
+      ?? rigidConfig.placaVarianteIdDefault
+      ?? variantesCompatibles[0]
+      ?? '',
+    );
+    if (!placaVarianteId) {
+      throw new BadRequestException('No hay placas configuradas. Asigná un material y variantes en el tab Tecnologías.');
+    }
+    const placaVariante = await this.prisma.materiaPrimaVariante.findFirst({
+      where: { id: placaVarianteId, tenantId: auth.tenantId },
+    });
+    if (!placaVariante) {
+      throw new BadRequestException('Placa no encontrada.');
+    }
+    const precioPlaca = Number(placaVariante.precioReferencia ?? 0);
+    const placaAttrs = (placaVariante.atributosVarianteJson ?? {}) as Record<string, unknown>;
+    const placaAnchoRaw = Number(placaAttrs.ancho ?? 0);
+    const placaAltoRaw = Number(placaAttrs.alto ?? 0);
+    const placaAnchoMm = placaAnchoRaw < 10 ? Math.round(placaAnchoRaw * 1000) : placaAnchoRaw;
+    const placaAltoMm = placaAltoRaw < 10 ? Math.round(placaAltoRaw * 1000) : placaAltoRaw;
+
+    // Márgenes de máquina
+    const mgConfig = (imposicionCfg.margenMaquina ?? {}) as Record<string, unknown>;
+    const margenArr = Number(mgConfig.arriba ?? 0);
+    const margenAba = Number(mgConfig.abajo ?? 0);
+    const margenIzq = Number(mgConfig.izquierda ?? 0);
+    const margenDer = Number(mgConfig.derecha ?? 0);
+
+    // Orientación de placa
+    const orientacion = String(imposicionCfg.orientacionPlaca ?? 'usar_lado_corto');
+    const ladoCorto = Math.min(placaAnchoMm, placaAltoMm);
+    const ladoLargo = Math.max(placaAnchoMm, placaAltoMm);
+    const pAnchoTrabajo = orientacion === 'usar_lado_largo' ? ladoLargo : ladoCorto;
+    const pLargoTrabajo = orientacion === 'usar_lado_largo' ? ladoCorto : ladoLargo;
+
+    // Área imprimible
+    const areaAncho = pAnchoTrabajo - margenIzq - margenDer;
+    const areaAlto = pLargoTrabajo - margenArr - margenAba;
+
+    // Nesting
+    const nesting = RigidPrintedCalc.nestRectangularGrid({
+      piezaAnchoMm: anchoMm, piezaAltoMm: altoMm,
+      placaAnchoMm: areaAncho, placaAltoMm: areaAlto,
+      separacionHMm: Number(imposicionCfg.separacionHorizontalMm ?? 3),
+      separacionVMm: Number(imposicionCfg.separacionVerticalMm ?? 3),
+      margenMm: 0, permitirRotacion: Boolean(imposicionCfg.permitirRotacion ?? true),
+    });
+    const plates = RigidPrintedCalc.calculatePlatesNeeded(cantidad, nesting.piezasPorPlaca);
+
+    // Costeo material
+    const estrategia = String(imposicionCfg.estrategiaCosteo ?? 'segmentos_placa') as 'm2_exacto' | 'largo_consumido' | 'segmentos_placa';
+    const segmentos = Array.isArray(imposicionCfg.segmentosPlaca)
+      ? (imposicionCfg.segmentosPlaca as number[]) : [25, 50, 75, 100];
+    const costeoMaterial = RigidPrintedCalc.calcularCosteoMaterial({
+      estrategia, precioPlaca, placaAnchoMm: pAnchoTrabajo, placaAltoMm: pLargoTrabajo,
+      nesting, placasNecesarias: plates.placas,
+      piezasUltimaPlaca: cantidad % nesting.piezasPorPlaca || nesting.piezasPorPlaca,
+      segmentosPlaca: segmentos, cantidadTotal: cantidad,
+      piezaAnchoMm: anchoMm, piezaAltoMm: altoMm,
+    });
+
+    // Doble faz
+    const caras = String(params.caras ?? rigidConfig.carasDefault ?? 'simple_faz');
+    const multiplicadorCaras = caras === 'doble_faz' ? 2 : 1;
+
+    // Ruta de producción
+    const tipoImpresion = String(params.tipoImpresion ?? 'directa');
+    const rutaId = tipoImpresion === 'flexible_montado'
+      ? rigidConfig.rutaFlexibleMontadoId : rigidConfig.rutaImpresionDirectaId;
+    const procesoDefId = String(rutaId ?? producto.procesoDefinicionDefaultId ?? '');
+
+    let costoProcesos = 0;
+    const bloquesProcesos: Array<{
+      orden: number; codigo: string; nombre: string;
+      centroCostoId: string | null; centroCostoNombre: string;
+      setupMin: number; runMin: number; totalMin: number;
+      tarifaHora: number; costo: number;
+    }> = [];
+
+    if (procesoDefId) {
+      const procesoDef = await this.prisma.procesoDefinicion.findFirst({
+        where: { id: procesoDefId, tenantId: auth.tenantId },
+        include: {
+          operaciones: {
+            orderBy: { orden: 'asc' },
+            include: { centroCosto: true, maquina: true, perfilOperativo: true },
+          },
+        },
+      });
+      if (procesoDef?.operaciones) {
+        for (const op of procesoDef.operaciones) {
+          if (!op.centroCosto) continue;
+          const tarifa = await this.prisma.centroCostoTarifaPeriodo.findFirst({
+            where: {
+              tenantId: auth.tenantId, centroCostoId: op.centroCosto.id,
+              periodo, estado: 'PUBLICADA',
+            },
+          });
+          const tarifaHora = Number(tarifa?.tarifaCalculada ?? 0);
+          const setupMin = Number(op.setupMin ?? 0);
+          const totalRunMin = Number(op.runMin ?? 0) * cantidad * multiplicadorCaras;
+          const totalMin = setupMin + totalRunMin + Number(op.cleanupMin ?? 0) + Number(op.tiempoFijoMin ?? 0);
+          const costo = this.roundProductNumber((totalMin / 60) * tarifaHora);
+          costoProcesos += costo;
+          bloquesProcesos.push({
+            orden: op.orden, codigo: op.codigo, nombre: op.nombre,
+            centroCostoId: op.centroCostoId, centroCostoNombre: op.centroCosto.nombre,
+            setupMin, runMin: totalRunMin, totalMin, tarifaHora, costo,
+          });
+        }
+      }
+    }
+
+    const total = this.roundProductNumber(costeoMaterial.costoTotal + costoProcesos);
+    const unitario = cantidad > 0 ? this.roundProductNumber(total / cantidad) : total;
+
+    const result = {
+      productoServicioId: productoId,
+      productoNombre: producto.nombre,
+      varianteId: variante?.id ?? null,
+      varianteNombre: variante?.nombre ?? 'Medida libre',
+      motorCodigo: motor.code, motorVersion: motor.version,
+      periodo, cantidad,
+      bloques: { procesos: bloquesProcesos, materiales: [{ materiaPrimaVarianteId: placaVarianteId, nombre: placaVariante.nombreVariante ?? 'Placa', unidad: 'placa', cantidad: plates.placas, costoUnitario: precioPlaca, costoTotal: costeoMaterial.costoTotal }] },
+      subtotales: { procesos: costoProcesos, material: costeoMaterial.costoTotal, toner: 0, desgaste: 0, consumiblesTerminacion: 0, adicionalesMateriales: 0, adicionalesCostEffects: 0 },
+      total, unitario,
+      trazabilidad: {
+        config: rigidConfig, tipoImpresion, caras, multiplicadorCaras,
+        estrategiaCosteo: estrategia, costeoDetalle: costeoMaterial.detalle,
+        resumenTecnico: { anchoMm, altoMm, placaAnchoMm: pAnchoTrabajo, placaAltoMm: pLargoTrabajo, piezasPorPlaca: nesting.piezasPorPlaca, placasNecesarias: plates.placas, aprovechamientoPct: nesting.aprovechamientoPct, rotada: nesting.rotada, sobrantes: plates.sobrantes },
+      },
+    };
+
+    const roundedResult = this.normalizeProductNumericPrecision(result);
+
+    const snapshot = await this.prisma.cotizacionProductoSnapshot.create({
+      data: {
+        tenantId: auth.tenantId, productoServicioId: productoId,
+        productoVarianteId: variante?.id ?? null,
+        motorCodigo: motor.code, motorVersion: motor.version,
+        configVersionBase: configRow?.versionConfig ?? null, configVersionOverride: null,
+        cantidad, periodoTarifa: periodo,
+        inputJson: ({ cantidad, periodo, anchoMm, altoMm, placaVarianteId, tipoImpresion, caras } as unknown) as Prisma.InputJsonValue,
         resultadoJson: (roundedResult as unknown) as Prisma.InputJsonValue,
         total: new Prisma.Decimal(Number((roundedResult as any).total ?? 0)),
       },

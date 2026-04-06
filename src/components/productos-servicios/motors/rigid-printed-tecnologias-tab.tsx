@@ -54,18 +54,23 @@ type RigidPrintedConfig = {
   [key: string]: unknown;
 };
 
+/** Máquinas que pueden imprimir directo sobre rigido */
 const PLANTILLAS_DIRECTA = new Set([
   "impresora_uv_mesa_extensora",
   "impresora_uv_flatbed",
 ]);
 
+/** Máquinas para imprimir/cortar sustrato flexible (incluye híbridas que hacen ambas) */
 const PLANTILLAS_FLEXIBLE = new Set([
+  "impresora_uv_mesa_extensora", // híbridas UV pueden imprimir en rollo también
+  "impresora_uv_flatbed",
   "impresora_uv_rollo",
   "impresora_solvente",
   "impresora_latex",
   "impresora_inyeccion_tinta",
   "impresora_sublimacion_gran_formato",
   "plotter_de_corte",
+  "mesa_de_corte",
 ]);
 
 const CARAS_OPTIONS = [
@@ -125,6 +130,7 @@ export function RigidPrintedTecnologiasTab(props: ProductTabProps) {
       setSaving(true);
       await upsertProductoMotorConfig(props.producto.id, config);
       await loadConfig();
+      await props.refreshMotorConfig();
       toast.success("Configuración guardada.");
     } catch (err) {
       console.error(err);
@@ -289,7 +295,9 @@ export function RigidPrintedTecnologiasTab(props: ProductTabProps) {
               }
             >
               <SelectTrigger className="mt-1 max-w-sm">
-                <SelectValue placeholder="Seleccionar material" />
+                <SelectValue placeholder="Seleccionar material">
+                  {selectedMaterial?.nombre ?? "Seleccionar material"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {materialesRigidos.map((m) => (
@@ -370,7 +378,9 @@ export function RigidPrintedTecnologiasTab(props: ProductTabProps) {
               onValueChange={(v) => update({ carasDefault: v || "simple_faz" })}
             >
               <SelectTrigger className="mt-1 max-w-xs">
-                <SelectValue />
+                <SelectValue>
+                  {CARAS_OPTIONS.find((o) => o.value === (config.carasDefault ?? "simple_faz"))?.label ?? "Simple faz"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {CARAS_OPTIONS.map((opt) => (
@@ -391,10 +401,12 @@ export function RigidPrintedTecnologiasTab(props: ProductTabProps) {
           value={config.modoMedidas ?? "estandar"}
           onValueChange={(v) => update({ modoMedidas: v || "estandar" })}
         >
-          <SelectTrigger className="max-w-md">
-            <SelectValue />
+          <SelectTrigger className="w-full max-w-md">
+            <SelectValue>
+              {MODO_MEDIDAS_OPTIONS.find((o) => o.value === (config.modoMedidas ?? "estandar"))?.label ?? "Medidas estándar"}
+            </SelectValue>
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="min-w-[320px]">
             {MODO_MEDIDAS_OPTIONS.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
             ))}
@@ -453,7 +465,6 @@ function MaquinasPerfilesSection({
                   onCheckedChange={() => onToggleMaquina(tipoKey, m.id)}
                 />
                 <CardTitle className="text-sm font-medium">{m.nombre}</CardTitle>
-                <Badge variant="outline" className="text-[10px]">{m.plantilla}</Badge>
               </div>
             </CardHeader>
             {isActive && perfiles.length > 0 && (

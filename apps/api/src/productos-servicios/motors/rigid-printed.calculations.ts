@@ -206,15 +206,15 @@ function costeoLargoConsumido(input: CosteoInput): CosteoResult {
   let ocupacionPct = 0;
 
   if (piezasRestantes > 0 && nesting.columnas > 0) {
-    const filasNecesarias = Math.ceil(piezasRestantes / nesting.columnas);
-    const pW = nesting.rotada ? input.piezaAltoMm : input.piezaAnchoMm;
     const pH = nesting.rotada ? input.piezaAnchoMm : input.piezaAltoMm;
-    const largoConsumido = input.nesting.posiciones.length > 0
-      ? filasNecesarias * pH + (filasNecesarias - 1) * 3 + 2 * 5 // approx with default margins
-      : 0;
-    const areaCobradaM2 = (input.placaAnchoMm * largoConsumido) / 1_000_000;
-    costoUltimaPlaca = round2(areaCobradaM2 * pm2);
-    ocupacionPct = round2((piezasRestantes / piezasPorPlaca) * 100);
+    const filasNecesarias = Math.ceil(piezasRestantes / nesting.columnas);
+    // Largo consumido real usando largoConsumidoMm del nesting result
+    const largoConsumido = nesting.largoConsumidoMm > 0
+      ? (filasNecesarias / nesting.filas) * nesting.largoConsumidoMm
+      : filasNecesarias * pH;
+    // Se cobra proporción del largo consumido sobre largo total de placa
+    costoUltimaPlaca = round2(input.precioPlaca * (largoConsumido / input.placaAltoMm));
+    ocupacionPct = round2((largoConsumido / input.placaAltoMm) * 100);
   }
 
   return {

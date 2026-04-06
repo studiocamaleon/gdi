@@ -38,10 +38,13 @@ export type ImposicionConfig = {
   segmentosPlaca: number[];
   separacionHorizontalMm: number;
   separacionVerticalMm: number;
-  margenPlacaMm: number;
   permitirRotacion: boolean;
   /** Prioridad cuando hay rígido + flexible montado */
   prioridadNesting: PrioridadNesting;
+  /** Qué lado de la placa se usa como ancho de trabajo */
+  orientacionPlaca: 'usar_lado_corto' | 'usar_lado_largo';
+  /** Márgenes no imprimibles de la máquina (mm), override sobre defaults */
+  margenMaquina: { arriba: number; abajo: number; izquierda: number; derecha: number };
 };
 
 // ── Config raíz del motor ─────────────────────────────────────────
@@ -84,9 +87,10 @@ export const DEFAULT_IMPOSICION_CONFIG: ImposicionConfig = {
   segmentosPlaca: [25, 50, 75, 100],
   separacionHorizontalMm: 3,
   separacionVerticalMm: 3,
-  margenPlacaMm: 5,
   permitirRotacion: true,
   prioridadNesting: 'rigido_manda',
+  orientacionPlaca: 'usar_lado_corto',
+  margenMaquina: { arriba: 0, abajo: 0, izquierda: 0, derecha: 0 },
 };
 
 export const DEFAULT_IMPRESION_TIPO_CONFIG: ImpresionTipoConfig = {

@@ -96,6 +96,22 @@ export function nestRectangularGrid(
   };
 }
 
+/**
+ * Calcula el largo consumido en la placa para una cantidad específica de piezas.
+ * Solo cuenta las filas necesarias para las piezas pedidas (no toda la placa).
+ */
+export function calcularLargoConsumido(
+  cantidadPiezas: number,
+  columnas: number,
+  piezaAltoMm: number,
+  separacionV: number,
+  margen: number,
+): number {
+  if (columnas <= 0 || cantidadPiezas <= 0) return 0;
+  const filasNecesarias = Math.ceil(cantidadPiezas / columnas);
+  return margen + filasNecesarias * piezaAltoMm + (filasNecesarias - 1) * separacionV + margen;
+}
+
 export function calculatePlatesNeeded(totalPiezas: number, piezasPorPlaca: number) {
   if (piezasPorPlaca <= 0) return { placas: 0, sobrantes: 0 };
   const placas = Math.ceil(totalPiezas / piezasPorPlaca);
@@ -122,6 +138,8 @@ export function calcularCosteoPreview(
   cantidad: number,
   piezasPorPlaca: number,
   segmentos: number[],
+  largoConsumidoMm?: number,
+  columnas?: number,
 ): CosteoPreview {
   if (piezasPorPlaca <= 0) {
     return { estrategia, costoTotal: 0, placasCompletas: 0, ultimaPlacaPct: null, segmentoAplicado: null };
@@ -145,14 +163,20 @@ export function calcularCosteoPreview(
     const placasLlenas = Math.floor(cantidad / piezasPorPlaca);
     const costoLlenas = placasLlenas * precioPlaca;
     const piezasRest = cantidad - placasLlenas * piezasPorPlaca;
-    // Simplificado: proporción del largo consumido
-    const costoUltima = piezasRest > 0
-      ? r2(precioPlaca * (piezasRest / piezasPorPlaca))
-      : 0;
+
+    let costoUltima = 0;
+    if (piezasRest > 0 && largoConsumidoMm && placaAltoMm > 0) {
+      // Se cobra proporción del largo consumido sobre el largo total de la placa
+      costoUltima = r2(precioPlaca * (largoConsumidoMm / placaAltoMm));
+    } else if (piezasRest > 0) {
+      // Fallback: proporción por piezas
+      costoUltima = r2(precioPlaca * (piezasRest / piezasPorPlaca));
+    }
+
     return {
       estrategia, costoTotal: r2(costoLlenas + costoUltima),
       placasCompletas: placasLlenas,
-      ultimaPlacaPct: piezasRest > 0 ? r2(ocupacionUltima) : null,
+      ultimaPlacaPct: piezasRest > 0 ? r2((largoConsumidoMm ?? 0) / placaAltoMm * 100) : null,
       segmentoAplicado: null,
     };
   }
