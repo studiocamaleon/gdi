@@ -1057,20 +1057,27 @@ export class ProductosServiciosService {
       variantChips?: Array<{ label: string; value: string }>;
     }> = [];
 
-    // Sustrato Base (piezas)
-    const costoBase = this.roundProductNumber(areaPiezasM2 * precioM2Placa);
+    // Sustrato desglosado por línea de medida
     const sustratoNombre = placaVariante.nombreVariante
       ? `${(placaVariante as any).materiaPrima?.nombre ?? 'Sustrato'} — ${placaVariante.nombreVariante}`
       : (placaVariante as any).materiaPrima?.nombre ?? 'Sustrato rígido';
-    materiasPrimas.push({
-      tipo: 'Sustrato',
-      nombre: sustratoNombre,
-      origen: 'Base',
-      unidad: 'm2',
-      cantidad: areaPiezasM2,
-      costoUnitario: precioM2Placa,
-      costo: costoBase,
-    });
+
+    let costoBase = 0;
+    for (const m of medidasInput) {
+      const m2Linea = this.roundProductNumber((m.anchoMm * m.altoMm * m.cantidad) / 1_000_000);
+      const costoLinea = this.roundProductNumber(m2Linea * precioM2Placa);
+      costoBase += costoLinea;
+      materiasPrimas.push({
+        tipo: 'Sustrato',
+        nombre: sustratoNombre,
+        origen: `${m.cantidad}× ${(m.anchoMm / 10).toFixed(0)}×${(m.altoMm / 10).toFixed(0)} cm`,
+        unidad: 'm2',
+        cantidad: m2Linea,
+        costoUnitario: precioM2Placa,
+        costo: costoLinea,
+      });
+    }
+    costoBase = this.roundProductNumber(costoBase);
 
     // Sustrato Desperdicio (si aplica según estrategia)
     if (costoMaterialTotal > costoBase) {
@@ -1080,7 +1087,7 @@ export class ProductosServiciosService {
         : this.roundProductNumber(Math.max(0, areaPlacaTotalM2 - areaPiezasM2));
       materiasPrimas.push({
         tipo: 'Sustrato',
-        nombre: materiasPrimas[0].nombre + ' · Desperdicio',
+        nombre: sustratoNombre + ' · Desperdicio',
         origen: 'Desperdicio',
         unidad: 'm2',
         cantidad: areaDesperdicioCobrada,
@@ -1162,7 +1169,17 @@ export class ProductosServiciosService {
     }
 
     const total = this.roundProductNumber(costoMaterialTotal + costoProcesos + costoTintas);
-    const unitario = cantidadTotal > 0 ? this.roundProductNumber(total / cantidadTotal) : total;
+
+    // Cantidad comercial: si la unidad es m², convertir piezas a m²
+    const unidadComercial = producto.unidadComercial ?? 'unidad';
+    const cantidadComercial = unidadComercial === 'm2'
+      ? this.roundProductNumber(areaPiezasM2)
+      : unidadComercial === 'metro_lineal'
+        ? this.roundProductNumber(
+            medidasInput.reduce((s, m) => s + (Math.max(m.anchoMm, m.altoMm) / 1000) * m.cantidad, 0),
+          )
+        : cantidadTotal;
+    const unitario = cantidadComercial > 0 ? this.roundProductNumber(total / cantidadComercial) : total;
 
     const result = {
       productoServicioId: productoId,
@@ -1170,7 +1187,7 @@ export class ProductosServiciosService {
       varianteId: variante?.id ?? null,
       varianteNombre: variante?.nombre ?? 'Medida libre',
       motorCodigo: motor.code, motorVersion: motor.version,
-      periodo, cantidad: cantidadTotal,
+      periodo, cantidad: cantidadComercial, cantidadPiezas: cantidadTotal,
       bloques: { procesos: bloquesProcesos, materiales: materiasPrimas },
       subtotales: {
         procesos: costoProcesos,
@@ -1184,6 +1201,12 @@ export class ProductosServiciosService {
         config: rigidConfig, tipoImpresion, caras, multiplicadorCaras,
         estrategiaCosteo: estrategia, costeoDetalle,
         resumenTecnico: { anchoMm, altoMm, placaAnchoMm: pAnchoTrabajo, placaAltoMm: pLargoTrabajo, piezasPorPlaca: multiNesting.totalPiezas, placasNecesarias: multiNesting.placas, aprovechamientoPct: multiNesting.aprovechamientoPct, rotada: false, sobrantes: 0 },
+        medidasDetalle: medidasInput.map((m) => ({
+          anchoMm: m.anchoMm,
+          altoMm: m.altoMm,
+          cantidad: m.cantidad,
+          m2: this.roundProductNumber((m.anchoMm * m.altoMm * m.cantidad) / 1_000_000),
+        })),
       },
     };
 
@@ -1195,8 +1218,8 @@ export class ProductosServiciosService {
         productoVarianteId: variante?.id ?? null,
         motorCodigo: motor.code, motorVersion: motor.version,
         configVersionBase: configRow?.versionConfig ?? null, configVersionOverride: null,
-        cantidad, periodoTarifa: periodo,
-        inputJson: ({ cantidad, periodo, anchoMm, altoMm, placaVarianteId, tipoImpresion, caras } as unknown) as Prisma.InputJsonValue,
+        cantidad: Math.round(cantidadComercial * 100) / 100, periodoTarifa: periodo,
+        inputJson: ({ cantidadComercial, cantidadPiezas: cantidadTotal, periodo, medidas: medidasInput, placaVarianteId, tipoImpresion, caras, unidadComercial } as unknown) as Prisma.InputJsonValue,
         resultadoJson: (roundedResult as unknown) as Prisma.InputJsonValue,
         total: new Prisma.Decimal(Number((roundedResult as any).total ?? 0)),
       },

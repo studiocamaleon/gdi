@@ -754,17 +754,19 @@ function MateriasPrimasBreakdown({ result, nestingPreview, medidas, config }: {
         </div>
       ))}
 
-      {/* Total general */}
-      <div className="rounded-lg border border-primary bg-primary/5 p-4">
-        <div className="flex justify-between items-center">
-          <div>
-            <p className="text-xs text-muted-foreground">Costo total (materiales + procesos)</p>
-            <p className="text-2xl font-bold tabular-nums mt-1">{formatCurrency(result.total)}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-muted-foreground">Unitario</p>
-            <p className="text-lg font-semibold tabular-nums mt-1">{formatCurrency(result.unitario)}</p>
-          </div>
+      {/* Total (formato gran formato) */}
+      <div className="rounded-lg border bg-muted/20 p-4">
+        <div className="flex items-center justify-between">
+          <span className="font-medium">Total materias primas</span>
+          <span className="font-semibold tabular-nums">{formatCurrency((result.subtotales.material ?? 0) + (result.subtotales.tinta ?? 0))}</span>
+        </div>
+        <div className="flex items-center justify-between mt-1">
+          <span className="font-medium">Total centros de costo</span>
+          <span className="font-semibold tabular-nums">{formatCurrency(result.subtotales.procesos)}</span>
+        </div>
+        <div className="mt-2 flex items-center justify-between border-t pt-2">
+          <span className="font-medium">Costo técnico total</span>
+          <span className="text-lg font-semibold tabular-nums">{formatCurrency(result.total)}</span>
         </div>
       </div>
     </div>
