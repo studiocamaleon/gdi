@@ -364,118 +364,134 @@ export function nestMultiMedida(
   let totalPiezas = 0;
   let totalAreaUtil = 0;
 
-  // ── Skyline bin-packing para una placa ──────────────────────────
+  // ── Bin-packing 2D con free rectangles (Maximal Rectangles) ─────
   function packPlaca(piezas: PiezaPendiente[]): {
     colocadas: MultiMedidaPiece[];
     noColocadas: PiezaPendiente[];
     maxY: number;
   } {
-    // Skyline: array de segmentos { x, y, w } representando el borde superior
-    type SkylineSegment = { x: number; y: number; w: number };
-    let skyline: SkylineSegment[] = [{ x: 0, y: 0, w: areaW }];
+    // Free rectangles: lista de rectángulos libres disponibles
+    type FreeRect = { x: number; y: number; w: number; h: number };
+    let freeRects: FreeRect[] = [{ x: 0, y: 0, w: areaW, h: areaH }];
     const colocadas: MultiMedidaPiece[] = [];
     const noColocadas: PiezaPendiente[] = [];
 
+    function findBestPosition(pw: number, ph: number): { x: number; y: number; idx: number } | null {
+      let bestY = Infinity;
+      let bestX = Infinity;
+      let bestIdx = -1;
+
+      for (let i = 0; i < freeRects.length; i++) {
+        const r = freeRects[i];
+        if (pw <= r.w + 0.01 && ph <= r.h + 0.01) {
+          // Bottom-left: menor Y, luego menor X
+          if (r.y < bestY || (r.y === bestY && r.x < bestX)) {
+            bestY = r.y;
+            bestX = r.x;
+            bestIdx = i;
+          }
+        }
+      }
+
+      return bestIdx >= 0 ? { x: bestX, y: bestY, idx: bestIdx } : null;
+    }
+
+    function splitFreeRects(px: number, py: number, pw: number, ph: number) {
+      // Añadir separación a la pieza colocada
+      const occX = px;
+      const occY = py;
+      const occW = pw + sepH;
+      const occH = ph + sepV;
+
+      const newFree: FreeRect[] = [];
+
+      for (const r of freeRects) {
+        // Si no intersecta, mantener
+        if (occX >= r.x + r.w - 0.01 || occX + occW <= r.x + 0.01 ||
+            occY >= r.y + r.h - 0.01 || occY + occH <= r.y + 0.01) {
+          newFree.push(r);
+          continue;
+        }
+
+        // Generar hasta 4 rectángulos libres alrededor de la pieza
+
+        // Derecha
+        if (occX + occW < r.x + r.w - 0.01) {
+          newFree.push({ x: occX + occW, y: r.y, w: r.x + r.w - (occX + occW), h: r.h });
+        }
+        // Izquierda
+        if (occX > r.x + 0.01) {
+          newFree.push({ x: r.x, y: r.y, w: occX - r.x, h: r.h });
+        }
+        // Abajo
+        if (occY + occH < r.y + r.h - 0.01) {
+          newFree.push({ x: r.x, y: occY + occH, w: r.w, h: r.y + r.h - (occY + occH) });
+        }
+        // Arriba (raro para bottom-left pero necesario)
+        if (occY > r.y + 0.01) {
+          newFree.push({ x: r.x, y: r.y, w: r.w, h: occY - r.y });
+        }
+      }
+
+      // Eliminar rectángulos contenidos en otros (maximizar)
+      freeRects = [];
+      for (let i = 0; i < newFree.length; i++) {
+        let contained = false;
+        for (let j = 0; j < newFree.length; j++) {
+          if (i === j) continue;
+          const a = newFree[i];
+          const b = newFree[j];
+          if (a.x >= b.x - 0.01 && a.y >= b.y - 0.01 &&
+              a.x + a.w <= b.x + b.w + 0.01 && a.y + a.h <= b.y + b.h + 0.01) {
+            contained = true;
+            break;
+          }
+        }
+        if (!contained && newFree[i].w > 1 && newFree[i].h > 1) {
+          freeRects.push(newFree[i]);
+        }
+      }
+    }
+
     for (const pieza of piezas) {
-      // Generar orientaciones posibles
       type Orient = { w: number; h: number; rotada: boolean };
       const orients: Orient[] = [{ w: pieza.origW, h: pieza.origH, rotada: false }];
       if (permitirRotacion && pieza.origW !== pieza.origH) {
         orients.push({ w: pieza.origH, h: pieza.origW, rotada: true });
       }
 
-      // Para "aprovechar ancho" preferir orientación más ancha primero
+      // Ordenar según config de aprovechamiento
       if (orientacionPlaca === 'usar_lado_corto') {
-        orients.sort((a, b) => b.w - a.w);
+        orients.sort((a, b) => b.w - a.w); // más ancha primero
       } else {
-        orients.sort((a, b) => b.h - a.h);
+        orients.sort((a, b) => b.h - a.h); // más alta primero
       }
 
       let placed = false;
 
+      // Probar cada orientación y elegir la que da la mejor posición (bottom-left)
+      let bestPos: { x: number; y: number; orient: Orient } | null = null;
+
       for (const orient of orients) {
-        if (placed) break;
-        const pw = orient.w + sepH; // ancho con separación
-        const ph = orient.h + sepV; // alto con separación
-
-        // Buscar la mejor posición en el skyline (más abajo y más a la izquierda)
-        let bestX = -1;
-        let bestY = Infinity;
-        let bestSegIdx = -1;
-
-        for (let si = 0; si < skyline.length; si++) {
-          const seg = skyline[si];
-
-          // Verificar si la pieza cabe empezando en este segmento
-          if (seg.x + orient.w > areaW + 0.01) continue;
-
-          // Calcular el Y máximo que necesita la pieza (puede abarcar múltiples segmentos)
-          let maxYNeeded = seg.y;
-          let widthCovered = 0;
-          for (let sj = si; sj < skyline.length && widthCovered < orient.w - 0.01; sj++) {
-            maxYNeeded = Math.max(maxYNeeded, skyline[sj].y);
-            widthCovered += skyline[sj].w;
-          }
-
-          if (maxYNeeded + orient.h > areaH + 0.01) continue; // No cabe en alto
-
-          // Es esta posición mejor (más abajo, luego más a la izquierda)?
-          if (maxYNeeded < bestY || (maxYNeeded === bestY && seg.x < bestX)) {
-            bestY = maxYNeeded;
-            bestX = seg.x;
-            bestSegIdx = si;
+        const pos = findBestPosition(orient.w, orient.h);
+        if (pos) {
+          if (!bestPos || pos.y < bestPos.y || (pos.y === bestPos.y && pos.x < bestPos.x)) {
+            bestPos = { x: pos.x, y: pos.y, orient };
           }
         }
+      }
 
-        if (bestSegIdx >= 0 && bestX >= 0) {
-          // Colocar pieza
-          colocadas.push({
-            x: margen + bestX,
-            y: margen + bestY,
-            anchoMm: orient.w,
-            altoMm: orient.h,
-            medidaIndex: pieza.mi,
-            rotada: orient.rotada,
-          });
-
-          // Actualizar skyline: el área ocupada por esta pieza sube el skyline
-          const newTop = bestY + orient.h + sepV;
-          const pieceRight = bestX + orient.w + sepH;
-
-          // Reconstruir skyline
-          const newSkyline: SkylineSegment[] = [];
-          for (const s of skyline) {
-            const sRight = s.x + s.w;
-            if (sRight <= bestX + 0.01 || s.x >= pieceRight - 0.01) {
-              // Segmento fuera del área de la pieza — mantener
-              newSkyline.push(s);
-            } else {
-              // Segmento parcialmente cubierto
-              if (s.x < bestX - 0.01) {
-                newSkyline.push({ x: s.x, y: s.y, w: bestX - s.x });
-              }
-              if (sRight > pieceRight + 0.01) {
-                newSkyline.push({ x: pieceRight, y: s.y, w: sRight - pieceRight });
-              }
-            }
-          }
-          // Agregar segmento de la pieza
-          newSkyline.push({ x: bestX, y: newTop, w: orient.w + sepH });
-
-          // Ordenar y fusionar segmentos adyacentes con mismo Y
-          newSkyline.sort((a, b) => a.x - b.x);
-          skyline = [];
-          for (const s of newSkyline) {
-            const last = skyline[skyline.length - 1];
-            if (last && Math.abs(last.y - s.y) < 0.01 && Math.abs((last.x + last.w) - s.x) < 0.5) {
-              last.w += s.w;
-            } else {
-              skyline.push({ ...s });
-            }
-          }
-
-          placed = true;
-        }
+      if (bestPos) {
+        colocadas.push({
+          x: margen + bestPos.x,
+          y: margen + bestPos.y,
+          anchoMm: bestPos.orient.w,
+          altoMm: bestPos.orient.h,
+          medidaIndex: pieza.mi,
+          rotada: bestPos.orient.rotada,
+        });
+        splitFreeRects(bestPos.x, bestPos.y, bestPos.orient.w, bestPos.orient.h);
+        placed = true;
       }
 
       if (!placed) {
@@ -483,7 +499,6 @@ export function nestMultiMedida(
       }
     }
 
-    // largoConsumidoMm = desde el inicio de la placa hasta el borde inferior de la pieza más baja
     const maxY = colocadas.length > 0
       ? Math.max(...colocadas.map((p) => p.y + p.altoMm))
       : 0;
