@@ -69,6 +69,11 @@ export type RigidPrintedMotorConfig = {
   variantesCompatibles: string[];
   placaVarianteIdDefault: string | null;
 
+  // Material flexible (solo cuando flexible_montado está activo)
+  materialFlexibleId: string | null;
+  variantesFlexiblesCompatibles: string[];
+  varianteFlexibleDefaultId: string | null;
+
   // Caras
   carasDisponibles: ('simple_faz' | 'doble_faz')[];
   carasDefault: 'simple_faz' | 'doble_faz';
@@ -110,6 +115,9 @@ export const DEFAULT_RIGID_PRINTED_CONFIG: RigidPrintedMotorConfig = {
   materialRigidoId: null,
   variantesCompatibles: [],
   placaVarianteIdDefault: null,
+  materialFlexibleId: null,
+  variantesFlexiblesCompatibles: [],
+  varianteFlexibleDefaultId: null,
   carasDisponibles: ['simple_faz'],
   carasDefault: 'simple_faz',
   modoMedidas: 'estandar',

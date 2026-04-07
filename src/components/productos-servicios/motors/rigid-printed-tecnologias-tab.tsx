@@ -106,6 +106,10 @@ export function RigidPrintedTecnologiasTab(props: ProductTabProps) {
     () => materiasPrimas.filter((mp) => mp.subfamilia === "sustrato_rigido"),
     [materiasPrimas],
   );
+  const materialesFlexibles = React.useMemo(
+    () => materiasPrimas.filter((mp) => mp.subfamilia === "sustrato_rollo_flexible"),
+    [materiasPrimas],
+  );
 
   const loadConfig = React.useCallback(async () => {
     try {
@@ -229,6 +233,20 @@ export function RigidPrintedTecnologiasTab(props: ProductTabProps) {
     });
   }, []);
 
+  const toggleVarianteFlexible = React.useCallback((varianteId: string) => {
+    setConfig((prev) => {
+      if (!prev) return prev;
+      const current = (prev as any).variantesFlexiblesCompatibles ?? [];
+      const has = current.includes(varianteId);
+      return {
+        ...prev,
+        variantesFlexiblesCompatibles: has
+          ? current.filter((id: string) => id !== varianteId)
+          : [...current, varianteId],
+      };
+    });
+  }, []);
+
   if (loading || !config) {
     return <GdiSpinner />;
   }
@@ -237,6 +255,7 @@ export function RigidPrintedTecnologiasTab(props: ProductTabProps) {
   const directaActiva = tiposActivos.includes("directa");
   const flexibleActivo = tiposActivos.includes("flexible_montado");
   const selectedMaterial = materialesRigidos.find((m) => m.id === config.materialRigidoId);
+  const selectedMaterialFlexible = materialesFlexibles.find((m) => m.id === (config as any).materialFlexibleId);
 
   return (
     <div className="space-y-6">
@@ -362,6 +381,76 @@ export function RigidPrintedTecnologiasTab(props: ProductTabProps) {
           )}
         </div>
       </ProductoTabSection>
+
+      {/* ── Material flexible (solo si flexible montado activo) ── */}
+      {flexibleActivo && (
+        <ProductoTabSection
+          title="Material flexible"
+          description="Sustrato flexible que se imprime y monta sobre el rígido."
+        >
+          <div className="space-y-3">
+            <div>
+              <Label>Material</Label>
+              <Select
+                value={(config as any).materialFlexibleId ?? ""}
+                onValueChange={(v) =>
+                  update({
+                    materialFlexibleId: v || null,
+                    variantesFlexiblesCompatibles: v
+                      ? (materialesFlexibles.find((m) => m.id === v)?.variantes ?? []).map((vr) => vr.id)
+                      : [],
+                    varianteFlexibleDefaultId: null,
+                  } as any)
+                }
+              >
+                <SelectTrigger className="mt-1 max-w-sm">
+                  <SelectValue placeholder="Seleccionar material flexible">
+                    {selectedMaterialFlexible?.nombre ?? "Seleccionar material flexible"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {materialesFlexibles.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>{m.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedMaterialFlexible && (selectedMaterialFlexible.variantes ?? []).length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                  Variantes compatibles
+                </p>
+                <div className="space-y-1.5">
+                  {(selectedMaterialFlexible.variantes ?? []).map((v) => {
+                    const attrs = (v.atributosVariante ?? {}) as Record<string, unknown>;
+                    const ancho = attrs.ancho;
+                    const largo = attrs.largo;
+                    const acabado = attrs.acabado;
+                    const isActive = ((config as any).variantesFlexiblesCompatibles ?? []).includes(v.id);
+
+                    return (
+                      <div key={v.id} className="flex items-center gap-2">
+                        <Checkbox checked={isActive} onCheckedChange={() => toggleVarianteFlexible(v.id)} />
+                        <span className="text-sm">
+                          {ancho != null && `Ancho: ${ancho} m`}
+                          {largo != null && ` · Largo: ${largo} m`}
+                          {acabado != null && ` · ${acabado}`}
+                        </span>
+                        {v.precioReferencia != null && (
+                          <span className="text-xs text-muted-foreground">
+                            ${Number(v.precioReferencia).toLocaleString("es-AR")}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </ProductoTabSection>
+      )}
 
       {/* ── Caras ── */}
       <ProductoTabSection
