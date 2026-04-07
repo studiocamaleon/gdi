@@ -943,14 +943,62 @@ export class ProductosServiciosService {
     const areaAncho = pAnchoTrabajo - margenIzq - margenDer;
     const areaAlto = pLargoTrabajo - margenArr - margenAba;
 
+    // ── Prioridad de nesting ──
+    const prioridadNesting = String(imposicionCfg.prioridadNesting ?? 'rigido_manda');
+    const sepH = Number(imposicionCfg.separacionHorizontalMm ?? 3);
+    const sepV = Number(imposicionCfg.separacionVerticalMm ?? 3);
+    const rotPermitida = Boolean(imposicionCfg.permitirRotacion ?? true);
+
+    // Si flexible_manda: calcular nesting del rollo primero para determinar orientaciones
+    let medidasParaPlaca = medidasInput;
+    if (prioridadNesting === 'flexible_manda' && tipoImpresion === 'flexible_montado') {
+      const flexMId = String(rigidConfig.materialFlexibleId ?? '');
+      const flexVIds = Array.isArray(rigidConfig.variantesFlexiblesCompatibles)
+        ? (rigidConfig.variantesFlexiblesCompatibles as string[]) : [];
+      if (flexMId && flexVIds.length > 0) {
+        const flexVs = await this.prisma.materiaPrimaVariante.findMany({
+          where: { id: { in: flexVIds }, tenantId: auth.tenantId, activo: true },
+        });
+        // Encontrar el mejor rollo
+        let bestLayout: any = null;
+        for (const fv of flexVs) {
+          const fAttrs = (fv.atributosVarianteJson ?? {}) as Record<string, unknown>;
+          const rwRaw = Number(fAttrs.ancho ?? 0);
+          const rwMm = rwRaw < 10 ? Math.round(rwRaw * 1000) : rwRaw;
+          if (rwMm <= 0) continue;
+          const layout = this.evaluateGranFormatoMixedShelfLayout({
+            printableWidthMm: rwMm, marginLeftMm: 0, marginStartMm: 0, marginEndMm: 0,
+            separacionHorizontalMm: sepH, separacionVerticalMm: sepV,
+            permitirRotacion: rotPermitida, medidas: medidasInput,
+          });
+          if (layout && (!bestLayout || layout.consumedLengthMm < bestLayout.consumedLengthMm)) {
+            bestLayout = layout;
+          }
+        }
+        // Si el rollo definió orientaciones, usar esas para la placa (sin re-rotar)
+        if (bestLayout?.placements) {
+          // Extraer las dimensiones efectivas de cada pieza según como quedó en el rollo
+          const piezasConOrientacion: Array<{ anchoMm: number; altoMm: number; cantidad: number }> = [];
+          for (const p of bestLayout.placements) {
+            const w = p.widthMm ?? p.originalWidthMm;
+            const h = p.heightMm ?? p.originalHeightMm;
+            // Agrupar iguales
+            const existing = piezasConOrientacion.find((x) => Math.abs(x.anchoMm - w) < 1 && Math.abs(x.altoMm - h) < 1);
+            if (existing) { existing.cantidad++; } else { piezasConOrientacion.push({ anchoMm: w, altoMm: h, cantidad: 1 }); }
+          }
+          medidasParaPlaca = piezasConOrientacion;
+        }
+      }
+    }
+
     // Nesting multi-medida (Maximal Rectangles bin-packing)
     const multiNesting = RigidPrintedCalc.nestMultiMedida(
-      medidasInput,
+      medidasParaPlaca,
       areaAncho, areaAlto,
-      Number(imposicionCfg.separacionHorizontalMm ?? 3),
-      Number(imposicionCfg.separacionVerticalMm ?? 3),
-      0, // margen ya descontado arriba
-      Boolean(imposicionCfg.permitirRotacion ?? true),
+      sepH, sepV,
+      0,
+      // Si flexible_manda, no re-rotar (orientación ya fijada por el rollo)
+      prioridadNesting === 'flexible_manda' && tipoImpresion === 'flexible_montado' ? false : rotPermitida,
       orientacion as 'usar_lado_corto' | 'usar_lado_largo',
     );
 
@@ -1121,13 +1169,16 @@ export class ProductosServiciosService {
           if (rollWidthMm <= 0) continue;
 
           // Nesting en rollo usando la lógica de gran formato
+          // Si rigido_manda: usar las medidas con orientación de la placa (sin re-rotar)
+          const medidasParaRollo = prioridadNesting === 'rigido_manda' ? medidasParaPlaca : medidasInput;
+          const rotarEnRollo = prioridadNesting === 'rigido_manda' ? false : rotPermitida;
           const layout = this.evaluateGranFormatoMixedShelfLayout({
             printableWidthMm: rollWidthMm,
             marginLeftMm: 0, marginStartMm: 0, marginEndMm: 0,
-            separacionHorizontalMm: Number(imposicionCfg.separacionHorizontalMm ?? 3),
-            separacionVerticalMm: Number(imposicionCfg.separacionVerticalMm ?? 3),
-            permitirRotacion: Boolean(imposicionCfg.permitirRotacion ?? true),
-            medidas: medidasInput,
+            separacionHorizontalMm: sepH,
+            separacionVerticalMm: sepV,
+            permitirRotacion: rotarEnRollo,
+            medidas: medidasParaRollo,
           });
 
           if (!layout) continue;
