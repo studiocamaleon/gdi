@@ -943,27 +943,55 @@ export class ProductosServiciosService {
     const areaAncho = pAnchoTrabajo - margenIzq - margenDer;
     const areaAlto = pLargoTrabajo - margenArr - margenAba;
 
-    // Nesting
-    const nesting = RigidPrintedCalc.nestRectangularGrid({
-      piezaAnchoMm: anchoMm, piezaAltoMm: altoMm,
-      placaAnchoMm: areaAncho, placaAltoMm: areaAlto,
-      separacionHMm: Number(imposicionCfg.separacionHorizontalMm ?? 3),
-      separacionVMm: Number(imposicionCfg.separacionVerticalMm ?? 3),
-      margenMm: 0, permitirRotacion: Boolean(imposicionCfg.permitirRotacion ?? true),
-    });
-    const plates = RigidPrintedCalc.calculatePlatesNeeded(cantidad, nesting.piezasPorPlaca);
+    // Nesting multi-medida (Maximal Rectangles bin-packing)
+    const multiNesting = RigidPrintedCalc.nestMultiMedida(
+      medidasInput,
+      areaAncho, areaAlto,
+      Number(imposicionCfg.separacionHorizontalMm ?? 3),
+      Number(imposicionCfg.separacionVerticalMm ?? 3),
+      0, // margen ya descontado arriba
+      Boolean(imposicionCfg.permitirRotacion ?? true),
+      orientacion as 'usar_lado_corto' | 'usar_lado_largo',
+    );
 
-    // Costeo material
+    // Costeo material basado en resultado real del nesting
     const estrategia = String(imposicionCfg.estrategiaCosteo ?? 'segmentos_placa') as 'm2_exacto' | 'largo_consumido' | 'segmentos_placa';
     const segmentos = Array.isArray(imposicionCfg.segmentosPlaca)
       ? (imposicionCfg.segmentosPlaca as number[]) : [25, 50, 75, 100];
-    const costeoMaterial = RigidPrintedCalc.calcularCosteoMaterial({
-      estrategia, precioPlaca, placaAnchoMm: pAnchoTrabajo, placaAltoMm: pLargoTrabajo,
-      nesting, placasNecesarias: plates.placas,
-      piezasUltimaPlaca: cantidad % nesting.piezasPorPlaca || nesting.piezasPorPlaca,
-      segmentosPlaca: segmentos, cantidadTotal: cantidad,
-      piezaAnchoMm: anchoMm, piezaAltoMm: altoMm,
-    });
+
+    // Costeo basado en resultado real del bin-packing
+    const areaPlacaM2 = (pAnchoTrabajo * pLargoTrabajo) / 1_000_000;
+    const precioM2Placa = areaPlacaM2 > 0 ? precioPlaca / areaPlacaM2 : 0;
+    const areaUtilM2 = multiNesting.areaUtilMm2 / 1_000_000;
+    let costoMaterialTotal = 0;
+
+    if (estrategia === 'm2_exacto') {
+      costoMaterialTotal = this.roundProductNumber(areaUtilM2 * precioM2Placa);
+    } else if (estrategia === 'largo_consumido') {
+      for (const layout of multiNesting.placaLayouts) {
+        const fraccion = layout.largoConsumidoMm / pLargoTrabajo;
+        costoMaterialTotal += fraccion >= 0.99
+          ? precioPlaca
+          : this.roundProductNumber(precioPlaca * fraccion);
+      }
+    } else {
+      // segmentos_placa
+      const escalones = segmentos.length > 0 ? [...segmentos].sort((a, b) => a - b) : [25, 50, 75, 100];
+      for (const layout of multiNesting.placaLayouts) {
+        const ocupacion = areaPlacaM2 > 0 ? (layout.areaUtilMm2 / 1_000_000 / areaPlacaM2) * 100 : 100;
+        const seg = escalones.find((s) => s >= ocupacion) ?? 100;
+        costoMaterialTotal += this.roundProductNumber(precioPlaca * (seg / 100));
+      }
+    }
+    costoMaterialTotal = this.roundProductNumber(costoMaterialTotal);
+
+    const costeoDetalle = {
+      precioPlaca,
+      precioM2: this.roundProductNumber(precioM2Placa),
+      placasCompletas: multiNesting.placas,
+      costoPlacasCompletas: costoMaterialTotal,
+      ultimaPlaca: null as { ocupacionPct: number; segmentoAplicado: number | null; costo: number } | null,
+    };
 
     // Doble faz
     const caras = String(params.caras ?? rigidConfig.carasDefault ?? 'simple_faz');
@@ -1021,11 +1049,7 @@ export class ProductosServiciosService {
     const areaPiezasM2 = this.roundProductNumber(
       medidasInput.reduce((s, m) => s + (m.anchoMm * m.altoMm * m.cantidad), 0) / 1_000_000,
     );
-    const areaPlacaTotalM2 = this.roundProductNumber((pAnchoTrabajo * pLargoTrabajo * plates.placas) / 1_000_000);
-    const areaDesperdicioM2 = this.roundProductNumber(Math.max(0, areaPlacaTotalM2 - areaPiezasM2));
-    const precioM2Placa = (pAnchoTrabajo * pLargoTrabajo) > 0
-      ? this.roundProductNumber(precioPlaca / ((pAnchoTrabajo * pLargoTrabajo) / 1_000_000))
-      : 0;
+    const areaPlacaTotalM2 = this.roundProductNumber((pAnchoTrabajo * pLargoTrabajo * multiNesting.placas) / 1_000_000);
 
     const materiasPrimas: Array<{
       tipo: string; nombre: string; origen: string; unidad: string;
@@ -1034,25 +1058,26 @@ export class ProductosServiciosService {
     }> = [];
 
     // Sustrato Base (piezas)
+    const costoBase = this.roundProductNumber(areaPiezasM2 * precioM2Placa);
+    const sustratoNombre = placaVariante.nombreVariante
+      ? `${(placaVariante as any).materiaPrima?.nombre ?? 'Sustrato'} — ${placaVariante.nombreVariante}`
+      : (placaVariante as any).materiaPrima?.nombre ?? 'Sustrato rígido';
     materiasPrimas.push({
       tipo: 'Sustrato',
-      nombre: placaVariante.nombreVariante
-        ? `${(placaVariante as any).materiaPrima?.nombre ?? 'Sustrato'} — ${placaVariante.nombreVariante}`
-        : (placaVariante as any).materiaPrima?.nombre ?? 'Sustrato rígido',
+      nombre: sustratoNombre,
       origen: 'Base',
       unidad: 'm2',
       cantidad: areaPiezasM2,
       costoUnitario: precioM2Placa,
-      costo: this.roundProductNumber(areaPiezasM2 * precioM2Placa),
+      costo: costoBase,
     });
 
     // Sustrato Desperdicio (si aplica según estrategia)
-    if (costeoMaterial.costoTotal > this.roundProductNumber(areaPiezasM2 * precioM2Placa)) {
-      const costoBase = this.roundProductNumber(areaPiezasM2 * precioM2Placa);
-      const costoDesperdicio = this.roundProductNumber(costeoMaterial.costoTotal - costoBase);
+    if (costoMaterialTotal > costoBase) {
+      const costoDesperdicio = this.roundProductNumber(costoMaterialTotal - costoBase);
       const areaDesperdicioCobrada = precioM2Placa > 0
         ? this.roundProductNumber(costoDesperdicio / precioM2Placa)
-        : areaDesperdicioM2;
+        : this.roundProductNumber(Math.max(0, areaPlacaTotalM2 - areaPiezasM2));
       materiasPrimas.push({
         tipo: 'Sustrato',
         nombre: materiasPrimas[0].nombre + ' · Desperdicio',
@@ -1136,7 +1161,7 @@ export class ProductosServiciosService {
       }
     }
 
-    const total = this.roundProductNumber(costeoMaterial.costoTotal + costoProcesos + costoTintas);
+    const total = this.roundProductNumber(costoMaterialTotal + costoProcesos + costoTintas);
     const unitario = cantidadTotal > 0 ? this.roundProductNumber(total / cantidadTotal) : total;
 
     const result = {
@@ -1149,7 +1174,7 @@ export class ProductosServiciosService {
       bloques: { procesos: bloquesProcesos, materiales: materiasPrimas },
       subtotales: {
         procesos: costoProcesos,
-        material: costeoMaterial.costoTotal,
+        material: costoMaterialTotal,
         tinta: costoTintas,
         toner: 0, desgaste: 0, consumiblesTerminacion: 0,
         adicionalesMateriales: 0, adicionalesCostEffects: 0,
@@ -1157,8 +1182,8 @@ export class ProductosServiciosService {
       total, unitario,
       trazabilidad: {
         config: rigidConfig, tipoImpresion, caras, multiplicadorCaras,
-        estrategiaCosteo: estrategia, costeoDetalle: costeoMaterial.detalle,
-        resumenTecnico: { anchoMm, altoMm, placaAnchoMm: pAnchoTrabajo, placaAltoMm: pLargoTrabajo, piezasPorPlaca: nesting.piezasPorPlaca, placasNecesarias: plates.placas, aprovechamientoPct: nesting.aprovechamientoPct, rotada: nesting.rotada, sobrantes: plates.sobrantes },
+        estrategiaCosteo: estrategia, costeoDetalle,
+        resumenTecnico: { anchoMm, altoMm, placaAnchoMm: pAnchoTrabajo, placaAltoMm: pLargoTrabajo, piezasPorPlaca: multiNesting.totalPiezas, placasNecesarias: multiNesting.placas, aprovechamientoPct: multiNesting.aprovechamientoPct, rotada: false, sobrantes: 0 },
       },
     };
 

@@ -117,6 +117,147 @@ export function calculatePlatesNeeded(totalPiezas: number, piezasPorPlaca: numbe
   return { placas, sobrantes: placas * piezasPorPlaca - totalPiezas };
 }
 
+// ─── Multi-medida bin-packing (Maximal Rectangles) ──────────────
+
+export type MultiMedidaInput = { anchoMm: number; altoMm: number; cantidad: number };
+
+export type MultiMedidaResult = {
+  placas: number;
+  totalPiezas: number;
+  areaUtilMm2: number;
+  areaTotalMm2: number;
+  aprovechamientoPct: number;
+  placaLayouts: Array<{ areaUtilMm2: number; largoConsumidoMm: number }>;
+};
+
+export function nestMultiMedida(
+  medidas: MultiMedidaInput[],
+  placaAnchoMm: number,
+  placaAltoMm: number,
+  sepH: number,
+  sepV: number,
+  margen: number,
+  permitirRotacion: boolean,
+  orientacionPlaca: 'usar_lado_corto' | 'usar_lado_largo' = 'usar_lado_corto',
+): MultiMedidaResult {
+  type Pieza = { w: number; h: number };
+  const areaW = placaAnchoMm - 2 * margen;
+  const areaH = placaAltoMm - 2 * margen;
+
+  // Crear lista de piezas, ordenar por área descendente
+  const pendientes: Pieza[] = [];
+  for (const m of medidas) {
+    if (m.anchoMm <= 0 || m.altoMm <= 0 || m.cantidad <= 0) continue;
+    for (let i = 0; i < m.cantidad; i++) {
+      pendientes.push({ w: m.anchoMm, h: m.altoMm });
+    }
+  }
+  pendientes.sort((a, b) => (b.w * b.h) - (a.w * a.h));
+
+  if (pendientes.length === 0) {
+    return { placas: 0, totalPiezas: 0, areaUtilMm2: 0, areaTotalMm2: 0, aprovechamientoPct: 0, placaLayouts: [] };
+  }
+
+  type FreeRect = { x: number; y: number; w: number; h: number };
+  type PlacedPiece = { x: number; y: number; w: number; h: number };
+
+  function packPlaca(piezas: Pieza[]): { colocadas: PlacedPiece[]; noColocadas: Pieza[]; maxY: number } {
+    let freeRects: FreeRect[] = [{ x: 0, y: 0, w: areaW, h: areaH }];
+    const colocadas: PlacedPiece[] = [];
+    const noColocadas: Pieza[] = [];
+
+    function findBest(pw: number, ph: number): { x: number; y: number } | null {
+      let bestY = Infinity, bestX = Infinity;
+      let found = false;
+      for (const r of freeRects) {
+        if (pw <= r.w + 0.01 && ph <= r.h + 0.01) {
+          if (r.y < bestY || (r.y === bestY && r.x < bestX)) {
+            bestY = r.y; bestX = r.x; found = true;
+          }
+        }
+      }
+      return found ? { x: bestX, y: bestY } : null;
+    }
+
+    function splitFree(px: number, py: number, pw: number, ph: number) {
+      const occR = px + pw + sepH;
+      const occB = py + ph + sepV;
+      const newFree: FreeRect[] = [];
+      for (const r of freeRects) {
+        const rR = r.x + r.w, rB = r.y + r.h;
+        if (px >= rR - 0.01 || occR <= r.x + 0.01 || py >= rB - 0.01 || occB <= r.y + 0.01) {
+          newFree.push(r); continue;
+        }
+        if (occR < rR - 0.01) newFree.push({ x: occR, y: r.y, w: rR - occR, h: r.h });
+        if (px > r.x + 0.01) newFree.push({ x: r.x, y: r.y, w: px - r.x, h: r.h });
+        if (occB < rB - 0.01) newFree.push({ x: r.x, y: occB, w: r.w, h: rB - occB });
+        if (py > r.y + 0.01) newFree.push({ x: r.x, y: r.y, w: r.w, h: py - r.y });
+      }
+      freeRects = [];
+      for (let i = 0; i < newFree.length; i++) {
+        let contained = false;
+        for (let j = 0; j < newFree.length; j++) {
+          if (i === j) continue;
+          const a = newFree[i], b = newFree[j];
+          if (a.x >= b.x - 0.01 && a.y >= b.y - 0.01 && a.x + a.w <= b.x + b.w + 0.01 && a.y + a.h <= b.y + b.h + 0.01) {
+            contained = true; break;
+          }
+        }
+        if (!contained && newFree[i].w > 1 && newFree[i].h > 1) freeRects.push(newFree[i]);
+      }
+    }
+
+    for (const pieza of piezas) {
+      const orients: Array<{ w: number; h: number }> = [{ w: pieza.w, h: pieza.h }];
+      if (permitirRotacion && pieza.w !== pieza.h) orients.push({ w: pieza.h, h: pieza.w });
+      if (orientacionPlaca === 'usar_lado_corto') orients.sort((a, b) => b.w - a.w);
+      else orients.sort((a, b) => b.h - a.h);
+
+      let best: { x: number; y: number; w: number; h: number } | null = null;
+      for (const o of orients) {
+        const pos = findBest(o.w, o.h);
+        if (pos && (!best || pos.y < best.y || (pos.y === best.y && pos.x < best.x))) {
+          best = { x: pos.x, y: pos.y, w: o.w, h: o.h };
+        }
+      }
+      if (best) {
+        colocadas.push(best);
+        splitFree(best.x, best.y, best.w, best.h);
+      } else {
+        noColocadas.push(pieza);
+      }
+    }
+
+    const maxY = colocadas.length > 0 ? Math.max(...colocadas.map((p) => p.y + p.h + margen)) : 0;
+    return { colocadas, noColocadas, maxY };
+  }
+
+  const placaLayouts: MultiMedidaResult['placaLayouts'] = [];
+  let restantes = [...pendientes];
+  let totalPiezas = 0;
+  let totalAreaUtil = 0;
+
+  while (restantes.length > 0) {
+    const result = packPlaca(restantes);
+    if (result.colocadas.length === 0) break;
+    const areaUtil = result.colocadas.reduce((s, p) => s + p.w * p.h, 0);
+    placaLayouts.push({ areaUtilMm2: areaUtil, largoConsumidoMm: result.maxY });
+    totalPiezas += result.colocadas.length;
+    totalAreaUtil += areaUtil;
+    restantes = result.noColocadas;
+  }
+
+  const areaTotalMm2 = placaAnchoMm * placaAltoMm * placaLayouts.length;
+  return {
+    placas: placaLayouts.length,
+    totalPiezas,
+    areaUtilMm2: totalAreaUtil,
+    areaTotalMm2,
+    aprovechamientoPct: areaTotalMm2 > 0 ? round2((totalAreaUtil / areaTotalMm2) * 100) : 0,
+    placaLayouts,
+  };
+}
+
 // ─── Costeo del material rígido ──────────────────────────────────
 
 export type CosteoInput = {
