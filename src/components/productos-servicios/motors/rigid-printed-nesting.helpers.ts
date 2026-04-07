@@ -322,7 +322,93 @@ export type MultiMedidaNestingResult = {
 };
 
 /**
- * Nesting multi-medida con bin-packing 2D (skyline / bottom-left).
+ * Grid óptimo para piezas de una sola medida.
+ * Prueba ambas orientaciones y elige la que cabe más piezas.
+ */
+function nestSingleSizeGrid(
+  pendientes: Array<{ mi: number; origW: number; origH: number }>,
+  areaW: number,
+  areaH: number,
+  sepH: number,
+  sepV: number,
+  margen: number,
+  permitirRotacion: boolean,
+  _orientacionPlaca: 'usar_lado_corto' | 'usar_lado_largo',
+): MultiMedidaNestingResult {
+  const pW = pendientes[0].origW;
+  const pH = pendientes[0].origH;
+  const mi = pendientes[0].mi;
+  const total = pendientes.length;
+
+  type GridOption = { cols: number; rows: number; w: number; h: number; rotada: boolean };
+  const options: GridOption[] = [];
+
+  const tryGrid = (w: number, h: number, rotada: boolean) => {
+    const cols = Math.max(0, Math.floor((areaW + sepH) / (w + sepH)));
+    const rows = Math.max(0, Math.floor((areaH + sepV) / (h + sepV)));
+    if (cols > 0 && rows > 0) options.push({ cols, rows, w, h, rotada });
+  };
+
+  tryGrid(pW, pH, false);
+  if (permitirRotacion && pW !== pH) tryGrid(pH, pW, true);
+
+  if (options.length === 0) {
+    return { posiciones: [], placas: 0, placaLayouts: [], totalPiezas: 0, aprovechamientoPct: 0, areaTotalMm2: 0, areaUtilMm2: 0 };
+  }
+
+  options.sort((a, b) => (b.cols * b.rows) - (a.cols * a.rows));
+  const best = options[0];
+
+  const piezasPorPlaca = best.cols * best.rows;
+  const placasNeeded = Math.ceil(total / piezasPorPlaca);
+  const placaLayouts: MultiMedidaNestingResult["placaLayouts"] = [];
+  let totalPiezas = 0;
+  let totalAreaUtil = 0;
+
+  let restantes = total;
+  for (let pi = 0; pi < placasNeeded; pi++) {
+    const piezasEstaPlaca = Math.min(restantes, piezasPorPlaca);
+    const posiciones: MultiMedidaPiece[] = [];
+    let placed = 0;
+    for (let row = 0; row < best.rows && placed < piezasEstaPlaca; row++) {
+      for (let col = 0; col < best.cols && placed < piezasEstaPlaca; col++) {
+        posiciones.push({
+          x: margen + col * (best.w + sepH),
+          y: margen + row * (best.h + sepV),
+          anchoMm: best.w,
+          altoMm: best.h,
+          medidaIndex: mi,
+          rotada: best.rotada,
+        });
+        placed++;
+      }
+    }
+    const filasUsadas = Math.ceil(piezasEstaPlaca / best.cols);
+    const areaUtil = piezasEstaPlaca * pW * pH;
+    placaLayouts.push({
+      posiciones,
+      largoConsumidoMm: margen + filasUsadas * best.h + (filasUsadas - 1) * sepV + margen,
+      areaUtilMm2: areaUtil,
+    });
+    totalPiezas += piezasEstaPlaca;
+    totalAreaUtil += areaUtil;
+    restantes -= piezasEstaPlaca;
+  }
+
+  const areaTotalMm2 = (areaW + 2 * margen) * (areaH + 2 * margen) * placaLayouts.length;
+  return {
+    posiciones: placaLayouts.flatMap((pl) => pl.posiciones),
+    placas: placaLayouts.length,
+    placaLayouts,
+    totalPiezas,
+    aprovechamientoPct: areaTotalMm2 > 0 ? r2((totalAreaUtil / areaTotalMm2) * 100) : 0,
+    areaTotalMm2,
+    areaUtilMm2: totalAreaUtil,
+  };
+}
+
+/**
+ * Nesting multi-medida con bin-packing 2D (Maximal Rectangles / BAF).
  *
  * Mantiene un "skyline" (perfil superior del área ocupada) y coloca
  * cada pieza en la posición más baja y más a la izquierda posible.
@@ -355,6 +441,14 @@ export function nestMultiMedida(
 
   if (pendientes.length === 0) {
     return { posiciones: [], placas: 0, placaLayouts: [], totalPiezas: 0, aprovechamientoPct: 0, areaTotalMm2: 0, areaUtilMm2: 0 };
+  }
+
+  // Fast-path: si todas las piezas son de la misma medida, usar grid óptimo
+  const allSameSize = pendientes.every(
+    (p) => Math.abs(p.origW - pendientes[0].origW) < 0.5 && Math.abs(p.origH - pendientes[0].origH) < 0.5,
+  );
+  if (allSameSize) {
+    return nestSingleSizeGrid(pendientes, areaW, areaH, sepH, sepV, margen, permitirRotacion, orientacionPlaca);
   }
 
   // Ordenar: piezas más grandes primero → mejor bin-packing
