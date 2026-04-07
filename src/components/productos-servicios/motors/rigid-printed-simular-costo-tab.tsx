@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   Table,
   TableBody,
@@ -688,62 +689,15 @@ function MateriasPrimasBreakdown({ result, nestingPreview, medidas }: {
             </div>
           </div>
 
-          {/* Nesting visual (solo para Sustrato) */}
-          {grupo.tipo === "Sustrato" && showNesting && nestingPreview && (
-            <div className="p-4 border-b bg-background">
-              {/* Leyenda de medidas */}
-              {medidas.filter((m) => m.anchoMm && m.altoMm).length > 1 && (
-                <div className="flex gap-3 mb-3 flex-wrap text-xs">
-                  {medidas.filter((m) => m.anchoMm && m.altoMm).map((m, i) => (
-                    <div key={i} className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: MEDIDA_COLORS[i % MEDIDA_COLORS.length], opacity: 0.85 }} />
-                      <span>{(m.anchoMm! / 10)} × {(m.altoMm! / 10)} cm × {m.cantidad}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {/* SVG por placa */}
-              {nestingPreview.placaLayouts.map((layout, pi) => {
-                const traz = result.trazabilidad.resumenTecnico;
-                const placaW = traz?.placaAnchoMm ?? 0;
-                const placaH = traz?.placaAltoMm ?? 0;
-                if (placaW <= 0 || placaH <= 0) return null;
-
-                // Siempre dibujar horizontal
-                const needsRotate = placaH > placaW;
-                const displayW = needsRotate ? placaH : placaW;
-                const displayH = needsRotate ? placaW : placaH;
-                const maxSvgW = 560;
-                const scale = maxSvgW / displayW;
-
-                const positions = (layout as any).posiciones ?? [];
-                const displayPos = needsRotate
-                  ? positions.map((p: any) => ({ ...p, x: p.y, y: placaW - p.x - p.anchoMm, anchoMm: p.altoMm, altoMm: p.anchoMm }))
-                  : positions;
-
-                return (
-                  <div key={pi} className={nestingPreview.placas > 1 ? "mb-3" : ""}>
-                    {nestingPreview.placas > 1 && (
-                      <p className="text-xs text-muted-foreground mb-1">Placa {pi + 1}</p>
-                    )}
-                    <svg
-                      width={displayW * scale}
-                      height={displayH * scale}
-                      viewBox={`0 0 ${displayW} ${displayH}`}
-                      className="border rounded bg-white"
-                    >
-                      <rect x={0} y={0} width={displayW} height={displayH} fill="#e0e7ef" stroke="#94a3b8" strokeWidth={1} />
-                      {displayPos.map((pos: any, i: number) => (
-                        <rect key={i} x={pos.x} y={pos.y} width={pos.anchoMm} height={pos.altoMm}
-                          fill={MEDIDA_COLORS[pos.medidaIndex % MEDIDA_COLORS.length]}
-                          stroke={MEDIDA_COLORS[pos.medidaIndex % MEDIDA_COLORS.length]}
-                          strokeWidth={0.5} opacity={0.85} />
-                      ))}
-                    </svg>
-                  </div>
-                );
-              })}
-            </div>
+          {/* Nesting Sheet (solo para Sustrato) */}
+          {grupo.tipo === "Sustrato" && (
+            <NestingSheet
+              open={showNesting}
+              onOpenChange={setShowNesting}
+              nestingPreview={nestingPreview}
+              medidas={medidas}
+              result={result}
+            />
           )}
 
           {/* Tabla de componentes */}
@@ -812,5 +766,123 @@ function MateriasPrimasBreakdown({ result, nestingPreview, medidas }: {
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Nesting Sheet ─────────────────────────────────────────────────
+
+function NestingSheet({
+  open,
+  onOpenChange,
+  nestingPreview,
+  medidas,
+  result,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  nestingPreview: MultiMedidaNestingResult | null;
+  medidas: Array<{ anchoMm: number | null; altoMm: number | null; cantidad: number }>;
+  result: QuoteResult;
+}) {
+  if (!nestingPreview || nestingPreview.placas <= 0) return null;
+
+  const traz = result.trazabilidad.resumenTecnico;
+  const placaW = traz?.placaAnchoMm ?? 0;
+  const placaH = traz?.placaAltoMm ?? 0;
+  if (placaW <= 0 || placaH <= 0) return null;
+
+  const validMedidas = medidas.filter((m) => m.anchoMm && m.altoMm);
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="!w-[72vw] !max-w-none md:!w-[68vw] lg:!w-[64vw] xl:!w-[60vw] sm:!max-w-none flex flex-col overflow-hidden">
+        <SheetHeader>
+          <SheetTitle>Nesting</SheetTitle>
+          <SheetDescription>
+            Visualización del acomodamiento de piezas en la placa.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-6">
+          {/* Resumen */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-lg border bg-muted/20 p-3 text-center">
+              <p className="text-xs text-muted-foreground">Placas</p>
+              <p className="text-lg font-semibold">{nestingPreview.placas}</p>
+            </div>
+            <div className="rounded-lg border bg-muted/20 p-3 text-center">
+              <p className="text-xs text-muted-foreground">Piezas</p>
+              <p className="text-lg font-semibold">{nestingPreview.totalPiezas}</p>
+            </div>
+            <div className="rounded-lg border bg-muted/20 p-3 text-center">
+              <p className="text-xs text-muted-foreground">Aprovechamiento</p>
+              <p className="text-lg font-semibold">{formatNumber(nestingPreview.aprovechamientoPct)}%</p>
+            </div>
+          </div>
+
+          {/* Leyenda de medidas */}
+          {validMedidas.length > 1 && (
+            <div className="flex gap-4 flex-wrap text-sm">
+              {validMedidas.map((m, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded" style={{ backgroundColor: MEDIDA_COLORS[i % MEDIDA_COLORS.length], opacity: 0.85 }} />
+                  <span>{(m.anchoMm! / 10)} × {(m.altoMm! / 10)} cm × {m.cantidad}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* SVG por placa */}
+          {nestingPreview.placaLayouts.map((layout, pi) => {
+            const needsRotate = placaH > placaW;
+            const displayW = needsRotate ? placaH : placaW;
+            const displayH = needsRotate ? placaW : placaH;
+            const maxSvgW = 800;
+            const scale = maxSvgW / displayW;
+
+            const positions = (layout as any).posiciones ?? [];
+            const displayPos = needsRotate
+              ? positions.map((p: any) => ({ ...p, x: p.y, y: placaW - p.x - p.anchoMm, anchoMm: p.altoMm, altoMm: p.anchoMm }))
+              : positions;
+
+            return (
+              <div key={pi}>
+                {nestingPreview.placas > 1 && (
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Placa {pi + 1}</p>
+                )}
+                <svg
+                  width={displayW * scale}
+                  height={displayH * scale}
+                  viewBox={`0 0 ${displayW} ${displayH}`}
+                  className="border rounded bg-white w-full"
+                >
+                  <rect x={0} y={0} width={displayW} height={displayH} fill="#e0e7ef" stroke="#94a3b8" strokeWidth={1} />
+                  {displayPos.map((pos: any, i: number) => (
+                    <rect key={i} x={pos.x} y={pos.y} width={pos.anchoMm} height={pos.altoMm}
+                      fill={MEDIDA_COLORS[pos.medidaIndex % MEDIDA_COLORS.length]}
+                      stroke={MEDIDA_COLORS[pos.medidaIndex % MEDIDA_COLORS.length]}
+                      strokeWidth={0.5} opacity={0.85} />
+                  ))}
+                </svg>
+              </div>
+            );
+          })}
+
+          {/* Leyenda */}
+          <div className="flex gap-4 flex-wrap text-xs text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded-sm bg-[#e0e7ef]" />
+              <span>Espacio libre</span>
+            </div>
+            {validMedidas.length === 1 && (
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: MEDIDA_COLORS[0], opacity: 0.85 }} />
+                <span>Piezas ({validMedidas[0].anchoMm! / 10} × {validMedidas[0].altoMm! / 10} cm)</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
