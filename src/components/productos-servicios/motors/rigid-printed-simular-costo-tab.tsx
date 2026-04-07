@@ -207,16 +207,13 @@ export function RigidPrintedSimularCostoTab(props: ProductTabProps) {
   const handleCotizar = React.useCallback(async () => {
     const validMedidas = medidas.filter((m) => m.anchoMm && m.anchoMm > 0 && m.altoMm && m.altoMm > 0);
     if (validMedidas.length === 0) { toast.error("Ingresá al menos una medida válida."); return; }
-    // Usar la primera medida (TODO: soporte multi-medida en backend)
-    const first = validMedidas[0];
     const cantidadTotal = validMedidas.reduce((s, m) => s + m.cantidad, 0);
     try {
       setQuoting(true);
       const r = await cotizarRigidPrintedByProducto(props.producto.id, {
         cantidad: cantidadTotal,
         parametros: {
-          anchoMm: first.anchoMm,
-          altoMm: first.altoMm,
+          medidas: validMedidas.map((m) => ({ anchoMm: m.anchoMm, altoMm: m.altoMm, cantidad: m.cantidad })),
           tipoImpresion, caras,
           ...(placaVarianteId ? { placaVarianteId } : {}),
         },

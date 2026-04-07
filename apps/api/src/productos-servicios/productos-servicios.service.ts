@@ -872,12 +872,31 @@ export class ProductosServiciosService {
     ) as Record<string, unknown>;
     const imposicionCfg = (rigidConfig.imposicion ?? {}) as Record<string, unknown>;
 
-    // Medidas del payload (obligatorias en modo libre)
-    const anchoMm = Number(params.anchoMm ?? 0);
-    const altoMm = Number(params.altoMm ?? 0);
-    if (anchoMm <= 0 || altoMm <= 0) {
-      throw new BadRequestException('Debe especificar ancho y alto de pieza mayores a 0.');
+    // Medidas del payload — soporta multi-medida o single
+    type MedidaItem = { anchoMm: number; altoMm: number; cantidad: number };
+    let medidasInput: MedidaItem[];
+    if (Array.isArray(params.medidas) && params.medidas.length > 0) {
+      medidasInput = (params.medidas as Record<string, unknown>[]).map((m) => ({
+        anchoMm: Number(m.anchoMm ?? 0),
+        altoMm: Number(m.altoMm ?? 0),
+        cantidad: Math.max(1, Math.floor(Number(m.cantidad ?? 1))),
+      })).filter((m) => m.anchoMm > 0 && m.altoMm > 0);
+    } else {
+      const anchoMm = Number(params.anchoMm ?? 0);
+      const altoMm = Number(params.altoMm ?? 0);
+      if (anchoMm <= 0 || altoMm <= 0) {
+        throw new BadRequestException('Debe especificar ancho y alto de pieza mayores a 0.');
+      }
+      medidasInput = [{ anchoMm, altoMm, cantidad }];
     }
+    if (medidasInput.length === 0) {
+      throw new BadRequestException('Debe especificar al menos una medida válida.');
+    }
+    // Para backward-compat: usar primera medida como referencia
+    const anchoMm = medidasInput[0].anchoMm;
+    const altoMm = medidasInput[0].altoMm;
+    // Recalcular cantidad total desde medidas
+    const cantidadTotal = medidasInput.reduce((s, m) => s + m.cantidad, 0);
 
     // Resolver placa: del payload, del default, o la primera variante compatible
     const variantesCompatibles = Array.isArray(rigidConfig.variantesCompatibles)
@@ -985,7 +1004,7 @@ export class ProductosServiciosService {
           });
           const tarifaHora = Number(tarifa?.tarifaCalculada ?? 0);
           const setupMin = Number(op.setupMin ?? 0);
-          const totalRunMin = Number(op.runMin ?? 0) * cantidad * multiplicadorCaras;
+          const totalRunMin = Number(op.runMin ?? 0) * cantidadTotal * multiplicadorCaras;
           const totalMin = setupMin + totalRunMin + Number(op.cleanupMin ?? 0) + Number(op.tiempoFijoMin ?? 0);
           const costo = this.roundProductNumber((totalMin / 60) * tarifaHora);
           costoProcesos += costo;
@@ -999,7 +1018,9 @@ export class ProductosServiciosService {
     }
 
     // ── Materias primas: sustrato rígido ──
-    const areaPiezasM2 = this.roundProductNumber((anchoMm * altoMm * cantidad) / 1_000_000);
+    const areaPiezasM2 = this.roundProductNumber(
+      medidasInput.reduce((s, m) => s + (m.anchoMm * m.altoMm * m.cantidad), 0) / 1_000_000,
+    );
     const areaPlacaTotalM2 = this.roundProductNumber((pAnchoTrabajo * pLargoTrabajo * plates.placas) / 1_000_000);
     const areaDesperdicioM2 = this.roundProductNumber(Math.max(0, areaPlacaTotalM2 - areaPiezasM2));
     const precioM2Placa = (pAnchoTrabajo * pLargoTrabajo) > 0
@@ -1116,7 +1137,7 @@ export class ProductosServiciosService {
     }
 
     const total = this.roundProductNumber(costeoMaterial.costoTotal + costoProcesos + costoTintas);
-    const unitario = cantidad > 0 ? this.roundProductNumber(total / cantidad) : total;
+    const unitario = cantidadTotal > 0 ? this.roundProductNumber(total / cantidadTotal) : total;
 
     const result = {
       productoServicioId: productoId,
@@ -1124,7 +1145,7 @@ export class ProductosServiciosService {
       varianteId: variante?.id ?? null,
       varianteNombre: variante?.nombre ?? 'Medida libre',
       motorCodigo: motor.code, motorVersion: motor.version,
-      periodo, cantidad,
+      periodo, cantidad: cantidadTotal,
       bloques: { procesos: bloquesProcesos, materiales: materiasPrimas },
       subtotales: {
         procesos: costoProcesos,

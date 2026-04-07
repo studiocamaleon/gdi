@@ -205,6 +205,88 @@ export function calcularCosteoPreview(
   };
 }
 
+/**
+ * Costeo basado en resultado real del multi-nesting.
+ * Usa el área útil real y la cantidad de placas del nesting, no aproximaciones.
+ */
+export function calcularCosteoFromNesting(
+  estrategia: string,
+  precioPlaca: number,
+  placaAnchoMm: number,
+  placaAltoMm: number,
+  nesting: MultiMedidaNestingResult,
+  segmentos: number[],
+): CosteoPreview {
+  if (nesting.placas <= 0) {
+    return { estrategia, costoTotal: 0, placasCompletas: 0, ultimaPlacaPct: null, segmentoAplicado: null };
+  }
+
+  const areaPlacaM2 = (placaAnchoMm * placaAltoMm) / 1_000_000;
+  const precioM2 = areaPlacaM2 > 0 ? precioPlaca / areaPlacaM2 : 0;
+  const areaUtilM2 = nesting.areaUtilMm2 / 1_000_000;
+
+  if (estrategia === "m2_exacto") {
+    return {
+      estrategia,
+      costoTotal: r2(areaUtilM2 * precioM2),
+      placasCompletas: nesting.placas,
+      ultimaPlacaPct: null,
+      segmentoAplicado: null,
+    };
+  }
+
+  if (estrategia === "largo_consumido") {
+    let total = 0;
+    let placasCompletas = 0;
+    for (const layout of nesting.placaLayouts) {
+      const fraccion = layout.largoConsumidoMm / placaAltoMm;
+      if (fraccion >= 0.99) {
+        total += precioPlaca;
+        placasCompletas++;
+      } else {
+        total += r2(precioPlaca * fraccion);
+      }
+    }
+    const ultimaLayout = nesting.placaLayouts[nesting.placaLayouts.length - 1];
+    const ultimaPct = ultimaLayout ? r2((ultimaLayout.largoConsumidoMm / placaAltoMm) * 100) : null;
+    return {
+      estrategia,
+      costoTotal: r2(total),
+      placasCompletas,
+      ultimaPlacaPct: ultimaPct !== null && ultimaPct < 99 ? ultimaPct : null,
+      segmentoAplicado: null,
+    };
+  }
+
+  // segmentos_placa
+  const escalones = segmentos.length > 0 ? [...segmentos].sort((a, b) => a - b) : [25, 50, 75, 100];
+  let total = 0;
+  let placasCompletas = 0;
+  let ultimaOcupPct: number | null = null;
+  let ultimoSeg: number | null = null;
+
+  for (const layout of nesting.placaLayouts) {
+    const ocupacion = areaPlacaM2 > 0 ? (layout.areaUtilMm2 / 1_000_000 / areaPlacaM2) * 100 : 100;
+    const seg = escalones.find((s) => s >= ocupacion) ?? 100;
+    const costo = r2(precioPlaca * (seg / 100));
+    total += costo;
+    if (seg >= 100) {
+      placasCompletas++;
+    } else {
+      ultimaOcupPct = r2(ocupacion);
+      ultimoSeg = seg;
+    }
+  }
+
+  return {
+    estrategia,
+    costoTotal: r2(total),
+    placasCompletas,
+    ultimaPlacaPct: ultimaOcupPct,
+    segmentoAplicado: ultimoSeg,
+  };
+}
+
 function r2(n: number) { return Math.round(n * 100) / 100; }
 
 // ── Nesting multi-medida ─────────────────────────────────────────

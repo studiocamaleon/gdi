@@ -27,12 +27,8 @@ import {
 import type { MateriaPrima } from "@/lib/materias-primas";
 import type { Maquina } from "@/lib/maquinaria";
 import {
-  nestRectangularGrid,
-  calculatePlatesNeeded,
-  calcularCosteoPreview,
-  calcularLargoConsumido,
   nestMultiMedida,
-  type NestingResult,
+  calcularCosteoFromNesting,
   type CosteoPreview,
   type MultiMedidaNestingResult,
   MEDIDA_COLORS,
@@ -255,17 +251,13 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
       })),
     };
 
-    // Costeo simplificado para preview (usa primera medida como referencia)
-    const firstM = validMedidas[0];
-    const totalCant = validMedidas.reduce((s, m) => s + m.cantidad, 0);
-    const costeo = calcularCosteoPreview(
+    // Costeo basado en resultado real del nesting
+    const costeo = calcularCosteoFromNesting(
       imposicion.estrategiaCosteo,
       placaInfo.precio,
       placaAnchoTrabajo,
       placaLargoTrabajo,
-      firstM.anchoMm!, firstM.altoMm!,
-      totalCant,
-      multiNesting.totalPiezas > 0 ? Math.ceil(multiNesting.totalPiezas / Math.max(1, multiNesting.placas)) : 0,
+      multiNesting,
       imposicion.segmentosPlaca,
     );
 
