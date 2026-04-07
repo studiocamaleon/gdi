@@ -310,8 +310,20 @@ export function RigidPrintedSimularCostoTab(props: ProductTabProps) {
             <p className="mt-1 text-lg font-semibold tabular-nums">{quoteResult ? formatCurrency(quoteResult.total) : "—"}</p>
           </div>
           <div className="rounded-lg border bg-muted/20 p-3">
-            <p className="text-xs text-muted-foreground">M² totales</p>
-            <p className="mt-1 text-lg font-semibold tabular-nums">{quoteResult ? `${formatNumber(quoteResult.cantidad)} m²` : "—"}</p>
+            <p className="text-xs text-muted-foreground">M² neto / cobrado</p>
+            {quoteResult ? (
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-lg font-semibold tabular-nums">{formatNumber(quoteResult.cantidad)}</span>
+                {quoteResult.subtotales.material > 0 && quoteResult.trazabilidad.costeoDetalle.precioM2 > 0 && (
+                  <>
+                    <span className="text-muted-foreground">/</span>
+                    <span className="text-sm font-medium tabular-nums text-muted-foreground">
+                      {formatNumber(quoteResult.subtotales.material / quoteResult.trazabilidad.costeoDetalle.precioM2)} m²
+                    </span>
+                  </>
+                )}
+              </div>
+            ) : <p className="mt-1 text-lg font-semibold">—</p>}
           </div>
           <div className="rounded-lg border bg-muted/20 p-3">
             <p className="text-xs text-muted-foreground">Placas necesarias</p>
