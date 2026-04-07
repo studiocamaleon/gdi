@@ -39,6 +39,8 @@ import type { CotizacionProductoSnapshotResumen } from "@/lib/productos-servicio
 import { HistoryIcon } from "lucide-react";
 import { EyeIcon } from "lucide-react";
 import { MultiMedidaPlacaSvg } from "./rigid-printed-imposicion-tab";
+import { WideFormatNestingCard } from "@/components/productos-servicios/motors/wide-format-nesting-card";
+import { buildWideFormatSimulatorDataFromPreview } from "@/components/productos-servicios/motors/wide-format-nesting.helpers";
 import type { MateriaPrima } from "@/lib/materias-primas";
 import type { Maquina } from "@/lib/maquinaria";
 import {
@@ -94,7 +96,7 @@ type QuoteResult = {
   total: number;
   unitario: number;
   cantidad: number;
-  subtotales: { procesos: number; material: number; tinta?: number };
+  subtotales: { procesos: number; material: number; flexible?: number; tinta?: number };
   bloques: {
     procesos: ProcesoBloque[];
     materiales: MateriaPrimaBloque[];
@@ -122,6 +124,7 @@ type QuoteResult = {
       rotada: boolean;
       sobrantes: number;
     };
+    flexibleNestingPreview?: Record<string, unknown> | null;
   };
 };
 
@@ -655,6 +658,7 @@ function MateriasPrimasBreakdown({ result, nestingPreview, medidas, config }: {
   config: RigidPrintedConfig | null;
 }) {
   const [showNesting, setShowNesting] = React.useState(false);
+  const [showFlexNesting, setShowFlexNesting] = React.useState(false);
   const materiales = result.bloques.materiales as MateriaPrimaBloque[];
 
   // Agrupar por tipo
@@ -691,6 +695,16 @@ function MateriasPrimasBreakdown({ result, nestingPreview, medidas, config }: {
                   size="sm"
                   className="h-7 text-xs bg-orange-500 hover:bg-orange-600 text-white"
                   onClick={() => setShowNesting((v) => !v)}
+                >
+                  <EyeIcon className="mr-1 size-3.5" />
+                  Ver nesting
+                </Button>
+              )}
+              {grupo.tipo === "Sustrato flexible" && result.trazabilidad.flexibleNestingPreview && (
+                <Button
+                  size="sm"
+                  className="h-7 text-xs bg-orange-500 hover:bg-orange-600 text-white"
+                  onClick={() => setShowFlexNesting(true)}
                 >
                   <EyeIcon className="mr-1 size-3.5" />
                   Ver nesting
@@ -767,11 +781,20 @@ function MateriasPrimasBreakdown({ result, nestingPreview, medidas, config }: {
         </div>
       ))}
 
+      {/* Plotter 3D del flexible */}
+      {showFlexNesting && result.trazabilidad.flexibleNestingPreview && (
+        <WideFormatNestingCard
+          title="Nesting sustrato flexible"
+          description="Visualización del acomodamiento de piezas en el rollo flexible."
+          simulator={buildWideFormatSimulatorDataFromPreview(result.trazabilidad.flexibleNestingPreview as any)}
+        />
+      )}
+
       {/* Total (formato gran formato) */}
       <div className="rounded-lg border bg-muted/20 p-4">
         <div className="flex items-center justify-between">
           <span className="font-medium">Total materias primas</span>
-          <span className="font-semibold tabular-nums">{formatCurrency((result.subtotales.material ?? 0) + (result.subtotales.tinta ?? 0))}</span>
+          <span className="font-semibold tabular-nums">{formatCurrency((result.subtotales.material ?? 0) + (result.subtotales.flexible ?? 0) + (result.subtotales.tinta ?? 0))}</span>
         </div>
         <div className="flex items-center justify-between mt-1">
           <span className="font-medium">Total centros de costo</span>

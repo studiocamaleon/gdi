@@ -1115,7 +1115,7 @@ export class ProductosServiciosService {
 
         // Evaluar cada variante de rollo y elegir la mejor
         let bestFlexCost = Infinity;
-        let bestFlexResult: { variant: typeof flexVariants[0]; consumedLengthMm: number; usefulAreaM2: number; consumedAreaM2: number } | null = null;
+        let bestFlexResult: { variant: typeof flexVariants[0]; consumedLengthMm: number; usefulAreaM2: number; consumedAreaM2: number; rollWidthMm: number; layout: any } | null = null;
 
         for (const flexV of flexVariants) {
           const flexAttrs = (flexV.atributosVarianteJson ?? {}) as Record<string, unknown>;
@@ -1149,7 +1149,7 @@ export class ProductosServiciosService {
 
           if (costoFlex < bestFlexCost) {
             bestFlexCost = costoFlex;
-            bestFlexResult = { variant: flexV, consumedLengthMm, usefulAreaM2, consumedAreaM2 };
+            bestFlexResult = { variant: flexV, consumedLengthMm, usefulAreaM2, consumedAreaM2, rollWidthMm, layout };
           }
         }
 
@@ -1299,6 +1299,36 @@ export class ProductosServiciosService {
           cantidad: m.cantidad,
           m2: this.roundProductNumber((m.anchoMm * m.altoMm * m.cantidad) / 1_000_000),
         })),
+        // Nesting preview del flexible (para plotter 3D)
+        flexibleNestingPreview: bestFlexResult?.layout ? {
+          rollWidth: bestFlexResult.rollWidthMm,
+          rollLength: bestFlexResult.consumedLengthMm,
+          marginLeft: 0,
+          marginRight: 0,
+          marginStart: 0,
+          marginEnd: 0,
+          panelizado: false,
+          panelAxis: null,
+          panelCount: 1,
+          panelOverlap: null,
+          panelMaxWidth: null,
+          panelDistribution: null,
+          panelWidthInterpretation: null,
+          panelMode: null,
+          pieces: (bestFlexResult.layout.placements ?? []).map((p: any, i: number) => ({
+            widthMm: p.widthMm ?? p.originalWidthMm ?? 0,
+            heightMm: p.heightMm ?? p.originalHeightMm ?? 0,
+            centerXMm: p.centerXMm ?? ((p.widthMm ?? p.originalWidthMm ?? 0) / 2),
+            centerYMm: p.centerYMm ?? ((p.heightMm ?? p.originalHeightMm ?? 0) / 2),
+            label: p.label ?? `Pieza ${i + 1}`,
+            rotated: p.rotated ?? false,
+            usefulWidthMm: p.usefulWidthMm ?? p.widthMm ?? p.originalWidthMm ?? 0,
+            usefulHeightMm: p.usefulHeightMm ?? p.heightMm ?? p.originalHeightMm ?? 0,
+            panelIndex: 0,
+            panelCount: 1,
+            panelAxis: null,
+          })),
+        } : null,
       },
     };
 
