@@ -93,6 +93,7 @@ type MateriaPrimaBloque = {
 type QuoteResult = {
   total: number;
   unitario: number;
+  cantidad: number;
   subtotales: { procesos: number; material: number; tinta?: number };
   bloques: {
     procesos: ProcesoBloque[];
@@ -309,8 +310,8 @@ export function RigidPrintedSimularCostoTab(props: ProductTabProps) {
             <p className="mt-1 text-lg font-semibold tabular-nums">{quoteResult ? formatCurrency(quoteResult.total) : "—"}</p>
           </div>
           <div className="rounded-lg border bg-muted/20 p-3">
-            <p className="text-xs text-muted-foreground">Costo unitario</p>
-            <p className="mt-1 text-lg font-semibold tabular-nums">{quoteResult ? formatCurrency(quoteResult.unitario) : "—"}</p>
+            <p className="text-xs text-muted-foreground">M² totales</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">{quoteResult ? `${formatNumber(quoteResult.cantidad)} m²` : "—"}</p>
           </div>
           <div className="rounded-lg border bg-muted/20 p-3">
             <p className="text-xs text-muted-foreground">Placas necesarias</p>
