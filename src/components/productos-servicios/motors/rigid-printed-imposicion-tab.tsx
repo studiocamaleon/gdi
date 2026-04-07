@@ -231,6 +231,7 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
       imposicion.separacionVerticalMm,
       0,
       imposicion.permitirRotacion,
+      imposicion.orientacionPlaca ?? 'usar_lado_corto',
     );
 
     // Desplazar posiciones por márgenes de máquina

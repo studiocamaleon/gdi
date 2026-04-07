@@ -337,6 +337,7 @@ export function nestMultiMedida(
   sepV: number,
   margen: number,
   permitirRotacion: boolean,
+  orientacionPlaca: 'usar_lado_corto' | 'usar_lado_largo' = 'usar_lado_corto',
 ): MultiMedidaNestingResult {
   // Preparar piezas — guardar dimensiones originales, rotación se decide al colocar
   type PiezaPendiente = { mi: number; origW: number; origH: number };
@@ -404,12 +405,16 @@ export function nestMultiMedida(
         orientaciones.push({ w: origH, h: origW, rotada: true });
       }
 
-      // Elegir la orientación que entra y maximiza uso del ancho (minimiza largo)
+      // Elegir orientación según config de aprovechamiento de placa
+      // usar_lado_corto = "Aprovechar ancho" → preferir pieza más ancha (llena el ancho, minimiza largo)
+      // usar_lado_largo = "Aprovechar largo" → preferir pieza más alta (llena el largo, minimiza ancho)
+      const preferirAncha = orientacionPlaca === 'usar_lado_corto';
       let mejorOrientacion: Orientacion | null = null;
       for (const o of orientaciones) {
         if (o.w <= espacioAncho + 0.01 && o.h <= espacioAlto + 0.01) {
-          if (!mejorOrientacion || o.w > mejorOrientacion.w) {
-            // Preferir la más ancha → aprovecha el ancho, minimiza filas en largo
+          if (!mejorOrientacion
+            || (preferirAncha && o.w > mejorOrientacion.w)
+            || (!preferirAncha && o.h > mejorOrientacion.h)) {
             mejorOrientacion = o;
           }
         }
