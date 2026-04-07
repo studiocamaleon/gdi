@@ -1218,7 +1218,7 @@ export class ProductosServiciosService {
         productoVarianteId: variante?.id ?? null,
         motorCodigo: motor.code, motorVersion: motor.version,
         configVersionBase: configRow?.versionConfig ?? null, configVersionOverride: null,
-        cantidad: Math.round(cantidadComercial * 100) / 100, periodoTarifa: periodo,
+        cantidad: new Prisma.Decimal(cantidadComercial), periodoTarifa: periodo,
         inputJson: ({ cantidadComercial, cantidadPiezas: cantidadTotal, periodo, medidas: medidasInput, placaVarianteId, tipoImpresion, caras, unidadComercial } as unknown) as Prisma.InputJsonValue,
         resultadoJson: (roundedResult as unknown) as Prisma.InputJsonValue,
         total: new Prisma.Decimal(Number((roundedResult as any).total ?? 0)),
@@ -7500,7 +7500,7 @@ export class ProductosServiciosService {
 
   private mapCotizacionSnapshotResumen(item: {
     id: string;
-    cantidad: number;
+    cantidad: Prisma.Decimal | number;
     periodoTarifa: string;
     motorCodigo: string;
     motorVersion: number;
@@ -7511,14 +7511,14 @@ export class ProductosServiciosService {
   }) {
     return {
       id: item.id,
-      cantidad: this.roundProductNumber(item.cantidad),
+      cantidad: this.roundProductNumber(Number(item.cantidad)),
       periodoTarifa: item.periodoTarifa,
       motorCodigo: item.motorCodigo,
       motorVersion: item.motorVersion,
       configVersionBase: item.configVersionBase,
       configVersionOverride: item.configVersionOverride,
       total: this.roundProductNumber(Number(item.total)),
-      unitario: this.roundProductNumber(item.cantidad > 0 ? Number(item.total.div(item.cantidad)) : Number(item.total)),
+      unitario: this.roundProductNumber(Number(item.cantidad) > 0 ? Number(item.total) / Number(item.cantidad) : Number(item.total)),
       createdAt: item.createdAt.toISOString(),
     };
   }

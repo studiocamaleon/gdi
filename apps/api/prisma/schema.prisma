@@ -2006,7 +2006,7 @@ model CotizacionProductoSnapshot {
   motorVersion          Int
   configVersionBase     Int?
   configVersionOverride Int?
-  cantidad              Int
+  cantidad              Decimal          @db.Decimal(14, 4)
   periodoTarifa         String
   inputJson             Json
   resultadoJson         Json
