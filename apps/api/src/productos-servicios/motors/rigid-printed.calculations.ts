@@ -166,17 +166,22 @@ export function nestMultiMedida(
     const colocadas: PlacedPiece[] = [];
     const noColocadas: Pieza[] = [];
 
+    // Best Area Fit: coloca en el rectángulo libre más ajustado
+    // Tiebreaker: Best Short Side Fit
     function findBest(pw: number, ph: number): { x: number; y: number } | null {
-      let bestY = Infinity, bestX = Infinity;
-      let found = false;
+      let bestArea = Infinity, bestShortSide = Infinity;
+      let bestX = -1, bestY = -1;
       for (const r of freeRects) {
         if (pw <= r.w + 0.01 && ph <= r.h + 0.01) {
-          if (r.y < bestY || (r.y === bestY && r.x < bestX)) {
-            bestY = r.y; bestX = r.x; found = true;
+          const area = r.w * r.h;
+          const shortSide = Math.min(r.w - pw, r.h - ph);
+          if (area < bestArea || (area === bestArea && shortSide < bestShortSide)) {
+            bestArea = area; bestShortSide = shortSide;
+            bestX = r.x; bestY = r.y;
           }
         }
       }
-      return found ? { x: bestX, y: bestY } : null;
+      return bestX >= 0 ? { x: bestX, y: bestY } : null;
     }
 
     function splitFree(px: number, py: number, pw: number, ph: number) {
@@ -210,14 +215,16 @@ export function nestMultiMedida(
     for (const pieza of piezas) {
       const orients: Array<{ w: number; h: number }> = [{ w: pieza.w, h: pieza.h }];
       if (permitirRotacion && pieza.w !== pieza.h) orients.push({ w: pieza.h, h: pieza.w });
-      if (orientacionPlaca === 'usar_lado_corto') orients.sort((a, b) => b.w - a.w);
-      else orients.sort((a, b) => b.h - a.h);
 
-      let best: { x: number; y: number; w: number; h: number } | null = null;
+      // Probar ambas orientaciones y elegir la mejor posición BAF
+      let best: { x: number; y: number; w: number; h: number; score: number } | null = null;
       for (const o of orients) {
         const pos = findBest(o.w, o.h);
-        if (pos && (!best || pos.y < best.y || (pos.y === best.y && pos.x < best.x))) {
-          best = { x: pos.x, y: pos.y, w: o.w, h: o.h };
+        if (pos) {
+          const score = pos.y * 10000 + pos.x;
+          if (!best || score < best.score) {
+            best = { x: pos.x, y: pos.y, w: o.w, h: o.h, score };
+          }
         }
       }
       if (best) {

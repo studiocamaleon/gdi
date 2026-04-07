@@ -376,24 +376,31 @@ export function nestMultiMedida(
     const colocadas: MultiMedidaPiece[] = [];
     const noColocadas: PiezaPendiente[] = [];
 
-    function findBestPosition(pw: number, ph: number): { x: number; y: number; idx: number } | null {
-      let bestY = Infinity;
-      let bestX = Infinity;
-      let bestIdx = -1;
+    // Best Area Fit: coloca en el rectángulo libre más chico donde entra
+    // Tiebreaker: Best Short Side Fit (menor lado residual corto)
+    function findBestPosition(pw: number, ph: number): { x: number; y: number } | null {
+      let bestArea = Infinity;
+      let bestShortSide = Infinity;
+      let bestX = -1;
+      let bestY = -1;
 
-      for (let i = 0; i < freeRects.length; i++) {
-        const r = freeRects[i];
+      for (const r of freeRects) {
         if (pw <= r.w + 0.01 && ph <= r.h + 0.01) {
-          // Bottom-left: menor Y, luego menor X
-          if (r.y < bestY || (r.y === bestY && r.x < bestX)) {
-            bestY = r.y;
+          const area = r.w * r.h;
+          const leftoverW = r.w - pw;
+          const leftoverH = r.h - ph;
+          const shortSide = Math.min(leftoverW, leftoverH);
+
+          if (area < bestArea || (area === bestArea && shortSide < bestShortSide)) {
+            bestArea = area;
+            bestShortSide = shortSide;
             bestX = r.x;
-            bestIdx = i;
+            bestY = r.y;
           }
         }
       }
 
-      return bestIdx >= 0 ? { x: bestX, y: bestY, idx: bestIdx } : null;
+      return bestX >= 0 ? { x: bestX, y: bestY } : null;
     }
 
     function splitFreeRects(px: number, py: number, pw: number, ph: number) {
@@ -460,23 +467,21 @@ export function nestMultiMedida(
         orients.push({ w: pieza.origH, h: pieza.origW, rotada: true });
       }
 
-      // Ordenar según config de aprovechamiento
-      if (orientacionPlaca === 'usar_lado_corto') {
-        orients.sort((a, b) => b.w - a.w); // más ancha primero
-      } else {
-        orients.sort((a, b) => b.h - a.h); // más alta primero
-      }
-
       let placed = false;
 
-      // Probar cada orientación y elegir la que da la mejor posición (bottom-left)
-      let bestPos: { x: number; y: number; orient: Orient } | null = null;
+      // Probar AMBAS orientaciones y elegir la que produce el mejor BAF score
+      // (se coloca en el rectángulo libre más ajustado)
+      let bestPos: { x: number; y: number; orient: Orient; score: number } | null = null;
 
       for (const orient of orients) {
         const pos = findBestPosition(orient.w, orient.h);
         if (pos) {
-          if (!bestPos || pos.y < bestPos.y || (pos.y === bestPos.y && pos.x < bestPos.x)) {
-            bestPos = { x: pos.x, y: pos.y, orient };
+          // Score = área del rectángulo libre donde entra (menor = mejor fit)
+          // findBestPosition ya devuelve el mejor, así que comparamos entre orientaciones
+          // usando la Y más baja como desempate (aprovecha largo)
+          const score = pos.y * 10000 + pos.x; // priorizar posición más arriba-izquierda
+          if (!bestPos || score < bestPos.score) {
+            bestPos = { x: pos.x, y: pos.y, orient, score };
           }
         }
       }
