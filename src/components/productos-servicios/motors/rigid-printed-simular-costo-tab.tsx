@@ -36,8 +36,14 @@ import {
 } from "@/lib/productos-servicios-api";
 import type { CotizacionProductoSnapshotResumen } from "@/lib/productos-servicios";
 import { HistoryIcon } from "lucide-react";
+import { EyeIcon } from "lucide-react";
 import type { MateriaPrima } from "@/lib/materias-primas";
 import type { Maquina } from "@/lib/maquinaria";
+import {
+  nestMultiMedida,
+  type MultiMedidaNestingResult,
+  MEDIDA_COLORS,
+} from "./rigid-printed-nesting.helpers";
 
 // ── Tipos ─────────────────────────────────────────────────────────
 
@@ -228,6 +234,55 @@ export function RigidPrintedSimularCostoTab(props: ProductTabProps) {
   }, [props.producto.id, medidas, tipoImpresion, caras, placaVarianteId]);
 
   const clear = () => setQuoteResult(null);
+
+  // Nesting visual para mostrar con el resultado
+  const nestingPreview = React.useMemo<MultiMedidaNestingResult | null>(() => {
+    if (!quoteResult || !config) return null;
+    const validMedidas = medidas.filter((m) => m.anchoMm && m.anchoMm > 0 && m.altoMm && m.altoMm > 0);
+    if (validMedidas.length === 0) return null;
+
+    const placa = placasCompatibles.find((p) => p.id === placaVarianteId) ?? placasCompatibles[0];
+    if (!placa) return null;
+
+    // Reconstruir dimensiones de placa de trabajo
+    const imposCfg = (config as Record<string, unknown>).imposicion as Record<string, unknown> | undefined;
+    const orientacion = String(imposCfg?.orientacionPlaca ?? 'usar_lado_corto');
+
+    // Parsear dimensiones de la placa desde el label
+    const traz = quoteResult.trazabilidad?.resumenTecnico;
+    const placaAnchoMm = traz?.placaAnchoMm ?? 0;
+    const placaAltoMm = traz?.placaAltoMm ?? 0;
+    if (placaAnchoMm <= 0 || placaAltoMm <= 0) return null;
+
+    const mgCfg = (imposCfg?.margenMaquina ?? {}) as Record<string, unknown>;
+    const mgArr = Number(mgCfg.arriba ?? 0);
+    const mgAba = Number(mgCfg.abajo ?? 0);
+    const mgIzq = Number(mgCfg.izquierda ?? 0);
+    const mgDer = Number(mgCfg.derecha ?? 0);
+    const areaW = placaAnchoMm - mgIzq - mgDer;
+    const areaH = placaAltoMm - mgArr - mgAba;
+
+    const result = nestMultiMedida(
+      validMedidas.map((m) => ({ anchoMm: m.anchoMm!, altoMm: m.altoMm!, cantidad: m.cantidad })),
+      areaW, areaH,
+      Number(imposCfg?.separacionHorizontalMm ?? 3),
+      Number(imposCfg?.separacionVerticalMm ?? 3),
+      0,
+      Boolean(imposCfg?.permitirRotacion ?? true),
+      orientacion as 'usar_lado_corto' | 'usar_lado_largo',
+    );
+
+    // Desplazar por márgenes
+    return {
+      ...result,
+      posiciones: result.posiciones.map((p) => ({ ...p, x: p.x + mgIzq, y: p.y + mgArr })),
+      placaLayouts: result.placaLayouts.map((pl) => ({
+        ...pl,
+        largoConsumidoMm: pl.largoConsumidoMm + mgArr,
+        posiciones: (pl as any).posiciones?.map((p: any) => ({ ...p, x: p.x + mgIzq, y: p.y + mgArr })) ?? [],
+      })),
+    };
+  }, [quoteResult, medidas, config, placaVarianteId, placasCompatibles]);
 
   if (loading) return <GdiSpinner />;
 
@@ -493,7 +548,7 @@ export function RigidPrintedSimularCostoTab(props: ProductTabProps) {
             description="Desglose de sustrato rígido, tintas y consumibles."
             icon={SigmaIcon}
           >
-            <MateriasPrimasBreakdown result={quoteResult} />
+            <MateriasPrimasBreakdown result={quoteResult} nestingPreview={nestingPreview} medidas={medidas} />
           </ProductoTabSection>
         )}
 
@@ -578,7 +633,12 @@ export function RigidPrintedSimularCostoTab(props: ProductTabProps) {
 
 // ── Desglose de materias primas (tabla agrupada) ──────────────────
 
-function MateriasPrimasBreakdown({ result }: { result: QuoteResult }) {
+function MateriasPrimasBreakdown({ result, nestingPreview, medidas }: {
+  result: QuoteResult;
+  nestingPreview: MultiMedidaNestingResult | null;
+  medidas: Array<{ anchoMm: number | null; altoMm: number | null; cantidad: number }>;
+}) {
+  const [showNesting, setShowNesting] = React.useState(false);
   const materiales = result.bloques.materiales as MateriaPrimaBloque[];
 
   // Agrupar por tipo
@@ -605,15 +665,86 @@ function MateriasPrimasBreakdown({ result }: { result: QuoteResult }) {
         <div key={grupo.tipo} className="rounded-lg border">
           {/* Header del grupo */}
           <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30 border-b">
-            <div>
-              <span className="text-sm font-semibold">{grupo.tipo}</span>
-              <span className="text-xs text-muted-foreground ml-2">{grupo.count} componente{grupo.count !== 1 ? "s" : ""}</span>
+            <div className="flex items-center gap-3">
+              <div>
+                <span className="text-sm font-semibold">{grupo.tipo}</span>
+                <span className="text-xs text-muted-foreground ml-2">{grupo.count} componente{grupo.count !== 1 ? "s" : ""}</span>
+              </div>
+              {grupo.tipo === "Sustrato" && nestingPreview && nestingPreview.placas > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setShowNesting((v) => !v)}
+                >
+                  <EyeIcon className="mr-1 size-3.5" />
+                  {showNesting ? "Ocultar nesting" : "Ver nesting"}
+                </Button>
+              )}
             </div>
             <div className="text-right">
               <span className="text-[10px] text-muted-foreground">Costo total</span>
               <p className="text-sm font-semibold tabular-nums">{formatCurrency(grupo.total)}</p>
             </div>
           </div>
+
+          {/* Nesting visual (solo para Sustrato) */}
+          {grupo.tipo === "Sustrato" && showNesting && nestingPreview && (
+            <div className="p-4 border-b bg-background">
+              {/* Leyenda de medidas */}
+              {medidas.filter((m) => m.anchoMm && m.altoMm).length > 1 && (
+                <div className="flex gap-3 mb-3 flex-wrap text-xs">
+                  {medidas.filter((m) => m.anchoMm && m.altoMm).map((m, i) => (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: MEDIDA_COLORS[i % MEDIDA_COLORS.length], opacity: 0.85 }} />
+                      <span>{(m.anchoMm! / 10)} × {(m.altoMm! / 10)} cm × {m.cantidad}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* SVG por placa */}
+              {nestingPreview.placaLayouts.map((layout, pi) => {
+                const traz = result.trazabilidad.resumenTecnico;
+                const placaW = traz?.placaAnchoMm ?? 0;
+                const placaH = traz?.placaAltoMm ?? 0;
+                if (placaW <= 0 || placaH <= 0) return null;
+
+                // Siempre dibujar horizontal
+                const needsRotate = placaH > placaW;
+                const displayW = needsRotate ? placaH : placaW;
+                const displayH = needsRotate ? placaW : placaH;
+                const maxSvgW = 560;
+                const scale = maxSvgW / displayW;
+
+                const positions = (layout as any).posiciones ?? [];
+                const displayPos = needsRotate
+                  ? positions.map((p: any) => ({ ...p, x: p.y, y: placaW - p.x - p.anchoMm, anchoMm: p.altoMm, altoMm: p.anchoMm }))
+                  : positions;
+
+                return (
+                  <div key={pi} className={nestingPreview.placas > 1 ? "mb-3" : ""}>
+                    {nestingPreview.placas > 1 && (
+                      <p className="text-xs text-muted-foreground mb-1">Placa {pi + 1}</p>
+                    )}
+                    <svg
+                      width={displayW * scale}
+                      height={displayH * scale}
+                      viewBox={`0 0 ${displayW} ${displayH}`}
+                      className="border rounded bg-white"
+                    >
+                      <rect x={0} y={0} width={displayW} height={displayH} fill="#e0e7ef" stroke="#94a3b8" strokeWidth={1} />
+                      {displayPos.map((pos: any, i: number) => (
+                        <rect key={i} x={pos.x} y={pos.y} width={pos.anchoMm} height={pos.altoMm}
+                          fill={MEDIDA_COLORS[pos.medidaIndex % MEDIDA_COLORS.length]}
+                          stroke={MEDIDA_COLORS[pos.medidaIndex % MEDIDA_COLORS.length]}
+                          strokeWidth={0.5} opacity={0.85} />
+                      ))}
+                    </svg>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Tabla de componentes */}
           <Table>
