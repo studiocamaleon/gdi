@@ -668,26 +668,25 @@ function MateriasPrimasBreakdown({ result, nestingPreview, medidas, config }: {
         <div key={grupo.tipo} className="rounded-lg border">
           {/* Header del grupo */}
           <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30 border-b">
+            <div>
+              <span className="text-sm font-semibold">{grupo.tipo}</span>
+              <span className="text-xs text-muted-foreground ml-2">{grupo.count} componente{grupo.count !== 1 ? "s" : ""}</span>
+            </div>
             <div className="flex items-center gap-3">
-              <div>
-                <span className="text-sm font-semibold">{grupo.tipo}</span>
-                <span className="text-xs text-muted-foreground ml-2">{grupo.count} componente{grupo.count !== 1 ? "s" : ""}</span>
-              </div>
               {grupo.tipo === "Sustrato" && nestingPreview && nestingPreview.placas > 0 && (
                 <Button
-                  variant="outline"
                   size="sm"
-                  className="h-7 text-xs"
+                  className="h-7 text-xs bg-orange-500 hover:bg-orange-600 text-white"
                   onClick={() => setShowNesting((v) => !v)}
                 >
                   <EyeIcon className="mr-1 size-3.5" />
-                  {showNesting ? "Ocultar nesting" : "Ver nesting"}
+                  Ver nesting
                 </Button>
               )}
-            </div>
-            <div className="text-right">
-              <span className="text-[10px] text-muted-foreground">Costo total</span>
-              <p className="text-sm font-semibold tabular-nums">{formatCurrency(grupo.total)}</p>
+              <div className="text-right">
+                <span className="text-[10px] text-muted-foreground">Costo total</span>
+                <p className="text-sm font-semibold tabular-nums">{formatCurrency(grupo.total)}</p>
+              </div>
             </div>
           </div>
 
