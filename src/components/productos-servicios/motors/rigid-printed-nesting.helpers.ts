@@ -322,12 +322,13 @@ export type MultiMedidaNestingResult = {
 };
 
 /**
- * Nesting multi-medida: aprovecha ancho primero.
+ * Nesting multi-medida con bin-packing 2D (skyline / bottom-left).
  *
- * Acomoda piezas llenando el ancho de la placa (como texto que fluye),
- * mezclando medidas en la misma fila. Cuando no entra nada más en el
- * ancho, baja a la siguiente fila. Cuando no entra nada más en alto,
- * abre nueva placa.
+ * Mantiene un "skyline" (perfil superior del área ocupada) y coloca
+ * cada pieza en la posición más baja y más a la izquierda posible.
+ * Las piezas se pegan unas a otras sin huecos innecesarios.
+ *
+ * Ordena piezas de mayor a menor área para mejor aprovechamiento.
  */
 export function nestMultiMedida(
   medidas: MedidaInput[],
@@ -339,9 +340,9 @@ export function nestMultiMedida(
   permitirRotacion: boolean,
   orientacionPlaca: 'usar_lado_corto' | 'usar_lado_largo' = 'usar_lado_corto',
 ): MultiMedidaNestingResult {
-  // Preparar piezas — guardar dimensiones originales, rotación se decide al colocar
   type PiezaPendiente = { mi: number; origW: number; origH: number };
   const areaW = placaAnchoMm - 2 * margen;
+  const areaH = placaAltoMm - 2 * margen;
   const pendientes: PiezaPendiente[] = [];
 
   for (let mi = 0; mi < medidas.length; mi++) {
@@ -356,112 +357,161 @@ export function nestMultiMedida(
     return { posiciones: [], placas: 0, placaLayouts: [], totalPiezas: 0, aprovechamientoPct: 0, areaTotalMm2: 0, areaUtilMm2: 0 };
   }
 
+  // Ordenar: piezas más grandes primero → mejor bin-packing
+  pendientes.sort((a, b) => (b.origW * b.origH) - (a.origW * a.origH));
+
   const placaLayouts: MultiMedidaNestingResult["placaLayouts"] = [];
-  let currentPlaca: MultiMedidaPiece[] = [];
-  let cursorX = margen;
-  let cursorY = margen;
-  let filaAltoMax = 0; // Alto máximo de la fila actual
   let totalPiezas = 0;
   let totalAreaUtil = 0;
 
-  function flushPlaca() {
-    // Cerrar fila actual
-    if (filaAltoMax > 0) {
-      cursorY += filaAltoMax + sepV;
-    }
-    if (currentPlaca.length > 0) {
-      const areaUtil = currentPlaca.reduce((s, p) => s + p.anchoMm * p.altoMm, 0);
-      placaLayouts.push({
-        posiciones: [...currentPlaca],
-        largoConsumidoMm: cursorY,
-        areaUtilMm2: areaUtil,
-      });
-      totalAreaUtil += areaUtil;
-    }
-    currentPlaca = [];
-    cursorX = margen;
-    cursorY = margen;
-    filaAltoMax = 0;
-  }
+  // ── Skyline bin-packing para una placa ──────────────────────────
+  function packPlaca(piezas: PiezaPendiente[]): {
+    colocadas: MultiMedidaPiece[];
+    noColocadas: PiezaPendiente[];
+    maxY: number;
+  } {
+    // Skyline: array de segmentos { x, y, w } representando el borde superior
+    type SkylineSegment = { x: number; y: number; w: number };
+    let skyline: SkylineSegment[] = [{ x: 0, y: 0, w: areaW }];
+    const colocadas: MultiMedidaPiece[] = [];
+    const noColocadas: PiezaPendiente[] = [];
 
-  function nuevaFila() {
-    cursorY += filaAltoMax + sepV;
-    cursorX = margen;
-    filaAltoMax = 0;
-  }
-
-  for (const pieza of pendientes) {
-    let colocada = false;
-    const { origW, origH } = pieza;
-
-    while (!colocada) {
-      const espacioAncho = areaW - (cursorX - margen);
-      const espacioAlto = placaAltoMm - margen - cursorY;
-
-      // Probar orientación normal y rotada, elegir la mejor para este espacio
-      type Orientacion = { w: number; h: number; rotada: boolean };
-      const orientaciones: Orientacion[] = [{ w: origW, h: origH, rotada: false }];
-      if (permitirRotacion && origW !== origH) {
-        orientaciones.push({ w: origH, h: origW, rotada: true });
+    for (const pieza of piezas) {
+      // Generar orientaciones posibles
+      type Orient = { w: number; h: number; rotada: boolean };
+      const orients: Orient[] = [{ w: pieza.origW, h: pieza.origH, rotada: false }];
+      if (permitirRotacion && pieza.origW !== pieza.origH) {
+        orients.push({ w: pieza.origH, h: pieza.origW, rotada: true });
       }
 
-      // Elegir orientación según config de aprovechamiento de placa
-      // usar_lado_corto = "Aprovechar ancho" → preferir pieza más ancha (llena el ancho, minimiza largo)
-      // usar_lado_largo = "Aprovechar largo" → preferir pieza más alta (llena el largo, minimiza ancho)
-      const preferirAncha = orientacionPlaca === 'usar_lado_corto';
-      let mejorOrientacion: Orientacion | null = null;
-      for (const o of orientaciones) {
-        if (o.w <= espacioAncho + 0.01 && o.h <= espacioAlto + 0.01) {
-          if (!mejorOrientacion
-            || (preferirAncha && o.w > mejorOrientacion.w)
-            || (!preferirAncha && o.h > mejorOrientacion.h)) {
-            mejorOrientacion = o;
-          }
-        }
-      }
-
-      if (mejorOrientacion) {
-        currentPlaca.push({
-          x: cursorX,
-          y: cursorY,
-          anchoMm: mejorOrientacion.w,
-          altoMm: mejorOrientacion.h,
-          medidaIndex: pieza.mi,
-          rotada: mejorOrientacion.rotada,
-        });
-        cursorX += mejorOrientacion.w + sepH;
-        filaAltoMax = Math.max(filaAltoMax, mejorOrientacion.h);
-        totalPiezas++;
-        colocada = true;
+      // Para "aprovechar ancho" preferir orientación más ancha primero
+      if (orientacionPlaca === 'usar_lado_corto') {
+        orients.sort((a, b) => b.w - a.w);
       } else {
-        // No entra en la fila actual — verificar si entra en una fila nueva
-        const minW = Math.min(origW, origH);
-        const minH = Math.max(origW, origH);
-        const cabeEnAncho = (permitirRotacion ? minW : origW) <= areaW + 0.01;
+        orients.sort((a, b) => b.h - a.h);
+      }
 
-        if (cabeEnAncho && filaAltoMax > 0) {
-          nuevaFila();
-          const nuevoAlto = placaAltoMm - margen - cursorY;
-          const altoPieza = permitirRotacion ? Math.min(origW, origH) : origH;
-          if (altoPieza <= nuevoAlto + 0.01) {
-            continue; // Re-intentar
+      let placed = false;
+
+      for (const orient of orients) {
+        if (placed) break;
+        const pw = orient.w + sepH; // ancho con separación
+        const ph = orient.h + sepV; // alto con separación
+
+        // Buscar la mejor posición en el skyline (más abajo y más a la izquierda)
+        let bestX = -1;
+        let bestY = Infinity;
+        let bestSegIdx = -1;
+
+        for (let si = 0; si < skyline.length; si++) {
+          const seg = skyline[si];
+
+          // Verificar si la pieza cabe empezando en este segmento
+          if (seg.x + orient.w > areaW + 0.01) continue;
+
+          // Calcular el Y máximo que necesita la pieza (puede abarcar múltiples segmentos)
+          let maxYNeeded = seg.y;
+          let widthCovered = 0;
+          for (let sj = si; sj < skyline.length && widthCovered < orient.w - 0.01; sj++) {
+            maxYNeeded = Math.max(maxYNeeded, skyline[sj].y);
+            widthCovered += skyline[sj].w;
+          }
+
+          if (maxYNeeded + orient.h > areaH + 0.01) continue; // No cabe en alto
+
+          // Es esta posición mejor (más abajo, luego más a la izquierda)?
+          if (maxYNeeded < bestY || (maxYNeeded === bestY && seg.x < bestX)) {
+            bestY = maxYNeeded;
+            bestX = seg.x;
+            bestSegIdx = si;
           }
         }
 
-        if (cabeEnAncho) {
-          // No cabe en esta placa → nueva placa
-          flushPlaca();
-          continue;
-        } else {
-          // La pieza no entra en ninguna orientación
-          colocada = true; // Skip
+        if (bestSegIdx >= 0 && bestX >= 0) {
+          // Colocar pieza
+          colocadas.push({
+            x: margen + bestX,
+            y: margen + bestY,
+            anchoMm: orient.w,
+            altoMm: orient.h,
+            medidaIndex: pieza.mi,
+            rotada: orient.rotada,
+          });
+
+          // Actualizar skyline: el área ocupada por esta pieza sube el skyline
+          const newTop = bestY + orient.h + sepV;
+          const pieceRight = bestX + orient.w + sepH;
+
+          // Reconstruir skyline
+          const newSkyline: SkylineSegment[] = [];
+          for (const s of skyline) {
+            const sRight = s.x + s.w;
+            if (sRight <= bestX + 0.01 || s.x >= pieceRight - 0.01) {
+              // Segmento fuera del área de la pieza — mantener
+              newSkyline.push(s);
+            } else {
+              // Segmento parcialmente cubierto
+              if (s.x < bestX - 0.01) {
+                newSkyline.push({ x: s.x, y: s.y, w: bestX - s.x });
+              }
+              if (sRight > pieceRight + 0.01) {
+                newSkyline.push({ x: pieceRight, y: s.y, w: sRight - pieceRight });
+              }
+            }
+          }
+          // Agregar segmento de la pieza
+          newSkyline.push({ x: bestX, y: newTop, w: orient.w + sepH });
+
+          // Ordenar y fusionar segmentos adyacentes con mismo Y
+          newSkyline.sort((a, b) => a.x - b.x);
+          skyline = [];
+          for (const s of newSkyline) {
+            const last = skyline[skyline.length - 1];
+            if (last && Math.abs(last.y - s.y) < 0.01 && Math.abs((last.x + last.w) - s.x) < 0.5) {
+              last.w += s.w;
+            } else {
+              skyline.push({ ...s });
+            }
+          }
+
+          placed = true;
         }
       }
+
+      if (!placed) {
+        noColocadas.push(pieza);
+      }
     }
+
+    const maxY = colocadas.length > 0
+      ? Math.max(...colocadas.map((p) => p.y - margen + p.altoMm)) + margen
+      : 0;
+
+    return { colocadas, noColocadas, maxY };
   }
 
-  // Flush última placa
-  flushPlaca();
+  // ── Empaquetar en múltiples placas ──────────────────────────────
+  let restantes = [...pendientes];
+
+  while (restantes.length > 0) {
+    const result = packPlaca(restantes);
+
+    if (result.colocadas.length === 0) {
+      // Ninguna pieza entra → terminar
+      break;
+    }
+
+    const areaUtil = result.colocadas.reduce((s, p) => s + p.anchoMm * p.altoMm, 0);
+    placaLayouts.push({
+      posiciones: result.colocadas,
+      largoConsumidoMm: result.maxY,
+      areaUtilMm2: areaUtil,
+    });
+    totalPiezas += result.colocadas.length;
+    totalAreaUtil += areaUtil;
+
+    restantes = result.noColocadas;
+  }
 
   const areaTotalMm2 = placaAnchoMm * placaAltoMm * placaLayouts.length;
 
