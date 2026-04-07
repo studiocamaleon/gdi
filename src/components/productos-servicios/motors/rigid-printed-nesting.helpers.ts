@@ -404,12 +404,12 @@ export function nestMultiMedida(
         orientaciones.push({ w: origH, h: origW, rotada: true });
       }
 
-      // Elegir la orientación que entra y minimiza desperdicio en ancho
+      // Elegir la orientación que entra y maximiza uso del ancho (minimiza largo)
       let mejorOrientacion: Orientacion | null = null;
       for (const o of orientaciones) {
         if (o.w <= espacioAncho + 0.01 && o.h <= espacioAlto + 0.01) {
-          if (!mejorOrientacion || o.w < mejorOrientacion.w) {
-            // Preferir la que usa menos ancho → deja más espacio para la siguiente
+          if (!mejorOrientacion || o.w > mejorOrientacion.w) {
+            // Preferir la más ancha → aprovecha el ancho, minimiza filas en largo
             mejorOrientacion = o;
           }
         }
