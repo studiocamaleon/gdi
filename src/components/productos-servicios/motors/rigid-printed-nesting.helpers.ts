@@ -356,7 +356,16 @@ function nestSingleSizeGrid(
     return { posiciones: [], placas: 0, placaLayouts: [], totalPiezas: 0, aprovechamientoPct: 0, areaTotalMm2: 0, areaUtilMm2: 0 };
   }
 
-  options.sort((a, b) => (b.cols * b.rows) - (a.cols * a.rows));
+  // Elegir orientación: preferir la que usa más columnas (aprovecha ancho)
+  // y minimiza filas necesarias para la cantidad pedida
+  options.sort((a, b) => {
+    const filasA = Math.ceil(total / a.cols);
+    const filasB = Math.ceil(total / b.cols);
+    // Menos filas primero (minimiza largo consumido)
+    if (filasA !== filasB) return filasA - filasB;
+    // Empate: más columnas primero (aprovecha ancho)
+    return b.cols - a.cols;
+  });
   const best = options[0];
 
   const piezasPorPlaca = best.cols * best.rows;
