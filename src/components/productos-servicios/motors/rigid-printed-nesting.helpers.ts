@@ -338,29 +338,16 @@ export function nestMultiMedida(
   margen: number,
   permitirRotacion: boolean,
 ): MultiMedidaNestingResult {
-  // Preparar piezas con rotación óptima
-  type PiezaPendiente = { mi: number; w: number; h: number; rotada: boolean };
+  // Preparar piezas — guardar dimensiones originales, rotación se decide al colocar
+  type PiezaPendiente = { mi: number; origW: number; origH: number };
   const areaW = placaAnchoMm - 2 * margen;
   const pendientes: PiezaPendiente[] = [];
 
   for (let mi = 0; mi < medidas.length; mi++) {
     const m = medidas[mi];
     if (m.anchoMm <= 0 || m.altoMm <= 0 || m.cantidad <= 0) continue;
-
-    let pW = m.anchoMm;
-    let pH = m.altoMm;
-    let rotada = false;
-
-    // Rotar si aprovecha mejor el ancho
-    if (permitirRotacion && pW !== pH && pH < pW) {
-      // Si la pieza es más ancha que alta, rotar para que sea más angosta
-      // → caben más por fila
-      const tmp = pW; pW = pH; pH = tmp;
-      rotada = true;
-    }
-
     for (let i = 0; i < m.cantidad; i++) {
-      pendientes.push({ mi, w: pW, h: pH, rotada });
+      pendientes.push({ mi, origW: m.anchoMm, origH: m.altoMm });
     }
   }
 
@@ -404,43 +391,66 @@ export function nestMultiMedida(
 
   for (const pieza of pendientes) {
     let colocada = false;
+    const { origW, origH } = pieza;
 
     while (!colocada) {
       const espacioAncho = areaW - (cursorX - margen);
       const espacioAlto = placaAltoMm - margen - cursorY;
 
-      // ¿Entra en la fila actual?
-      if (pieza.w <= espacioAncho + 0.01 && pieza.h <= espacioAlto + 0.01) {
+      // Probar orientación normal y rotada, elegir la mejor para este espacio
+      type Orientacion = { w: number; h: number; rotada: boolean };
+      const orientaciones: Orientacion[] = [{ w: origW, h: origH, rotada: false }];
+      if (permitirRotacion && origW !== origH) {
+        orientaciones.push({ w: origH, h: origW, rotada: true });
+      }
+
+      // Elegir la orientación que entra y minimiza desperdicio en ancho
+      let mejorOrientacion: Orientacion | null = null;
+      for (const o of orientaciones) {
+        if (o.w <= espacioAncho + 0.01 && o.h <= espacioAlto + 0.01) {
+          if (!mejorOrientacion || o.w < mejorOrientacion.w) {
+            // Preferir la que usa menos ancho → deja más espacio para la siguiente
+            mejorOrientacion = o;
+          }
+        }
+      }
+
+      if (mejorOrientacion) {
         currentPlaca.push({
           x: cursorX,
           y: cursorY,
-          anchoMm: pieza.w,
-          altoMm: pieza.h,
+          anchoMm: mejorOrientacion.w,
+          altoMm: mejorOrientacion.h,
           medidaIndex: pieza.mi,
-          rotada: pieza.rotada,
+          rotada: mejorOrientacion.rotada,
         });
-        cursorX += pieza.w + sepH;
-        filaAltoMax = Math.max(filaAltoMax, pieza.h);
+        cursorX += mejorOrientacion.w + sepH;
+        filaAltoMax = Math.max(filaAltoMax, mejorOrientacion.h);
         totalPiezas++;
         colocada = true;
-      } else if (pieza.w <= areaW + 0.01) {
-        // No entra en ancho restante pero entra en una fila nueva
-        if (filaAltoMax > 0) {
+      } else {
+        // No entra en la fila actual — verificar si entra en una fila nueva
+        const minW = Math.min(origW, origH);
+        const minH = Math.max(origW, origH);
+        const cabeEnAncho = (permitirRotacion ? minW : origW) <= areaW + 0.01;
+
+        if (cabeEnAncho && filaAltoMax > 0) {
           nuevaFila();
+          const nuevoAlto = placaAltoMm - margen - cursorY;
+          const altoPieza = permitirRotacion ? Math.min(origW, origH) : origH;
+          if (altoPieza <= nuevoAlto + 0.01) {
+            continue; // Re-intentar
+          }
         }
-        // Verificar si cabe en alto
-        const nuevoEspacioAlto = placaAltoMm - margen - cursorY;
-        if (pieza.h <= nuevoEspacioAlto + 0.01) {
-          // Cabe en nueva fila
-          continue; // Re-intentar en el loop
-        } else {
+
+        if (cabeEnAncho) {
           // No cabe en esta placa → nueva placa
           flushPlaca();
           continue;
+        } else {
+          // La pieza no entra en ninguna orientación
+          colocada = true; // Skip
         }
-      } else {
-        // La pieza no entra ni en el ancho total de la placa
-        colocada = true; // Skip, no se puede acomodar
       }
     }
   }
