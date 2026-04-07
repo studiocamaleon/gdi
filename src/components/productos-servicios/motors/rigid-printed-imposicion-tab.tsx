@@ -28,9 +28,11 @@ import type { MateriaPrima } from "@/lib/materias-primas";
 import type { Maquina } from "@/lib/maquinaria";
 import {
   nestMultiMedida,
+  nestRollo,
   calcularCosteoFromNesting,
   type CosteoPreview,
   type MultiMedidaNestingResult,
+  type RollNestingResult,
   MEDIDA_COLORS,
 } from "./rigid-printed-nesting.helpers";
 
@@ -58,6 +60,9 @@ type RigidPrintedConfig = {
   materialRigidoId: string | null;
   variantesCompatibles: string[];
   placaVarianteIdDefault: string | null;
+  materialFlexibleId: string | null;
+  variantesFlexiblesCompatibles: string[];
+  varianteFlexibleDefaultId: string | null;
   imposicion: ImposicionConfig;
   [key: string]: unknown;
 };
@@ -110,6 +115,7 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
   // Simulación — medidas dinámicas (mismo patrón que Simular Costo)
   type MedidaRow = { anchoMm: number | null; altoMm: number | null; cantidad: number };
   const [medidas, setMedidas] = React.useState<MedidaRow[]>([{ anchoMm: null, altoMm: null, cantidad: 1 }]);
+  const [tipoImpresionSim, setTipoImpresionSim] = React.useState<string>("directa");
   const fmtMmAsCm = (v: number | null) => (v != null && Number.isFinite(v) ? String(Number((v / 10).toFixed(2))) : "");
 
   const materiasPrimas = (props.materiasPrimas ?? []) as MateriaPrima[];
@@ -202,12 +208,28 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
   }, [config, materiasPrimas]);
 
   // Nesting + costeo preview
+  // Resolver rollo flexible info
+  const rolloInfo = React.useMemo(() => {
+    if (!config?.materialFlexibleId) return null;
+    const mat = materiasPrimas.find((m) => m.id === config.materialFlexibleId);
+    if (!mat) return null;
+    const compatIds = new Set((config as any).variantesFlexiblesCompatibles ?? []);
+    const variantes = (mat.variantes ?? []).filter((v) => compatIds.has(v.id));
+    const v = variantes[0]; // usar primera variante compatible
+    if (!v) return null;
+    const attrs = (v.atributosVariante ?? {}) as Record<string, unknown>;
+    const anchoM = Number(attrs.ancho ?? 0);
+    const anchoMm = anchoM < 10 ? Math.round(anchoM * 1000) : anchoM;
+    return { id: v.id, anchoMm, nombre: mat.nombre, precio: Number(v.precioReferencia ?? 0) };
+  }, [config, materiasPrimas]);
+
   const preview = React.useMemo<{
     multiNesting: MultiMedidaNestingResult;
     placaAnchoTrabajo: number;
     placaLargoTrabajo: number;
     margenMaquina: { arriba: number; abajo: number; izquierda: number; derecha: number };
     costeo: CosteoPreview;
+    rollPreview: RollNestingResult | null;
   } | null>(() => {
     const validMedidas = medidas.filter((m) => m.anchoMm && m.anchoMm > 0 && m.altoMm && m.altoMm > 0);
     if (!placaInfo || validMedidas.length === 0) return null;
@@ -263,12 +285,26 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
       imposicion.segmentosPlaca,
     );
 
+    // Nesting de rollo flexible (si tipo es flexible_montado)
+    let rollPreview: RollNestingResult | null = null;
+    if (tipoImpresionSim === 'flexible_montado' && rolloInfo) {
+      rollPreview = nestRollo(
+        validMedidas.map((m) => ({ anchoMm: m.anchoMm!, altoMm: m.altoMm!, cantidad: m.cantidad })),
+        rolloInfo.anchoMm,
+        imposicion.separacionHorizontalMm,
+        imposicion.separacionVerticalMm,
+        0, 0, 0,
+        imposicion.permitirRotacion,
+      );
+    }
+
     return {
       multiNesting: desplazadas,
       costeo, placaAnchoTrabajo, placaLargoTrabajo,
       margenMaquina: mg,
+      rollPreview,
     };
-  }, [placaInfo, medidas, imposicion]);
+  }, [placaInfo, medidas, imposicion, tipoImpresionSim, rolloInfo]);
 
   const tieneFlexible = (config?.tiposImpresion ?? []).includes("flexible_montado");
 
@@ -445,6 +481,29 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
           <p className="text-sm text-muted-foreground">No hay placa configurada.</p>
         ) : (
           <>
+            {/* Selector tipo impresión */}
+            {tieneFlexible && (
+              <div className="mb-4 flex items-center gap-3">
+                <Label>Simular para:</Label>
+                <Select value={tipoImpresionSim} onValueChange={(v) => { if (v) setTipoImpresionSim(v); }}>
+                  <SelectTrigger className="w-56">
+                    <SelectValue>
+                      {tipoImpresionSim === "directa" ? "Impresión directa" : "Sustrato flexible montado"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="directa">Impresión directa</SelectItem>
+                    <SelectItem value="flexible_montado">Sustrato flexible montado</SelectItem>
+                  </SelectContent>
+                </Select>
+                {tipoImpresionSim === "flexible_montado" && rolloInfo && (
+                  <span className="text-xs text-muted-foreground">
+                    Rollo: {rolloInfo.nombre} · {rolloInfo.anchoMm} mm ancho
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Medidas dinámicas (mismo layout que Simular Costo) */}
             <div className="rounded-lg border p-3 mb-4">
               <div className="mb-3 flex items-center justify-between gap-2">
@@ -565,6 +624,37 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
                 {preview.multiNesting.totalPiezas === 0 && (
                   <p className="text-sm text-destructive">Las piezas no caben en la placa.</p>
                 )}
+
+                {/* Nesting de rollo flexible */}
+                {tipoImpresionSim === "flexible_montado" && preview.rollPreview && (
+                  <div className="mt-6 pt-4 border-t">
+                    <p className="text-sm font-medium mb-3">
+                      Sustrato flexible · {rolloInfo?.nombre} · {rolloInfo?.anchoMm} mm ancho
+                    </p>
+                    <div className="flex gap-3 mb-3 flex-wrap">
+                      <Badge className="text-sm py-1 px-3">
+                        {r2(preview.rollPreview.largoConsumidoMm / 10)} cm largo
+                      </Badge>
+                      <Badge variant="secondary" className="text-sm py-1 px-3">
+                        {r2(preview.rollPreview.areaConsumidaM2)} m² consumido
+                      </Badge>
+                      <Badge variant="secondary" className="text-sm py-1 px-3">
+                        {preview.rollPreview.desperdicioPct}% desperdicio
+                      </Badge>
+                    </div>
+                    <RollSvg
+                      rolloAnchoMm={preview.rollPreview.rolloAnchoMm}
+                      largoConsumidoMm={preview.rollPreview.largoConsumidoMm}
+                      posiciones={preview.rollPreview.posiciones}
+                    />
+                  </div>
+                )}
+
+                {tipoImpresionSim === "flexible_montado" && !rolloInfo && (
+                  <div className="mt-4 p-3 rounded-lg border border-dashed text-sm text-muted-foreground">
+                    Configurá un material flexible en el tab Tecnologías para ver la imposición del rollo.
+                  </div>
+                )}
               </>
             )}
           </>
@@ -650,6 +740,55 @@ function SegmentosChipEditor({
 }
 
 // ── SVG de placa ──────────────────────────────────────────────────
+
+function r2(n: number) { return Math.round(n * 100) / 100; }
+
+// ── SVG de rollo flexible ─────────────────────────────────────────
+
+function RollSvg({
+  rolloAnchoMm,
+  largoConsumidoMm,
+  posiciones,
+}: {
+  rolloAnchoMm: number;
+  largoConsumidoMm: number;
+  posiciones: Array<{ x: number; y: number; anchoMm: number; altoMm: number; medidaIndex: number }>;
+}) {
+  // Dibujar horizontal: ancho del rollo = ancho SVG, largo consumido = alto SVG
+  const displayW = rolloAnchoMm;
+  const displayH = Math.max(largoConsumidoMm, 100);
+  const maxSvgW = 600;
+  const scale = maxSvgW / displayW;
+  const svgW = displayW * scale;
+  const svgH = displayH * scale;
+
+  return (
+    <div className="space-y-2">
+      <svg width={svgW} height={svgH} viewBox={`0 0 ${displayW} ${displayH}`} className="border rounded bg-white">
+        {/* Rollo */}
+        <rect x={0} y={0} width={displayW} height={displayH} fill="#f0fdf4" stroke="#86efac" strokeWidth={1} />
+        {/* Área consumida */}
+        <rect x={0} y={0} width={displayW} height={largoConsumidoMm} fill="#bbf7d0" stroke="#4ade80" strokeWidth={0.5} strokeDasharray="4 2" />
+        {/* Piezas */}
+        {posiciones.map((pos, i) => (
+          <rect key={i} x={pos.x} y={pos.y} width={pos.anchoMm} height={pos.altoMm}
+            fill={MEDIDA_COLORS[pos.medidaIndex % MEDIDA_COLORS.length]}
+            stroke={MEDIDA_COLORS[pos.medidaIndex % MEDIDA_COLORS.length]}
+            strokeWidth={0.5} opacity={0.85} />
+        ))}
+        {/* Línea de corte */}
+        {largoConsumidoMm < displayH && (
+          <line x1={0} y1={largoConsumidoMm} x2={displayW} y2={largoConsumidoMm}
+            stroke="#16a34a" strokeWidth={1.5} strokeDasharray="6 3" />
+        )}
+      </svg>
+      <div className="flex gap-4 flex-wrap text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-sm bg-[#bbf7d0]" /><span>Área consumida del rollo</span></div>
+        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-sm bg-[#f0fdf4]" /><span>Rollo restante</span></div>
+      </div>
+    </div>
+  );
+}
 
 export function MultiMedidaPlacaSvg({
   placaAnchoMm,

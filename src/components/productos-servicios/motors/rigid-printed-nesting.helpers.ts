@@ -558,3 +558,127 @@ export const MEDIDA_COLORS = [
   "#f97316", // naranja
   "#6366f1", // indigo
 ];
+
+// ── Nesting de rollo flexible (shelf-packing) ────────────────────
+
+export type RollNestingPiece = {
+  x: number;
+  y: number;
+  anchoMm: number;
+  altoMm: number;
+  medidaIndex: number;
+  rotada: boolean;
+};
+
+export type RollNestingResult = {
+  posiciones: RollNestingPiece[];
+  rolloAnchoMm: number;
+  largoConsumidoMm: number;
+  areaUtilMm2: number;
+  areaConsumidaM2: number;
+  desperdicioPct: number;
+  totalPiezas: number;
+};
+
+/**
+ * Nesting en rollo flexible (ancho fijo, largo infinito).
+ * Shelf-packing: acomoda piezas en filas horizontales, aprovechando el ancho.
+ * Cada fila tiene la altura de la pieza más alta en esa fila.
+ */
+export function nestRollo(
+  medidas: MedidaInput[],
+  rolloAnchoMm: number,
+  sepH: number,
+  sepV: number,
+  margenIzq: number,
+  margenDer: number,
+  margenInicio: number,
+  permitirRotacion: boolean,
+): RollNestingResult {
+  const printableW = rolloAnchoMm - margenIzq - margenDer;
+  const posiciones: RollNestingPiece[] = [];
+
+  // Crear lista de piezas ordenadas por área (mayor primero)
+  type Pieza = { mi: number; w: number; h: number };
+  const piezas: Pieza[] = [];
+  for (let mi = 0; mi < medidas.length; mi++) {
+    const m = medidas[mi];
+    if (m.anchoMm <= 0 || m.altoMm <= 0 || m.cantidad <= 0) continue;
+    for (let i = 0; i < m.cantidad; i++) {
+      piezas.push({ mi, w: m.anchoMm, h: m.altoMm });
+    }
+  }
+  piezas.sort((a, b) => (b.w * b.h) - (a.w * a.h));
+
+  // Shelf packing
+  let cursorX = margenIzq;
+  let cursorY = margenInicio;
+  let filaAlto = 0;
+
+  for (const pieza of piezas) {
+    // Probar orientaciones
+    type Orient = { w: number; h: number; rotada: boolean };
+    const orients: Orient[] = [{ w: pieza.w, h: pieza.h, rotada: false }];
+    if (permitirRotacion && pieza.w !== pieza.h) {
+      orients.push({ w: pieza.h, h: pieza.w, rotada: true });
+    }
+    // Preferir orientación que aprovecha más el ancho
+    orients.sort((a, b) => b.w - a.w);
+
+    let placed = false;
+    for (const o of orients) {
+      if (o.w <= printableW - (cursorX - margenIzq) + 0.01) {
+        // Cabe en la fila actual
+        posiciones.push({
+          x: cursorX, y: cursorY,
+          anchoMm: o.w, altoMm: o.h,
+          medidaIndex: pieza.mi, rotada: o.rotada,
+        });
+        cursorX += o.w + sepH;
+        filaAlto = Math.max(filaAlto, o.h);
+        placed = true;
+        break;
+      }
+    }
+
+    if (!placed) {
+      // Nueva fila
+      cursorY += filaAlto + sepV;
+      cursorX = margenIzq;
+      filaAlto = 0;
+
+      // Reintentar
+      for (const o of orients) {
+        if (o.w <= printableW + 0.01) {
+          posiciones.push({
+            x: cursorX, y: cursorY,
+            anchoMm: o.w, altoMm: o.h,
+            medidaIndex: pieza.mi, rotada: o.rotada,
+          });
+          cursorX += o.w + sepH;
+          filaAlto = Math.max(filaAlto, o.h);
+          break;
+        }
+      }
+    }
+  }
+
+  // Largo consumido
+  const largoConsumidoMm = posiciones.length > 0
+    ? Math.max(...posiciones.map((p) => p.y + p.altoMm)) + margenInicio
+    : 0;
+
+  const areaUtilMm2 = posiciones.reduce((s, p) => s + p.anchoMm * p.altoMm, 0);
+  const areaConsumidaMm2 = rolloAnchoMm * largoConsumidoMm;
+  const desperdicioPct = areaConsumidaMm2 > 0 ? r2(((areaConsumidaMm2 - areaUtilMm2) / areaConsumidaMm2) * 100) : 0;
+
+  return {
+    posiciones,
+    rolloAnchoMm,
+    largoConsumidoMm,
+    areaUtilMm2,
+    areaConsumidaM2: r2(areaConsumidaMm2 / 1_000_000),
+    desperdicioPct,
+    totalPiezas: posiciones.length,
+  };
+}
