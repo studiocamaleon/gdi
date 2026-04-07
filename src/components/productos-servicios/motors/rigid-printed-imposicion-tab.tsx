@@ -244,6 +244,7 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
       })),
       placaLayouts: multiNesting.placaLayouts.map((pl) => ({
         ...pl,
+        largoConsumidoMm: pl.largoConsumidoMm + mg.arriba,
         posiciones: pl.posiciones.map((pos) => ({
           ...pos,
           x: pos.x + mg.izquierda,
