@@ -1000,9 +1000,35 @@ export function ProductoPrecioTab(props: ProductTabProps) {
           </SheetHeader>
           <div className="space-y-4 px-4 pb-4">
             <PrecioMetodoDetalleEditor value={precioForm} onChange={setPrecioForm} />
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setIsMetodoDetalleOpen(false)}>
                 Cerrar
+              </Button>
+              <Button
+                type="button"
+                disabled={isSavingPrecio || !isPrecioDirty}
+                onClick={() => {
+                  startSavingPrecio(async () => {
+                    try {
+                      await updateProductoPrecio(props.producto.id, {
+                        metodoCalculo: precioForm.metodoCalculo,
+                        measurementUnit: precioForm.measurementUnit,
+                        impuestos: precioForm.impuestos,
+                        comisiones: precioForm.comisiones,
+                        detalle: precioForm.detalle as Record<string, unknown>,
+                      });
+                      await props.refreshProducto();
+                      toast.success("Configuración de precio actualizada.");
+                      setIsMetodoDetalleOpen(false);
+                    } catch (error) {
+                      console.error(error);
+                      toast.error(error instanceof Error ? error.message : "No se pudo guardar.");
+                    }
+                  });
+                }}
+              >
+                {isSavingPrecio ? <GdiSpinner className="size-4" data-icon="inline-start" /> : <SaveIcon className="size-4" data-icon="inline-start" />}
+                Guardar configuración
               </Button>
             </div>
           </div>
