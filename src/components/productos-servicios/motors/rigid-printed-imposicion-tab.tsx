@@ -650,7 +650,7 @@ function SegmentosChipEditor({
 
 // ── SVG de placa ──────────────────────────────────────────────────
 
-function MultiMedidaPlacaSvg({
+export function MultiMedidaPlacaSvg({
   placaAnchoMm,
   placaAltoMm,
   posiciones,

@@ -38,6 +38,7 @@ import {
 import type { CotizacionProductoSnapshotResumen } from "@/lib/productos-servicios";
 import { HistoryIcon } from "lucide-react";
 import { EyeIcon } from "lucide-react";
+import { MultiMedidaPlacaSvg } from "./rigid-printed-imposicion-tab";
 import type { MateriaPrima } from "@/lib/materias-primas";
 import type { Maquina } from "@/lib/maquinaria";
 import {
@@ -549,7 +550,7 @@ export function RigidPrintedSimularCostoTab(props: ProductTabProps) {
             description="Desglose de sustrato rígido, tintas y consumibles."
             icon={SigmaIcon}
           >
-            <MateriasPrimasBreakdown result={quoteResult} nestingPreview={nestingPreview} medidas={medidas} />
+            <MateriasPrimasBreakdown result={quoteResult} nestingPreview={nestingPreview} medidas={medidas} config={config} />
           </ProductoTabSection>
         )}
 
@@ -634,10 +635,11 @@ export function RigidPrintedSimularCostoTab(props: ProductTabProps) {
 
 // ── Desglose de materias primas (tabla agrupada) ──────────────────
 
-function MateriasPrimasBreakdown({ result, nestingPreview, medidas }: {
+function MateriasPrimasBreakdown({ result, nestingPreview, medidas, config }: {
   result: QuoteResult;
   nestingPreview: MultiMedidaNestingResult | null;
   medidas: Array<{ anchoMm: number | null; altoMm: number | null; cantidad: number }>;
+  config: RigidPrintedConfig | null;
 }) {
   const [showNesting, setShowNesting] = React.useState(false);
   const materiales = result.bloques.materiales as MateriaPrimaBloque[];
@@ -697,6 +699,7 @@ function MateriasPrimasBreakdown({ result, nestingPreview, medidas }: {
               nestingPreview={nestingPreview}
               medidas={medidas}
               result={result}
+              config={config}
             />
           )}
 
@@ -777,12 +780,14 @@ function NestingSheet({
   nestingPreview,
   medidas,
   result,
+  config,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   nestingPreview: MultiMedidaNestingResult | null;
   medidas: Array<{ anchoMm: number | null; altoMm: number | null; cantidad: number }>;
   result: QuoteResult;
+  config: RigidPrintedConfig | null;
 }) {
   if (!nestingPreview || nestingPreview.placas <= 0) return null;
 
@@ -792,6 +797,17 @@ function NestingSheet({
   if (placaW <= 0 || placaH <= 0) return null;
 
   const validMedidas = medidas.filter((m) => m.anchoMm && m.altoMm);
+  const imposCfg = (config as Record<string, unknown> | null)?.imposicion as Record<string, unknown> | undefined;
+  const mgCfg = (imposCfg?.margenMaquina ?? {}) as Record<string, unknown>;
+  const margenMaquina = {
+    arriba: Number(mgCfg.arriba ?? 0),
+    abajo: Number(mgCfg.abajo ?? 0),
+    izquierda: Number(mgCfg.izquierda ?? 0),
+    derecha: Number(mgCfg.derecha ?? 0),
+  };
+  const estrategia = String(imposCfg?.estrategiaCosteo ?? 'segmentos_placa');
+  const costeoPreview = result.trazabilidad.costeoDetalle;
+  const segmentoAplicado = costeoPreview?.ultimaPlaca?.segmentoAplicado ?? null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -832,55 +848,23 @@ function NestingSheet({
             </div>
           )}
 
-          {/* SVG por placa */}
-          {nestingPreview.placaLayouts.map((layout, pi) => {
-            const needsRotate = placaH > placaW;
-            const displayW = needsRotate ? placaH : placaW;
-            const displayH = needsRotate ? placaW : placaH;
-            const maxSvgW = 800;
-            const scale = maxSvgW / displayW;
-
-            const positions = (layout as any).posiciones ?? [];
-            const displayPos = needsRotate
-              ? positions.map((p: any) => ({ ...p, x: p.y, y: placaW - p.x - p.anchoMm, anchoMm: p.altoMm, altoMm: p.anchoMm }))
-              : positions;
-
-            return (
-              <div key={pi}>
-                {nestingPreview.placas > 1 && (
-                  <p className="text-sm font-medium text-muted-foreground mb-2">Placa {pi + 1}</p>
-                )}
-                <svg
-                  width={displayW * scale}
-                  height={displayH * scale}
-                  viewBox={`0 0 ${displayW} ${displayH}`}
-                  className="border rounded bg-white w-full"
-                >
-                  <rect x={0} y={0} width={displayW} height={displayH} fill="#e0e7ef" stroke="#94a3b8" strokeWidth={1} />
-                  {displayPos.map((pos: any, i: number) => (
-                    <rect key={i} x={pos.x} y={pos.y} width={pos.anchoMm} height={pos.altoMm}
-                      fill={MEDIDA_COLORS[pos.medidaIndex % MEDIDA_COLORS.length]}
-                      stroke={MEDIDA_COLORS[pos.medidaIndex % MEDIDA_COLORS.length]}
-                      strokeWidth={0.5} opacity={0.85} />
-                  ))}
-                </svg>
-              </div>
-            );
-          })}
-
-          {/* Leyenda */}
-          <div className="flex gap-4 flex-wrap text-xs text-muted-foreground">
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-sm bg-[#e0e7ef]" />
-              <span>Espacio libre</span>
+          {/* SVG por placa — reutiliza MultiMedidaPlacaSvg de Imposición */}
+          {nestingPreview.placaLayouts.map((layout, pi) => (
+            <div key={pi}>
+              {nestingPreview.placas > 1 && (
+                <p className="text-sm font-medium text-muted-foreground mb-2">Placa {pi + 1}</p>
+              )}
+              <MultiMedidaPlacaSvg
+                placaAnchoMm={placaW}
+                placaAltoMm={placaH}
+                posiciones={(layout as any).posiciones ?? []}
+                largoConsumidoMm={layout.largoConsumidoMm}
+                estrategia={estrategia}
+                segmentoAplicadoPct={segmentoAplicado}
+                margenMaquina={margenMaquina}
+              />
             </div>
-            {validMedidas.length === 1 && (
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: MEDIDA_COLORS[0], opacity: 0.85 }} />
-                <span>Piezas ({validMedidas[0].anchoMm! / 10} × {validMedidas[0].altoMm! / 10} cm)</span>
-              </div>
-            )}
-          </div>
+          ))}
         </div>
       </SheetContent>
     </Sheet>
