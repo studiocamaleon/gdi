@@ -483,8 +483,9 @@ export function nestMultiMedida(
       }
     }
 
+    // largoConsumidoMm = desde el inicio de la placa hasta el borde inferior de la pieza más baja
     const maxY = colocadas.length > 0
-      ? Math.max(...colocadas.map((p) => p.y - margen + p.altoMm)) + margen
+      ? Math.max(...colocadas.map((p) => p.y + p.altoMm))
       : 0;
 
     return { colocadas, noColocadas, maxY };
