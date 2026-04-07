@@ -820,8 +820,7 @@ function NestingSheet({
     derecha: Number(mgCfg.derecha ?? 0),
   };
   const estrategia = String(imposCfg?.estrategiaCosteo ?? 'segmentos_placa');
-  const costeoPreview = result.trazabilidad.costeoDetalle;
-  const segmentoAplicado = costeoPreview?.ultimaPlaca?.segmentoAplicado ?? null;
+  const segmentosPlaca = Array.isArray(imposCfg?.segmentosPlaca) ? imposCfg.segmentosPlaca as number[] : [25, 50, 75, 100];
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -874,7 +873,8 @@ function NestingSheet({
                 posiciones={(layout as any).posiciones ?? []}
                 largoConsumidoMm={layout.largoConsumidoMm}
                 estrategia={estrategia}
-                segmentoAplicadoPct={segmentoAplicado}
+                segmentoAplicadoPct={null}
+                segmentosPlaca={segmentosPlaca}
                 margenMaquina={margenMaquina}
               />
             </div>

@@ -555,7 +555,8 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
                       posiciones={layout.posiciones}
                       largoConsumidoMm={layout.largoConsumidoMm}
                       estrategia={imposicion.estrategiaCosteo}
-                      segmentoAplicadoPct={preview.costeo.segmentoAplicado}
+                      segmentoAplicadoPct={null}
+                      segmentosPlaca={imposicion.segmentosPlaca}
                       margenMaquina={preview.margenMaquina}
                     />
                   </div>
@@ -657,6 +658,7 @@ export function MultiMedidaPlacaSvg({
   largoConsumidoMm,
   estrategia,
   segmentoAplicadoPct,
+  segmentosPlaca,
   margenMaquina,
 }: {
   placaAnchoMm: number;
@@ -665,6 +667,7 @@ export function MultiMedidaPlacaSvg({
   largoConsumidoMm: number;
   estrategia: string;
   segmentoAplicadoPct: number | null;
+  segmentosPlaca?: number[];
   margenMaquina: { arriba: number; abajo: number; izquierda: number; derecha: number };
 }) {
   const needsRotate = placaAltoMm > placaAnchoMm;
@@ -683,15 +686,31 @@ export function MultiMedidaPlacaSvg({
     ? posiciones.map((pos) => ({ ...pos, x: pos.y, y: placaAnchoMm - pos.x - pos.anchoMm, anchoMm: pos.altoMm, altoMm: pos.anchoMm }))
     : posiciones;
 
-  // Área cobrada
+  // Calcular área útil de las piezas en esta placa para determinar desperdicio
+  const areaUtilPiezas = posiciones.reduce((s, p) => s + p.anchoMm * p.altoMm, 0);
+  const areaPlaca = placaAnchoMm * placaAltoMm;
+  const ocupacionPct = areaPlaca > 0 ? (areaUtilPiezas / areaPlaca) * 100 : 0;
+
+  // Área cobrada según estrategia
   let cobradoW = 0, cobradoH = 0;
   if (estrategia === "largo_consumido") {
     if (needsRotate) { cobradoW = Math.min(largoConsumidoMm, displayW); cobradoH = displayH; }
     else { cobradoW = displayW; cobradoH = Math.min(largoConsumidoMm, displayH); }
-  } else if (estrategia === "segmentos_placa" && segmentoAplicadoPct != null) {
-    const f = segmentoAplicadoPct / 100;
+  } else if (estrategia === "segmentos_placa") {
+    // Calcular segmento real para esta placa basado en ocupación
+    const escalones = (segmentosPlaca && segmentosPlaca.length > 0)
+      ? [...segmentosPlaca].sort((a, b) => a - b)
+      : [25, 50, 75, 100];
+    const segReal = segmentoAplicadoPct != null
+      ? segmentoAplicadoPct
+      : (escalones.find((s) => s >= ocupacionPct) ?? 100);
+    const f = segReal / 100;
     if (needsRotate) { cobradoW = displayW * f; cobradoH = displayH; }
     else { cobradoW = displayW; cobradoH = displayH * f; }
+  } else if (estrategia === "m2_exacto") {
+    // M² exacto: el área cobrada es exactamente el bounding box de las piezas
+    cobradoW = 0;
+    cobradoH = 0;
   }
 
   const MARGEN_COLOR = "#fecaca";
