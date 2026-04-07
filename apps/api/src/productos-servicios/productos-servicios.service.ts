@@ -1096,6 +1096,94 @@ export class ProductosServiciosService {
       });
     }
 
+    // ── Sustrato flexible (solo cuando tipo = flexible_montado) ──
+    let costoFlexible = 0;
+    if (tipoImpresion === 'flexible_montado') {
+      const flexMaterialId = String(rigidConfig.materialFlexibleId ?? '');
+      const flexVariantIds = Array.isArray(rigidConfig.variantesFlexiblesCompatibles)
+        ? (rigidConfig.variantesFlexiblesCompatibles as string[]) : [];
+
+      if (flexMaterialId && flexVariantIds.length > 0) {
+        // Buscar variantes de material flexible
+        const flexVariants = await this.prisma.materiaPrimaVariante.findMany({
+          where: { id: { in: flexVariantIds }, tenantId: auth.tenantId, activo: true },
+          include: { materiaPrima: true },
+        });
+
+        // Evaluar cada variante de rollo y elegir la mejor
+        let bestFlexCost = Infinity;
+        let bestFlexResult: { variant: typeof flexVariants[0]; consumedLengthMm: number; usefulAreaM2: number; consumedAreaM2: number } | null = null;
+
+        for (const flexV of flexVariants) {
+          const flexAttrs = (flexV.atributosVarianteJson ?? {}) as Record<string, unknown>;
+          const rollWidthRaw = Number(flexAttrs.ancho ?? 0);
+          const rollWidthMm = rollWidthRaw < 10 ? Math.round(rollWidthRaw * 1000) : rollWidthRaw;
+          if (rollWidthMm <= 0) continue;
+
+          // Nesting en rollo usando la lógica de gran formato
+          const layout = this.evaluateGranFormatoMixedShelfLayout({
+            printableWidthMm: rollWidthMm,
+            marginLeftMm: 0, marginStartMm: 0, marginEndMm: 0,
+            separacionHorizontalMm: Number(imposicionCfg.separacionHorizontalMm ?? 3),
+            separacionVerticalMm: Number(imposicionCfg.separacionVerticalMm ?? 3),
+            permitirRotacion: Boolean(imposicionCfg.permitirRotacion ?? true),
+            medidas: medidasInput,
+          });
+
+          if (!layout) continue;
+
+          const consumedLengthMm = layout.consumedLengthMm ?? 0;
+          const usefulAreaM2 = layout.usefulAreaM2 ?? 0;
+          const consumedAreaM2 = (rollWidthMm * consumedLengthMm) / 1_000_000;
+
+          // Costo del rollo: largo consumido × precio por metro lineal (o por m²)
+          const precioFlex = Number(flexV.precioReferencia ?? 0);
+          const rollLargoM = Number(flexAttrs.largo ?? 0);
+          const precioM2Flex = rollLargoM > 0 && rollWidthRaw > 0
+            ? precioFlex / (rollWidthRaw * rollLargoM) // precio_rollo / (ancho_m × largo_m)
+            : 0;
+          const costoFlex = this.roundProductNumber(consumedAreaM2 * precioM2Flex);
+
+          if (costoFlex < bestFlexCost) {
+            bestFlexCost = costoFlex;
+            bestFlexResult = { variant: flexV, consumedLengthMm, usefulAreaM2, consumedAreaM2 };
+          }
+        }
+
+        if (bestFlexResult) {
+          costoFlexible = bestFlexCost;
+          const flexNombre = bestFlexResult.variant.materiaPrima.nombre;
+          const flexVariantNombre = bestFlexResult.variant.nombreVariante ?? '';
+
+          // Base (área impresa)
+          materiasPrimas.push({
+            tipo: 'Sustrato flexible',
+            nombre: flexVariantNombre ? `${flexNombre} — ${flexVariantNombre}` : flexNombre,
+            origen: 'Base',
+            unidad: 'm2',
+            cantidad: this.roundProductNumber(bestFlexResult.usefulAreaM2),
+            costoUnitario: this.roundProductNumber(bestFlexCost / Math.max(bestFlexResult.consumedAreaM2, 0.001)),
+            costo: this.roundProductNumber(bestFlexResult.usefulAreaM2 * (bestFlexCost / Math.max(bestFlexResult.consumedAreaM2, 0.001))),
+          });
+
+          // Desperdicio del flexible
+          const desperdicioM2 = this.roundProductNumber(bestFlexResult.consumedAreaM2 - bestFlexResult.usefulAreaM2);
+          if (desperdicioM2 > 0.001) {
+            const costoDesp = this.roundProductNumber(costoFlexible - (bestFlexResult.usefulAreaM2 * (bestFlexCost / Math.max(bestFlexResult.consumedAreaM2, 0.001))));
+            materiasPrimas.push({
+              tipo: 'Sustrato flexible',
+              nombre: (flexVariantNombre ? `${flexNombre} — ${flexVariantNombre}` : flexNombre) + ' · Desperdicio',
+              origen: 'Desperdicio',
+              unidad: 'm2',
+              cantidad: desperdicioM2,
+              costoUnitario: this.roundProductNumber(bestFlexCost / Math.max(bestFlexResult.consumedAreaM2, 0.001)),
+              costo: costoDesp > 0 ? costoDesp : 0,
+            });
+          }
+        }
+      }
+    }
+
     // ── Tintas (solo sobre piezas impresas, NO sobre desperdicio) ──
     let costoTintas = 0;
     const areaImpresaM2 = areaPiezasM2 * multiplicadorCaras; // doble faz = x2
@@ -1168,7 +1256,7 @@ export class ProductosServiciosService {
       }
     }
 
-    const total = this.roundProductNumber(costoMaterialTotal + costoProcesos + costoTintas);
+    const total = this.roundProductNumber(costoMaterialTotal + costoFlexible + costoProcesos + costoTintas);
 
     // Cantidad comercial: si la unidad es m², convertir piezas a m²
     const unidadComercial = producto.unidadComercial ?? 'unidad';
@@ -1192,6 +1280,7 @@ export class ProductosServiciosService {
       subtotales: {
         procesos: costoProcesos,
         material: costoMaterialTotal,
+        flexible: costoFlexible,
         tinta: costoTintas,
         toner: 0, desgaste: 0, consumiblesTerminacion: 0,
         adicionalesMateriales: 0, adicionalesCostEffects: 0,
