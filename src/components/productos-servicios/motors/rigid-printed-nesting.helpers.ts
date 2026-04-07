@@ -240,9 +240,12 @@ export type MultiMedidaNestingResult = {
 };
 
 /**
- * Nesting multi-medida por bandas horizontales.
- * Cada medida se acomoda en filas consecutivas en la placa.
- * Si no cabe más, abre nueva placa.
+ * Nesting multi-medida: aprovecha ancho primero.
+ *
+ * Acomoda piezas llenando el ancho de la placa (como texto que fluye),
+ * mezclando medidas en la misma fila. Cuando no entra nada más en el
+ * ancho, baja a la siguiente fila. Cuando no entra nada más en alto,
+ * abre nueva placa.
  */
 export function nestMultiMedida(
   medidas: MedidaInput[],
@@ -253,85 +256,109 @@ export function nestMultiMedida(
   margen: number,
   permitirRotacion: boolean,
 ): MultiMedidaNestingResult {
-  const placaLayouts: MultiMedidaNestingResult["placaLayouts"] = [];
-  let currentPlaca: MultiMedidaPiece[] = [];
-  let currentY = margen;
-  let totalPiezas = 0;
-  let totalAreaUtil = 0;
+  // Preparar piezas con rotación óptima
+  type PiezaPendiente = { mi: number; w: number; h: number; rotada: boolean };
   const areaW = placaAnchoMm - 2 * margen;
-
-  function flushPlaca() {
-    if (currentPlaca.length > 0) {
-      const areaUtil = currentPlaca.reduce((s, p) => s + p.anchoMm * p.altoMm, 0);
-      placaLayouts.push({
-        posiciones: currentPlaca,
-        largoConsumidoMm: currentY,
-        areaUtilMm2: areaUtil,
-      });
-      totalAreaUtil += areaUtil;
-    }
-    currentPlaca = [];
-    currentY = margen;
-  }
+  const pendientes: PiezaPendiente[] = [];
 
   for (let mi = 0; mi < medidas.length; mi++) {
     const m = medidas[mi];
     if (m.anchoMm <= 0 || m.altoMm <= 0 || m.cantidad <= 0) continue;
 
-    // Decidir si rotar la pieza
     let pW = m.anchoMm;
     let pH = m.altoMm;
     let rotada = false;
 
-    if (permitirRotacion && pW !== pH) {
-      const colsNormal = Math.floor((areaW + sepH) / (pW + sepH));
-      const colsRotada = Math.floor((areaW + sepH) / (pH + sepH));
-      if (colsRotada > colsNormal) {
-        const tmp = pW; pW = pH; pH = tmp;
-        rotada = true;
-      }
+    // Rotar si aprovecha mejor el ancho
+    if (permitirRotacion && pW !== pH && pH < pW) {
+      // Si la pieza es más ancha que alta, rotar para que sea más angosta
+      // → caben más por fila
+      const tmp = pW; pW = pH; pH = tmp;
+      rotada = true;
     }
 
-    const columnas = Math.max(0, Math.floor((areaW + sepH) / (pW + sepH)));
-    if (columnas <= 0) continue;
+    for (let i = 0; i < m.cantidad; i++) {
+      pendientes.push({ mi, w: pW, h: pH, rotada });
+    }
+  }
 
-    let piezasRestantes = m.cantidad;
+  if (pendientes.length === 0) {
+    return { posiciones: [], placas: 0, placaLayouts: [], totalPiezas: 0, aprovechamientoPct: 0, areaTotalMm2: 0, areaUtilMm2: 0 };
+  }
 
-    while (piezasRestantes > 0) {
-      const altoDisponible = placaAltoMm - currentY - margen;
+  const placaLayouts: MultiMedidaNestingResult["placaLayouts"] = [];
+  let currentPlaca: MultiMedidaPiece[] = [];
+  let cursorX = margen;
+  let cursorY = margen;
+  let filaAltoMax = 0; // Alto máximo de la fila actual
+  let totalPiezas = 0;
+  let totalAreaUtil = 0;
 
-      if (altoDisponible < pH) {
-        // No cabe otra fila en esta placa → nueva placa
-        flushPlaca();
-        continue;
-      }
+  function flushPlaca() {
+    // Cerrar fila actual
+    if (filaAltoMax > 0) {
+      cursorY += filaAltoMax + sepV;
+    }
+    if (currentPlaca.length > 0) {
+      const areaUtil = currentPlaca.reduce((s, p) => s + p.anchoMm * p.altoMm, 0);
+      placaLayouts.push({
+        posiciones: [...currentPlaca],
+        largoConsumidoMm: cursorY,
+        areaUtilMm2: areaUtil,
+      });
+      totalAreaUtil += areaUtil;
+    }
+    currentPlaca = [];
+    cursorX = margen;
+    cursorY = margen;
+    filaAltoMax = 0;
+  }
 
-      // Cuántas filas caben en el espacio restante
-      const filasQueCaben = Math.floor((altoDisponible + sepV) / (pH + sepV));
-      const piezasQueCaben = filasQueCaben * columnas;
-      const piezasEnEstaPlaca = Math.min(piezasRestantes, piezasQueCaben);
-      const filasUsadas = Math.ceil(piezasEnEstaPlaca / columnas);
+  function nuevaFila() {
+    cursorY += filaAltoMax + sepV;
+    cursorX = margen;
+    filaAltoMax = 0;
+  }
 
-      for (let row = 0; row < filasUsadas; row++) {
-        const piezasEnFila = Math.min(columnas, piezasRestantes);
-        for (let col = 0; col < piezasEnFila; col++) {
-          currentPlaca.push({
-            x: margen + col * (pW + sepH),
-            y: currentY + row * (pH + sepV),
-            anchoMm: pW,
-            altoMm: pH,
-            medidaIndex: mi,
-            rotada,
-          });
-          piezasRestantes--;
-          totalPiezas++;
+  for (const pieza of pendientes) {
+    let colocada = false;
+
+    while (!colocada) {
+      const espacioAncho = areaW - (cursorX - margen);
+      const espacioAlto = placaAltoMm - margen - cursorY;
+
+      // ¿Entra en la fila actual?
+      if (pieza.w <= espacioAncho + 0.01 && pieza.h <= espacioAlto + 0.01) {
+        currentPlaca.push({
+          x: cursorX,
+          y: cursorY,
+          anchoMm: pieza.w,
+          altoMm: pieza.h,
+          medidaIndex: pieza.mi,
+          rotada: pieza.rotada,
+        });
+        cursorX += pieza.w + sepH;
+        filaAltoMax = Math.max(filaAltoMax, pieza.h);
+        totalPiezas++;
+        colocada = true;
+      } else if (pieza.w <= areaW + 0.01) {
+        // No entra en ancho restante pero entra en una fila nueva
+        if (filaAltoMax > 0) {
+          nuevaFila();
         }
-      }
-
-      currentY += filasUsadas * pH + (filasUsadas - 1) * sepV + sepV;
-
-      if (piezasRestantes > 0) {
-        flushPlaca();
+        // Verificar si cabe en alto
+        const nuevoEspacioAlto = placaAltoMm - margen - cursorY;
+        if (pieza.h <= nuevoEspacioAlto + 0.01) {
+          // Cabe en nueva fila
+          continue; // Re-intentar en el loop
+        } else {
+          // No cabe en esta placa → nueva placa
+          flushPlaca();
+          continue;
+        }
+      } else {
+        // La pieza no entra ni en el ancho total de la placa
+        colocada = true; // Skip, no se puede acomodar
       }
     }
   }
