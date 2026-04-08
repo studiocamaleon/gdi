@@ -34,8 +34,10 @@ import {
   getGranFormatoVariantes,
   getGranFormatoChecklist,
   cotizarProductoVariante,
+  cotizarRigidPrintedByProducto,
   previewGranFormatoCostos,
   previewVinylCutImposicionByProducto,
+  getRigidPrintedChecklist,
 } from "@/lib/productos-servicios-api";
 import { getMateriasPrimas } from "@/lib/materias-primas-api";
 import { getMaquinas } from "@/lib/maquinaria-api";
@@ -75,6 +77,7 @@ import {
   GranFormatoProposalConfig,
   type GranFormatoMedida,
 } from "@/components/comercial/motors/gran-formato-config";
+import { RigidPrintedProposalConfig } from "@/components/comercial/motors/rigid-printed-config";
 import {
   VinylCutProposalConfig,
   buildDefaultColor,
@@ -790,6 +793,97 @@ function StepSummaryVinylCut({
 // Step: Summary Gran Formato
 // ---------------------------------------------------------------------------
 
+function StepSummaryRigidPrinted({
+  producto,
+  medidas,
+  tipoImpresion,
+  caras,
+  placaVarianteId,
+  checklistRespuestas,
+  onCostoCalculated,
+  onCostosResult,
+}: {
+  producto: ProductoServicio;
+  medidas: Array<{ anchoMm: number | null; altoMm: number | null; cantidad: number }>;
+  tipoImpresion: string;
+  caras: string;
+  placaVarianteId: string;
+  checklistRespuestas: ChecklistCotizadorValue;
+  onCostoCalculated: (costo: number | null) => void;
+  onCostosResult: (res: Record<string, unknown> | null) => void;
+}) {
+  const [loading, setLoading] = React.useState(true);
+  const [costoTotal, setCostoTotal] = React.useState<number | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const validMedidas = React.useMemo(
+    () => medidas.filter((m) => m.anchoMm && m.altoMm && m.cantidad > 0)
+      .map((m) => ({ anchoMm: m.anchoMm!, altoMm: m.altoMm!, cantidad: m.cantidad })),
+    [medidas],
+  );
+
+  const cantidadTotal = validMedidas.reduce((s, m) => s + m.cantidad, 0);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    cotizarRigidPrintedByProducto(producto.id, {
+      cantidad: cantidadTotal,
+      parametros: {
+        medidas: validMedidas,
+        tipoImpresion,
+        caras,
+        ...(placaVarianteId ? { placaVarianteId } : {}),
+      },
+    })
+      .then((res) => {
+        if (!cancelled) {
+          const cost = (res as any).total ?? 0;
+          setCostoTotal(cost);
+          onCostoCalculated(cost);
+          onCostosResult(res as unknown as Record<string, unknown>);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Error al calcular costos.");
+          onCostoCalculated(null);
+          onCostosResult(null);
+        }
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [producto.id, tipoImpresion, caras, placaVarianteId, JSON.stringify(validMedidas)]);
+
+  const cantidadPricing = calcGranFormatoCantidad(medidas as GranFormatoMedida[], producto.unidadComercial);
+
+  const TIPO_LABELS: Record<string, string> = { directa: "Impresion directa", flexible_montado: "Sustrato flexible montado" };
+  const CARAS_LABELS: Record<string, string> = { simple_faz: "Simple faz", doble_faz: "Doble faz" };
+
+  if (loading) return <div className="flex flex-col items-center justify-center gap-2 py-12"><Loader2Icon className="size-5 animate-spin text-muted-foreground" /><p className="text-sm text-muted-foreground">Calculando costos...</p></div>;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <p className="text-sm font-medium">{producto.nombre}</p>
+        <p className="text-xs text-muted-foreground">
+          {TIPO_LABELS[tipoImpresion] ?? tipoImpresion} · {CARAS_LABELS[caras] ?? caras}
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        <Badge variant="secondary">{TIPO_LABELS[tipoImpresion] ?? tipoImpresion}</Badge>
+        <Badge variant="secondary">{CARAS_LABELS[caras] ?? caras}</Badge>
+        <Badge variant="secondary">{formatMedidas(medidas as GranFormatoMedida[])}</Badge>
+      </div>
+      <Separator />
+      <PriceBreakdown producto={producto} costoTotal={costoTotal} cantidad={cantidadPricing} error={error} />
+    </div>
+  );
+}
+
 function StepSummaryGranFormato({
   producto,
   medidas,
@@ -936,10 +1030,21 @@ export function AgregarProductoSheet({
   const [vcColores, setVcColores] = React.useState<VinylCutColorDraft[]>([buildDefaultColor(0)]);
   const [vcCostosResponse, setVcCostosResponse] = React.useState<Record<string, unknown> | null>(null);
 
+  // ── Rígidos Impresos state ──
+  const [rpConfig, setRpConfig] = React.useState<Record<string, unknown> | null>(null);
+  const [rpMedidas, setRpMedidas] = React.useState<Array<{ anchoMm: number | null; altoMm: number | null; cantidad: number }>>([{ anchoMm: null, altoMm: null, cantidad: 1 }]);
+  const [rpTipoImpresion, setRpTipoImpresion] = React.useState("");
+  const [rpPlacaVarianteId, setRpPlacaVarianteId] = React.useState("");
+  const [rpCaras, setRpCaras] = React.useState("simple_faz");
+  const [rpChecklist, setRpChecklist] = React.useState<import("@/lib/productos-servicios").RigidPrintedChecklistConfig | null>(null);
+  const [rpPlacasCompatibles, setRpPlacasCompatibles] = React.useState<Array<{ id: string; anchoMm: number; altoMm: number; precio: number; label: string; espesor: string | null; color: string | null }>>([]);
+  const [rpCostosResult, setRpCostosResult] = React.useState<Record<string, unknown> | null>(null);
+
   const motorCodigo = producto?.motorCodigo ?? "";
   const isGranFormato = motorCodigo === "gran_formato";
   const isViniloCut = motorCodigo === "vinilo_de_corte";
   const isTalonario = motorCodigo === "talonario";
+  const isRigidosPrinted = motorCodigo === "rigidos_impresos";
 
   const steps = React.useMemo(
     () => buildSteps(motorCodigo, variantes.filter((v) => v.activo).length > 1),
@@ -1072,6 +1177,51 @@ export function AgregarProductoSheet({
             : "",
         );
         setCurrentStep("configure");
+      } else if (p.motorCodigo === "rigidos_impresos") {
+        const [cfgResult, cl, rpMateriasPrimas] = await Promise.all([
+          getProductoMotorConfig(p.id).catch(() => null),
+          getRigidPrintedChecklist(p.id).catch(() => null),
+          getMateriasPrimas().catch(() => []),
+        ]);
+        const params = (cfgResult?.parametros ?? {}) as Record<string, unknown>;
+        setRpConfig(params);
+        setRpChecklist(cl);
+        setRpMedidas([{ anchoMm: null, altoMm: null, cantidad: 1 }]);
+        setRpCostosResult(null);
+
+        // Resolve placas compatibles
+        const matId = params.materialRigidoId ? String(params.materialRigidoId) : null;
+        const varIds = new Set(Array.isArray(params.variantesCompatibles) ? params.variantesCompatibles as string[] : []);
+        const mat = matId ? rpMateriasPrimas.find((m: any) => m.id === matId) : null;
+        const placas: Array<{ id: string; anchoMm: number; altoMm: number; precio: number; label: string; espesor: string | null; color: string | null }> = [];
+        if (mat && (mat as any).variantes) {
+          for (const v of (mat as any).variantes) {
+            if (!varIds.has(v.id)) continue;
+            const attrs = (v.atributosVariante ?? {}) as Record<string, unknown>;
+            const anchoRaw = Number(attrs.ancho ?? 0);
+            const altoRaw = Number(attrs.alto ?? 0);
+            const anchoMm = anchoRaw < 10 ? Math.round(anchoRaw * 1000) : anchoRaw;
+            const altoMm = altoRaw < 10 ? Math.round(altoRaw * 1000) : altoRaw;
+            placas.push({
+              id: v.id,
+              anchoMm, altoMm,
+              precio: Number(v.precioReferencia ?? 0),
+              label: `${anchoMm} x ${altoMm} mm`,
+              espesor: attrs.espesor ? `${attrs.espesor}mm` : null,
+              color: typeof attrs.color === "string" ? attrs.color : null,
+            });
+          }
+        }
+        setRpPlacasCompatibles(placas);
+        setRpPlacaVarianteId(String(params.placaVarianteIdDefault ?? placas[0]?.id ?? ""));
+
+        // Defaults
+        const tipos = Array.isArray(params.tiposImpresion) ? params.tiposImpresion as string[] : [];
+        setRpTipoImpresion(tipos[0] ?? "directa");
+        const firstTipoCfg = (tipos[0] === "flexible_montado" ? params.flexibleMontado : params.impresionDirecta) as Record<string, unknown> | undefined;
+        setRpCaras(String(firstTipoCfg?.carasDefault ?? params.carasDefault ?? "simple_faz"));
+
+        setCurrentStep("configure");
       } else {
         // Digital laser
         const [vars, cl] = await Promise.all([
@@ -1104,12 +1254,15 @@ export function AgregarProductoSheet({
     const isGF = producto.motorCodigo === "gran_formato";
     const isVC = producto.motorCodigo === "vinilo_de_corte";
     const isTalonario = producto.motorCodigo === "talonario";
+    const isRP = producto.motorCodigo === "rigidos_impresos";
 
     const cantidadFinal = isGF
       ? calcGranFormatoCantidad(gfMedidas, producto.unidadComercial)
       : isVC
         ? calcVinylCutCantidad(vcColores, producto.unidadComercial)
-        : cantidad;
+        : isRP
+          ? calcGranFormatoCantidad(rpMedidas as GranFormatoMedida[], producto.unidadComercial)
+          : cantidad;
 
     if (cantidadFinal <= 0) return;
 
@@ -1140,8 +1293,17 @@ export function AgregarProductoSheet({
       impuestoMonto: impuestosMonto,
       total: precioFinal,
       precioConfig: precio ?? undefined,
-      cotizacion: (isGF || isVC) ? null : cotizacionCompleta,
-      especificaciones: isGF
+      cotizacion: (isGF || isVC || isRP) ? null : cotizacionCompleta,
+      especificaciones: isRP
+        ? {
+            "Tipo impresion": { directa: "Impresion directa", flexible_montado: "Sustrato flexible montado" }[rpTipoImpresion] ?? rpTipoImpresion,
+            Caras: { simple_faz: "Simple faz", doble_faz: "Doble faz" }[rpCaras] ?? rpCaras,
+            ...(rpPlacasCompatibles.find((p) => p.id === rpPlacaVarianteId)
+              ? { Placa: rpPlacasCompatibles.find((p) => p.id === rpPlacaVarianteId)!.label }
+              : {}),
+            Medidas: formatMedidas(rpMedidas as GranFormatoMedida[]),
+          }
+        : isGF
         ? {
             Tecnologia: getTecnologiaLabel(gfTecnologia),
             ...(confTintas
@@ -1217,6 +1379,20 @@ export function AgregarProductoSheet({
             },
           }
         : {}),
+      // Rigidos impresos-specific
+      ...(isRP && rpCostosResult
+        ? {
+            rigidosPrinted: {
+              tipoImpresion: rpTipoImpresion,
+              caras: rpCaras,
+              placaVarianteId: rpPlacaVarianteId,
+              medidas: rpMedidas
+                .filter((m) => m.anchoMm && m.altoMm && m.cantidad > 0)
+                .map((m) => ({ anchoMm: m.anchoMm!, altoMm: m.altoMm!, cantidad: m.cantidad })),
+              cotizacionResult: rpCostosResult,
+            },
+          }
+        : {}),
     };
 
     onAddItem(item);
@@ -1232,6 +1408,9 @@ export function AgregarProductoSheet({
       return vcColores.length > 0 && vcColores.every(
         (c) => c.colorFiltro && c.medidas.some((m) => m.anchoMm && m.anchoMm > 0 && m.altoMm && m.altoMm > 0 && m.cantidad > 0),
       );
+    }
+    if (isRigidosPrinted) {
+      return hasValidMedidas(rpMedidas as GranFormatoMedida[]) && rpTipoImpresion !== "";
     }
     return cantidad > 0;
   })();
@@ -1303,7 +1482,26 @@ export function AgregarProductoSheet({
                 />
               )}
 
-              {currentStep === "configure" && producto && !isGranFormato && !isViniloCut && !isTalonario && variante && (
+              {currentStep === "configure" && producto && isRigidosPrinted && rpConfig && (
+                <RigidPrintedProposalConfig
+                  producto={producto}
+                  config={rpConfig as any}
+                  placasCompatibles={rpPlacasCompatibles}
+                  checklistConfig={rpChecklist}
+                  medidas={rpMedidas}
+                  onMedidasChange={setRpMedidas}
+                  tipoImpresion={rpTipoImpresion}
+                  onTipoImpresionChange={setRpTipoImpresion}
+                  placaVarianteId={rpPlacaVarianteId}
+                  onPlacaVarianteIdChange={setRpPlacaVarianteId}
+                  caras={rpCaras}
+                  onCarasChange={setRpCaras}
+                  checklistRespuestas={checklistRespuestas}
+                  onChecklistRespuestasChange={setChecklistRespuestas}
+                />
+              )}
+
+              {currentStep === "configure" && producto && !isGranFormato && !isViniloCut && !isTalonario && !isRigidosPrinted && variante && (
                 <StepConfigureDigital
                   producto={producto}
                   variante={variante}
@@ -1348,7 +1546,7 @@ export function AgregarProductoSheet({
                 />
               )}
 
-              {currentStep === "summary" && producto && !isGranFormato && !isViniloCut && !isTalonario && variante && (
+              {currentStep === "summary" && producto && !isGranFormato && !isViniloCut && !isTalonario && !isRigidosPrinted && variante && (
                 <StepSummaryDigital
                   producto={producto}
                   variante={variante}
@@ -1381,6 +1579,19 @@ export function AgregarProductoSheet({
                   checklistRespuestas={checklistRespuestas}
                   onCostoCalculated={setCotizacionCosto}
                   onCostosResponse={setGfCostosResponse}
+                />
+              )}
+
+              {currentStep === "summary" && producto && isRigidosPrinted && (
+                <StepSummaryRigidPrinted
+                  producto={producto}
+                  medidas={rpMedidas}
+                  tipoImpresion={rpTipoImpresion}
+                  caras={rpCaras}
+                  placaVarianteId={rpPlacaVarianteId}
+                  checklistRespuestas={checklistRespuestas}
+                  onCostoCalculated={setCotizacionCosto}
+                  onCostosResult={setRpCostosResult}
                 />
               )}
             </>

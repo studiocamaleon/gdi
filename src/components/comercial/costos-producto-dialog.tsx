@@ -166,6 +166,46 @@ function buildGfMaterialGroups(item: PropuestaItem): MaterialGroup[] {
 }
 
 // ---------------------------------------------------------------------------
+// Rígidos Impresos helpers
+// ---------------------------------------------------------------------------
+
+function buildRpSlices(result: Record<string, unknown> | undefined): CostBreakdownSlice[] {
+  if (!result) return [];
+  const sub = result.subtotales as Record<string, number> | undefined;
+  if (!sub) return [];
+  const slices: CostBreakdownSlice[] = [];
+  if ((sub.procesos ?? 0) > 0) slices.push({ name: "Procesos", value: sub.procesos });
+  if ((sub.material ?? 0) > 0) slices.push({ name: "Sustrato", value: sub.material });
+  if ((sub.flexible ?? 0) > 0) slices.push({ name: "Flexible", value: sub.flexible });
+  if ((sub.tinta ?? 0) > 0) slices.push({ name: "Tinta", value: sub.tinta });
+  return slices;
+}
+
+function buildRpMaterialGroups(result: Record<string, unknown> | undefined): MaterialGroup[] {
+  if (!result) return [];
+  const bloques = result.bloques as Record<string, unknown> | undefined;
+  const materiales = (bloques?.materiales ?? []) as Array<Record<string, unknown>>;
+  const byKey = new Map<string, MaterialGroup>();
+  for (const mat of materiales) {
+    const tipo = String(mat.tipo ?? "Otro");
+    if (!byKey.has(tipo)) byKey.set(tipo, { tipo, items: [], subtotal: 0 });
+    const group = byKey.get(tipo)!;
+    const chips = mat.variantChips as Array<{ label: string; value: string }> | undefined;
+    const colorChip = chips?.find((c) => c.label === "Color");
+    const displayName = colorChip ? `${mat.nombre} · ${colorChip.value}` : String(mat.nombre ?? "");
+    group.items.push({
+      nombre: displayName,
+      origen: String(mat.origen ?? ""),
+      cantidad: `${mat.cantidad}${mat.unidad ? ` ${mat.unidad}` : ""}`,
+      costoUnitario: Number(mat.costoUnitario ?? 0),
+      costo: Number(mat.costo ?? 0),
+    });
+    group.subtotal += Number(mat.costo ?? 0);
+  }
+  return Array.from(byKey.values());
+}
+
+// ---------------------------------------------------------------------------
 // Vinyl cut helpers
 // ---------------------------------------------------------------------------
 
@@ -237,7 +277,9 @@ export function CostosProductoDialog({
   const isDigital = item.motorCodigo === "impresion_digital_laser" || item.motorCodigo === "talonario";
   const isGf = item.motorCodigo === "gran_formato";
   const isVc = item.motorCodigo === "vinilo_de_corte";
+  const isRp = item.motorCodigo === "rigidos_impresos";
   const vcAgg = item.viniloCut?.costosResponse?.aggregated as Record<string, unknown> | undefined;
+  const rpResult = item.rigidosPrinted?.cotizacionResult as Record<string, unknown> | undefined;
 
   // Cost totals
   const costoTotal = isDigital
@@ -246,12 +288,16 @@ export function CostosProductoDialog({
       ? item.granFormato?.costosResponse?.totales.tecnico ?? 0
       : isVc
         ? Number(vcAgg?.totalTecnico ?? 0)
-        : 0;
+        : isRp
+          ? Number(rpResult?.total ?? 0)
+          : 0;
   const costoUnitario = isDigital
     ? item.cotizacion?.unitario ?? 0
-    : item.cantidad > 0
-      ? costoTotal / item.cantidad
-      : 0;
+    : isRp
+      ? Number(rpResult?.unitario ?? (item.cantidad > 0 ? costoTotal / item.cantidad : 0))
+      : item.cantidad > 0
+        ? costoTotal / item.cantidad
+        : 0;
 
   // Simulacion comercial completa (incluye impuestos + comisiones + margen)
   const sim = item.precioConfig
@@ -271,7 +317,9 @@ export function CostosProductoDialog({
     ? buildDigitalSlices(item)
     : isVc
       ? buildVcSlices(vcAgg)
-      : buildGfSlices(item);
+      : isRp
+        ? buildRpSlices(rpResult)
+        : buildGfSlices(item);
 
   // Donut: composicion del precio
   const precioSlices: CostBreakdownSlice[] = [];
@@ -289,6 +337,7 @@ export function CostosProductoDialog({
 
   // Process table
   const vcCentros = (vcAgg?.centrosCosto ?? []) as Array<Record<string, unknown>>;
+  const rpProcs = (rpResult?.bloques as Record<string, unknown>)?.procesos as Array<Record<string, unknown>> | undefined;
   const procesos = isDigital
     ? (item.cotizacion?.bloques.procesos ?? []).map((p) => ({
         nombre: p.nombre,
@@ -298,6 +347,15 @@ export function CostosProductoDialog({
         tarifaHora: p.tarifaHora,
         costo: p.costo,
       }))
+    : isRp
+      ? (rpProcs ?? []).map((p) => ({
+          nombre: String(p.nombre ?? ""),
+          centro: String(p.centroCostoNombre ?? ""),
+          origen: "",
+          minutos: Number(p.totalMin ?? 0),
+          tarifaHora: Number(p.tarifaHora ?? 0),
+          costo: Number(p.costo ?? 0),
+        }))
     : isVc
       ? vcCentros.map((c) => ({
           nombre: String(c.paso ?? c.nombre ?? ""),
@@ -322,11 +380,14 @@ export function CostosProductoDialog({
     ? buildDigitalMaterialGroups(item)
     : isVc
       ? buildVcMaterialGroups(vcAgg)
-      : buildGfMaterialGroups(item);
+      : isRp
+        ? buildRpMaterialGroups(rpResult)
+        : buildGfMaterialGroups(item);
   const totalMateriales = materialGroups.reduce((sum, g) => sum + g.subtotal, 0);
 
   // GF resumen tecnico
   const resumenTecnico = isGf ? item.granFormato?.costosResponse?.resumenTecnico : null;
+  const rpResumen = isRp ? (rpResult?.trazabilidad as Record<string, unknown>)?.resumenTecnico as Record<string, unknown> | undefined : null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -526,7 +587,12 @@ export function CostosProductoDialog({
                           <TableBody>
                             {group.items.map((mat, i) => (
                               <TableRow key={i}>
-                                <TableCell>{mat.nombre}</TableCell>
+                                <TableCell>
+                                  <div>
+                                    <span>{mat.nombre}</span>
+                                    {mat.origen && <p className="text-[10px] text-muted-foreground">{mat.origen}</p>}
+                                  </div>
+                                </TableCell>
                                 <TableCell className="text-right tabular-nums">{mat.cantidad}</TableCell>
                                 <TableCell className="text-right tabular-nums">{fmt(mat.costoUnitario)}</TableCell>
                                 <TableCell className="text-right tabular-nums font-medium">{fmt(mat.costo)}</TableCell>

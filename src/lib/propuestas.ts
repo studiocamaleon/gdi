@@ -98,6 +98,14 @@ export type PropuestaItem = {
     }>;
     costosResponse: Record<string, unknown>;
   };
+  // Rigidos impresos specific
+  rigidosPrinted?: {
+    tipoImpresion: string;
+    caras: string;
+    placaVarianteId: string;
+    medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
+    cotizacionResult: Record<string, unknown>;
+  };
 };
 
 export type PropuestaResumen = {
