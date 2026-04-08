@@ -360,7 +360,19 @@ export function ProductoPrecioTab(props: ProductTabProps) {
   const comisionesEsquemaIdsKey = (precioForm.comisiones.esquemaIds ?? (precioForm.comisiones.esquemaId ? [precioForm.comisiones.esquemaId] : [])).join(",");
   React.useEffect(() => {
     const ids = (precioForm.comisiones.esquemaIds ?? (precioForm.comisiones.esquemaId ? [precioForm.comisiones.esquemaId] : []));
-    if (!ids.length) return;
+    if (!ids.length) {
+      // Sin esquemas → limpiar porcentajeTotal e items
+      setPrecioForm((current) => ({
+        ...current,
+        comisiones: {
+          ...current.comisiones,
+          esquemaNombre: "",
+          items: [],
+          porcentajeTotal: 0,
+        },
+      }));
+      return;
+    }
     const mergedItems: typeof precioForm.comisiones.items = [];
     const nombres: string[] = [];
     for (const id of ids) {
