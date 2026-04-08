@@ -399,7 +399,7 @@ export function CostosProductoDialog({
             {item.varianteNombre ? ` · ${item.varianteNombre}` : ""}
             {" · "}
             {item.cantidad.toLocaleString("es-AR")}{" "}
-            {item.unidadMedida === "unidad" ? "un." : item.unidadMedida}
+            {item.unidadMedida === "unidad" ? "un." : item.unidadMedida === "metro_lineal" ? "ml" : item.unidadMedida === "m2" ? "m²" : item.unidadMedida}
           </SheetDescription>
         </SheetHeader>
 

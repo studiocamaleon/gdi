@@ -307,6 +307,13 @@ function SearchableSelect({
 // Expandable item row
 // ---------------------------------------------------------------------------
 
+function fmtUnidad(u: string) {
+  if (u === "unidad") return "un.";
+  if (u === "m2") return "m²";
+  if (u === "metro_lineal") return "ml";
+  return u;
+}
+
 function ItemRow({
   item,
   index,
@@ -406,9 +413,7 @@ function ItemRow({
         <TableCell className="text-right tabular-nums">
           {item.cantidad.toLocaleString("es-AR")}{" "}
           <span className="text-muted-foreground">
-            {item.unidadMedida === "unidad"
-              ? item.cantidad === 1 ? "un." : "un."
-              : item.unidadMedida}
+            {fmtUnidad(item.unidadMedida)}
           </span>
         </TableCell>
         <TableCell className="text-right tabular-nums">
@@ -949,7 +954,7 @@ function CostosOrdenTab({ items }: { items: PropuestaItem[] }) {
                         <span className="font-medium">{f.item.productoNombre}</span>
                         <span className="text-xs text-muted-foreground">
                           {f.item.cantidad.toLocaleString("es-AR")}{" "}
-                          {f.item.unidadMedida === "unidad" ? "un." : f.item.unidadMedida}
+                          {fmtUnidad(f.item.unidadMedida)}
                         </span>
                       </div>
                     </TableCell>
@@ -1093,6 +1098,7 @@ export function PropuestaFicha({
         variant="sidebar"
         size="sm"
         className="w-fit"
+        nativeButton={false}
         render={<Link href="/" />}
       >
         <ArrowLeftIcon />
@@ -1329,9 +1335,7 @@ export function PropuestaFicha({
                             ? `${item.varianteNombre} · `
                             : ""}
                           {item.cantidad.toLocaleString("es-AR")}{" "}
-                          {item.unidadMedida === "unidad"
-                            ? "u."
-                            : item.unidadMedida}
+                          {fmtUnidad(item.unidadMedida)}
                           {item.cotizacion &&
                             ` · ${item.cotizacion.pliegos} pliego${item.cotizacion.pliegos !== 1 ? "s" : ""}`}
                         </p>
