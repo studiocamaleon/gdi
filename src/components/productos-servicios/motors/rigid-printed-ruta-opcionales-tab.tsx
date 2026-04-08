@@ -1,15 +1,35 @@
 "use client";
 
 import * as React from "react";
+import { toast } from "sonner";
 import { GitBranchIcon, MapIcon } from "lucide-react";
 
 import type { ProductTabProps } from "@/components/productos-servicios/product-detail-types";
 import { ProductoRutaOpcionalesShell } from "@/components/productos-servicios/producto-ruta-opcionales-shell";
 import { ProductoServicioChecklistEditor } from "@/components/productos-servicios/producto-servicio-checklist";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import type { Proceso, ProcesoOperacionPlantilla } from "@/lib/procesos";
-import type { ProductoChecklist } from "@/lib/productos-servicios";
-import { getProductoMotorConfig } from "@/lib/productos-servicios-api";
+import type { ProductoChecklist, ProductoChecklistPayload, RigidPrintedChecklistConfig } from "@/lib/productos-servicios";
+import {
+  getProductoMotorConfig,
+  getRigidPrintedChecklist,
+  updateRigidPrintedChecklist,
+} from "@/lib/productos-servicios-api";
+
+// ── Helpers ──────────────────────────────────────────────────────
+
+const TIPO_LABELS: Record<string, string> = {
+  directa: "Impresión directa",
+  flexible_montado: "Sustrato flexible montado",
+};
+
+function createEmptyChecklist(productoId: string): ProductoChecklist {
+  return { id: undefined, productoId, activo: true, preguntas: [], createdAt: null, updatedAt: null };
+}
 
 function normalizePasoNombreBase(value: string | null | undefined) {
   const normalized = String(value ?? "").trim().toLowerCase();
@@ -54,65 +74,170 @@ function getRutaPasoOptions(
   return Array.from(new Map(matches.map((item) => [item.id, item])).values());
 }
 
+// ── Componente ───────────────────────────────────────────────────
+
 export function RigidPrintedRutaOpcionalesTab(props: ProductTabProps) {
-  const [productoChecklist, setProductoChecklist] = React.useState<ProductoChecklist>(props.checklist);
-  const [rutaIds, setRutaIds] = React.useState<string[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [tiposImpresion, setTiposImpresion] = React.useState<string[]>([]);
+  const [rutaDirectaId, setRutaDirectaId] = React.useState<string | null>(null);
+  const [rutaFlexibleId, setRutaFlexibleId] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    setProductoChecklist(props.checklist);
-  }, [props.checklist]);
+  // Checklist state
+  const [aplicaATodos, setAplicaATodos] = React.useState(true);
+  const [checklistComun, setChecklistComun] = React.useState<ProductoChecklist>(
+    createEmptyChecklist(props.producto.id),
+  );
+  const [checklistsPorTipo, setChecklistsPorTipo] = React.useState<Record<string, ProductoChecklist>>({});
+  const [tipoSeleccionado, setTipoSeleccionado] = React.useState<string>("");
+  const [dirty, setDirty] = React.useState(false);
 
-  // Cargar rutas del motor config
+  // Load config + checklist
   React.useEffect(() => {
     (async () => {
       try {
-        const result = await getProductoMotorConfig(props.producto.id);
-        const params = (result?.parametros ?? {}) as Record<string, unknown>;
-        const ids: string[] = [];
-        if (params.rutaImpresionDirectaId) ids.push(String(params.rutaImpresionDirectaId));
-        if (params.rutaFlexibleMontadoId) ids.push(String(params.rutaFlexibleMontadoId));
-        if (ids.length === 0 && props.producto.procesoDefinicionDefaultId) {
-          ids.push(props.producto.procesoDefinicionDefaultId);
+        setLoading(true);
+        const [configResult, checklistResult] = await Promise.all([
+          getProductoMotorConfig(props.producto.id),
+          getRigidPrintedChecklist(props.producto.id),
+        ]);
+
+        const params = (configResult?.parametros ?? {}) as Record<string, unknown>;
+        const tipos = Array.isArray(params.tiposImpresion) ? params.tiposImpresion as string[] : [];
+        setTiposImpresion(tipos);
+        setRutaDirectaId(params.rutaImpresionDirectaId ? String(params.rutaImpresionDirectaId) : null);
+        setRutaFlexibleId(params.rutaFlexibleMontadoId ? String(params.rutaFlexibleMontadoId) : null);
+
+        if (checklistResult) {
+          setAplicaATodos(checklistResult.aplicaATodosLosTiposImpresion !== false);
+          setChecklistComun(checklistResult.checklistComun ?? createEmptyChecklist(props.producto.id));
+          const byTipo: Record<string, ProductoChecklist> = {};
+          for (const item of checklistResult.checklistsPorTipoImpresion ?? []) {
+            const t = (item as { tipoImpresion?: string }).tipoImpresion;
+            if (t) byTipo[t] = (item as { checklist: ProductoChecklist }).checklist;
+          }
+          setChecklistsPorTipo(byTipo);
         }
-        setRutaIds(ids);
-      } catch {
-        if (props.producto.procesoDefinicionDefaultId) {
-          setRutaIds([props.producto.procesoDefinicionDefaultId]);
-        }
+
+        if (tipos.length > 0) setTipoSeleccionado(tipos[0]);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
       }
     })();
-  }, [props.producto.id, props.producto.procesoDefinicionDefaultId]);
+  }, [props.producto.id]);
 
-  const pasosRutaOpcionales = React.useMemo(() => {
-    const options = rutaIds.flatMap((procesoId) =>
-      getRutaPasoOptions(procesoId, props.procesos, props.plantillasPaso).map((paso) => ({
-        id: paso.id,
-        label: paso.nombre,
-      })),
-    );
-    return Array.from(new Map(options.map((item) => [item.id, item])).values());
-  }, [rutaIds, props.procesos, props.plantillasPaso]);
-
-  const hasRouteConfigured = rutaIds.length > 0;
-  const preguntasActivas = productoChecklist.preguntas.filter((item) => item.activo);
-  const respuestasConAccion = preguntasActivas.reduce(
-    (count, pregunta) =>
-      count + pregunta.respuestas.filter((r) => r.activo && r.reglas.some((regla) => regla.activo)).length,
-    0,
+  // Route step options per tipo
+  const pasosDirecta = React.useMemo(
+    () => getRutaPasoOptions(rutaDirectaId, props.procesos, props.plantillasPaso).map((p) => ({ id: p.id, label: p.nombre })),
+    [rutaDirectaId, props.procesos, props.plantillasPaso],
   );
+  const pasosFlexible = React.useMemo(
+    () => getRutaPasoOptions(rutaFlexibleId, props.procesos, props.plantillasPaso).map((p) => ({ id: p.id, label: p.nombre })),
+    [rutaFlexibleId, props.procesos, props.plantillasPaso],
+  );
+  const pasosCombinados = React.useMemo(() => {
+    const map = new Map([...pasosDirecta, ...pasosFlexible].map((p) => [p.id, p]));
+    return Array.from(map.values());
+  }, [pasosDirecta, pasosFlexible]);
 
-  const rutaNames = rutaIds
-    .map((id) => props.procesos.find((p) => p.id === id)?.nombre)
-    .filter(Boolean)
-    .join(" / ");
+  // Active checklist for editor
+  const checklistActivo = React.useMemo(() => {
+    if (aplicaATodos) return checklistComun;
+    return checklistsPorTipo[tipoSeleccionado] ?? createEmptyChecklist(props.producto.id);
+  }, [aplicaATodos, checklistComun, checklistsPorTipo, tipoSeleccionado, props.producto.id]);
+
+  const routeStepOptions = React.useMemo(() => {
+    if (aplicaATodos) return pasosCombinados;
+    if (tipoSeleccionado === "directa") return pasosDirecta;
+    if (tipoSeleccionado === "flexible_montado") return pasosFlexible;
+    return pasosCombinados;
+  }, [aplicaATodos, tipoSeleccionado, pasosCombinados, pasosDirecta, pasosFlexible]);
+
+  // Convert ProductoChecklist → ProductoChecklistPayload
+  const toPayload = (cl: ProductoChecklist): ProductoChecklistPayload => ({
+    activo: cl.activo,
+    preguntas: cl.preguntas as unknown as ProductoChecklistPayload["preguntas"],
+  });
+
+  // Save handler (used by onSaveChecklist)
+  const handleSave = React.useCallback(async (payload: ProductoChecklistPayload): Promise<ProductoChecklist> => {
+    const nextPorTipo = { ...checklistsPorTipo };
+    if (!aplicaATodos && tipoSeleccionado) {
+      nextPorTipo[tipoSeleccionado] = { ...checklistActivo, preguntas: payload.preguntas as unknown as ProductoChecklist["preguntas"] };
+    }
+
+    const result = await updateRigidPrintedChecklist(props.producto.id, {
+      aplicaATodosLosTiposImpresion: aplicaATodos,
+      checklistComun: aplicaATodos ? payload : undefined,
+      checklistsPorTipoImpresion: tiposImpresion.map((tipo) => ({
+        tipoImpresion: tipo,
+        checklist: tipo === tipoSeleccionado && !aplicaATodos
+          ? payload
+          : toPayload(nextPorTipo[tipo] ?? createEmptyChecklist(props.producto.id)),
+      })),
+    });
+
+    setChecklistComun(result.checklistComun ?? createEmptyChecklist(props.producto.id));
+    const byTipo: Record<string, ProductoChecklist> = {};
+    for (const item of result.checklistsPorTipoImpresion ?? []) {
+      const t = (item as { tipoImpresion?: string }).tipoImpresion;
+      if (t) byTipo[t] = (item as { checklist: ProductoChecklist }).checklist;
+    }
+    setChecklistsPorTipo(byTipo);
+    setDirty(false);
+
+    return aplicaATodos
+      ? result.checklistComun
+      : byTipo[tipoSeleccionado] ?? createEmptyChecklist(props.producto.id);
+  }, [aplicaATodos, tipoSeleccionado, checklistActivo, checklistsPorTipo, tiposImpresion, props.producto.id]);
+
+  // Toggle scope
+  const handleToggleScope = React.useCallback(async (newValue: boolean) => {
+    if (dirty) {
+      toast.warning("Guardá los cambios antes de cambiar el alcance.");
+      return;
+    }
+    setAplicaATodos(newValue);
+    try {
+      const result = await updateRigidPrintedChecklist(props.producto.id, {
+        aplicaATodosLosTiposImpresion: newValue,
+        checklistComun: newValue ? { preguntas: checklistComun.preguntas as ProductoChecklistPayload["preguntas"] } : undefined,
+        checklistsPorTipoImpresion: tiposImpresion.map((tipo) => ({
+          tipoImpresion: tipo,
+          checklist: { preguntas: (checklistsPorTipo[tipo]?.preguntas ?? []) as ProductoChecklistPayload["preguntas"] },
+        })),
+      });
+      if (result) {
+        setChecklistComun(result.checklistComun ?? createEmptyChecklist(props.producto.id));
+        const byTipo: Record<string, ProductoChecklist> = {};
+        for (const item of result.checklistsPorTipoImpresion ?? []) {
+          const t = (item as { tipoImpresion?: string }).tipoImpresion;
+          if (t) byTipo[t] = (item as { checklist: ProductoChecklist }).checklist;
+        }
+        setChecklistsPorTipo(byTipo);
+      }
+      toast.success(newValue ? "Checklist unificado para todos los tipos." : "Checklist separado por tipo de impresión.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Error al cambiar alcance.");
+      setAplicaATodos(!newValue); // revert
+    }
+  }, [dirty, checklistComun, checklistsPorTipo, tiposImpresion, props.producto.id]);
+
+  const hasRoute = Boolean(rutaDirectaId || rutaFlexibleId);
+  const tieneMasDeUnTipo = tiposImpresion.length > 1;
+  const preguntasActivas = checklistActivo.preguntas.filter((p) => p.activo);
+
+  if (loading) return <GdiSpinner />;
 
   return (
     <ProductoRutaOpcionalesShell
       summaryItems={[
-        { label: "Rutas configuradas", value: rutaIds.length },
+        { label: "Rutas configuradas", value: (rutaDirectaId ? 1 : 0) + (rutaFlexibleId ? 1 : 0) },
+        { label: "Alcance", value: aplicaATodos || !tieneMasDeUnTipo ? "Todos los tipos" : TIPO_LABELS[tipoSeleccionado] ?? tipoSeleccionado },
         { label: "Preguntas activas", value: preguntasActivas.length },
-        { label: "Respuestas con acción", value: respuestasConAccion },
-        { label: "Pasos opcionales detectados", value: pasosRutaOpcionales.length },
+        { label: "Pasos opcionales", value: routeStepOptions.length },
       ]}
       context={
         <div className="space-y-3">
@@ -122,22 +247,35 @@ export function RigidPrintedRutaOpcionalesTab(props: ProductTabProps) {
                 <MapIcon className="size-4 text-muted-foreground" />
                 <p className="text-sm font-medium">Rutas de producción</p>
               </div>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {rutaNames || "Sin ruta configurada"}
-              </p>
+              <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                {rutaDirectaId && (
+                  <p>Directa: {props.procesos.find((p) => p.id === rutaDirectaId)?.nombre ?? "—"}</p>
+                )}
+                {rutaFlexibleId && (
+                  <p>Flexible: {props.procesos.find((p) => p.id === rutaFlexibleId)?.nombre ?? "—"}</p>
+                )}
+                {!rutaDirectaId && !rutaFlexibleId && <p>Sin ruta configurada</p>}
+              </div>
             </div>
             <div className="rounded-lg border bg-muted/20 p-3">
               <div className="flex items-center gap-2">
                 <GitBranchIcon className="size-4 text-muted-foreground" />
-                <p className="text-sm font-medium">Contexto del configurador</p>
+                <p className="text-sm font-medium">Alcance del checklist</p>
               </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Badge variant="outline">{rutaIds.length} ruta(s)</Badge>
-                <Badge variant="outline">{pasosRutaOpcionales.length} paso(s) base</Badge>
-              </div>
+              {tieneMasDeUnTipo ? (
+                <div className="mt-2 flex items-center gap-2">
+                  <Switch
+                    checked={aplicaATodos}
+                    onCheckedChange={handleToggleScope}
+                  />
+                  <Label className="text-sm">Aplica a todos los tipos de impresión</Label>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">Un solo tipo de impresión activo.</p>
+              )}
             </div>
           </div>
-          {!hasRouteConfigured && (
+          {!hasRoute && (
             <div className="rounded-lg border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">
               Primero configurá una ruta base en el tab Ruta Base para habilitar los opcionales.
             </div>
@@ -145,19 +283,54 @@ export function RigidPrintedRutaOpcionalesTab(props: ProductTabProps) {
         </div>
       }
       editor={
-        !hasRouteConfigured ? (
+        !hasRoute ? (
           <div className="rounded-lg border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">
             Cuando exista una ruta base, acá vas a poder definir preguntas, respuestas y acciones opcionales.
           </div>
-        ) : (
+        ) : aplicaATodos || !tieneMasDeUnTipo ? (
+          /* Modo unificado: un solo editor */
           <ProductoServicioChecklistEditor
             productoId={props.producto.id}
-            initialChecklist={productoChecklist}
+            initialChecklist={checklistActivo}
             plantillasPaso={props.plantillasPaso}
             materiasPrimas={props.materiasPrimas}
-            routeStepOptions={pasosRutaOpcionales}
-            onSaved={setProductoChecklist}
+            routeStepOptions={routeStepOptions}
+            onSaved={() => {}}
+            onSaveChecklist={handleSave}
+            onDirtyChange={setDirty}
           />
+        ) : (
+          /* Modo por tipo: tabs */
+          <Tabs value={tipoSeleccionado} onValueChange={(v) => {
+            if (dirty) {
+              toast.warning("Guardá los cambios antes de cambiar de tipo.");
+              return;
+            }
+            setTipoSeleccionado(v);
+          }}>
+            <TabsList>
+              {tiposImpresion.map((tipo) => (
+                <TabsTrigger key={tipo} value={tipo}>
+                  {TIPO_LABELS[tipo] ?? tipo}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            {tiposImpresion.map((tipo) => (
+              <TabsContent key={tipo} value={tipo}>
+                <ProductoServicioChecklistEditor
+                  key={`checklist-${tipo}`}
+                  productoId={props.producto.id}
+                  initialChecklist={checklistsPorTipo[tipo] ?? createEmptyChecklist(props.producto.id)}
+                  plantillasPaso={props.plantillasPaso}
+                  materiasPrimas={props.materiasPrimas}
+                  routeStepOptions={tipo === "directa" ? pasosDirecta : tipo === "flexible_montado" ? pasosFlexible : pasosCombinados}
+                  onSaved={() => {}}
+                  onSaveChecklist={handleSave}
+                  onDirtyChange={setDirty}
+                />
+              </TabsContent>
+            ))}
+          </Tabs>
         )
       }
     />

@@ -9,6 +9,7 @@ import {
   UpdateProductoPrecioEspecialClientesDto,
   UpdateGranFormatoConfigDto,
   UpdateGranFormatoChecklistDto,
+  UpdateRigidPrintedChecklistDto,
   UpdateGranFormatoRutaBaseDto,
   AssignVarianteRutaDto,
   CotizarProductoVarianteDto,
@@ -382,9 +383,26 @@ export class ProductosServiciosController {
   previewRigidPrintedFlexible(
     @CurrentSession() auth: CurrentAuth,
     @Param('id') id: string,
-    @Body() payload: { medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }> },
+    @Body() payload: { medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>; caras?: string },
   ) {
     return this.service.previewRigidPrintedFlexible(auth, id, payload);
+  }
+
+  @Get(':id/rigidos-impresos/checklist')
+  getRigidPrintedChecklist(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.service.getRigidPrintedChecklist(auth, id);
+  }
+
+  @Put(':id/rigidos-impresos/checklist')
+  updateRigidPrintedChecklist(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: UpdateRigidPrintedChecklistDto,
+  ) {
+    return this.service.updateRigidPrintedChecklist(auth, id, payload);
   }
 
   @Post(':id/gran-formato-costos/preview')

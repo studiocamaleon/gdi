@@ -846,6 +846,17 @@ export type GranFormatoChecklistConfig = {
   updatedAt: string | null;
 };
 
+export type RigidPrintedChecklistConfig = {
+  productoId: string;
+  aplicaATodosLosTiposImpresion: boolean;
+  checklistComun: ProductoChecklist;
+  checklistsPorTipoImpresion: Array<{
+    tipoImpresion: string;
+    checklist: ProductoChecklist;
+  }>;
+  updatedAt: string | null;
+};
+
 export type PreviewGranFormatoCostoMedida = {
   anchoMm: number;
   altoMm: number;

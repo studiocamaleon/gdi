@@ -728,9 +728,33 @@ export async function cotizarRigidPrintedByProducto(
   );
 }
 
+export async function getRigidPrintedChecklist(productoId: string) {
+  return apiRequest<import("./productos-servicios").RigidPrintedChecklistConfig>(
+    `/productos-servicios/${productoId}/rigidos-impresos/checklist`,
+  );
+}
+
+export async function updateRigidPrintedChecklist(
+  productoId: string,
+  payload: {
+    aplicaATodosLosTiposImpresion: boolean;
+    checklistComun?: import("./productos-servicios").ProductoChecklistPayload;
+    checklistsPorTipoImpresion?: Array<{
+      tipoImpresion: string;
+      checklist: import("./productos-servicios").ProductoChecklistPayload;
+    }>;
+  },
+) {
+  return apiRequest<import("./productos-servicios").RigidPrintedChecklistConfig>(
+    `/productos-servicios/${productoId}/rigidos-impresos/checklist`,
+    { method: 'PUT', body: JSON.stringify(payload) },
+  );
+}
+
 export async function previewRigidPrintedFlexible(
   productoId: string,
   medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>,
+  caras?: string,
 ) {
   return apiRequest<{
     preview: Record<string, unknown> | null;
@@ -742,7 +766,7 @@ export async function previewRigidPrintedFlexible(
     variantNombre?: string;
   }>(
     `/productos-servicios/${productoId}/rigidos-impresos/preview-flexible`,
-    { method: 'POST', body: JSON.stringify({ medidas }) },
+    { method: 'POST', body: JSON.stringify({ medidas, caras }) },
   );
 }
 

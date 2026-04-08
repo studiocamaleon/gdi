@@ -112,6 +112,8 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
   type MedidaRow = { anchoMm: number | null; altoMm: number | null; cantidad: number };
   const [medidas, setMedidas] = React.useState<MedidaRow[]>([{ anchoMm: null, altoMm: null, cantidad: 1 }]);
   const [tipoImpresionSim, setTipoImpresionSim] = React.useState<string>("directa");
+  const [placaVarianteId, setPlacaVarianteId] = React.useState<string>("");
+  const [caras, setCaras] = React.useState<string>("simple_faz");
   const fmtMmAsCm = (v: number | null) => (v != null && Number.isFinite(v) ? String(Number((v / 10).toFixed(2))) : "");
 
   const materiasPrimas = (props.materiasPrimas ?? []) as MateriaPrima[];
@@ -149,6 +151,12 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
       }
 
       setImposicion(imp);
+      // Init placa y caras
+      setPlacaVarianteId(params.placaVarianteIdDefault ?? (params.variantesCompatibles ?? [])[0] ?? '');
+      const firstTipo = (params.tiposImpresion ?? [])[0] ?? 'directa';
+      const firstTipoCfg = (firstTipo === 'flexible_montado' ? params.flexibleMontado : params.impresionDirecta) as Record<string, unknown> | undefined;
+      setCaras(String(firstTipoCfg?.carasDefault ?? params.carasDefault ?? 'simple_faz'));
+      if ((params.tiposImpresion ?? []).length > 0) setTipoImpresionSim(params.tiposImpresion[0]);
     } catch (err) {
       console.error(err);
       toast.error("Error al cargar configuración.");
@@ -176,32 +184,29 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
     }
   }, [config, imposicion, props.producto.id, loadConfig]);
 
-  // Resolver placa seleccionada
-  const placaInfo = React.useMemo(() => {
-    if (!config?.materialRigidoId) return null;
+  // Resolver placas compatibles
+  const placasCompatibles = React.useMemo(() => {
+    if (!config?.materialRigidoId) return [];
     const mat = materiasPrimas.find((m) => m.id === config.materialRigidoId);
-    if (!mat) return null;
-
-    const compatibles = new Set(config.variantesCompatibles ?? []);
-    const variantes = (mat.variantes ?? []).filter((v) => compatibles.has(v.id));
-    // Usar la primera variante compatible o la default
-    const defaultId = config.placaVarianteIdDefault;
-    const placa = defaultId
-      ? variantes.find((v) => v.id === defaultId) ?? variantes[0]
-      : variantes[0];
-    if (!placa) return null;
-
-    const attrs = (placa.atributosVariante ?? {}) as Record<string, unknown>;
-    const anchoRaw = Number(attrs.ancho ?? 0);
-    const altoRaw = Number(attrs.alto ?? 0);
-    return {
-      id: placa.id,
-      anchoMm: anchoRaw < 10 ? Math.round(anchoRaw * 1000) : anchoRaw,
-      altoMm: altoRaw < 10 ? Math.round(altoRaw * 1000) : altoRaw,
-      precio: Number(placa.precioReferencia ?? 0),
-      label: `${anchoRaw < 10 ? Math.round(anchoRaw * 1000) : anchoRaw} × ${altoRaw < 10 ? Math.round(altoRaw * 1000) : altoRaw} mm`,
-    };
+    if (!mat) return [];
+    const ids = new Set(config.variantesCompatibles ?? []);
+    return (mat.variantes ?? []).filter((v) => ids.has(v.id)).map((v) => {
+      const attrs = (v.atributosVariante ?? {}) as Record<string, unknown>;
+      const anchoRaw = Number(attrs.ancho ?? 0);
+      const altoRaw = Number(attrs.alto ?? 0);
+      return {
+        id: v.id,
+        anchoMm: anchoRaw < 10 ? Math.round(anchoRaw * 1000) : anchoRaw,
+        altoMm: altoRaw < 10 ? Math.round(altoRaw * 1000) : altoRaw,
+        precio: Number(v.precioReferencia ?? 0),
+        label: `${anchoRaw < 10 ? Math.round(anchoRaw * 1000) : anchoRaw} × ${altoRaw < 10 ? Math.round(altoRaw * 1000) : altoRaw} mm`,
+        espesor: attrs.espesor ? `${attrs.espesor}mm` : null,
+      };
+    });
   }, [config, materiasPrimas]);
+
+  // Resolver placa seleccionada
+  const placaInfo = placasCompatibles.find((p) => p.id === placaVarianteId) ?? placasCompatibles[0] ?? null;
 
   // Nesting + costeo preview
   // Resolver rollo flexible info
@@ -288,6 +293,15 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
   }, [placaInfo, medidas, imposicion]);
 
   const tieneFlexible = (config?.tiposImpresion ?? []).includes("flexible_montado");
+  const tiposDisponibles = config?.tiposImpresion ?? [];
+
+  // Caras disponibles según tipo de impresión seleccionado
+  const carasDisponibles = React.useMemo(() => {
+    if (!config) return ["simple_faz"];
+    const tc = (tipoImpresionSim === "flexible_montado" ? config.flexibleMontado : config.impresionDirecta) as Record<string, unknown> | undefined;
+    const porTipo = Array.isArray(tc?.carasDisponibles) ? tc.carasDisponibles as string[] : null;
+    return porTipo ?? (config.carasDisponibles as string[] ?? ["simple_faz"]);
+  }, [config, tipoImpresionSim]);
 
   // Preview flexible vía backend (debounced)
   const [flexPreview, setFlexPreview] = React.useState<Record<string, unknown> | null>(null);
@@ -313,6 +327,7 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
         const res = await previewRigidPrintedFlexible(
           props.producto.id,
           validMedidas.map((m) => ({ anchoMm: m.anchoMm!, altoMm: m.altoMm!, cantidad: m.cantidad })),
+          caras,
         );
         setFlexPreview(res.preview ?? null);
         setFlexMeta(res.preview ? { rollWidthMm: res.rollWidthMm, consumedLengthMm: res.consumedLengthMm, wastePct: res.wastePct, variantNombre: res.variantNombre } : null);
@@ -325,7 +340,7 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
     }, 400); // debounce 400ms
 
     return () => clearTimeout(timer);
-  }, [tipoImpresionSim, medidas, props.producto.id]);
+  }, [tipoImpresionSim, medidas, caras, props.producto.id]);
 
   if (loading) {
     return <GdiSpinner />;
@@ -472,101 +487,117 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
       {/* ── Simulación visual ── */}
       <ProductoTabSection
         title="Simulación de imposición"
-        description={placaInfo ? `Placa: ${placaInfo.label} · $${placaInfo.precio.toLocaleString("es-AR")}` : "Configurá un material en el tab Tecnologías."}
+        description="Probá distintas medidas, placas y configuraciones para visualizar el nesting."
       >
-        {!placaInfo ? (
-          <p className="text-sm text-muted-foreground">No hay placa configurada.</p>
+        {placasCompatibles.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No hay placa configurada. Configurá un material en el tab Tecnologías.</p>
         ) : (
           <>
-            {/* Selector tipo impresión */}
-            {tieneFlexible && (
-              <div className="mb-4 flex items-center gap-3">
-                <Label>Simular para:</Label>
-                <Select value={tipoImpresionSim} onValueChange={(v) => { if (v) setTipoImpresionSim(v); }}>
-                  <SelectTrigger className="w-56">
-                    <SelectValue>
-                      {tipoImpresionSim === "directa" ? "Impresión directa" : "Sustrato flexible montado"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="directa">Impresión directa</SelectItem>
-                    <SelectItem value="flexible_montado">Sustrato flexible montado</SelectItem>
-                  </SelectContent>
-                </Select>
-                {tipoImpresionSim === "flexible_montado" && rolloInfo && (
-                  <span className="text-xs text-muted-foreground">
-                    Rollo: {rolloInfo.nombre} · {rolloInfo.anchoMm} mm ancho
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Medidas dinámicas (mismo layout que Simular Costo) */}
-            <div className="rounded-lg border p-3 mb-4">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <p className="text-sm font-medium">Medidas del trabajo</p>
-              </div>
-              <div className="space-y-2">
-                <div className="hidden gap-2 px-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px_40px]">
-                  <span>Ancho (cm)</span>
-                  <span>Alto (cm)</span>
-                  <span>Cantidad</span>
-                  <span />
-                  <span />
-                </div>
-                {medidas.map((medida, index) => (
-                  <div key={`imp-medida-${index}`} className="grid gap-2 rounded-lg border p-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px_40px]">
-                    <Field>
-                      <Input
-                        aria-label={`Ancho (cm) fila ${index + 1}`}
-                        placeholder="30"
-                        value={fmtMmAsCm(medida.anchoMm)}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setMedidas((prev) => prev.map((item, i) =>
-                            i === index ? { ...item, anchoMm: v.trim() ? Math.round(Number(v) * 10) : null } : item));
-                        }}
-                      />
-                    </Field>
-                    <Field>
-                      <Input
-                        aria-label={`Alto (cm) fila ${index + 1}`}
-                        placeholder="40"
-                        value={fmtMmAsCm(medida.altoMm)}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setMedidas((prev) => prev.map((item, i) =>
-                            i === index ? { ...item, altoMm: v.trim() ? Math.round(Number(v) * 10) : null } : item));
-                        }}
-                      />
-                    </Field>
-                    <Field>
-                      <Input
-                        aria-label={`Cantidad fila ${index + 1}`}
-                        type="number"
-                        min={1}
-                        value={medida.cantidad}
-                        onChange={(e) => {
-                          const v = Number(e.target.value);
-                          setMedidas((prev) => prev.map((item, i) =>
-                            i === index ? { ...item, cantidad: Number.isFinite(v) && v > 0 ? v : 1 } : item));
-                        }}
-                      />
-                    </Field>
-                    <div className="flex items-end">
-                      <Button type="button" variant="ghost" size="icon" aria-label="Agregar medida"
-                        onClick={() => setMedidas((prev) => [...prev, { anchoMm: null, altoMm: null, cantidad: 1 }])}>
-                        <PlusIcon className="size-4" />
-                      </Button>
-                    </div>
-                    <div className="flex items-end">
-                      <Button type="button" variant="ghost" size="icon" disabled={medidas.length === 1}
-                        onClick={() => setMedidas((prev) => prev.length === 1 ? prev : prev.filter((_, i) => i !== index))}>
-                        <Trash2Icon className="size-4" />
-                      </Button>
-                    </div>
+            {/* Layout 2 columnas como Simular Costo */}
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+              {/* ── Columna izquierda: Medidas ── */}
+              <div className="rounded-lg border p-3">
+                <div className="mb-3"><p className="text-sm font-medium">Medidas del trabajo</p></div>
+                <div className="space-y-2">
+                  <div className="hidden gap-2 px-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px_40px]">
+                    <span>Ancho (cm)</span><span>Alto (cm)</span><span>Cantidad</span><span /><span />
                   </div>
-                ))}
+                  {medidas.map((medida, index) => (
+                    <div key={`imp-medida-${index}`} className="grid gap-2 rounded-lg border p-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_40px_40px]">
+                      <Field><Input aria-label={`Ancho (cm) fila ${index + 1}`} placeholder="30" value={fmtMmAsCm(medida.anchoMm)}
+                        onChange={(e) => { const v = e.target.value; setMedidas((prev) => prev.map((item, i) => i === index ? { ...item, anchoMm: v.trim() ? Math.round(Number(v) * 10) : null } : item)); }} /></Field>
+                      <Field><Input aria-label={`Alto (cm) fila ${index + 1}`} placeholder="40" value={fmtMmAsCm(medida.altoMm)}
+                        onChange={(e) => { const v = e.target.value; setMedidas((prev) => prev.map((item, i) => i === index ? { ...item, altoMm: v.trim() ? Math.round(Number(v) * 10) : null } : item)); }} /></Field>
+                      <Field><Input aria-label={`Cantidad fila ${index + 1}`} type="number" min={1} value={medida.cantidad}
+                        onChange={(e) => { const v = Number(e.target.value); setMedidas((prev) => prev.map((item, i) => i === index ? { ...item, cantidad: Number.isFinite(v) && v > 0 ? v : 1 } : item)); }} /></Field>
+                      <div className="flex items-end">
+                        <Button type="button" variant="ghost" size="icon" aria-label="Agregar medida"
+                          onClick={() => setMedidas((prev) => [...prev, { anchoMm: null, altoMm: null, cantidad: 1 }])}><PlusIcon className="size-4" /></Button>
+                      </div>
+                      <div className="flex items-end">
+                        <Button type="button" variant="ghost" size="icon" disabled={medidas.length === 1}
+                          onClick={() => setMedidas((prev) => prev.length === 1 ? prev : prev.filter((_, i) => i !== index))}><Trash2Icon className="size-4" /></Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Columna derecha: Opciones ── */}
+              <div className="rounded-lg border p-3">
+                <div className="space-y-3">
+                  {/* Tipo impresión */}
+                  {tiposDisponibles.length > 1 && (
+                    <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                      <Label className="text-sm sm:mb-0">Tipo impresión</Label>
+                      <Select value={tipoImpresionSim} onValueChange={(v) => {
+                        if (!v) return;
+                        setTipoImpresionSim(v);
+                        const tc = (v === "flexible_montado" ? config?.flexibleMontado : config?.impresionDirecta) as Record<string, unknown> | undefined;
+                        setCaras(String(tc?.carasDefault ?? config?.carasDefault ?? "simple_faz"));
+                      }}>
+                        <SelectTrigger><SelectValue>{tipoImpresionSim === "directa" ? "Impresión directa" : "Sustrato flexible montado"}</SelectValue></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="directa">Impresión directa</SelectItem>
+                          <SelectItem value="flexible_montado">Sustrato flexible montado</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {tiposDisponibles.length === 1 && (
+                    <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                      <Label className="text-sm sm:mb-0">Tipo impresión</Label>
+                      <Select value={tiposDisponibles[0]} disabled>
+                        <SelectTrigger><SelectValue>{tiposDisponibles[0] === "directa" ? "Impresión directa" : "Sustrato flexible montado"}</SelectValue></SelectTrigger>
+                        <SelectContent><SelectItem value={tiposDisponibles[0]}>{tiposDisponibles[0] === "directa" ? "Impresión directa" : "Sustrato flexible montado"}</SelectItem></SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {/* Placa */}
+                  {placasCompatibles.length > 1 && (
+                    <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                      <Label className="text-sm sm:mb-0">Placa</Label>
+                      <Select value={placaVarianteId} onValueChange={(v) => { if (v) setPlacaVarianteId(v); }}>
+                        <SelectTrigger><SelectValue>{placaInfo ? `${placaInfo.label}${placaInfo.espesor ? ` · ${placaInfo.espesor}` : ""}` : "Seleccionar"}</SelectValue></SelectTrigger>
+                        <SelectContent>
+                          {placasCompatibles.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>{p.label}{p.espesor ? ` · ${p.espesor}` : ""}{p.precio > 0 ? ` · $${p.precio.toLocaleString("es-AR")}` : ""}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {placasCompatibles.length === 1 && (
+                    <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                      <Label className="text-sm sm:mb-0">Placa</Label>
+                      <Select value={placasCompatibles[0].id} disabled>
+                        <SelectTrigger><SelectValue>{placasCompatibles[0].label}{placasCompatibles[0].espesor ? ` · ${placasCompatibles[0].espesor}` : ""}</SelectValue></SelectTrigger>
+                        <SelectContent><SelectItem value={placasCompatibles[0].id}>{placasCompatibles[0].label}</SelectItem></SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {/* Caras */}
+                  {carasDisponibles.length > 1 && (
+                    <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                      <Label className="text-sm sm:mb-0">Caras</Label>
+                      <Select value={caras} onValueChange={(v) => { if (v) setCaras(v); }}>
+                        <SelectTrigger><SelectValue>{{ simple_faz: "Simple faz", doble_faz: "Doble faz" }[caras] ?? caras}</SelectValue></SelectTrigger>
+                        <SelectContent>{carasDisponibles.map((c) => (<SelectItem key={c} value={c}>{{ simple_faz: "Simple faz", doble_faz: "Doble faz" }[c] ?? c}</SelectItem>))}</SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {carasDisponibles.length === 1 && (
+                    <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                      <Label className="text-sm sm:mb-0">Caras</Label>
+                      <Select value={carasDisponibles[0]} disabled>
+                        <SelectTrigger><SelectValue>{{ simple_faz: "Simple faz", doble_faz: "Doble faz" }[carasDisponibles[0]] ?? carasDisponibles[0]}</SelectValue></SelectTrigger>
+                        <SelectContent><SelectItem value={carasDisponibles[0]}>{{ simple_faz: "Simple faz", doble_faz: "Doble faz" }[carasDisponibles[0]] ?? carasDisponibles[0]}</SelectItem></SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 

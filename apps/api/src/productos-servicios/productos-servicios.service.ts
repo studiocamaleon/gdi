@@ -81,6 +81,7 @@ import {
   UpdateProductoPrecioEspecialClientesDto,
   UpdateGranFormatoConfigDto,
   UpdateGranFormatoChecklistDto,
+  UpdateRigidPrintedChecklistDto,
   UpdateGranFormatoRutaBaseDto,
   UpdateProductoRutaPolicyDto,
   EstadoProductoServicioDto,
@@ -842,6 +843,130 @@ export class ProductosServiciosService {
     return { snapshotId: snapshot.id, ...roundedResult, createdAt: snapshot.createdAt.toISOString() };
   }
 
+  // ── Rígidos Impresos: Checklist por tipo de impresión ──────────
+
+  async getRigidPrintedChecklist(auth: CurrentAuth, productoId: string) {
+    const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+    return this.buildRigidPrintedChecklistResponse(auth, producto);
+  }
+
+  async updateRigidPrintedChecklist(
+    auth: CurrentAuth,
+    productoId: string,
+    payload: UpdateRigidPrintedChecklistDto,
+  ) {
+    const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+    const motorConfig = await this.prisma.productoMotorConfig.findFirst({
+      where: { productoServicioId: producto.id, tenantId: auth.tenantId },
+    });
+    const rigidConfig = (motorConfig?.parametrosJson ?? {}) as Record<string, unknown>;
+    const tiposActivos = new Set(Array.isArray(rigidConfig.tiposImpresion) ? rigidConfig.tiposImpresion as string[] : []);
+
+    const checklistComun = this.getGranFormatoChecklistStored(payload.checklistComun ?? { preguntas: [] });
+    const checklistsPorTipo = (payload.checklistsPorTipoImpresion ?? []).map((item) => ({
+      tipoImpresion: String(item.tipoImpresion ?? ''),
+      checklist: this.getGranFormatoChecklistStored(item.checklist),
+    }));
+
+    // Validar tipos
+    for (const item of checklistsPorTipo) {
+      if (!item.tipoImpresion || !tiposActivos.has(item.tipoImpresion)) {
+        throw new BadRequestException(`El tipo de impresión "${item.tipoImpresion}" no está activo en este producto.`);
+      }
+    }
+
+    const normalized = {
+      aplicaATodosLosTiposImpresion: payload.aplicaATodosLosTiposImpresion !== false,
+      checklistComun,
+      checklistsPorTipoImpresion: checklistsPorTipo,
+    };
+
+    const nextDetalle = this.mergeProductoDetalle(producto.detalleJson, {
+      rigidPrintedChecklist: normalized,
+    });
+
+    const updated = await this.prisma.productoServicio.update({
+      where: { id: producto.id },
+      data: { detalleJson: this.toNullableJson(nextDetalle) },
+    });
+
+    return this.buildRigidPrintedChecklistResponse(auth, updated);
+  }
+
+  private async buildRigidPrintedChecklistResponse(
+    auth: CurrentAuth,
+    producto: { id: string; detalleJson: Prisma.JsonValue | null; updatedAt: Date },
+  ) {
+    const detalle = this.asObject(this.asObject(producto.detalleJson).rigidPrintedChecklist);
+    const aplicaATodosLosTiposImpresion = detalle.aplicaATodosLosTiposImpresion !== false;
+    const checklistComun = this.getGranFormatoChecklistStored(detalle.checklistComun ?? { preguntas: [] });
+    const checklistsPorTipo = Array.isArray(detalle.checklistsPorTipoImpresion)
+      ? detalle.checklistsPorTipoImpresion : [];
+
+    // Collect IDs for enrichment (same as gran formato)
+    const idsPaso = new Set<string>();
+    const idsCentro = new Set<string>();
+    const idsVariante = new Set<string>();
+    const collectIds = (cl: GranFormatoChecklistStored) => {
+      for (const p of cl.preguntas ?? []) {
+        for (const r of p.respuestas ?? []) {
+          for (const regla of r.reglas ?? []) {
+            if (regla.pasoPlantillaId) idsPaso.add(regla.pasoPlantillaId);
+            if (regla.costoCentroCostoId) idsCentro.add(regla.costoCentroCostoId);
+            if (regla.materiaPrimaVarianteId) idsVariante.add(regla.materiaPrimaVarianteId);
+          }
+        }
+      }
+    };
+    collectIds(checklistComun);
+    for (const item of checklistsPorTipo) {
+      const row = this.asObject(item);
+      collectIds(this.getGranFormatoChecklistStored(row.checklist));
+    }
+
+    const [plantillas, centros, variantes] = await Promise.all([
+      idsPaso.size ? this.prisma.procesoOperacionPlantilla.findMany({
+        where: { tenantId: auth.tenantId, id: { in: Array.from(idsPaso) } },
+        include: { centroCosto: true, maquina: true, perfilOperativo: true },
+      }) : [],
+      idsCentro.size ? this.prisma.centroCosto.findMany({
+        where: { tenantId: auth.tenantId, id: { in: Array.from(idsCentro) } },
+        select: { id: true, nombre: true },
+      }) : [],
+      idsVariante.size ? this.prisma.materiaPrimaVariante.findMany({
+        where: { tenantId: auth.tenantId, id: { in: Array.from(idsVariante) } },
+        include: { materiaPrima: true },
+      }) : [],
+    ]);
+
+    const plantillasById = new Map(plantillas.map((i) => [i.id, i]));
+    const centrosById = new Map(centros.map((i) => [i.id, i]));
+    const variantesById = new Map(variantes.map((i) => [i.id, i]));
+
+    return {
+      productoId: producto.id,
+      aplicaATodosLosTiposImpresion,
+      checklistComun: this.buildGranFormatoChecklistItemResponse(
+        producto.id, checklistComun, plantillasById, centrosById, variantesById, producto.updatedAt,
+      ),
+      checklistsPorTipoImpresion: checklistsPorTipo
+        .map((item) => {
+          const row = this.asObject(item);
+          const tipo = String(row.tipoImpresion ?? '');
+          if (!tipo) return null;
+          return {
+            tipoImpresion: tipo,
+            checklist: this.buildGranFormatoChecklistItemResponse(
+              producto.id, this.getGranFormatoChecklistStored(row.checklist),
+              plantillasById, centrosById, variantesById, producto.updatedAt,
+            ),
+          };
+        })
+        .filter(Boolean),
+      updatedAt: producto.updatedAt.toISOString(),
+    };
+  }
+
   /**
    * Preview liviano del nesting flexible para el tab Imposición.
    * Reutiliza evaluateGranFormatoImposicionCandidates + buildGranFormatoNestingPreview.
@@ -849,7 +974,7 @@ export class ProductosServiciosService {
   async previewRigidPrintedFlexible(
     auth: CurrentAuth,
     productoId: string,
-    payload: { medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }> },
+    payload: { medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>; caras?: string },
   ) {
     const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
     const motorConfig = await this.prisma.productoMotorConfig.findFirst({
@@ -885,9 +1010,17 @@ export class ProductosServiciosService {
     const sepV = Number(imposicion.separacionVerticalMm ?? 3);
     const rotPermitida = imposicion.permitirRotacion !== false;
 
+    // Duplicar medidas si doble faz + duplicar flexible
+    const esDobleFaz = payload.caras === 'doble_faz';
+    const duplicarFlex = esDobleFaz
+      && (rigidConfig.flexibleMontado as Record<string, unknown> | undefined)?.duplicarSustratoFlexibleEnDobleFaz === true;
+    const medidasFlex = duplicarFlex
+      ? medidas.map((m) => ({ ...m, cantidad: m.cantidad * 2 }))
+      : medidas;
+
     const candidatos = this.evaluateGranFormatoImposicionCandidates({
       maquina: flexMaquina,
-      medidas,
+      medidas: medidasFlex,
       config: {
         permitirRotacion: rotPermitida,
         separacionHorizontalMm: sepH,
