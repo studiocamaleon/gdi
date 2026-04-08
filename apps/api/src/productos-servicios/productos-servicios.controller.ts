@@ -378,6 +378,15 @@ export class ProductosServiciosController {
     return this.service.cotizarRigidPrintedByProducto(auth, id, payload);
   }
 
+  @Post(':id/rigidos-impresos/preview-flexible')
+  previewRigidPrintedFlexible(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: { medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }> },
+  ) {
+    return this.service.previewRigidPrintedFlexible(auth, id, payload);
+  }
+
   @Post(':id/gran-formato-costos/preview')
   previewGranFormatoCostos(
     @CurrentSession() auth: CurrentAuth,

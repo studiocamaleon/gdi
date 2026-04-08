@@ -1279,6 +1279,7 @@ export function ProcesosPanel({
             setupMin: operacion.setupMin ?? undefined,
             cleanupMin: operacion.cleanupMin ?? undefined,
             tiempoFijoMin: operacion.tiempoFijoMin ?? undefined,
+            multiplicadorDobleFaz: operacion.multiplicadorDobleFaz ?? undefined,
             modoProductividad: operacion.modoProductividad,
             productividadModoUi,
             productividadBase: operacion.productividadBase ?? undefined,
@@ -1481,6 +1482,7 @@ export function ProcesosPanel({
       setupMin: operacion.setupMin,
       cleanupMin: operacion.cleanupMin,
       tiempoFijoMin: operacion.tiempoFijoMin,
+      multiplicadorDobleFaz: operacion.multiplicadorDobleFaz,
       modoProductividad: operacion.modoProductividad,
       productividadBase: operacion.productividadBase,
       unidadEntrada: operacion.unidadEntrada || "ninguna",
@@ -3149,6 +3151,28 @@ export function ProcesosPanel({
                               }
                             />
                           </Field>
+                          </div>
+                          {/* Mult. doble faz — editable incluso en pasos de biblioteca */}
+                          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 mt-3">
+                            <Field>
+                              <FieldLabel>Mult. doble faz</FieldLabel>
+                              <Input
+                                type="number"
+                                min={0}
+                                step="0.5"
+                                placeholder="1"
+                                value={operacion.multiplicadorDobleFaz ?? ""}
+                                onChange={(event) =>
+                                  updateOperacion(operacion.id, (prev) => ({
+                                    ...prev,
+                                    multiplicadorDobleFaz: toOptionalNumber(event.target.value),
+                                  }))
+                                }
+                              />
+                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                                Factor que multiplica el tiempo de este paso cuando el producto es doble faz. Vacío = sin cambio.
+                              </p>
+                            </Field>
                           </div>
                           </CardContent>
                         ) : (

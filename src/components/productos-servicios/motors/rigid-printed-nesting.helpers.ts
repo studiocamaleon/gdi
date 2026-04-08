@@ -1,7 +1,8 @@
 /**
  * Helpers de nesting + costeo para rígidos impresos (client-side).
- * Mirror del backend para feedback instantáneo.
+ * Usa maxrects-packer para bin-packing 2D óptimo.
  */
+import { MaxRectsPacker } from "maxrects-packer";
 
 // ── Nesting ──────────────────────────────────────────────────────
 
@@ -417,13 +418,11 @@ function nestSingleSizeGrid(
 }
 
 /**
- * Nesting multi-medida con bin-packing 2D (Maximal Rectangles / BAF).
+ * Nesting multi-medida con bin-packing 2D usando maxrects-packer.
  *
- * Mantiene un "skyline" (perfil superior del área ocupada) y coloca
- * cada pieza en la posición más baja y más a la izquierda posible.
- * Las piezas se pegan unas a otras sin huecos innecesarios.
- *
- * Ordena piezas de mayor a menor área para mejor aprovechamiento.
+ * Para piezas de una sola medida usa un grid óptimo (fast-path).
+ * Para múltiples medidas delega a maxrects-packer (Maximal Rectangles)
+ * que distribuye piezas en múltiples bins (placas) automáticamente.
  */
 export function nestMultiMedida(
   medidas: MedidaInput[],
@@ -452,189 +451,71 @@ export function nestMultiMedida(
     return { posiciones: [], placas: 0, placaLayouts: [], totalPiezas: 0, aprovechamientoPct: 0, areaTotalMm2: 0, areaUtilMm2: 0 };
   }
 
-  // Fast-path: si todas las piezas son de la misma medida, usar grid óptimo
-  const allSameSize = pendientes.every(
-    (p) => Math.abs(p.origW - pendientes[0].origW) < 0.5 && Math.abs(p.origH - pendientes[0].origH) < 0.5,
-  );
-  if (allSameSize) {
-    return nestSingleSizeGrid(pendientes, areaW, areaH, sepH, sepV, margen, permitirRotacion, orientacionPlaca);
-  }
+  // ── Bin-packing 2D con maxrects-packer ──────────────────────────
+  // Cada pieza incluye la separación en sus dimensiones para que el
+  // packer los coloque con gap correcto. Luego al leer los resultados
+  // restamos la separación para obtener la posición real.
 
-  // Ordenar: piezas más grandes primero → mejor bin-packing
+  const packer = new MaxRectsPacker(
+    areaW + sepH,   // +sep porque cada pieza incluye sep en su tamaño
+    areaH + sepV,
+    0, // padding = 0 (la separación va incluida en el tamaño de pieza)
+    {
+      smart: false,  // tamaño fijo de placa, no auto-crecer
+      pot: false,
+      square: false,
+      allowRotation: permitirRotacion,
+    },
+  );
+
+  // Ordenar piezas de mayor a menor área para mejor aprovechamiento
   pendientes.sort((a, b) => (b.origW * b.origH) - (a.origW * a.origH));
+
+  for (const p of pendientes) {
+    // add(width, height, data) crea un Rectangle internamente
+    packer.add(p.origW + sepH, p.origH + sepV, { mi: p.mi, origW: p.origW, origH: p.origH });
+  }
 
   const placaLayouts: MultiMedidaNestingResult["placaLayouts"] = [];
   let totalPiezas = 0;
   let totalAreaUtil = 0;
 
-  // ── Bin-packing 2D con free rectangles (Maximal Rectangles) ─────
-  function packPlaca(piezas: PiezaPendiente[]): {
-    colocadas: MultiMedidaPiece[];
-    noColocadas: PiezaPendiente[];
-    maxY: number;
-  } {
-    // Free rectangles: lista de rectángulos libres disponibles
-    type FreeRect = { x: number; y: number; w: number; h: number };
-    let freeRects: FreeRect[] = [{ x: 0, y: 0, w: areaW, h: areaH }];
-    const colocadas: MultiMedidaPiece[] = [];
-    const noColocadas: PiezaPendiente[] = [];
+  for (const bin of packer.bins) {
+    const posiciones: MultiMedidaPiece[] = [];
+    let maxY = 0;
+    let areaUtil = 0;
 
-    // Best Area Fit: coloca en el rectángulo libre más chico donde entra
-    // Tiebreaker: Best Short Side Fit (menor lado residual corto)
-    function findBestPosition(pw: number, ph: number): { x: number; y: number } | null {
-      let bestArea = Infinity;
-      let bestShortSide = Infinity;
-      let bestX = -1;
-      let bestY = -1;
+    for (const rect of bin.rects) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const d = (rect as any).data as { mi: number; origW: number; origH: number };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rotada: boolean = (rect as any).rot ?? false;
+      // El packer coloca con dimensiones incluyendo separación,
+      // la pieza real es origW × origH
+      const pieceW = rotada ? d.origH : d.origW;
+      const pieceH = rotada ? d.origW : d.origH;
 
-      for (const r of freeRects) {
-        if (pw <= r.w + 0.01 && ph <= r.h + 0.01) {
-          const area = r.w * r.h;
-          const leftoverW = r.w - pw;
-          const leftoverH = r.h - ph;
-          const shortSide = Math.min(leftoverW, leftoverH);
+      posiciones.push({
+        x: margen + rect.x,
+        y: margen + rect.y,
+        anchoMm: pieceW,
+        altoMm: pieceH,
+        medidaIndex: d.mi,
+        rotada,
+      });
 
-          if (area < bestArea || (area === bestArea && shortSide < bestShortSide)) {
-            bestArea = area;
-            bestShortSide = shortSide;
-            bestX = r.x;
-            bestY = r.y;
-          }
-        }
-      }
-
-      return bestX >= 0 ? { x: bestX, y: bestY } : null;
+      const bottom = rect.y + pieceH;
+      if (bottom > maxY) maxY = bottom;
+      areaUtil += d.origW * d.origH;
     }
 
-    function splitFreeRects(px: number, py: number, pw: number, ph: number) {
-      // Añadir separación a la pieza colocada
-      const occX = px;
-      const occY = py;
-      const occW = pw + sepH;
-      const occH = ph + sepV;
-
-      const newFree: FreeRect[] = [];
-
-      for (const r of freeRects) {
-        // Si no intersecta, mantener
-        if (occX >= r.x + r.w - 0.01 || occX + occW <= r.x + 0.01 ||
-            occY >= r.y + r.h - 0.01 || occY + occH <= r.y + 0.01) {
-          newFree.push(r);
-          continue;
-        }
-
-        // Generar hasta 4 rectángulos libres alrededor de la pieza
-
-        // Derecha
-        if (occX + occW < r.x + r.w - 0.01) {
-          newFree.push({ x: occX + occW, y: r.y, w: r.x + r.w - (occX + occW), h: r.h });
-        }
-        // Izquierda
-        if (occX > r.x + 0.01) {
-          newFree.push({ x: r.x, y: r.y, w: occX - r.x, h: r.h });
-        }
-        // Abajo
-        if (occY + occH < r.y + r.h - 0.01) {
-          newFree.push({ x: r.x, y: occY + occH, w: r.w, h: r.y + r.h - (occY + occH) });
-        }
-        // Arriba (raro para bottom-left pero necesario)
-        if (occY > r.y + 0.01) {
-          newFree.push({ x: r.x, y: r.y, w: r.w, h: occY - r.y });
-        }
-      }
-
-      // Eliminar rectángulos contenidos en otros (maximizar)
-      freeRects = [];
-      for (let i = 0; i < newFree.length; i++) {
-        let contained = false;
-        for (let j = 0; j < newFree.length; j++) {
-          if (i === j) continue;
-          const a = newFree[i];
-          const b = newFree[j];
-          if (a.x >= b.x - 0.01 && a.y >= b.y - 0.01 &&
-              a.x + a.w <= b.x + b.w + 0.01 && a.y + a.h <= b.y + b.h + 0.01) {
-            contained = true;
-            break;
-          }
-        }
-        if (!contained && newFree[i].w > 1 && newFree[i].h > 1) {
-          freeRects.push(newFree[i]);
-        }
-      }
-    }
-
-    for (const pieza of piezas) {
-      type Orient = { w: number; h: number; rotada: boolean };
-      const orients: Orient[] = [{ w: pieza.origW, h: pieza.origH, rotada: false }];
-      if (permitirRotacion && pieza.origW !== pieza.origH) {
-        orients.push({ w: pieza.origH, h: pieza.origW, rotada: true });
-      }
-
-      let placed = false;
-
-      // Probar AMBAS orientaciones y elegir la que produce el mejor BAF score
-      // (se coloca en el rectángulo libre más ajustado)
-      let bestPos: { x: number; y: number; orient: Orient; score: number } | null = null;
-
-      for (const orient of orients) {
-        const pos = findBestPosition(orient.w, orient.h);
-        if (pos) {
-          // Score = área del rectángulo libre donde entra (menor = mejor fit)
-          // findBestPosition ya devuelve el mejor, así que comparamos entre orientaciones
-          // usando la Y más baja como desempate (aprovecha largo)
-          const score = pos.y * 10000 + pos.x; // priorizar posición más arriba-izquierda
-          if (!bestPos || score < bestPos.score) {
-            bestPos = { x: pos.x, y: pos.y, orient, score };
-          }
-        }
-      }
-
-      if (bestPos) {
-        colocadas.push({
-          x: margen + bestPos.x,
-          y: margen + bestPos.y,
-          anchoMm: bestPos.orient.w,
-          altoMm: bestPos.orient.h,
-          medidaIndex: pieza.mi,
-          rotada: bestPos.orient.rotada,
-        });
-        splitFreeRects(bestPos.x, bestPos.y, bestPos.orient.w, bestPos.orient.h);
-        placed = true;
-      }
-
-      if (!placed) {
-        noColocadas.push(pieza);
-      }
-    }
-
-    const maxY = colocadas.length > 0
-      ? Math.max(...colocadas.map((p) => p.y + p.altoMm))
-      : 0;
-
-    return { colocadas, noColocadas, maxY };
-  }
-
-  // ── Empaquetar en múltiples placas ──────────────────────────────
-  let restantes = [...pendientes];
-
-  while (restantes.length > 0) {
-    const result = packPlaca(restantes);
-
-    if (result.colocadas.length === 0) {
-      // Ninguna pieza entra → terminar
-      break;
-    }
-
-    const areaUtil = result.colocadas.reduce((s, p) => s + p.anchoMm * p.altoMm, 0);
     placaLayouts.push({
-      posiciones: result.colocadas,
-      largoConsumidoMm: result.maxY,
+      posiciones,
+      largoConsumidoMm: maxY > 0 ? margen + maxY + margen : 0,
       areaUtilMm2: areaUtil,
     });
-    totalPiezas += result.colocadas.length;
+    totalPiezas += posiciones.length;
     totalAreaUtil += areaUtil;
-
-    restantes = result.noColocadas;
   }
 
   const areaTotalMm2 = placaAnchoMm * placaAltoMm * placaLayouts.length;

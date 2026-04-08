@@ -169,7 +169,13 @@ export function RigidPrintedSimularCostoTab(props: ProductTabProps) {
   }, [config, materiasPrimas]);
 
   const tiposDisponibles = config?.tiposImpresion ?? [];
-  const carasDisponibles = config?.carasDisponibles ?? ["simple_faz"];
+  // Caras por tipo de impresión (con fallback a config raíz)
+  const carasDisponibles = React.useMemo(() => {
+    if (!config) return ["simple_faz"];
+    const tc = (tipoImpresion === "flexible_montado" ? config.flexibleMontado : config.impresionDirecta) as Record<string, unknown> | undefined;
+    const porTipo = Array.isArray(tc?.carasDisponibles) ? tc.carasDisponibles as string[] : null;
+    return porTipo ?? (config.carasDisponibles as string[] ?? ["simple_faz"]);
+  }, [config, tipoImpresion]);
 
   const perfilesDisponibles = React.useMemo<PerfilOption[]>(() => {
     if (!config) return [];
@@ -192,8 +198,11 @@ export function RigidPrintedSimularCostoTab(props: ProductTabProps) {
         const result = await getProductoMotorConfig(props.producto.id);
         const p = (result?.parametros ?? {}) as RigidPrintedConfig;
         setConfig(p);
-        setCaras(p.carasDefault ?? "simple_faz");
         if ((p.tiposImpresion ?? []).length > 0) setTipoImpresion(p.tiposImpresion[0]);
+        // Caras default del primer tipo de impresión
+        const firstTipo = (p.tiposImpresion ?? [])[0] ?? "directa";
+        const firstTipoCfg = (firstTipo === "flexible_montado" ? p.flexibleMontado : p.impresionDirecta) as Record<string, unknown> | undefined;
+        setCaras(String(firstTipoCfg?.carasDefault ?? p.carasDefault ?? "simple_faz"));
         setPlacaVarianteId(p.placaVarianteIdDefault ?? (p.variantesCompatibles ?? [])[0] ?? "");
         // Cargar historial de snapshots
         getCotizacionesProductoServicio(props.producto.id).then(setSnapshots).catch(() => {});
@@ -424,7 +433,14 @@ export function RigidPrintedSimularCostoTab(props: ProductTabProps) {
                 {tiposDisponibles.length > 1 && (
                   <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
                     <FieldLabel className="sm:mb-0">Tipo impresión</FieldLabel>
-                    <Select value={tipoImpresion} onValueChange={(v) => { if (v) setTipoImpresion(v); clear(); }}>
+                    <Select value={tipoImpresion} onValueChange={(v) => {
+                      if (!v) return;
+                      setTipoImpresion(v);
+                      // Reset caras al default del nuevo tipo
+                      const tc = (v === "flexible_montado" ? config?.flexibleMontado : config?.impresionDirecta) as Record<string, unknown> | undefined;
+                      setCaras(String(tc?.carasDefault ?? config?.carasDefault ?? "simple_faz"));
+                      clear();
+                    }}>
                       <SelectTrigger><SelectValue>{TIPO_LABELS[tipoImpresion] ?? tipoImpresion}</SelectValue></SelectTrigger>
                       <SelectContent>{tiposDisponibles.map((t) => (<SelectItem key={t} value={t}>{TIPO_LABELS[t] ?? t}</SelectItem>))}</SelectContent>
                     </Select>
@@ -781,13 +797,25 @@ function MateriasPrimasBreakdown({ result, nestingPreview, medidas, config }: {
         </div>
       ))}
 
-      {/* Plotter 3D del flexible */}
-      {showFlexNesting && result.trazabilidad.flexibleNestingPreview && (
-        <WideFormatNestingCard
-          title="Nesting sustrato flexible"
-          description="Visualización del acomodamiento de piezas en el rollo flexible."
-          simulator={buildWideFormatSimulatorDataFromPreview(result.trazabilidad.flexibleNestingPreview as any)}
-        />
+      {/* Plotter 3D del flexible (Sheet) */}
+      {result.trazabilidad.flexibleNestingPreview && (
+        <Sheet open={showFlexNesting} onOpenChange={setShowFlexNesting}>
+          <SheetContent side="right" className="!w-[72vw] !max-w-none md:!w-[68vw] lg:!w-[64vw] xl:!w-[60vw] sm:!max-w-none flex flex-col overflow-hidden">
+            <SheetHeader>
+              <SheetTitle>Nesting sustrato flexible</SheetTitle>
+              <SheetDescription>
+                Visualización del acomodamiento de piezas en el rollo flexible.
+              </SheetDescription>
+            </SheetHeader>
+            <div className="flex-1 overflow-y-auto p-4">
+              <WideFormatNestingCard
+                title="Nesting sustrato flexible"
+                description="Distribución óptima de piezas en el rollo."
+                simulator={buildWideFormatSimulatorDataFromPreview(result.trazabilidad.flexibleNestingPreview as any)}
+              />
+            </div>
+          </SheetContent>
+        </Sheet>
       )}
 
       {/* Total (formato gran formato) */}

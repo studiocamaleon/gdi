@@ -700,6 +700,7 @@ export class ProcesosService {
       runMin: this.toDecimal(payload.runMin),
       cleanupMin: derived.cleanupMin,
       tiempoFijoMin: this.toDecimal(payload.tiempoFijoMin),
+      multiplicadorDobleFaz: this.toDecimal(payload.multiplicadorDobleFaz),
       modoProductividad: this.resolveModoProductividadFromPayload(payload),
       productividadBase: derived.productividadBase,
       unidadEntrada: this.toPrismaEnum<UnidadProceso>(
@@ -2178,6 +2179,7 @@ export class ProcesosService {
         runMin: this.decimalToNumberOrNull(operacion.runMin),
         cleanupMin: this.decimalToNumberOrNull(operacion.cleanupMin),
         tiempoFijoMin: this.decimalToNumberOrNull(operacion.tiempoFijoMin),
+        multiplicadorDobleFaz: this.decimalToNumberOrNull(operacion.multiplicadorDobleFaz),
         modoProductividad: this.toApiModoProductividad(
           operacion.modoProductividad,
         ),
@@ -2414,6 +2416,7 @@ export class ProcesosService {
         runMin: this.decimalToNumberOrNull(operacion.runMin),
         cleanupMin: this.decimalToNumberOrNull(operacion.cleanupMin),
         tiempoFijoMin: this.decimalToNumberOrNull(operacion.tiempoFijoMin),
+        multiplicadorDobleFaz: this.decimalToNumberOrNull(operacion.multiplicadorDobleFaz),
         modoProductividad: operacion.modoProductividad,
         productividadBase: this.decimalToNumberOrNull(
           operacion.productividadBase,

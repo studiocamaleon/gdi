@@ -35,6 +35,9 @@ type ImpresionTipoConfig = {
   perfilesCompatibles: string[];
   maquinaDefaultId: string | null;
   perfilDefaultId: string | null;
+  carasDisponibles?: string[];
+  carasDefault?: string;
+  duplicarSustratoFlexibleEnDobleFaz?: boolean;
 };
 
 type RigidPrintedConfig = {
@@ -72,11 +75,6 @@ const PLANTILLAS_FLEXIBLE = new Set([
   "plotter_de_corte",
   "mesa_de_corte",
 ]);
-
-const CARAS_OPTIONS = [
-  { value: "simple_faz", label: "Simple faz" },
-  { value: "doble_faz", label: "Doble faz" },
-];
 
 const MODO_MEDIDAS_OPTIONS = [
   { value: "estandar", label: "Medidas estándar (variantes)" },
@@ -253,7 +251,7 @@ export function RigidPrintedTecnologiasTab(props: ProductTabProps) {
 
   const tiposActivos = config.tiposImpresion ?? [];
   const directaActiva = tiposActivos.includes("directa");
-  const flexibleActivo = tiposActivos.includes("flexible_montado");
+  const flexibleActiva = tiposActivos.includes("flexible_montado");
   const selectedMaterial = materialesRigidos.find((m) => m.id === config.materialRigidoId);
   const selectedMaterialFlexible = materialesFlexibles.find((m) => m.id === (config as any).materialFlexibleId);
 
@@ -271,7 +269,7 @@ export function RigidPrintedTecnologiasTab(props: ProductTabProps) {
             <span className="text-xs text-muted-foreground">(UV cama plana, híbrida con cinta extensora)</span>
           </div>
           <div className="flex items-center gap-2">
-            <Switch checked={flexibleActivo} onCheckedChange={() => toggleTipoImpresion("flexible_montado")} />
+            <Switch checked={flexibleActiva} onCheckedChange={() => toggleTipoImpresion("flexible_montado")} />
             <Label>Sustrato flexible montado</Label>
             <span className="text-xs text-muted-foreground">(se imprime en sustrato flexible y se aplica sobre el rígido)</span>
           </div>
@@ -296,7 +294,7 @@ export function RigidPrintedTecnologiasTab(props: ProductTabProps) {
       )}
 
       {/* ── Máquinas: Sustrato flexible ── */}
-      {flexibleActivo && (
+      {flexibleActiva && (
         <ProductoTabSection
           title="Máquinas — Sustrato flexible montado"
           description="Máquinas para imprimir el sustrato flexible que se montará sobre el rígido."
@@ -383,7 +381,7 @@ export function RigidPrintedTecnologiasTab(props: ProductTabProps) {
       </ProductoTabSection>
 
       {/* ── Material flexible (solo si flexible montado activo) ── */}
-      {flexibleActivo && (
+      {flexibleActiva && (
         <ProductoTabSection
           title="Material flexible"
           description="Sustrato flexible que se imprime y monta sobre el rígido."
@@ -452,51 +450,43 @@ export function RigidPrintedTecnologiasTab(props: ProductTabProps) {
         </ProductoTabSection>
       )}
 
-      {/* ── Caras ── */}
+      {/* ── Caras por tipo de impresión ── */}
       <ProductoTabSection
         title="Caras"
-        description="Simple faz, doble faz, o ambas. Doble faz aplica multiplicador ×2 sobre impresión."
+        description="Configurá simple faz o doble faz por cada tipo de impresión. Doble faz aplica el multiplicador configurado en cada operación de la ruta."
       >
-        <div className="space-y-3">
-          <div>
-            <Label className="text-xs">Opciones disponibles</Label>
-            <div className="flex gap-4 mt-1">
-              {CARAS_OPTIONS.map((opt) => (
-                <div key={opt.value} className="flex items-center gap-1.5">
-                  <Checkbox
-                    checked={(config.carasDisponibles ?? []).includes(opt.value)}
-                    onCheckedChange={(checked) => {
-                      const current = config.carasDisponibles ?? [];
-                      update({
-                        carasDisponibles: checked
-                          ? [...current, opt.value]
-                          : current.filter((c) => c !== opt.value),
-                      });
-                    }}
+        <div className="space-y-4">
+          {directaActiva && (
+            <CarasPorTipoConfig
+              label="Impresión directa"
+              tipoKey="impresionDirecta"
+              config={config}
+              update={update}
+            />
+          )}
+          {flexibleActiva && (
+            <>
+              <CarasPorTipoConfig
+                label="Sustrato flexible montado"
+                tipoKey="flexibleMontado"
+                config={config}
+                update={update}
+              />
+              {/* Toggle duplicar flexible en doble faz */}
+              {((config.flexibleMontado as Record<string, unknown>)?.carasDisponibles as string[] ?? []).includes("doble_faz") && (
+                <div className="flex items-center gap-2 pl-4 border-l-2 border-green-200">
+                  <Switch
+                    checked={!!(config.flexibleMontado as Record<string, unknown>)?.duplicarSustratoFlexibleEnDobleFaz}
+                    onCheckedChange={(v) => update({
+                      flexibleMontado: { ...(config.flexibleMontado ?? {}), duplicarSustratoFlexibleEnDobleFaz: v },
+                    })}
                   />
-                  <span className="text-sm">{opt.label}</span>
+                  <Label className="text-sm">Duplicar sustrato flexible en doble faz</Label>
+                  <span className="text-xs text-muted-foreground">(se usa el doble de vinilo para cubrir ambas caras)</span>
                 </div>
-              ))}
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs">Default</Label>
-            <Select
-              value={config.carasDefault ?? "simple_faz"}
-              onValueChange={(v) => update({ carasDefault: v || "simple_faz" })}
-            >
-              <SelectTrigger className="mt-1 max-w-xs">
-                <SelectValue>
-                  {CARAS_OPTIONS.find((o) => o.value === (config.carasDefault ?? "simple_faz"))?.label ?? "Simple faz"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {CARAS_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+              )}
+            </>
+          )}
         </div>
       </ProductoTabSection>
 
@@ -619,6 +609,74 @@ function MaquinasPerfilesSection({
           </Card>
         );
       })}
+    </div>
+  );
+}
+
+// ── Caras por tipo de impresión ──────────────────────────────────
+
+const CARAS_OPTIONS = [
+  { value: "simple_faz", label: "Simple faz" },
+  { value: "doble_faz", label: "Doble faz" },
+];
+
+function CarasPorTipoConfig({
+  label,
+  tipoKey,
+  config,
+  update,
+}: {
+  label: string;
+  tipoKey: "impresionDirecta" | "flexibleMontado";
+  config: Record<string, unknown>;
+  update: (patch: Record<string, unknown>) => void;
+}) {
+  const tipoCfg = (config[tipoKey] ?? {}) as Record<string, unknown>;
+  const carasDisp = Array.isArray(tipoCfg.carasDisponibles) ? tipoCfg.carasDisponibles as string[] : ["simple_faz"];
+  const carasDefault = String(tipoCfg.carasDefault ?? "simple_faz");
+
+  const updateTipo = (patch: Record<string, unknown>) => {
+    update({ [tipoKey]: { ...tipoCfg, ...patch } });
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm font-medium">{label}</Label>
+      <div className="flex items-center gap-4 pl-4 border-l-2 border-muted">
+        <div>
+          <span className="text-xs text-muted-foreground">Opciones</span>
+          <div className="flex gap-3 mt-1">
+            {CARAS_OPTIONS.map((opt) => (
+              <div key={opt.value} className="flex items-center gap-1.5">
+                <Checkbox
+                  checked={carasDisp.includes(opt.value)}
+                  onCheckedChange={(checked) => {
+                    updateTipo({
+                      carasDisponibles: checked
+                        ? [...carasDisp, opt.value]
+                        : carasDisp.filter((c) => c !== opt.value),
+                    });
+                  }}
+                />
+                <span className="text-sm">{opt.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <span className="text-xs text-muted-foreground">Default</span>
+          <Select value={carasDefault} onValueChange={(v) => updateTipo({ carasDefault: v || "simple_faz" })}>
+            <SelectTrigger className="mt-1 w-36">
+              <SelectValue>{CARAS_OPTIONS.find((o) => o.value === carasDefault)?.label ?? "Simple faz"}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {CARAS_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
     </div>
   );
 }

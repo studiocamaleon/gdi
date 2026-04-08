@@ -140,6 +140,11 @@ export class ProcesoOperacionItemDto {
   tiempoFijoMin?: number;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  multiplicadorDobleFaz?: number;
+
+  @IsOptional()
   @IsEnum(ModoProductividadProcesoDto)
   modoProductividad?: ModoProductividadProcesoDto;
 
@@ -222,6 +227,11 @@ export class ProcesoOperacionNivelDto {
   @Type(() => Number)
   @IsNumber()
   tiempoFijoMin?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  multiplicadorDobleFaz?: number;
 
   @IsOptional()
   @Type(() => Number)

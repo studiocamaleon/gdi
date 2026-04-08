@@ -278,6 +278,7 @@ function ProcesoOperacionesPreview({ proceso }: { proceso: Proceso }) {
             <TableHead className="w-12">#</TableHead>
             <TableHead>Operación</TableHead>
             <TableHead>Centro de costo</TableHead>
+            <TableHead className="w-20 text-right">Mult. DF</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -286,6 +287,11 @@ function ProcesoOperacionesPreview({ proceso }: { proceso: Proceso }) {
               <TableCell className="text-xs">{op.orden}</TableCell>
               <TableCell className="text-xs">{op.nombre}</TableCell>
               <TableCell className="text-xs">{op.centroCostoNombre ?? "—"}</TableCell>
+              <TableCell className="text-xs text-right">
+                {op.multiplicadorDobleFaz != null && op.multiplicadorDobleFaz !== 1
+                  ? `×${op.multiplicadorDobleFaz}`
+                  : "—"}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>

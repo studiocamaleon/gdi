@@ -23,6 +23,7 @@ import {
 import {
   getProductoMotorConfig,
   upsertProductoMotorConfig,
+  previewRigidPrintedFlexible,
 } from "@/lib/productos-servicios-api";
 import type { MateriaPrima } from "@/lib/materias-primas";
 import type { Maquina } from "@/lib/maquinaria";
@@ -33,6 +34,8 @@ import {
   type MultiMedidaNestingResult,
   MEDIDA_COLORS,
 } from "./rigid-printed-nesting.helpers";
+import { WideFormatNestingCard } from "@/components/productos-servicios/motors/wide-format-nesting-card";
+import { buildWideFormatSimulatorDataFromPreview } from "@/components/productos-servicios/motors/wide-format-nesting.helpers";
 
 // ── Tipos ─────────────────────────────────────────────────────────
 
@@ -285,6 +288,44 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
   }, [placaInfo, medidas, imposicion]);
 
   const tieneFlexible = (config?.tiposImpresion ?? []).includes("flexible_montado");
+
+  // Preview flexible vía backend (debounced)
+  const [flexPreview, setFlexPreview] = React.useState<Record<string, unknown> | null>(null);
+  const [flexMeta, setFlexMeta] = React.useState<{ rollWidthMm?: number; consumedLengthMm?: number; wastePct?: number; variantNombre?: string } | null>(null);
+  const [flexLoading, setFlexLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (tipoImpresionSim !== "flexible_montado") {
+      setFlexPreview(null);
+      setFlexMeta(null);
+      return;
+    }
+    const validMedidas = medidas.filter((m) => m.anchoMm && m.anchoMm > 0 && m.altoMm && m.altoMm > 0);
+    if (validMedidas.length === 0) {
+      setFlexPreview(null);
+      setFlexMeta(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setFlexLoading(true);
+        const res = await previewRigidPrintedFlexible(
+          props.producto.id,
+          validMedidas.map((m) => ({ anchoMm: m.anchoMm!, altoMm: m.altoMm!, cantidad: m.cantidad })),
+        );
+        setFlexPreview(res.preview ?? null);
+        setFlexMeta(res.preview ? { rollWidthMm: res.rollWidthMm, consumedLengthMm: res.consumedLengthMm, wastePct: res.wastePct, variantNombre: res.variantNombre } : null);
+      } catch {
+        setFlexPreview(null);
+        setFlexMeta(null);
+      } finally {
+        setFlexLoading(false);
+      }
+    }, 400); // debounce 400ms
+
+    return () => clearTimeout(timer);
+  }, [tipoImpresionSim, medidas, props.producto.id]);
 
   if (loading) {
     return <GdiSpinner />;
@@ -581,13 +622,29 @@ export function RigidPrintedImposicionTab(props: ProductTabProps) {
                   <p className="text-sm text-destructive">Las piezas no caben en la placa.</p>
                 )}
 
-                {/* Info sustrato flexible */}
-                {tipoImpresionSim === "flexible_montado" && (
-                  <div className="mt-4 p-4 rounded-lg border bg-green-50/50">
-                    <p className="text-sm font-medium mb-1">Sustrato flexible</p>
-                    <p className="text-xs text-muted-foreground">
-                      El nesting del sustrato flexible se calcula con la lógica de gran formato al cotizar.
-                      El resultado incluye la evaluación de todos los rollos compatibles para encontrar el óptimo.
+                {/* Nesting sustrato flexible (plotter 3D vía backend) */}
+                {tipoImpresionSim === "flexible_montado" && flexPreview && (
+                  <div className="mt-4">
+                    <WideFormatNestingCard
+                      title={`Sustrato flexible${flexMeta?.variantNombre ? ` — ${flexMeta.variantNombre}` : ""}`}
+                      description={[
+                        flexMeta?.rollWidthMm ? `Rollo: ${(flexMeta.rollWidthMm / 10).toFixed(0)} cm` : null,
+                        flexMeta?.consumedLengthMm ? `Largo: ${(flexMeta.consumedLengthMm / 10).toFixed(1)} cm` : null,
+                        flexMeta?.wastePct != null ? `Desperdicio: ${flexMeta.wastePct}%` : null,
+                      ].filter(Boolean).join(" · ")}
+                      simulator={buildWideFormatSimulatorDataFromPreview(flexPreview as any)}
+                    />
+                  </div>
+                )}
+                {tipoImpresionSim === "flexible_montado" && flexLoading && (
+                  <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+                    <GdiSpinner className="size-4" /> Calculando nesting flexible...
+                  </div>
+                )}
+                {tipoImpresionSim === "flexible_montado" && !flexPreview && !flexLoading && (
+                  <div className="mt-4 p-3 rounded-lg border border-amber-200 bg-amber-50/50">
+                    <p className="text-xs text-amber-700">
+                      Configurá un material flexible en la pestaña Tecnologías para ver el nesting de rollo.
                     </p>
                   </div>
                 )}
@@ -933,3 +990,4 @@ function PlacaSvg({
     </div>
   );
 }
+

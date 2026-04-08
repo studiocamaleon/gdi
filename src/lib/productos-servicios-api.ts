@@ -728,6 +728,24 @@ export async function cotizarRigidPrintedByProducto(
   );
 }
 
+export async function previewRigidPrintedFlexible(
+  productoId: string,
+  medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>,
+) {
+  return apiRequest<{
+    preview: Record<string, unknown> | null;
+    rollWidthMm?: number;
+    consumedLengthMm?: number;
+    usefulAreaM2?: number;
+    consumedAreaM2?: number;
+    wastePct?: number;
+    variantNombre?: string;
+  }>(
+    `/productos-servicios/${productoId}/rigidos-impresos/preview-flexible`,
+    { method: 'POST', body: JSON.stringify({ medidas }) },
+  );
+}
+
 export async function previewImposicionProductoVariante(
   varianteId: string,
   parametros: Record<string, unknown>,

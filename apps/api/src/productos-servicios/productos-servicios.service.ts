@@ -711,12 +711,16 @@ export class ProductosServiciosService {
       piezaAltoMm: altoMm,
     });
 
-    // ── Doble faz ──
-    const caras = String(params.caras ?? rigidConfig.carasDefault ?? 'simple_faz');
-    const multiplicadorCaras = caras === 'doble_faz' ? 2 : 1;
-
     // ── Costo ruta de producción ──
     const tipoImpresion = String(params.tipoImpresion ?? 'directa');
+
+    // ── Doble faz (lee del tipo de impresión con fallback) ──
+    const tipoCfgCaras0 = tipoImpresion === 'flexible_montado'
+      ? rigidConfig.flexibleMontado as Record<string, unknown> | undefined
+      : rigidConfig.impresionDirecta as Record<string, unknown> | undefined;
+    const caras = String(params.caras ?? (tipoCfgCaras0?.carasDefault) ?? rigidConfig.carasDefault ?? 'simple_faz');
+    const esDobleFaz0 = caras === 'doble_faz';
+    const multiplicadorCaras = esDobleFaz0 ? 2 : 1;
     const rutaId = tipoImpresion === 'flexible_montado'
       ? rigidConfig.rutaFlexibleMontadoId
       : rigidConfig.rutaImpresionDirectaId;
@@ -755,7 +759,8 @@ export class ProductosServiciosService {
           const runMinBase = Number(op.runMin ?? 0);
           const cleanupMin = Number(op.cleanupMin ?? 0);
           const tiempoFijoMin = Number(op.tiempoFijoMin ?? 0);
-          const totalRunMin = runMinBase * cantidad * multiplicadorCaras;
+          const multDobleFazOp = esDobleFaz0 ? Number(op.multiplicadorDobleFaz ?? 1) : 1;
+          const totalRunMin = runMinBase * cantidad * multDobleFazOp;
           const totalMin = setupMin + totalRunMin + cleanupMin + tiempoFijoMin;
           const costo = this.roundProductNumber((totalMin / 60) * tarifaHora);
 
@@ -835,6 +840,87 @@ export class ProductosServiciosService {
     });
 
     return { snapshotId: snapshot.id, ...roundedResult, createdAt: snapshot.createdAt.toISOString() };
+  }
+
+  /**
+   * Preview liviano del nesting flexible para el tab Imposición.
+   * Reutiliza evaluateGranFormatoImposicionCandidates + buildGranFormatoNestingPreview.
+   */
+  async previewRigidPrintedFlexible(
+    auth: CurrentAuth,
+    productoId: string,
+    payload: { medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }> },
+  ) {
+    const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+    const motorConfig = await this.prisma.productoMotorConfig.findFirst({
+      where: { productoServicioId: producto.id, tenantId: auth.tenantId },
+    });
+    const rigidConfig = (motorConfig?.parametrosJson ?? {}) as Record<string, unknown>;
+    const imposicion = (rigidConfig.imposicion ?? {}) as Record<string, unknown>;
+
+    const medidas = (payload.medidas ?? [])
+      .map((m) => ({ anchoMm: Number(m.anchoMm ?? 0), altoMm: Number(m.altoMm ?? 0), cantidad: Math.max(1, Math.floor(Number(m.cantidad ?? 1))) }))
+      .filter((m) => m.anchoMm > 0 && m.altoMm > 0);
+    if (medidas.length === 0) return { preview: null };
+
+    // Cargar variantes de material flexible
+    const flexVariantIds = Array.isArray(rigidConfig.variantesFlexiblesCompatibles)
+      ? (rigidConfig.variantesFlexiblesCompatibles as string[]) : [];
+    if (flexVariantIds.length === 0) return { preview: null };
+
+    const flexVariants = await this.prisma.materiaPrimaVariante.findMany({
+      where: { id: { in: flexVariantIds }, tenantId: auth.tenantId, activo: true },
+      include: { materiaPrima: true },
+    });
+    if (flexVariants.length === 0) return { preview: null };
+
+    // Resolver máquina para márgenes
+    const flexCfg = rigidConfig.flexibleMontado as Record<string, unknown> | undefined;
+    const flexMaquinaId = String(flexCfg?.maquinaDefaultId ?? ((flexCfg?.maquinasCompatibles as string[]) ?? [])[0] ?? '');
+    const flexMaquina = flexMaquinaId
+      ? await this.prisma.maquina.findUnique({ where: { id: flexMaquinaId, tenantId: auth.tenantId } })
+      : null;
+
+    const sepH = Number(imposicion.separacionHorizontalMm ?? 3);
+    const sepV = Number(imposicion.separacionVerticalMm ?? 3);
+    const rotPermitida = imposicion.permitirRotacion !== false;
+
+    const candidatos = this.evaluateGranFormatoImposicionCandidates({
+      maquina: flexMaquina,
+      medidas,
+      config: {
+        permitirRotacion: rotPermitida,
+        separacionHorizontalMm: sepH,
+        separacionVerticalMm: sepV,
+        margenLateralIzquierdoMmOverride: null,
+        margenLateralDerechoMmOverride: null,
+        margenInicioMmOverride: null,
+        margenFinalMmOverride: null,
+        criterioOptimizacion: 'menor_desperdicio' as any,
+        panelizadoActivo: false,
+        panelizadoDireccion: 'vertical' as any,
+        panelizadoSolapeMm: null,
+        panelizadoAnchoMaxPanelMm: null,
+        panelizadoDistribucion: 'equilibrada' as any,
+        panelizadoInterpretacionAnchoMaximo: 'total' as any,
+        panelizadoModo: 'automatico' as any,
+        panelizadoManualLayout: null,
+      },
+      variants: flexVariants,
+    });
+
+    if (candidatos.length === 0) return { preview: null };
+
+    const best = candidatos[0];
+    return {
+      preview: this.buildGranFormatoNestingPreview(best),
+      rollWidthMm: best.rollWidthMm,
+      consumedLengthMm: best.consumedLengthMm,
+      usefulAreaM2: best.usefulAreaM2,
+      consumedAreaM2: best.consumedAreaM2,
+      wastePct: best.wastePct,
+      variantNombre: best.variant.materiaPrima?.nombre ?? '',
+    };
   }
 
   /**
@@ -996,12 +1082,22 @@ export class ProductosServiciosService {
       ultimaPlaca: null as { ocupacionPct: number; segmentoAplicado: number | null; costo: number } | null,
     };
 
-    // Doble faz
-    const caras = String(params.caras ?? rigidConfig.carasDefault ?? 'simple_faz');
-    const multiplicadorCaras = caras === 'doble_faz' ? 2 : 1;
-
-    // Ruta de producción
+    // Ruta de producción (se resuelve antes de caras porque caras depende del tipo)
     const tipoImpresion = String(params.tipoImpresion ?? 'directa');
+
+    // Doble faz — ahora se lee del tipo de impresión con fallback a config raíz
+    const tipoCfgCaras = tipoImpresion === 'flexible_montado'
+      ? rigidConfig.flexibleMontado as Record<string, unknown> | undefined
+      : rigidConfig.impresionDirecta as Record<string, unknown> | undefined;
+    const caras = String(
+      params.caras
+      ?? (tipoCfgCaras?.carasDefault)
+      ?? rigidConfig.carasDefault
+      ?? 'simple_faz',
+    );
+    const esDobleFaz = caras === 'doble_faz';
+    const multiplicadorCaras = esDobleFaz ? 2 : 1;
+    console.log('[RIGID-QUOTE] caras:', caras, 'esDobleFaz:', esDobleFaz, 'multiplicadorCaras:', multiplicadorCaras);
     const rutaId = tipoImpresion === 'flexible_montado'
       ? rigidConfig.rutaFlexibleMontadoId : rigidConfig.rutaImpresionDirectaId;
     const procesoDefId = String(rutaId ?? producto.procesoDefinicionDefaultId ?? '');
@@ -1035,14 +1131,26 @@ export class ProductosServiciosService {
           });
           const tarifaHora = Number(tarifa?.tarifaCalculada ?? 0);
           const setupMin = Number(op.setupMin ?? 0);
-          const totalRunMin = Number(op.runMin ?? 0) * cantidadTotal * multiplicadorCaras;
-          const totalMin = setupMin + totalRunMin + Number(op.cleanupMin ?? 0) + Number(op.tiempoFijoMin ?? 0);
+          const multDobleFazOp = esDobleFaz ? Number(op.multiplicadorDobleFaz ?? 1) : 1;
+          const productividadBase = Number(op.productividadBase ?? 0);
+          // Si hay productividad (ej: 27 m²/h), calcular runMin desde área; si no, usar runMin directo
+          let runMinCalc: number;
+          if (productividadBase > 0) {
+            // productividad en unidades/hora → convertir a minutos
+            // cantidadObjetivo = área total en m² de todas las piezas
+            const areaM2Total = medidasInput.reduce((s, m) => s + (m.anchoMm * m.altoMm * m.cantidad) / 1_000_000, 0);
+            const cantidadObjetivo = areaM2Total * multDobleFazOp;
+            runMinCalc = (cantidadObjetivo / productividadBase) * 60;
+          } else {
+            runMinCalc = Number(op.runMin ?? 0) * cantidadTotal * multDobleFazOp;
+          }
+          const totalMin = setupMin + runMinCalc + Number(op.cleanupMin ?? 0) + Number(op.tiempoFijoMin ?? 0);
           const costo = this.roundProductNumber((totalMin / 60) * tarifaHora);
           costoProcesos += costo;
           bloquesProcesos.push({
             orden: op.orden, codigo: op.codigo, nombre: op.nombre,
             centroCostoId: op.centroCostoId, centroCostoNombre: op.centroCosto.nombre,
-            setupMin, runMin: totalRunMin, totalMin, tarifaHora, costo,
+            setupMin, runMin: runMinCalc, totalMin, tarifaHora, costo,
           });
         }
       }
@@ -1100,87 +1208,100 @@ export class ProductosServiciosService {
     }
 
     // ── Sustrato flexible (solo cuando tipo = flexible_montado) ──
+    // Usa el MISMO pipeline de gran formato: evaluateGranFormatoImposicionCandidates
     let costoFlexible = 0;
+    let bestFlexCandidate: GranFormatoCostosPreviewCandidate | null = null;
     if (tipoImpresion === 'flexible_montado') {
-      const flexMaterialId = String(rigidConfig.materialFlexibleId ?? '');
       const flexVariantIds = Array.isArray(rigidConfig.variantesFlexiblesCompatibles)
         ? (rigidConfig.variantesFlexiblesCompatibles as string[]) : [];
 
-      if (flexMaterialId && flexVariantIds.length > 0) {
-        // Buscar variantes de material flexible
+      if (flexVariantIds.length > 0) {
         const flexVariants = await this.prisma.materiaPrimaVariante.findMany({
           where: { id: { in: flexVariantIds }, tenantId: auth.tenantId, activo: true },
           include: { materiaPrima: true },
         });
 
-        // Evaluar cada variante de rollo y elegir la mejor
-        let bestFlexCost = Infinity;
-        let bestFlexResult: { variant: typeof flexVariants[0]; consumedLengthMm: number; usefulAreaM2: number; consumedAreaM2: number; rollWidthMm: number; layout: any } | null = null;
+        // Resolver máquina de impresión flexible para márgenes
+        const flexCfg = rigidConfig.flexibleMontado as Record<string, unknown> | undefined;
+        const flexMaquinaId = String(flexCfg?.maquinaDefaultId ?? ((flexCfg?.maquinasCompatibles as string[]) ?? [])[0] ?? '');
+        const flexMaquina = flexMaquinaId
+          ? await this.prisma.maquina.findUnique({ where: { id: flexMaquinaId, tenantId: auth.tenantId } })
+          : null;
 
-        for (const flexV of flexVariants) {
-          const flexAttrs = (flexV.atributosVarianteJson ?? {}) as Record<string, unknown>;
-          const rollWidthRaw = Number(flexAttrs.ancho ?? 0);
-          const rollWidthMm = rollWidthRaw < 10 ? Math.round(rollWidthRaw * 1000) : rollWidthRaw;
-          if (rollWidthMm <= 0) continue;
+        // Duplicar cantidades si doble faz + duplicar flexible
+        const duplicarFlexDobleFaz = esDobleFaz
+          && (rigidConfig.flexibleMontado as Record<string, unknown> | undefined)?.duplicarSustratoFlexibleEnDobleFaz === true;
+        const multFlexCaras = duplicarFlexDobleFaz ? 2 : 1;
+        const medidasFlex = multFlexCaras > 1
+          ? medidasInput.map((m) => ({ ...m, cantidad: m.cantidad * multFlexCaras }))
+          : medidasInput;
 
-          // Nesting en rollo usando la lógica de gran formato (independiente)
-          const layout = this.evaluateGranFormatoMixedShelfLayout({
-            printableWidthMm: rollWidthMm,
-            marginLeftMm: 0, marginStartMm: 0, marginEndMm: 0,
+        // Evaluar candidatos con el pipeline de gran formato
+        const candidatos = this.evaluateGranFormatoImposicionCandidates({
+          maquina: flexMaquina,
+          medidas: medidasFlex,
+          config: {
+            permitirRotacion: rotPermitida,
             separacionHorizontalMm: sepH,
             separacionVerticalMm: sepV,
-            permitirRotacion: rotPermitida,
-            medidas: medidasInput,
+            margenLateralIzquierdoMmOverride: null,
+            margenLateralDerechoMmOverride: null,
+            margenInicioMmOverride: null,
+            margenFinalMmOverride: null,
+            criterioOptimizacion: 'menor_desperdicio' as any,
+            panelizadoActivo: false,
+            panelizadoDireccion: 'vertical' as any,
+            panelizadoSolapeMm: null,
+            panelizadoAnchoMaxPanelMm: null,
+            panelizadoDistribucion: 'equilibrada' as any,
+            panelizadoInterpretacionAnchoMaximo: 'total' as any,
+            panelizadoModo: 'automatico' as any,
+            panelizadoManualLayout: null,
+          },
+          variants: flexVariants,
+        });
+
+        if (candidatos.length > 0) {
+          bestFlexCandidate = candidatos[0];
+          const flexWarnings: string[] = [];
+          const largoConsumidoMl = this.roundProductNumber(bestFlexCandidate.consumedLengthMm / 1000);
+          const substrateTotalCost = this.calculateGranFormatoSustratoCost({
+            variant: bestFlexCandidate.variant,
+            consumedAreaM2: bestFlexCandidate.consumedAreaM2,
+            consumedLengthMl: largoConsumidoMl,
+            warnings: flexWarnings,
           });
+          costoFlexible = substrateTotalCost;
 
-          if (!layout) continue;
+          const flexNombre = bestFlexCandidate.variant.materiaPrima.nombre;
+          const flexVariantNombre = bestFlexCandidate.variant.nombreVariante ?? '';
+          const usefulFactor = bestFlexCandidate.consumedAreaM2 > 0
+            ? bestFlexCandidate.usefulAreaM2 / bestFlexCandidate.consumedAreaM2 : 0;
+          const usefulCost = this.roundProductNumber(substrateTotalCost * usefulFactor);
+          const wasteCost = this.roundProductNumber(substrateTotalCost - usefulCost);
 
-          const consumedLengthMm = layout.consumedLengthMm ?? 0;
-          const usefulAreaM2 = layout.usefulAreaM2 ?? 0;
-          const consumedAreaM2 = (rollWidthMm * consumedLengthMm) / 1_000_000;
-
-          // Costo del rollo: largo consumido × precio por metro lineal (o por m²)
-          const precioFlex = Number(flexV.precioReferencia ?? 0);
-          const rollLargoM = Number(flexAttrs.largo ?? 0);
-          const precioM2Flex = rollLargoM > 0 && rollWidthRaw > 0
-            ? precioFlex / (rollWidthRaw * rollLargoM) // precio_rollo / (ancho_m × largo_m)
-            : 0;
-          const costoFlex = this.roundProductNumber(consumedAreaM2 * precioM2Flex);
-
-          if (costoFlex < bestFlexCost) {
-            bestFlexCost = costoFlex;
-            bestFlexResult = { variant: flexV, consumedLengthMm, usefulAreaM2, consumedAreaM2, rollWidthMm, layout };
-          }
-        }
-
-        if (bestFlexResult) {
-          costoFlexible = bestFlexCost;
-          const flexNombre = bestFlexResult.variant.materiaPrima.nombre;
-          const flexVariantNombre = bestFlexResult.variant.nombreVariante ?? '';
-
-          // Base (área impresa)
+          // Base (área impresa) — ya incluye doble faz si aplica (medidas duplicadas)
           materiasPrimas.push({
             tipo: 'Sustrato flexible',
-            nombre: flexVariantNombre ? `${flexNombre} — ${flexVariantNombre}` : flexNombre,
+            nombre: (flexVariantNombre ? `${flexNombre} — ${flexVariantNombre}` : flexNombre)
+              + (multFlexCaras > 1 ? ` (×${multFlexCaras} caras)` : ''),
             origen: 'Base',
             unidad: 'm2',
-            cantidad: this.roundProductNumber(bestFlexResult.usefulAreaM2),
-            costoUnitario: this.roundProductNumber(bestFlexCost / Math.max(bestFlexResult.consumedAreaM2, 0.001)),
-            costo: this.roundProductNumber(bestFlexResult.usefulAreaM2 * (bestFlexCost / Math.max(bestFlexResult.consumedAreaM2, 0.001))),
+            cantidad: this.roundProductNumber(bestFlexCandidate.usefulAreaM2),
+            costoUnitario: bestFlexCandidate.usefulAreaM2 > 0 ? this.roundProductNumber(usefulCost / bestFlexCandidate.usefulAreaM2) : 0,
+            costo: usefulCost,
           });
 
           // Desperdicio del flexible
-          const desperdicioM2 = this.roundProductNumber(bestFlexResult.consumedAreaM2 - bestFlexResult.usefulAreaM2);
-          if (desperdicioM2 > 0.001) {
-            const costoDesp = this.roundProductNumber(costoFlexible - (bestFlexResult.usefulAreaM2 * (bestFlexCost / Math.max(bestFlexResult.consumedAreaM2, 0.001))));
+          if (bestFlexCandidate.wasteAreaM2 > 0.001) {
             materiasPrimas.push({
               tipo: 'Sustrato flexible',
               nombre: (flexVariantNombre ? `${flexNombre} — ${flexVariantNombre}` : flexNombre) + ' · Desperdicio',
               origen: 'Desperdicio',
               unidad: 'm2',
-              cantidad: desperdicioM2,
-              costoUnitario: this.roundProductNumber(bestFlexCost / Math.max(bestFlexResult.consumedAreaM2, 0.001)),
-              costo: costoDesp > 0 ? costoDesp : 0,
+              cantidad: this.roundProductNumber(bestFlexCandidate.wasteAreaM2),
+              costoUnitario: bestFlexCandidate.wasteAreaM2 > 0 ? this.roundProductNumber(wasteCost / bestFlexCandidate.wasteAreaM2) : 0,
+              costo: wasteCost > 0 ? wasteCost : 0,
             });
           }
         }
@@ -1299,36 +1420,10 @@ export class ProductosServiciosService {
           cantidad: m.cantidad,
           m2: this.roundProductNumber((m.anchoMm * m.altoMm * m.cantidad) / 1_000_000),
         })),
-        // Nesting preview del flexible (para plotter 3D)
-        flexibleNestingPreview: bestFlexResult?.layout ? {
-          rollWidth: bestFlexResult.rollWidthMm,
-          rollLength: bestFlexResult.consumedLengthMm,
-          marginLeft: 0,
-          marginRight: 0,
-          marginStart: 0,
-          marginEnd: 0,
-          panelizado: false,
-          panelAxis: null,
-          panelCount: 1,
-          panelOverlap: null,
-          panelMaxWidth: null,
-          panelDistribution: null,
-          panelWidthInterpretation: null,
-          panelMode: null,
-          pieces: (bestFlexResult.layout.placements ?? []).map((p: any, i: number) => ({
-            widthMm: p.widthMm ?? p.originalWidthMm ?? 0,
-            heightMm: p.heightMm ?? p.originalHeightMm ?? 0,
-            centerXMm: p.centerXMm ?? ((p.widthMm ?? p.originalWidthMm ?? 0) / 2),
-            centerYMm: p.centerYMm ?? ((p.heightMm ?? p.originalHeightMm ?? 0) / 2),
-            label: p.label ?? `Pieza ${i + 1}`,
-            rotated: p.rotated ?? false,
-            usefulWidthMm: p.usefulWidthMm ?? p.widthMm ?? p.originalWidthMm ?? 0,
-            usefulHeightMm: p.usefulHeightMm ?? p.heightMm ?? p.originalHeightMm ?? 0,
-            panelIndex: 0,
-            panelCount: 1,
-            panelAxis: null,
-          })),
-        } : null,
+        // Nesting preview del flexible (plotter 3D) — usa buildGranFormatoNestingPreview
+        flexibleNestingPreview: bestFlexCandidate
+          ? this.buildGranFormatoNestingPreview(bestFlexCandidate)
+          : null,
       },
     };
 

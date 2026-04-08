@@ -30,6 +30,11 @@ export type ImpresionTipoConfig = {
   perfilesCompatibles: string[];
   maquinaDefaultId: string | null;
   perfilDefaultId: string | null;
+  /** Caras disponibles para este tipo de impresión */
+  carasDisponibles: ('simple_faz' | 'doble_faz')[];
+  carasDefault: 'simple_faz' | 'doble_faz';
+  /** Solo para flexibleMontado: duplicar sustrato flexible en doble faz */
+  duplicarSustratoFlexibleEnDobleFaz?: boolean;
 };
 
 export type ImposicionConfig = {
@@ -74,9 +79,9 @@ export type RigidPrintedMotorConfig = {
   variantesFlexiblesCompatibles: string[];
   varianteFlexibleDefaultId: string | null;
 
-  // Caras
-  carasDisponibles: ('simple_faz' | 'doble_faz')[];
-  carasDefault: 'simple_faz' | 'doble_faz';
+  // Caras (DEPRECATED: ahora se configura por tipo de impresión, se mantiene para fallback)
+  carasDisponibles?: ('simple_faz' | 'doble_faz')[];
+  carasDefault?: 'simple_faz' | 'doble_faz';
 
   // Modo de medidas
   modoMedidas: ModoMedidas;
@@ -103,6 +108,8 @@ export const DEFAULT_IMPRESION_TIPO_CONFIG: ImpresionTipoConfig = {
   perfilesCompatibles: [],
   maquinaDefaultId: null,
   perfilDefaultId: null,
+  carasDisponibles: ['simple_faz'],
+  carasDefault: 'simple_faz',
 };
 
 export const DEFAULT_RIGID_PRINTED_CONFIG: RigidPrintedMotorConfig = {
