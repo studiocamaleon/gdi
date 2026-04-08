@@ -1265,17 +1265,47 @@ export class ProductosServiciosService {
           const tarifaHora = Number(tarifa?.tarifaCalculada ?? 0);
           const setupMin = Number(op.setupMin ?? 0);
           const multDobleFazOp = esDobleFaz ? Number(op.multiplicadorDobleFaz ?? 1) : 1;
-          const productividadBase = Number(op.productividadBase ?? 0);
-          // Si hay productividad (ej: 27 m²/h), calcular runMin desde área; si no, usar runMin directo
+
+          // Resolver cantidad objetivo según base de cálculo de productividad
+          const cantidadObjetivoSalida = this.resolveGranFormatoCantidadObjetivoSalida({
+            operacion: op,
+            totalPiezas: cantidadTotal * multDobleFazOp,
+            areaUtilM2: medidasInput.reduce((s, m) => s + (m.anchoMm * m.altoMm * m.cantidad) / 1_000_000, 0) * multDobleFazOp,
+            largoConsumidoMl: 0, // no aplica para rígidos
+            perimetroTotalMl: this.roundProductNumber(
+              medidasInput.reduce((s, m) => s + (((m.anchoMm + m.altoMm) * 2) / 1000) * m.cantidad, 0) * multDobleFazOp,
+            ),
+          });
+
+          const usaSoloTiempoFijo =
+            (op.modoProductividad ?? 'FIJA') === 'FIJA' &&
+            Number(op.tiempoFijoMin ?? 0) > 0 &&
+            Number(op.productividadBase ?? 0) <= 0 &&
+            Number(op.runMin ?? 0) <= 0;
+
           let runMinCalc: number;
-          if (productividadBase > 0) {
-            // productividad en unidades/hora → convertir a minutos
-            // cantidadObjetivo = área total en m² de todas las piezas
-            const areaM2Total = medidasInput.reduce((s, m) => s + (m.anchoMm * m.altoMm * m.cantidad) / 1_000_000, 0);
-            const cantidadObjetivo = areaM2Total * multDobleFazOp;
-            runMinCalc = (cantidadObjetivo / productividadBase) * 60;
+          if (usaSoloTiempoFijo) {
+            runMinCalc = 0;
           } else {
-            runMinCalc = Number(op.runMin ?? 0) * cantidadTotal * multDobleFazOp;
+            const prodResult = evaluateProductividad({
+              modoProductividad: op.modoProductividad ?? ModoProductividadProceso.FIJA,
+              productividadBase: op.productividadBase,
+              reglaVelocidadJson: op.reglaVelocidadJson ?? null,
+              reglaMermaJson: op.reglaMermaJson ?? null,
+              runMin: op.runMin,
+              unidadTiempo: op.unidadTiempo ?? UnidadProceso.MINUTO,
+              mermaRunPct: op.mermaRunPct,
+              mermaSetup: op.mermaSetup ?? null,
+              cantidadObjetivoSalida,
+              contexto: {
+                cantidad: cantidadTotal * multDobleFazOp,
+                areaTotalM2: medidasInput.reduce((s, m) => s + (m.anchoMm * m.altoMm * m.cantidad) / 1_000_000, 0) * multDobleFazOp,
+                perimetroTotalMl: this.roundProductNumber(
+                  medidasInput.reduce((s, m) => s + (((m.anchoMm + m.altoMm) * 2) / 1000) * m.cantidad, 0) * multDobleFazOp,
+                ),
+              },
+            });
+            runMinCalc = prodResult.runMin;
           }
           const totalMin = setupMin + runMinCalc + Number(op.cleanupMin ?? 0) + Number(op.tiempoFijoMin ?? 0);
           const costo = this.roundProductNumber((totalMin / 60) * tarifaHora);
@@ -1449,8 +1479,9 @@ export class ProductosServiciosService {
     const tipoCfg = tipoImpresion === 'flexible_montado'
       ? rigidConfig.flexibleMontado as Record<string, unknown> | undefined
       : rigidConfig.impresionDirecta as Record<string, unknown> | undefined;
-    const maquinaImpresionId = String(tipoCfg?.maquinaDefaultId ?? ((tipoCfg?.maquinasCompatibles as string[]) ?? [])[0] ?? '');
-    const perfilImpresionId = String(tipoCfg?.perfilDefaultId ?? '');
+    // Máquina y perfil: override desde propuesta → default del config → primera compatible
+    const maquinaImpresionId = String(params.maquinaId ?? tipoCfg?.maquinaDefaultId ?? ((tipoCfg?.maquinasCompatibles as string[]) ?? [])[0] ?? '');
+    const perfilImpresionId = String(params.perfilId ?? tipoCfg?.perfilDefaultId ?? '');
 
     if (maquinaImpresionId) {
       const consumibles = await this.prisma.maquinaConsumible.findMany({

@@ -799,6 +799,8 @@ function StepSummaryRigidPrinted({
   tipoImpresion,
   caras,
   placaVarianteId,
+  maquinaId,
+  perfilId,
   checklistRespuestas,
   onCostoCalculated,
   onCostosResult,
@@ -808,6 +810,8 @@ function StepSummaryRigidPrinted({
   tipoImpresion: string;
   caras: string;
   placaVarianteId: string;
+  maquinaId: string;
+  perfilId: string;
   checklistRespuestas: ChecklistCotizadorValue;
   onCostoCalculated: (costo: number | null) => void;
   onCostosResult: (res: Record<string, unknown> | null) => void;
@@ -836,6 +840,8 @@ function StepSummaryRigidPrinted({
         tipoImpresion,
         caras,
         ...(placaVarianteId ? { placaVarianteId } : {}),
+        ...(maquinaId ? { maquinaId } : {}),
+        ...(perfilId ? { perfilId } : {}),
       },
     })
       .then((res) => {
@@ -856,7 +862,7 @@ function StepSummaryRigidPrinted({
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [producto.id, tipoImpresion, caras, placaVarianteId, JSON.stringify(validMedidas)]);
+  }, [producto.id, tipoImpresion, caras, placaVarianteId, maquinaId, perfilId, JSON.stringify(validMedidas)]);
 
   const cantidadPricing = calcGranFormatoCantidad(medidas as GranFormatoMedida[], producto.unidadComercial);
 
@@ -1039,6 +1045,9 @@ export function AgregarProductoSheet({
   const [rpChecklist, setRpChecklist] = React.useState<import("@/lib/productos-servicios").RigidPrintedChecklistConfig | null>(null);
   const [rpPlacasCompatibles, setRpPlacasCompatibles] = React.useState<Array<{ id: string; anchoMm: number; altoMm: number; precio: number; label: string; espesor: string | null; color: string | null }>>([]);
   const [rpCostosResult, setRpCostosResult] = React.useState<Record<string, unknown> | null>(null);
+  const [rpMaquinaId, setRpMaquinaId] = React.useState("");
+  const [rpPerfilId, setRpPerfilId] = React.useState("");
+  const [rpMaquinas, setRpMaquinas] = React.useState<import("@/lib/maquinaria").Maquina[]>([]);
 
   const motorCodigo = producto?.motorCodigo ?? "";
   const isGranFormato = motorCodigo === "gran_formato";
@@ -1178,11 +1187,13 @@ export function AgregarProductoSheet({
         );
         setCurrentStep("configure");
       } else if (p.motorCodigo === "rigidos_impresos") {
-        const [cfgResult, cl, rpMateriasPrimas] = await Promise.all([
+        const [cfgResult, cl, rpMateriasPrimas, rpAllMaquinas] = await Promise.all([
           getProductoMotorConfig(p.id).catch(() => null),
           getRigidPrintedChecklist(p.id).catch(() => null),
           getMateriasPrimas().catch(() => []),
+          getMaquinas().catch(() => [] as Maquina[]),
         ]);
+        setRpMaquinas(rpAllMaquinas);
         const params = (cfgResult?.parametros ?? {}) as Record<string, unknown>;
         setRpConfig(params);
         setRpChecklist(cl);
@@ -1298,6 +1309,12 @@ export function AgregarProductoSheet({
         ? {
             "Tipo impresion": { directa: "Impresion directa", flexible_montado: "Sustrato flexible montado" }[rpTipoImpresion] ?? rpTipoImpresion,
             Caras: { simple_faz: "Simple faz", doble_faz: "Doble faz" }[rpCaras] ?? rpCaras,
+            ...(rpMaquinaId && rpMaquinas.find((m) => m.id === rpMaquinaId)
+              ? { Maquina: rpMaquinas.find((m) => m.id === rpMaquinaId)!.nombre }
+              : {}),
+            ...(rpPerfilId && rpMaquinas.find((m) => m.id === rpMaquinaId)?.perfilesOperativos.find((p) => p.id === rpPerfilId)
+              ? { Perfil: rpMaquinas.find((m) => m.id === rpMaquinaId)!.perfilesOperativos.find((p) => p.id === rpPerfilId)!.nombre }
+              : {}),
             ...(rpPlacasCompatibles.find((p) => p.id === rpPlacaVarianteId)
               ? { Placa: rpPlacasCompatibles.find((p) => p.id === rpPlacaVarianteId)!.label }
               : {}),
@@ -1386,6 +1403,10 @@ export function AgregarProductoSheet({
               tipoImpresion: rpTipoImpresion,
               caras: rpCaras,
               placaVarianteId: rpPlacaVarianteId,
+              maquinaId: rpMaquinaId || undefined,
+              maquinaNombre: rpMaquinas.find((m) => m.id === rpMaquinaId)?.nombre,
+              perfilId: rpPerfilId || undefined,
+              perfilNombre: rpMaquinas.find((m) => m.id === rpMaquinaId)?.perfilesOperativos.find((p) => p.id === rpPerfilId)?.nombre,
               medidas: rpMedidas
                 .filter((m) => m.anchoMm && m.altoMm && m.cantidad > 0)
                 .map((m) => ({ anchoMm: m.anchoMm!, altoMm: m.altoMm!, cantidad: m.cantidad })),
@@ -1487,6 +1508,7 @@ export function AgregarProductoSheet({
                   producto={producto}
                   config={rpConfig as any}
                   placasCompatibles={rpPlacasCompatibles}
+                  maquinas={rpMaquinas}
                   checklistConfig={rpChecklist}
                   medidas={rpMedidas}
                   onMedidasChange={setRpMedidas}
@@ -1496,6 +1518,10 @@ export function AgregarProductoSheet({
                   onPlacaVarianteIdChange={setRpPlacaVarianteId}
                   caras={rpCaras}
                   onCarasChange={setRpCaras}
+                  maquinaId={rpMaquinaId}
+                  onMaquinaIdChange={setRpMaquinaId}
+                  perfilId={rpPerfilId}
+                  onPerfilIdChange={setRpPerfilId}
                   checklistRespuestas={checklistRespuestas}
                   onChecklistRespuestasChange={setChecklistRespuestas}
                 />
@@ -1589,6 +1615,8 @@ export function AgregarProductoSheet({
                   tipoImpresion={rpTipoImpresion}
                   caras={rpCaras}
                   placaVarianteId={rpPlacaVarianteId}
+                  maquinaId={rpMaquinaId}
+                  perfilId={rpPerfilId}
                   checklistRespuestas={checklistRespuestas}
                   onCostoCalculated={setCotizacionCosto}
                   onCostosResult={setRpCostosResult}

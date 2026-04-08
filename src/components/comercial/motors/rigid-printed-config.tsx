@@ -9,6 +9,7 @@ import type {
   ChecklistCotizadorValue,
   RigidPrintedChecklistConfig,
 } from "@/lib/productos-servicios";
+import { type Maquina, getMaquinaTecnologia, tecnologiaMaquinaItems } from "@/lib/maquinaria";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -46,6 +47,7 @@ export type RigidPrintedProposalConfigProps = {
   producto: ProductoServicio;
   config: RigidPrintedConfig;
   placasCompatibles: PlacaCompatible[];
+  maquinas: Maquina[];
   checklistConfig: RigidPrintedChecklistConfig | null;
   medidas: RigidPrintedMedida[];
   onMedidasChange: (medidas: RigidPrintedMedida[]) => void;
@@ -55,6 +57,10 @@ export type RigidPrintedProposalConfigProps = {
   onPlacaVarianteIdChange: (id: string) => void;
   caras: string;
   onCarasChange: (caras: string) => void;
+  maquinaId: string;
+  onMaquinaIdChange: (id: string) => void;
+  perfilId: string;
+  onPerfilIdChange: (id: string) => void;
   checklistRespuestas: ChecklistCotizadorValue;
   onChecklistRespuestasChange: (v: ChecklistCotizadorValue) => void;
 };
@@ -132,6 +138,7 @@ function SegmentedToggle<T extends string>({
 export function RigidPrintedProposalConfig({
   config,
   placasCompatibles,
+  maquinas,
   checklistConfig,
   medidas,
   onMedidasChange,
@@ -141,6 +148,10 @@ export function RigidPrintedProposalConfig({
   onPlacaVarianteIdChange,
   caras,
   onCarasChange,
+  maquinaId,
+  onMaquinaIdChange,
+  perfilId,
+  onPerfilIdChange,
   checklistRespuestas,
   onChecklistRespuestasChange,
 }: RigidPrintedProposalConfigProps) {
@@ -151,6 +162,78 @@ export function RigidPrintedProposalConfig({
   React.useEffect(() => {
     if (!tipoImpresion && tipos.length === 1) onTipoImpresionChange(tipos[0]);
   }, [tipoImpresion, tipos, onTipoImpresionChange]);
+
+  // ── Cascada: Tecnología → Máquina → Perfil ──
+  const tipoCfg = (tipoImpresion === "flexible_montado" ? config.flexibleMontado : config.impresionDirecta) ?? {};
+  const maquinasCompatibleIds = new Set(Array.isArray(tipoCfg.maquinasCompatibles) ? tipoCfg.maquinasCompatibles as string[] : []);
+  const perfilesCompatibleIds = new Set(Array.isArray(tipoCfg.perfilesCompatibles) ? tipoCfg.perfilesCompatibles as string[] : []);
+
+  // Máquinas del tipo seleccionado
+  const maquinasDelTipo = React.useMemo(
+    () => maquinas.filter((m) => maquinasCompatibleIds.has(m.id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [maquinas, tipoImpresion],
+  );
+
+  // Tecnologías disponibles (derivadas de las máquinas)
+  const tecnologias = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of maquinasDelTipo) {
+      const tec = getMaquinaTecnologia(m);
+      if (tec) {
+        const label = tecnologiaMaquinaItems.find((t) => t.value === tec)?.label ?? tec;
+        map.set(tec, label);
+      }
+    }
+    return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
+  }, [maquinasDelTipo]);
+
+  const [tecnologia, setTecnologia] = React.useState("");
+
+  // Auto-select tecnología
+  React.useEffect(() => {
+    if (tecnologias.length === 1 && tecnologia !== tecnologias[0].value) {
+      setTecnologia(tecnologias[0].value);
+    } else if (tecnologias.length > 0 && !tecnologias.some((t) => t.value === tecnologia)) {
+      setTecnologia(tecnologias[0].value);
+    }
+  }, [tecnologias, tecnologia]);
+
+  // Máquinas filtradas por tecnología
+  const maquinasFiltradas = React.useMemo(
+    () => maquinasDelTipo.filter((m) => getMaquinaTecnologia(m) === tecnologia),
+    [maquinasDelTipo, tecnologia],
+  );
+
+  // Auto-select máquina
+  React.useEffect(() => {
+    if (maquinasFiltradas.length === 1 && maquinaId !== maquinasFiltradas[0].id) {
+      onMaquinaIdChange(maquinasFiltradas[0].id);
+    } else if (maquinasFiltradas.length > 0 && !maquinasFiltradas.some((m) => m.id === maquinaId)) {
+      onMaquinaIdChange(maquinasFiltradas[0].id);
+    }
+  }, [maquinasFiltradas, maquinaId, onMaquinaIdChange]);
+
+  // Perfiles de la máquina seleccionada, filtrados por compatibles
+  const maquinaSeleccionada = maquinas.find((m) => m.id === maquinaId);
+  const perfilesDisponibles = React.useMemo(() => {
+    if (!maquinaSeleccionada) return [];
+    return maquinaSeleccionada.perfilesOperativos.filter(
+      (p) => p.activo && perfilesCompatibleIds.has(p.id),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maquinaSeleccionada, tipoImpresion]);
+
+  // Auto-select perfil
+  React.useEffect(() => {
+    if (perfilesDisponibles.length === 1 && perfilId !== perfilesDisponibles[0].id) {
+      onPerfilIdChange(perfilesDisponibles[0].id);
+    } else if (perfilesDisponibles.length > 0 && !perfilesDisponibles.some((p) => p.id === perfilId)) {
+      onPerfilIdChange(perfilesDisponibles[0].id);
+    } else if (perfilesDisponibles.length === 0 && perfilId) {
+      onPerfilIdChange("");
+    }
+  }, [perfilesDisponibles, perfilId, onPerfilIdChange]);
 
   // Caras disponibles del tipo seleccionado
   const carasDisponibles = React.useMemo(() => {
@@ -284,6 +367,57 @@ export function RigidPrintedProposalConfig({
           <p className="text-sm font-medium">{TIPO_LABELS[tipos[0]] ?? tipos[0]}</p>
         </div>
       ) : null}
+
+      {/* ── Tecnología / Máquina / Perfil ── */}
+      {(() => {
+        const hasTecSelector = tecnologias.length > 1;
+        const hasMaqSelector = maquinasFiltradas.length > 1;
+        const hasPerfilSelector = perfilesDisponibles.length > 1;
+        const anySelector = hasTecSelector || hasMaqSelector || hasPerfilSelector;
+        const perfilLabel = perfilesDisponibles.length === 1
+          ? (() => { const d = perfilesDisponibles[0].detalle as Record<string, unknown> | null; const c = typeof d?.configuracionTintas === "string" ? d.configuracionTintas : ""; return c ? `${perfilesDisponibles[0].nombre} — ${c}` : perfilesDisponibles[0].nombre; })()
+          : "";
+
+        // Si todos son texto fijo → una fila compacta
+        if (!anySelector && (tecnologias.length > 0 || maquinasFiltradas.length > 0 || perfilesDisponibles.length > 0)) {
+          return (
+            <div className="grid grid-cols-3 gap-4 rounded-lg border bg-muted/20 px-3 py-2">
+              {tecnologias.length === 1 && (
+                <div><p className="text-[10px] text-muted-foreground">Tecnologia</p><p className="text-sm font-medium">{tecnologias[0].label}</p></div>
+              )}
+              {maquinasFiltradas.length === 1 && (
+                <div><p className="text-[10px] text-muted-foreground">Maquina</p><p className="text-sm font-medium">{maquinasFiltradas[0].nombre}</p></div>
+              )}
+              {perfilesDisponibles.length === 1 && (
+                <div><p className="text-[10px] text-muted-foreground">Perfil</p><p className="text-sm font-medium">{perfilLabel}</p></div>
+              )}
+            </div>
+          );
+        }
+
+        // Si alguno tiene selector → layout vertical
+        return (
+          <>
+            {hasTecSelector && (
+              <SegmentedToggle label="Tecnologia" options={tecnologias.map((t) => t.value)} value={tecnologia}
+                onChange={(v) => setTecnologia(v)} labels={Object.fromEntries(tecnologias.map((t) => [t.value, t.label]))} />
+            )}
+            {hasMaqSelector && (
+              <SegmentedToggle label="Maquina" options={maquinasFiltradas.map((m) => m.id)} value={maquinaId}
+                onChange={onMaquinaIdChange} labels={Object.fromEntries(maquinasFiltradas.map((m) => [m.id, m.nombre]))} />
+            )}
+            {hasPerfilSelector && (
+              <SegmentedToggle label="Perfil" options={perfilesDisponibles.map((p) => p.id)} value={perfilId}
+                onChange={onPerfilIdChange}
+                labels={Object.fromEntries(perfilesDisponibles.map((p) => {
+                  const det = p.detalle as Record<string, unknown> | null;
+                  const confTintas = typeof det?.configuracionTintas === "string" ? det.configuracionTintas : "";
+                  return [p.id, confTintas ? `${p.nombre} — ${confTintas}` : p.nombre];
+                }))} />
+            )}
+          </>
+        );
+      })()}
 
       {/* ── Placa: Espesor (chips) → Color (chips si hay más de uno) ── */}
       {placasCompatibles.length > 0 && (
