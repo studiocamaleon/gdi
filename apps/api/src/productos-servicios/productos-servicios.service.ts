@@ -1230,7 +1230,6 @@ export class ProductosServiciosService {
     );
     const esDobleFaz = caras === 'doble_faz';
     const multiplicadorCaras = esDobleFaz ? 2 : 1;
-    console.log('[RIGID-QUOTE] caras:', caras, 'esDobleFaz:', esDobleFaz, 'multiplicadorCaras:', multiplicadorCaras);
     const rutaId = tipoImpresion === 'flexible_montado'
       ? rigidConfig.rutaFlexibleMontadoId : rigidConfig.rutaImpresionDirectaId;
     const procesoDefId = String(rutaId ?? producto.procesoDefinicionDefaultId ?? '');
