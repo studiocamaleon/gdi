@@ -1376,6 +1376,35 @@ export class UpdateGranFormatoChecklistDto {
   checklistsPorTecnologia?: UpsertGranFormatoChecklistPorTecnologiaDto[];
 }
 
+// ── Rígidos Impresos: Checklist por tipo de impresión ─────────────
+
+export class UpsertRigidPrintedChecklistPorTipoDto {
+  @IsString()
+  @IsNotEmpty()
+  tipoImpresion: string;
+
+  @ValidateNested()
+  @Type(() => UpsertProductoChecklistDto)
+  checklist: UpsertProductoChecklistDto;
+}
+
+export class UpdateRigidPrintedChecklistDto {
+  @IsBoolean()
+  aplicaATodosLosTiposImpresion: boolean;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpsertProductoChecklistDto)
+  checklistComun?: UpsertProductoChecklistDto;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => UpsertRigidPrintedChecklistPorTipoDto)
+  checklistsPorTipoImpresion?: UpsertRigidPrintedChecklistPorTipoDto[];
+}
+
 export class PreviewGranFormatoCostoMedidaDto {
   @Type(() => Number)
   @IsNumber()

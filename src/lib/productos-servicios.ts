@@ -1,6 +1,6 @@
 export type TipoProductoServicio = 'producto' | 'servicio';
 export type EstadoProductoServicio = 'activo' | 'inactivo';
-export type MotorCategory = 'digital_sheet' | 'wide_format' | 'vinyl_cut';
+export type MotorCategory = 'digital_sheet' | 'wide_format' | 'vinyl_cut' | 'talonario' | 'rigid_printed';
 export type TipoVentaGranFormato = 'm2' | 'metro_lineal';
 export type UnidadComercialProducto = 'unidad' | 'm2' | 'metro_lineal';
 export const unidadComercialProductoItems: Array<{
@@ -841,6 +841,17 @@ export type GranFormatoChecklistConfig = {
   checklistComun: ProductoChecklist;
   checklistsPorTecnologia: Array<{
     tecnologia: string;
+    checklist: ProductoChecklist;
+  }>;
+  updatedAt: string | null;
+};
+
+export type RigidPrintedChecklistConfig = {
+  productoId: string;
+  aplicaATodosLosTiposImpresion: boolean;
+  checklistComun: ProductoChecklist;
+  checklistsPorTipoImpresion: Array<{
+    tipoImpresion: string;
     checklist: ProductoChecklist;
   }>;
   updatedAt: string | null;

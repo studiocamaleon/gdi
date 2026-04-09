@@ -48,12 +48,18 @@ function getImpuestosPct(precio: ProductoPrecioConfig) {
 }
 
 function getComisionesPct(precio: ProductoPrecioConfig) {
+  // Si no hay esquemas seleccionados → sin comisiones
+  const esquemaIds = precio.comisiones.esquemaIds ?? (precio.comisiones.esquemaId ? [precio.comisiones.esquemaId] : []);
+  if (esquemaIds.length === 0) {
+    return 0;
+  }
+  // Sumar items activos de los esquemas seleccionados
   if (precio.comisiones.items?.length) {
     const activeItems = precio.comisiones.items.filter((item) => item.activo);
     const activeTotal = roundMoney(
       activeItems.reduce((sum, item) => sum + Number(item.porcentaje || 0), 0),
     );
-    if (activeItems.length > 0 || Number(precio.comisiones.porcentajeTotal ?? 0) <= 0) {
+    if (activeItems.length > 0) {
       return activeTotal;
     }
   }

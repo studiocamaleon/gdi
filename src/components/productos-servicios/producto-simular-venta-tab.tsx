@@ -281,9 +281,13 @@ export function ProductoSimularVentaTab(props: ProductTabProps) {
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-muted-foreground">Comisiones (%)</span>
                       <span>
-                        {props.producto.precio?.comisiones.items.some((item) => item.activo)
-                          ? `${formatNumber(props.producto.precio?.comisiones.porcentajeTotal ?? 0)}%`
-                          : "-"}
+                        {(() => {
+                          const c = props.producto.precio?.comisiones;
+                          if (!c) return "-";
+                          const ids = c.esquemaIds ?? (c.esquemaId ? [c.esquemaId] : []);
+                          if (ids.length === 0) return "-";
+                          return `${formatNumber(c.porcentajeTotal ?? 0)}%`;
+                        })()}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-3">

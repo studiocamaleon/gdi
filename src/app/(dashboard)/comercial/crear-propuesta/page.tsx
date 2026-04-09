@@ -15,6 +15,6 @@ export default function CrearPropuestaPage() {
 }
 
 async function CrearPropuestaContent() {
-  const clientes = await getClientes();
-  return <PropuestaFicha initialClientes={clientes} />;
+  const clientes = await getClientes().catch(() => []);
+  return <PropuestaFicha initialClientes={Array.isArray(clientes) ? clientes : []} />;
 }

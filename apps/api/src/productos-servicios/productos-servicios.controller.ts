@@ -9,6 +9,7 @@ import {
   UpdateProductoPrecioEspecialClientesDto,
   UpdateGranFormatoConfigDto,
   UpdateGranFormatoChecklistDto,
+  UpdateRigidPrintedChecklistDto,
   UpdateGranFormatoRutaBaseDto,
   AssignVarianteRutaDto,
   CotizarProductoVarianteDto,
@@ -367,6 +368,41 @@ export class ProductosServiciosController {
     @Body() payload: UpdateGranFormatoChecklistDto,
   ) {
     return this.service.updateGranFormatoChecklist(auth, id, payload);
+  }
+
+  @Post(':id/rigidos-impresos/cotizar')
+  cotizarRigidPrintedByProducto(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: CotizarProductoVarianteDto,
+  ) {
+    return this.service.cotizarRigidPrintedByProducto(auth, id, payload);
+  }
+
+  @Post(':id/rigidos-impresos/preview-flexible')
+  previewRigidPrintedFlexible(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: { medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>; caras?: string },
+  ) {
+    return this.service.previewRigidPrintedFlexible(auth, id, payload);
+  }
+
+  @Get(':id/rigidos-impresos/checklist')
+  getRigidPrintedChecklist(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.service.getRigidPrintedChecklist(auth, id);
+  }
+
+  @Put(':id/rigidos-impresos/checklist')
+  updateRigidPrintedChecklist(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: UpdateRigidPrintedChecklistDto,
+  ) {
+    return this.service.updateRigidPrintedChecklist(auth, id, payload);
   }
 
   @Post(':id/gran-formato-costos/preview')

@@ -59,7 +59,7 @@ export type ProductMotorUiContract = {
   key: string;
   tabs: Partial<Record<ProductTabKey, ComponentType<ProductTabProps>>>;
   tabOrder?: Array<ProductTabKey | string>;
-  hiddenTabs?: ProductTabKey[];
+  hiddenTabs?: ProductTabKey[] | ((motorConfig: ProductoMotorConfig | null) => ProductTabKey[]);
   extraTabs?: Array<{
     key: string;
     label: string;

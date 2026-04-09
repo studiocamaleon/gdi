@@ -711,6 +711,65 @@ export async function cotizarProductoVariante(
   );
 }
 
+export async function cotizarRigidPrintedByProducto(
+  productoId: string,
+  payload: {
+    cantidad: number;
+    periodo?: string;
+    parametros?: Record<string, unknown>;
+  },
+) {
+  return apiRequest<CotizacionProductoVariante>(
+    `/productos-servicios/${productoId}/rigidos-impresos/cotizar`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function getRigidPrintedChecklist(productoId: string) {
+  return apiRequest<import("./productos-servicios").RigidPrintedChecklistConfig>(
+    `/productos-servicios/${productoId}/rigidos-impresos/checklist`,
+  );
+}
+
+export async function updateRigidPrintedChecklist(
+  productoId: string,
+  payload: {
+    aplicaATodosLosTiposImpresion: boolean;
+    checklistComun?: import("./productos-servicios").ProductoChecklistPayload;
+    checklistsPorTipoImpresion?: Array<{
+      tipoImpresion: string;
+      checklist: import("./productos-servicios").ProductoChecklistPayload;
+    }>;
+  },
+) {
+  return apiRequest<import("./productos-servicios").RigidPrintedChecklistConfig>(
+    `/productos-servicios/${productoId}/rigidos-impresos/checklist`,
+    { method: 'PUT', body: JSON.stringify(payload) },
+  );
+}
+
+export async function previewRigidPrintedFlexible(
+  productoId: string,
+  medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>,
+  caras?: string,
+) {
+  return apiRequest<{
+    preview: Record<string, unknown> | null;
+    rollWidthMm?: number;
+    consumedLengthMm?: number;
+    usefulAreaM2?: number;
+    consumedAreaM2?: number;
+    wastePct?: number;
+    variantNombre?: string;
+  }>(
+    `/productos-servicios/${productoId}/rigidos-impresos/preview-flexible`,
+    { method: 'POST', body: JSON.stringify({ medidas, caras }) },
+  );
+}
+
 export async function previewImposicionProductoVariante(
   varianteId: string,
   parametros: Record<string, unknown>,

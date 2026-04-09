@@ -1238,6 +1238,7 @@ model ProcesoOperacion {
   runMin                      Decimal?                   @db.Decimal(12, 2)
   cleanupMin                  Decimal?                   @db.Decimal(12, 2)
   tiempoFijoMin               Decimal?                   @db.Decimal(12, 2)
+  multiplicadorDobleFaz       Decimal?                   @db.Decimal(5, 2)
   modoProductividad           ModoProductividadProceso   @default(FIJA)
   productividadBase           Decimal?                   @db.Decimal(12, 4)
   unidadEntrada               UnidadProceso              @default(NINGUNA)
@@ -2006,7 +2007,7 @@ model CotizacionProductoSnapshot {
   motorVersion          Int
   configVersionBase     Int?
   configVersionOverride Int?
-  cantidad              Int
+  cantidad              Decimal          @db.Decimal(14, 4)
   periodoTarifa         String
   inputJson             Json
   resultadoJson         Json

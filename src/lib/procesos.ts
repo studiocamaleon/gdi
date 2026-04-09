@@ -52,6 +52,7 @@ export type ProcesoOperacion = {
   runMin: number | null;
   cleanupMin: number | null;
   tiempoFijoMin: number | null;
+  multiplicadorDobleFaz: number | null;
   modoProductividad: ModoProductividadProceso;
   productividadBase: number | null;
   unidadEntrada: UnidadProceso;
@@ -116,6 +117,7 @@ export type ProcesoOperacionPayload = {
   runMin?: number;
   cleanupMin?: number;
   tiempoFijoMin?: number;
+  multiplicadorDobleFaz?: number;
   modoProductividad?: ModoProductividadProceso;
   productividadBase?: number;
   unidadEntrada?: UnidadProceso;
@@ -172,6 +174,7 @@ export type ProcesoOperacionPlantilla = {
   setupMin: number | null;
   cleanupMin: number | null;
   tiempoFijoMin: number | null;
+  multiplicadorDobleFaz: number | null;
   modoProductividad: ModoProductividadProceso;
   productividadBase: number | null;
   unidadEntrada: UnidadProceso;
@@ -200,6 +203,7 @@ export type ProcesoOperacionPlantillaPayload = {
   setupMin?: number;
   cleanupMin?: number;
   tiempoFijoMin?: number;
+  multiplicadorDobleFaz?: number;
   modoProductividad?: ModoProductividadProceso;
   productividadBase?: number;
   unidadEntrada?: UnidadProceso;
