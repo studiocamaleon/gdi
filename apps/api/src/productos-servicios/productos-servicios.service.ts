@@ -16190,7 +16190,8 @@ export class ProductosServiciosService {
       return input.areaUtilM2;
     }
     if (unidad === UnidadProceso.METRO_LINEAL) {
-      return input.largoConsumidoMl;
+      // Preferir largo consumido; si es 0 (ej: rígidos), usar perímetro como fallback
+      return input.largoConsumidoMl > 0 ? input.largoConsumidoMl : input.perimetroTotalMl;
     }
     if (unidad === UnidadProceso.PIEZA || unidad === UnidadProceso.UNIDAD) {
       return input.totalPiezas;
