@@ -47,9 +47,10 @@ var TipoOperacionProcesoDto;
     TipoOperacionProcesoDto["preprensa"] = "preprensa";
     TipoOperacionProcesoDto["prensa"] = "prensa";
     TipoOperacionProcesoDto["postprensa"] = "postprensa";
+    TipoOperacionProcesoDto["instalacion"] = "instalacion";
+    TipoOperacionProcesoDto["entrega_despacho"] = "entrega_despacho";
     TipoOperacionProcesoDto["acabado"] = "acabado";
     TipoOperacionProcesoDto["servicio"] = "servicio";
-    TipoOperacionProcesoDto["instalacion"] = "instalacion";
 })(TipoOperacionProcesoDto || (exports.TipoOperacionProcesoDto = TipoOperacionProcesoDto = {}));
 var ModoProductividadProcesoDto;
 (function (ModoProductividadProcesoDto) {
@@ -99,6 +100,7 @@ class ProcesoOperacionItemDto {
     runMin;
     cleanupMin;
     tiempoFijoMin;
+    multiplicadorDobleFaz;
     modoProductividad;
     productividadBase;
     unidadEntrada;
@@ -176,6 +178,12 @@ __decorate([
 ], ProcesoOperacionItemDto.prototype, "tiempoFijoMin", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Number)
+], ProcesoOperacionItemDto.prototype, "multiplicadorDobleFaz", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEnum)(ModoProductividadProcesoDto),
     __metadata("design:type", String)
 ], ProcesoOperacionItemDto.prototype, "modoProductividad", void 0);
@@ -250,6 +258,7 @@ class ProcesoOperacionNivelDto {
     activo;
     modoProductividadNivel;
     tiempoFijoMin;
+    multiplicadorDobleFaz;
     productividadBase;
     unidadSalida;
     unidadTiempo;
@@ -297,6 +306,12 @@ __decorate([
     (0, class_transformer_1.Type)(() => Number),
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
+], ProcesoOperacionNivelDto.prototype, "multiplicadorDobleFaz", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Number)
 ], ProcesoOperacionNivelDto.prototype, "productividadBase", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
@@ -339,7 +354,6 @@ class UpsertProcesoDto {
     codigo;
     nombre;
     descripcion;
-    plantillaMaquinaria;
     estadoConfiguracion;
     activo;
     observaciones;
@@ -362,11 +376,6 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpsertProcesoDto.prototype, "descripcion", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsEnum)(PlantillaMaquinariaDto),
-    __metadata("design:type", String)
-], UpsertProcesoDto.prototype, "plantillaMaquinaria", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEnum)(EstadoConfiguracionProcesoDto),

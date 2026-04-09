@@ -301,7 +301,7 @@ export function ProductosServiciosFamiliasManager({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <Link href="/costos/productos-servicios" className={cn(buttonVariants({ variant: "ghost" }), "-ml-3")}>
+        <Link href="/costos/productos" className={cn(buttonVariants({ variant: "ghost" }), "-ml-3")}>
           <ArrowLeftIcon data-icon="inline-start" />
           Volver a catalogo de productos
         </Link>

@@ -276,7 +276,7 @@ function UnifiedProductDetailShell(props: ProductDetailViewProps) {
         nativeButton={false}
         size="sm"
         className="w-fit"
-        render={<Link href="/costos/productos-servicios" />}
+        render={<Link href="/costos/productos" />}
       >
         <ArrowLeftIcon data-icon="inline-start" />
         Volver a productos

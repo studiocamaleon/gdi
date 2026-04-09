@@ -188,8 +188,8 @@ export function ProductosServiciosTable({
         setProductos((prev) => [...prev, created].sort((a, b) => a.nombre.localeCompare(b.nombre)));
         setOpenCreate(false);
         toast.success("Producto creado.");
-        startNavigation(`/costos/productos-servicios/${created.id}`);
-        router.push(`/costos/productos-servicios/${created.id}`);
+        startNavigation(`/costos/productos/${created.id}`);
+        router.push(`/costos/productos/${created.id}`);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "No se pudo crear el registro.");
       }
@@ -212,7 +212,7 @@ export function ProductosServiciosTable({
               type="button"
               variant="outline"
               nativeButton={false}
-              render={<NavLink href="/costos/productos-servicios/familias" />}
+              render={<NavLink href="/costos/productos/familias" />}
             >
               Editar familias
             </Button>
@@ -239,8 +239,8 @@ export function ProductosServiciosTable({
                   key={item.id}
                   className="cursor-pointer"
                   onClick={() => {
-                    startNavigation(`/costos/productos-servicios/${item.id}`);
-                    router.push(`/costos/productos-servicios/${item.id}`);
+                    startNavigation(`/costos/productos/${item.id}`);
+                    router.push(`/costos/productos/${item.id}`);
                   }}
                 >
                   <TableCell>{item.codigo}</TableCell>

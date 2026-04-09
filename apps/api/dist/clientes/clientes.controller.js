@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ClientesController = void 0;
 const common_1 = require("@nestjs/common");
 const current_auth_decorator_1 = require("../auth/current-auth.decorator");
+const pagination_dto_1 = require("../common/dto/pagination.dto");
 const upsert_cliente_dto_1 = require("./dto/upsert-cliente.dto");
 const clientes_service_1 = require("./clientes.service");
 let ClientesController = class ClientesController {
@@ -22,8 +23,8 @@ let ClientesController = class ClientesController {
     constructor(clientesService) {
         this.clientesService = clientesService;
     }
-    findAll(auth) {
-        return this.clientesService.findAll(auth);
+    findAll(auth, pagination) {
+        return this.clientesService.findAll(auth, pagination);
     }
     findOne(auth, id) {
         return this.clientesService.findOne(auth, id);
@@ -42,8 +43,9 @@ exports.ClientesController = ClientesController;
 __decorate([
     (0, common_1.Get)(),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, pagination_dto_1.PaginationDto]),
     __metadata("design:returntype", void 0)
 ], ClientesController.prototype, "findAll", null);
 __decorate([

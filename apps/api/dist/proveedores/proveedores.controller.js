@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProveedoresController = void 0;
 const common_1 = require("@nestjs/common");
 const current_auth_decorator_1 = require("../auth/current-auth.decorator");
+const pagination_dto_1 = require("../common/dto/pagination.dto");
 const upsert_proveedor_dto_1 = require("./dto/upsert-proveedor.dto");
 const proveedores_service_1 = require("./proveedores.service");
 let ProveedoresController = class ProveedoresController {
@@ -22,8 +23,8 @@ let ProveedoresController = class ProveedoresController {
     constructor(proveedoresService) {
         this.proveedoresService = proveedoresService;
     }
-    findAll(auth) {
-        return this.proveedoresService.findAll(auth);
+    findAll(auth, pagination) {
+        return this.proveedoresService.findAll(auth, pagination);
     }
     findOne(auth, id) {
         return this.proveedoresService.findOne(auth, id);
@@ -42,8 +43,9 @@ exports.ProveedoresController = ProveedoresController;
 __decorate([
     (0, common_1.Get)(),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, pagination_dto_1.PaginationDto]),
     __metadata("design:returntype", void 0)
 ], ProveedoresController.prototype, "findAll", null);
 __decorate([

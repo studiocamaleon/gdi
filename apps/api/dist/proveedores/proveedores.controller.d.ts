@@ -1,40 +1,47 @@
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { UpsertProveedorDto } from './dto/upsert-proveedor.dto';
 import { ProveedoresService } from './proveedores.service';
 import type { CurrentAuth } from '../auth/auth.types';
 export declare class ProveedoresController {
     private readonly proveedoresService;
     constructor(proveedoresService: ProveedoresService);
-    findAll(auth: CurrentAuth): Promise<{
-        id: string;
-        nombre: string;
-        razonSocial: string;
-        email: string;
-        telefonoCodigo: string;
-        telefonoNumero: string;
-        pais: string;
-        contacto: string;
-        ciudad: string;
-        contactos: {
+    findAll(auth: CurrentAuth, pagination: PaginationDto): Promise<{
+        data: {
             id: string;
             nombre: string;
-            cargo: string;
+            razonSocial: string;
             email: string;
             telefonoCodigo: string;
             telefonoNumero: string;
-            principal: boolean;
-        }[];
-        direcciones: {
-            id: string;
-            descripcion: string;
             pais: string;
-            codigoPostal: string;
-            direccion: string;
-            numero: string;
+            contacto: string;
             ciudad: string;
-            tipo: import("./dto/direccion.dto").TipoDireccionDto;
-            principal: boolean;
+            contactos: {
+                id: string;
+                nombre: string;
+                cargo: string;
+                email: string;
+                telefonoCodigo: string;
+                telefonoNumero: string;
+                principal: boolean;
+            }[];
+            direcciones: {
+                id: string;
+                descripcion: string;
+                pais: string;
+                codigoPostal: string;
+                direccion: string;
+                numero: string;
+                ciudad: string;
+                tipo: import("./dto/direccion.dto").TipoDireccionDto;
+                principal: boolean;
+            }[];
         }[];
-    }[]>;
+        total: number;
+        page: number;
+        limit: number;
+        pages: number;
+    }>;
     findOne(auth: CurrentAuth, id: string): Promise<{
         id: string;
         nombre: string;

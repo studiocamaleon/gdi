@@ -33,6 +33,7 @@ class UpsertProcesoOperacionPlantillaDto {
     baseCalculoProductividad;
     observaciones;
     niveles;
+    estacionId;
     activo;
 }
 exports.UpsertProcesoOperacionPlantillaDto = UpsertProcesoOperacionPlantillaDto;
@@ -136,6 +137,11 @@ __decorate([
     (0, class_transformer_1.Type)(() => upsert_proceso_dto_1.ProcesoOperacionNivelDto),
     __metadata("design:type", Array)
 ], UpsertProcesoOperacionPlantillaDto.prototype, "niveles", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], UpsertProcesoOperacionPlantillaDto.prototype, "estacionId", void 0);
 __decorate([
     (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)

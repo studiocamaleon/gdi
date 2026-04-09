@@ -19,5 +19,6 @@ export declare class UpsertProcesoOperacionPlantillaDto {
     baseCalculoProductividad?: BaseCalculoProductividadDto;
     observaciones?: string;
     niveles?: ProcesoOperacionNivelDto[];
+    estacionId?: string;
     activo: boolean;
 }

@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProveedoresService = void 0;
 const common_1 = require("@nestjs/common");
 const client_1 = require("@prisma/client");
+const pagination_dto_1 = require("../common/dto/pagination.dto");
 const prisma_service_1 = require("../prisma/prisma.service");
 const direccion_dto_1 = require("./dto/direccion.dto");
 let ProveedoresService = class ProveedoresService {
@@ -19,24 +20,26 @@ let ProveedoresService = class ProveedoresService {
     constructor(prisma) {
         this.prisma = prisma;
     }
-    async findAll(auth) {
-        const proveedores = await this.prisma.proveedor.findMany({
-            where: {
-                tenantId: auth.tenantId,
-            },
-            include: {
-                contactos: {
-                    orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
+    async findAll(auth, pagination) {
+        const where = { tenantId: auth.tenantId };
+        const [proveedores, total] = await this.prisma.$transaction([
+            this.prisma.proveedor.findMany({
+                where,
+                include: {
+                    contactos: {
+                        orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
+                    },
+                    direcciones: {
+                        orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
+                    },
                 },
-                direcciones: {
-                    orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
-                },
-            },
-            orderBy: {
-                nombre: 'asc',
-            },
-        });
-        return proveedores.map((proveedor) => this.toResponse(proveedor));
+                orderBy: { nombre: 'asc' },
+                skip: pagination.skip,
+                take: pagination.limit,
+            }),
+            this.prisma.proveedor.count({ where }),
+        ]);
+        return (0, pagination_dto_1.paginatedResponse)(proveedores.map((proveedor) => this.toResponse(proveedor)), total, pagination);
     }
     async findOne(auth, id) {
         const proveedor = await this.findProveedorOrThrow(auth, id, this.prisma);

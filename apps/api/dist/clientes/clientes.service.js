@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ClientesService = void 0;
 const common_1 = require("@nestjs/common");
 const client_1 = require("@prisma/client");
+const pagination_dto_1 = require("../common/dto/pagination.dto");
 const prisma_service_1 = require("../prisma/prisma.service");
 const direccion_dto_1 = require("./dto/direccion.dto");
 let ClientesService = class ClientesService {
@@ -19,24 +20,26 @@ let ClientesService = class ClientesService {
     constructor(prisma) {
         this.prisma = prisma;
     }
-    async findAll(auth) {
-        const clientes = await this.prisma.cliente.findMany({
-            where: {
-                tenantId: auth.tenantId,
-            },
-            include: {
-                contactos: {
-                    orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
+    async findAll(auth, pagination) {
+        const where = { tenantId: auth.tenantId };
+        const [clientes, total] = await this.prisma.$transaction([
+            this.prisma.cliente.findMany({
+                where,
+                include: {
+                    contactos: {
+                        orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
+                    },
+                    direcciones: {
+                        orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
+                    },
                 },
-                direcciones: {
-                    orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }],
-                },
-            },
-            orderBy: {
-                nombre: 'asc',
-            },
-        });
-        return clientes.map((cliente) => this.toResponse(cliente));
+                orderBy: { nombre: 'asc' },
+                skip: pagination.skip,
+                take: pagination.limit,
+            }),
+            this.prisma.cliente.count({ where }),
+        ]);
+        return (0, pagination_dto_1.paginatedResponse)(clientes.map((cliente) => this.toResponse(cliente)), total, pagination);
     }
     async findOne(auth, id) {
         const cliente = await this.findClienteOrThrow(auth, id, this.prisma);

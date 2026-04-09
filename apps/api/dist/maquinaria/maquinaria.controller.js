@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.MaquinariaController = void 0;
 const common_1 = require("@nestjs/common");
 const current_auth_decorator_1 = require("../auth/current-auth.decorator");
+const pagination_dto_1 = require("../common/dto/pagination.dto");
 const upsert_maquina_dto_1 = require("./dto/upsert-maquina.dto");
 const maquinaria_service_1 = require("./maquinaria.service");
 let MaquinariaController = class MaquinariaController {
@@ -22,8 +23,8 @@ let MaquinariaController = class MaquinariaController {
     constructor(maquinariaService) {
         this.maquinariaService = maquinariaService;
     }
-    findAll(auth) {
-        return this.maquinariaService.findAll(auth);
+    findAll(auth, pagination) {
+        return this.maquinariaService.findAll(auth, pagination);
     }
     findOne(auth, id) {
         return this.maquinariaService.findOne(auth, id);
@@ -42,8 +43,9 @@ exports.MaquinariaController = MaquinariaController;
 __decorate([
     (0, common_1.Get)(),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, pagination_dto_1.PaginationDto]),
     __metadata("design:returntype", void 0)
 ], MaquinariaController.prototype, "findAll", null);
 __decorate([

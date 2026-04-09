@@ -15,7 +15,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProcesosController = void 0;
 const common_1 = require("@nestjs/common");
 const current_auth_decorator_1 = require("../auth/current-auth.decorator");
+const pagination_dto_1 = require("../common/dto/pagination.dto");
 const evaluar_proceso_costo_dto_1 = require("./dto/evaluar-proceso-costo.dto");
+const bulk_assign_estacion_plantillas_dto_1 = require("./dto/bulk-assign-estacion-plantillas.dto");
 const upsert_proceso_operacion_plantilla_dto_1 = require("./dto/upsert-proceso-operacion-plantilla.dto");
 const upsert_proceso_dto_1 = require("./dto/upsert-proceso.dto");
 const procesos_service_1 = require("./procesos.service");
@@ -24,8 +26,8 @@ let ProcesosController = class ProcesosController {
     constructor(procesosService) {
         this.procesosService = procesosService;
     }
-    findAll(auth) {
-        return this.procesosService.findAll(auth);
+    findAll(auth, pagination) {
+        return this.procesosService.findAll(auth, pagination);
     }
     findAllBiblioteca(auth) {
         return this.procesosService.findAllBibliotecaOperaciones(auth);
@@ -38,6 +40,9 @@ let ProcesosController = class ProcesosController {
     }
     toggleBiblioteca(auth, id) {
         return this.procesosService.toggleBibliotecaOperacion(auth, id);
+    }
+    bulkAssignEstacion(auth, payload) {
+        return this.procesosService.bulkAssignEstacionPlantillas(auth, payload);
     }
     findOne(auth, id) {
         return this.procesosService.findOne(auth, id);
@@ -65,8 +70,9 @@ exports.ProcesosController = ProcesosController;
 __decorate([
     (0, common_1.Get)(),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, pagination_dto_1.PaginationDto]),
     __metadata("design:returntype", void 0)
 ], ProcesosController.prototype, "findAll", null);
 __decorate([
@@ -101,6 +107,14 @@ __decorate([
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", void 0)
 ], ProcesosController.prototype, "toggleBiblioteca", null);
+__decorate([
+    (0, common_1.Patch)('biblioteca-operaciones/bulk-assign-estacion'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, bulk_assign_estacion_plantillas_dto_1.BulkAssignEstacionPlantillasDto]),
+    __metadata("design:returntype", void 0)
+], ProcesosController.prototype, "bulkAssignEstacion", null);
 __decorate([
     (0, common_1.Get)(':id'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),

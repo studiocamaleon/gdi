@@ -427,7 +427,7 @@ let AuthService = class AuthService {
     }
     async issueToken(payload) {
         return this.jwtService.signAsync(payload, {
-            secret: process.env.JWT_SECRET ?? 'gdi-dev-secret',
+            secret: process.env.JWT_SECRET,
             expiresIn: '7d',
         });
     }

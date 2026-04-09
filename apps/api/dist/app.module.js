@@ -10,6 +10,7 @@ exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const core_1 = require("@nestjs/core");
 const config_1 = require("@nestjs/config");
+const throttler_1 = require("@nestjs/throttler");
 const app_controller_1 = require("./app.controller");
 const app_service_1 = require("./app.service");
 const auth_guard_1 = require("./auth/auth.guard");
@@ -23,6 +24,7 @@ const procesos_module_1 = require("./procesos/procesos.module");
 const proveedores_module_1 = require("./proveedores/proveedores.module");
 const tenants_module_1 = require("./tenants/tenants.module");
 const inventario_module_1 = require("./inventario/inventario.module");
+const produccion_module_1 = require("./produccion/produccion.module");
 const productos_servicios_module_1 = require("./productos-servicios/productos-servicios.module");
 let AppModule = class AppModule {
 };
@@ -31,6 +33,13 @@ exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
         imports: [
             config_1.ConfigModule.forRoot({ isGlobal: true }),
+            throttler_1.ThrottlerModule.forRoot([
+                {
+                    name: 'default',
+                    ttl: 60000,
+                    limit: 100,
+                },
+            ]),
             prisma_module_1.PrismaModule,
             auth_module_1.AuthModule,
             tenants_module_1.TenantsModule,
@@ -41,11 +50,16 @@ exports.AppModule = AppModule = __decorate([
             maquinaria_module_1.MaquinariaModule,
             procesos_module_1.ProcesosModule,
             inventario_module_1.InventarioModule,
+            produccion_module_1.ProduccionModule,
             productos_servicios_module_1.ProductosServiciosModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [
             app_service_1.AppService,
+            {
+                provide: core_1.APP_GUARD,
+                useClass: throttler_1.ThrottlerGuard,
+            },
             {
                 provide: core_1.APP_GUARD,
                 useClass: auth_guard_1.AuthGuard,

@@ -174,6 +174,24 @@ export declare class DigitalSheetMotorModule implements ProductMotorModule {
             config: {
                 [x: string]: unknown;
             };
+            terminacionesConfiguradas: {
+                tipoTerminacion: "perforacion" | "puntas_redondeadas";
+                parametros: {
+                    diametroMm?: number;
+                    posicion?: {
+                        referenciaBorde: "superior" | "inferior" | "izquierdo" | "derecho";
+                        distanciaBordeMm: number;
+                        centradoEnEje: boolean;
+                    };
+                    radioMm?: number;
+                    esquinas?: {
+                        superiorIzquierda: boolean;
+                        superiorDerecha: boolean;
+                        inferiorIzquierda: boolean;
+                        inferiorDerecha: boolean;
+                    };
+                };
+            }[] | undefined;
             configVersionBase: number | null;
             configVersionOverride: number | null;
         };

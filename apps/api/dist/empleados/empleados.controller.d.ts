@@ -1,3 +1,4 @@
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { InvitarAccesoDto } from './dto/invitar-acceso.dto';
 import { EmpleadosService } from './empleados.service';
 import { UpsertEmpleadoDto } from './dto/upsert-empleado.dto';
@@ -5,40 +6,46 @@ import type { CurrentAuth } from '../auth/auth.types';
 export declare class EmpleadosController {
     private readonly empleadosService;
     constructor(empleadosService: EmpleadosService);
-    findAll(auth: CurrentAuth): Promise<{
-        id: string;
-        nombreCompleto: string;
-        email: string;
-        telefonoCodigo: string;
-        telefonoNumero: string;
-        sector: string;
-        ocupacion: string;
-        sexo: string;
-        fechaIngreso: string;
-        fechaNacimiento: string;
-        usuarioSistema: boolean;
-        emailAcceso: string;
-        rolSistema: string;
-        comisionesHabilitadas: boolean;
-        ciudad: string;
-        direcciones: {
+    findAll(auth: CurrentAuth, pagination: PaginationDto): Promise<{
+        data: {
             id: string;
-            descripcion: string;
-            pais: string;
-            codigoPostal: string;
-            direccion: string;
-            numero: string;
+            nombreCompleto: string;
+            email: string;
+            telefonoCodigo: string;
+            telefonoNumero: string;
+            sector: string;
+            ocupacion: string;
+            sexo: string;
+            fechaIngreso: string;
+            fechaNacimiento: string;
+            usuarioSistema: boolean;
+            emailAcceso: string;
+            rolSistema: string;
+            comisionesHabilitadas: boolean;
             ciudad: string;
-            tipo: import("./dto/direccion.dto").TipoDireccionDto;
-            principal: boolean;
+            direcciones: {
+                id: string;
+                descripcion: string;
+                pais: string;
+                codigoPostal: string;
+                direccion: string;
+                numero: string;
+                ciudad: string;
+                tipo: import("./dto/direccion.dto").TipoDireccionDto;
+                principal: boolean;
+            }[];
+            comisiones: {
+                id: string;
+                descripcion: string;
+                tipo: import("./dto/comision.dto").TipoComisionDto;
+                valor: string;
+            }[];
         }[];
-        comisiones: {
-            id: string;
-            descripcion: string;
-            tipo: import("./dto/comision.dto").TipoComisionDto;
-            valor: string;
-        }[];
-    }[]>;
+        total: number;
+        page: number;
+        limit: number;
+        pages: number;
+    }>;
     findOne(auth: CurrentAuth, id: string): Promise<{
         id: string;
         nombreCompleto: string;

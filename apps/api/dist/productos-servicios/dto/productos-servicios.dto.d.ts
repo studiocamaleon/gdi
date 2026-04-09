@@ -79,13 +79,18 @@ export declare enum TipoConsumoAdicionalMaterialDto {
 }
 export declare enum DimensionOpcionProductivaDto {
     tipo_impresion = "tipo_impresion",
-    caras = "caras"
+    caras = "caras",
+    tipo_copia = "tipo_copia"
 }
 export declare enum ValorOpcionProductivaDto {
     bn = "bn",
     cmyk = "cmyk",
     simple_faz = "simple_faz",
-    doble_faz = "doble_faz"
+    doble_faz = "doble_faz",
+    copia_simple = "copia_simple",
+    duplicado = "duplicado",
+    triplicado = "triplicado",
+    cuadruplicado = "cuadruplicado"
 }
 export declare enum TipoProductoAdicionalEfectoDto {
     route_effect = "route_effect",
@@ -114,7 +119,8 @@ export declare enum TipoChecklistAccionReglaDto {
     costo_extra = "costo_extra",
     material_extra = "material_extra",
     mutar_producto_base = "mutar_producto_base",
-    set_atributo_tecnico = "set_atributo_tecnico"
+    set_atributo_tecnico = "set_atributo_tecnico",
+    configurar_terminacion = "configurar_terminacion"
 }
 export declare enum ReglaCostoChecklistDto {
     tiempo_min = "tiempo_min",
@@ -415,6 +421,7 @@ export declare class CotizarAddonConfigDto {
 export declare class CotizarChecklistRespuestaDto {
     preguntaId: string;
     respuestaId: string;
+    terminacionParams?: Record<string, unknown>;
 }
 export declare class CotizarSeleccionBaseDto {
     dimension: DimensionOpcionProductivaDto;
@@ -476,6 +483,15 @@ export declare class UpdateGranFormatoChecklistDto {
     aplicaATodasLasTecnologias: boolean;
     checklistComun?: UpsertProductoChecklistDto;
     checklistsPorTecnologia?: UpsertGranFormatoChecklistPorTecnologiaDto[];
+}
+export declare class UpsertRigidPrintedChecklistPorTipoDto {
+    tipoImpresion: string;
+    checklist: UpsertProductoChecklistDto;
+}
+export declare class UpdateRigidPrintedChecklistDto {
+    aplicaATodosLosTiposImpresion: boolean;
+    checklistComun?: UpsertProductoChecklistDto;
+    checklistsPorTipoImpresion?: UpsertRigidPrintedChecklistPorTipoDto[];
 }
 export declare class PreviewGranFormatoCostoMedidaDto {
     anchoMm: number;

@@ -1,10 +1,43 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
     if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
@@ -22,9 +55,16 @@ const proceso_productividad_engine_1 = require("../procesos/proceso-productivida
 const productos_servicios_dto_1 = require("./dto/productos-servicios.dto");
 const digital_sheet_motor_1 = require("./motors/digital-sheet.motor");
 const product_motor_registry_1 = require("./motors/product-motor.registry");
+const TalonarioCalc = __importStar(require("./motors/talonario.calculations"));
+const talonario_motor_1 = require("./motors/talonario.motor");
+const RigidPrintedCalc = __importStar(require("./motors/rigid-printed.calculations"));
+const rigid_printed_motor_1 = require("./motors/rigid-printed.motor");
+const rigid_printed_types_1 = require("./motors/rigid-printed.types");
 const vinyl_cut_motor_1 = require("./motors/vinyl-cut.motor");
 const wide_format_motor_1 = require("./motors/wide-format.motor");
 const DEFAULT_PERIOD_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
+const TIPOS_TERMINACION_VALIDOS = new Set(['perforacion', 'puntas_redondeadas']);
+const BORDES_VALIDOS = new Set(['superior', 'inferior', 'izquierdo', 'derecho']);
 let ProductosServiciosService = class ProductosServiciosService {
     static { ProductosServiciosService_1 = this; }
     prisma;
@@ -108,6 +148,34 @@ let ProductosServiciosService = class ProductosServiciosService {
         },
         exposedInCatalog: true,
     };
+    static TALONARIO_MOTOR_DEFINITION = {
+        code: 'talonario',
+        version: 1,
+        label: 'Talonario · v1',
+        category: 'talonario',
+        capabilities: {
+            hasProductConfig: true,
+            hasVariantOverride: true,
+            hasPreview: true,
+            hasQuote: true,
+        },
+        schema: {},
+        exposedInCatalog: true,
+    };
+    static RIGID_PRINTED_MOTOR_DEFINITION = {
+        code: 'rigidos_impresos',
+        version: 1,
+        label: 'Rígidos impresos · v1',
+        category: 'rigid_printed',
+        capabilities: {
+            hasProductConfig: true,
+            hasVariantOverride: false,
+            hasPreview: true,
+            hasQuote: true,
+        },
+        schema: {},
+        exposedInCatalog: true,
+    };
     static DEFAULT_A4_AREA_M2 = 0.06237;
     static TERMINACION_PLANTILLAS_SOPORTADAS = new Set([
         client_1.PlantillaMaquinaria.GUILLOTINA,
@@ -129,6 +197,11 @@ let ProductosServiciosService = class ProductosServiciosService {
         { codigo: 'A4', nombre: 'A4', anchoMm: 210, altoMm: 297 },
         { codigo: 'A3', nombre: 'A3', anchoMm: 297, altoMm: 420 },
         { codigo: 'SRA3', nombre: 'SRA3', anchoMm: 320, altoMm: 450 },
+        { codigo: 'SRA3+', nombre: 'SRA3+', anchoMm: 330, altoMm: 480 },
+        { codigo: 'SRA3++', nombre: 'SRA3++', anchoMm: 325, altoMm: 500 },
+        { codigo: '22x34', nombre: '22x34', anchoMm: 220, altoMm: 340 },
+        { codigo: 'CARTA', nombre: 'Carta', anchoMm: 216, altoMm: 279 },
+        { codigo: 'OFICIO', nombre: 'Oficio', anchoMm: 216, altoMm: 356 },
     ];
     motorRegistry;
     constructor(prisma) {
@@ -137,6 +210,8 @@ let ProductosServiciosService = class ProductosServiciosService {
             new digital_sheet_motor_1.DigitalSheetMotorModule(this),
             new wide_format_motor_1.WideFormatMotorModule(this),
             new vinyl_cut_motor_1.VinylCutMotorModule(this),
+            new talonario_motor_1.TalonarioMotorModule(this),
+            new rigid_printed_motor_1.RigidPrintedMotorModule(this),
         ]);
     }
     getCatalogoPliegosImpresion() {
@@ -166,6 +241,1459 @@ let ProductosServiciosService = class ProductosServiciosService {
     }
     getVinylCutMotorDefinition() {
         return ProductosServiciosService_1.VINYL_CUT_MOTOR_DEFINITION;
+    }
+    getTalonarioMotorDefinition() {
+        return {
+            ...ProductosServiciosService_1.TALONARIO_MOTOR_DEFINITION,
+            schema: this.getDefaultTalonarioMotorConfig(),
+        };
+    }
+    getRigidPrintedMotorDefinition() {
+        return ProductosServiciosService_1.RIGID_PRINTED_MOTOR_DEFINITION;
+    }
+    async getRigidPrintedProductMotorConfig(auth, productoId) {
+        const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+        const motor = this.resolveMotorOrThrow(producto.motorCodigo, producto.motorVersion);
+        const config = await this.prisma.productoMotorConfig.findFirst({
+            where: {
+                tenantId: auth.tenantId,
+                productoServicioId: producto.id,
+                motorCodigo: motor.code,
+                motorVersion: motor.version,
+                activo: true,
+            },
+            orderBy: [{ versionConfig: 'desc' }],
+        });
+        return {
+            parametros: config?.parametrosJson ??
+                this.resolveDefaultMotorConfig(ProductosServiciosService_1.RIGID_PRINTED_MOTOR_DEFINITION.code),
+            versionConfig: config?.versionConfig ?? 1,
+            activo: config?.activo ?? true,
+            updatedAt: config?.updatedAt?.toISOString() ?? null,
+        };
+    }
+    async upsertRigidPrintedProductMotorConfig(auth, productoId, payload) {
+        const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+        const motor = this.resolveMotorOrThrow(producto.motorCodigo, producto.motorVersion);
+        const current = await this.prisma.productoMotorConfig.findFirst({
+            where: {
+                tenantId: auth.tenantId,
+                productoServicioId: producto.id,
+                motorCodigo: motor.code,
+                motorVersion: motor.version,
+                activo: true,
+            },
+            orderBy: [{ versionConfig: 'desc' }],
+        });
+        const merged = this.mergeMotorConfig(motor.code, current?.parametrosJson, payload.parametros);
+        if (current) {
+            await this.prisma.productoMotorConfig.update({
+                where: { id: current.id },
+                data: {
+                    parametrosJson: merged,
+                    updatedAt: new Date(),
+                },
+            });
+        }
+        else {
+            await this.prisma.productoMotorConfig.create({
+                data: {
+                    tenantId: auth.tenantId,
+                    productoServicioId: producto.id,
+                    motorCodigo: motor.code,
+                    motorVersion: motor.version,
+                    versionConfig: 1,
+                    parametrosJson: merged,
+                    activo: true,
+                },
+            });
+        }
+        return this.getRigidPrintedProductMotorConfig(auth, productoId);
+    }
+    async quoteRigidPrintedVariant(auth, varianteId, payload) {
+        const cantidad = Math.max(1, Math.floor(Number(payload.cantidad ?? 1)));
+        const periodo = this.normalizePeriodo(payload.periodo);
+        const variante = await this.findVarianteCompletaOrThrow(auth, varianteId, this.prisma);
+        const motor = this.resolveMotorOrThrow(variante.productoServicio.motorCodigo, variante.productoServicio.motorVersion);
+        const { config, configVersionBase, configVersionOverride } = await this.getEffectiveMotorConfig(auth, variante.productoServicio.id, variante.id, motor);
+        const effectiveConfig = this.mergeMotorConfig(motor.code, config, (payload.parametros ?? {}));
+        const params = (payload.parametros ?? {});
+        const rigidConfig = effectiveConfig;
+        const imposicionCfg = (rigidConfig.imposicion ?? {});
+        const anchoMm = Number(params.anchoMm ?? variante.anchoMm ?? 0);
+        const altoMm = Number(params.altoMm ?? variante.altoMm ?? 0);
+        if (anchoMm <= 0 || altoMm <= 0) {
+            throw new common_1.BadRequestException('Debe especificar ancho y alto de pieza mayores a 0.');
+        }
+        const variantesCompat = Array.isArray(rigidConfig.variantesCompatibles)
+            ? rigidConfig.variantesCompatibles : [];
+        const placaVarianteId = String(params.placaVarianteId ?? rigidConfig.placaVarianteIdDefault ?? variantesCompat[0] ?? '');
+        if (!placaVarianteId) {
+            throw new common_1.BadRequestException('No hay placas configuradas. Asigná un material y variantes en el tab Tecnologías.');
+        }
+        const placaVariante = await this.prisma.materiaPrimaVariante.findFirst({
+            where: { id: placaVarianteId, tenantId: auth.tenantId },
+        });
+        if (!placaVariante) {
+            throw new common_1.BadRequestException('Placa no encontrada.');
+        }
+        const precioPlaca = Number(placaVariante.precioReferencia ?? 0);
+        const placaAttrs = (placaVariante.atributosVarianteJson ?? {});
+        const placaAnchoRaw = Number(placaAttrs.ancho ?? 0);
+        const placaAltoRaw = Number(placaAttrs.alto ?? 0);
+        const placaAnchoMm = placaAnchoRaw < 10 ? Math.round(placaAnchoRaw * 1000) : placaAnchoRaw;
+        const placaAltoMm = placaAltoRaw < 10 ? Math.round(placaAltoRaw * 1000) : placaAltoRaw;
+        if (placaAnchoMm <= 0 || placaAltoMm <= 0) {
+            throw new common_1.BadRequestException('La placa no tiene dimensiones válidas.');
+        }
+        const nesting = RigidPrintedCalc.nestRectangularGrid({
+            piezaAnchoMm: anchoMm,
+            piezaAltoMm: altoMm,
+            placaAnchoMm,
+            placaAltoMm,
+            separacionHMm: Number(imposicionCfg.separacionHorizontalMm ?? 3),
+            separacionVMm: Number(imposicionCfg.separacionVerticalMm ?? 3),
+            margenMm: Number(imposicionCfg.margenPlacaMm ?? 5),
+            permitirRotacion: Boolean(imposicionCfg.permitirRotacion ?? true),
+        });
+        const plates = RigidPrintedCalc.calculatePlatesNeeded(cantidad, nesting.piezasPorPlaca);
+        const estrategia = String(imposicionCfg.estrategiaCosteo ?? 'segmentos_placa');
+        const segmentos = Array.isArray(imposicionCfg.segmentosPlaca)
+            ? imposicionCfg.segmentosPlaca
+            : [25, 50, 75, 100];
+        const piezasUltimaPlaca = cantidad % nesting.piezasPorPlaca || nesting.piezasPorPlaca;
+        const costeoMaterial = RigidPrintedCalc.calcularCosteoMaterial({
+            estrategia,
+            precioPlaca,
+            placaAnchoMm,
+            placaAltoMm,
+            nesting,
+            placasNecesarias: plates.placas,
+            piezasUltimaPlaca,
+            segmentosPlaca: segmentos,
+            cantidadTotal: cantidad,
+            piezaAnchoMm: anchoMm,
+            piezaAltoMm: altoMm,
+        });
+        const tipoImpresion = String(params.tipoImpresion ?? 'directa');
+        const tipoCfgCaras0 = tipoImpresion === 'flexible_montado'
+            ? rigidConfig.flexibleMontado
+            : rigidConfig.impresionDirecta;
+        const caras = String(params.caras ?? (tipoCfgCaras0?.carasDefault) ?? rigidConfig.carasDefault ?? 'simple_faz');
+        const esDobleFaz0 = caras === 'doble_faz';
+        const multiplicadorCaras = esDobleFaz0 ? 2 : 1;
+        const rutaId = tipoImpresion === 'flexible_montado'
+            ? rigidConfig.rutaFlexibleMontadoId
+            : rigidConfig.rutaImpresionDirectaId;
+        const procesoDefId = String(rutaId ?? variante.procesoDefinicionId ?? variante.productoServicio.procesoDefinicionDefaultId ?? '');
+        let costoProcesos = 0;
+        const bloquesProcesos = [];
+        if (procesoDefId) {
+            const procesoDef = await this.prisma.procesoDefinicion.findFirst({
+                where: { id: procesoDefId, tenantId: auth.tenantId },
+                include: {
+                    operaciones: {
+                        orderBy: { orden: 'asc' },
+                        include: { centroCosto: true, maquina: true, perfilOperativo: true },
+                    },
+                },
+            });
+            if (procesoDef?.operaciones) {
+                for (const op of procesoDef.operaciones) {
+                    if (!op.centroCosto)
+                        continue;
+                    const tarifa = await this.prisma.centroCostoTarifaPeriodo.findFirst({
+                        where: {
+                            tenantId: auth.tenantId, centroCostoId: op.centroCosto.id,
+                            periodo, estado: 'PUBLICADA',
+                        },
+                    });
+                    const tarifaHora = Number(tarifa?.tarifaCalculada ?? 0);
+                    const setupMin = Number(op.setupMin ?? 0);
+                    const runMinBase = Number(op.runMin ?? 0);
+                    const cleanupMin = Number(op.cleanupMin ?? 0);
+                    const tiempoFijoMin = Number(op.tiempoFijoMin ?? 0);
+                    const multDobleFazOp = esDobleFaz0 ? Number(op.multiplicadorDobleFaz ?? 1) : 1;
+                    const totalRunMin = runMinBase * cantidad * multDobleFazOp;
+                    const totalMin = setupMin + totalRunMin + cleanupMin + tiempoFijoMin;
+                    const costo = this.roundProductNumber((totalMin / 60) * tarifaHora);
+                    costoProcesos += costo;
+                    bloquesProcesos.push({
+                        orden: op.orden,
+                        codigo: op.codigo,
+                        nombre: op.nombre,
+                        centroCostoId: op.centroCostoId,
+                        centroCostoNombre: op.centroCosto.nombre,
+                        setupMin, runMin: totalRunMin, totalMin, tarifaHora, costo,
+                    });
+                }
+            }
+        }
+        const total = this.roundProductNumber(costeoMaterial.costoTotal + costoProcesos);
+        const unitario = cantidad > 0 ? this.roundProductNumber(total / cantidad) : total;
+        const result = {
+            varianteId: variante.id,
+            productoServicioId: variante.productoServicioId,
+            productoNombre: variante.productoServicio.nombre,
+            varianteNombre: variante.nombre,
+            motorCodigo: motor.code,
+            motorVersion: motor.version,
+            periodo, cantidad,
+            bloques: {
+                procesos: bloquesProcesos,
+                materiales: [{
+                        materiaPrimaVarianteId: placaVarianteId,
+                        nombre: placaVariante.nombreVariante ?? 'Placa',
+                        unidad: 'placa',
+                        cantidad: plates.placas,
+                        costoUnitario: precioPlaca,
+                        costoTotal: costeoMaterial.costoTotal,
+                    }],
+            },
+            subtotales: {
+                procesos: costoProcesos,
+                material: costeoMaterial.costoTotal,
+                toner: 0, desgaste: 0, consumiblesTerminacion: 0,
+                adicionalesMateriales: 0, adicionalesCostEffects: 0,
+            },
+            total, unitario,
+            trazabilidad: {
+                config: effectiveConfig,
+                configVersionBase, configVersionOverride,
+                tipoImpresion, caras, multiplicadorCaras,
+                estrategiaCosteo: estrategia,
+                costeoDetalle: costeoMaterial.detalle,
+                resumenTecnico: {
+                    anchoMm, altoMm, placaAnchoMm, placaAltoMm,
+                    piezasPorPlaca: nesting.piezasPorPlaca,
+                    placasNecesarias: plates.placas,
+                    aprovechamientoPct: nesting.aprovechamientoPct,
+                    rotada: nesting.rotada,
+                    sobrantes: plates.sobrantes,
+                },
+            },
+        };
+        const roundedResult = this.normalizeProductNumericPrecision(result);
+        const snapshot = await this.prisma.cotizacionProductoSnapshot.create({
+            data: {
+                tenantId: auth.tenantId,
+                productoServicioId: variante.productoServicioId,
+                productoVarianteId: variante.id,
+                motorCodigo: motor.code, motorVersion: motor.version,
+                configVersionBase, configVersionOverride,
+                cantidad, periodoTarifa: periodo,
+                inputJson: { cantidad, periodo, anchoMm, altoMm, placaVarianteId, tipoImpresion, caras, config: effectiveConfig },
+                resultadoJson: roundedResult,
+                total: new client_1.Prisma.Decimal(Number(roundedResult.total ?? 0)),
+            },
+        });
+        return { snapshotId: snapshot.id, ...roundedResult, createdAt: snapshot.createdAt.toISOString() };
+    }
+    async getRigidPrintedChecklist(auth, productoId) {
+        const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+        return this.buildRigidPrintedChecklistResponse(auth, producto);
+    }
+    async updateRigidPrintedChecklist(auth, productoId, payload) {
+        const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+        const motorConfig = await this.prisma.productoMotorConfig.findFirst({
+            where: { productoServicioId: producto.id, tenantId: auth.tenantId },
+        });
+        const rigidConfig = (motorConfig?.parametrosJson ?? {});
+        const tiposActivos = new Set(Array.isArray(rigidConfig.tiposImpresion) ? rigidConfig.tiposImpresion : []);
+        const checklistComun = this.getGranFormatoChecklistStored(payload.checklistComun ?? { preguntas: [] });
+        const checklistsPorTipo = (payload.checklistsPorTipoImpresion ?? []).map((item) => ({
+            tipoImpresion: String(item.tipoImpresion ?? ''),
+            checklist: this.getGranFormatoChecklistStored(item.checklist),
+        }));
+        for (const item of checklistsPorTipo) {
+            if (!item.tipoImpresion || !tiposActivos.has(item.tipoImpresion)) {
+                throw new common_1.BadRequestException(`El tipo de impresión "${item.tipoImpresion}" no está activo en este producto.`);
+            }
+        }
+        const normalized = {
+            aplicaATodosLosTiposImpresion: payload.aplicaATodosLosTiposImpresion !== false,
+            checklistComun,
+            checklistsPorTipoImpresion: checklistsPorTipo,
+        };
+        const nextDetalle = this.mergeProductoDetalle(producto.detalleJson, {
+            rigidPrintedChecklist: normalized,
+        });
+        const updated = await this.prisma.productoServicio.update({
+            where: { id: producto.id },
+            data: { detalleJson: this.toNullableJson(nextDetalle) },
+        });
+        return this.buildRigidPrintedChecklistResponse(auth, updated);
+    }
+    async buildRigidPrintedChecklistResponse(auth, producto) {
+        const detalle = this.asObject(this.asObject(producto.detalleJson).rigidPrintedChecklist);
+        const aplicaATodosLosTiposImpresion = detalle.aplicaATodosLosTiposImpresion !== false;
+        const checklistComun = this.getGranFormatoChecklistStored(detalle.checklistComun ?? { preguntas: [] });
+        const checklistsPorTipo = Array.isArray(detalle.checklistsPorTipoImpresion)
+            ? detalle.checklistsPorTipoImpresion : [];
+        const idsPaso = new Set();
+        const idsCentro = new Set();
+        const idsVariante = new Set();
+        const collectIds = (cl) => {
+            for (const p of cl.preguntas ?? []) {
+                for (const r of p.respuestas ?? []) {
+                    for (const regla of r.reglas ?? []) {
+                        if (regla.pasoPlantillaId)
+                            idsPaso.add(regla.pasoPlantillaId);
+                        if (regla.costoCentroCostoId)
+                            idsCentro.add(regla.costoCentroCostoId);
+                        if (regla.materiaPrimaVarianteId)
+                            idsVariante.add(regla.materiaPrimaVarianteId);
+                    }
+                }
+            }
+        };
+        collectIds(checklistComun);
+        for (const item of checklistsPorTipo) {
+            const row = this.asObject(item);
+            collectIds(this.getGranFormatoChecklistStored(row.checklist));
+        }
+        const [plantillas, centros, variantes] = await Promise.all([
+            idsPaso.size ? this.prisma.procesoOperacionPlantilla.findMany({
+                where: { tenantId: auth.tenantId, id: { in: Array.from(idsPaso) } },
+                include: { centroCosto: true, maquina: true, perfilOperativo: true },
+            }) : [],
+            idsCentro.size ? this.prisma.centroCosto.findMany({
+                where: { tenantId: auth.tenantId, id: { in: Array.from(idsCentro) } },
+                select: { id: true, nombre: true },
+            }) : [],
+            idsVariante.size ? this.prisma.materiaPrimaVariante.findMany({
+                where: { tenantId: auth.tenantId, id: { in: Array.from(idsVariante) } },
+                include: { materiaPrima: true },
+            }) : [],
+        ]);
+        const plantillasById = new Map(plantillas.map((i) => [i.id, i]));
+        const centrosById = new Map(centros.map((i) => [i.id, i]));
+        const variantesById = new Map(variantes.map((i) => [i.id, i]));
+        return {
+            productoId: producto.id,
+            aplicaATodosLosTiposImpresion,
+            checklistComun: this.buildGranFormatoChecklistItemResponse(producto.id, checklistComun, plantillasById, centrosById, variantesById, producto.updatedAt),
+            checklistsPorTipoImpresion: checklistsPorTipo
+                .map((item) => {
+                const row = this.asObject(item);
+                const tipo = String(row.tipoImpresion ?? '');
+                if (!tipo)
+                    return null;
+                return {
+                    tipoImpresion: tipo,
+                    checklist: this.buildGranFormatoChecklistItemResponse(producto.id, this.getGranFormatoChecklistStored(row.checklist), plantillasById, centrosById, variantesById, producto.updatedAt),
+                };
+            })
+                .filter(Boolean),
+            updatedAt: producto.updatedAt.toISOString(),
+        };
+    }
+    async previewRigidPrintedFlexible(auth, productoId, payload) {
+        const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+        const motorConfig = await this.prisma.productoMotorConfig.findFirst({
+            where: { productoServicioId: producto.id, tenantId: auth.tenantId },
+        });
+        const rigidConfig = (motorConfig?.parametrosJson ?? {});
+        const imposicion = (rigidConfig.imposicion ?? {});
+        const medidas = (payload.medidas ?? [])
+            .map((m) => ({ anchoMm: Number(m.anchoMm ?? 0), altoMm: Number(m.altoMm ?? 0), cantidad: Math.max(1, Math.floor(Number(m.cantidad ?? 1))) }))
+            .filter((m) => m.anchoMm > 0 && m.altoMm > 0);
+        if (medidas.length === 0)
+            return { preview: null };
+        const flexVariantIds = Array.isArray(rigidConfig.variantesFlexiblesCompatibles)
+            ? rigidConfig.variantesFlexiblesCompatibles : [];
+        if (flexVariantIds.length === 0)
+            return { preview: null };
+        const flexVariants = await this.prisma.materiaPrimaVariante.findMany({
+            where: { id: { in: flexVariantIds }, tenantId: auth.tenantId, activo: true },
+            include: { materiaPrima: true },
+        });
+        if (flexVariants.length === 0)
+            return { preview: null };
+        const flexCfg = rigidConfig.flexibleMontado;
+        const flexMaquinaId = String(flexCfg?.maquinaDefaultId ?? (flexCfg?.maquinasCompatibles ?? [])[0] ?? '');
+        const flexMaquina = flexMaquinaId
+            ? await this.prisma.maquina.findUnique({ where: { id: flexMaquinaId, tenantId: auth.tenantId } })
+            : null;
+        const sepH = Number(imposicion.separacionHorizontalMm ?? 3);
+        const sepV = Number(imposicion.separacionVerticalMm ?? 3);
+        const rotPermitida = imposicion.permitirRotacion !== false;
+        const esDobleFaz = payload.caras === 'doble_faz';
+        const duplicarFlex = esDobleFaz
+            && rigidConfig.flexibleMontado?.duplicarSustratoFlexibleEnDobleFaz === true;
+        const medidasFlex = duplicarFlex
+            ? medidas.map((m) => ({ ...m, cantidad: m.cantidad * 2 }))
+            : medidas;
+        const candidatos = this.evaluateGranFormatoImposicionCandidates({
+            maquina: flexMaquina,
+            medidas: medidasFlex,
+            config: {
+                permitirRotacion: rotPermitida,
+                separacionHorizontalMm: sepH,
+                separacionVerticalMm: sepV,
+                margenLateralIzquierdoMmOverride: null,
+                margenLateralDerechoMmOverride: null,
+                margenInicioMmOverride: null,
+                margenFinalMmOverride: null,
+                criterioOptimizacion: 'menor_desperdicio',
+                panelizadoActivo: false,
+                panelizadoDireccion: 'vertical',
+                panelizadoSolapeMm: null,
+                panelizadoAnchoMaxPanelMm: null,
+                panelizadoDistribucion: 'equilibrada',
+                panelizadoInterpretacionAnchoMaximo: 'total',
+                panelizadoModo: 'automatico',
+                panelizadoManualLayout: null,
+            },
+            variants: flexVariants,
+        });
+        if (candidatos.length === 0)
+            return { preview: null };
+        const best = candidatos[0];
+        return {
+            preview: this.buildGranFormatoNestingPreview(best),
+            rollWidthMm: best.rollWidthMm,
+            consumedLengthMm: best.consumedLengthMm,
+            usefulAreaM2: best.usefulAreaM2,
+            consumedAreaM2: best.consumedAreaM2,
+            wastePct: best.wastePct,
+            variantNombre: best.variant.materiaPrima?.nombre ?? '',
+        };
+    }
+    async cotizarRigidPrintedByProducto(auth, productoId, payload) {
+        const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+        const motor = this.resolveMotorOrThrow(producto.motorCodigo, producto.motorVersion);
+        const variante = await this.prisma.productoVariante.findFirst({
+            where: { tenantId: auth.tenantId, productoServicioId: productoId, activo: true },
+            orderBy: { createdAt: 'asc' },
+        });
+        const cantidad = Math.max(1, Math.floor(Number(payload.cantidad ?? 1)));
+        const periodo = this.normalizePeriodo(payload.periodo);
+        const params = (payload.parametros ?? {});
+        const configRow = await this.prisma.productoMotorConfig.findFirst({
+            where: {
+                tenantId: auth.tenantId, productoServicioId: productoId,
+                motorCodigo: motor.code, motorVersion: motor.version, activo: true,
+            },
+            orderBy: [{ versionConfig: 'desc' }],
+        });
+        const rigidConfig = this.mergeMotorConfig(motor.code, configRow?.parametrosJson, params);
+        const imposicionCfg = (rigidConfig.imposicion ?? {});
+        let medidasInput;
+        if (Array.isArray(params.medidas) && params.medidas.length > 0) {
+            medidasInput = params.medidas.map((m) => ({
+                anchoMm: Number(m.anchoMm ?? 0),
+                altoMm: Number(m.altoMm ?? 0),
+                cantidad: Math.max(1, Math.floor(Number(m.cantidad ?? 1))),
+            })).filter((m) => m.anchoMm > 0 && m.altoMm > 0);
+        }
+        else {
+            const anchoMm = Number(params.anchoMm ?? 0);
+            const altoMm = Number(params.altoMm ?? 0);
+            if (anchoMm <= 0 || altoMm <= 0) {
+                throw new common_1.BadRequestException('Debe especificar ancho y alto de pieza mayores a 0.');
+            }
+            medidasInput = [{ anchoMm, altoMm, cantidad }];
+        }
+        if (medidasInput.length === 0) {
+            throw new common_1.BadRequestException('Debe especificar al menos una medida válida.');
+        }
+        const anchoMm = medidasInput[0].anchoMm;
+        const altoMm = medidasInput[0].altoMm;
+        const cantidadTotal = medidasInput.reduce((s, m) => s + m.cantidad, 0);
+        const variantesCompatibles = Array.isArray(rigidConfig.variantesCompatibles)
+            ? rigidConfig.variantesCompatibles
+            : [];
+        const placaVarianteId = String(params.placaVarianteId
+            ?? rigidConfig.placaVarianteIdDefault
+            ?? variantesCompatibles[0]
+            ?? '');
+        if (!placaVarianteId) {
+            throw new common_1.BadRequestException('No hay placas configuradas. Asigná un material y variantes en el tab Tecnologías.');
+        }
+        const placaVariante = await this.prisma.materiaPrimaVariante.findFirst({
+            where: { id: placaVarianteId, tenantId: auth.tenantId },
+            include: { materiaPrima: true },
+        });
+        if (!placaVariante) {
+            throw new common_1.BadRequestException('Placa no encontrada.');
+        }
+        const precioPlaca = Number(placaVariante.precioReferencia ?? 0);
+        const placaAttrs = (placaVariante.atributosVarianteJson ?? {});
+        const placaAnchoRaw = Number(placaAttrs.ancho ?? 0);
+        const placaAltoRaw = Number(placaAttrs.alto ?? 0);
+        const placaAnchoMm = placaAnchoRaw < 10 ? Math.round(placaAnchoRaw * 1000) : placaAnchoRaw;
+        const placaAltoMm = placaAltoRaw < 10 ? Math.round(placaAltoRaw * 1000) : placaAltoRaw;
+        const mgConfig = (imposicionCfg.margenMaquina ?? {});
+        const margenArr = Number(mgConfig.arriba ?? 0);
+        const margenAba = Number(mgConfig.abajo ?? 0);
+        const margenIzq = Number(mgConfig.izquierda ?? 0);
+        const margenDer = Number(mgConfig.derecha ?? 0);
+        const orientacion = String(imposicionCfg.orientacionPlaca ?? 'usar_lado_corto');
+        const ladoCorto = Math.min(placaAnchoMm, placaAltoMm);
+        const ladoLargo = Math.max(placaAnchoMm, placaAltoMm);
+        const pAnchoTrabajo = orientacion === 'usar_lado_largo' ? ladoLargo : ladoCorto;
+        const pLargoTrabajo = orientacion === 'usar_lado_largo' ? ladoCorto : ladoLargo;
+        const areaAncho = pAnchoTrabajo - margenIzq - margenDer;
+        const areaAlto = pLargoTrabajo - margenArr - margenAba;
+        const sepH = Number(imposicionCfg.separacionHorizontalMm ?? 3);
+        const sepV = Number(imposicionCfg.separacionVerticalMm ?? 3);
+        const rotPermitida = Boolean(imposicionCfg.permitirRotacion ?? true);
+        const multiNesting = RigidPrintedCalc.nestMultiMedida(medidasInput, areaAncho, areaAlto, sepH, sepV, 0, rotPermitida, orientacion);
+        const estrategia = String(imposicionCfg.estrategiaCosteo ?? 'segmentos_placa');
+        const segmentos = Array.isArray(imposicionCfg.segmentosPlaca)
+            ? imposicionCfg.segmentosPlaca : [25, 50, 75, 100];
+        const areaPlacaM2 = (pAnchoTrabajo * pLargoTrabajo) / 1_000_000;
+        const precioM2Placa = areaPlacaM2 > 0 ? precioPlaca / areaPlacaM2 : 0;
+        const areaUtilM2 = multiNesting.areaUtilMm2 / 1_000_000;
+        let costoMaterialTotal = 0;
+        if (estrategia === 'm2_exacto') {
+            costoMaterialTotal = this.roundProductNumber(areaUtilM2 * precioM2Placa);
+        }
+        else if (estrategia === 'largo_consumido') {
+            for (const layout of multiNesting.placaLayouts) {
+                const fraccion = layout.largoConsumidoMm / pLargoTrabajo;
+                costoMaterialTotal += fraccion >= 0.99
+                    ? precioPlaca
+                    : this.roundProductNumber(precioPlaca * fraccion);
+            }
+        }
+        else {
+            const escalones = segmentos.length > 0 ? [...segmentos].sort((a, b) => a - b) : [25, 50, 75, 100];
+            for (const layout of multiNesting.placaLayouts) {
+                const ocupacion = areaPlacaM2 > 0 ? (layout.areaUtilMm2 / 1_000_000 / areaPlacaM2) * 100 : 100;
+                const seg = escalones.find((s) => s >= ocupacion) ?? 100;
+                costoMaterialTotal += this.roundProductNumber(precioPlaca * (seg / 100));
+            }
+        }
+        costoMaterialTotal = this.roundProductNumber(costoMaterialTotal);
+        const costeoDetalle = {
+            precioPlaca,
+            precioM2: this.roundProductNumber(precioM2Placa),
+            placasCompletas: multiNesting.placas,
+            costoPlacasCompletas: costoMaterialTotal,
+            ultimaPlaca: null,
+        };
+        const tipoImpresion = String(params.tipoImpresion ?? 'directa');
+        const tipoCfgCaras = tipoImpresion === 'flexible_montado'
+            ? rigidConfig.flexibleMontado
+            : rigidConfig.impresionDirecta;
+        const caras = String(params.caras
+            ?? (tipoCfgCaras?.carasDefault)
+            ?? rigidConfig.carasDefault
+            ?? 'simple_faz');
+        const esDobleFaz = caras === 'doble_faz';
+        const multiplicadorCaras = esDobleFaz ? 2 : 1;
+        const rutaId = tipoImpresion === 'flexible_montado'
+            ? rigidConfig.rutaFlexibleMontadoId : rigidConfig.rutaImpresionDirectaId;
+        const procesoDefId = String(rutaId ?? producto.procesoDefinicionDefaultId ?? '');
+        let costoProcesos = 0;
+        const bloquesProcesos = [];
+        if (procesoDefId) {
+            const procesoDef = await this.prisma.procesoDefinicion.findFirst({
+                where: { id: procesoDefId, tenantId: auth.tenantId },
+                include: {
+                    operaciones: {
+                        orderBy: { orden: 'asc' },
+                        include: { centroCosto: true, maquina: true, perfilOperativo: true },
+                    },
+                },
+            });
+            if (procesoDef?.operaciones) {
+                for (const op of procesoDef.operaciones) {
+                    if (!op.centroCosto)
+                        continue;
+                    const tarifa = await this.prisma.centroCostoTarifaPeriodo.findFirst({
+                        where: {
+                            tenantId: auth.tenantId, centroCostoId: op.centroCosto.id,
+                            periodo, estado: 'PUBLICADA',
+                        },
+                    });
+                    const tarifaHora = Number(tarifa?.tarifaCalculada ?? 0);
+                    const setupMin = Number(op.setupMin ?? 0);
+                    const multDobleFazOp = esDobleFaz ? Number(op.multiplicadorDobleFaz ?? 1) : 1;
+                    const cantidadObjetivoSalida = this.resolveGranFormatoCantidadObjetivoSalida({
+                        operacion: op,
+                        totalPiezas: cantidadTotal * multDobleFazOp,
+                        areaUtilM2: medidasInput.reduce((s, m) => s + (m.anchoMm * m.altoMm * m.cantidad) / 1_000_000, 0) * multDobleFazOp,
+                        largoConsumidoMl: 0,
+                        perimetroTotalMl: this.roundProductNumber(medidasInput.reduce((s, m) => s + (((m.anchoMm + m.altoMm) * 2) / 1000) * m.cantidad, 0) * multDobleFazOp),
+                    });
+                    const usaSoloTiempoFijo = (op.modoProductividad ?? 'FIJA') === 'FIJA' &&
+                        Number(op.tiempoFijoMin ?? 0) > 0 &&
+                        Number(op.productividadBase ?? 0) <= 0 &&
+                        Number(op.runMin ?? 0) <= 0;
+                    let runMinCalc;
+                    if (usaSoloTiempoFijo) {
+                        runMinCalc = 0;
+                    }
+                    else {
+                        const prodResult = (0, proceso_productividad_engine_1.evaluateProductividad)({
+                            modoProductividad: op.modoProductividad ?? client_1.ModoProductividadProceso.FIJA,
+                            productividadBase: op.productividadBase,
+                            reglaVelocidadJson: op.reglaVelocidadJson ?? null,
+                            reglaMermaJson: op.reglaMermaJson ?? null,
+                            runMin: op.runMin,
+                            unidadTiempo: op.unidadTiempo ?? client_1.UnidadProceso.MINUTO,
+                            mermaRunPct: op.mermaRunPct,
+                            mermaSetup: op.mermaSetup ?? null,
+                            cantidadObjetivoSalida,
+                            contexto: {
+                                cantidad: cantidadTotal * multDobleFazOp,
+                                areaTotalM2: medidasInput.reduce((s, m) => s + (m.anchoMm * m.altoMm * m.cantidad) / 1_000_000, 0) * multDobleFazOp,
+                                perimetroTotalMl: this.roundProductNumber(medidasInput.reduce((s, m) => s + (((m.anchoMm + m.altoMm) * 2) / 1000) * m.cantidad, 0) * multDobleFazOp),
+                            },
+                        });
+                        runMinCalc = prodResult.runMin;
+                    }
+                    const totalMin = setupMin + runMinCalc + Number(op.cleanupMin ?? 0) + Number(op.tiempoFijoMin ?? 0);
+                    const costo = this.roundProductNumber((totalMin / 60) * tarifaHora);
+                    costoProcesos += costo;
+                    bloquesProcesos.push({
+                        orden: op.orden, codigo: op.codigo, nombre: op.nombre,
+                        centroCostoId: op.centroCostoId, centroCostoNombre: op.centroCosto.nombre,
+                        setupMin, runMin: runMinCalc, totalMin, tarifaHora, costo,
+                    });
+                }
+            }
+        }
+        const areaPiezasM2 = this.roundProductNumber(medidasInput.reduce((s, m) => s + (m.anchoMm * m.altoMm * m.cantidad), 0) / 1_000_000);
+        const areaPlacaTotalM2 = this.roundProductNumber((pAnchoTrabajo * pLargoTrabajo * multiNesting.placas) / 1_000_000);
+        const materiasPrimas = [];
+        const sustratoNombre = placaVariante.nombreVariante
+            ? `${placaVariante.materiaPrima?.nombre ?? 'Sustrato'} — ${placaVariante.nombreVariante}`
+            : placaVariante.materiaPrima?.nombre ?? 'Sustrato rígido';
+        let costoBase = 0;
+        for (const m of medidasInput) {
+            const m2Linea = this.roundProductNumber((m.anchoMm * m.altoMm * m.cantidad) / 1_000_000);
+            const costoLinea = this.roundProductNumber(m2Linea * precioM2Placa);
+            costoBase += costoLinea;
+            materiasPrimas.push({
+                tipo: 'Sustrato',
+                nombre: sustratoNombre,
+                origen: `${m.cantidad}× ${(m.anchoMm / 10).toFixed(0)}×${(m.altoMm / 10).toFixed(0)} cm`,
+                unidad: 'm2',
+                cantidad: m2Linea,
+                costoUnitario: precioM2Placa,
+                costo: costoLinea,
+            });
+        }
+        costoBase = this.roundProductNumber(costoBase);
+        if (costoMaterialTotal > costoBase) {
+            const costoDesperdicio = this.roundProductNumber(costoMaterialTotal - costoBase);
+            const areaDesperdicioCobrada = precioM2Placa > 0
+                ? this.roundProductNumber(costoDesperdicio / precioM2Placa)
+                : this.roundProductNumber(Math.max(0, areaPlacaTotalM2 - areaPiezasM2));
+            materiasPrimas.push({
+                tipo: 'Sustrato',
+                nombre: sustratoNombre + ' · Desperdicio',
+                origen: 'Desperdicio',
+                unidad: 'm2',
+                cantidad: areaDesperdicioCobrada,
+                costoUnitario: precioM2Placa,
+                costo: costoDesperdicio,
+            });
+        }
+        let costoFlexible = 0;
+        let bestFlexCandidate = null;
+        if (tipoImpresion === 'flexible_montado') {
+            const flexVariantIds = Array.isArray(rigidConfig.variantesFlexiblesCompatibles)
+                ? rigidConfig.variantesFlexiblesCompatibles : [];
+            if (flexVariantIds.length > 0) {
+                const flexVariants = await this.prisma.materiaPrimaVariante.findMany({
+                    where: { id: { in: flexVariantIds }, tenantId: auth.tenantId, activo: true },
+                    include: { materiaPrima: true },
+                });
+                const flexCfg = rigidConfig.flexibleMontado;
+                const flexMaquinaId = String(flexCfg?.maquinaDefaultId ?? (flexCfg?.maquinasCompatibles ?? [])[0] ?? '');
+                const flexMaquina = flexMaquinaId
+                    ? await this.prisma.maquina.findUnique({ where: { id: flexMaquinaId, tenantId: auth.tenantId } })
+                    : null;
+                const duplicarFlexDobleFaz = esDobleFaz
+                    && rigidConfig.flexibleMontado?.duplicarSustratoFlexibleEnDobleFaz === true;
+                const multFlexCaras = duplicarFlexDobleFaz ? 2 : 1;
+                const medidasFlex = multFlexCaras > 1
+                    ? medidasInput.map((m) => ({ ...m, cantidad: m.cantidad * multFlexCaras }))
+                    : medidasInput;
+                const candidatos = this.evaluateGranFormatoImposicionCandidates({
+                    maquina: flexMaquina,
+                    medidas: medidasFlex,
+                    config: {
+                        permitirRotacion: rotPermitida,
+                        separacionHorizontalMm: sepH,
+                        separacionVerticalMm: sepV,
+                        margenLateralIzquierdoMmOverride: null,
+                        margenLateralDerechoMmOverride: null,
+                        margenInicioMmOverride: null,
+                        margenFinalMmOverride: null,
+                        criterioOptimizacion: 'menor_desperdicio',
+                        panelizadoActivo: false,
+                        panelizadoDireccion: 'vertical',
+                        panelizadoSolapeMm: null,
+                        panelizadoAnchoMaxPanelMm: null,
+                        panelizadoDistribucion: 'equilibrada',
+                        panelizadoInterpretacionAnchoMaximo: 'total',
+                        panelizadoModo: 'automatico',
+                        panelizadoManualLayout: null,
+                    },
+                    variants: flexVariants,
+                });
+                if (candidatos.length > 0) {
+                    bestFlexCandidate = candidatos[0];
+                    const flexWarnings = [];
+                    const largoConsumidoMl = this.roundProductNumber(bestFlexCandidate.consumedLengthMm / 1000);
+                    const substrateTotalCost = this.calculateGranFormatoSustratoCost({
+                        variant: bestFlexCandidate.variant,
+                        consumedAreaM2: bestFlexCandidate.consumedAreaM2,
+                        consumedLengthMl: largoConsumidoMl,
+                        warnings: flexWarnings,
+                    });
+                    costoFlexible = substrateTotalCost;
+                    const flexNombre = bestFlexCandidate.variant.materiaPrima.nombre;
+                    const flexVariantNombre = bestFlexCandidate.variant.nombreVariante ?? '';
+                    const usefulFactor = bestFlexCandidate.consumedAreaM2 > 0
+                        ? bestFlexCandidate.usefulAreaM2 / bestFlexCandidate.consumedAreaM2 : 0;
+                    const usefulCost = this.roundProductNumber(substrateTotalCost * usefulFactor);
+                    const wasteCost = this.roundProductNumber(substrateTotalCost - usefulCost);
+                    materiasPrimas.push({
+                        tipo: 'Sustrato flexible',
+                        nombre: (flexVariantNombre ? `${flexNombre} — ${flexVariantNombre}` : flexNombre)
+                            + (multFlexCaras > 1 ? ` (×${multFlexCaras} caras)` : ''),
+                        origen: 'Base',
+                        unidad: 'm2',
+                        cantidad: this.roundProductNumber(bestFlexCandidate.usefulAreaM2),
+                        costoUnitario: bestFlexCandidate.usefulAreaM2 > 0 ? this.roundProductNumber(usefulCost / bestFlexCandidate.usefulAreaM2) : 0,
+                        costo: usefulCost,
+                    });
+                    if (bestFlexCandidate.wasteAreaM2 > 0.001) {
+                        materiasPrimas.push({
+                            tipo: 'Sustrato flexible',
+                            nombre: (flexVariantNombre ? `${flexNombre} — ${flexVariantNombre}` : flexNombre) + ' · Desperdicio',
+                            origen: 'Desperdicio',
+                            unidad: 'm2',
+                            cantidad: this.roundProductNumber(bestFlexCandidate.wasteAreaM2),
+                            costoUnitario: bestFlexCandidate.wasteAreaM2 > 0 ? this.roundProductNumber(wasteCost / bestFlexCandidate.wasteAreaM2) : 0,
+                            costo: wasteCost > 0 ? wasteCost : 0,
+                        });
+                    }
+                }
+            }
+        }
+        let costoTintas = 0;
+        const areaImpresaM2 = areaPiezasM2 * multiplicadorCaras;
+        const tipoCfg = tipoImpresion === 'flexible_montado'
+            ? rigidConfig.flexibleMontado
+            : rigidConfig.impresionDirecta;
+        const maquinaImpresionId = String(params.maquinaId ?? tipoCfg?.maquinaDefaultId ?? (tipoCfg?.maquinasCompatibles ?? [])[0] ?? '');
+        const perfilImpresionId = String(params.perfilId ?? tipoCfg?.perfilDefaultId ?? '');
+        if (maquinaImpresionId) {
+            const consumibles = await this.prisma.maquinaConsumible.findMany({
+                where: {
+                    tenantId: auth.tenantId,
+                    maquinaId: maquinaImpresionId,
+                    activo: true,
+                    tipo: { in: ['TINTA', 'TONER'] },
+                },
+                include: {
+                    materiaPrimaVariante: { include: { materiaPrima: true } },
+                    perfilOperativo: true,
+                },
+            });
+            let perfilEfectivo = perfilImpresionId || '';
+            if (!perfilEfectivo) {
+                const tieneGenericos = consumibles.some((c) => !c.perfilOperativoId);
+                if (!tieneGenericos && consumibles.length > 0) {
+                    perfilEfectivo = consumibles[0].perfilOperativoId ?? '';
+                }
+            }
+            const consumiblesFiltrados = perfilEfectivo
+                ? consumibles.filter((c) => !c.perfilOperativoId || c.perfilOperativoId === perfilEfectivo)
+                : consumibles.filter((c) => !c.perfilOperativoId);
+            for (const cons of consumiblesFiltrados) {
+                const consumoBase = Number(cons.consumoBase ?? 0);
+                if (consumoBase <= 0)
+                    continue;
+                const cantidadConsumida = this.roundProductNumber(consumoBase * areaImpresaM2);
+                const unidadTinta = cons.unidad === 'LITRO' ? 'l' : cons.unidad === 'GRAMO' ? 'g' : 'ml';
+                const costoUnitario = this.resolveMateriaPrimaVariantUnitCost({
+                    materiaPrimaVariante: cons.materiaPrimaVariante,
+                    targetUnit: unidadTinta,
+                    contextLabel: 'Tinta',
+                });
+                const costoTinta = this.roundProductNumber(cantidadConsumida * costoUnitario);
+                costoTintas += costoTinta;
+                const detalle = (cons.detalleJson ?? {});
+                const colorLabel = detalle.color ? String(detalle.color).toUpperCase() : '';
+                materiasPrimas.push({
+                    tipo: 'Tinta',
+                    nombre: cons.materiaPrimaVariante.materiaPrima.nombre,
+                    origen: 'Base',
+                    unidad: unidadTinta,
+                    cantidad: cantidadConsumida,
+                    costoUnitario,
+                    costo: costoTinta,
+                    variantChips: colorLabel ? [{ label: 'Color', value: colorLabel }] : undefined,
+                });
+            }
+        }
+        const total = this.roundProductNumber(costoMaterialTotal + costoFlexible + costoProcesos + costoTintas);
+        const unidadComercial = producto.unidadComercial ?? 'unidad';
+        const cantidadComercial = unidadComercial === 'm2'
+            ? this.roundProductNumber(areaPiezasM2)
+            : unidadComercial === 'metro_lineal'
+                ? this.roundProductNumber(medidasInput.reduce((s, m) => s + (Math.max(m.anchoMm, m.altoMm) / 1000) * m.cantidad, 0))
+                : cantidadTotal;
+        const unitario = cantidadComercial > 0 ? this.roundProductNumber(total / cantidadComercial) : total;
+        const result = {
+            productoServicioId: productoId,
+            productoNombre: producto.nombre,
+            varianteId: variante?.id ?? null,
+            varianteNombre: variante?.nombre ?? 'Medida libre',
+            motorCodigo: motor.code, motorVersion: motor.version,
+            periodo, cantidad: cantidadComercial, cantidadPiezas: cantidadTotal,
+            bloques: { procesos: bloquesProcesos, materiales: materiasPrimas },
+            subtotales: {
+                procesos: costoProcesos,
+                material: costoMaterialTotal,
+                flexible: costoFlexible,
+                tinta: costoTintas,
+                toner: 0, desgaste: 0, consumiblesTerminacion: 0,
+                adicionalesMateriales: 0, adicionalesCostEffects: 0,
+            },
+            total, unitario,
+            trazabilidad: {
+                config: rigidConfig, tipoImpresion, caras, multiplicadorCaras,
+                estrategiaCosteo: estrategia, costeoDetalle,
+                resumenTecnico: { anchoMm, altoMm, placaAnchoMm: pAnchoTrabajo, placaAltoMm: pLargoTrabajo, piezasPorPlaca: multiNesting.totalPiezas, placasNecesarias: multiNesting.placas, aprovechamientoPct: multiNesting.aprovechamientoPct, rotada: false, sobrantes: 0 },
+                medidasDetalle: medidasInput.map((m) => ({
+                    anchoMm: m.anchoMm,
+                    altoMm: m.altoMm,
+                    cantidad: m.cantidad,
+                    m2: this.roundProductNumber((m.anchoMm * m.altoMm * m.cantidad) / 1_000_000),
+                })),
+                flexibleNestingPreview: bestFlexCandidate
+                    ? this.buildGranFormatoNestingPreview(bestFlexCandidate)
+                    : null,
+            },
+        };
+        const roundedResult = this.normalizeProductNumericPrecision(result);
+        const snapshot = await this.prisma.cotizacionProductoSnapshot.create({
+            data: {
+                tenantId: auth.tenantId, productoServicioId: productoId,
+                productoVarianteId: variante?.id ?? null,
+                motorCodigo: motor.code, motorVersion: motor.version,
+                configVersionBase: configRow?.versionConfig ?? null, configVersionOverride: null,
+                cantidad: new client_1.Prisma.Decimal(cantidadComercial), periodoTarifa: periodo,
+                inputJson: { cantidadComercial, cantidadPiezas: cantidadTotal, periodo, medidas: medidasInput, placaVarianteId, tipoImpresion, caras, unidadComercial },
+                resultadoJson: roundedResult,
+                total: new client_1.Prisma.Decimal(Number(roundedResult.total ?? 0)),
+            },
+        });
+        return { snapshotId: snapshot.id, ...roundedResult, createdAt: snapshot.createdAt.toISOString() };
+    }
+    async getTalonarioProductMotorConfig(auth, productoId) {
+        const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+        const motor = this.resolveMotorOrThrow(producto.motorCodigo, producto.motorVersion);
+        const config = await this.prisma.productoMotorConfig.findFirst({
+            where: {
+                tenantId: auth.tenantId,
+                productoServicioId: producto.id,
+                motorCodigo: motor.code,
+                motorVersion: motor.version,
+                activo: true,
+            },
+            orderBy: [{ versionConfig: 'desc' }],
+        });
+        return {
+            productoId: producto.id,
+            motorCodigo: motor.code,
+            motorVersion: motor.version,
+            parametros: config?.parametrosJson ??
+                this.resolveDefaultMotorConfig(ProductosServiciosService_1.TALONARIO_MOTOR_DEFINITION.code),
+            versionConfig: config?.versionConfig ?? 1,
+            activo: config?.activo ?? true,
+            updatedAt: config?.updatedAt?.toISOString() ?? null,
+        };
+    }
+    async upsertTalonarioProductMotorConfig(auth, productoId, payload) {
+        const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+        const motor = this.resolveMotorOrThrow(producto.motorCodigo, producto.motorVersion);
+        const current = await this.prisma.productoMotorConfig.findFirst({
+            where: {
+                tenantId: auth.tenantId,
+                productoServicioId: producto.id,
+                motorCodigo: motor.code,
+                motorVersion: motor.version,
+                activo: true,
+            },
+            orderBy: [{ versionConfig: 'desc' }],
+        });
+        const nextVersion = (current?.versionConfig ?? 0) + 1;
+        const merged = this.mergeMotorConfig(motor.code, current?.parametrosJson, payload.parametros);
+        const created = await this.prisma.productoMotorConfig.create({
+            data: {
+                tenantId: auth.tenantId,
+                productoServicioId: producto.id,
+                motorCodigo: motor.code,
+                motorVersion: motor.version,
+                parametrosJson: merged,
+                versionConfig: nextVersion,
+                activo: true,
+            },
+        });
+        return {
+            productoId: producto.id,
+            motorCodigo: motor.code,
+            motorVersion: motor.version,
+            parametros: created.parametrosJson,
+            versionConfig: created.versionConfig,
+            activo: created.activo,
+            updatedAt: created.updatedAt.toISOString(),
+        };
+    }
+    async getTalonarioVariantMotorOverride(auth, varianteId) {
+        const variante = await this.findVarianteOrThrow(auth, varianteId, this.prisma);
+        const producto = await this.findProductoOrThrow(auth, variante.productoServicioId, this.prisma);
+        const motor = this.resolveMotorOrThrow(producto.motorCodigo, producto.motorVersion);
+        const config = await this.prisma.productoVarianteMotorOverride.findFirst({
+            where: {
+                tenantId: auth.tenantId,
+                productoVarianteId: variante.id,
+                motorCodigo: motor.code,
+                motorVersion: motor.version,
+                activo: true,
+            },
+            orderBy: [{ versionConfig: 'desc' }],
+        });
+        return {
+            varianteId: variante.id,
+            motorCodigo: motor.code,
+            motorVersion: motor.version,
+            parametros: config?.parametrosJson ?? {},
+            versionConfig: config?.versionConfig ?? 1,
+            activo: config?.activo ?? true,
+            updatedAt: config?.updatedAt?.toISOString() ?? null,
+        };
+    }
+    async upsertTalonarioVariantMotorOverride(auth, varianteId, payload) {
+        const variante = await this.findVarianteOrThrow(auth, varianteId, this.prisma);
+        const producto = await this.findProductoOrThrow(auth, variante.productoServicioId, this.prisma);
+        const motor = this.resolveMotorOrThrow(producto.motorCodigo, producto.motorVersion);
+        const current = await this.prisma.productoVarianteMotorOverride.findFirst({
+            where: {
+                tenantId: auth.tenantId,
+                productoVarianteId: variante.id,
+                motorCodigo: motor.code,
+                motorVersion: motor.version,
+                activo: true,
+            },
+            orderBy: [{ versionConfig: 'desc' }],
+        });
+        const nextVersion = (current?.versionConfig ?? 0) + 1;
+        const currentObj = (current?.parametrosJson && typeof current.parametrosJson === 'object'
+            ? current.parametrosJson : {});
+        const merged = { ...currentObj, ...payload.parametros };
+        const created = await this.prisma.productoVarianteMotorOverride.create({
+            data: {
+                tenantId: auth.tenantId,
+                productoVarianteId: variante.id,
+                motorCodigo: motor.code,
+                motorVersion: motor.version,
+                parametrosJson: merged,
+                versionConfig: nextVersion,
+                activo: true,
+            },
+        });
+        return {
+            varianteId: variante.id,
+            motorCodigo: motor.code,
+            motorVersion: motor.version,
+            parametros: created.parametrosJson,
+            versionConfig: created.versionConfig,
+            activo: created.activo,
+            updatedAt: created.updatedAt.toISOString(),
+        };
+    }
+    async quoteTalonarioVariant(auth, varianteId, payload) {
+        const cantidadTalonarios = Math.floor(Number(payload.cantidad));
+        if (!Number.isFinite(cantidadTalonarios) || cantidadTalonarios <= 0) {
+            throw new common_1.BadRequestException('La cantidad de talonarios debe ser mayor a 0.');
+        }
+        const periodo = this.normalizePeriodo(payload.periodo);
+        const variante = await this.findVarianteCompletaOrThrow(auth, varianteId, this.prisma);
+        const motor = this.resolveMotorOrThrow(variante.productoServicio.motorCodigo, variante.productoServicio.motorVersion);
+        const { config: rawConfig, configVersionBase, configVersionOverride } = await this.getEffectiveMotorConfig(auth, variante.productoServicio.id, variante.id, motor);
+        const [productConfigRow, variantOverrideRow] = await Promise.all([
+            this.prisma.productoMotorConfig.findFirst({
+                where: {
+                    tenantId: auth.tenantId,
+                    productoServicioId: variante.productoServicio.id,
+                    motorCodigo: motor.code,
+                    motorVersion: motor.version,
+                    activo: true,
+                },
+                orderBy: [{ versionConfig: 'desc' }],
+            }),
+            this.prisma.productoVarianteMotorOverride.findFirst({
+                where: {
+                    tenantId: auth.tenantId,
+                    productoVarianteId: variante.id,
+                    motorCodigo: motor.code,
+                    motorVersion: motor.version,
+                    activo: true,
+                },
+                orderBy: [{ versionConfig: 'desc' }],
+            }),
+        ]);
+        const productParams = this.asObject(productConfigRow?.parametrosJson);
+        const variantParams = this.asObject(variantOverrideRow?.parametrosJson);
+        const composicionFields = [
+            'tipoCopiaDefiniciones', 'encuadernacion', 'puntillado',
+            'materialesExtra', 'numeracion', 'numerosXTalonarioDefault',
+            'modoTalonarioIncompleto',
+        ];
+        const effectiveConfig = { ...rawConfig };
+        for (const field of composicionFields) {
+            if (variantParams[field] !== undefined) {
+                effectiveConfig[field] = variantParams[field];
+            }
+            else if (productParams[field] !== undefined) {
+                effectiveConfig[field] = productParams[field];
+            }
+        }
+        const payloadParams = this.asObject(payload.parametros);
+        if (payloadParams.encuadernacion && typeof payloadParams.encuadernacion === 'object') {
+            effectiveConfig.encuadernacion = payloadParams.encuadernacion;
+        }
+        if (payloadParams.puntillado && typeof payloadParams.puntillado === 'object') {
+            effectiveConfig.puntillado = payloadParams.puntillado;
+        }
+        const varianteAnchoMmOverride = Number(payloadParams.anchoMm);
+        const varianteAltoMmOverride = Number(payloadParams.altoMm);
+        const useAnchoOverride = Number.isFinite(varianteAnchoMmOverride) && varianteAnchoMmOverride > 0;
+        const useAltoOverride = Number.isFinite(varianteAltoMmOverride) && varianteAltoMmOverride > 0;
+        const talonarioConfig = TalonarioCalc.parseTalonarioMotorConfig(effectiveConfig);
+        const tipoCopiaSeleccionado = payloadParams.tipoCopia ??
+            (payload.seleccionesBase ?? []).find((s) => s.dimension === productos_servicios_dto_1.DimensionOpcionProductivaDto.tipo_copia)?.valor ??
+            null;
+        const tipoCopia = TalonarioCalc.resolveTipoCopia(talonarioConfig, String(tipoCopiaSeleccionado ?? ''));
+        if (!tipoCopia) {
+            throw new common_1.BadRequestException('No se encontró una definición de tipo de copia válida.');
+        }
+        const numerosXTalonario = tipoCopia.numerosXTalonarioSugerido || talonarioConfig.numerosXTalonarioDefault || 50;
+        const imposicionAnchoMm = useAnchoOverride ? varianteAnchoMmOverride : Number(variante.anchoMm);
+        const imposicionAltoMm = useAltoOverride ? varianteAltoMmOverride : Number(variante.altoMm);
+        const procesoDefinicionId = this.resolveRutaEfectivaId(variante);
+        if (!procesoDefinicionId) {
+            throw new common_1.BadRequestException('No hay ruta de producción efectiva para la variante.');
+        }
+        const proceso = await this.findProcesoConOperacionesOrThrow(auth, procesoDefinicionId, this.prisma);
+        if (proceso.operaciones.length === 0) {
+            throw new common_1.BadRequestException('La ruta seleccionada no tiene pasos operativos.');
+        }
+        const sustratoDims = variante.papelVariante
+            ? this.resolvePapelDimensionesMm(variante.papelVariante.atributosVarianteJson)
+            : { anchoMm: 210, altoMm: 297 };
+        const pliegoImpresion = this.resolvePliegoImpresion(rawConfig, sustratoDims);
+        const machineMargins = this.resolveMachineMarginsMm(proceso.operaciones);
+        const imposicionBase = this.calculateImposicion({
+            varianteAnchoMm: imposicionAnchoMm,
+            varianteAltoMm: imposicionAltoMm,
+            sheetAnchoMm: pliegoImpresion.anchoMm,
+            sheetAltoMm: pliegoImpresion.altoMm,
+            machineMargins,
+            config: rawConfig,
+        });
+        if (imposicionBase.piezasPorPliego <= 0) {
+            throw new common_1.BadRequestException('No entran piezas (talonarios) en el pliego con la configuración actual.');
+        }
+        const imposicion = TalonarioCalc.applyTalonarioImposicionConstraints(imposicionBase, talonarioConfig);
+        const grouping = TalonarioCalc.calculateTalonarioGrouping({
+            cantidadTalonarios,
+            posesXPliego: imposicion.piezasPorPliego,
+            numerosXTalonario,
+            modoTalonarioIncompleto: talonarioConfig.modoTalonarioIncompleto,
+        });
+        const variantOverrideRaw = this.asObject((await this.prisma.productoVarianteMotorOverride.findFirst({
+            where: {
+                tenantId: auth.tenantId,
+                productoVarianteId: variante.id,
+                motorCodigo: motor.code,
+                motorVersion: motor.version,
+                activo: true,
+            },
+            orderBy: [{ versionConfig: 'desc' }],
+            select: { parametrosJson: true },
+        }))?.parametrosJson);
+        const papelesCapasOverride = Array.isArray(variantOverrideRaw.papelesCapas)
+            ? variantOverrideRaw.papelesCapas
+            : [];
+        if (papelesCapasOverride.length > 0) {
+            const overrideMap = new Map(papelesCapasOverride.map((o) => [o.capaIndex, o.papelVarianteId]));
+            for (const papel of tipoCopia.papeles) {
+                const override = overrideMap.get(papel.capaIndex);
+                if (override) {
+                    papel.papelVarianteId = override;
+                }
+            }
+        }
+        const papelVarianteIds = tipoCopia.papeles
+            .map((p) => p.papelVarianteId)
+            .filter((id) => Boolean(id));
+        const papelVariantes = papelVarianteIds.length > 0
+            ? await this.prisma.materiaPrimaVariante.findMany({
+                where: { id: { in: papelVarianteIds }, tenantId: auth.tenantId },
+                select: {
+                    id: true,
+                    precioReferencia: true,
+                    atributosVarianteJson: true,
+                    unidadStock: true,
+                    unidadCompra: true,
+                    materiaPrima: { select: { unidadStock: true, unidadCompra: true } },
+                },
+            })
+            : [];
+        const papelPrecioByVarianteId = new Map(papelVariantes.map((p) => {
+            const precioRaw = Number(p.precioReferencia ?? 0);
+            const unidadCompra = (p.unidadCompra ?? p.materiaPrima.unidadCompra ?? 'hoja');
+            const unidadStock = (p.unidadStock ?? p.materiaPrima.unidadStock ?? 'hoja');
+            const precioNormalizado = this.convertPrecioToStockUnit(precioRaw, unidadCompra, unidadStock);
+            return [p.id, precioNormalizado];
+        }));
+        const pliegosPorSustratoByVarianteId = new Map(papelVariantes.map((p) => {
+            const dims = this.resolvePapelDimensionesMm(p.atributosVarianteJson);
+            const conv = this.calculateSustratoToPliegoConversion({ sustrato: dims, pliegoImpresion });
+            return [p.id, conv.pliegosPorSustrato];
+        }));
+        const paperCosts = TalonarioCalc.calculateTalonarioPaperCosts({
+            pliegosXCapa: grouping.pliegosXCapa,
+            tipoCopiaDefinicion: tipoCopia,
+            papelPrecioByVarianteId,
+            pliegosPorSustratoByVarianteId,
+        });
+        const extraMatIds = [
+            talonarioConfig.materialesExtra.cartonBase.materiaPrimaVarianteId,
+            talonarioConfig.materialesExtra.hojaBlancaSuperior.materiaPrimaVarianteId,
+        ].filter((id) => Boolean(id));
+        const extraMatVariantes = extraMatIds.length > 0
+            ? await this.prisma.materiaPrimaVariante.findMany({
+                where: { id: { in: extraMatIds }, tenantId: auth.tenantId },
+                select: { id: true, precioReferencia: true },
+            })
+            : [];
+        const materialPrecioByVarianteId = new Map(extraMatVariantes.map((p) => [p.id, Number(p.precioReferencia ?? 0)]));
+        const extraMaterials = TalonarioCalc.calculateTalonarioExtraMaterials({
+            cantidadTalonarios,
+            numerosXTalonario,
+            grouping,
+            config: talonarioConfig,
+            materialPrecioByVarianteId,
+        });
+        const centroIds = Array.from(new Set(proceso.operaciones.map((op) => op.centroCostoId)));
+        const tarifas = await this.prisma.centroCostoTarifaPeriodo.findMany({
+            where: {
+                tenantId: auth.tenantId,
+                periodo,
+                estado: client_1.EstadoTarifaCentroCostoPeriodo.PUBLICADA,
+                centroCostoId: { in: centroIds },
+            },
+            select: { centroCostoId: true, tarifaCalculada: true },
+        });
+        const tarifaByCentro = new Map(tarifas.map((t) => [t.centroCostoId, t.tarifaCalculada]));
+        const totalPliegosImpresion = grouping.pliegosXCapa * tipoCopia.capas;
+        const guillotinado = TalonarioCalc.calculateTalonarioGuillotinado({
+            cantidadTalonarios,
+            numerosXTalonario,
+            capas: tipoCopia.capas,
+            tieneCarton: talonarioConfig.materialesExtra.cartonBase.habilitado,
+            tieneHojaBlanca: talonarioConfig.materialesExtra.hojaBlancaSuperior.habilitado,
+            capacidadMaxHojas: 500,
+        });
+        let costoProcesos = 0;
+        let costoToner = 0;
+        let costoDesgaste = 0;
+        let costoConsumiblesTerminacion = 0;
+        const pasosDetalle = [];
+        const materialesConsumibles = [];
+        const warnings = [];
+        const machineIds = Array.from(new Set(proceso.operaciones.map((op) => op.maquinaId).filter((id) => Boolean(id))));
+        const [consumibles, consumiblesFilm, desgastes] = machineIds.length > 0
+            ? await Promise.all([
+                this.prisma.maquinaConsumible.findMany({
+                    where: { tenantId: auth.tenantId, activo: true, tipo: client_1.TipoConsumibleMaquina.TONER, maquinaId: { in: machineIds } },
+                    include: { perfilOperativo: true, materiaPrimaVariante: { include: { materiaPrima: true } } },
+                }),
+                this.prisma.maquinaConsumible.findMany({
+                    where: { tenantId: auth.tenantId, activo: true, tipo: client_1.TipoConsumibleMaquina.FILM, maquinaId: { in: machineIds } },
+                    include: { perfilOperativo: true, materiaPrimaVariante: { include: { materiaPrima: true } } },
+                }),
+                this.prisma.maquinaComponenteDesgaste.findMany({
+                    where: { tenantId: auth.tenantId, activo: true, maquinaId: { in: machineIds } },
+                    include: { materiaPrimaVariante: { include: { materiaPrima: true } } },
+                }),
+            ])
+            : [[], [], []];
+        const areaPliegoM2 = (pliegoImpresion.anchoMm / 1000) * (pliegoImpresion.altoMm / 1000);
+        const a4EqFactor = areaPliegoM2 / ProductosServiciosService_1.DEFAULT_A4_AREA_M2;
+        const tipoImpresionVariante = variante.tipoImpresion ?? client_1.TipoImpresionProductoVariante.CMYK;
+        const carasVariante = variante.caras ?? client_1.CarasProductoVariante.SIMPLE_FAZ;
+        const carasFactor = carasVariante === client_1.CarasProductoVariante.DOBLE_FAZ ? 2 : 1;
+        const cortesGuillotina = Math.max(0, (imposicion.cols - 1) + (imposicion.rows - 1)) * guillotinado.tandas;
+        for (const operacion of proceso.operaciones) {
+            const tarifa = tarifaByCentro.get(operacion.centroCostoId);
+            if (tarifa === undefined) {
+                warnings.push(`Sin tarifa para centro ${operacion.centroCosto?.nombre ?? operacion.centroCostoId} en ${periodo}.`);
+                continue;
+            }
+            const tarifaHora = Number(tarifa);
+            const tipoOp = operacion.tipoOperacion;
+            let cantidadObjetivo;
+            if (tipoOp === client_1.TipoOperacionProceso.IMPRESION || tipoOp === client_1.TipoOperacionProceso.PREPRENSA) {
+                cantidadObjetivo = totalPliegosImpresion;
+            }
+            else if (tipoOp === client_1.TipoOperacionProceso.CORTE) {
+                cantidadObjetivo = cortesGuillotina;
+            }
+            else {
+                cantidadObjetivo = cantidadTalonarios;
+            }
+            const productividadBase = Number(operacion.productividadBase ?? 0);
+            const setupMin = Number(operacion.setupMin ?? 0);
+            const cleanupMin = Number(operacion.cleanupMin ?? 0);
+            const runMin = productividadBase > 0
+                ? (cantidadObjetivo / productividadBase)
+                : Number(operacion.runMin ?? 0);
+            const totalMin = setupMin + runMin + cleanupMin;
+            const costo = (totalMin / 60) * tarifaHora;
+            costoProcesos += costo;
+            if (operacion.maquinaId && (tipoOp === client_1.TipoOperacionProceso.IMPRESION || tipoOp === client_1.TipoOperacionProceso.PREPRENSA)) {
+                const prodResult = (0, proceso_productividad_engine_1.evaluateProductividad)({
+                    modoProductividad: client_1.ModoProductividadProceso.FIJA,
+                    productividadBase: operacion.productividadBase,
+                    reglaVelocidadJson: null,
+                    reglaMermaJson: operacion.reglaMermaJson ?? null,
+                    runMin: operacion.runMin,
+                    unidadTiempo: operacion.unidadTiempo,
+                    mermaRunPct: operacion.mermaRunPct,
+                    mermaSetup: operacion.mermaSetup,
+                    cantidadObjetivoSalida: cantidadObjetivo,
+                    contexto: {
+                        cantidad: cantidadTalonarios,
+                        pliegos: totalPliegosImpresion,
+                        piezasPorPliego: imposicion.piezasPorPliego,
+                        areaPliegoM2,
+                        a4EqFactor,
+                        carasFactor,
+                    },
+                });
+                const pliegosEfectivos = Math.max(totalPliegosImpresion, prodResult.cantidadRun);
+                const tonerAndWear = this.calculateMachineConsumables({
+                    operation: operacion,
+                    tipoImpresion: tipoImpresionVariante,
+                    carasFactor,
+                    pliegos: totalPliegosImpresion,
+                    pliegosEfectivos,
+                    areaPliegoM2,
+                    a4EqFactor,
+                    warnings,
+                    consumibles,
+                    desgastes,
+                });
+                costoToner += tonerAndWear.costoToner;
+                costoDesgaste += tonerAndWear.costoDesgaste;
+                materialesConsumibles.push(...tonerAndWear.materiales);
+                const laminadoFilm = this.calculateLaminadoraFilmConsumables({
+                    operation: operacion,
+                    consumiblesFilm,
+                    timingOverride: null,
+                    warnings,
+                });
+                materialesConsumibles.push(...laminadoFilm.materiales);
+                costoConsumiblesTerminacion += laminadoFilm.costo;
+            }
+            pasosDetalle.push({
+                codigo: operacion.codigo,
+                nombre: operacion.nombre,
+                centroCostoNombre: operacion.centroCosto?.nombre ?? '',
+                tipoOperacion: tipoOp,
+                cantidadObjetivo: this.roundProductNumber(cantidadObjetivo),
+                setupMin: this.roundProductNumber(setupMin),
+                runMin: this.roundProductNumber(runMin),
+                cleanupMin: this.roundProductNumber(cleanupMin),
+                totalMin: this.roundProductNumber(totalMin),
+                tarifaHora: this.roundProductNumber(tarifaHora),
+                costo: this.roundProductNumber(costo),
+            });
+        }
+        const costoPapelTotal = this.roundProductNumber(paperCosts.totalPapel);
+        const costoMaterialesExtra = this.roundProductNumber(extraMaterials.total);
+        costoProcesos = this.roundProductNumber(costoProcesos);
+        costoToner = this.roundProductNumber(costoToner);
+        costoDesgaste = this.roundProductNumber(costoDesgaste);
+        costoConsumiblesTerminacion = this.roundProductNumber(costoConsumiblesTerminacion);
+        const total = this.roundProductNumber(costoPapelTotal + costoMaterialesExtra + costoProcesos +
+            costoToner + costoDesgaste + costoConsumiblesTerminacion);
+        const unitario = cantidadTalonarios > 0 ? this.roundProductNumber(total / cantidadTalonarios) : 0;
+        const result = {
+            status: 'disponible',
+            varianteId: variante.id,
+            varianteNombre: variante.nombre,
+            motorCodigo: motor.code,
+            motorVersion: motor.version,
+            periodo,
+            cantidad: cantidadTalonarios,
+            tipoCopia: tipoCopia.valor,
+            capas: tipoCopia.capas,
+            numerosXTalonario,
+            piezasPorPliego: imposicion.piezasPorPliego,
+            pliegos: totalPliegosImpresion,
+            pliegosXCapa: grouping.pliegosXCapa,
+            pliegosTotales: totalPliegosImpresion,
+            warnings,
+            bloques: {
+                procesos: pasosDetalle,
+                materiales: [
+                    ...paperCosts.layers.map((l) => ({
+                        tipo: 'PAPEL_CAPA',
+                        nombre: `Papel ${l.capaLabel} (${l.colorPapel})`,
+                        cantidad: l.pliegos,
+                        costoUnitario: l.costoUnitario,
+                        costo: l.costoTotal,
+                    })),
+                    ...materialesConsumibles,
+                    ...extraMaterials.items.map((i) => ({
+                        tipo: 'MATERIAL_EXTRA',
+                        nombre: i.nombre,
+                        cantidad: i.cantidad,
+                        costoUnitario: i.costoUnitario,
+                        costo: i.costoTotal,
+                    })),
+                ],
+            },
+            subtotales: {
+                procesos: costoProcesos,
+                papel: costoPapelTotal,
+                materialesExtra: costoMaterialesExtra,
+                toner: costoToner,
+                desgaste: costoDesgaste,
+                consumiblesTerminacion: costoConsumiblesTerminacion,
+                adicionalesMateriales: 0,
+                adicionalesCostEffects: 0,
+            },
+            total,
+            unitario,
+            trazabilidad: {
+                imposicion,
+                grouping,
+                guillotinado,
+                paperCosts: paperCosts.layers,
+                extraMaterials: extraMaterials.items,
+                config: rawConfig,
+                configVersionBase,
+                configVersionOverride,
+            },
+        };
+        await this.prisma.cotizacionProductoSnapshot.create({
+            data: {
+                tenantId: auth.tenantId,
+                productoServicioId: variante.productoServicioId,
+                productoVarianteId: variante.id,
+                motorCodigo: motor.code,
+                motorVersion: motor.version,
+                configVersionBase,
+                configVersionOverride,
+                cantidad: cantidadTalonarios,
+                periodoTarifa: periodo,
+                inputJson: {
+                    cantidad: cantidadTalonarios,
+                    tipoCopia: tipoCopia.valor,
+                    numerosXTalonario,
+                },
+                resultadoJson: result,
+                total,
+            },
+        });
+        return result;
+    }
+    async previewTalonarioVariant(auth, varianteId, payload) {
+        const variante = await this.findVarianteCompletaOrThrow(auth, varianteId, this.prisma);
+        const motor = this.resolveMotorOrThrow(variante.productoServicio.motorCodigo, variante.productoServicio.motorVersion);
+        const { config: persisted } = await this.getEffectiveMotorConfig(auth, variante.productoServicio.id, variante.id, motor);
+        const config = this.mergeMotorConfig(motor.code, persisted, payload.parametros ?? {});
+        const [productConfigPreview, variantOverridePreview] = await Promise.all([
+            this.prisma.productoMotorConfig.findFirst({
+                where: {
+                    tenantId: auth.tenantId,
+                    productoServicioId: variante.productoServicio.id,
+                    motorCodigo: motor.code,
+                    motorVersion: motor.version,
+                    activo: true,
+                },
+                orderBy: [{ versionConfig: 'desc' }],
+            }),
+            this.prisma.productoVarianteMotorOverride.findFirst({
+                where: {
+                    tenantId: auth.tenantId,
+                    productoVarianteId: variante.id,
+                    motorCodigo: motor.code,
+                    motorVersion: motor.version,
+                    activo: true,
+                },
+                orderBy: [{ versionConfig: 'desc' }],
+            }),
+        ]);
+        const productParamsPreview = this.asObject(productConfigPreview?.parametrosJson);
+        const variantParamsPreview = this.asObject(variantOverridePreview?.parametrosJson);
+        for (const field of ['tipoCopiaDefiniciones', 'encuadernacion', 'puntillado',
+            'materialesExtra', 'numeracion', 'numerosXTalonarioDefault', 'modoTalonarioIncompleto']) {
+            if (variantParamsPreview[field] !== undefined) {
+                config[field] = variantParamsPreview[field];
+            }
+            else if (productParamsPreview[field] !== undefined) {
+                config[field] = productParamsPreview[field];
+            }
+        }
+        const talonarioConfig = TalonarioCalc.parseTalonarioMotorConfig(config);
+        const procesoDefinicionId = this.resolveRutaEfectivaId(variante);
+        if (!procesoDefinicionId) {
+            throw new common_1.BadRequestException('No hay ruta de producción efectiva para la variante.');
+        }
+        const proceso = await this.findProcesoConOperacionesOrThrow(auth, procesoDefinicionId, this.prisma);
+        const sustratoDims = variante.papelVariante
+            ? this.resolvePapelDimensionesMm(variante.papelVariante.atributosVarianteJson)
+            : { anchoMm: 210, altoMm: 297 };
+        const pliegoImpresion = this.resolvePliegoImpresion(config, sustratoDims);
+        const machineMargins = this.resolveMachineMarginsMm(proceso.operaciones);
+        const imposicionBase = this.calculateImposicion({
+            varianteAnchoMm: Number(variante.anchoMm),
+            varianteAltoMm: Number(variante.altoMm),
+            sheetAnchoMm: pliegoImpresion.anchoMm,
+            sheetAltoMm: pliegoImpresion.altoMm,
+            machineMargins,
+            config,
+        });
+        const imposicion = TalonarioCalc.applyTalonarioImposicionConstraints(imposicionBase, talonarioConfig);
+        const conversionPapel = this.calculateSustratoToPliegoConversion({
+            sustrato: sustratoDims,
+            pliegoImpresion,
+        });
+        return {
+            varianteId: variante.id,
+            varianteNombre: variante.nombre,
+            pliegoImpresion,
+            sustrato: sustratoDims,
+            machineMargins,
+            imposicion,
+            conversionPapel,
+            config,
+            talonario: {
+                encuadernacion: talonarioConfig.encuadernacion,
+                puntillado: talonarioConfig.puntillado,
+                teteBeche: imposicion.teteBeche,
+                puntilladoLineMm: imposicion.puntilladoLineMm,
+                puntilladoBorde: imposicion.puntilladoBorde,
+            },
+        };
     }
     async findAdicionalesCatalogo(auth) {
         const rows = await this.prisma.productoAdicionalCatalogo.findMany({
@@ -1494,29 +3022,35 @@ let ProductosServiciosService = class ProductosServiciosService {
             if (item.regla.accion === 'seleccionar_variante_paso' && item.regla.variantePasoId) {
                 const nivel = this.getProcesoOperacionNiveles(plantilla.detalleJson).find((row) => row.id === item.regla.variantePasoId);
                 if (!nivel) {
+                    const reglaDetalleFallback = item.regla.detalleJson ?? item.regla.detalle;
                     return {
-                        ...this.buildChecklistOperacionFromPlantilla(plantilla),
-                        orden: 10_000 + activeChecklistRules.indexOf(item),
+                        operacion: {
+                            ...this.buildChecklistOperacionFromPlantilla(plantilla),
+                            orden: this.getChecklistRouteOrden(reglaDetalleFallback),
+                        },
+                        insertion: this.parseChecklistRouteInsertion(reglaDetalleFallback),
                     };
                 }
                 const perfilNivel = (nivel?.perfilOperativoId
                     ? checklistNivelPerfilById.get(nivel.perfilOperativoId) ?? null
                     : null) ??
                     plantilla.perfilOperativo;
+                const reglaDetalle = item.regla.detalleJson ?? item.regla.detalle;
                 return {
                     operacion: {
                         ...this.buildChecklistOperacionFromPlantillaConNivel(plantilla, nivel, perfilNivel),
-                        orden: 10_000 + activeChecklistRules.indexOf(item),
+                        orden: this.getChecklistRouteOrden(reglaDetalle),
                     },
-                    insertion: this.parseChecklistRouteInsertion(item.regla.detalleJson),
+                    insertion: this.parseChecklistRouteInsertion(reglaDetalle),
                 };
             }
+            const reglaDetalle = item.regla.detalleJson ?? item.regla.detalle;
             return {
                 operacion: {
                     ...this.buildChecklistOperacionFromPlantilla(plantilla),
-                    orden: 10_000 + activeChecklistRules.indexOf(item),
+                    orden: this.getChecklistRouteOrden(reglaDetalle),
                 },
-                insertion: this.parseChecklistRouteInsertion(item.regla.detalleJson),
+                insertion: this.parseChecklistRouteInsertion(reglaDetalle),
             };
         })
             .filter((item) => Boolean(item));
@@ -1607,7 +3141,7 @@ let ProductosServiciosService = class ProductosServiciosService {
                     paso: op.nombre,
                     centroCostoId: op.centroCostoId,
                     centroCostoNombre: op.centroCosto?.nombre ?? '',
-                    origen: Number(op.orden) >= 10_000 ? 'Configurador' : 'Producto base',
+                    origen: op._esChecklist ? 'Configurador' : 'Producto base',
                     minutos,
                     tarifaHora: tarifa ? Number(tarifa) : 0,
                     costo,
@@ -3214,6 +4748,23 @@ let ProductosServiciosService = class ProductosServiciosService {
                 respuesta: respuesta.texto,
             });
         }
+        const terminacionParamsByPregunta = new Map();
+        for (const sel of checklistRespuestasInput) {
+            if (sel.terminacionParams) {
+                terminacionParamsByPregunta.set(sel.preguntaId, sel.terminacionParams);
+            }
+        }
+        const terminacionesConfiguradas = [];
+        for (const item of checklistReglasActivas) {
+            if (item.regla.accion !== client_1.TipoProductoChecklistReglaAccion.CONFIGURAR_TERMINACION)
+                continue;
+            const reglaDet = this.asObject(item.regla.detalleJson);
+            const tipoTerminacion = String(reglaDet.tipoTerminacion ?? '');
+            const userParams = terminacionParamsByPregunta.get(item.preguntaId) ?? {};
+            const detalle = this.parseChecklistTerminacionDetalle({ tipoTerminacion, parametros: userParams }, false);
+            if (detalle)
+                terminacionesConfiguradas.push(detalle);
+        }
         const tipoImpresionSeleccionado = this.toTipoImpresionFromValor(atributosTecnicosSeleccionados.get(client_1.DimensionOpcionProductiva.TIPO_IMPRESION) ??
             this.toValorFromTipoImpresion(variante.tipoImpresion));
         const carasSeleccionadas = this.toCarasFromValor(atributosTecnicosSeleccionados.get(client_1.DimensionOpcionProductiva.CARAS) ??
@@ -3431,7 +4982,10 @@ let ProductosServiciosService = class ProductosServiciosService {
         const mermaPct = Number(config.mermaAdicionalPct ?? 0);
         const cantidadConMerma = Math.ceil(cantidad * (1 + mermaPct / 100));
         const pliegos = Math.ceil(cantidadConMerma / imposicion.piezasPorPliego);
-        const precioPapelBase = Number(variante.papelVariante.precioReferencia ?? 0);
+        const precioPapelRaw = Number(variante.papelVariante.precioReferencia ?? 0);
+        const papelUnidadCompra = (variante.papelVariante.unidadCompra ?? variante.papelVariante.materiaPrima.unidadCompra ?? 'hoja');
+        const papelUnidadStock = (variante.papelVariante.unidadStock ?? variante.papelVariante.materiaPrima.unidadStock ?? 'hoja');
+        const precioPapelBase = this.convertPrecioToStockUnit(precioPapelRaw, papelUnidadCompra, papelUnidadStock);
         const conversionPapel = this.calculateSustratoToPliegoConversion({
             sustrato: sustratoDims,
             pliegoImpresion,
@@ -4369,6 +5923,7 @@ let ProductosServiciosService = class ProductosServiciosService {
                     addonId: item.addonId,
                 })),
                 config,
+                terminacionesConfiguradas: terminacionesConfiguradas.length > 0 ? terminacionesConfiguradas : undefined,
                 configVersionBase,
                 configVersionOverride,
             },
@@ -4419,7 +5974,8 @@ let ProductosServiciosService = class ProductosServiciosService {
         const motor = this.resolveMotorOrThrow(variante.productoServicio.motorCodigo, variante.productoServicio.motorVersion);
         const { config, configVersionBase, configVersionOverride } = await this.getEffectiveMotorConfig(auth, variante.productoServicio.id, variante.id, motor);
         const effectiveConfig = this.mergeMotorConfig(motor.code, config, (payload.parametros ?? {}));
-        const simulation = await this.buildVinylCutSimulation(auth, variante, effectiveConfig, periodo, cantidadTrabajos);
+        const unidadComercial = this.normalizeUnidadComercialProductoValue(variante.productoServicio.unidadComercial) === 'm2' ? 'm2' : 'metro_lineal';
+        const simulation = await this.buildVinylCutSimulation(auth, variante, effectiveConfig, periodo, cantidadTrabajos, unidadComercial);
         const { aggregated } = simulation;
         const colorResults = (simulation.colorResults ?? []);
         if (!aggregated || aggregated.totalTecnico === 0 && !colorResults.some((cr) => cr.winner)) {
@@ -4433,8 +5989,13 @@ let ProductosServiciosService = class ProductosServiciosService {
             const w = cr.winner;
             return acc + Number(this.asObject(w?.resumenTecnico).largoConsumidoMl ?? 0);
         }, 0));
-        const unitario = totalLargoConsumidoMl > 0
-            ? this.roundProductNumber(total / totalLargoConsumidoMl)
+        const totalAreaConsumidaM2 = this.roundProductNumber(colorResults.reduce((acc, cr) => {
+            const w = cr.winner;
+            return acc + Number(this.asObject(w?.resumenTecnico).areaConsumidaM2 ?? this.asObject(w?.resumenTecnico).consumedAreaM2 ?? 0);
+        }, 0));
+        const unitarioDivisor = unidadComercial === 'm2' ? totalAreaConsumidaM2 : totalLargoConsumidoMl;
+        const unitario = unitarioDivisor > 0
+            ? this.roundProductNumber(total / unitarioDivisor)
             : total;
         const result = {
             varianteId: variante.id,
@@ -4590,6 +6151,7 @@ let ProductosServiciosService = class ProductosServiciosService {
                 motorVersion: true,
                 usarRutaComunVariantes: true,
                 procesoDefinicionDefaultId: true,
+                unidadComercial: true,
             },
         });
         if (!producto) {
@@ -4605,7 +6167,36 @@ let ProductosServiciosService = class ProductosServiciosService {
                 procesoDefinicionDefaultId: producto.procesoDefinicionDefaultId,
             },
         };
-        return this.buildVinylCutSimulation(auth, fakeVariante, effectiveConfig, this.normalizePeriodo(undefined), 1);
+        const unidadComercial = this.normalizeUnidadComercialProductoValue(producto.unidadComercial) === 'm2' ? 'm2' : 'metro_lineal';
+        const periodo = this.normalizePeriodo(undefined);
+        const simulation = await this.buildVinylCutSimulation(auth, fakeVariante, effectiveConfig, periodo, 1, unidadComercial);
+        const { aggregated } = simulation;
+        const total = aggregated?.totalTecnico ?? 0;
+        const snapshotResult = this.normalizeProductNumericPrecision({
+            productoServicioId: producto.id,
+            motorCodigo: motor.code,
+            motorVersion: motor.version,
+            periodo,
+            cantidad: 1,
+            total,
+            aggregated,
+        });
+        await this.prisma.cotizacionProductoSnapshot.create({
+            data: {
+                tenantId: auth.tenantId,
+                productoServicioId: producto.id,
+                motorCodigo: motor.code,
+                motorVersion: motor.version,
+                configVersionBase: null,
+                configVersionOverride: null,
+                cantidad: 1,
+                periodoTarifa: periodo,
+                inputJson: { cantidad: 1, periodo, config: effectiveConfig },
+                resultadoJson: snapshotResult,
+                total: new client_1.Prisma.Decimal(Number(total)),
+            },
+        });
+        return simulation;
     }
     async getVarianteCotizacionesBase(auth, varianteId) {
         await this.findVarianteOrThrow(auth, varianteId, this.prisma);
@@ -4619,8 +6210,7 @@ let ProductosServiciosService = class ProductosServiciosService {
         return rows.map((item) => this.mapCotizacionSnapshotResumen(item));
     }
     async getProductoCotizaciones(auth, productoId) {
-        const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
-        this.ensureWideFormatProducto(producto);
+        await this.findProductoOrThrow(auth, productoId, this.prisma);
         const rows = await this.prisma.cotizacionProductoSnapshot.findMany({
             where: {
                 tenantId: auth.tenantId,
@@ -4656,14 +6246,14 @@ let ProductosServiciosService = class ProductosServiciosService {
     mapCotizacionSnapshotResumen(item) {
         return {
             id: item.id,
-            cantidad: this.roundProductNumber(item.cantidad),
+            cantidad: this.roundProductNumber(Number(item.cantidad)),
             periodoTarifa: item.periodoTarifa,
             motorCodigo: item.motorCodigo,
             motorVersion: item.motorVersion,
             configVersionBase: item.configVersionBase,
             configVersionOverride: item.configVersionOverride,
             total: this.roundProductNumber(Number(item.total)),
-            unitario: this.roundProductNumber(item.cantidad > 0 ? Number(item.total.div(item.cantidad)) : Number(item.total)),
+            unitario: this.roundProductNumber(Number(item.cantidad) > 0 ? Number(item.total) / Number(item.cantidad) : Number(item.total)),
             createdAt: item.createdAt.toISOString(),
         };
     }
@@ -5447,6 +7037,12 @@ let ProductosServiciosService = class ProductosServiciosService {
                             throw new common_1.BadRequestException('Las reglas de paso con inserción antes/después requieren un paso de referencia.');
                         }
                     }
+                    if (regla.accion === productos_servicios_dto_1.TipoChecklistAccionReglaDto.configurar_terminacion) {
+                        const det = this.asObject(regla.detalle);
+                        if (!det.tipoTerminacion || !TIPOS_TERMINACION_VALIDOS.has(String(det.tipoTerminacion))) {
+                            throw new common_1.BadRequestException('CONFIGURAR_TERMINACION requiere tipoTerminacion válido (perforacion o puntas_redondeadas).');
+                        }
+                    }
                     if (regla.accion === productos_servicios_dto_1.TipoChecklistAccionReglaDto.set_atributo_tecnico) {
                         throw new common_1.BadRequestException('SET_ATRIBUTO_TECNICO ya no se admite en Ruta de opcionales.');
                     }
@@ -5515,6 +7111,68 @@ let ProductosServiciosService = class ProductosServiciosService {
             ejes,
             valorMmPorLado,
         };
+    }
+    parseChecklistTerminacionDetalle(value, throwOnError = false) {
+        const detalle = this.asObject(value);
+        const fail = (message) => {
+            if (throwOnError) {
+                throw new common_1.BadRequestException(message);
+            }
+            return null;
+        };
+        const tipoTerminacion = typeof detalle.tipoTerminacion === 'string' ? detalle.tipoTerminacion.trim() : '';
+        if (!TIPOS_TERMINACION_VALIDOS.has(tipoTerminacion)) {
+            return fail('CONFIGURAR_TERMINACION requiere tipoTerminacion válido (perforacion o puntas_redondeadas).');
+        }
+        const params = this.asObject(detalle.parametros);
+        if (tipoTerminacion === 'perforacion') {
+            const diametroMm = Number(params.diametroMm);
+            if (!Number.isFinite(diametroMm) || diametroMm <= 0) {
+                return fail('Perforación requiere diámetroMm mayor a 0.');
+            }
+            const posObj = this.asObject(params.posicion);
+            const referenciaBorde = typeof posObj.referenciaBorde === 'string' ? posObj.referenciaBorde.trim() : String(params.referenciaBorde ?? '');
+            if (!BORDES_VALIDOS.has(referenciaBorde)) {
+                return fail('Perforación requiere referenciaBorde válido.');
+            }
+            const distanciaBordeMm = Number(posObj.distanciaBordeMm ?? params.distanciaBordeMm ?? 0);
+            if (!Number.isFinite(distanciaBordeMm) || distanciaBordeMm < 0) {
+                return fail('Perforación requiere distanciaBordeMm válido.');
+            }
+            const centradoEnEje = (posObj.centradoEnEje ?? params.centradoEnEje) !== false;
+            return {
+                tipoTerminacion: 'perforacion',
+                parametros: {
+                    diametroMm,
+                    posicion: {
+                        referenciaBorde: referenciaBorde,
+                        distanciaBordeMm,
+                        centradoEnEje,
+                    },
+                },
+            };
+        }
+        if (tipoTerminacion === 'puntas_redondeadas') {
+            const radioMm = Number(params.radioMm);
+            if (!Number.isFinite(radioMm) || radioMm <= 0) {
+                return fail('Puntas redondeadas requiere radioMm mayor a 0.');
+            }
+            const esqObj = this.asObject(params.esquinas);
+            const esquinas = {
+                superiorIzquierda: esqObj.superiorIzquierda !== false,
+                superiorDerecha: esqObj.superiorDerecha !== false,
+                inferiorIzquierda: esqObj.inferiorIzquierda !== false,
+                inferiorDerecha: esqObj.inferiorDerecha !== false,
+            };
+            return {
+                tipoTerminacion: 'puntas_redondeadas',
+                parametros: {
+                    radioMm,
+                    esquinas,
+                },
+            };
+        }
+        return null;
     }
     applyGranFormatoChecklistProductMutations(input) {
         const medidasOriginales = input.medidas.map((item) => ({
@@ -6653,12 +8311,22 @@ let ProductosServiciosService = class ProductosServiciosService {
                     tipo,
                     porcentaje: this.toSafeNumber(row.porcentaje, 0),
                     activo: row.activo !== false,
+                    esquemaOrigenId: typeof row.esquemaOrigenId === 'string' && row.esquemaOrigenId.trim().length
+                        ? row.esquemaOrigenId.trim()
+                        : undefined,
                 };
             })
                 .filter((item) => Boolean(item))
             : [];
+        const esquemaId = typeof raw.esquemaId === 'string' && raw.esquemaId.trim().length ? raw.esquemaId.trim() : null;
+        const esquemaIds = Array.isArray(raw.esquemaIds)
+            ? raw.esquemaIds
+                .filter((id) => typeof id === 'string' && id.trim().length > 0)
+                .map((id) => id.trim())
+            : (esquemaId ? [esquemaId] : []);
         return {
-            esquemaId: typeof raw.esquemaId === 'string' && raw.esquemaId.trim().length ? raw.esquemaId.trim() : null,
+            esquemaId,
+            esquemaIds,
             esquemaNombre: typeof raw.esquemaNombre === 'string' ? raw.esquemaNombre : '',
             items,
             porcentajeTotal: Number(items
@@ -6671,27 +8339,44 @@ let ProductosServiciosService = class ProductosServiciosService {
         const normalized = this.normalizeProductoPrecioComisiones(value && typeof value === 'object' && !Array.isArray(value)
             ? value
             : null);
-        if (!normalized.esquemaId) {
+        const ids = normalized.esquemaIds.length ? normalized.esquemaIds : (normalized.esquemaId ? [normalized.esquemaId] : []);
+        if (!ids.length) {
             return normalized;
         }
-        const row = await this.prisma.productoComisionCatalogo.findFirst({
-            where: { tenantId: auth.tenantId, id: normalized.esquemaId, activo: true },
+        const rows = await this.prisma.productoComisionCatalogo.findMany({
+            where: { tenantId: auth.tenantId, id: { in: ids }, activo: true },
         });
-        if (!row) {
-            throw new common_1.BadRequestException('El esquema de comisiones seleccionado es inválido o está inactivo.');
+        const foundIds = new Set(rows.map((r) => r.id));
+        const missing = ids.filter((id) => !foundIds.has(id));
+        if (missing.length) {
+            throw new common_1.BadRequestException('Uno o más esquemas de comisiones seleccionados son inválidos o están inactivos.');
         }
-        const detalle = this.parseComisionDetalle(row.detalleJson);
+        const mergedItems = [];
+        const nombres = [];
+        for (const id of ids) {
+            const row = rows.find((r) => r.id === id);
+            if (!row)
+                continue;
+            nombres.push(row.nombre);
+            const detalle = this.parseComisionDetalle(row.detalleJson);
+            for (const item of detalle.items) {
+                mergedItems.push({
+                    id: item.id,
+                    nombre: item.nombre,
+                    tipo: item.tipo,
+                    porcentaje: item.porcentaje,
+                    activo: item.activo,
+                    esquemaOrigenId: id,
+                });
+            }
+        }
+        const porcentajeTotal = Number(mergedItems.filter((i) => i.activo).reduce((s, i) => s + i.porcentaje, 0).toFixed(2));
         return {
-            esquemaId: row.id,
-            esquemaNombre: row.nombre,
-            items: detalle.items.map((item) => ({
-                id: item.id,
-                nombre: item.nombre,
-                tipo: item.tipo,
-                porcentaje: item.porcentaje,
-                activo: item.activo,
-            })),
-            porcentajeTotal: Number(row.porcentaje),
+            esquemaId: ids[0] ?? null,
+            esquemaIds: ids,
+            esquemaNombre: nombres.join(', '),
+            items: mergedItems,
+            porcentajeTotal,
         };
     }
     normalizeProductoPrecioEspecialClienteStored(value) {
@@ -7171,7 +8856,7 @@ let ProductosServiciosService = class ProductosServiciosService {
         }));
     }
     normalizeDimensionOpcionProductivaValue(value) {
-        return value === 'tipo_impresion' || value === 'caras' ? value : null;
+        return value === 'tipo_impresion' || value === 'caras' || value === 'tipo_copia' ? value : null;
     }
     normalizeTipoImpresionProductoVarianteValue(value) {
         return value === 'bn' || value === 'cmyk'
@@ -7202,6 +8887,15 @@ let ProductosServiciosService = class ProductosServiciosService {
             papelVarianteId: item.papelVarianteId,
             papelVarianteSku: item.papelVariante?.sku ?? '',
             papelNombre: item.papelVariante?.materiaPrima.nombre ?? '',
+            papelVarianteNombre: item.papelVariante?.nombreVariante ?? '',
+            papelAtributos: (() => {
+                const attrs = this.asObject(item.papelVariante?.atributosVarianteJson);
+                return {
+                    material: typeof attrs.material === 'string' ? attrs.material : '',
+                    acabado: typeof attrs.acabado === 'string' ? attrs.acabado : '',
+                    gramaje: typeof attrs.gramaje === 'number' ? attrs.gramaje : (typeof attrs.gramajeGm2 === 'number' ? attrs.gramajeGm2 : null),
+                };
+            })(),
             tipoImpresion: this.fromTipoImpresion(item.tipoImpresion),
             caras: this.fromCaras(item.caras),
             opcionesProductivas,
@@ -7470,6 +9164,82 @@ let ProductosServiciosService = class ProductosServiciosService {
             ],
         };
     }
+    getDefaultTalonarioMotorConfig() {
+        return {
+            tamanoPliegoImpresion: {
+                codigo: 'A4',
+                nombre: 'A4',
+                anchoMm: 210,
+                altoMm: 297,
+            },
+            tipoCorte: 'sin_demasia',
+            demasiaCorteMm: 0,
+            lineaCorteMm: 3,
+            mermaAdicionalPct: 0,
+            numerosXTalonarioDefault: 50,
+            tipoCopiaDefiniciones: [
+                {
+                    valor: 'COPIA_SIMPLE',
+                    capas: 1,
+                    numerosXTalonarioSugerido: 100,
+                    papeles: [
+                        { capaIndex: 0, capaLabel: 'Original', papelVarianteId: null, colorPapel: 'blanco' },
+                    ],
+                },
+                {
+                    valor: 'DUPLICADO',
+                    capas: 2,
+                    numerosXTalonarioSugerido: 50,
+                    papeles: [
+                        { capaIndex: 0, capaLabel: 'Original', papelVarianteId: null, colorPapel: 'blanco' },
+                        { capaIndex: 1, capaLabel: 'Duplicado', papelVarianteId: null, colorPapel: 'amarillo' },
+                    ],
+                },
+                {
+                    valor: 'TRIPLICADO',
+                    capas: 3,
+                    numerosXTalonarioSugerido: 25,
+                    papeles: [
+                        { capaIndex: 0, capaLabel: 'Original', papelVarianteId: null, colorPapel: 'blanco' },
+                        { capaIndex: 1, capaLabel: 'Duplicado', papelVarianteId: null, colorPapel: 'amarillo' },
+                        { capaIndex: 2, capaLabel: 'Triplicado', papelVarianteId: null, colorPapel: 'rosa' },
+                    ],
+                },
+                {
+                    valor: 'CUADRUPLICADO',
+                    capas: 4,
+                    numerosXTalonarioSugerido: 25,
+                    papeles: [
+                        { capaIndex: 0, capaLabel: 'Original', papelVarianteId: null, colorPapel: 'blanco' },
+                        { capaIndex: 1, capaLabel: 'Duplicado', papelVarianteId: null, colorPapel: 'amarillo' },
+                        { capaIndex: 2, capaLabel: 'Triplicado', papelVarianteId: null, colorPapel: 'rosa' },
+                        { capaIndex: 3, capaLabel: 'Cuadruplicado', papelVarianteId: null, colorPapel: 'celeste' },
+                    ],
+                },
+            ],
+            encuadernacion: {
+                tipo: 'abrochado',
+                cantidadGrapas: 2,
+                posicionGrapas: 'superior',
+                bordeEncolar: null,
+            },
+            puntillado: {
+                habilitado: false,
+                tipo: null,
+                distanciaBordeMm: null,
+                borde: null,
+            },
+            modoTalonarioIncompleto: 'pose_completa',
+            materialesExtra: {
+                cartonBase: { habilitado: true, materiaPrimaVarianteId: null },
+                hojaBlancaSuperior: { habilitado: false, materiaPrimaVarianteId: null },
+            },
+            numeracion: {
+                habilitado: true,
+                posicion: 'superior_derecho',
+            },
+        };
+    }
     resolveDefaultMotorConfig(code) {
         if (code === ProductosServiciosService_1.DIGITAL_SHEET_MOTOR_DEFINITION.code) {
             return this.getDefaultMotorConfig();
@@ -7479,6 +9249,12 @@ let ProductosServiciosService = class ProductosServiciosService {
         }
         if (code === ProductosServiciosService_1.VINYL_CUT_MOTOR_DEFINITION.code) {
             return this.getDefaultVinylCutMotorConfig();
+        }
+        if (code === ProductosServiciosService_1.TALONARIO_MOTOR_DEFINITION.code) {
+            return this.getDefaultTalonarioMotorConfig();
+        }
+        if (code === ProductosServiciosService_1.RIGID_PRINTED_MOTOR_DEFINITION.code) {
+            return { ...rigid_printed_types_1.DEFAULT_RIGID_PRINTED_CONFIG };
         }
         return {};
     }
@@ -7619,6 +9395,21 @@ let ProductosServiciosService = class ProductosServiciosService {
             anchoMm: this.normalizeToMm(anchoRaw),
             altoMm: this.normalizeToMm(altoRaw),
         };
+    }
+    convertPrecioToStockUnit(precioRaw, unidadCompra, unidadStock) {
+        const from = unidadCompra.toLowerCase();
+        const to = unidadStock.toLowerCase();
+        if (!precioRaw || from === to)
+            return precioRaw;
+        const fromDef = unidades_canonicas_1.CANONICAL_UNITS[from];
+        const toDef = unidades_canonicas_1.CANONICAL_UNITS[to];
+        if (!fromDef || !toDef)
+            return precioRaw;
+        if (fromDef.dimension !== toDef.dimension || fromDef.baseCode !== toDef.baseCode)
+            return precioRaw;
+        if (fromDef.factorToBase === toDef.factorToBase)
+            return precioRaw;
+        return precioRaw * (toDef.factorToBase / fromDef.factorToBase);
     }
     normalizeToMm(value) {
         if (value <= 100) {
@@ -8340,7 +10131,7 @@ let ProductosServiciosService = class ProductosServiciosService {
             : this.buildChecklistOperacionFromPlantilla(template);
         return {
             ...baseOperacion,
-            nombre: template.nombre,
+            nombre: `${template.nombre} (${nivel.nombre})`,
             maquinaId: nivel.maquinaId ?? baseOperacion.maquinaId,
             perfilOperativoId: nivel.modoProductividadNivel === 'variable_perfil'
                 ? perfilOperativo?.id ?? nivel.perfilOperativoId ?? baseOperacion.perfilOperativoId
@@ -8471,7 +10262,7 @@ let ProductosServiciosService = class ProductosServiciosService {
                             : anchorIndex + 1;
                 }
             }
-            ordered.splice(insertIndex, 0, checklistItem.operacion);
+            ordered.splice(insertIndex, 0, { ...checklistItem.operacion, _esChecklist: true });
         }
         return ordered.map((item, index) => ({
             ...item,
@@ -10199,7 +11990,7 @@ let ProductosServiciosService = class ProductosServiciosService {
         }
         return Array.from(merged.values()).sort((a, b) => a.orden - b.orden);
     }
-    async buildVinylCutSimulation(auth, variante, effectiveConfig, periodo, cantidadTrabajos) {
+    async buildVinylCutSimulation(auth, variante, effectiveConfig, periodo, cantidadTrabajos, unidadComercial = 'metro_lineal') {
         const procesoDefinicionId = this.resolveRutaEfectivaId(variante);
         if (!procesoDefinicionId) {
             throw new common_1.BadRequestException('No hay ruta de producción efectiva para la variante seleccionada.');
@@ -10396,13 +12187,34 @@ let ProductosServiciosService = class ProductosServiciosService {
                             consumedLengthMl: largoConsumidoMl,
                             warnings,
                         });
-                        const usefulFactor = candidate.consumedAreaM2 > 0 ? candidate.usefulAreaM2 / candidate.consumedAreaM2 : 0;
-                        const usefulCost = this.roundProductNumber(substrateTotalCost * usefulFactor);
-                        const wasteCost = this.roundProductNumber(substrateTotalCost - usefulCost);
-                        const usefulLengthMl = candidate.rollWidthMm > 0
-                            ? this.roundProductNumber(candidate.usefulAreaM2 / (candidate.rollWidthMm / 1000))
-                            : 0;
+                        const piecesLengthMl = this.roundProductNumber(colorEntry.medidas.reduce((acc, m) => {
+                            const effectiveHeight = m.anchoMm > candidate.rollWidthMm ? m.anchoMm : m.altoMm;
+                            return acc + (effectiveHeight / 1000) * m.cantidad;
+                        }, 0));
+                        const usefulLengthMl = Math.min(piecesLengthMl, largoConsumidoMl);
                         const wasteLengthMl = this.roundProductNumber(Math.max(0, largoConsumidoMl - usefulLengthMl));
+                        let usefulQuantity;
+                        let wasteQuantity;
+                        let costoUnitarioMaterial;
+                        let materialUnidad;
+                        if (unidadComercial === 'm2') {
+                            usefulQuantity = this.roundProductNumber(candidate.usefulAreaM2);
+                            wasteQuantity = this.roundProductNumber(candidate.wasteAreaM2);
+                            costoUnitarioMaterial = candidate.consumedAreaM2 > 0
+                                ? this.roundProductNumber(substrateTotalCost / candidate.consumedAreaM2)
+                                : 0;
+                            materialUnidad = 'm2';
+                        }
+                        else {
+                            usefulQuantity = usefulLengthMl;
+                            wasteQuantity = wasteLengthMl;
+                            costoUnitarioMaterial = largoConsumidoMl > 0
+                                ? this.roundProductNumber(substrateTotalCost / largoConsumidoMl)
+                                : 0;
+                            materialUnidad = 'metro_lineal';
+                        }
+                        const usefulCost = this.roundProductNumber(costoUnitarioMaterial * usefulQuantity);
+                        const wasteCost = this.roundProductNumber(substrateTotalCost - usefulCost);
                         const centrosCosto = proceso.operaciones.map((op, index) => {
                             const cantidadObjetivoSalida = this.resolveGranFormatoCantidadObjetivoSalida({
                                 operacion: op,
@@ -10477,37 +12289,48 @@ let ProductosServiciosService = class ProductosServiciosService {
                                 ...this.buildGranFormatoCostosCandidateResumen(candidateWithCosts),
                                 cantidadTrabajos,
                                 totalPiezas: colorTotalPiezas,
-                                unidadComercial: 'metro_lineal',
+                                unidadComercial,
                                 largoConsumidoMl,
+                                areaConsumidaM2: this.roundProductNumber(candidate.consumedAreaM2),
                             },
-                            materiasPrimas: [
-                                {
-                                    tipo: 'VINILO',
-                                    nombre: candidate.variant.materiaPrima.nombre,
-                                    sku: candidate.variant.sku,
-                                    variantChips: this.buildMateriaPrimaVariantDisplayChips(candidate.variant),
-                                    cantidad: usefulLengthMl,
-                                    costoUnitario: usefulLengthMl > 0 ? this.roundProductNumber(usefulCost / usefulLengthMl) : 0,
-                                    costo: usefulCost,
-                                    origen: 'Base',
-                                    unidad: 'metro_lineal',
-                                    colorId: colorEntry.id,
-                                    colorLabel: colorEntry.label,
-                                },
-                                {
-                                    tipo: 'VINILO',
-                                    nombre: `${candidate.variant.materiaPrima.nombre} · Desperdicio`,
-                                    sku: candidate.variant.sku,
-                                    variantChips: this.buildMateriaPrimaVariantDisplayChips(candidate.variant),
-                                    cantidad: wasteLengthMl,
-                                    costoUnitario: wasteLengthMl > 0 ? this.roundProductNumber(wasteCost / wasteLengthMl) : 0,
-                                    costo: wasteCost,
-                                    origen: 'Desperdicio',
-                                    unidad: 'metro_lineal',
-                                    colorId: colorEntry.id,
-                                    colorLabel: colorEntry.label,
-                                },
-                            ],
+                            materiasPrimas: (() => {
+                                const rollWidthM = this.roundProductNumber(candidate.rollWidthMm / 1000);
+                                const baseChips = this.buildMateriaPrimaVariantDisplayChips(candidate.variant);
+                                const usefulChips = baseChips
+                                    .filter((c) => c.label !== 'Ancho de rollo' && c.label !== 'Largo de rollo')
+                                    .concat([{ label: 'Medida', value: `${rollWidthM} m × ${usefulLengthMl} m` }]);
+                                const wasteChips = baseChips
+                                    .filter((c) => c.label !== 'Ancho de rollo' && c.label !== 'Largo de rollo')
+                                    .concat([{ label: 'Medida', value: `${rollWidthM} m × ${wasteLengthMl} m` }]);
+                                return [
+                                    {
+                                        tipo: 'VINILO',
+                                        nombre: candidate.variant.materiaPrima.nombre,
+                                        sku: candidate.variant.sku,
+                                        variantChips: usefulChips,
+                                        cantidad: usefulQuantity,
+                                        costoUnitario: costoUnitarioMaterial,
+                                        costo: usefulCost,
+                                        origen: 'Base',
+                                        unidad: materialUnidad,
+                                        colorId: colorEntry.id,
+                                        colorLabel: colorEntry.label,
+                                    },
+                                    {
+                                        tipo: 'VINILO',
+                                        nombre: `${candidate.variant.materiaPrima.nombre} · Desperdicio`,
+                                        sku: candidate.variant.sku,
+                                        variantChips: wasteChips,
+                                        cantidad: wasteQuantity,
+                                        costoUnitario: costoUnitarioMaterial,
+                                        costo: wasteCost,
+                                        origen: 'Desperdicio',
+                                        unidad: materialUnidad,
+                                        colorId: colorEntry.id,
+                                        colorLabel: colorEntry.label,
+                                    },
+                                ];
+                            })(),
                             centrosCosto,
                             totales: {
                                 materiales: totalMateriales,
@@ -10602,7 +12425,7 @@ let ProductosServiciosService = class ProductosServiciosService {
             return input.areaUtilM2;
         }
         if (unidad === client_1.UnidadProceso.METRO_LINEAL) {
-            return input.largoConsumidoMl;
+            return input.largoConsumidoMl > 0 ? input.largoConsumidoMl : input.perimetroTotalMl;
         }
         if (unidad === client_1.UnidadProceso.PIEZA || unidad === client_1.UnidadProceso.UNIDAD) {
             return input.totalPiezas;
@@ -11104,36 +12927,52 @@ let ProductosServiciosService = class ProductosServiciosService {
         if (value === productos_servicios_dto_1.DimensionOpcionProductivaDto.caras) {
             return client_1.DimensionOpcionProductiva.CARAS;
         }
+        if (value === productos_servicios_dto_1.DimensionOpcionProductivaDto.tipo_copia) {
+            return client_1.DimensionOpcionProductiva.TIPO_COPIA;
+        }
         return client_1.DimensionOpcionProductiva.TIPO_IMPRESION;
     }
     fromDimensionOpcionProductiva(value) {
         if (value === client_1.DimensionOpcionProductiva.CARAS) {
             return productos_servicios_dto_1.DimensionOpcionProductivaDto.caras;
         }
+        if (value === client_1.DimensionOpcionProductiva.TIPO_COPIA) {
+            return productos_servicios_dto_1.DimensionOpcionProductivaDto.tipo_copia;
+        }
         return productos_servicios_dto_1.DimensionOpcionProductivaDto.tipo_impresion;
     }
     toValorOpcionProductiva(value) {
-        if (value === productos_servicios_dto_1.ValorOpcionProductivaDto.bn) {
+        if (value === productos_servicios_dto_1.ValorOpcionProductivaDto.bn)
             return client_1.ValorOpcionProductiva.BN;
-        }
-        if (value === productos_servicios_dto_1.ValorOpcionProductivaDto.simple_faz) {
+        if (value === productos_servicios_dto_1.ValorOpcionProductivaDto.simple_faz)
             return client_1.ValorOpcionProductiva.SIMPLE_FAZ;
-        }
-        if (value === productos_servicios_dto_1.ValorOpcionProductivaDto.doble_faz) {
+        if (value === productos_servicios_dto_1.ValorOpcionProductivaDto.doble_faz)
             return client_1.ValorOpcionProductiva.DOBLE_FAZ;
-        }
+        if (value === productos_servicios_dto_1.ValorOpcionProductivaDto.copia_simple)
+            return client_1.ValorOpcionProductiva.COPIA_SIMPLE;
+        if (value === productos_servicios_dto_1.ValorOpcionProductivaDto.duplicado)
+            return client_1.ValorOpcionProductiva.DUPLICADO;
+        if (value === productos_servicios_dto_1.ValorOpcionProductivaDto.triplicado)
+            return client_1.ValorOpcionProductiva.TRIPLICADO;
+        if (value === productos_servicios_dto_1.ValorOpcionProductivaDto.cuadruplicado)
+            return client_1.ValorOpcionProductiva.CUADRUPLICADO;
         return client_1.ValorOpcionProductiva.CMYK;
     }
     fromValorOpcionProductiva(value) {
-        if (value === client_1.ValorOpcionProductiva.BN) {
+        if (value === client_1.ValorOpcionProductiva.BN)
             return productos_servicios_dto_1.ValorOpcionProductivaDto.bn;
-        }
-        if (value === client_1.ValorOpcionProductiva.SIMPLE_FAZ) {
+        if (value === client_1.ValorOpcionProductiva.SIMPLE_FAZ)
             return productos_servicios_dto_1.ValorOpcionProductivaDto.simple_faz;
-        }
-        if (value === client_1.ValorOpcionProductiva.DOBLE_FAZ) {
+        if (value === client_1.ValorOpcionProductiva.DOBLE_FAZ)
             return productos_servicios_dto_1.ValorOpcionProductivaDto.doble_faz;
-        }
+        if (value === client_1.ValorOpcionProductiva.COPIA_SIMPLE)
+            return productos_servicios_dto_1.ValorOpcionProductivaDto.copia_simple;
+        if (value === client_1.ValorOpcionProductiva.DUPLICADO)
+            return productos_servicios_dto_1.ValorOpcionProductivaDto.duplicado;
+        if (value === client_1.ValorOpcionProductiva.TRIPLICADO)
+            return productos_servicios_dto_1.ValorOpcionProductivaDto.triplicado;
+        if (value === client_1.ValorOpcionProductiva.CUADRUPLICADO)
+            return productos_servicios_dto_1.ValorOpcionProductivaDto.cuadruplicado;
         return productos_servicios_dto_1.ValorOpcionProductivaDto.cmyk;
     }
     toValorFromTipoImpresion(value) {
@@ -11236,6 +13075,9 @@ let ProductosServiciosService = class ProductosServiciosService {
         if (value === productos_servicios_dto_1.TipoChecklistAccionReglaDto.set_atributo_tecnico) {
             return client_1.TipoProductoChecklistReglaAccion.SET_ATRIBUTO_TECNICO;
         }
+        if (value === productos_servicios_dto_1.TipoChecklistAccionReglaDto.configurar_terminacion) {
+            return client_1.TipoProductoChecklistReglaAccion.CONFIGURAR_TERMINACION;
+        }
         return client_1.TipoProductoChecklistReglaAccion.ACTIVAR_PASO;
     }
     fromTipoChecklistAccion(value) {
@@ -11253,6 +13095,9 @@ let ProductosServiciosService = class ProductosServiciosService {
         }
         if (value === client_1.TipoProductoChecklistReglaAccion.SET_ATRIBUTO_TECNICO) {
             return productos_servicios_dto_1.TipoChecklistAccionReglaDto.set_atributo_tecnico;
+        }
+        if (value === client_1.TipoProductoChecklistReglaAccion.CONFIGURAR_TERMINACION) {
+            return productos_servicios_dto_1.TipoChecklistAccionReglaDto.configurar_terminacion;
         }
         return productos_servicios_dto_1.TipoChecklistAccionReglaDto.activar_paso;
     }

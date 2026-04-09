@@ -30,9 +30,10 @@ export declare enum TipoOperacionProcesoDto {
     preprensa = "preprensa",
     prensa = "prensa",
     postprensa = "postprensa",
+    instalacion = "instalacion",
+    entrega_despacho = "entrega_despacho",
     acabado = "acabado",
-    servicio = "servicio",
-    instalacion = "instalacion"
+    servicio = "servicio"
 }
 export declare enum ModoProductividadProcesoDto {
     fija = "fija",
@@ -78,6 +79,7 @@ export declare class ProcesoOperacionItemDto {
     runMin?: number;
     cleanupMin?: number;
     tiempoFijoMin?: number;
+    multiplicadorDobleFaz?: number;
     modoProductividad?: ModoProductividadProcesoDto;
     productividadBase?: number;
     unidadEntrada?: UnidadProcesoDto;
@@ -99,6 +101,7 @@ export declare class ProcesoOperacionNivelDto {
     activo?: boolean;
     modoProductividadNivel: ModoProductividadNivelDto;
     tiempoFijoMin?: number;
+    multiplicadorDobleFaz?: number;
     productividadBase?: number;
     unidadSalida?: UnidadProcesoDto;
     unidadTiempo?: UnidadProcesoDto;
@@ -112,7 +115,6 @@ export declare class UpsertProcesoDto {
     codigo?: string;
     nombre: string;
     descripcion?: string;
-    plantillaMaquinaria?: PlantillaMaquinariaDto;
     estadoConfiguracion?: EstadoConfiguracionProcesoDto;
     activo: boolean;
     observaciones?: string;

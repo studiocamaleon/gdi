@@ -15,6 +15,7 @@ const common_1 = require("@nestjs/common");
 const node_crypto_1 = require("node:crypto");
 const client_1 = require("@prisma/client");
 const library_1 = require("@prisma/client/runtime/library");
+const pagination_dto_1 = require("../common/dto/pagination.dto");
 const prisma_service_1 = require("../prisma/prisma.service");
 const upsert_maquina_dto_1 = require("./dto/upsert-maquina.dto");
 const maquinaria_template_machine_rules_1 = require("./maquinaria-template-machine-rules");
@@ -256,36 +257,42 @@ let MaquinariaService = class MaquinariaService {
     constructor(prisma) {
         this.prisma = prisma;
     }
-    async findAll(auth) {
-        const maquinas = await this.prisma.maquina.findMany({
-            where: { tenantId: auth.tenantId },
-            include: {
-                planta: true,
-                centroCostoPrincipal: true,
-                perfilesOperativos: true,
-                consumibles: {
-                    include: {
-                        perfilOperativo: true,
-                        materiaPrimaVariante: {
-                            include: {
-                                materiaPrima: true,
+    async findAll(auth, pagination) {
+        const where = { tenantId: auth.tenantId };
+        const [maquinas, total] = await this.prisma.$transaction([
+            this.prisma.maquina.findMany({
+                where,
+                include: {
+                    planta: true,
+                    centroCostoPrincipal: true,
+                    perfilesOperativos: true,
+                    consumibles: {
+                        include: {
+                            perfilOperativo: true,
+                            materiaPrimaVariante: {
+                                include: {
+                                    materiaPrima: true,
+                                },
+                            },
+                        },
+                    },
+                    componentesDesgaste: {
+                        include: {
+                            materiaPrimaVariante: {
+                                include: {
+                                    materiaPrima: true,
+                                },
                             },
                         },
                     },
                 },
-                componentesDesgaste: {
-                    include: {
-                        materiaPrimaVariante: {
-                            include: {
-                                materiaPrima: true,
-                            },
-                        },
-                    },
-                },
-            },
-            orderBy: [{ nombre: 'asc' }],
-        });
-        return maquinas.map((maquina) => this.toMaquinaResponse(maquina));
+                orderBy: [{ nombre: 'asc' }],
+                skip: pagination.skip,
+                take: pagination.limit,
+            }),
+            this.prisma.maquina.count({ where }),
+        ]);
+        return (0, pagination_dto_1.paginatedResponse)(maquinas.map((maquina) => this.toMaquinaResponse(maquina)), total, pagination);
     }
     async findOne(auth, id) {
         const maquina = await this.findMaquinaOrThrow(auth, id);

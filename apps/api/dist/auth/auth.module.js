@@ -11,6 +11,9 @@ const common_1 = require("@nestjs/common");
 const jwt_1 = require("@nestjs/jwt");
 const auth_controller_1 = require("./auth.controller");
 const auth_service_1 = require("./auth.service");
+if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET environment variable is not set');
+}
 let AuthModule = class AuthModule {
 };
 exports.AuthModule = AuthModule;
@@ -18,7 +21,7 @@ exports.AuthModule = AuthModule = __decorate([
     (0, common_1.Module)({
         imports: [
             jwt_1.JwtModule.register({
-                secret: process.env.JWT_SECRET ?? 'gdi-dev-secret',
+                secret: process.env.JWT_SECRET,
             }),
         ],
         controllers: [auth_controller_1.AuthController],

@@ -151,6 +151,18 @@ let ProductosServiciosController = class ProductosServiciosController {
     upsertGranFormatoChecklist(auth, id, payload) {
         return this.service.updateGranFormatoChecklist(auth, id, payload);
     }
+    cotizarRigidPrintedByProducto(auth, id, payload) {
+        return this.service.cotizarRigidPrintedByProducto(auth, id, payload);
+    }
+    previewRigidPrintedFlexible(auth, id, payload) {
+        return this.service.previewRigidPrintedFlexible(auth, id, payload);
+    }
+    getRigidPrintedChecklist(auth, id) {
+        return this.service.getRigidPrintedChecklist(auth, id);
+    }
+    updateRigidPrintedChecklist(auth, id, payload) {
+        return this.service.updateRigidPrintedChecklist(auth, id, payload);
+    }
     previewGranFormatoCostos(auth, id, payload) {
         return this.service.previewGranFormatoCostos(auth, id, payload);
     }
@@ -591,6 +603,41 @@ __decorate([
     __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.UpdateGranFormatoChecklistDto]),
     __metadata("design:returntype", void 0)
 ], ProductosServiciosController.prototype, "upsertGranFormatoChecklist", null);
+__decorate([
+    (0, common_1.Post)(':id/rigidos-impresos/cotizar'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.CotizarProductoVarianteDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "cotizarRigidPrintedByProducto", null);
+__decorate([
+    (0, common_1.Post)(':id/rigidos-impresos/preview-flexible'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, Object]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "previewRigidPrintedFlexible", null);
+__decorate([
+    (0, common_1.Get)(':id/rigidos-impresos/checklist'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "getRigidPrintedChecklist", null);
+__decorate([
+    (0, common_1.Put)(':id/rigidos-impresos/checklist'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, productos_servicios_dto_1.UpdateRigidPrintedChecklistDto]),
+    __metadata("design:returntype", void 0)
+], ProductosServiciosController.prototype, "updateRigidPrintedChecklist", null);
 __decorate([
     (0, common_1.Post)(':id/gran-formato-costos/preview'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),

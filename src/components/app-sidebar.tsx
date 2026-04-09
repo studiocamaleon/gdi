@@ -104,7 +104,7 @@ const costos = [
   },
   {
     title: "Catalogo de productos",
-    href: "/costos/productos-servicios",
+    href: "/costos/productos",
     icon: BoxesIcon,
   },
 ];

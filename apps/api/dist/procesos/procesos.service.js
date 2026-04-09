@@ -15,6 +15,7 @@ const common_1 = require("@nestjs/common");
 const node_crypto_1 = require("node:crypto");
 const client_1 = require("@prisma/client");
 const library_1 = require("@prisma/client/runtime/library");
+const pagination_dto_1 = require("../common/dto/pagination.dto");
 const prisma_service_1 = require("../prisma/prisma.service");
 const upsert_proceso_dto_1 = require("./dto/upsert-proceso.dto");
 const proceso_productividad_engine_1 = require("./proceso-productividad.engine");
@@ -27,26 +28,28 @@ let ProcesosService = class ProcesosService {
     constructor(prisma) {
         this.prisma = prisma;
     }
-    async findAll(auth) {
-        const procesos = await this.prisma.procesoDefinicion.findMany({
-            where: {
-                tenantId: auth.tenantId,
-            },
-            include: {
-                operaciones: {
-                    include: {
-                        centroCosto: true,
-                        maquina: true,
-                        perfilOperativo: true,
-                    },
-                    orderBy: {
-                        orden: 'asc',
+    async findAll(auth, pagination) {
+        const where = { tenantId: auth.tenantId };
+        const [procesos, total] = await this.prisma.$transaction([
+            this.prisma.procesoDefinicion.findMany({
+                where,
+                include: {
+                    operaciones: {
+                        include: {
+                            centroCosto: true,
+                            maquina: true,
+                            perfilOperativo: true,
+                        },
+                        orderBy: { orden: 'asc' },
                     },
                 },
-            },
-            orderBy: [{ nombre: 'asc' }],
-        });
-        return procesos.map((proceso) => this.toProcesoResponse(proceso));
+                orderBy: [{ nombre: 'asc' }],
+                skip: pagination.skip,
+                take: pagination.limit,
+            }),
+            this.prisma.procesoDefinicion.count({ where }),
+        ]);
+        return (0, pagination_dto_1.paginatedResponse)(procesos.map((proceso) => this.toProcesoResponse(proceso)), total, pagination);
     }
     async findAllBibliotecaOperaciones(auth) {
         try {
@@ -58,6 +61,7 @@ let ProcesosService = class ProcesosService {
                     centroCosto: true,
                     maquina: true,
                     perfilOperativo: true,
+                    estacion: true,
                 },
                 orderBy: [{ nombre: 'asc' }],
             });
@@ -123,6 +127,26 @@ let ProcesosService = class ProcesosService {
         }
         const saved = await this.findBibliotecaOperacionOrThrow(auth, updated.id);
         return this.toBibliotecaOperacionResponse(saved);
+    }
+    async bulkAssignEstacionPlantillas(auth, dto) {
+        if (dto.estacionId) {
+            const estacion = await this.prisma.estacion.findFirst({
+                where: { id: dto.estacionId, tenantId: auth.tenantId },
+            });
+            if (!estacion) {
+                throw new common_1.BadRequestException('La estacion seleccionada no existe.');
+            }
+        }
+        await this.prisma.procesoOperacionPlantilla.updateMany({
+            where: {
+                id: { in: dto.ids },
+                tenantId: auth.tenantId,
+            },
+            data: {
+                estacionId: dto.estacionId ?? null,
+            },
+        });
+        return this.findAllBibliotecaOperaciones(auth);
     }
     async findOne(auth, id) {
         const proceso = await this.findProcesoOrThrow(auth, id);
@@ -404,16 +428,12 @@ let ProcesosService = class ProcesosService {
         })));
     }
     buildProcesoWriteData(auth, payload, references, forcedCodigo, forcedVersion) {
-        const plantillaMaquinaria = this.getPlantillaFromPayload(payload);
         const estadoConfiguracion = this.getDerivedEstadoConfiguracion(payload, references);
         return {
             tenantId: auth.tenantId,
             codigo: forcedCodigo,
             nombre: payload.nombre.trim(),
             descripcion: payload.descripcion?.trim() || null,
-            plantillaMaquinaria: plantillaMaquinaria
-                ? this.toPrismaEnum(plantillaMaquinaria)
-                : null,
             currentVersion: forcedVersion,
             estadoConfiguracion: this.toPrismaEnum(estadoConfiguracion),
             activo: payload.activo,
@@ -438,6 +458,7 @@ let ProcesosService = class ProcesosService {
             runMin: this.toDecimal(payload.runMin),
             cleanupMin: derived.cleanupMin,
             tiempoFijoMin: this.toDecimal(payload.tiempoFijoMin),
+            multiplicadorDobleFaz: this.toDecimal(payload.multiplicadorDobleFaz),
             modoProductividad: this.resolveModoProductividadFromPayload(payload),
             productividadBase: derived.productividadBase,
             unidadEntrada: this.toPrismaEnum(payload.unidadEntrada ?? upsert_proceso_dto_1.UnidadProcesoDto.ninguna),
@@ -459,6 +480,7 @@ let ProcesosService = class ProcesosService {
             centroCostoId: refs.centroCostoId,
             maquinaId: refs.maquinaId,
             perfilOperativoId: refs.perfilOperativoId,
+            estacionId: refs.estacionId,
             setupMin: this.toDecimal(payload.setupMin),
             cleanupMin: this.toDecimal(payload.cleanupMin),
             tiempoFijoMin: this.toDecimal(payload.tiempoFijoMin),
@@ -482,13 +504,14 @@ let ProcesosService = class ProcesosService {
             case upsert_proceso_dto_1.TipoOperacionProcesoDto.prensa:
                 return client_1.TipoOperacionProceso.IMPRESION;
             case upsert_proceso_dto_1.TipoOperacionProcesoDto.postprensa:
-                return client_1.TipoOperacionProceso.TERMINACION;
             case upsert_proceso_dto_1.TipoOperacionProcesoDto.acabado:
-                return client_1.TipoOperacionProceso.LAMINADO;
-            case upsert_proceso_dto_1.TipoOperacionProcesoDto.servicio:
-                return client_1.TipoOperacionProceso.OTRO;
+                return client_1.TipoOperacionProceso.TERMINACION;
             case upsert_proceso_dto_1.TipoOperacionProcesoDto.instalacion:
                 return client_1.TipoOperacionProceso.LOGISTICA;
+            case upsert_proceso_dto_1.TipoOperacionProcesoDto.entrega_despacho:
+                return client_1.TipoOperacionProceso.EMPAQUE;
+            case upsert_proceso_dto_1.TipoOperacionProcesoDto.servicio:
+                return client_1.TipoOperacionProceso.OTRO;
             default:
                 return client_1.TipoOperacionProceso.OTRO;
         }
@@ -497,26 +520,25 @@ let ProcesosService = class ProcesosService {
         switch (value) {
             case client_1.TipoOperacionProceso.PREPRENSA:
             case client_1.TipoOperacionProceso.PREFLIGHT:
+            case client_1.TipoOperacionProceso.OTRO:
                 return upsert_proceso_dto_1.TipoOperacionProcesoDto.preprensa;
             case client_1.TipoOperacionProceso.IMPRESION:
                 return upsert_proceso_dto_1.TipoOperacionProcesoDto.prensa;
             case client_1.TipoOperacionProceso.LOGISTICA:
                 return upsert_proceso_dto_1.TipoOperacionProcesoDto.instalacion;
+            case client_1.TipoOperacionProceso.EMPAQUE:
+                return upsert_proceso_dto_1.TipoOperacionProcesoDto.entrega_despacho;
             case client_1.TipoOperacionProceso.LAMINADO:
             case client_1.TipoOperacionProceso.CORTE:
             case client_1.TipoOperacionProceso.MECANIZADO:
             case client_1.TipoOperacionProceso.GRABADO:
             case client_1.TipoOperacionProceso.CURADO:
             case client_1.TipoOperacionProceso.TRANSFERENCIA:
-                return upsert_proceso_dto_1.TipoOperacionProcesoDto.acabado;
             case client_1.TipoOperacionProceso.TERMINACION:
             case client_1.TipoOperacionProceso.CONTROL_CALIDAD:
-            case client_1.TipoOperacionProceso.EMPAQUE:
             case client_1.TipoOperacionProceso.TERCERIZADO:
-                return upsert_proceso_dto_1.TipoOperacionProcesoDto.postprensa;
-            case client_1.TipoOperacionProceso.OTRO:
             default:
-                return upsert_proceso_dto_1.TipoOperacionProcesoDto.servicio;
+                return upsert_proceso_dto_1.TipoOperacionProcesoDto.postprensa;
         }
     }
     buildOperacionDetalleJson(detalle, niveles = [], baseCalculoProductividad) {
@@ -964,9 +986,6 @@ let ProcesosService = class ProcesosService {
         }
         return values.map((item) => new client_1.Prisma.Decimal(item));
     }
-    getPlantillaFromPayload(payload) {
-        return payload.plantillaMaquinaria ?? null;
-    }
     getDerivedEstadoConfiguracion(payload, references) {
         if (!payload.nombre?.trim()) {
             return upsert_proceso_dto_1.EstadoConfiguracionProcesoDto.borrador;
@@ -1039,21 +1058,6 @@ let ProcesosService = class ProcesosService {
             }
             if (perfil.maquinaId !== operacion.maquinaId) {
                 throw new common_1.BadRequestException(`El perfil operativo de ${operacion.nombre.trim()} no pertenece a la maquina seleccionada.`);
-            }
-        }
-        if (payload.plantillaMaquinaria) {
-            for (const operacion of operaciones) {
-                if (!operacion.maquinaId) {
-                    continue;
-                }
-                const maquina = references.maquinasById.get(operacion.maquinaId);
-                if (!maquina) {
-                    continue;
-                }
-                if (maquina.plantilla !==
-                    this.toPrismaEnum(payload.plantillaMaquinaria)) {
-                    throw new common_1.BadRequestException(`La maquina ${maquina.nombre} no coincide con la plantilla seleccionada del proceso.`);
-                }
             }
         }
         for (const operacion of operaciones) {
@@ -1200,6 +1204,7 @@ let ProcesosService = class ProcesosService {
                 centroCosto: true,
                 maquina: true,
                 perfilOperativo: true,
+                estacion: true,
             },
         });
         if (!item) {
@@ -1226,12 +1231,30 @@ let ProcesosService = class ProcesosService {
             }
             return centro.id;
         };
+        const resolveEstacion = async (estacionId) => {
+            if (!estacionId) {
+                return null;
+            }
+            const estacion = await this.prisma.estacion.findFirst({
+                where: {
+                    id: estacionId,
+                    tenantId: auth.tenantId,
+                },
+                select: { id: true },
+            });
+            if (!estacion) {
+                throw new common_1.BadRequestException('La estacion seleccionada no existe para este tenant.');
+            }
+            return estacion.id;
+        };
+        const estacionId = await resolveEstacion(payload.estacionId);
         if (!payload.maquinaId) {
             const centroCostoId = await resolveCentro(payload.centroCostoId);
             return {
                 centroCostoId,
                 maquinaId: null,
                 perfilOperativoId: null,
+                estacionId,
             };
         }
         const maquina = await this.prisma.maquina.findFirst({
@@ -1255,6 +1278,7 @@ let ProcesosService = class ProcesosService {
                 centroCostoId,
                 maquinaId: payload.maquinaId,
                 perfilOperativoId: null,
+                estacionId,
             };
         }
         const perfil = await this.prisma.maquinaPerfilOperativo.findFirst({
@@ -1274,6 +1298,7 @@ let ProcesosService = class ProcesosService {
             centroCostoId,
             maquinaId: payload.maquinaId,
             perfilOperativoId: payload.perfilOperativoId,
+            estacionId,
         };
     }
     validateOperacionNivelesPayload(niveles, operationName) {
@@ -1470,6 +1495,7 @@ let ProcesosService = class ProcesosService {
                 runMin: this.decimalToNumberOrNull(operacion.runMin),
                 cleanupMin: this.decimalToNumberOrNull(operacion.cleanupMin),
                 tiempoFijoMin: this.decimalToNumberOrNull(operacion.tiempoFijoMin),
+                multiplicadorDobleFaz: this.decimalToNumberOrNull(operacion.multiplicadorDobleFaz),
                 modoProductividad: this.toApiModoProductividad(operacion.modoProductividad),
                 productividadBase: this.decimalToNumberOrNull(operacion.productividadBase),
                 unidadEntrada: this.toApiEnum(operacion.unidadEntrada),
@@ -1518,6 +1544,8 @@ let ProcesosService = class ProcesosService {
             baseCalculoProductividad: this.getOperacionDetalle(detalleJson)?.baseCalculoProductividad ?? null,
             observaciones: item.observaciones ?? '',
             niveles: this.getOperacionNiveles(detalleJson),
+            estacionId: item.estacionId ?? null,
+            estacionNombre: item.estacion?.nombre ?? '',
             activo: item.activo,
             createdAt: item.createdAt.toISOString(),
             updatedAt: item.updatedAt.toISOString(),
@@ -1636,6 +1664,7 @@ let ProcesosService = class ProcesosService {
                 runMin: this.decimalToNumberOrNull(operacion.runMin),
                 cleanupMin: this.decimalToNumberOrNull(operacion.cleanupMin),
                 tiempoFijoMin: this.decimalToNumberOrNull(operacion.tiempoFijoMin),
+                multiplicadorDobleFaz: this.decimalToNumberOrNull(operacion.multiplicadorDobleFaz),
                 modoProductividad: operacion.modoProductividad,
                 productividadBase: this.decimalToNumberOrNull(operacion.productividadBase),
                 unidadEntrada: operacion.unidadEntrada,

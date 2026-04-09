@@ -1,6 +1,6 @@
 import type { CurrentAuth } from '../../auth/auth.types';
 import type { CotizarProductoVarianteDto, PreviewImposicionProductoVarianteDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto } from '../dto/productos-servicios.dto';
-export type MotorCategory = 'digital_sheet' | 'wide_format' | 'vinyl_cut';
+export type MotorCategory = 'digital_sheet' | 'wide_format' | 'vinyl_cut' | 'talonario' | 'rigid_printed';
 export type ProductMotorCapabilities = {
     hasProductConfig: boolean;
     hasVariantOverride: boolean;

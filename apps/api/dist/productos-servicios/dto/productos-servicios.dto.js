@@ -10,7 +10,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AssignVarianteRutaDto = exports.UpdateProductoVarianteDto = exports.CreateProductoVarianteDto = exports.UpsertProductoServicioDto = exports.UpsertSubfamiliaProductoDto = exports.UpsertProductoComisionDto = exports.UpsertProductoImpuestoDto = exports.UpsertFamiliaProductoDto = exports.SetVarianteAdicionalRestrictionDto = exports.AssignProductoAdicionalDto = exports.UpsertProductoAdicionalServicioPricingDto = exports.UpsertProductoAdicionalServicioReglaCostoDto = exports.UpsertProductoAdicionalServicioNivelDto = exports.UpsertProductoAdicionalDto = exports.UpsertProductoAdicionalMaterialDto = exports.UpsertProductoAdicionalEfectoDto = exports.UpsertProductoAdicionalMaterialEffectDto = exports.UpsertProductoAdicionalCostEffectDto = exports.UpsertProductoAdicionalRouteEffectDto = exports.UpsertProductoAdicionalRouteInsertionDto = exports.UpsertProductoAdicionalRouteEffectPasoDto = exports.UpsertProductoAdicionalEfectoScopeDto = exports.UpsertVarianteOpcionesProductivasDto = exports.UpsertVarianteOpcionProductivaDimensionDto = exports.MetodoCalculoPrecioProductoDto = exports.ReglaCostoChecklistDto = exports.TipoChecklistAccionReglaDto = exports.TipoChecklistPreguntaDto = exports.ReglaCostoAdicionalEfectoDto = exports.TipoInsercionRouteEffectDto = exports.TipoProductoAdicionalEfectoDto = exports.ValorOpcionProductivaDto = exports.DimensionOpcionProductivaDto = exports.TipoConsumoAdicionalMaterialDto = exports.MetodoCostoProductoAdicionalDto = exports.TipoProductoAdicionalDto = exports.CarasProductoVarianteDto = exports.TipoImpresionProductoVarianteDto = exports.GranFormatoPanelManualLayoutDto = exports.GranFormatoPanelManualLayoutItemDto = exports.GranFormatoPanelManualItemDto = exports.GranFormatoPanelizadoModoDto = exports.GranFormatoPanelizadoInterpretacionAnchoMaximoDto = exports.GranFormatoPanelizadoDistribucionDto = exports.GranFormatoPanelizadoDireccionDto = exports.GranFormatoImposicionCriterioOptimizacionDto = exports.UnidadComercialProductoDto = exports.TipoVentaGranFormatoDto = exports.EstadoProductoServicioDto = exports.TipoProductoServicioDto = void 0;
-exports.PreviewImposicionProductoVarianteDto = exports.CotizarProductoVarianteDto = exports.PreviewGranFormatoCostosDto = exports.PreviewGranFormatoCostoMedidaDto = exports.UpdateGranFormatoChecklistDto = exports.UpsertGranFormatoChecklistPorTecnologiaDto = exports.UpsertProductoChecklistDto = exports.UpsertChecklistPreguntaDto = exports.UpsertChecklistRespuestaDto = exports.UpsertChecklistReglaDto = exports.UpsertChecklistReglaNivelDto = exports.CotizarSeleccionBaseDto = exports.CotizarChecklistRespuestaDto = exports.CotizarAddonConfigDto = exports.UpsertVarianteMotorOverrideDto = exports.UpdateGranFormatoVarianteDto = exports.CreateGranFormatoVarianteDto = exports.UpdateGranFormatoRutaBaseDto = exports.UpsertGranFormatoRutaBaseReglaImpresionDto = exports.UpdateGranFormatoConfigDto = exports.UpdateGranFormatoImposicionDto = exports.GranFormatoImposicionMedidaDto = exports.UpsertProductoMotorConfigDto = exports.UpdateProductoPrecioEspecialClientesDto = exports.UpdateProductoPrecioDto = exports.AssignProductoMotorDto = exports.AssignProductoVariantesRutaMasivaDto = exports.UpdateProductoRutaPolicyDto = exports.UpsertProductoRutaPasoFijoVarianteDto = exports.UpsertProductoRutaPasoFijoItemDto = exports.UpsertProductoRutaBaseMatchingVarianteDto = exports.UpsertProductoRutaBaseMatchingItemDto = void 0;
+exports.PreviewImposicionProductoVarianteDto = exports.CotizarProductoVarianteDto = exports.PreviewGranFormatoCostosDto = exports.PreviewGranFormatoCostoMedidaDto = exports.UpdateRigidPrintedChecklistDto = exports.UpsertRigidPrintedChecklistPorTipoDto = exports.UpdateGranFormatoChecklistDto = exports.UpsertGranFormatoChecklistPorTecnologiaDto = exports.UpsertProductoChecklistDto = exports.UpsertChecklistPreguntaDto = exports.UpsertChecklistRespuestaDto = exports.UpsertChecklistReglaDto = exports.UpsertChecklistReglaNivelDto = exports.CotizarSeleccionBaseDto = exports.CotizarChecklistRespuestaDto = exports.CotizarAddonConfigDto = exports.UpsertVarianteMotorOverrideDto = exports.UpdateGranFormatoVarianteDto = exports.CreateGranFormatoVarianteDto = exports.UpdateGranFormatoRutaBaseDto = exports.UpsertGranFormatoRutaBaseReglaImpresionDto = exports.UpdateGranFormatoConfigDto = exports.UpdateGranFormatoImposicionDto = exports.GranFormatoImposicionMedidaDto = exports.UpsertProductoMotorConfigDto = exports.UpdateProductoPrecioEspecialClientesDto = exports.UpdateProductoPrecioDto = exports.AssignProductoMotorDto = exports.AssignProductoVariantesRutaMasivaDto = exports.UpdateProductoRutaPolicyDto = exports.UpsertProductoRutaPasoFijoVarianteDto = exports.UpsertProductoRutaPasoFijoItemDto = exports.UpsertProductoRutaBaseMatchingVarianteDto = exports.UpsertProductoRutaBaseMatchingItemDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 var TipoProductoServicioDto;
@@ -187,6 +187,7 @@ var DimensionOpcionProductivaDto;
 (function (DimensionOpcionProductivaDto) {
     DimensionOpcionProductivaDto["tipo_impresion"] = "tipo_impresion";
     DimensionOpcionProductivaDto["caras"] = "caras";
+    DimensionOpcionProductivaDto["tipo_copia"] = "tipo_copia";
 })(DimensionOpcionProductivaDto || (exports.DimensionOpcionProductivaDto = DimensionOpcionProductivaDto = {}));
 var ValorOpcionProductivaDto;
 (function (ValorOpcionProductivaDto) {
@@ -194,6 +195,10 @@ var ValorOpcionProductivaDto;
     ValorOpcionProductivaDto["cmyk"] = "cmyk";
     ValorOpcionProductivaDto["simple_faz"] = "simple_faz";
     ValorOpcionProductivaDto["doble_faz"] = "doble_faz";
+    ValorOpcionProductivaDto["copia_simple"] = "copia_simple";
+    ValorOpcionProductivaDto["duplicado"] = "duplicado";
+    ValorOpcionProductivaDto["triplicado"] = "triplicado";
+    ValorOpcionProductivaDto["cuadruplicado"] = "cuadruplicado";
 })(ValorOpcionProductivaDto || (exports.ValorOpcionProductivaDto = ValorOpcionProductivaDto = {}));
 var TipoProductoAdicionalEfectoDto;
 (function (TipoProductoAdicionalEfectoDto) {
@@ -228,6 +233,7 @@ var TipoChecklistAccionReglaDto;
     TipoChecklistAccionReglaDto["material_extra"] = "material_extra";
     TipoChecklistAccionReglaDto["mutar_producto_base"] = "mutar_producto_base";
     TipoChecklistAccionReglaDto["set_atributo_tecnico"] = "set_atributo_tecnico";
+    TipoChecklistAccionReglaDto["configurar_terminacion"] = "configurar_terminacion";
 })(TipoChecklistAccionReglaDto || (exports.TipoChecklistAccionReglaDto = TipoChecklistAccionReglaDto = {}));
 var ReglaCostoChecklistDto;
 (function (ReglaCostoChecklistDto) {
@@ -1593,6 +1599,7 @@ __decorate([
 class CotizarChecklistRespuestaDto {
     preguntaId;
     respuestaId;
+    terminacionParams;
 }
 exports.CotizarChecklistRespuestaDto = CotizarChecklistRespuestaDto;
 __decorate([
@@ -1603,6 +1610,11 @@ __decorate([
     (0, class_validator_1.IsUUID)(),
     __metadata("design:type", String)
 ], CotizarChecklistRespuestaDto.prototype, "respuestaId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsObject)(),
+    __metadata("design:type", Object)
+], CotizarChecklistRespuestaDto.prototype, "terminacionParams", void 0);
 class CotizarSeleccionBaseDto {
     dimension;
     valor;
@@ -1922,6 +1934,45 @@ __decorate([
     (0, class_transformer_1.Type)(() => UpsertGranFormatoChecklistPorTecnologiaDto),
     __metadata("design:type", Array)
 ], UpdateGranFormatoChecklistDto.prototype, "checklistsPorTecnologia", void 0);
+class UpsertRigidPrintedChecklistPorTipoDto {
+    tipoImpresion;
+    checklist;
+}
+exports.UpsertRigidPrintedChecklistPorTipoDto = UpsertRigidPrintedChecklistPorTipoDto;
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], UpsertRigidPrintedChecklistPorTipoDto.prototype, "tipoImpresion", void 0);
+__decorate([
+    (0, class_validator_1.ValidateNested)(),
+    (0, class_transformer_1.Type)(() => UpsertProductoChecklistDto),
+    __metadata("design:type", UpsertProductoChecklistDto)
+], UpsertRigidPrintedChecklistPorTipoDto.prototype, "checklist", void 0);
+class UpdateRigidPrintedChecklistDto {
+    aplicaATodosLosTiposImpresion;
+    checklistComun;
+    checklistsPorTipoImpresion;
+}
+exports.UpdateRigidPrintedChecklistDto = UpdateRigidPrintedChecklistDto;
+__decorate([
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], UpdateRigidPrintedChecklistDto.prototype, "aplicaATodosLosTiposImpresion", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.ValidateNested)(),
+    (0, class_transformer_1.Type)(() => UpsertProductoChecklistDto),
+    __metadata("design:type", UpsertProductoChecklistDto)
+], UpdateRigidPrintedChecklistDto.prototype, "checklistComun", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ArrayMaxSize)(10),
+    (0, class_validator_1.ValidateNested)({ each: true }),
+    (0, class_transformer_1.Type)(() => UpsertRigidPrintedChecklistPorTipoDto),
+    __metadata("design:type", Array)
+], UpdateRigidPrintedChecklistDto.prototype, "checklistsPorTipoImpresion", void 0);
 class PreviewGranFormatoCostoMedidaDto {
     anchoMm;
     altoMm;

@@ -40,7 +40,7 @@ let AuthGuard = class AuthGuard {
         let payload;
         try {
             payload = await this.jwtService.verifyAsync(token, {
-                secret: process.env.JWT_SECRET ?? 'gdi-dev-secret',
+                secret: process.env.JWT_SECRET,
             });
         }
         catch {

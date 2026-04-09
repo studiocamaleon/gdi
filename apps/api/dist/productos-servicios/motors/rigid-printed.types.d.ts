@@ -1,0 +1,51 @@
+export type TipoImpresionRigido = 'directa' | 'flexible_montado';
+export type EstrategiaCosteoMaterial = 'm2_exacto' | 'largo_consumido' | 'segmentos_placa';
+export type PrioridadNesting = 'rigido_manda' | 'flexible_manda' | 'independientes';
+export type ModoMedidas = 'estandar' | 'libres' | 'ambas';
+export type ImpresionTipoConfig = {
+    maquinasCompatibles: string[];
+    perfilesCompatibles: string[];
+    maquinaDefaultId: string | null;
+    perfilDefaultId: string | null;
+    carasDisponibles: ('simple_faz' | 'doble_faz')[];
+    carasDefault: 'simple_faz' | 'doble_faz';
+    duplicarSustratoFlexibleEnDobleFaz?: boolean;
+};
+export type ImposicionConfig = {
+    estrategiaCosteo: EstrategiaCosteoMaterial;
+    segmentosPlaca: number[];
+    separacionHorizontalMm: number;
+    separacionVerticalMm: number;
+    permitirRotacion: boolean;
+    prioridadNesting: PrioridadNesting;
+    orientacionPlaca: 'usar_lado_corto' | 'usar_lado_largo';
+    margenMaquina: {
+        arriba: number;
+        abajo: number;
+        izquierda: number;
+        derecha: number;
+    };
+};
+export type RigidPrintedMotorConfig = {
+    tipoPlantilla: 'rigidos_impresos';
+    tiposImpresion: TipoImpresionRigido[];
+    impresionDirecta: ImpresionTipoConfig;
+    flexibleMontado: ImpresionTipoConfig;
+    rutaImpresionDirectaId: string | null;
+    rutaFlexibleMontadoId: string | null;
+    materialRigidoId: string | null;
+    variantesCompatibles: string[];
+    placaVarianteIdDefault: string | null;
+    materialFlexibleId: string | null;
+    variantesFlexiblesCompatibles: string[];
+    varianteFlexibleDefaultId: string | null;
+    carasDisponibles?: ('simple_faz' | 'doble_faz')[];
+    carasDefault?: 'simple_faz' | 'doble_faz';
+    modoMedidas: ModoMedidas;
+    imposicion: ImposicionConfig;
+};
+export declare const DEFAULT_IMPOSICION_CONFIG: ImposicionConfig;
+export declare const DEFAULT_IMPRESION_TIPO_CONFIG: ImpresionTipoConfig;
+export declare const DEFAULT_RIGID_PRINTED_CONFIG: RigidPrintedMotorConfig;
+export declare const PLANTILLAS_IMPRESION_DIRECTA: readonly ["IMPRESORA_UV_MESA_EXTENSORA", "IMPRESORA_UV_FLATBED"];
+export declare const PLANTILLAS_FLEXIBLE_MONTADO: readonly ["IMPRESORA_UV_ROLLO", "IMPRESORA_SOLVENTE", "IMPRESORA_LATEX", "IMPRESORA_INYECCION_TINTA", "IMPRESORA_SUBLIMACION_GRAN_FORMATO", "PLOTTER_DE_CORTE"];
