@@ -169,6 +169,7 @@ export type ProcesoOperacionPlantilla = {
   centroCostoNombre: string;
   maquinaId: string | null;
   maquinaNombre: string;
+  maquinaPlantilla: string | null;
   perfilOperativoId: string | null;
   perfilOperativoNombre: string;
   setupMin: number | null;

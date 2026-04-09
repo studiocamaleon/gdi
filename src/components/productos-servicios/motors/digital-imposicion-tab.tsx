@@ -24,6 +24,8 @@ import {
 import type { MateriaPrima, MateriaPrimaVariante } from "@/lib/materias-primas";
 import type { PliegoImpresionCatalogItem } from "@/lib/productos-servicios";
 import { carasProductoVarianteItems, tipoImpresionProductoVarianteItems } from "@/lib/productos-servicios";
+import type { ProcesoOperacionPlantilla } from "@/lib/procesos";
+import { getProcesoOperacionPlantillas } from "@/lib/procesos-api";
 
 type PapelOption = {
   id: string;
@@ -60,18 +62,50 @@ type PreviewImposicionState = {
   };
 };
 
-const tipoCorteItems = [
+type TipoCorte = "sin_corte" | "guillotina" | "corte_manual" | "troquelado";
+
+const tipoCorteItems: ReadonlyArray<{ value: TipoCorte; label: string; help: string }> = [
   {
-    value: "sin_demasia",
-    label: "Sin demasía",
-    help: "Las piezas se acomodan con su medida final. Se recomienda cuando la guillotina puede cortar a línea final.",
+    value: "sin_corte",
+    label: "Sin corte",
+    help: "Solo impresión, sin ningún proceso de corte posterior. La pieza ocupa la totalidad del pliego.",
   },
   {
-    value: "con_demasia",
-    label: "Con demasía",
-    help: "Agrega demasía perimetral para cortar luego con más margen y precisión.",
+    value: "guillotina",
+    label: "Guillotina",
+    help: "Corte recto con guillotina. Las piezas se acomodan con línea de corte y opcionalmente demasía.",
+  },
+  {
+    value: "corte_manual",
+    label: "Corte manual",
+    help: "Corte manual sin máquina. Similar a guillotina pero sin asignar equipo de corte.",
+  },
+  {
+    value: "troquelado",
+    label: "Troquelado",
+    help: "Corte con plotter o mesa de corte. Requiere marcas de registro y separación entre contornos.",
   },
 ] as const;
+
+/** Mapea valores legacy a los nuevos tipos de corte */
+function normalizeTipoCorte(raw: unknown): TipoCorte {
+  const value = String(raw ?? "");
+  if (value === "sin_corte" || value === "guillotina" || value === "corte_manual" || value === "troquelado") return value;
+  // Compatibilidad con datos existentes
+  if (value === "con_demasia") return "guillotina";
+  if (value === "sin_demasia") return "guillotina";
+  return "guillotina";
+}
+
+/** Devuelve true si el tipo de corte utiliza demasía */
+function tipoCorteUsaDemasia(tipo: TipoCorte): boolean {
+  return tipo === "guillotina" || tipo === "corte_manual" || tipo === "troquelado";
+}
+
+/** Devuelve true si el tipo de corte usa línea de corte (marca de guillotina) */
+function tipoCorteUsaLineaCorte(tipo: TipoCorte): boolean {
+  return tipo === "guillotina" || tipo === "corte_manual";
+}
 
 const fallbackPliegosImpresion: PliegoImpresionCatalogItem[] = [
   { codigo: "A6", nombre: "A6", anchoMm: 105, altoMm: 148, label: "A6 (105 x 148 mm)" },
@@ -93,11 +127,12 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(value);
 }
 
-function getGuillotinaCutsFromImposicion(cols: number, rows: number, tipoCorte: "sin_demasia" | "con_demasia") {
+function getGuillotinaCutsFromImposicion(cols: number, rows: number, tipoCorte: TipoCorte, demasiaCorteMm: number) {
   const normalizedCols = Math.max(0, Math.floor(cols));
   const normalizedRows = Math.max(0, Math.floor(rows));
   if (normalizedCols <= 0 || normalizedRows <= 0) return 0;
-  if (tipoCorte === "con_demasia") {
+  if (tipoCorte === "sin_corte" || tipoCorte === "troquelado") return 0;
+  if (demasiaCorteMm > 0) {
     return normalizedCols * 2 + normalizedRows * 2;
   }
   return normalizedCols + normalizedRows + 2;
@@ -277,7 +312,7 @@ function renderTerminacionNodes(
 
 function buildDefaultConfig() {
   return {
-    tipoCorte: "sin_demasia",
+    tipoCorte: "guillotina" as TipoCorte,
     demasiaCorteMm: 0,
     lineaCorteMm: 3,
     tamanoPliegoImpresion: {
@@ -287,23 +322,44 @@ function buildDefaultConfig() {
       altoMm: 297,
     },
     mermaAdicionalPct: 0,
+    // Paso de corte (ProcesoOperacionPlantilla)
+    pasoCorteId: null as string | null,
+    // Parámetros específicos de troquelado
+    troquelado: {
+      anchoUtilPlotterMm: 290 as number,  // default: A4 ancho - 2*10mm
+      altoUtilPlotterMm: 420 as number,   // default: A3 alto - 2*10mm (se recalculará según pliego)
+      separacionEntreContornosMm: 3,
+      sangriadoTroquelMm: 3,
+    },
   } as Record<string, unknown>;
 }
 
 function normalizeDigitalImposicionSnapshot(config: Record<string, unknown>) {
   const tamanoRaw = readConfigRecord(config.tamanoPliegoImpresion);
-  const tipoCorte = String(config.tipoCorte ?? "sin_demasia") === "con_demasia" ? "con_demasia" : "sin_demasia";
+  const tipoCorte = normalizeTipoCorte(config.tipoCorte);
+  const troquelado = readConfigRecord(config.troquelado);
   return JSON.stringify({
     tipoCorte,
-    demasiaCorteMm: tipoCorte === "con_demasia" ? Math.max(0, Number(config.demasiaCorteMm ?? 0)) : 0,
+    demasiaCorteMm: tipoCorteUsaDemasia(tipoCorte) ? Math.max(0, Number(config.demasiaCorteMm ?? 0)) : 0,
     lineaCorteMm: Math.max(0, Number(config.lineaCorteMm ?? 3)),
     mermaAdicionalPct: Math.max(0, Number(config.mermaAdicionalPct ?? 0)),
+    pasoCorteId: config.pasoCorteId ?? null,
     tamanoPliegoImpresion: {
       codigo: String(tamanoRaw.codigo ?? "A4"),
       nombre: String(tamanoRaw.nombre ?? "A4"),
       anchoMm: Number(tamanoRaw.anchoMm ?? 210),
       altoMm: Number(tamanoRaw.altoMm ?? 297),
     },
+    ...(tipoCorte === "troquelado"
+      ? {
+          troquelado: {
+            anchoUtilPlotterMm: Math.max(0, Number(troquelado.anchoUtilPlotterMm ?? 290)),
+            altoUtilPlotterMm: Math.max(0, Number(troquelado.altoUtilPlotterMm ?? 420)),
+            separacionEntreContornosMm: Math.max(0, Number(troquelado.separacionEntreContornosMm ?? 3)),
+            sangriadoTroquelMm: Math.max(0, Number(troquelado.sangriadoTroquelMm ?? 3)),
+          },
+        }
+      : {}),
   });
 }
 
@@ -324,21 +380,31 @@ function mergeImposicionConfig(baseConfig: Record<string, unknown> | null | unde
     Number(incoming.gapVerticalMm ?? 0),
     legacyPerimetral,
   );
-  const tipoCorte =
+  // Normalizar tipoCorte (compatible con legacy sin_demasia/con_demasia)
+  const rawTipoCorte =
     String(incoming.tipoCorte ?? "") ||
     (legacyTipoImposicion === "doble_calle" ? "con_demasia" : "sin_demasia");
+  const tipoCorte = normalizeTipoCorte(rawTipoCorte);
   const demasiaCorteMm =
-    tipoCorte === "con_demasia"
+    tipoCorteUsaDemasia(tipoCorte)
       ? Number(incoming.demasiaCorteMm ?? legacyGap ?? 0)
       : 0;
   const lineaCorteMm = Number(incoming.lineaCorteMm ?? 3);
   const tamanoRaw = readConfigRecord(incoming.tamanoPliegoImpresion);
+  const troquelado = readConfigRecord(incoming.troquelado);
   return {
     ...buildDefaultConfig(),
     ...incoming,
     tipoCorte,
     demasiaCorteMm: Number.isFinite(demasiaCorteMm) ? Math.max(0, demasiaCorteMm) : 0,
     lineaCorteMm: Number.isFinite(lineaCorteMm) ? Math.max(0, lineaCorteMm) : 3,
+    pasoCorteId: incoming.pasoCorteId ?? null,
+    troquelado: {
+      anchoUtilPlotterMm: Math.max(0, Number(troquelado.anchoUtilPlotterMm ?? 290)),
+      altoUtilPlotterMm: Math.max(0, Number(troquelado.altoUtilPlotterMm ?? 420)),
+      separacionEntreContornosMm: Math.max(0, Number(troquelado.separacionEntreContornosMm ?? 3)),
+      sangriadoTroquelMm: Math.max(0, Number(troquelado.sangriadoTroquelMm ?? 3)),
+    },
     tamanoPliegoImpresion: {
       codigo: String(tamanoRaw.codigo ?? "A4"),
       nombre: String(tamanoRaw.nombre ?? "A4"),
@@ -355,9 +421,24 @@ function buildPreviewImposicion(params: {
   lineaCorteMm: number;
   papelById: Map<string, PapelOption>;
   imposicionPreviewRaw: Record<string, unknown> | null;
-  tipoCorteValue: "sin_demasia" | "con_demasia";
+  tipoCorteValue: TipoCorte;
+  troquelado?: { anchoUtilPlotterMm: number; altoUtilPlotterMm: number; separacionEntreContornosMm: number; sangriadoTroquelMm: number };
 }): PreviewImposicionState | null {
-  const { selectedVariante, pliego, demasiaCorteMm, lineaCorteMm, papelById, imposicionPreviewRaw, tipoCorteValue } = params;
+  const { selectedVariante, pliego, papelById, imposicionPreviewRaw, tipoCorteValue, troquelado } = params;
+
+  // Para troquelado:
+  //   - demasía = sangrado del troquel (bleed alrededor de cada pieza)
+  //   - lineaCorteMm = 0 (el margen de registro ya maneja el borde)
+  //   - separación entre contornos se suma al tamaño efectivo de cada pieza como gap
+  const demasiaCorteMm = tipoCorteValue === "troquelado"
+    ? (troquelado?.sangriadoTroquelMm ?? 3)
+    : params.demasiaCorteMm;
+  const lineaCorteMm = tipoCorteValue === "troquelado"
+    ? 0 // margenRegistroExtra ya maneja el borde
+    : (tipoCorteValue === "sin_corte" ? 0 : params.lineaCorteMm);
+  const separacionEntrePiezasMm = tipoCorteValue === "troquelado"
+    ? (troquelado?.separacionEntreContornosMm ?? 3)
+    : 0;
   if (!selectedVariante) return null;
   const server = imposicionPreviewRaw ?? {};
   const serverImposicion = readConfigRecord(server.imposicion);
@@ -367,20 +448,29 @@ function buildPreviewImposicion(params: {
   const piezaH = Math.max(1, Number(selectedVariante.altoMm));
   const hojaWRaw = Math.max(1, Number(serverPliego.anchoMm ?? pliego.anchoMm));
   const hojaHRaw = Math.max(1, Number(serverPliego.altoMm ?? pliego.altoMm));
-  const effectiveW = piezaW + demasiaCorteMm * 2;
-  const effectiveH = piezaH + demasiaCorteMm * 2;
+  // Para troquelado, el tamaño efectivo incluye: pieza + sangrado + separación entre contornos
+  const effectiveW = piezaW + demasiaCorteMm * 2 + separacionEntrePiezasMm;
+  const effectiveH = piezaH + demasiaCorteMm * 2 + separacionEntrePiezasMm;
 
   // Determinar si es motor talonario (tiene config de puntillado/encuadernacion)
   const serverConfig = readConfigRecord(server.config);
   const esTalonario = Boolean(serverConfig.puntillado || serverConfig.encuadernacion);
 
   // Determinar orientación real del cálculo
-  const marginsRaw = {
-    leftMm: Math.max(0, Number(serverMargins.leftMm ?? 0)),
-    rightMm: Math.max(0, Number(serverMargins.rightMm ?? 0)),
-    topMm: Math.max(0, Number(serverMargins.topMm ?? 0)),
-    bottomMm: Math.max(0, Number(serverMargins.bottomMm ?? 0)),
-  };
+  // Márgenes de máquina impresora (mínimos no imprimibles)
+  const machineLeft = Math.max(0, Number(serverMargins.leftMm ?? 0));
+  const machineRight = Math.max(0, Number(serverMargins.rightMm ?? 0));
+  const machineTop = Math.max(0, Number(serverMargins.topMm ?? 0));
+  const machineBottom = Math.max(0, Number(serverMargins.bottomMm ?? 0));
+  // Para troquelado: el margen final es el MAYOR entre máquina y plotter (no se suman)
+  const marginsRaw = tipoCorteValue === "troquelado" && troquelado
+    ? {
+        leftMm: Math.max(machineLeft, (hojaWRaw - troquelado.anchoUtilPlotterMm) / 2),
+        rightMm: Math.max(machineRight, (hojaWRaw - troquelado.anchoUtilPlotterMm) / 2),
+        topMm: Math.max(machineTop, (hojaHRaw - troquelado.altoUtilPlotterMm) / 2),
+        bottomMm: Math.max(machineBottom, (hojaHRaw - troquelado.altoUtilPlotterMm) / 2),
+      }
+    : { leftMm: machineLeft, rightMm: machineRight, topMm: machineTop, bottomMm: machineBottom };
   const printableWRaw = Math.max(0, hojaWRaw - marginsRaw.leftMm - marginsRaw.rightMm);
   const printableHRaw = Math.max(0, hojaHRaw - marginsRaw.topMm - marginsRaw.bottomMm);
   const utilWRaw = Math.max(0, printableWRaw - lineaCorteMm * 2);
@@ -413,12 +503,14 @@ function buildPreviewImposicion(params: {
   // Además hay que intercambiar cols↔rows porque lo que eran filas en la hoja
   // original ahora son columnas en la hoja girada.
   const orientacion: "normal" | "rotada" = hojaRotada ? "normal" : orientacionReal;
+  // Para troquelado, siempre usar cálculo local (el server puede no tener los params de troquelado aún)
+  const useLocalCalc = tipoCorteValue === "troquelado";
   const cols = Math.max(0, hojaRotada
-    ? Number(serverImposicion.rows ?? rotRows)
-    : Number(serverImposicion.cols ?? (orientacionReal === "rotada" ? rotCols : normalCols)));
+    ? Number((!useLocalCalc && serverImposicion.rows) || rotRows)
+    : Number((!useLocalCalc && serverImposicion.cols) || (orientacionReal === "rotada" ? rotCols : normalCols)));
   const rows = Math.max(0, hojaRotada
-    ? Number(serverImposicion.cols ?? rotCols)
-    : Number(serverImposicion.rows ?? (orientacionReal === "rotada" ? rotRows : normalRows)));
+    ? Number((!useLocalCalc && serverImposicion.cols) || rotCols)
+    : Number((!useLocalCalc && serverImposicion.rows) || (orientacionReal === "rotada" ? rotRows : normalRows)));
   const papelSeleccionado = selectedVariante.papelVarianteId ? papelById.get(selectedVariante.papelVarianteId) : null;
   const sustratoAnchoMm = papelSeleccionado?.anchoMm ?? null;
   const sustratoAltoMm = papelSeleccionado?.altoMm ?? null;
@@ -451,8 +543,8 @@ function buildPreviewImposicion(params: {
     orientacion,
     cols,
     rows,
-    cortesGuillotina: getGuillotinaCutsFromImposicion(cols, rows, tipoCorteValue),
-    piezasPorPliego: Math.max(normal, rotada),
+    cortesGuillotina: getGuillotinaCutsFromImposicion(cols, rows, tipoCorteValue, demasiaCorteMm),
+    piezasPorPliego: cols * rows,
     pliegosPorSustrato,
     orientacionSustrato,
     sustratoAnchoMm,
@@ -471,6 +563,7 @@ export function DigitalImposicionTab(props: ProductTabProps) {
   );
 
   const [pliegosImpresion, setPliegosImpresion] = React.useState<PliegoImpresionCatalogItem[]>(fallbackPliegosImpresion);
+  const [pasosCorte, setPasosCorte] = React.useState<ProcesoOperacionPlantilla[]>([]);
   const [config, setConfig] = React.useState<Record<string, unknown>>(() => mergeImposicionConfig(props.motorConfig?.parametros, null));
   const [savedConfigSnapshot, setSavedConfigSnapshot] = React.useState(() =>
     normalizeDigitalImposicionSnapshot(mergeImposicionConfig(props.motorConfig?.parametros, null)),
@@ -489,6 +582,9 @@ export function DigitalImposicionTab(props: ProductTabProps) {
       .catch(() => {
         setPliegosImpresion(fallbackPliegosImpresion);
       });
+    getProcesoOperacionPlantillas()
+      .then((items) => setPasosCorte(items.filter((p) => p.activo)))
+      .catch(() => setPasosCorte([]));
   }, []);
 
   React.useEffect(() => {
@@ -518,9 +614,21 @@ export function DigitalImposicionTab(props: ProductTabProps) {
     };
   }, [props.motorConfig?.updatedAt, props.motorConfig?.versionConfig, props.selectedVariant?.id]);
 
-  const tipoCorteValue = String(config.tipoCorte ?? "sin_demasia") === "con_demasia" ? "con_demasia" : "sin_demasia";
-  const tipoCorteSelected = tipoCorteItems.find((item) => item.value === tipoCorteValue) ?? tipoCorteItems[0];
-  const demasiaCorteMm = tipoCorteValue === "con_demasia" ? Math.max(0, Number(config.demasiaCorteMm ?? 0)) : 0;
+  const tipoCorteValue = normalizeTipoCorte(config.tipoCorte);
+  const tipoCorteSelected = tipoCorteItems.find((item) => item.value === tipoCorteValue) ?? tipoCorteItems[1]; // default: guillotina
+
+  // Filtrar pasos de corte compatibles según tipo de corte
+  const pasosCorteCompatibles = React.useMemo(() => {
+    if (tipoCorteValue === "sin_corte") return [];
+    if (tipoCorteValue === "guillotina") return pasosCorte.filter((p) => p.maquinaPlantilla === "GUILLOTINA");
+    if (tipoCorteValue === "troquelado") return pasosCorte.filter((p) => p.maquinaPlantilla === "PLOTTER_DE_CORTE" || p.maquinaPlantilla === "MESA_DE_CORTE");
+    // corte_manual: todos
+    return pasosCorte;
+  }, [tipoCorteValue, pasosCorte]);
+  const pasoCorteId = typeof config.pasoCorteId === "string" ? config.pasoCorteId : null;
+  const pasoCorteSeleccionado = pasosCorteCompatibles.find((p) => p.id === pasoCorteId) ?? null;
+  const troqueladoRaw = readConfigRecord(config.troquelado);
+  const demasiaCorteMm = tipoCorteUsaDemasia(tipoCorteValue) ? Math.max(0, Number(config.demasiaCorteMm ?? 0)) : 0;
   const lineaCorteMm = Math.max(0, Number(config.lineaCorteMm ?? 3));
   const tamanoPliegoRaw = readConfigRecord(config.tamanoPliegoImpresion);
   const tamanoPliegoCodigo = String(tamanoPliegoRaw.codigo ?? "A4");
@@ -534,11 +642,21 @@ export function DigitalImposicionTab(props: ProductTabProps) {
       label: `${String(tamanoPliegoRaw.nombre ?? "Personalizado")} (${Number(tamanoPliegoRaw.anchoMm ?? 210)} x ${Number(tamanoPliegoRaw.altoMm ?? 297)} mm)`,
     } as PliegoImpresionCatalogItem);
 
+  const pliegoAnchoMm = tamanoPliegoSeleccionado.anchoMm;
+  const pliegoAltoMm = tamanoPliegoSeleccionado.altoMm;
+  const troqueladoConfig = React.useMemo(() => ({
+    anchoUtilPlotterMm: Math.min(pliegoAnchoMm, Math.max(0, Number(troqueladoRaw.anchoUtilPlotterMm ?? pliegoAnchoMm - 20))),
+    altoUtilPlotterMm: Math.min(pliegoAltoMm, Math.max(0, Number(troqueladoRaw.altoUtilPlotterMm ?? pliegoAltoMm - 20))),
+    separacionEntreContornosMm: Math.max(0, Number(troqueladoRaw.separacionEntreContornosMm ?? 3)),
+    sangriadoTroquelMm: Math.max(0, Number(troqueladoRaw.sangriadoTroquelMm ?? 3)),
+  }), [pliegoAnchoMm, pliegoAltoMm, troqueladoRaw.anchoUtilPlotterMm, troqueladoRaw.altoUtilPlotterMm, troqueladoRaw.separacionEntreContornosMm, troqueladoRaw.sangriadoTroquelMm]);
+
   const imposicionPayloadConfig = React.useMemo(
     () => ({
       tipoCorte: tipoCorteValue,
-      demasiaCorteMm: tipoCorteValue === "con_demasia" ? demasiaCorteMm : 0,
+      demasiaCorteMm: tipoCorteUsaDemasia(tipoCorteValue) ? demasiaCorteMm : 0,
       lineaCorteMm,
+      pasoCorteId: config.pasoCorteId ?? null,
       tamanoPliegoImpresion: {
         codigo: tamanoPliegoSeleccionado.codigo,
         nombre: tamanoPliegoSeleccionado.nombre,
@@ -546,8 +664,9 @@ export function DigitalImposicionTab(props: ProductTabProps) {
         altoMm: tamanoPliegoSeleccionado.altoMm,
       },
       mermaAdicionalPct: Number(config.mermaAdicionalPct ?? 0),
+      ...(tipoCorteValue === "troquelado" ? { troquelado: troqueladoConfig } : {}),
     }),
-    [config.mermaAdicionalPct, demasiaCorteMm, lineaCorteMm, tamanoPliegoSeleccionado, tipoCorteValue],
+    [config.mermaAdicionalPct, config.pasoCorteId, demasiaCorteMm, lineaCorteMm, tamanoPliegoSeleccionado, tipoCorteValue, troqueladoConfig],
   );
 
   React.useEffect(() => {
@@ -574,8 +693,9 @@ export function DigitalImposicionTab(props: ProductTabProps) {
         papelById,
         imposicionPreviewRaw,
         tipoCorteValue,
+        troquelado: tipoCorteValue === "troquelado" ? troqueladoConfig : undefined,
       }),
-    [demasiaCorteMm, imposicionPreviewRaw, lineaCorteMm, papelById, props.selectedVariant, tamanoPliegoSeleccionado, tipoCorteValue],
+    [demasiaCorteMm, imposicionPreviewRaw, lineaCorteMm, papelById, props.selectedVariant, tamanoPliegoSeleccionado, tipoCorteValue, troqueladoConfig],
   );
   const isConfigDirty = normalizeDigitalImposicionSnapshot(imposicionPayloadConfig) !== savedConfigSnapshot;
   const selectedVariantLabel = props.selectedVariant
@@ -740,11 +860,12 @@ export function DigitalImposicionTab(props: ProductTabProps) {
                     value={tipoCorteValue}
                     onValueChange={(value) =>
                       setConfig((prev) => {
+                        const tipo = normalizeTipoCorte(value);
                         const demasiaActual = Number(prev.demasiaCorteMm ?? 0);
                         return {
                           ...prev,
-                          tipoCorte: value,
-                          demasiaCorteMm: value === "con_demasia" ? (demasiaActual > 0 ? demasiaActual : 2) : 0,
+                          tipoCorte: tipo,
+                          demasiaCorteMm: tipoCorteUsaDemasia(tipo) ? (demasiaActual > 0 ? demasiaActual : 2) : 0,
                         };
                       })
                     }
@@ -778,8 +899,8 @@ export function DigitalImposicionTab(props: ProductTabProps) {
                       type="number"
                       step="0.1"
                       className="h-9 w-full min-w-0 pr-9"
-                      disabled={tipoCorteValue !== "con_demasia"}
-                      value={String(demasiaCorteMm)}
+                      disabled={!tipoCorteUsaDemasia(tipoCorteValue) || tipoCorteValue === "troquelado"}
+                      value={String(tipoCorteValue === "troquelado" ? troqueladoConfig.sangriadoTroquelMm : demasiaCorteMm)}
                       onChange={(e) =>
                         setConfig((prev) => ({
                           ...prev,
@@ -840,7 +961,227 @@ export function DigitalImposicionTab(props: ProductTabProps) {
                   </div>
                 </Field>
               </div>
+              {tipoCorteValue !== "sin_corte" && tipoCorteValue !== "troquelado" && (
+                <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-4">
+                  <Field className="min-w-0 space-y-1">
+                    <FieldLabel className="flex items-center gap-1 text-xs text-muted-foreground">
+                      Paso de corte
+                      <Tooltip>
+                        <TooltipTrigger className="inline-flex items-center text-muted-foreground">
+                          <InfoIcon className="size-3.5" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs text-xs">
+                          Paso de producción que se agrega a la ruta para el corte. Define máquina, perfil, productividad y tiempos.
+                        </TooltipContent>
+                      </Tooltip>
+                    </FieldLabel>
+                    <Select
+                      value={pasoCorteId ?? "__none__"}
+                      onValueChange={(value) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          pasoCorteId: value === "__none__" ? null : value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="h-9 w-full min-w-0">
+                        <SelectValue>{pasoCorteSeleccionado?.nombre ?? "Sin paso asignado"}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Sin paso asignado</SelectItem>
+                        {pasosCorteCompatibles.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.nombre}{p.maquinaNombre ? ` · ${p.maquinaNombre}` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+              )}
             </div>
+            {tipoCorteValue === "troquelado" && (
+              <div className="rounded-xl border border-blue-200 bg-blue-50/30 p-4">
+                <div className="mb-4">
+                  <h4 className="text-sm font-semibold">Parámetros de troquelado</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Configuración específica para corte con plotter/mesa de corte. Estos valores afectan la imposición.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
+                  <Field className="min-w-0 space-y-1">
+                    <FieldLabel className="flex items-center gap-1 text-xs text-muted-foreground">
+                      Sangrado troquel
+                      <Tooltip>
+                        <TooltipTrigger className="inline-flex items-center text-muted-foreground">
+                          <InfoIcon className="size-3.5" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs text-xs">
+                          Demasía perimetral alrededor del contorno de troquel. Se aplica como bleed en cada pieza.
+                        </TooltipContent>
+                      </Tooltip>
+                    </FieldLabel>
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        step="0.1"
+                        className="h-9 w-full min-w-0 pr-9"
+                        value={String(troqueladoConfig.sangriadoTroquelMm)}
+                        onChange={(e) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            troquelado: {
+                              ...readConfigRecord(prev.troquelado),
+                              sangriadoTroquelMm: Math.max(0, Number(e.target.value || 0)),
+                            },
+                          }))
+                        }
+                      />
+                      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">
+                        mm
+                      </span>
+                    </div>
+                  </Field>
+                  <Field className="min-w-0 space-y-1">
+                    <FieldLabel className="flex items-center gap-1 text-xs text-muted-foreground">
+                      Sep. entre contornos
+                      <Tooltip>
+                        <TooltipTrigger className="inline-flex items-center text-muted-foreground">
+                          <InfoIcon className="size-3.5" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs text-xs">
+                          Separación mínima entre contornos de troquel adyacentes.
+                        </TooltipContent>
+                      </Tooltip>
+                    </FieldLabel>
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        step="0.1"
+                        className="h-9 w-full min-w-0 pr-9"
+                        value={String(troqueladoConfig.separacionEntreContornosMm)}
+                        onChange={(e) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            troquelado: {
+                              ...readConfigRecord(prev.troquelado),
+                              separacionEntreContornosMm: Math.max(0, Number(e.target.value || 0)),
+                            },
+                          }))
+                        }
+                      />
+                      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">
+                        mm
+                      </span>
+                    </div>
+                  </Field>
+                  <Field className="min-w-0 space-y-1">
+                    <FieldLabel className="flex items-center gap-1 text-xs text-muted-foreground">
+                      Ancho útil plotter
+                      <Tooltip>
+                        <TooltipTrigger className="inline-flex items-center text-muted-foreground">
+                          <InfoIcon className="size-3.5" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs text-xs">
+                          Ancho del área útil del plotter de corte. El sistema calcula los márgenes de registro centrados automáticamente.
+                        </TooltipContent>
+                      </Tooltip>
+                    </FieldLabel>
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        step="1"
+                        min={0}
+                        max={pliegoAnchoMm}
+                        className="h-9 w-full min-w-0 pr-9"
+                        value={String(troqueladoConfig.anchoUtilPlotterMm)}
+                        onChange={(e) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            troquelado: {
+                              ...readConfigRecord(prev.troquelado),
+                              anchoUtilPlotterMm: Math.min(pliegoAnchoMm, Math.max(0, Number(e.target.value || 0))),
+                            },
+                          }))
+                        }
+                      />
+                      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">
+                        mm
+                      </span>
+                    </div>
+                  </Field>
+                  <Field className="min-w-0 space-y-1">
+                    <FieldLabel className="flex items-center gap-1 text-xs text-muted-foreground">
+                      Alto útil plotter
+                      <Tooltip>
+                        <TooltipTrigger className="inline-flex items-center text-muted-foreground">
+                          <InfoIcon className="size-3.5" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs text-xs">
+                          Alto del área útil del plotter de corte. El sistema calcula los márgenes de registro centrados automáticamente.
+                        </TooltipContent>
+                      </Tooltip>
+                    </FieldLabel>
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        step="1"
+                        min={0}
+                        max={pliegoAltoMm}
+                        className="h-9 w-full min-w-0 pr-9"
+                        value={String(troqueladoConfig.altoUtilPlotterMm)}
+                        onChange={(e) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            troquelado: {
+                              ...readConfigRecord(prev.troquelado),
+                              altoUtilPlotterMm: Math.min(pliegoAltoMm, Math.max(0, Number(e.target.value || 0))),
+                            },
+                          }))
+                        }
+                      />
+                      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">
+                        mm
+                      </span>
+                    </div>
+                  </Field>
+                  <Field className="min-w-0 space-y-1">
+                    <FieldLabel className="flex items-center gap-1 text-xs text-muted-foreground">
+                      Paso de corte
+                      <Tooltip>
+                        <TooltipTrigger className="inline-flex items-center text-muted-foreground">
+                          <InfoIcon className="size-3.5" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs text-xs">
+                          Paso de producción que se inyecta en la ruta para el troquelado. Define máquina, perfil, productividad y tiempos.
+                        </TooltipContent>
+                      </Tooltip>
+                    </FieldLabel>
+                    <Select
+                      value={pasoCorteId ?? "__none__"}
+                      onValueChange={(value) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          pasoCorteId: value === "__none__" ? null : value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="h-9 w-full min-w-0">
+                        <SelectValue>{pasoCorteSeleccionado?.nombre ?? "Sin paso asignado"}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Sin paso asignado</SelectItem>
+                        {pasosCorteCompatibles.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.nombre}{p.maquinaNombre ? ` · ${p.maquinaNombre}` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+              </div>
+            )}
           </div>
         </ProductoTabSection>
 
@@ -918,16 +1259,21 @@ export function DigitalImposicionTab(props: ProductTabProps) {
                     const printableY = oy + marginTop;
                     const printableW = Math.max(0, sheetW - marginLeft - marginRight);
                     const printableH = Math.max(0, sheetH - marginTop - marginBottom);
-                    const lineCut = previewImposicion.piezaW > 0 ? lineaCorteMm * scale : 0;
+                    const lineCutMm = tipoCorteValue === "troquelado" || tipoCorteValue === "sin_corte" ? 0 : lineaCorteMm;
+                    const lineCut = previewImposicion.piezaW > 0 ? lineCutMm * scale : 0;
                     const utilX = printableX + lineCut;
                     const utilY = printableY + lineCut;
                     const utilW = Math.max(0, printableW - lineCut * 2);
                     const utilH = Math.max(0, printableH - lineCut * 2);
                     const effectivePieceW = (previewImposicion.orientacion === "rotada" ? previewImposicion.effectiveH : previewImposicion.effectiveW) * scale;
                     const effectivePieceH = (previewImposicion.orientacion === "rotada" ? previewImposicion.effectiveW : previewImposicion.effectiveH) * scale;
-                    const demasiaPx = Math.max(0, demasiaCorteMm) * scale;
-                    const pieceW = Math.max(0, effectivePieceW - demasiaPx * 2);
-                    const pieceH = Math.max(0, effectivePieceH - demasiaPx * 2);
+                    // Para troquelado, la demasía visual es el sangrado del troquel
+                    const demasiaEfectivaMm = tipoCorteValue === "troquelado" ? troqueladoConfig.sangriadoTroquelMm : demasiaCorteMm;
+                    const demasiaPx = Math.max(0, demasiaEfectivaMm) * scale;
+                    // Para troquelado, el effectiveW incluye separación entre contornos que es gap vacío
+                    const sepPx = tipoCorteValue === "troquelado" ? (troqueladoConfig.separacionEntreContornosMm * scale) : 0;
+                    const pieceW = Math.max(0, effectivePieceW - demasiaPx * 2 - sepPx);
+                    const pieceH = Math.max(0, effectivePieceH - demasiaPx * 2 - sepPx);
                     const gridW = previewImposicion.cols * effectivePieceW;
                     const gridH = previewImposicion.rows * effectivePieceH;
                     const centeredGridX = utilX + Math.max(0, (utilW - gridW) / 2);
@@ -936,7 +1282,7 @@ export function DigitalImposicionTab(props: ProductTabProps) {
                     const blockTop = centeredGridY;
                     const blockRight = centeredGridX + gridW;
                     const blockBottom = centeredGridY + gridH;
-                    const markLen = Math.max(0, lineaCorteMm * scale);
+                    const markLen = Math.max(0, lineCutMm * scale);
                     const markOffset = 1.6;
 
                     // Puntillado config (para motor talonario)
@@ -976,8 +1322,9 @@ export function DigitalImposicionTab(props: ProductTabProps) {
                       for (let c = 0; c < previewImposicion.cols; c++) {
                         const x = centeredGridX + c * effectivePieceW;
                         const y = centeredGridY + r * effectivePieceH;
-                        const trimX = x + demasiaPx;
-                        const trimY = y + demasiaPx;
+                        const halfSep = sepPx / 2;
+                        const trimX = x + demasiaPx + halfSep;
+                        const trimY = y + demasiaPx + halfSep;
                         cutXMap.set(trimX.toFixed(2), trimX);
                         cutXMap.set((trimX + pieceW).toFixed(2), trimX + pieceW);
                         cutYMap.set(trimY.toFixed(2), trimY);
@@ -1048,15 +1395,22 @@ export function DigitalImposicionTab(props: ProductTabProps) {
                           ? renderTerminacionNodes(terminacionesCfg, trimX, trimY, pieceW, pieceH, scale, previewImposicion.orientacion)
                           : null;
 
+                        // Para troquelado, el rectángulo de demasía no incluye la separación (es gap vacío)
+                        const cellVisualW = effectivePieceW - sepPx;
+                        const cellVisualH = effectivePieceH - sepPx;
+                        // El rectángulo de demasía empieza en x + halfSep (trimX - demasiaPx = x + halfSep)
+                        const demasiaX = trimX - demasiaPx;
+                        const demasiaY = trimY - demasiaPx;
+
                         cells.push(
                           <g key={`cell-${r}-${c}`}>
                             <rect
-                              x={x}
-                              y={y}
-                              width={effectivePieceW}
-                              height={effectivePieceH}
-                              fill={demasiaCorteMm > 0 ? "#e5e7eb" : "#dcfce7"}
-                              stroke={demasiaCorteMm > 0 ? "#9ca3af" : "#16a34a"}
+                              x={demasiaX}
+                              y={demasiaY}
+                              width={cellVisualW}
+                              height={cellVisualH}
+                              fill={demasiaEfectivaMm > 0 ? "#e5e7eb" : "#dcfce7"}
+                              stroke={demasiaEfectivaMm > 0 ? "#9ca3af" : "#16a34a"}
                               strokeWidth="0.8"
                             />
                             {termResult?.roundedPath ? (

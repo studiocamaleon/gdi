@@ -9,6 +9,7 @@ import { ProductoServicioChecklistEditor } from "@/components/productos-servicio
 import { Badge } from "@/components/ui/badge";
 import type { Proceso, ProcesoOperacionPlantilla } from "@/lib/procesos";
 import type { ProductoChecklist } from "@/lib/productos-servicios";
+import { getVarianteMotorOverride } from "@/lib/productos-servicios-api";
 
 function normalizePasoNombreBase(value: string | null | undefined) {
   const normalized = String(value ?? "").trim().toLowerCase();
@@ -75,10 +76,30 @@ function getRutaPasoOptions(
 
 export function DigitalRutaOpcionalesTab(props: ProductTabProps) {
   const [productoChecklist, setProductoChecklist] = React.useState<ProductoChecklist>(props.checklist);
+  const [variantePasoCorteId, setVariantePasoCorteId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setProductoChecklist(props.checklist);
   }, [props.checklist]);
+
+  // Cargar pasoCorteId del override de la variante seleccionada
+  React.useEffect(() => {
+    if (!props.selectedVariant) {
+      setVariantePasoCorteId(null);
+      return;
+    }
+    let cancelled = false;
+    getVarianteMotorOverride(props.selectedVariant.id)
+      .then((override) => {
+        if (cancelled) return;
+        const params = (override.parametros ?? {}) as Record<string, unknown>;
+        setVariantePasoCorteId(typeof params.pasoCorteId === "string" ? params.pasoCorteId : null);
+      })
+      .catch(() => {
+        if (!cancelled) setVariantePasoCorteId(null);
+      });
+    return () => { cancelled = true; };
+  }, [props.selectedVariant?.id]);
 
   const pasosRutaOpcionales = React.useMemo(() => {
     const processIds = new Set<string>();
@@ -95,6 +116,13 @@ export function DigitalRutaOpcionalesTab(props: ProductTabProps) {
         label: paso.nombre,
       })),
     );
+    // Si hay un paso de corte configurado desde imposición, agregarlo al final
+    if (variantePasoCorteId) {
+      const pasoCorte = props.plantillasPaso.find((p) => p.id === variantePasoCorteId);
+      if (pasoCorte && !options.some((o) => o.id === pasoCorte.id)) {
+        options.push({ id: pasoCorte.id, label: `${pasoCorte.nombre} (corte desde imposición)` });
+      }
+    }
     return Array.from(new Map(options.map((item) => [item.id, item])).values());
   }, [
     props.plantillasPaso,
@@ -102,6 +130,7 @@ export function DigitalRutaOpcionalesTab(props: ProductTabProps) {
     props.producto.procesoDefinicionDefaultId,
     props.producto.usarRutaComunVariantes,
     props.variantes,
+    variantePasoCorteId,
   ]);
 
   const hasRouteConfigured = props.producto.usarRutaComunVariantes

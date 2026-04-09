@@ -2228,6 +2228,7 @@ export class ProcesosService {
       centroCostoNombre: item.centroCosto?.nombre ?? '',
       maquinaId: item.maquinaId ?? null,
       maquinaNombre: item.maquina?.nombre ?? '',
+      maquinaPlantilla: item.maquina?.plantilla ?? null,
       perfilOperativoId: item.perfilOperativoId ?? null,
       perfilOperativoNombre: item.perfilOperativo?.nombre ?? '',
       setupMin: this.decimalToNumberOrNull(item.setupMin),
