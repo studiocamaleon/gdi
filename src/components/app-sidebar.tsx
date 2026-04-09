@@ -130,7 +130,7 @@ const inventario = [
   },
   {
     title: "Movimientos",
-    href: "/inventario/movimientos-kardex",
+    href: "/inventario/movimientos",
     icon: ArrowLeftRightIcon,
   },
 ];

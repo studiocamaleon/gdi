@@ -1617,7 +1617,7 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => router.push("/inventario/movimientos-kardex")}
+                                  onClick={() => router.push("/inventario/movimientos")}
                                 >
                                   <HistoryIcon className="size-4" />
                                   Historial
