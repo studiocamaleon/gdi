@@ -9,7 +9,7 @@ import {
   CalendarClockIcon,
   CircleDollarSignIcon,
   ChevronRightIcon,
-  CreditCardIcon,
+  WarehouseIcon,
   BoxesIcon,
   FileTextIcon,
   FactoryIcon,
@@ -126,10 +126,10 @@ const inventario = [
   {
     title: "Centro de stock",
     href: "/inventario/centro-stock",
-    icon: CreditCardIcon,
+    icon: WarehouseIcon,
   },
   {
-    title: "Historial",
+    title: "Movimientos",
     href: "/inventario/movimientos-kardex",
     icon: ArrowLeftRightIcon,
   },
