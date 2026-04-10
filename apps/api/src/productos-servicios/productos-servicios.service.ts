@@ -374,9 +374,10 @@ export class ProductosServiciosService {
       hasQuote: true,
     },
     schema: {
-      tipoCorte: 'sin_demasia',
+      tipoCorte: 'guillotina',
       demasiaCorteMm: 0,
       lineaCorteMm: 3,
+      pasoCorteId: null,
       tamanoPliegoImpresion: {
         codigo: 'A4',
         nombre: 'A4',
@@ -384,6 +385,12 @@ export class ProductosServiciosService {
         altoMm: 297,
       },
       mermaAdicionalPct: 0,
+      troquelado: {
+        anchoUtilPlotterMm: 290,
+        altoUtilPlotterMm: 420,
+        separacionEntreContornosMm: 3,
+        sangriadoTroquelMm: 3,
+      },
     },
     exposedInCatalog: true,
   };
@@ -6349,6 +6356,36 @@ export class ProductosServiciosService {
       checklistOperacionesActivadas,
       conflictosMatchingRutaWarnings,
     );
+
+    // Inyectar paso de corte desde pasoCorteId si existe
+    const pasoCorteId = typeof config.pasoCorteId === 'string' && config.pasoCorteId ? config.pasoCorteId : null;
+    if (pasoCorteId) {
+      const pasoCorte = await this.prisma.procesoOperacionPlantilla.findFirst({
+        where: { tenantId: auth.tenantId, id: pasoCorteId, activo: true },
+        include: { centroCosto: true, maquina: true, perfilOperativo: true },
+      });
+      if (pasoCorte && pasoCorte.centroCosto) {
+        const maxOrden = operacionesCotizadas.reduce((max, op) => Math.max(max, op.orden), 0);
+        operacionesCotizadas.push({
+          ...pasoCorte,
+          id: `_paso_corte_${pasoCorte.id}`,
+          orden: maxOrden + 1,
+          codigo: pasoCorte.nombre,
+          nombre: pasoCorte.nombre,
+          centroCostoId: pasoCorte.centroCosto.id,
+          centroCosto: pasoCorte.centroCosto,
+          maquinaId: pasoCorte.maquinaId,
+          maquina: pasoCorte.maquina,
+          perfilOperativoId: pasoCorte.perfilOperativoId,
+          perfilOperativo: pasoCorte.perfilOperativo,
+          unidadEntrada: pasoCorte.unidadEntrada,
+          unidadSalida: pasoCorte.unidadSalida,
+          unidadTiempo: pasoCorte.unidadTiempo,
+          detalleJson: pasoCorte.detalleJson ?? {},
+        } as typeof operacionesCotizadas[number]);
+      }
+    }
+
     if (operacionesCotizadas.length === 0) {
       throw new BadRequestException('La ruta no tiene pasos activos para la selección actual.');
     }
@@ -6559,6 +6596,7 @@ export class ProductosServiciosService {
           cols: imposicion.cols,
           rows: imposicion.rows,
           tipoCorte: imposicion.tipoCorte,
+          demasiaCorteMm: imposicion.demasiaCorteMm,
         },
         pliegoAnchoMm: pliegoImpresion.anchoMm,
         pliegoAltoMm: pliegoImpresion.altoMm,
@@ -11711,9 +11749,10 @@ export class ProductosServiciosService {
 
   private getDefaultMotorConfig(): Record<string, unknown> {
     return {
-      tipoCorte: 'sin_demasia',
+      tipoCorte: 'guillotina',
       demasiaCorteMm: 0,
       lineaCorteMm: 3,
+      pasoCorteId: null,
       tamanoPliegoImpresion: {
         codigo: 'A4',
         nombre: 'A4',
@@ -11721,6 +11760,12 @@ export class ProductosServiciosService {
         altoMm: 297,
       },
       mermaAdicionalPct: 0,
+      troquelado: {
+        anchoUtilPlotterMm: 290,
+        altoUtilPlotterMm: 420,
+        separacionEntreContornosMm: 3,
+        sangriadoTroquelMm: 3,
+      },
     };
   }
 
@@ -11765,10 +11810,11 @@ export class ProductosServiciosService {
         anchoMm: 210,
         altoMm: 297,
       },
-      tipoCorte: 'sin_demasia',
+      tipoCorte: 'guillotina',
       demasiaCorteMm: 0,
       lineaCorteMm: 3,
       mermaAdicionalPct: 0,
+      pasoCorteId: null,
       numerosXTalonarioDefault: 50,
       tipoCopiaDefiniciones: [
         {
@@ -12092,16 +12138,46 @@ export class ProductosServiciosService {
     machineMargins: { leftMm: number; rightMm: number; topMm: number; bottomMm: number };
     config: Record<string, unknown>;
   }) {
-    const tipoCorte = String(input.config.tipoCorte ?? 'sin_demasia');
-    const demasiaRaw = Number(input.config.demasiaCorteMm ?? 0);
-    const demasiaCorteMm = tipoCorte === 'con_demasia' && Number.isFinite(demasiaRaw) ? Math.max(0, demasiaRaw) : 0;
-    const lineaCorteRaw = Number(input.config.lineaCorteMm ?? 3);
+    const rawTipoCorte = String(input.config.tipoCorte ?? 'sin_demasia');
+    // Compatibilidad: mapear legacy sin_demasia/con_demasia → guillotina
+    const tipoCorte = rawTipoCorte === 'sin_corte' || rawTipoCorte === 'guillotina' || rawTipoCorte === 'corte_manual' || rawTipoCorte === 'troquelado'
+      ? rawTipoCorte
+      : 'guillotina';
+    const troquelado = (input.config.troquelado && typeof input.config.troquelado === 'object' && !Array.isArray(input.config.troquelado))
+      ? input.config.troquelado as Record<string, unknown>
+      : {};
+    const demasiaRaw = tipoCorte === 'troquelado'
+      ? Number(troquelado.sangriadoTroquelMm ?? 3)
+      : Number(input.config.demasiaCorteMm ?? 0);
+    const demasiaCorteMm = (tipoCorte !== 'sin_corte') && Number.isFinite(demasiaRaw) ? Math.max(0, demasiaRaw) : 0;
+    const lineaCorteRaw = tipoCorte === 'troquelado'
+      ? 0 // margenRegistroExtra ya maneja el borde
+      : (tipoCorte === 'sin_corte' ? 0 : Number(input.config.lineaCorteMm ?? 3));
     const lineaCorteMm = Number.isFinite(lineaCorteRaw) ? Math.max(0, lineaCorteRaw) : 3;
-    const piezaAnchoEfectivoMm = input.varianteAnchoMm + 2 * demasiaCorteMm;
-    const piezaAltoEfectivoMm = input.varianteAltoMm + 2 * demasiaCorteMm;
+    // Para troquelado, la separación entre contornos se suma al tamaño efectivo (gap entre piezas)
+    const separacionEntrePiezasMm = tipoCorte === 'troquelado'
+      ? Math.max(0, Number(troquelado.separacionEntreContornosMm ?? 3))
+      : 0;
+    const piezaAnchoEfectivoMm = input.varianteAnchoMm + 2 * demasiaCorteMm + separacionEntrePiezasMm;
+    const piezaAltoEfectivoMm = input.varianteAltoMm + 2 * demasiaCorteMm + separacionEntrePiezasMm;
 
-    const anchoImprimible = input.sheetAnchoMm - input.machineMargins.leftMm - input.machineMargins.rightMm;
-    const altoImprimible = input.sheetAltoMm - input.machineMargins.topMm - input.machineMargins.bottomMm;
+    // Para troquelado: margen final = MAYOR entre máquina y plotter (no se suman)
+    let marginLeftMm = input.machineMargins.leftMm;
+    let marginRightMm = input.machineMargins.rightMm;
+    let marginTopMm = input.machineMargins.topMm;
+    let marginBottomMm = input.machineMargins.bottomMm;
+    if (tipoCorte === 'troquelado') {
+      const anchoUtilPlotter = Math.min(input.sheetAnchoMm, Math.max(0, Number(troquelado.anchoUtilPlotterMm ?? input.sheetAnchoMm - 20)));
+      const altoUtilPlotter = Math.min(input.sheetAltoMm, Math.max(0, Number(troquelado.altoUtilPlotterMm ?? input.sheetAltoMm - 20)));
+      const plotterMarginH = Math.max(0, (input.sheetAnchoMm - anchoUtilPlotter) / 2);
+      const plotterMarginV = Math.max(0, (input.sheetAltoMm - altoUtilPlotter) / 2);
+      marginLeftMm = Math.max(marginLeftMm, plotterMarginH);
+      marginRightMm = Math.max(marginRightMm, plotterMarginH);
+      marginTopMm = Math.max(marginTopMm, plotterMarginV);
+      marginBottomMm = Math.max(marginBottomMm, plotterMarginV);
+    }
+    const anchoImprimible = input.sheetAnchoMm - marginLeftMm - marginRightMm;
+    const altoImprimible = input.sheetAltoMm - marginTopMm - marginBottomMm;
     const anchoDisponible = anchoImprimible - 2 * lineaCorteMm;
     const altoDisponible = altoImprimible - 2 * lineaCorteMm;
 
@@ -12215,14 +12291,20 @@ export class ProductosServiciosService {
     cols: number;
     rows: number;
     tipoCorte?: string;
+    demasiaCorteMm?: number;
   }) {
     const cols = Math.max(0, Math.floor(input.cols));
     const rows = Math.max(0, Math.floor(input.rows));
     if (cols <= 0 || rows <= 0) {
       return 0;
     }
-    const tipoCorte = String(input.tipoCorte ?? 'sin_demasia').trim().toLowerCase();
-    if (tipoCorte === 'con_demasia') {
+    const rawTipoCorte = String(input.tipoCorte ?? 'guillotina').trim().toLowerCase();
+    // Troquelado y sin_corte no usan guillotina
+    if (rawTipoCorte === 'sin_corte' || rawTipoCorte === 'troquelado') {
+      return 0;
+    }
+    // Con demasía: cada pieza tiene 2 cortes por eje (legacy con_demasia también aplica)
+    if (rawTipoCorte === 'con_demasia' || (input.demasiaCorteMm ?? 0) > 0) {
       return cols * 2 + rows * 2;
     }
     return cols + rows + 2;
@@ -12252,6 +12334,7 @@ export class ProductosServiciosService {
       cols: number;
       rows: number;
       tipoCorte?: string;
+      demasiaCorteMm?: number;
     };
     varianteAnchoMm: number;
     varianteAltoMm: number;
@@ -12327,6 +12410,7 @@ export class ProductosServiciosService {
         cols: input.imposicion?.cols ?? 0,
         rows: input.imposicion?.rows ?? 0,
         tipoCorte: input.imposicion?.tipoCorte,
+        demasiaCorteMm: input.imposicion?.demasiaCorteMm,
       });
       if (cortesPorImposicion <= 0) {
         throw new BadRequestException(
