@@ -16,6 +16,7 @@ import {
   MetodoCostoProductoAdicional,
   PlantillaMaquinaria,
   Prisma,
+  RolProcesoOperacion,
   SubfamiliaMateriaPrima,
   TipoProductoAdicionalEfecto,
   TipoConsumoAdicionalMaterial,
@@ -5922,14 +5923,31 @@ export class ProductosServiciosService {
     const dimensionesBaseConsumidas = this.getProductoDimensionesBaseConsumidas(
       variante.productoServicio.detalleJson,
     );
-    const matchingBaseVarianteRaw =
-      this.getProductoMatchingBaseByVariante(variante.productoServicio.detalleJson).find(
-        (item) => item.varianteId === variante.id,
-      )?.matching ?? [];
-    const pasosFijosVarianteRaw =
-      this.getProductoPasosFijosByVariante(variante.productoServicio.detalleJson).find(
-        (item) => item.varianteId === variante.id,
-      )?.pasos ?? [];
+    // Intentar leer configuracionesImpresion del motor override de la variante (nuevo modelo)
+    const configAsRecord = (config ?? {}) as Record<string, unknown>;
+    const configuracionesImpresionRaw = Array.isArray(configAsRecord.configuracionesImpresion)
+      ? (configAsRecord.configuracionesImpresion as Array<Record<string, unknown>>)
+          .filter((item) => typeof item === 'object' && item !== null && item.maquinaId && item.perfilOperativoId)
+          .map((item) => ({
+            tipoImpresion: String(item.tipoImpresion ?? '') as TipoImpresionProductoVarianteDto,
+            caras: String(item.caras ?? '') as CarasProductoVarianteDto,
+            maquinaId: String(item.maquinaId ?? ''),
+            perfilOperativoId: String(item.perfilOperativoId ?? ''),
+          }))
+      : [];
+    const usaNuevoModeloConfigImpresion = configuracionesImpresionRaw.length > 0;
+
+    // Fallback: leer matching legacy del detalleJson del producto
+    const matchingBaseVarianteRaw = usaNuevoModeloConfigImpresion
+      ? []
+      : this.getProductoMatchingBaseByVariante(variante.productoServicio.detalleJson).find(
+          (item) => item.varianteId === variante.id,
+        )?.matching ?? [];
+    const pasosFijosVarianteRaw = usaNuevoModeloConfigImpresion
+      ? []
+      : this.getProductoPasosFijosByVariante(variante.productoServicio.detalleJson).find(
+          (item) => item.varianteId === variante.id,
+        )?.pasos ?? [];
     const seleccionesBaseInput = new Map(
       Array.from(
         new Map((payload.seleccionesBase ?? []).map((item) => [item.dimension, item])).values(),
@@ -6240,9 +6258,78 @@ export class ProductosServiciosService {
         .map((item) => this.buildChecklistPasoSignature(item.pasoPlantilla))
         .filter((value): value is string => Boolean(value)),
     );
+    // Resolver máquina+perfil para el paso de impresión desde el nuevo modelo de configuración de variante
+    let configImpresionResuelta: {
+      maquinaId: string;
+      perfilOperativoId: string;
+      maquina: any;
+      perfilOperativo: any;
+    } | null = null;
+
+    if (usaNuevoModeloConfigImpresion) {
+      // Filtrar configuración que coincida con la selección del usuario
+      const tipoSeleccionado = atributosTecnicosSeleccionados.get(DimensionOpcionProductiva.TIPO_IMPRESION);
+      const carasSeleccionado = atributosTecnicosSeleccionados.get(DimensionOpcionProductiva.CARAS);
+      const configMatch = configuracionesImpresionRaw.find((cfg) => {
+        const tipoOk = !tipoSeleccionado || this.toValorFromTipoImpresion(this.toTipoImpresion(cfg.tipoImpresion)) === tipoSeleccionado;
+        const carasOk = !carasSeleccionado || this.toValorFromCaras(this.toCaras(cfg.caras)) === carasSeleccionado;
+        return tipoOk && carasOk;
+      }) ?? configuracionesImpresionRaw[0];
+
+      if (configMatch) {
+        const [maquinaResult, perfilResult] = await Promise.all([
+          this.prisma.maquina.findUnique({
+            where: { id: configMatch.maquinaId },
+            include: { centroCosto: true },
+          }),
+          this.prisma.maquinaPerfilOperativo.findUnique({
+            where: { id: configMatch.perfilOperativoId },
+          }),
+        ]);
+        if (maquinaResult && perfilResult) {
+          configImpresionResuelta = {
+            maquinaId: configMatch.maquinaId,
+            perfilOperativoId: configMatch.perfilOperativoId,
+            maquina: maquinaResult,
+            perfilOperativo: perfilResult,
+          };
+        }
+      }
+    }
+
     const operacionesBaseCotizadas = proceso.operaciones
       .filter((op) => op.activo)
       .map((op) => {
+        // Nuevo modelo: si la operación tiene rol IMPRESION y hay config resuelta, aplicar máquina+perfil
+        if (usaNuevoModeloConfigImpresion && op.rol === RolProcesoOperacion.IMPRESION && configImpresionResuelta) {
+          return {
+            ...op,
+            maquinaId: configImpresionResuelta.maquinaId,
+            maquina: configImpresionResuelta.maquina,
+            perfilOperativoId: configImpresionResuelta.perfilOperativoId,
+            perfilOperativo: configImpresionResuelta.perfilOperativo,
+            setupMin:
+              configImpresionResuelta.perfilOperativo.setupMin !== null
+                ? configImpresionResuelta.perfilOperativo.setupMin
+                : op.setupMin,
+            cleanupMin:
+              configImpresionResuelta.perfilOperativo.cleanupMin !== null
+                ? configImpresionResuelta.perfilOperativo.cleanupMin
+                : op.cleanupMin,
+            productividadBase:
+              configImpresionResuelta.perfilOperativo.productivityValue !== null
+                ? configImpresionResuelta.perfilOperativo.productivityValue
+                : op.productividadBase,
+            detalleJson: {
+              ...this.asObject(op.detalleJson),
+              perfilOperativoId: configImpresionResuelta.perfilOperativoId,
+              maquinaId: configImpresionResuelta.maquinaId,
+              configImpresionVariante: true,
+            } as Prisma.JsonObject,
+          };
+        }
+
+        // Legacy: matching por plantilla (para productos existentes sin nuevo modelo)
         const pasoPlantillaId =
           this.getPasoPlantillaIdFromDetalle(op.detalleJson) ??
           this.resolvePasoPlantillaIdFromOperacionRuta(op, matchingPlantillas);
