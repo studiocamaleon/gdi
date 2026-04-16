@@ -84,17 +84,17 @@ function buildConfiguracionesFromOpciones(
   return result;
 }
 
-function createVarianteDraft(papeles: PapelOption[]): VarianteDraft {
+function createVarianteDraft(_papeles: PapelOption[]): VarianteDraft {
   return {
     nombre: "",
-    anchoMm: "90",
-    altoMm: "50",
-    papelVarianteId: papeles[0]?.id ?? "",
+    anchoMm: "",
+    altoMm: "",
+    papelVarianteId: "",
     tipoImpresion: "cmyk",
     caras: "simple_faz",
-    opcionesTipoImpresion: ["cmyk"],
-    opcionesCaras: ["simple_faz"],
-    configuracionesImpresion: [{ tipoImpresion: "cmyk", caras: "simple_faz", maquinaId: "", perfilOperativoId: "" }],
+    opcionesTipoImpresion: [],
+    opcionesCaras: [],
+    configuracionesImpresion: [],
   };
 }
 
@@ -127,6 +127,7 @@ function createEditVarianteDraft(
 }
 
 function getTipoImpresionPermitidoSelectValue(values: Array<"bn" | "cmyk">) {
+  if (values.length === 0) return "";
   const normalized = [...new Set(values)].sort().join("|");
   if (normalized === "bn") return "bn";
   if (normalized === "bn|cmyk") return "cmyk_bn";
@@ -134,6 +135,7 @@ function getTipoImpresionPermitidoSelectValue(values: Array<"bn" | "cmyk">) {
 }
 
 function getCarasPermitidasSelectValue(values: Array<"simple_faz" | "doble_faz">) {
+  if (values.length === 0) return "";
   const normalized = [...new Set(values)].sort().join("|");
   if (normalized === "doble_faz") return "doble_faz";
   if (normalized === "doble_faz|simple_faz") return "simple_doble";
@@ -189,12 +191,6 @@ export function DigitalVariantesTab(props: ProductTabProps) {
   const [isUpdatingVariante, startUpdatingVariante] = React.useTransition();
   const [isTogglingVariante, startTogglingVariante] = React.useTransition();
   const [isDeletingVariante, startDeletingVariante] = React.useTransition();
-
-  React.useEffect(() => {
-    if (!draft.papelVarianteId && papeles[0]?.id) {
-      setDraft((prev) => ({ ...prev, papelVarianteId: papeles[0]?.id ?? "" }));
-    }
-  }, [draft.papelVarianteId, papeles]);
 
   const syncRutaBaseForVariant = React.useCallback(
     async (varianteId: string, _varianteDraft: VarianteDraft) => {
@@ -444,11 +440,11 @@ export function DigitalVariantesTab(props: ProductTabProps) {
             </Field>
             <Field>
               <FieldLabel>Ancho (mm)</FieldLabel>
-              <Input value={formDraft.anchoMm} onChange={(e) => setFormDraft((prev) => ({ ...prev, anchoMm: e.target.value }))} />
+              <Input placeholder="Ej: 90" value={formDraft.anchoMm} onChange={(e) => setFormDraft((prev) => ({ ...prev, anchoMm: e.target.value }))} />
             </Field>
             <Field>
               <FieldLabel>Alto (mm)</FieldLabel>
-              <Input value={formDraft.altoMm} onChange={(e) => setFormDraft((prev) => ({ ...prev, altoMm: e.target.value }))} />
+              <Input placeholder="Ej: 50" value={formDraft.altoMm} onChange={(e) => setFormDraft((prev) => ({ ...prev, altoMm: e.target.value }))} />
             </Field>
             <Field>
               <FieldLabel>Papel</FieldLabel>
@@ -484,7 +480,9 @@ export function DigitalVariantesTab(props: ProductTabProps) {
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecciona una opción">
-                    {tipoImpresionPermitidoSelectItems.find((item) => item.value === getTipoImpresionPermitidoSelectValue(formDraft.opcionesTipoImpresion))?.label ?? "Selecciona una opción"}
+                    {formDraft.opcionesTipoImpresion.length === 0
+                      ? "Selecciona una opción"
+                      : tipoImpresionPermitidoSelectItems.find((item) => item.value === getTipoImpresionPermitidoSelectValue(formDraft.opcionesTipoImpresion))?.label ?? "Selecciona una opción"}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -515,7 +513,9 @@ export function DigitalVariantesTab(props: ProductTabProps) {
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecciona una opción">
-                    {carasPermitidasSelectItems.find((item) => item.value === getCarasPermitidasSelectValue(formDraft.opcionesCaras))?.label ?? "Selecciona una opción"}
+                    {formDraft.opcionesCaras.length === 0
+                      ? "Selecciona una opción"
+                      : carasPermitidasSelectItems.find((item) => item.value === getCarasPermitidasSelectValue(formDraft.opcionesCaras))?.label ?? "Selecciona una opción"}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -528,7 +528,7 @@ export function DigitalVariantesTab(props: ProductTabProps) {
               </Select>
             </Field>
           </div>
-          {!isEditingVariante && !formDraft.nombre.trim() ? (
+          {!isEditingVariante && formDraft.configuracionesImpresion.length === 0 ? (
             <div className="mt-4 rounded-md border border-dashed p-4 text-sm text-muted-foreground">
               <p className="font-medium text-foreground mb-1">Configuraciones de impresión</p>
               <p>
