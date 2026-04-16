@@ -6297,8 +6297,15 @@ export class ProductosServiciosService {
       }
     }
 
+    const opcionalesSeleccionadosSet = new Set(payload.opcionalesSeleccionados ?? []);
     const operacionesBaseCotizadas = proceso.operaciones
       .filter((op) => op.activo)
+      .filter((op) => {
+        // Operaciones obligatorias (esOpcional=false) siempre se incluyen
+        if (!op.esOpcional) return true;
+        // Operaciones opcionales solo si el usuario las seleccionó
+        return opcionalesSeleccionadosSet.has(op.id);
+      })
       .map((op) => {
         // Nuevo modelo: si la operación tiene rol IMPRESION y hay config resuelta, aplicar máquina+perfil
         if (usaNuevoModeloConfigImpresion && op.rol === RolProcesoOperacion.IMPRESION && configImpresionResuelta) {

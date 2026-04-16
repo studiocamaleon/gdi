@@ -1497,6 +1497,12 @@ export class CotizarProductoVarianteDto {
   seleccionesBase?: CotizarSeleccionBaseDto[];
 
   @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsUUID('4', { each: true })
+  opcionalesSeleccionados?: string[];
+
+  @IsOptional()
   @IsObject()
   parametros?: Record<string, unknown>;
 }

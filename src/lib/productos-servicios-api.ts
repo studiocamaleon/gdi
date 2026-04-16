@@ -699,6 +699,7 @@ export async function cotizarProductoVariante(
     periodo?: string;
     seleccionesBase?: Array<{ dimension: DimensionOpcionProductiva; valor: ValorOpcionProductiva }>;
     checklistRespuestas?: Array<{ preguntaId: string; respuestaId: string }>;
+    opcionalesSeleccionados?: string[];
     parametros?: Record<string, unknown>;
   },
 ) {

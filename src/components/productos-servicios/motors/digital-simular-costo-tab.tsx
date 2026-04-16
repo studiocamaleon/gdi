@@ -6,7 +6,6 @@ import { toast } from "sonner";
 
 import type { ProductTabProps } from "@/components/productos-servicios/product-detail-types";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
-import { ProductoServicioChecklistCotizador } from "@/components/productos-servicios/producto-servicio-checklist";
 import { formatCurrency, formatNumber } from "@/components/productos-servicios/producto-comercial.helpers";
 import { ProductoTabSection } from "@/components/productos-servicios/producto-tab-section";
 import { Badge } from "@/components/ui/badge";
@@ -156,8 +155,22 @@ export function DigitalSimularCostoTab(props: ProductTabProps) {
 
   const [cotizacionCantidad, setCotizacionCantidad] = React.useState("100");
   const [cotizacionPeriodo, setCotizacionPeriodo] = React.useState(buildDefaultPeriodo());
-  const [cotizacionChecklistRespuestas, setCotizacionChecklistRespuestas] = React.useState<Record<string, { respuestaId: string }>>({});
   const [cotizacionSeleccionesBase, setCotizacionSeleccionesBase] = React.useState<Partial<Record<DimensionOpcionProductiva, ValorOpcionProductiva>>>({});
+  const [opcionalesSeleccionados, setOpcionalesSeleccionados] = React.useState<Set<string>>(new Set());
+
+  // Resolver el proceso activo de la variante actual
+  const procesoActivo = React.useMemo(() => {
+    const procesoId = props.producto.usarRutaComunVariantes
+      ? props.producto.procesoDefinicionDefaultId
+      : props.selectedVariant?.procesoDefinicionId;
+    if (!procesoId) return null;
+    return props.procesos.find((p) => p.id === procesoId) ?? null;
+  }, [props.producto, props.selectedVariant, props.procesos]);
+
+  // Lista de operaciones opcionales del proceso activo
+  const opcionalesDelProceso = React.useMemo(() => {
+    return procesoActivo?.operaciones.filter((op) => op.activo && op.esOpcional) ?? [];
+  }, [procesoActivo]);
   const [cotizacion, setCotizacion] = React.useState<CotizacionProductoVariante | null>(null);
   const [cotizaciones, setCotizaciones] = React.useState<CotizacionProductoSnapshotResumen[]>([]);
   const [snapshotsOpen, setSnapshotsOpen] = React.useState(false);
@@ -167,8 +180,8 @@ export function DigitalSimularCostoTab(props: ProductTabProps) {
   const [isLoadingSnapshots, startLoadingSnapshots] = React.useTransition();
 
   React.useEffect(() => {
-    setCotizacionChecklistRespuestas({});
-  }, [props.checklist]);
+    setOpcionalesSeleccionados(new Set());
+  }, [procesoActivo?.id]);
 
   React.useEffect(() => {
     if (!props.selectedVariant) {
@@ -245,12 +258,7 @@ export function DigitalSimularCostoTab(props: ProductTabProps) {
               dimension: dimension as DimensionOpcionProductiva,
               valor: valor as ValorOpcionProductiva,
             })),
-          checklistRespuestas: Object.entries(cotizacionChecklistRespuestas)
-            .filter(([, value]) => Boolean(value?.respuestaId))
-            .map(([preguntaId, value]) => ({
-              preguntaId,
-              respuestaId: value.respuestaId,
-            })),
+          opcionalesSeleccionados: Array.from(opcionalesSeleccionados),
         });
         setCotizacion(result);
         const snapshots = await getCotizacionesProductoVariante(props.selectedVariant!.id);
@@ -498,14 +506,62 @@ export function DigitalSimularCostoTab(props: ProductTabProps) {
               <div className="mb-3">
                 <h4 className="text-sm font-semibold">Opcionales para cotizar</h4>
                 <p className="text-sm text-muted-foreground">
-                  Estas respuestas pueden agregar procesos, materiales o costos al trabajo actual.
+                  Pasos opcionales de la ruta de producción. Marcá los que querés incluir en esta cotización.
                 </p>
               </div>
-              <ProductoServicioChecklistCotizador
-                checklist={props.checklist}
-                value={cotizacionChecklistRespuestas}
-                onChange={setCotizacionChecklistRespuestas}
-              />
+              {!procesoActivo ? (
+                <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                  No hay ruta de producción asignada a esta variante.
+                </div>
+              ) : opcionalesDelProceso.length === 0 ? (
+                <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                  Este producto no tiene pasos opcionales. Podés marcar pasos como opcionales desde la ruta de producción.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {opcionalesDelProceso.map((op) => {
+                    const etapaLabel =
+                      op.tipoOperacion === "preprensa" ? "Pre-prensa"
+                      : op.tipoOperacion === "prensa" ? "Prensa"
+                      : op.tipoOperacion === "postprensa" ? "Post-prensa"
+                      : op.tipoOperacion === "instalacion" ? "Instalación"
+                      : op.tipoOperacion === "entrega_despacho" ? "Entrega / Despacho"
+                      : op.tipoOperacion;
+                    const checked = opcionalesSeleccionados.has(op.id);
+                    return (
+                      <label
+                        key={op.id}
+                        className="flex items-center gap-3 rounded-md border p-3 cursor-pointer hover:bg-muted/40"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            setOpcionalesSeleccionados((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(op.id);
+                              else next.delete(op.id);
+                              return next;
+                            });
+                          }}
+                          className="size-4"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm">{op.nombre}</span>
+                            {op.rol === "impresion" ? (
+                              <Badge variant="default" className="text-xs">Impresión</Badge>
+                            ) : null}
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {etapaLabel} · {op.centroCostoNombre || "Sin centro"}
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </ProductoTabSection>
