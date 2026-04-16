@@ -194,8 +194,6 @@ export type ProcesoOperacionPlantilla = {
   baseCalculoProductividad?: BaseCalculoProductividad | null;
   observaciones: string;
   niveles: ProcesoOperacionNivel[];
-  rol: RolProcesoOperacion | null;
-  esOpcional: boolean;
   estacionId: string | null;
   estacionNombre: string;
   activo: boolean;
@@ -224,8 +222,6 @@ export type ProcesoOperacionPlantillaPayload = {
   baseCalculoProductividad?: BaseCalculoProductividad;
   observaciones?: string;
   niveles?: ProcesoOperacionNivelPayload[];
-  rol?: RolProcesoOperacion;
-  esOpcional?: boolean;
   estacionId?: string;
   activo: boolean;
 };

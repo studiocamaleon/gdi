@@ -767,8 +767,6 @@ export class ProcesosService {
         payload.niveles,
         payload.baseCalculoProductividad,
       ),
-      rol: payload.rol ? this.toPrismaRol(payload.rol) : null,
-      esOpcional: payload.esOpcional ?? false,
       observaciones: payload.observaciones?.trim() || null,
       activo: payload.activo,
     };
@@ -2264,8 +2262,6 @@ export class ProcesosService {
         this.getOperacionDetalle(detalleJson)?.baseCalculoProductividad ?? null,
       observaciones: item.observaciones ?? '',
       niveles: this.getOperacionNiveles(detalleJson),
-      rol: item.rol ? this.fromPrismaRol(item.rol) : null,
-      esOpcional: item.esOpcional,
       estacionId: item.estacionId ?? null,
       estacionNombre: item.estacion?.nombre ?? '',
       activo: item.activo,

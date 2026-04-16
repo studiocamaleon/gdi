@@ -14,7 +14,6 @@ import {
   BaseCalculoProductividadDto,
   ModoProductividadProcesoDto,
   ProcesoOperacionNivelDto,
-  RolProcesoOperacionDto,
   TipoOperacionProcesoDto,
   UnidadProcesoDto,
 } from './upsert-proceso.dto';
@@ -100,14 +99,6 @@ export class UpsertProcesoOperacionPlantillaDto {
   @ValidateNested({ each: true })
   @Type(() => ProcesoOperacionNivelDto)
   niveles?: ProcesoOperacionNivelDto[];
-
-  @IsOptional()
-  @IsEnum(RolProcesoOperacionDto)
-  rol?: RolProcesoOperacionDto;
-
-  @IsOptional()
-  @IsBoolean()
-  esOpcional?: boolean;
 
   @IsOptional()
   @IsUUID()

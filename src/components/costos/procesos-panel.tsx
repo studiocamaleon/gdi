@@ -325,8 +325,8 @@ function buildOperacionFromBiblioteca(
       pasoPlantillaId: template.id,
     },
     niveles: normalizeNiveles(template.niveles ?? []),
-    rol: template.rol ?? undefined,
-    esOpcional: template.esOpcional ?? false,
+    rol: undefined,
+    esOpcional: false,
     activo: template.activo,
     orden: index + 1,
   };

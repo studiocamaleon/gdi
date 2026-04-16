@@ -1180,8 +1180,6 @@ model ProcesoOperacionPlantilla {
   reglaVelocidadJson Json?
   reglaMermaJson     Json?
   detalleJson        Json?
-  rol                RolProcesoOperacion?
-  esOpcional         Boolean                  @default(false)
   observaciones      String?
   activo             Boolean                  @default(true)
   createdAt          DateTime                 @default(now())
