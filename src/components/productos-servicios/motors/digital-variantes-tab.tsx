@@ -20,16 +20,10 @@ import {
   createProductoVariante,
   deleteProductoVariante,
   getVarianteMotorOverride,
-  updateProductoRutaPolicy,
   updateProductoVariante,
   updateVarianteOpcionesProductivas,
   upsertVarianteMotorOverride,
 } from "@/lib/productos-servicios-api";
-import type {
-  DimensionOpcionProductiva,
-  ProductoRutaBaseMatchingItem,
-} from "@/lib/productos-servicios";
-import type { Maquina } from "@/lib/maquinaria";
 
 type PapelOption = {
   id: string;
@@ -160,28 +154,6 @@ function buildPapelOptions(materiasPrimas: ProductTabProps["materiasPrimas"]): P
   return items.sort((a, b) => a.label.localeCompare(b.label));
 }
 
-function buildMatchingCombinationKeys(
-  dimensionesBaseConsumidas: DimensionOpcionProductiva[],
-  draft: Pick<VarianteDraft, "opcionesTipoImpresion" | "opcionesCaras">,
-) {
-  const tipos = dimensionesBaseConsumidas.includes("tipo_impresion") ? draft.opcionesTipoImpresion : [null];
-  const caras = dimensionesBaseConsumidas.includes("caras") ? draft.opcionesCaras : [null];
-  return tipos.flatMap((tipoImpresion) =>
-    caras.map((carasValue) => ({
-      tipoImpresion,
-      caras: carasValue,
-      key: `${tipoImpresion ?? "na"}:${carasValue ?? "na"}`,
-    })),
-  );
-}
-
-function buildMatchingKey(item: {
-  tipoImpresion?: "bn" | "cmyk" | null;
-  caras?: "simple_faz" | "doble_faz" | null;
-}) {
-  return `${item.tipoImpresion ?? "na"}:${item.caras ?? "na"}`;
-}
-
 function getTipoImpresionPermitidoLabel(values: Array<"bn" | "cmyk">) {
   return (
     tipoImpresionPermitidoSelectItems.find((item) => item.value === getTipoImpresionPermitidoSelectValue(values))
@@ -202,7 +174,6 @@ const carasLabel: Record<string, string> = { simple_faz: "Simple faz", doble_faz
 export function DigitalVariantesTab(props: ProductTabProps) {
   const papeles = React.useMemo(() => buildPapelOptions(props.materiasPrimas), [props.materiasPrimas]);
   const papelLabelById = React.useMemo(() => new Map(papeles.map((item) => [item.id, item.label])), [papeles]);
-  const dimensionesBaseConsumidas = props.producto.dimensionesBaseConsumidas ?? [];
   const maquinasLaser = React.useMemo(
     () => props.maquinas.filter((m) => m.plantilla === "impresora_laser" && m.estado === "activa"),
     [props.maquinas],
@@ -226,13 +197,12 @@ export function DigitalVariantesTab(props: ProductTabProps) {
   }, [draft.papelVarianteId, papeles]);
 
   const syncRutaBaseForVariant = React.useCallback(
-    async (varianteId: string, varianteDraft: VarianteDraft) => {
-      const dimensionesBaseConsumidas = props.producto.dimensionesBaseConsumidas ?? [];
-      const productoMatching = props.producto.matchingBasePorVariante ?? [];
-      const productoPasosFijos = props.producto.pasosFijosPorVariante ?? [];
-
-      let variantesActuales = await props.refreshVariantes();
-      let varianteActual = variantesActuales.find((item) => item.id === varianteId) ?? null;
+    async (varianteId: string, _varianteDraft: VarianteDraft) => {
+      // Con el nuevo modelo, las configuraciones de impresión viven en el motor override
+      // de la variante, no en matchingBasePorVariante del producto. Lo único que hace falta
+      // acá es asegurar que la variante tenga una ruta asignada cuando no se usa ruta común.
+      const variantesActuales = await props.refreshVariantes();
+      const varianteActual = variantesActuales.find((item) => item.id === varianteId) ?? null;
       if (!varianteActual) return;
 
       if (!props.producto.usarRutaComunVariantes && !varianteActual.procesoDefinicionId) {
@@ -242,117 +212,8 @@ export function DigitalVariantesTab(props: ProductTabProps) {
           null;
         if (referenciaRuta) {
           await assignProductoVarianteRuta(varianteId, referenciaRuta);
-          variantesActuales = await props.refreshVariantes();
-          varianteActual = variantesActuales.find((item) => item.id === varianteId) ?? varianteActual;
+          await props.refreshVariantes();
         }
-      }
-
-      const procesoObjetivo = props.producto.usarRutaComunVariantes
-        ? props.producto.procesoDefinicionDefaultId ?? null
-        : varianteActual.procesoDefinicionId ?? null;
-
-      const varianteIdsReferencia = new Set(
-        variantesActuales
-          .filter((item) => item.id !== varianteId)
-          .filter((item) => {
-            if (props.producto.usarRutaComunVariantes) return true;
-            return (item.procesoDefinicionId ?? null) === procesoObjetivo;
-          })
-          .map((item) => item.id),
-      );
-
-      const combos = buildMatchingCombinationKeys(dimensionesBaseConsumidas, varianteDraft);
-      const currentOwnMatching =
-        productoMatching.find((item) => item.varianteId === varianteId)?.matching.map((item) => ({ ...item })) ?? [];
-      const referenceMatchingIndex = new Map<string, ProductoRutaBaseMatchingItem>();
-      for (const variantMatching of productoMatching) {
-        if (!varianteIdsReferencia.has(variantMatching.varianteId)) continue;
-        for (const row of variantMatching.matching) {
-          const key = buildMatchingKey(row);
-          if (!referenceMatchingIndex.has(key)) {
-            referenceMatchingIndex.set(key, row);
-          }
-        }
-      }
-      const ownMatchingIndex = new Map(
-        currentOwnMatching.map((row) => [buildMatchingKey(row), row] as const),
-      );
-
-      const nextTargetMatching = combos
-        .map((combo) => {
-          const source = ownMatchingIndex.get(combo.key) ?? referenceMatchingIndex.get(combo.key) ?? null;
-          if (!source) return null;
-          return {
-            tipoImpresion: combo.tipoImpresion,
-            caras: combo.caras,
-            pasoPlantillaId: source.pasoPlantillaId,
-            perfilOperativoId: source.perfilOperativoId,
-          };
-        })
-        .filter(
-          (
-            item,
-          ): item is {
-            tipoImpresion: "bn" | "cmyk" | null;
-            caras: "simple_faz" | "doble_faz" | null;
-            pasoPlantillaId: string;
-            perfilOperativoId: string;
-          } => Boolean(item?.pasoPlantillaId && item?.perfilOperativoId),
-        );
-
-      const currentOwnPasos =
-        productoPasosFijos.find((item) => item.varianteId === varianteId)?.pasos.map((item) => ({
-          pasoPlantillaId: item.pasoPlantillaId,
-          perfilOperativoId: item.perfilOperativoId,
-        })) ?? [];
-      let nextTargetPasos = currentOwnPasos;
-      if (!nextTargetPasos.length) {
-        const referenciaPasos =
-          productoPasosFijos.find((item) => varianteIdsReferencia.has(item.varianteId) && item.pasos.length > 0)?.pasos ??
-          [];
-        nextTargetPasos = referenciaPasos.map((item) => ({
-          pasoPlantillaId: item.pasoPlantillaId,
-          perfilOperativoId: item.perfilOperativoId,
-        }));
-      }
-
-      const matchingBasePorVariante = variantesActuales.map((item) => ({
-        varianteId: item.id,
-        matching:
-          item.id === varianteId
-            ? nextTargetMatching
-            : (productoMatching.find((row) => row.varianteId === item.id)?.matching ?? []).map((row) => ({
-                tipoImpresion: row.tipoImpresion ?? undefined,
-                caras: row.caras ?? undefined,
-                pasoPlantillaId: row.pasoPlantillaId,
-                perfilOperativoId: row.perfilOperativoId,
-              })),
-      }));
-
-      const pasosFijosPorVariante = variantesActuales.map((item) => ({
-        varianteId: item.id,
-        pasos:
-          item.id === varianteId
-            ? nextTargetPasos
-            : (productoPasosFijos.find((row) => row.varianteId === item.id)?.pasos ?? []).map((row) => ({
-                pasoPlantillaId: row.pasoPlantillaId,
-                perfilOperativoId: row.perfilOperativoId,
-              })),
-      }));
-
-      if (dimensionesBaseConsumidas.length || nextTargetPasos.length) {
-        await updateProductoRutaPolicy(props.producto.id, {
-          usarRutaComunVariantes: props.producto.usarRutaComunVariantes,
-          procesoDefinicionDefaultId: props.producto.procesoDefinicionDefaultId,
-          dimensionesBaseConsumidas,
-          matchingBasePorVariante,
-          pasosFijosPorVariante,
-        });
-        await props.refreshProducto();
-      }
-
-      if (dimensionesBaseConsumidas.length && nextTargetMatching.length === 0) {
-        toast.warning("La variante se guardó, pero faltan filas de matching en Ruta base para completar la cotización.");
       }
     },
     [props],
