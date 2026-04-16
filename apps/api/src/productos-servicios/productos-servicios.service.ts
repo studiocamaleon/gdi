@@ -5955,22 +5955,39 @@ export class ProductosServiciosService {
     );
     const atributosTecnicosSeleccionados = new Map<DimensionOpcionProductiva, ValorOpcionProductiva>();
     for (const dimension of dimensionesBaseConsumidas) {
-      const valoresMatching = Array.from(
-        new Set(
-          matchingBaseVarianteRaw
-            .map((item) =>
-              dimension === DimensionOpcionProductiva.TIPO_IMPRESION
-                ? item.tipoImpresion
-                : item.caras,
-            )
-            .filter((value): value is TipoImpresionProductoVarianteDto | CarasProductoVarianteDto => Boolean(value))
-            .map((value) =>
-              dimension === DimensionOpcionProductiva.TIPO_IMPRESION
-                ? this.toValorFromTipoImpresion(this.toTipoImpresion(value as TipoImpresionProductoVarianteDto))
-                : this.toValorFromCaras(this.toCaras(value as CarasProductoVarianteDto)),
+      // Con el nuevo modelo, los valores disponibles vienen de configuracionesImpresion (motor override)
+      // Con el modelo legacy, vienen de matchingBaseVarianteRaw (detalleJson)
+      const valoresMatching = usaNuevoModeloConfigImpresion
+        ? Array.from(
+            new Set(
+              configuracionesImpresionRaw
+                .map((item) =>
+                  dimension === DimensionOpcionProductiva.TIPO_IMPRESION ? item.tipoImpresion : item.caras,
+                )
+                .filter((value): value is TipoImpresionProductoVarianteDto | CarasProductoVarianteDto => Boolean(value))
+                .map((value) =>
+                  dimension === DimensionOpcionProductiva.TIPO_IMPRESION
+                    ? this.toValorFromTipoImpresion(this.toTipoImpresion(value as TipoImpresionProductoVarianteDto))
+                    : this.toValorFromCaras(this.toCaras(value as CarasProductoVarianteDto)),
+                ),
             ),
-        ),
-      );
+          )
+        : Array.from(
+            new Set(
+              matchingBaseVarianteRaw
+                .map((item) =>
+                  dimension === DimensionOpcionProductiva.TIPO_IMPRESION
+                    ? item.tipoImpresion
+                    : item.caras,
+                )
+                .filter((value): value is TipoImpresionProductoVarianteDto | CarasProductoVarianteDto => Boolean(value))
+                .map((value) =>
+                  dimension === DimensionOpcionProductiva.TIPO_IMPRESION
+                    ? this.toValorFromTipoImpresion(this.toTipoImpresion(value as TipoImpresionProductoVarianteDto))
+                    : this.toValorFromCaras(this.toCaras(value as CarasProductoVarianteDto)),
+                ),
+            ),
+          );
       const permitidosVariante = opcionesProductivasPermitidas.get(dimension);
       const allowedValues = valoresMatching.filter((value) => !permitidosVariante || permitidosVariante.has(value));
       if (!allowedValues.length) {
@@ -6007,7 +6024,7 @@ export class ProductosServiciosService {
         return item.caras ? this.toValorFromCaras(this.toCaras(item.caras)) === selectedValue : false;
       });
     });
-    if (dimensionesBaseConsumidas.length > 0 && matchingSeleccionado.length === 0) {
+    if (!usaNuevoModeloConfigImpresion && dimensionesBaseConsumidas.length > 0 && matchingSeleccionado.length === 0) {
       throw new BadRequestException(
         `Ruta base: no existe un matching para la combinación seleccionada en ${variante.nombre}.`,
       );
