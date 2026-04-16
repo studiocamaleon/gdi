@@ -2696,8 +2696,51 @@ export function ProcesosPanel({
                         {isExpanded ? (
                           <CardContent className="space-y-3">
                           <div className="rounded-md border border-dashed px-3 py-3 text-sm text-muted-foreground">
-                            La ruta consume este paso desde la Biblioteca. Aquí solo puedes revisar la configuración y ordenar la secuencia.
+                            La ruta consume este paso desde la Biblioteca. Abajo podés configurar cómo se comporta este paso en esta ruta específica (rol y opcionalidad), y más abajo revisar la configuración heredada de la biblioteca.
                           </div>
+
+                          {/* Campos editables propios de la ruta (no vienen de la biblioteca) */}
+                          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 rounded-md border p-3 bg-muted/20">
+                            <Field>
+                              <FieldLabel>Rol en la ruta</FieldLabel>
+                              <Select
+                                value={operacion.rol ?? "__none__"}
+                                onValueChange={(value) =>
+                                  updateOperacion(operacion.id, (prev) => ({
+                                    ...prev,
+                                    rol: !value || value === "__none__" ? undefined : (value as "impresion"),
+                                  }))
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue>
+                                    {operacion.rol === "impresion" ? "Impresión" : "Ninguno"}
+                                  </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">Ninguno</SelectItem>
+                                  <SelectItem value="impresion">Impresión</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </Field>
+
+                            <Field>
+                              <FieldLabel>Opcionalidad</FieldLabel>
+                              <div className="flex h-9 items-center gap-2">
+                                <Checkbox
+                                  checked={operacion.esOpcional ?? false}
+                                  onCheckedChange={(checked) =>
+                                    updateOperacion(operacion.id, (prev) => ({
+                                      ...prev,
+                                      esOpcional: checked === true,
+                                    }))
+                                  }
+                                />
+                                <span className="text-sm">Paso opcional</span>
+                              </div>
+                            </Field>
+                          </div>
+
                           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 pointer-events-none opacity-80">
                           <Field>
                             <FieldLabel>Codigo</FieldLabel>
@@ -2744,45 +2787,6 @@ export function ProcesosPanel({
                                 ))}
                               </SelectContent>
                             </Select>
-                          </Field>
-
-                          <Field>
-                            <FieldLabel>Rol</FieldLabel>
-                            <Select
-                              value={operacion.rol ?? "__none__"}
-                              onValueChange={(value) =>
-                                updateOperacion(operacion.id, (prev) => ({
-                                  ...prev,
-                                  rol: value === "__none__" ? undefined : (value as "impresion"),
-                                }))
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue>
-                                  {operacion.rol === "impresion" ? "Impresión" : "Ninguno"}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="__none__">Ninguno</SelectItem>
-                                <SelectItem value="impresion">Impresión</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </Field>
-
-                          <Field>
-                            <FieldLabel>Opcionalidad</FieldLabel>
-                            <div className="flex h-9 items-center gap-2">
-                              <Checkbox
-                                checked={operacion.esOpcional ?? false}
-                                onCheckedChange={(checked) =>
-                                  updateOperacion(operacion.id, (prev) => ({
-                                    ...prev,
-                                    esOpcional: checked === true,
-                                  }))
-                                }
-                              />
-                              <span className="text-sm">Paso opcional</span>
-                            </div>
                           </Field>
 
                           <Field className="md:col-span-2 xl:col-span-3">
