@@ -9,7 +9,6 @@ import {
   CogIcon,
   FileTextIcon,
   Layers3Icon,
-  NetworkIcon,
   RouteIcon,
   ScanSearchIcon,
   WrenchIcon,
@@ -27,7 +26,7 @@ import { ProductoGeneralTab } from "@/components/productos-servicios/producto-ge
 import { ProductoPrecioTab } from "@/components/productos-servicios/producto-precio-tab";
 import { ProductoRutaBaseTab } from "@/components/productos-servicios/producto-ruta-base-tab";
 import { ProductoSimularVentaTab } from "@/components/productos-servicios/producto-simular-venta-tab";
-import { ProductoRutaOpcionalesPlaceholder, ProductoStandardTabPlaceholder } from "@/components/productos-servicios/producto-standard-tab-placeholder";
+import { ProductoStandardTabPlaceholder } from "@/components/productos-servicios/producto-standard-tab-placeholder";
 import { ProductoVariantesTab } from "@/components/productos-servicios/producto-variantes-tab";
 import { talonarioMotorUi } from "@/components/productos-servicios/motors/talonario.motor-ui";
 import { vinylCutMotorUi } from "@/components/productos-servicios/motors/vinyl-cut.motor-ui";
@@ -61,8 +60,7 @@ const STANDARD_TABS: Array<{
 }> = [
   { value: "general", label: "General", group: "configuracion", icon: FileTextIcon },
   { value: "variantes", label: "Variantes", group: "configuracion", icon: Layers3Icon },
-  { value: "ruta_base", label: "Ruta base", group: "configuracion", icon: RouteIcon },
-  { value: "ruta_opcionales", label: "Ruta de opcionales", group: "configuracion", icon: NetworkIcon },
+  { value: "ruta_base", label: "Ruta de producción", group: "configuracion", icon: RouteIcon },
   { value: "imposicion", label: "Imposición", group: "configuracion", icon: BlocksIcon },
   { value: "simular_costo", label: "Simular costo", group: "comercial", icon: ScanSearchIcon },
   { value: "precio", label: "Precio", group: "comercial", icon: BanknoteIcon },
@@ -92,7 +90,6 @@ function buildCommonTabRenderer(tab: ProductTabKey): React.ComponentType<Product
   if (tab === "general") return ProductoGeneralTab;
   if (tab === "variantes") return ProductoVariantesTab;
   if (tab === "ruta_base") return ProductoRutaBaseTab;
-  if (tab === "ruta_opcionales") return ProductoRutaOpcionalesPlaceholder;
   if (tab === "precio") return ProductoPrecioTab;
   if (tab === "simular_venta") return ProductoSimularVentaTab;
   return () => <ProductTabFallback title={STANDARD_TABS.find((item) => item.value === tab)?.label ?? "Tab"} />;

@@ -250,27 +250,16 @@ enum EstadoConfiguracionProceso {
 }
 
 enum TipoOperacionProceso {
-  PREFLIGHT
   PREPRENSA
   IMPRESION
-  CORTE
-  MECANIZADO
-  GRABADO
   TERMINACION
-  CURADO
-  LAMINADO
-  TRANSFERENCIA
-  CONTROL_CALIDAD
-  EMPAQUE
   LOGISTICA
-  TERCERIZADO
-  OTRO
+  EMPAQUE
 }
 
 enum ModoProductividadProceso {
   FIJA
   FORMULA
-  TABLA
 }
 
 enum UnidadProceso {

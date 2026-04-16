@@ -10,7 +10,6 @@ import type {
 } from "@/components/productos-servicios/product-detail-types";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { VinylCutNestingWorkspace } from "@/components/vinyl-cut-nesting-workspace";
-import { VinylCutRutaOpcionalesTab } from "@/components/productos-servicios/motors/vinyl-cut-ruta-opcionales-tab";
 import { formatCurrency, formatNumber } from "@/components/productos-servicios/producto-comercial.helpers";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -1584,14 +1583,12 @@ export const vinylCutMotorUi: ProductMotorUiContract = {
     "general",
     "equipos_materiales",
     "ruta_base",
-    "ruta_opcionales",
     "imposicion",
     "simular_costo",
     "precio",
     "simular_venta",
   ],
   tabs: {
-    ruta_opcionales: VinylCutRutaOpcionalesTab,
     imposicion: VinylCutImposicionTab,
     simular_costo: VinylCutSimularCostoTab,
   },

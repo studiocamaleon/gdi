@@ -771,6 +771,7 @@ export class ProcesosService {
   private toPrismaTipoOperacion(value: TipoOperacionProcesoDto): TipoOperacionProceso {
     switch (value) {
       case TipoOperacionProcesoDto.preprensa:
+      case TipoOperacionProcesoDto.servicio: // legacy → preprensa
         return TipoOperacionProceso.PREPRENSA;
       case TipoOperacionProcesoDto.prensa:
         return TipoOperacionProceso.IMPRESION;
@@ -781,36 +782,25 @@ export class ProcesosService {
         return TipoOperacionProceso.LOGISTICA;
       case TipoOperacionProcesoDto.entrega_despacho:
         return TipoOperacionProceso.EMPAQUE;
-      case TipoOperacionProcesoDto.servicio: // legacy → preprensa
-        return TipoOperacionProceso.OTRO;
       default:
-        return TipoOperacionProceso.OTRO;
+        return TipoOperacionProceso.PREPRENSA;
     }
   }
 
   private fromPrismaTipoOperacion(value: TipoOperacionProceso): TipoOperacionProcesoDto {
     switch (value) {
       case TipoOperacionProceso.PREPRENSA:
-      case TipoOperacionProceso.PREFLIGHT:
-      case TipoOperacionProceso.OTRO:
         return TipoOperacionProcesoDto.preprensa;
       case TipoOperacionProceso.IMPRESION:
         return TipoOperacionProcesoDto.prensa;
+      case TipoOperacionProceso.TERMINACION:
+        return TipoOperacionProcesoDto.postprensa;
       case TipoOperacionProceso.LOGISTICA:
         return TipoOperacionProcesoDto.instalacion;
       case TipoOperacionProceso.EMPAQUE:
         return TipoOperacionProcesoDto.entrega_despacho;
-      case TipoOperacionProceso.LAMINADO:
-      case TipoOperacionProceso.CORTE:
-      case TipoOperacionProceso.MECANIZADO:
-      case TipoOperacionProceso.GRABADO:
-      case TipoOperacionProceso.CURADO:
-      case TipoOperacionProceso.TRANSFERENCIA:
-      case TipoOperacionProceso.TERMINACION:
-      case TipoOperacionProceso.CONTROL_CALIDAD:
-      case TipoOperacionProceso.TERCERIZADO:
       default:
-        return TipoOperacionProcesoDto.postprensa;
+        return TipoOperacionProcesoDto.preprensa;
     }
   }
 
