@@ -25,6 +25,8 @@ export type TipoOperacionProceso =
   | 'instalacion'
   | 'entrega_despacho';
 
+export type RolProcesoOperacion = 'impresion';
+
 export type ModoProductividadProceso = 'fija' | 'variable';
 export type ModoProductividadNivel =
   | 'fija'
@@ -65,6 +67,8 @@ export type ProcesoOperacion = {
   detalle: Record<string, unknown> | null;
   baseCalculoProductividad?: BaseCalculoProductividad | null;
   niveles: ProcesoOperacionNivel[];
+  rol: RolProcesoOperacion | null;
+  esOpcional: boolean;
   activo: boolean;
   warnings?: string[];
 };
@@ -130,6 +134,8 @@ export type ProcesoOperacionPayload = {
   detalle?: Record<string, unknown>;
   baseCalculoProductividad?: BaseCalculoProductividad;
   niveles?: ProcesoOperacionNivelPayload[];
+  rol?: RolProcesoOperacion;
+  esOpcional?: boolean;
   activo: boolean;
 };
 
@@ -188,6 +194,8 @@ export type ProcesoOperacionPlantilla = {
   baseCalculoProductividad?: BaseCalculoProductividad | null;
   observaciones: string;
   niveles: ProcesoOperacionNivel[];
+  rol: RolProcesoOperacion | null;
+  esOpcional: boolean;
   estacionId: string | null;
   estacionNombre: string;
   activo: boolean;
@@ -216,9 +224,19 @@ export type ProcesoOperacionPlantillaPayload = {
   baseCalculoProductividad?: BaseCalculoProductividad;
   observaciones?: string;
   niveles?: ProcesoOperacionNivelPayload[];
+  rol?: RolProcesoOperacion;
+  esOpcional?: boolean;
   estacionId?: string;
   activo: boolean;
 };
+
+export const rolProcesoOperacionItems: Array<{
+  label: string;
+  value: RolProcesoOperacion | '';
+}> = [
+  { label: 'Ninguno', value: '' },
+  { label: 'Impresión', value: 'impresion' },
+];
 
 export const estadoConfiguracionProcesoItems: Array<{
   label: string;

@@ -11,6 +11,7 @@ import {
   ModoProductividadProceso,
   PlantillaMaquinaria,
   Prisma,
+  RolProcesoOperacion,
   TipoOperacionProceso,
   UnidadBaseCentroCosto,
   UnidadProduccionMaquina,
@@ -26,6 +27,7 @@ import {
   ModoProductividadProcesoDto,
   type PlantillaMaquinariaDto,
   type ProcesoOperacionItemDto,
+  RolProcesoOperacionDto,
   TipoOperacionProcesoDto,
   UnidadProcesoDto,
   UpsertProcesoDto,
@@ -717,6 +719,8 @@ export class ProcesosService {
         payload.niveles,
         payload.baseCalculoProductividad,
       ),
+      rol: payload.rol ? this.toPrismaRol(payload.rol) : null,
+      esOpcional: payload.esOpcional ?? false,
       activo: payload.activo,
     };
   }
@@ -763,6 +767,8 @@ export class ProcesosService {
         payload.niveles,
         payload.baseCalculoProductividad,
       ),
+      rol: payload.rol ? this.toPrismaRol(payload.rol) : null,
+      esOpcional: payload.esOpcional ?? false,
       observaciones: payload.observaciones?.trim() || null,
       activo: payload.activo,
     };
@@ -801,6 +807,24 @@ export class ProcesosService {
         return TipoOperacionProcesoDto.entrega_despacho;
       default:
         return TipoOperacionProcesoDto.preprensa;
+    }
+  }
+
+  private toPrismaRol(value: RolProcesoOperacionDto): RolProcesoOperacion {
+    switch (value) {
+      case RolProcesoOperacionDto.impresion:
+        return RolProcesoOperacion.IMPRESION;
+      default:
+        return RolProcesoOperacion.IMPRESION;
+    }
+  }
+
+  private fromPrismaRol(value: RolProcesoOperacion): RolProcesoOperacionDto {
+    switch (value) {
+      case RolProcesoOperacion.IMPRESION:
+        return RolProcesoOperacionDto.impresion;
+      default:
+        return RolProcesoOperacionDto.impresion;
     }
   }
 
@@ -2197,6 +2221,8 @@ export class ProcesosService {
           this.getOperacionDetalle(operacion.detalleJson)?.baseCalculoProductividad ??
           null,
         niveles: this.getOperacionNiveles(operacion.detalleJson),
+        rol: operacion.rol ? this.fromPrismaRol(operacion.rol) : null,
+        esOpcional: operacion.esOpcional,
         activo: operacion.activo,
         warnings: this.getOperationWarnings(operacion),
       })),
@@ -2238,6 +2264,8 @@ export class ProcesosService {
         this.getOperacionDetalle(detalleJson)?.baseCalculoProductividad ?? null,
       observaciones: item.observaciones ?? '',
       niveles: this.getOperacionNiveles(detalleJson),
+      rol: item.rol ? this.fromPrismaRol(item.rol) : null,
+      esOpcional: item.esOpcional,
       estacionId: item.estacionId ?? null,
       estacionNombre: item.estacion?.nombre ?? '',
       activo: item.activo,

@@ -239,6 +239,8 @@ function buildDefaultOperacion(index = 0): LocalOperacion {
     mermaRuleMode: "fija",
     mermaTiers: [],
     niveles: [],
+    rol: undefined,
+    esOpcional: false,
     activo: true,
     orden: index + 1,
   };
@@ -263,6 +265,8 @@ function buildOperacionFromTemplate(
     mermaRuleMode: "fija",
     mermaTiers: [],
     niveles: [],
+    rol: undefined,
+    esOpcional: false,
     activo: templateOperation.activo ?? true,
     orden: index + 1,
   };
@@ -321,6 +325,8 @@ function buildOperacionFromBiblioteca(
       pasoPlantillaId: template.id,
     },
     niveles: normalizeNiveles(template.niveles ?? []),
+    rol: template.rol ?? undefined,
+    esOpcional: template.esOpcional ?? false,
     activo: template.activo,
     orden: index + 1,
   };
@@ -1291,6 +1297,8 @@ export function ProcesosPanel({
             mermaRuleMode: mermaBuilder.mode,
             mermaTiers: mermaBuilder.tiers,
             niveles: normalizeNiveles(operacion.niveles ?? []),
+            rol: operacion.rol ?? undefined,
+            esOpcional: operacion.esOpcional ?? false,
             activo: operacion.activo,
           };
         }),
@@ -1493,6 +1501,8 @@ export function ProcesosPanel({
       reglaVelocidad: undefined as Record<string, unknown> | undefined,
       reglaMerma: undefined as Record<string, unknown> | undefined,
       niveles: operacion.niveles,
+      rol: operacion.rol || undefined,
+      esOpcional: operacion.esOpcional ?? false,
       activo: operacion.activo,
     }));
 
@@ -2634,6 +2644,12 @@ export function ProcesosPanel({
                               <Badge variant="outline" className="ml-2">
                                 {operacion.niveles.length} variante{operacion.niveles.length === 1 ? "" : "s"}
                               </Badge>
+                              {operacion.rol === "impresion" ? (
+                                <Badge variant="default" className="ml-1">Impresión</Badge>
+                              ) : null}
+                              {operacion.esOpcional ? (
+                                <Badge variant="secondary" className="ml-1">Opcional</Badge>
+                              ) : null}
                             </span>
                           </Button>
                           <div className="flex items-center gap-2">
@@ -2728,6 +2744,45 @@ export function ProcesosPanel({
                                 ))}
                               </SelectContent>
                             </Select>
+                          </Field>
+
+                          <Field>
+                            <FieldLabel>Rol</FieldLabel>
+                            <Select
+                              value={operacion.rol ?? "__none__"}
+                              onValueChange={(value) =>
+                                updateOperacion(operacion.id, (prev) => ({
+                                  ...prev,
+                                  rol: value === "__none__" ? undefined : (value as "impresion"),
+                                }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue>
+                                  {operacion.rol === "impresion" ? "Impresión" : "Ninguno"}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">Ninguno</SelectItem>
+                                <SelectItem value="impresion">Impresión</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </Field>
+
+                          <Field>
+                            <FieldLabel>Opcionalidad</FieldLabel>
+                            <div className="flex h-9 items-center gap-2">
+                              <Checkbox
+                                checked={operacion.esOpcional ?? false}
+                                onCheckedChange={(checked) =>
+                                  updateOperacion(operacion.id, (prev) => ({
+                                    ...prev,
+                                    esOpcional: checked === true,
+                                  }))
+                                }
+                              />
+                              <span className="text-sm">Paso opcional</span>
+                            </div>
                           </Field>
 
                           <Field className="md:col-span-2 xl:col-span-3">
