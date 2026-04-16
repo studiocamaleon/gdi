@@ -1613,7 +1613,10 @@ export class ProcesosService {
         operacion,
         references,
       );
+      const tieneNiveles = (operacion.niveles?.length ?? 0) > 0;
+
       if (
+        !tieneNiveles &&
         modoProductividad === ModoProductividadProceso.FIJA &&
         (!operacion.tiempoFijoMin || operacion.tiempoFijoMin <= 0)
       ) {
@@ -1623,6 +1626,7 @@ export class ProcesosService {
       }
 
       if (
+        !tieneNiveles &&
         modoProductividad === ModoProductividadProceso.FORMULA &&
         (!derived.productividadBase || Number(derived.productividadBase) <= 0)
       ) {
