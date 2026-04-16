@@ -2053,7 +2053,7 @@ export class ProductosServiciosService {
       let cantidadObjetivo: number;
       if (tipoOp === TipoOperacionProceso.IMPRESION || tipoOp === TipoOperacionProceso.PREPRENSA) {
         cantidadObjetivo = totalPliegosImpresion;
-      } else if (tipoOp === TipoOperacionProceso.CORTE) {
+      } else if (tipoOp === TipoOperacionProceso.TERMINACION) {
         cantidadObjetivo = cortesGuillotina;
       } else {
         cantidadObjetivo = cantidadTalonarios;
@@ -6280,7 +6280,7 @@ export class ProductosServiciosService {
         const [maquinaResult, perfilResult] = await Promise.all([
           this.prisma.maquina.findUnique({
             where: { id: configMatch.maquinaId },
-            include: { centroCosto: true },
+            include: { centroCostoPrincipal: true },
           }),
           this.prisma.maquinaPerfilOperativo.findUnique({
             where: { id: configMatch.perfilOperativoId },
@@ -8803,7 +8803,7 @@ export class ProductosServiciosService {
           productoAdicionalRouteEffectId: route.id,
           orden: paso.orden ?? index + 1,
           nombre: paso.nombre.trim(),
-          tipoOperacion: TipoOperacionProceso.OTRO,
+          tipoOperacion: TipoOperacionProceso.PREPRENSA,
           centroCostoId: paso.centroCostoId,
           setupMin: paso.setupMin ?? null,
           runMin: paso.runMin ?? null,
