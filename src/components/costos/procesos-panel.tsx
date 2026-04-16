@@ -1554,13 +1554,14 @@ export function ProcesosPanel({
         operacion.unidadTiempo = mappedUnit.unidadTiempo;
       }
 
+      const tieneVariantes = (operacion.niveles?.length ?? 0) > 0;
       const productivityMode = source.productividadModoUi ?? "variable";
       if (!operacion.perfilOperativoId) {
         if (productivityMode === "manual") {
           operacion.modoProductividad = "fija";
           operacion.productividadBase = undefined;
           operacion.reglaVelocidad = undefined;
-          if (!operacion.tiempoFijoMin || operacion.tiempoFijoMin <= 0) {
+          if (!tieneVariantes && (!operacion.tiempoFijoMin || operacion.tiempoFijoMin <= 0)) {
             toast.error(
               `La operacion ${index + 1} en modo manual requiere Tiempo total (min) mayor a 0.`,
             );
@@ -1570,7 +1571,7 @@ export function ProcesosPanel({
           operacion.modoProductividad = "variable";
           operacion.tiempoFijoMin = undefined;
           operacion.reglaVelocidad = undefined;
-          if (!operacion.productividadBase || operacion.productividadBase <= 0) {
+          if (!tieneVariantes && (!operacion.productividadBase || operacion.productividadBase <= 0)) {
             toast.error(
               `La operacion ${index + 1} en modo variable requiere un valor de productividad mayor a 0.`,
             );
@@ -1610,24 +1611,26 @@ export function ProcesosPanel({
         return null;
       }
 
-      if (operacion.modoProductividad === "fija") {
-        const hasTiempoFijo = Boolean(
-          operacion.tiempoFijoMin !== undefined && operacion.tiempoFijoMin > 0,
-        );
-        if (!hasTiempoFijo) {
+      if (!tieneVariantes) {
+        if (operacion.modoProductividad === "fija") {
+          const hasTiempoFijo = Boolean(
+            operacion.tiempoFijoMin !== undefined && operacion.tiempoFijoMin > 0,
+          );
+          if (!hasTiempoFijo) {
+            toast.error(
+              `La operacion ${index + 1} en modo fija requiere Tiempo fijo (min) mayor a 0.`,
+            );
+            return null;
+          }
+        } else if (
+          !operacion.perfilOperativoId &&
+          (!operacion.productividadBase || operacion.productividadBase <= 0)
+        ) {
           toast.error(
-            `La operacion ${index + 1} en modo fija requiere Tiempo fijo (min) mayor a 0.`,
+            `La operacion ${index + 1} en modo variable requiere Productividad base mayor a 0.`,
           );
           return null;
         }
-      } else if (
-        !operacion.perfilOperativoId &&
-        (!operacion.productividadBase || operacion.productividadBase <= 0)
-      ) {
-        toast.error(
-          `La operacion ${index + 1} en modo variable requiere Productividad base mayor a 0.`,
-        );
-        return null;
       }
 
       if (
@@ -2829,6 +2832,12 @@ export function ProcesosPanel({
                             )}
                           </Field>
 
+                          {operacion.niveles.length > 0 ? (
+                            <div className="md:col-span-2 xl:col-span-3 rounded-md border border-dashed px-3 py-3 text-sm text-muted-foreground">
+                              Este paso usa variantes. La máquina, perfil, productividad y tiempos se definen por variante — los campos generales no aplican.
+                            </div>
+                          ) : (
+                          <>
                           <Field>
                             <FieldLabel>Maquina</FieldLabel>
                             <Select
@@ -3210,6 +3219,8 @@ export function ProcesosPanel({
                               }
                             />
                           </Field>
+                          </>
+                          )}
                           </div>
                           {/* Mult. doble faz — editable incluso en pasos de biblioteca */}
                           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 mt-3">
