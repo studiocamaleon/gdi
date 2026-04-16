@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ProductoTabSection } from "@/components/productos-servicios/producto-tab-section";
 import { updateProductoRutaPolicy } from "@/lib/productos-servicios-api";
+import { getOperacionSummary } from "@/lib/proceso-operacion-values";
 
 export function ProductoRutaBaseTab(props: ProductTabProps) {
   const [rutaId, setRutaId] = React.useState(props.producto.procesoDefinicionDefaultId ?? "");
@@ -131,7 +132,15 @@ export function ProductoRutaBaseTab(props: ProductTabProps) {
                         <TableCell>{operacion.orden}</TableCell>
                         <TableCell>{operacion.nombre}</TableCell>
                         <TableCell>{operacion.centroCostoNombre || "-"}</TableCell>
-                        <TableCell>{operacion.maquinaNombre || "-"}</TableCell>
+                        <TableCell>
+                          {(() => {
+                            const summary = getOperacionSummary(operacion);
+                            return summary.maquinasSummary === "Sin máquina" &&
+                              !summary.tieneNiveles
+                              ? "-"
+                              : summary.maquinasSummary;
+                          })()}
+                        </TableCell>
                       </TableRow>
                     ))
                   ) : (

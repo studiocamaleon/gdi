@@ -700,6 +700,7 @@ export async function cotizarProductoVariante(
     seleccionesBase?: Array<{ dimension: DimensionOpcionProductiva; valor: ValorOpcionProductiva }>;
     checklistRespuestas?: Array<{ preguntaId: string; respuestaId: string }>;
     opcionalesSeleccionados?: string[];
+    nivelesSeleccionados?: Array<{ operacionId: string; nivelId: string }>;
     parametros?: Record<string, unknown>;
   },
 ) {

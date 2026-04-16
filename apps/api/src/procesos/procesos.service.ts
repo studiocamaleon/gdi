@@ -40,6 +40,12 @@ import {
 import {
   evaluateProductividad,
 } from './proceso-productividad.engine';
+import {
+  getNivelesActivos,
+  operacionTieneNiveles,
+  todosLosNivelesCompletos,
+  getMaquinaIdsDeNiveles,
+} from './utils/operacion-values';
 
 type ProcesoCompleto = Prisma.ProcesoDefinicionGetPayload<{
   include: {
@@ -395,6 +401,14 @@ export class ProcesosService {
         warnings.push(unitWarning);
       }
 
+      const nivelesDelPaso = getNivelesActivos(operacion.detalleJson);
+      const tieneNivelesPaso = nivelesDelPaso.length > 0;
+      if (tieneNivelesPaso) {
+        warnings.push(
+          `Este paso tiene ${nivelesDelPaso.length} variante${nivelesDelPaso.length > 1 ? 's' : ''}; la simulación usa los valores generales, cada variante puede cotizar distinto.`,
+        );
+      }
+
       return {
         operacionId: operacion.id,
         orden: operacion.orden,
@@ -419,6 +433,25 @@ export class ProcesosService {
         modoProductividad: this.toApiModoProductividad(
           operacion.modoProductividad,
         ),
+        tieneNiveles: tieneNivelesPaso,
+        nivelesCount: nivelesDelPaso.length,
+        nivelesSnapshots: tieneNivelesPaso
+          ? nivelesDelPaso.map((nivel) => ({
+              nivelId: nivel.id,
+              nombre: nivel.nombre,
+              maquinaId: nivel.maquinaId,
+              maquinaNombre: nivel.maquinaNombre,
+              perfilOperativoId: nivel.perfilOperativoId,
+              perfilOperativoNombre: nivel.perfilOperativoNombre,
+              modoProductividadNivel: nivel.modoProductividadNivel,
+              productividadBase: nivel.productividadBase,
+              tiempoFijoMin: nivel.tiempoFijoMin,
+              setupMin: nivel.setupMin,
+              cleanupMin: nivel.cleanupMin,
+              unidadSalida: nivel.unidadSalida,
+              unidadTiempo: nivel.unidadTiempo,
+            }))
+          : [],
         warnings: Array.from(new Set(warnings)),
       };
     });
@@ -1475,6 +1508,18 @@ export class ProcesosService {
         return true;
       }
 
+      // Si la operación tiene niveles activos, verificar que todos tengan máquina con centro principal.
+      const nivelesActivos = (operacion.niveles ?? []).filter(
+        (n) => n.activo !== false,
+      );
+      if (nivelesActivos.length > 0) {
+        return nivelesActivos.every((nivel) => {
+          if (!nivel.maquinaId) return false;
+          const maquina = references.maquinasById.get(nivel.maquinaId);
+          return Boolean(maquina?.centroCostoPrincipalId);
+        });
+      }
+
       if (!operacion.maquinaId) {
         return false;
       }
@@ -1489,6 +1534,19 @@ export class ProcesosService {
 
     const hasAllOperationsCostingSignals = payload.operaciones.every(
       (operacion) => {
+        // Si la operación tiene niveles activos, TODOS deben tener campos de costeo.
+        const nivelesActivos = (operacion.niveles ?? []).filter(
+          (n) => n.activo !== false,
+        );
+        if (nivelesActivos.length > 0) {
+          return nivelesActivos.every((nivel) => {
+            if (nivel.modoProductividadNivel === 'fija') {
+              return (nivel.tiempoFijoMin ?? 0) > 0;
+            }
+            return (nivel.productividadBase ?? 0) > 0;
+          });
+        }
+
         const derived = this.deriveOperationDefaultsFromPayload(
           operacion,
           references,

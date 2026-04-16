@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { assignProductoVarianteRuta, updateProductoRutaPolicy } from "@/lib/productos-servicios-api";
+import { getOperacionSummary } from "@/lib/proceso-operacion-values";
 
 const EMPTY_SELECT_VALUE = "__none__";
 
@@ -181,20 +182,44 @@ export function DigitalRutaBaseTab(props: ProductTabProps) {
                       </TableCell>
                       <TableCell>{op.centroCostoNombre}</TableCell>
                       <TableCell>
-                        {op.maquinaNombre || "Sin máquina"}
-                        {op.rol === "impresion" ? (
-                          <span className="ml-1 text-xs text-muted-foreground">(resuelve desde variante)</span>
-                        ) : null}
+                        {(() => {
+                          const summary = getOperacionSummary(op);
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              <span>{summary.maquinasSummary}</span>
+                              {op.rol === "impresion" ? (
+                                <span className="text-xs text-muted-foreground">
+                                  (resuelve desde variante)
+                                </span>
+                              ) : summary.tieneNiveles ? (
+                                <span className="text-xs text-muted-foreground">
+                                  {summary.nivelesCount} variante
+                                  {summary.nivelesCount > 1 ? "s" : ""}
+                                </span>
+                              ) : null}
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <span className="text-sm">
-                          {getModoProductividadLabel(op.modoProductividad)}
-                          {op.modoProductividad === "fija" && op.tiempoFijoMin
-                            ? ` · ${op.tiempoFijoMin} min`
-                            : null}
-                          {op.modoProductividad === "variable" && op.productividadBase
-                            ? ` · ${op.productividadBase} ${getUnidadProductividadCompuestaLabel(op.unidadSalida, op.unidadTiempo)}`
-                            : null}
+                          {(() => {
+                            const summary = getOperacionSummary(op);
+                            if (summary.tieneNiveles) {
+                              return `${summary.modoProductividadSummary} · ${summary.productividadSummary === "—" ? summary.tiempoSummary : summary.productividadSummary}`;
+                            }
+                            return (
+                              <>
+                                {getModoProductividadLabel(op.modoProductividad)}
+                                {op.modoProductividad === "fija" && op.tiempoFijoMin
+                                  ? ` · ${op.tiempoFijoMin} min`
+                                  : null}
+                                {op.modoProductividad === "variable" && op.productividadBase
+                                  ? ` · ${op.productividadBase} ${getUnidadProductividadCompuestaLabel(op.unidadSalida, op.unidadTiempo)}`
+                                  : null}
+                              </>
+                            );
+                          })()}
                         </span>
                       </TableCell>
                     </TableRow>

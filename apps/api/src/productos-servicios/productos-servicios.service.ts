@@ -46,6 +46,11 @@ import { convertFlexibleRollUnitPrice } from '../inventario/unidades-derivadas';
 import { PrismaService } from '../prisma/prisma.service';
 import { evaluateProductividad } from '../procesos/proceso-productividad.engine';
 import {
+  getNivelesActivos,
+  operacionTieneNiveles,
+  resolveOperacionForNivel,
+} from '../procesos/utils/operacion-values';
+import {
   AssignProductoVariantesRutaMasivaDto,
   AssignProductoAdicionalDto,
   AssignProductoMotorDto,
@@ -755,6 +760,27 @@ export class ProductosServiciosService {
       });
 
       if (procesoDef?.operaciones) {
+        // Niveles: validar que todos los pasos con niveles tengan selección.
+        const nivelesPorOpRigid = new Map<string, string>();
+        for (const sel of payload.nivelesSeleccionados ?? []) {
+          nivelesPorOpRigid.set(sel.operacionId, sel.nivelId);
+        }
+        for (const op of procesoDef.operaciones) {
+          if (!operacionTieneNiveles(op)) continue;
+          const nivelId = nivelesPorOpRigid.get(op.id);
+          if (!nivelId) {
+            throw new BadRequestException(
+              `El paso "${op.nombre}" tiene variantes. Seleccioná una variante para cotizar.`,
+            );
+          }
+          const niveles = getNivelesActivos(op.detalleJson);
+          if (!niveles.some((n) => n.id === nivelId)) {
+            throw new BadRequestException(
+              `El nivel seleccionado para el paso "${op.nombre}" no existe o no está activo.`,
+            );
+          }
+        }
+
         for (const op of procesoDef.operaciones) {
           if (!op.centroCosto) continue;
           const tarifa = await this.prisma.centroCostoTarifaPeriodo.findFirst({
@@ -763,11 +789,19 @@ export class ProductosServiciosService {
               periodo, estado: 'PUBLICADA',
             },
           });
+          const resolvedOpRigid = resolveOperacionForNivel(
+            op,
+            nivelesPorOpRigid.get(op.id),
+          );
           const tarifaHora = Number(tarifa?.tarifaCalculada ?? 0);
-          const setupMin = Number(op.setupMin ?? 0);
-          const runMinBase = Number(op.runMin ?? 0);
-          const cleanupMin = Number(op.cleanupMin ?? 0);
-          const tiempoFijoMin = Number(op.tiempoFijoMin ?? 0);
+          const setupMin = Number(resolvedOpRigid?.setupMin ?? op.setupMin ?? 0);
+          const runMinBase = Number(resolvedOpRigid?.runMin ?? op.runMin ?? 0);
+          const cleanupMin = Number(
+            resolvedOpRigid?.cleanupMin ?? op.cleanupMin ?? 0,
+          );
+          const tiempoFijoMin = Number(
+            resolvedOpRigid?.tiempoFijoMin ?? op.tiempoFijoMin ?? 0,
+          );
           const multDobleFazOp = esDobleFaz0 ? Number(op.multiplicadorDobleFaz ?? 1) : 1;
           const totalRunMin = runMinBase * cantidad * multDobleFazOp;
           const totalMin = setupMin + totalRunMin + cleanupMin + tiempoFijoMin;
@@ -1261,6 +1295,27 @@ export class ProductosServiciosService {
         },
       });
       if (procesoDef?.operaciones) {
+        // Niveles: validar selección en pasos con niveles (gran formato preview).
+        const nivelesPorOpGf = new Map<string, string>();
+        for (const sel of payload.nivelesSeleccionados ?? []) {
+          nivelesPorOpGf.set(sel.operacionId, sel.nivelId);
+        }
+        for (const op of procesoDef.operaciones) {
+          if (!operacionTieneNiveles(op)) continue;
+          const nivelId = nivelesPorOpGf.get(op.id);
+          if (!nivelId) {
+            throw new BadRequestException(
+              `El paso "${op.nombre}" tiene variantes. Seleccioná una variante para cotizar.`,
+            );
+          }
+          const niveles = getNivelesActivos(op.detalleJson);
+          if (!niveles.some((n) => n.id === nivelId)) {
+            throw new BadRequestException(
+              `El nivel seleccionado para el paso "${op.nombre}" no existe o no está activo.`,
+            );
+          }
+        }
+
         for (const op of procesoDef.operaciones) {
           if (!op.centroCosto) continue;
           const tarifa = await this.prisma.centroCostoTarifaPeriodo.findFirst({
@@ -1269,8 +1324,12 @@ export class ProductosServiciosService {
               periodo, estado: 'PUBLICADA',
             },
           });
+          const resolvedOpGf = resolveOperacionForNivel(
+            op,
+            nivelesPorOpGf.get(op.id),
+          );
           const tarifaHora = Number(tarifa?.tarifaCalculada ?? 0);
-          const setupMin = Number(op.setupMin ?? 0);
+          const setupMin = Number(resolvedOpGf?.setupMin ?? op.setupMin ?? 0);
           const multDobleFazOp = esDobleFaz ? Number(op.multiplicadorDobleFaz ?? 1) : 1;
 
           // Resolver cantidad objetivo según base de cálculo de productividad
@@ -2040,6 +2099,29 @@ export class ProductosServiciosService {
     // La cantidad objetivo para cada operación depende de su tipo:
     const cortesGuillotina = Math.max(0, (imposicion.cols - 1) + (imposicion.rows - 1)) * guillotinado.tandas;
 
+    // Niveles (variantes de paso): validar que todos los pasos con niveles tengan
+    // una selección. Si no hay nivel seleccionado, cotizar produciría costos
+    // silenciosamente erróneos → se lanza un error explícito.
+    const nivelesPorOperacionTalonario = new Map<string, string>();
+    for (const sel of payload.nivelesSeleccionados ?? []) {
+      nivelesPorOperacionTalonario.set(sel.operacionId, sel.nivelId);
+    }
+    for (const op of proceso.operaciones) {
+      if (!operacionTieneNiveles(op)) continue;
+      const nivelId = nivelesPorOperacionTalonario.get(op.id);
+      if (!nivelId) {
+        throw new BadRequestException(
+          `El paso "${op.nombre}" tiene variantes. Seleccioná una variante para cotizar.`,
+        );
+      }
+      const niveles = getNivelesActivos(op.detalleJson);
+      if (!niveles.some((n) => n.id === nivelId)) {
+        throw new BadRequestException(
+          `El nivel seleccionado para el paso "${op.nombre}" no existe o no está activo.`,
+        );
+      }
+    }
+
     for (const operacion of proceso.operaciones) {
       const tarifa = tarifaByCentro.get(operacion.centroCostoId);
       if (tarifa === undefined) {
@@ -2059,12 +2141,20 @@ export class ProductosServiciosService {
         cantidadObjetivo = cantidadTalonarios;
       }
 
-      const productividadBase = Number(operacion.productividadBase ?? 0);
-      const setupMin = Number(operacion.setupMin ?? 0);
-      const cleanupMin = Number(operacion.cleanupMin ?? 0);
+      const resolvedOp = resolveOperacionForNivel(
+        operacion,
+        nivelesPorOperacionTalonario.get(operacion.id),
+      );
+      const productividadBase = Number(
+        resolvedOp?.productividadBase ?? operacion.productividadBase ?? 0,
+      );
+      const setupMin = Number(resolvedOp?.setupMin ?? operacion.setupMin ?? 0);
+      const cleanupMin = Number(
+        resolvedOp?.cleanupMin ?? operacion.cleanupMin ?? 0,
+      );
       const runMin = productividadBase > 0
         ? (cantidadObjetivo / productividadBase)
-        : Number(operacion.runMin ?? 0);
+        : Number(resolvedOp?.runMin ?? operacion.runMin ?? 0);
       const totalMin = setupMin + runMin + cleanupMin;
       const costo = (totalMin / 60) * tarifaHora;
       costoProcesos += costo;
@@ -4017,6 +4107,28 @@ export class ProductosServiciosService {
       checklistOps,
       warnings,
     );
+
+    // Niveles (variantes de paso): validar selección y preparar map para resolver.
+    const nivelesPorOpGfCand = new Map<string, string>();
+    for (const sel of payload.nivelesSeleccionados ?? []) {
+      nivelesPorOpGfCand.set(sel.operacionId, sel.nivelId);
+    }
+    for (const op of operacionesCotizadas) {
+      if (!operacionTieneNiveles(op)) continue;
+      const nivelId = nivelesPorOpGfCand.get(op.id);
+      if (!nivelId) {
+        throw new BadRequestException(
+          `El paso "${op.nombre}" tiene variantes. Seleccioná una variante para cotizar.`,
+        );
+      }
+      const niveles = getNivelesActivos(op.detalleJson);
+      if (!niveles.some((n) => n.id === nivelId)) {
+        throw new BadRequestException(
+          `El nivel seleccionado para el paso "${op.nombre}" no existe o no está activo.`,
+        );
+      }
+    }
+
     const centroIds = Array.from(
       new Set(
         operacionesCotizadas
@@ -4082,9 +4194,17 @@ export class ProductosServiciosService {
         costo: number;
         detalleTecnico: Record<string, unknown> | null;
       }> = operacionesCotizadas.map((op, index) => {
-        const setupMin = Number(op.setupMin ?? 0);
-        const cleanupMin = Number(op.cleanupMin ?? 0);
-        const tiempoFijoMin = Number(op.tiempoFijoMin ?? 0);
+        const resolvedOpGfCand = resolveOperacionForNivel(
+          op,
+          nivelesPorOpGfCand.get(op.id),
+        );
+        const setupMin = Number(resolvedOpGfCand?.setupMin ?? op.setupMin ?? 0);
+        const cleanupMin = Number(
+          resolvedOpGfCand?.cleanupMin ?? op.cleanupMin ?? 0,
+        );
+        const tiempoFijoMin = Number(
+          resolvedOpGfCand?.tiempoFijoMin ?? op.tiempoFijoMin ?? 0,
+        );
         const cantidadObjetivoSalida = this.resolveGranFormatoCantidadObjetivoSalida({
           operacion: op,
           totalPiezas: totalPiezasGrupo,
@@ -4092,11 +4212,20 @@ export class ProductosServiciosService {
           largoConsumidoMl,
           perimetroTotalMl: perimetroTotalMlGrupo,
         });
+        const efectivoModo =
+          resolvedOpGfCand?.modoProductividad ??
+          op.modoProductividad ??
+          ModoProductividadProceso.FIJA;
+        const efectivoProductividad =
+          resolvedOpGfCand?.productividadBase ?? op.productividadBase;
+        const efectivoRunMin = resolvedOpGfCand?.runMin ?? op.runMin;
+        const efectivoUnidadTiempo =
+          resolvedOpGfCand?.unidadTiempo ?? op.unidadTiempo;
         const usaSoloTiempoFijo =
-          (op.modoProductividad ?? ModoProductividadProceso.FIJA) === ModoProductividadProceso.FIJA &&
-          Number(op.tiempoFijoMin ?? 0) > 0 &&
-          Number(op.productividadBase ?? 0) <= 0 &&
-          Number(op.runMin ?? 0) <= 0;
+          efectivoModo === ModoProductividadProceso.FIJA &&
+          Number(tiempoFijoMin) > 0 &&
+          Number(efectivoProductividad ?? 0) <= 0 &&
+          Number(efectivoRunMin ?? 0) <= 0;
         const productividad = usaSoloTiempoFijo
           ? {
               runMin: 0,
@@ -4107,12 +4236,12 @@ export class ProductosServiciosService {
               warnings: [],
             }
           : evaluateProductividad({
-              modoProductividad: op.modoProductividad ?? ModoProductividadProceso.FIJA,
-              productividadBase: op.productividadBase,
+              modoProductividad: efectivoModo,
+              productividadBase: efectivoProductividad,
               reglaVelocidadJson: op.reglaVelocidadJson ?? null,
               reglaMermaJson: op.reglaMermaJson ?? null,
-              runMin: op.runMin,
-              unidadTiempo: op.unidadTiempo,
+              runMin: efectivoRunMin,
+              unidadTiempo: efectivoUnidadTiempo,
               mermaRunPct: op.mermaRunPct,
               mermaSetup: op.mermaSetup,
               cantidadObjetivoSalida,
@@ -6315,14 +6444,81 @@ export class ProductosServiciosService {
     }
 
     const opcionalesSeleccionadosSet = new Set(payload.opcionalesSeleccionados ?? []);
-    const operacionesBaseCotizadas = proceso.operaciones
+
+    // Niveles (variantes) seleccionados por el usuario para pasos que las tienen.
+    // Cualquier paso con niveles activos — excepto los pasos rol=IMPRESION que se
+    // resuelven desde la configuración de variante — requiere que el cotizador
+    // elija un nivel, sino la cotización falla con un mensaje claro.
+    const nivelesPorOperacion = new Map<string, string>();
+    for (const sel of payload.nivelesSeleccionados ?? []) {
+      nivelesPorOperacion.set(sel.operacionId, sel.nivelId);
+    }
+
+    const operacionesActivasAIncluir = proceso.operaciones
       .filter((op) => op.activo)
       .filter((op) => {
-        // Operaciones obligatorias (esOpcional=false) siempre se incluyen
         if (!op.esOpcional) return true;
-        // Operaciones opcionales solo si el usuario las seleccionó
         return opcionalesSeleccionadosSet.has(op.id);
-      })
+      });
+
+    for (const op of operacionesActivasAIncluir) {
+      if (!operacionTieneNiveles(op)) continue;
+      // Rol IMPRESION se resuelve por configuración de variante (no por nivel).
+      const impresionResuelta =
+        usaNuevoModeloConfigImpresion &&
+        op.rol === RolProcesoOperacion.IMPRESION &&
+        configImpresionResuelta;
+      if (impresionResuelta) continue;
+      const nivelId = nivelesPorOperacion.get(op.id);
+      if (!nivelId) {
+        throw new BadRequestException(
+          `El paso "${op.nombre}" tiene variantes. Seleccioná una variante para cotizar.`,
+        );
+      }
+      const niveles = getNivelesActivos(op.detalleJson);
+      if (!niveles.some((n) => n.id === nivelId)) {
+        throw new BadRequestException(
+          `El nivel seleccionado para el paso "${op.nombre}" no existe o no está activo.`,
+        );
+      }
+    }
+
+    // Pre-cargar máquinas/perfiles referenciados por niveles para poder
+    // substituirlos en el array de operaciones sin perder las relaciones.
+    const maquinaIdsFromNiveles = new Set<string>();
+    const perfilIdsFromNiveles = new Set<string>();
+    for (const op of operacionesActivasAIncluir) {
+      const nivelId = nivelesPorOperacion.get(op.id);
+      if (!nivelId) continue;
+      const niveles = getNivelesActivos(op.detalleJson);
+      const nivel = niveles.find((n) => n.id === nivelId);
+      if (!nivel) continue;
+      if (nivel.maquinaId) maquinaIdsFromNiveles.add(nivel.maquinaId);
+      if (nivel.perfilOperativoId)
+        perfilIdsFromNiveles.add(nivel.perfilOperativoId);
+    }
+    const maquinasExtra =
+      maquinaIdsFromNiveles.size > 0
+        ? await this.prisma.maquina.findMany({
+            where: {
+              tenantId: auth.tenantId,
+              id: { in: Array.from(maquinaIdsFromNiveles) },
+            },
+          })
+        : [];
+    const maquinasExtraMap = new Map(maquinasExtra.map((m) => [m.id, m]));
+    const perfilesExtra =
+      perfilIdsFromNiveles.size > 0
+        ? await this.prisma.maquinaPerfilOperativo.findMany({
+            where: {
+              tenantId: auth.tenantId,
+              id: { in: Array.from(perfilIdsFromNiveles) },
+            },
+          })
+        : [];
+    const perfilesExtraMap = new Map(perfilesExtra.map((p) => [p.id, p]));
+
+    const operacionesBaseCotizadas = operacionesActivasAIncluir
       .map((op) => {
         // Nuevo modelo: si la operación tiene rol IMPRESION y hay config resuelta, aplicar máquina+perfil
         if (usaNuevoModeloConfigImpresion && op.rol === RolProcesoOperacion.IMPRESION && configImpresionResuelta) {
@@ -6351,6 +6547,50 @@ export class ProductosServiciosService {
               configImpresionVariante: true,
             } as Prisma.JsonObject,
           };
+        }
+
+        // Niveles (variantes) del paso: si el paso tiene niveles activos y el
+        // usuario eligió uno, aplicar sus valores (máquina/perfil/tiempos).
+        if (operacionTieneNiveles(op)) {
+          const nivelId = nivelesPorOperacion.get(op.id);
+          const resolved = resolveOperacionForNivel(op, nivelId);
+          if (resolved && resolved.nivelId !== null) {
+            const nuevaMaquina = resolved.maquinaId
+              ? maquinasExtraMap.get(resolved.maquinaId) ?? op.maquina
+              : op.maquina;
+            const nuevoPerfil = resolved.perfilOperativoId
+              ? perfilesExtraMap.get(resolved.perfilOperativoId) ?? op.perfilOperativo
+              : op.perfilOperativo;
+            return {
+              ...op,
+              maquinaId: resolved.maquinaId ?? op.maquinaId,
+              maquina: nuevaMaquina,
+              perfilOperativoId: resolved.perfilOperativoId ?? op.perfilOperativoId,
+              perfilOperativo: nuevoPerfil,
+              modoProductividad: resolved.modoProductividad,
+              productividadBase:
+                resolved.productividadBase !== null
+                  ? resolved.productividadBase
+                  : op.productividadBase,
+              tiempoFijoMin:
+                resolved.tiempoFijoMin !== null
+                  ? resolved.tiempoFijoMin
+                  : op.tiempoFijoMin,
+              setupMin:
+                resolved.setupMin !== null ? resolved.setupMin : op.setupMin,
+              cleanupMin:
+                resolved.cleanupMin !== null
+                  ? resolved.cleanupMin
+                  : op.cleanupMin,
+              unidadSalida: resolved.unidadSalida,
+              unidadTiempo: resolved.unidadTiempo,
+              detalleJson: {
+                ...this.asObject(op.detalleJson),
+                nivelResueltoId: resolved.nivelId,
+                nivelResueltoNombre: resolved.nivelNombre,
+              } as Prisma.JsonObject,
+            };
+          }
         }
 
         // Legacy: matching por plantilla (para productos existentes sin nuevo modelo)

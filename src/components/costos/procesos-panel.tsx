@@ -64,6 +64,7 @@ import {
   etapaProcesoItems,
   unidadProcesoItems,
 } from "@/lib/procesos";
+import { getOperacionSummary } from "@/lib/proceso-operacion-values";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -1001,14 +1002,25 @@ export function ProcesosPanel({
     return visibles.filter((item) => {
       const tipoLabel = getTipoOperacionLabel(item.tipoOperacion).toLowerCase();
       const centroLabel = item.centroCostoNombre.toLowerCase();
-      const maquinaLabel = item.maquinaNombre.toLowerCase();
-      const perfilLabel = item.perfilOperativoNombre.toLowerCase();
+      const summary = getOperacionSummary(item);
+      const maquinasSearch = [
+        item.maquinaNombre,
+        ...summary.maquinasDistintas,
+      ]
+        .join(" ")
+        .toLowerCase();
+      const perfilesSearch = [
+        item.perfilOperativoNombre,
+        ...summary.perfilesDistintos,
+      ]
+        .join(" ")
+        .toLowerCase();
       return (
         item.nombre.toLowerCase().includes(normalized) ||
         tipoLabel.includes(normalized) ||
         centroLabel.includes(normalized) ||
-        maquinaLabel.includes(normalized) ||
-        perfilLabel.includes(normalized)
+        maquinasSearch.includes(normalized) ||
+        perfilesSearch.includes(normalized)
       );
     });
   }, [bibliotecaOperaciones, bibliotecaSearchTerm, showInactiveBiblioteca]);
@@ -1071,14 +1083,25 @@ export function ProcesosPanel({
     return operationTemplateItems.filter((item) => {
       const tipoLabel = getTipoOperacionLabel(item.tipoOperacion).toLowerCase();
       const centroLabel = item.centroCostoNombre.toLowerCase();
-      const maquinaLabel = item.maquinaNombre.toLowerCase();
-      const perfilLabel = item.perfilOperativoNombre.toLowerCase();
+      const summary = getOperacionSummary(item);
+      const maquinasSearch = [
+        item.maquinaNombre,
+        ...summary.maquinasDistintas,
+      ]
+        .join(" ")
+        .toLowerCase();
+      const perfilesSearch = [
+        item.perfilOperativoNombre,
+        ...summary.perfilesDistintos,
+      ]
+        .join(" ")
+        .toLowerCase();
       return (
         item.nombre.toLowerCase().includes(normalized) ||
         tipoLabel.includes(normalized) ||
         centroLabel.includes(normalized) ||
-        maquinaLabel.includes(normalized) ||
-        perfilLabel.includes(normalized)
+        maquinasSearch.includes(normalized) ||
+        perfilesSearch.includes(normalized)
       );
     });
   }, [operacionTemplateSearch, operationTemplateItems]);
@@ -2331,15 +2354,27 @@ export function ProcesosPanel({
                         <TableCell>{getTipoOperacionLabel(item.tipoOperacion)}</TableCell>
                         <TableCell>{item.centroCostoNombre || "Sin centro"}</TableCell>
                         <TableCell>
-                          {item.maquinaId
-                            ? `${item.maquinaNombre}${item.perfilOperativoId ? ` / ${item.perfilOperativoNombre}` : ""}`
-                            : "Sin maquina"}
+                          {(() => {
+                            const summary = getOperacionSummary(item);
+                            return (
+                              <div className="flex flex-col gap-0.5">
+                                <span>{summary.maquinasSummary}</span>
+                                {summary.tieneNiveles ? (
+                                  <span className="text-xs text-muted-foreground">
+                                    {summary.nivelesCount} variante
+                                    {summary.nivelesCount > 1 ? "s" : ""}
+                                  </span>
+                                ) : null}
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>{item.estacionNombre || "Sin estacion"}</TableCell>
                         <TableCell>
-                          {modoProductividadProcesoItems.find(
-                            (mode) => mode.value === item.modoProductividad,
-                          )?.label ?? item.modoProductividad}
+                          {(() => {
+                            const summary = getOperacionSummary(item);
+                            return summary.modoProductividadSummary;
+                          })()}
                         </TableCell>
                         <TableCell>
                           <Badge variant={item.activo ? "default" : "outline"}>
@@ -2537,7 +2572,7 @@ export function ProcesosPanel({
                                       <p className="text-xs text-muted-foreground">
                                         {getTipoOperacionLabel(item.tipoOperacion)} ·{" "}
                                         {item.centroCostoNombre || "Sin centro"} ·{" "}
-                                        {item.maquinaId ? item.maquinaNombre : "Sin maquina"}
+                                        {getOperacionSummary(item).maquinasSummary}
                                       </p>
                                     </button>
                                   );

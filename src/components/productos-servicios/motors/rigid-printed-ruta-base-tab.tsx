@@ -20,6 +20,7 @@ import {
 } from "@/lib/productos-servicios-api";
 import type { Proceso } from "@/lib/procesos";
 import type { Maquina } from "@/lib/maquinaria";
+import { getOperacionSummary } from "@/lib/proceso-operacion-values";
 
 const PLANTILLAS_DIRECTA = new Set([
   "impresora_uv_mesa_extensora",
@@ -73,8 +74,11 @@ export function RigidPrintedRutaBaseTab(props: ProductTabProps) {
   const procesosDirecta = React.useMemo(
     () => procesoItems.filter((p) =>
       p.operaciones.some((op) => {
-        const plantilla = maquinaPlantillaMap.get(op.maquinaId);
-        return plantilla && PLANTILLAS_DIRECTA.has(plantilla);
+        const summary = getOperacionSummary(op);
+        return summary.maquinaIdsDistintos.some((mid) => {
+          const plantilla = maquinaPlantillaMap.get(mid);
+          return plantilla && PLANTILLAS_DIRECTA.has(plantilla);
+        });
       }),
     ),
     [procesoItems, maquinaPlantillaMap],
@@ -83,8 +87,11 @@ export function RigidPrintedRutaBaseTab(props: ProductTabProps) {
   const procesosFlexible = React.useMemo(
     () => procesoItems.filter((p) =>
       p.operaciones.some((op) => {
-        const plantilla = maquinaPlantillaMap.get(op.maquinaId);
-        return plantilla && PLANTILLAS_FLEXIBLE.has(plantilla);
+        const summary = getOperacionSummary(op);
+        return summary.maquinaIdsDistintos.some((mid) => {
+          const plantilla = maquinaPlantillaMap.get(mid);
+          return plantilla && PLANTILLAS_FLEXIBLE.has(plantilla);
+        });
       }),
     ),
     [procesoItems, maquinaPlantillaMap],
