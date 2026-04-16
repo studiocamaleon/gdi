@@ -528,7 +528,14 @@ export function DigitalVariantesTab(props: ProductTabProps) {
               </Select>
             </Field>
           </div>
-          {formDraft.configuracionesImpresion.length > 0 ? (
+          {!isEditingVariante && !formDraft.nombre.trim() ? (
+            <div className="mt-4 rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground mb-1">Configuraciones de impresión</p>
+              <p>
+                Completá el nombre, las medidas, el papel y seleccioná qué tipos de impresión y caras admite la variante. Luego vas a poder asignar la máquina y el perfil operativo a cada combinación.
+              </p>
+            </div>
+          ) : formDraft.configuracionesImpresion.length > 0 ? (
             <div className="mt-4 space-y-2">
               <p className="text-sm font-medium">Configuraciones de impresión</p>
               <p className="text-xs text-muted-foreground">
