@@ -65,10 +65,11 @@ describe('WideFormatMotorModuleV2 (B.2 + B.3)', () => {
     });
 
     it('suma de buckets = total (coherencia)', async () => {
+      // Medidas que SI encajan en rollo 630mm (600 rotado cabe).
       const result = await motor.quoteVariant(AUTH, VARIANTE_ID, {
         cantidad: 3,
         periodo: '2026-04',
-        parametros: { anchoMm: 1500, altoMm: 800, conLaminado: true },
+        parametros: { anchoMm: 600, altoMm: 400, conLaminado: true },
       } as never);
 
       const sumaBuckets =
@@ -110,25 +111,44 @@ describe('WideFormatMotorModuleV2 (B.2 + B.3)', () => {
       expect(r.pasos).toHaveLength(5);
     });
 
-    it('G2: 2 piezas 2000×800mm sin laminado → rango $15.000–$40.000', async () => {
+    it('G2: 2 piezas 2000×800mm — RECHAZADO por no encajar en rollo 630mm', async () => {
+      // 2000mm ni rotado (800mm) entra en 620mm útil del rollo.
+      // Este es el comportamiento correcto del nesting real: rechaza piezas
+      // que físicamente no caben.
+      await expect(
+        motor.quoteVariant(AUTH, VARIANTE_ID, {
+          cantidad: 2,
+          periodo: '2026-04',
+          parametros: { anchoMm: 2000, altoMm: 800, conLaminado: false },
+        } as never),
+      ).rejects.toThrow(/no encajan en el rollo/);
+    });
+
+    it('G2b: 2 piezas 1200×500mm — encaja rotada en rollo 630mm', async () => {
+      // 500mm rotado cabe. 1 pieza por fila, 2 filas de 1200mm = 2400mm largo.
       const r = await motor.quoteVariant(AUTH, VARIANTE_ID, {
         cantidad: 2,
         periodo: '2026-04',
-        parametros: { anchoMm: 2000, altoMm: 800, conLaminado: false },
+        parametros: { anchoMm: 1200, altoMm: 500, conLaminado: false },
       } as never);
-      expect(r.total).toBeGreaterThan(15000);
-      expect(r.total).toBeLessThan(40000);
+      expect(r.total).toBeGreaterThan(10000);
       expect(r.pasos).toHaveLength(4);
+      const impresion = r.pasos.find((p) => p.tipo === 'impresion_por_area');
+      expect(impresion?.trazabilidad).toMatchObject({
+        nesting: expect.objectContaining({
+          aprovechamientoPct: expect.any(Number),
+        }),
+      });
     });
 
-    it('G3: 10 stickers 500×500mm → incluye embalaje de 10 piezas', async () => {
+    it('G3: 10 stickers 500×500mm → incluye nesting real y embalaje de 10 piezas', async () => {
       const r = await motor.quoteVariant(AUTH, VARIANTE_ID, {
         cantidad: 10,
         periodo: '2026-04',
         parametros: { anchoMm: 500, altoMm: 500, conLaminado: false },
       } as never);
       expect(r.total).toBeGreaterThan(5000);
-      expect(r.total).toBeLessThan(25000);
+      expect(r.total).toBeLessThan(35000); // ajustado tras nesting real (aprovechamiento bajo)
       const embalaje = r.pasos.find((p) => p.tipo === 'operacion_manual');
       expect(embalaje?.trazabilidad).toMatchObject({ cantidad: 10, bolsas: 10 });
     });
