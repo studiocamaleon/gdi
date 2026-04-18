@@ -4,6 +4,14 @@ import * as React from "react";
 
 // ──────────────── Tipos públicos ────────────────
 
+/** Márgenes mecánicos no-imprimibles de la máquina (pinza superior, bordes, etc). */
+export type MachineMargins = {
+  leftMm?: number;
+  rightMm?: number;
+  topMm?: number;
+  bottomMm?: number;
+};
+
 export type NestingContainer =
   | {
       type: "rollo";
@@ -13,21 +21,29 @@ export type NestingContainer =
       consumedLengthMm: number;
       /** Ancho total del rollo (incluye zonas no-imprimibles). Si no se pasa, = printableWidthMm. */
       rolloAnchoTotalMm?: number;
-      /** Márgenes no-imprimibles (para dibujar sombras laterales). */
+      /** Margen no-imprimible lateral izquierdo del rollo (zona física que no imprime). */
       marginLeftMm?: number;
+      /** Margen no-imprimible al inicio del rollo (top del dibujo). */
       marginStartMm?: number;
+      /** Margen no-imprimible al final del rollo (bottom del dibujo). */
       marginEndMm?: number;
     }
   | {
       type: "pliego";
       anchoMm: number;
       altoMm: number;
+      /** Márgenes mecánicos no-imprimibles de la máquina (pinza, bordes). */
+      machineMargins?: MachineMargins;
+      /** Margen perimetral de seguridad interno (safety margin). */
       margenMm?: number;
     }
   | {
       type: "placa";
       anchoMm: number;
       altoMm: number;
+      /** Márgenes no-imprimibles de la máquina UV/mesa (pinza, detección de borde). */
+      machineMargins?: MachineMargins;
+      /** Margen perimetral de seguridad interno. */
       margenMm?: number;
       /** Etiqueta del material (ej. "MDF 3mm") para mostrar dentro de la placa. */
       materialLabel?: string;
@@ -162,16 +178,24 @@ export function NestingPreview({
   const areaContenedorM2 = (widthMm * heightMm) / 1_000_000;
   const aprovechamiento = areaContenedorM2 > 0 ? (areaUtilM2 / areaContenedorM2) * 100 : 0;
 
-  // Márgenes no-imprimibles (solo rollo por ahora)
-  const printableZone =
+  // Márgenes no-imprimibles de la máquina: cada lado como franja sombreada.
+  const machineMargins: MachineMargins =
     container.type === "rollo"
       ? {
-          x: container.marginLeftMm ?? 0,
-          y: container.marginStartMm ?? 0,
-          widthMm: container.printableWidthMm,
-          heightMm: heightMm - (container.marginStartMm ?? 0) - (container.marginEndMm ?? 0),
+          leftMm: container.marginLeftMm ?? 0,
+          rightMm:
+            (container.rolloAnchoTotalMm ?? container.printableWidthMm) -
+            container.printableWidthMm -
+            (container.marginLeftMm ?? 0),
+          topMm: container.marginStartMm ?? 0,
+          bottomMm: container.marginEndMm ?? 0,
         }
-      : null;
+      : container.machineMargins ?? {};
+
+  const marginLeft = Math.max(0, machineMargins.leftMm ?? 0);
+  const marginRight = Math.max(0, machineMargins.rightMm ?? 0);
+  const marginTop = Math.max(0, machineMargins.topMm ?? 0);
+  const marginBottom = Math.max(0, machineMargins.bottomMm ?? 0);
 
   const perimeterMargin =
     container.type === "pliego" || container.type === "placa"
@@ -208,6 +232,26 @@ export function NestingPreview({
           preserveAspectRatio="xMidYMid meet"
           className="h-full w-full"
         >
+          <defs>
+            <pattern
+              id="nonPrintableHatch"
+              patternUnits="userSpaceOnUse"
+              width={Math.max(widthMm, heightMm) * 0.015}
+              height={Math.max(widthMm, heightMm) * 0.015}
+              patternTransform="rotate(45)"
+            >
+              <line
+                x1={0}
+                y1={0}
+                x2={0}
+                y2={Math.max(widthMm, heightMm) * 0.015}
+                stroke="currentColor"
+                strokeWidth={Math.max(widthMm, heightMm) * 0.0025}
+                className="text-muted-foreground"
+              />
+            </pattern>
+          </defs>
+
           {/* Grid de fondo tipo CAD */}
           {showGrid && (
             <g opacity={0.35}>
@@ -250,41 +294,70 @@ export function NestingPreview({
             className="text-foreground"
           />
 
-          {/* Zona no-imprimible (rollo) */}
-          {container.type === "rollo" && printableZone && (
-            <>
-              {printableZone.x > 0 && (
-                <rect
-                  x={padding}
-                  y={padding}
-                  width={printableZone.x}
-                  height={heightMm}
-                  fill="currentColor"
-                  className="text-muted-foreground"
-                  opacity={0.15}
-                />
-              )}
-              {printableZone.x + printableZone.widthMm < widthMm && (
-                <rect
-                  x={padding + printableZone.x + printableZone.widthMm}
-                  y={padding}
-                  width={widthMm - printableZone.x - printableZone.widthMm}
-                  height={heightMm}
-                  fill="currentColor"
-                  className="text-muted-foreground"
-                  opacity={0.15}
-                />
-              )}
-            </>
+          {/* Zonas no-imprimibles de la máquina — una por lado si corresponde */}
+          {marginLeft > 0 && (
+            <rect
+              x={padding}
+              y={padding}
+              width={marginLeft}
+              height={heightMm}
+              fill="url(#nonPrintableHatch)"
+              opacity={0.6}
+            />
+          )}
+          {marginRight > 0 && (
+            <rect
+              x={padding + widthMm - marginRight}
+              y={padding}
+              width={marginRight}
+              height={heightMm}
+              fill="url(#nonPrintableHatch)"
+              opacity={0.6}
+            />
+          )}
+          {marginTop > 0 && (
+            <rect
+              x={padding + marginLeft}
+              y={padding}
+              width={widthMm - marginLeft - marginRight}
+              height={marginTop}
+              fill="url(#nonPrintableHatch)"
+              opacity={0.6}
+            />
+          )}
+          {marginBottom > 0 && (
+            <rect
+              x={padding + marginLeft}
+              y={padding + heightMm - marginBottom}
+              width={widthMm - marginLeft - marginRight}
+              height={marginBottom}
+              fill="url(#nonPrintableHatch)"
+              opacity={0.6}
+            />
           )}
 
-          {/* Margen perimetral (pliego/placa) */}
+          {/* Borde de la zona imprimible (línea continua fina) */}
+          {(marginLeft + marginRight + marginTop + marginBottom) > 0 && (
+            <rect
+              x={padding + marginLeft}
+              y={padding + marginTop}
+              width={widthMm - marginLeft - marginRight}
+              height={heightMm - marginTop - marginBottom}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={0.6}
+              className="text-muted-foreground"
+              opacity={0.9}
+            />
+          )}
+
+          {/* Margen perimetral de seguridad (línea punteada interna) */}
           {perimeterMargin > 0 && (
             <rect
-              x={padding + perimeterMargin}
-              y={padding + perimeterMargin}
-              width={widthMm - perimeterMargin * 2}
-              height={heightMm - perimeterMargin * 2}
+              x={padding + marginLeft + perimeterMargin}
+              y={padding + marginTop + perimeterMargin}
+              width={widthMm - marginLeft - marginRight - perimeterMargin * 2}
+              height={heightMm - marginTop - marginBottom - perimeterMargin * 2}
               fill="none"
               stroke="currentColor"
               strokeWidth={0.5}
