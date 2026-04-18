@@ -271,6 +271,20 @@ enum ActivacionPasoV2 {
   CONDICIONAL
 }
 
+// Modelo universal (A.4): dominio sobre el que decide una ReglaDeSeleccion.
+// MATERIAL       → elige qué MateriaPrimaVariante consume un paso.
+// CENTRO_COSTO   → elige qué centro/máquina ejecuta un paso.
+// VARIANTE_PASO  → elige una variante/nivel del paso.
+// ACTIVACION     → decide si el paso se ejecuta (condicional).
+// PARAMETRO      → decide el valor de un parámetro del paso (ej. caras_laminado = 1 o 2).
+enum DominioReglaSeleccion {
+  MATERIAL
+  CENTRO_COSTO
+  VARIANTE_PASO
+  ACTIVACION
+  PARAMETRO
+}
+
 enum ModoProductividadProceso {
   FIJA
   FORMULA
@@ -521,6 +535,7 @@ model Tenant {
   procesoOperacionPlantillas             ProcesoOperacionPlantilla[]
   procesosOperacion                      ProcesoOperacion[]
   procesosVersion                        ProcesoVersion[]
+  reglasDeSeleccion                      ReglaDeSeleccion[]
   materiasPrimas                         MateriaPrima[]
   materiaPrimaVariantes                  MateriaPrimaVariante[]
   almacenesMateriaPrima                  AlmacenMateriaPrima[]
@@ -1298,6 +1313,29 @@ model ProcesoVersion {
 
   @@unique([tenantId, procesoDefinicionId, version])
   @@index([tenantId, procesoDefinicionId, createdAt])
+}
+
+// Modelo universal (A.4): regla declarativa que resuelve puntos de decisión
+// (material, centro de costo, variante, activación, parámetro) sin intervención
+// manual. Evaluada por el motor v2 contra el Job Context + outputs previos.
+// Sin consumidores al 2026-04-17; se activará en Etapas B/C.
+model ReglaDeSeleccion {
+  id              String                @id @default(uuid()) @db.Uuid
+  tenantId        String                @db.Uuid
+  nombre          String
+  descripcion     String?
+  dominio         DominioReglaSeleccion
+  targetRef       String?               // id del paso/material/centro sobre el que decide (FK lógica, no enforceable)
+  inputs          Json                  // string[] — variables del Job Context u outputs previos que lee
+  casos           Json                  // Array<{ condicion: JsonLogicExpr, decision: JsonValue }>
+  defaultDecision Json?                 // decisión si ningún caso matchea (opcional; sin default → rechaza cotización)
+  activa          Boolean               @default(true)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, dominio, activa])
+  @@index([tenantId, targetRef])
 }
 
 model MateriaPrima {
