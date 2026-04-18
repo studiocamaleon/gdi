@@ -261,6 +261,16 @@ enum RolProcesoOperacion {
   IMPRESION
 }
 
+// Modelo universal (A.3): modo de activación de un paso en la ruta efectiva.
+// OBLIGATORIO   → siempre se ejecuta.
+// OPCIONAL      → se ejecuta si el cliente/operador lo eligió.
+// CONDICIONAL   → se ejecuta si la expresión JsonLogic en condicionV2 evalúa true.
+enum ActivacionPasoV2 {
+  OBLIGATORIO
+  OPCIONAL
+  CONDICIONAL
+}
+
 enum ModoProductividadProceso {
   FIJA
   FORMULA
@@ -1245,6 +1255,17 @@ model ProcesoOperacion {
   rol                         RolProcesoOperacion?
   esOpcional                  Boolean                    @default(false)
   requiresProductoAdicionalId String?                    @db.Uuid
+  // ── Extensiones modelo universal (A.3) ─────────────────────────────
+  // Todas nullable para mantener compatibilidad con motores v1.
+  // Los motores v2 de Etapa B/C las consumirán cuando las rutas las declaren.
+  familiaV2                   String?                    // FK lógica a pasos/familias.ts (código)
+  leeDelTrabajoV2             Json?                      // string[] de variables del Job Context
+  leeDePasosV2                Json?                      // string[] de outputs de pasos previos
+  produceV2                   Json?                      // string[] de outputs canónicos emitidos
+  unidadProductivaV2          String?                    // 'cantidad', 'hojas', 'letras', 'modulosLED', etc.
+  activacionV2                ActivacionPasoV2?          // OBLIGATORIO | OPCIONAL | CONDICIONAL
+  condicionV2                 Json?                      // JsonLogic expression si activacionV2 = CONDICIONAL
+  // ───────────────────────────────────────────────────────────────────
   activo                      Boolean                    @default(true)
   createdAt                   DateTime                   @default(now())
   updatedAt                   DateTime                   @updatedAt
