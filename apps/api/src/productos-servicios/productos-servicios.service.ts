@@ -551,6 +551,119 @@ export class ProductosServiciosService {
     }));
   }
 
+  // ──────────────────────── C.7: Shadow logs dashboard ────────────────────────
+
+  async listShadowLogs(
+    auth: CurrentAuth,
+    filtros: {
+      motor: string | null;
+      productoId: string | null;
+      minDiffPct: number | null;
+      limit: number;
+    },
+  ) {
+    const where: Prisma.CotizacionShadowLogWhereInput = {
+      tenantId: auth.tenantId,
+      ...(filtros.motor ? { motorCodigo: filtros.motor } : {}),
+      ...(filtros.productoId ? { productoServicioId: filtros.productoId } : {}),
+      ...(filtros.minDiffPct != null ? { diffPct: { gte: filtros.minDiffPct } } : {}),
+    };
+    const logs = await this.prisma.cotizacionShadowLog.findMany({
+      where,
+      orderBy: [{ createdAt: 'desc' }],
+      take: filtros.limit,
+    });
+    // Enriquecer con nombre del producto (lookup simple, best-effort).
+    const productoIds = [...new Set(logs.map((l) => l.productoServicioId))];
+    const productos = productoIds.length
+      ? await this.prisma.productoServicio.findMany({
+          where: { tenantId: auth.tenantId, id: { in: productoIds } },
+          select: { id: true, nombre: true },
+        })
+      : [];
+    const nombreById = new Map(productos.map((p) => [p.id, p.nombre]));
+    return logs.map((log) => ({
+      id: log.id,
+      motorCodigo: log.motorCodigo,
+      productoServicioId: log.productoServicioId,
+      productoNombre: nombreById.get(log.productoServicioId) ?? null,
+      productoVarianteId: log.productoVarianteId,
+      inputHash: log.inputHash,
+      totalV1: Number(log.totalV1),
+      totalV2: Number(log.totalV2),
+      diffAbsoluto: Number(log.diffAbsoluto),
+      diffPct: log.diffPct,
+      createdAt: log.createdAt.toISOString(),
+    }));
+  }
+
+  async getShadowLogsSummary(auth: CurrentAuth) {
+    const total = await this.prisma.cotizacionShadowLog.count({
+      where: { tenantId: auth.tenantId },
+    });
+    if (total === 0) {
+      return { total: 0, porMotor: [], distribucionDiff: { cero: 0, bajo: 0, medio: 0, alto: 0 } };
+    }
+    const porMotor = await this.prisma.cotizacionShadowLog.groupBy({
+      by: ['motorCodigo'],
+      where: { tenantId: auth.tenantId },
+      _count: { _all: true },
+      _avg: { diffPct: true },
+      _max: { diffPct: true },
+    });
+    const logs = await this.prisma.cotizacionShadowLog.findMany({
+      where: { tenantId: auth.tenantId },
+      select: { diffPct: true },
+    });
+    const dist = { cero: 0, bajo: 0, medio: 0, alto: 0 };
+    for (const l of logs) {
+      const pct = Math.abs(l.diffPct);
+      if (pct < 0.01) dist.cero++;
+      else if (pct < 1) dist.bajo++;
+      else if (pct < 10) dist.medio++;
+      else dist.alto++;
+    }
+    return {
+      total,
+      porMotor: porMotor.map((m) => ({
+        motor: m.motorCodigo,
+        count: m._count._all,
+        diffPctPromedio: m._avg.diffPct ?? 0,
+        diffPctMax: m._max.diffPct ?? 0,
+      })),
+      distribucionDiff: dist,
+    };
+  }
+
+  async getShadowLogDetail(auth: CurrentAuth, id: string) {
+    const log = await this.prisma.cotizacionShadowLog.findFirst({
+      where: { id, tenantId: auth.tenantId },
+    });
+    if (!log) {
+      throw new BadRequestException(`ShadowLog ${id} no existe.`);
+    }
+    const producto = await this.prisma.productoServicio.findFirst({
+      where: { tenantId: auth.tenantId, id: log.productoServicioId },
+      select: { id: true, nombre: true, motorCodigo: true, motorVersion: true },
+    });
+    return {
+      id: log.id,
+      motorCodigo: log.motorCodigo,
+      productoServicioId: log.productoServicioId,
+      productoNombre: producto?.nombre ?? null,
+      productoVarianteId: log.productoVarianteId,
+      inputHash: log.inputHash,
+      totalV1: Number(log.totalV1),
+      totalV2: Number(log.totalV2),
+      diffAbsoluto: Number(log.diffAbsoluto),
+      diffPct: log.diffPct,
+      subtotalesV1: log.subtotalesV1,
+      subtotalesV2: log.subtotalesV2,
+      anomalias: log.anomalias,
+      createdAt: log.createdAt.toISOString(),
+    };
+  }
+
   getDigitalMotorDefinition() {
     return {
       ...ProductosServiciosService.DIGITAL_SHEET_MOTOR_DEFINITION,

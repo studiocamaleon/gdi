@@ -55,6 +55,36 @@ export class ProductosServiciosController {
     return this.service.getMotoresCosto();
   }
 
+  /**
+   * C.7 — Listado de CotizacionShadowLog para el dashboard de diffs v1 vs v2.
+   * Filtros opcionales: motorCodigo, productoServicioId, minDiffPct, limit (default 100).
+   */
+  @Get('shadow-logs')
+  getShadowLogs(
+    @CurrentSession() auth: CurrentAuth,
+    @Query('motor') motor?: string,
+    @Query('productoId') productoId?: string,
+    @Query('minDiffPct') minDiffPct?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.service.listShadowLogs(auth, {
+      motor: motor ?? null,
+      productoId: productoId ?? null,
+      minDiffPct: minDiffPct ? Number(minDiffPct) : null,
+      limit: limit ? Math.min(500, Math.max(1, Number(limit))) : 100,
+    });
+  }
+
+  @Get('shadow-logs/summary')
+  getShadowLogsSummary(@CurrentSession() auth: CurrentAuth) {
+    return this.service.getShadowLogsSummary(auth);
+  }
+
+  @Get('shadow-logs/:id')
+  getShadowLogDetail(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    return this.service.getShadowLogDetail(auth, id);
+  }
+
   @Get('adicionales')
   getAdicionales(@CurrentSession() auth: CurrentAuth) {
     return this.service.findAdicionalesCatalogo(auth);
