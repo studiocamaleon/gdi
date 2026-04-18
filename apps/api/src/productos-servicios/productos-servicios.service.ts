@@ -3599,23 +3599,24 @@ export class ProductosServiciosService {
       },
       orderBy: [{ versionConfig: 'desc' }],
     });
-    if (!v1) {
-      throw new BadRequestException(
-        `El producto ${productoId} no tiene ProductoMotorConfig activa para ${motorCodigo} (ni v1 ni v2).`,
-      );
-    }
+    // Seed parametrosJson: prioridad v1 existente → defaults del motor.
+    // Los defaults permiten que productos huérfanos (sin config ni v1) puedan
+    // cotizar con v2 usando valores razonables del esquema del motor.
+    const parametrosJson = v1
+      ? (v1.parametrosJson as Prisma.InputJsonValue)
+      : (this.resolveDefaultMotorConfig(motorCodigo) as Prisma.InputJsonValue);
     await this.prisma.productoMotorConfig.create({
       data: {
         tenantId: auth.tenantId,
         productoServicioId: productoId,
         motorCodigo,
         motorVersion: 2,
-        parametrosJson: v1.parametrosJson as Prisma.InputJsonValue,
+        parametrosJson,
         versionConfig: 1,
         activo: true,
       },
     });
-    return { parametrosJson: v1.parametrosJson };
+    return { parametrosJson: parametrosJson as Prisma.JsonValue };
   }
 
   async loadGranFormatoV2Runtime(auth: CurrentAuth, productoId: string) {
