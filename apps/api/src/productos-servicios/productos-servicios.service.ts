@@ -117,6 +117,7 @@ import { DEFAULT_RIGID_PRINTED_CONFIG } from './motors/rigid-printed.types';
 import { VinylCutMotorModule } from './motors/vinyl-cut.motor';
 import { WideFormatMotorModule } from './motors/wide-format.motor';
 import { WideFormatMotorModuleV2 } from './motors/wide-format-v2.motor';
+import { VinylCutMotorModuleV2 } from './motors/vinyl-cut-v2.motor';
 import { v1ToCanonical } from './adapters/v1-to-canonical';
 import { logShadowDiff } from './shadow/shadow-logger';
 import { nestOnRoll as nestOnRollExternal, type NestingRolloResult } from './nesting/nesting-rollo';
@@ -520,6 +521,7 @@ export class ProductosServiciosService {
       new WideFormatMotorModule(this),
       new WideFormatMotorModuleV2(this), // gran_formato@2 — piloto Etapa B
       new VinylCutMotorModule(this),
+      new VinylCutMotorModuleV2(this), // vinilo_de_corte@2 — Etapa C.3 piloto single-color
       new TalonarioMotorModule(this),
       new RigidPrintedMotorModule(this),
     ]);
@@ -3483,6 +3485,126 @@ export class ProductosServiciosService {
       producto,
       config,
       materiales,
+    };
+  }
+
+  /**
+   * Modelo universal (C.3): carga runtime para vinilo_de_corte@2 — config activa,
+   * variantes de material en rollo compatibles (con filtro opcional por color) y
+   * plotters de corte compatibles con sus perfiles operativos.
+   */
+  async loadVinylCutV2Runtime(
+    auth: CurrentAuth,
+    productoId: string,
+    colorFiltro?: string | null,
+  ) {
+    const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+    if (producto.motorCodigo !== 'vinilo_de_corte') {
+      throw new BadRequestException(
+        `El producto no usa motor vinilo_de_corte (usa ${producto.motorCodigo}).`,
+      );
+    }
+    const configRow = await this.prisma.productoMotorConfig.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        productoServicioId: productoId,
+        motorCodigo: 'vinilo_de_corte',
+        motorVersion: 2,
+        activo: true,
+      },
+      orderBy: [{ versionConfig: 'desc' }],
+    });
+    if (!configRow) {
+      throw new BadRequestException(
+        `El producto ${productoId} no tiene ProductoMotorConfig para vinilo_de_corte@2. Creá uno con los materiales y plotters compatibles.`,
+      );
+    }
+    const config = configRow.parametrosJson as Record<string, unknown>;
+    // vinyl_cut config distingue entre materialesCompatibles (MateriaPrima ids)
+    // y variantesCompatibles (MateriaPrimaVariante ids con ancho/color específicos).
+    // El motor v2 opera sobre variantes — aceptamos ambos, priorizando variantes.
+    const variantesIds = Array.isArray(config.variantesCompatibles)
+      ? (config.variantesCompatibles as string[])
+      : [];
+    const materialesIds = Array.isArray(config.materialesCompatibles)
+      ? (config.materialesCompatibles as string[])
+      : [];
+    if (variantesIds.length === 0 && materialesIds.length === 0) {
+      throw new BadRequestException(
+        'La config de vinilo_de_corte@2 no declara variantesCompatibles ni materialesCompatibles.',
+      );
+    }
+    const plotterIds = Array.isArray(config.plottersCompatibles)
+      ? (config.plottersCompatibles as string[])
+      : [];
+    if (plotterIds.length === 0) {
+      throw new BadRequestException(
+        'La config de vinilo_de_corte@2 no declara plottersCompatibles.',
+      );
+    }
+
+    const materialesRaw =
+      variantesIds.length > 0
+        ? await this.prisma.materiaPrimaVariante.findMany({
+            where: {
+              tenantId: auth.tenantId,
+              id: { in: variantesIds },
+              activo: true,
+            },
+            include: {
+              materiaPrima: { select: { id: true, nombre: true, subfamilia: true } },
+            },
+          })
+        : await this.prisma.materiaPrimaVariante.findMany({
+            where: {
+              tenantId: auth.tenantId,
+              materiaPrimaId: { in: materialesIds },
+              activo: true,
+            },
+            include: {
+              materiaPrima: { select: { id: true, nombre: true, subfamilia: true } },
+            },
+          });
+    const filtered = colorFiltro
+      ? materialesRaw.filter((v) => {
+          const attrs = (v.atributosVarianteJson ?? {}) as Record<string, unknown>;
+          const color = typeof attrs.color === 'string' ? attrs.color.trim().toLowerCase() : '';
+          return color === colorFiltro.trim().toLowerCase();
+        })
+      : materialesRaw;
+    const materiales = filtered.length > 0 ? filtered : materialesRaw;
+    if (materiales.length === 0) {
+      throw new BadRequestException(
+        'Ninguno de los materialesCompatibles existe o está activo.',
+      );
+    }
+
+    const plotters = await this.prisma.maquina.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        id: { in: plotterIds },
+        activo: true,
+        plantilla: PlantillaMaquinaria.PLOTTER_DE_CORTE,
+      },
+      include: {
+        perfilesOperativos: {
+          where: { activo: true },
+          orderBy: [{ nombre: 'asc' }],
+        },
+      },
+      orderBy: [{ nombre: 'asc' }],
+    });
+    if (plotters.length === 0) {
+      throw new BadRequestException(
+        'Ninguno de los plottersCompatibles existe o está activo.',
+      );
+    }
+
+    return {
+      producto,
+      config,
+      materiales,
+      plotters,
     };
   }
 
