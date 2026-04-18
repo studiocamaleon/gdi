@@ -5955,6 +5955,24 @@ export class ProductosServiciosService {
     ).quoteVariant(auth, variante.id, payload);
   }
 
+  /**
+   * Modelo universal (A.6): cotiza una variante y devuelve shape canónica.
+   *
+   * Flujo actual (Etapa A): delega en el motor v1 + aplica adapter v1→canonical.
+   * Cuando los motores v2 estén disponibles (Etapa B/C) el dispatcher elegirá
+   * v2 directo (sin adapter) para productos migrados; este método queda como
+   * entry point estable sin requerir cambio en clientes.
+   */
+  async cotizarVarianteV2(
+    auth: CurrentAuth,
+    varianteId: string,
+    payload: CotizarProductoVarianteDto,
+  ) {
+    const { v1ToCanonical } = await import('./adapters/v1-to-canonical.js');
+    const v1 = await this.cotizarVariante(auth, varianteId, payload);
+    return v1ToCanonical(v1 as never);
+  }
+
   async quoteDigitalVariant(
     auth: CurrentAuth,
     varianteId: string,

@@ -609,6 +609,22 @@ export class ProductosServiciosController {
     return this.service.cotizarVariante(auth, varianteId, payload);
   }
 
+  /**
+   * Modelo universal (A.6): endpoint alternativo que devuelve la cotización
+   * en la shape canónica del modelo universal. Hoy detrás llama al motor v1
+   * y adapta el resultado; en Etapa B/C se enchufarán motores v2 que emitan
+   * directo sin adapter. Los consumidores del nuevo shape ya pueden apuntar
+   * a este endpoint.
+   */
+  @Post('variantes/:varianteId/cotizar-v2')
+  cotizarVarianteV2(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('varianteId') varianteId: string,
+    @Body() payload: CotizarProductoVarianteDto,
+  ) {
+    return this.service.cotizarVarianteV2(auth, varianteId, payload);
+  }
+
   @Post('variantes/:varianteId/imposicion-preview')
   previewImposicionVariante(
     @CurrentSession() auth: CurrentAuth,
