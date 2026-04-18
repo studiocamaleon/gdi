@@ -204,7 +204,12 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
         const seleccionesBase = MOTORS_CON_CARAS_TIPO.has(motorCodigo)
           ? [
               { dimension: "caras" as const, valor: caras },
-              { dimension: "tipo_impresion" as const, valor: tipoImpresion },
+              // El DTO valida contra valores lowercase (enum ValorOpcionProductiva),
+              // pero la UI/motor usan 'CMYK'/'BN' para legibilidad.
+              {
+                dimension: "tipo_impresion" as const,
+                valor: tipoImpresion.toLowerCase() as "cmyk" | "bn",
+              },
             ]
           : undefined;
         const result = await cotizarProductoVarianteV2(
