@@ -1,0 +1,18 @@
+{
+  "description": "MDF Impreso 100x50cm, 3 piezas, flexible montado (vinilo sobre MDF) doble faz",
+  "method": "cotizarRigidPrintedByProducto",
+  "productoId": "14516e74-5d26-464f-9589-95225ccb6bb6",
+  "payload": {
+    "cantidad": 3,
+    "periodo": "2026-04",
+    "parametros": {
+      "tipoImpresion": "flexible_montado",
+      "caras": "doble_faz",
+      "anchoMm": 1000,
+      "altoMm": 500
+    },
+    "nivelesSeleccionados": [
+      { "operacionId": "e2945058-5e37-439e-b7c1-7dd25e6249ec", "nivelId": "103ac486-f1ba-4f46-ac43-e7562f13da53" }
+    ]
+  }
+}

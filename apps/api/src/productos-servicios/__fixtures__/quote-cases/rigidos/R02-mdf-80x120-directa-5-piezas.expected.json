@@ -1,0 +1,242 @@
+{
+  "productoServicioId": "14516e74-5d26-464f-9589-95225ccb6bb6",
+  "productoNombre": "MDF Impreso",
+  "varianteId": null,
+  "varianteNombre": "Medida libre",
+  "motorCodigo": "rigidos_impresos",
+  "motorVersion": 1,
+  "periodo": "2026-04",
+  "cantidad": 4.8,
+  "cantidadPiezas": 5,
+  "bloques": {
+    "procesos": [
+      {
+        "orden": 1,
+        "codigo": "OP-001",
+        "nombre": "Impresion Gran Formato: UV",
+        "centroCostoId": "7a6c6cd8-f7a3-4904-aeea-8e611e25f600",
+        "centroCostoNombre": "Impresion Laser",
+        "setupMin": 10,
+        "runMin": 10.67,
+        "totalMin": 20.67,
+        "tarifaHora": 4084.97,
+        "costo": 1407.27
+      },
+      {
+        "orden": 2,
+        "codigo": "OP-002",
+        "nombre": "Refilado de vinillos/lonas",
+        "centroCostoId": "04132714-0f74-4152-8006-af0203cb1062",
+        "centroCostoNombre": "Post-prensa",
+        "setupMin": 5,
+        "runMin": 20,
+        "totalMin": 25,
+        "tarifaHora": 17874.05,
+        "costo": 7447.52
+      }
+    ],
+    "materiales": [
+      {
+        "tipo": "Sustrato",
+        "nombre": "MDF",
+        "origen": "5× 80×120 cm",
+        "unidad": "m2",
+        "cantidad": 4.8,
+        "costoUnitario": 10077.94,
+        "costo": 48374.09
+      },
+      {
+        "tipo": "Sustrato",
+        "nombre": "MDF · Desperdicio",
+        "origen": "Desperdicio",
+        "unidad": "m2",
+        "cantidad": 0.08,
+        "costoUnitario": 10077.94,
+        "costo": 806.24
+      },
+      {
+        "tipo": "Tinta",
+        "nombre": "Tinta UV",
+        "origen": "Base",
+        "unidad": "ml",
+        "cantidad": 12,
+        "costoUnitario": 125,
+        "costo": 1500,
+        "variantChips": [
+          {
+            "label": "Color",
+            "value": "CIAN"
+          }
+        ]
+      },
+      {
+        "tipo": "Tinta",
+        "nombre": "Tinta UV",
+        "origen": "Base",
+        "unidad": "ml",
+        "cantidad": 12,
+        "costoUnitario": 125,
+        "costo": 1500,
+        "variantChips": [
+          {
+            "label": "Color",
+            "value": "MAGENTA"
+          }
+        ]
+      },
+      {
+        "tipo": "Tinta",
+        "nombre": "Tinta UV",
+        "origen": "Base",
+        "unidad": "ml",
+        "cantidad": 12,
+        "costoUnitario": 125,
+        "costo": 1500,
+        "variantChips": [
+          {
+            "label": "Color",
+            "value": "AMARILLO"
+          }
+        ]
+      },
+      {
+        "tipo": "Tinta",
+        "nombre": "Tinta UV",
+        "origen": "Base",
+        "unidad": "ml",
+        "cantidad": 12,
+        "costoUnitario": 125,
+        "costo": 1500,
+        "variantChips": [
+          {
+            "label": "Color",
+            "value": "NEGRO"
+          }
+        ]
+      }
+    ]
+  },
+  "subtotales": {
+    "procesos": 8854.79,
+    "material": 49180.33,
+    "flexible": 0,
+    "tinta": 6000,
+    "toner": 0,
+    "desgaste": 0,
+    "consumiblesTerminacion": 0,
+    "adicionalesMateriales": 0,
+    "adicionalesCostEffects": 0
+  },
+  "total": 64035.12,
+  "unitario": 13340.65,
+  "trazabilidad": {
+    "config": {
+      "tipoPlantilla": "rigidos_impresos",
+      "tiposImpresion": [
+        "flexible_montado",
+        "directa"
+      ],
+      "impresionDirecta": {
+        "perfilDefaultId": "2d013a97-cb59-4c98-a273-28ee6a8536d7",
+        "maquinaDefaultId": "ae862a5b-829d-4fd3-9c06-12aeabf5086d",
+        "maquinasCompatibles": [
+          "ae862a5b-829d-4fd3-9c06-12aeabf5086d"
+        ],
+        "perfilesCompatibles": [
+          "2d013a97-cb59-4c98-a273-28ee6a8536d7",
+          "77488dbf-8dd5-4c07-96c0-e8ca2518bcb5"
+        ]
+      },
+      "flexibleMontado": {
+        "perfilDefaultId": "2d013a97-cb59-4c98-a273-28ee6a8536d7",
+        "carasDisponibles": [
+          "simple_faz",
+          "doble_faz"
+        ],
+        "maquinaDefaultId": "ae862a5b-829d-4fd3-9c06-12aeabf5086d",
+        "maquinasCompatibles": [
+          "ae862a5b-829d-4fd3-9c06-12aeabf5086d"
+        ],
+        "perfilesCompatibles": [
+          "2d013a97-cb59-4c98-a273-28ee6a8536d7"
+        ],
+        "duplicarSustratoFlexibleEnDobleFaz": true
+      },
+      "rutaImpresionDirectaId": "52aa9142-4c31-4257-bfba-bf181c6dc1d7",
+      "rutaFlexibleMontadoId": "52aa9142-4c31-4257-bfba-bf181c6dc1d7",
+      "materialRigidoId": "4d5deff2-99a7-4966-b88e-24051f0ff625",
+      "variantesCompatibles": [
+        "d8073a52-8bbb-4d7d-ac1e-fa375f157e88",
+        "b347b7d5-0c14-4c01-b95a-9ccd1260d76f"
+      ],
+      "placaVarianteIdDefault": null,
+      "materialFlexibleId": "6d43ac4e-eafe-48b0-8eee-fea5c319f447",
+      "variantesFlexiblesCompatibles": [
+        "7b81c65e-e317-49e9-80e7-83e36f9789c7",
+        "ff94d258-60fd-4831-a93d-adf3f900483c",
+        "e5024a97-addf-4175-998a-2a42cd0b9677"
+      ],
+      "varianteFlexibleDefaultId": null,
+      "carasDisponibles": [
+        "simple_faz"
+      ],
+      "carasDefault": "simple_faz",
+      "modoMedidas": "libres",
+      "imposicion": {
+        "margenMaquina": {
+          "abajo": 10,
+          "arriba": 10,
+          "derecha": 10,
+          "izquierda": 10
+        },
+        "margenPlacaMm": 5,
+        "segmentosPlaca": [
+          25,
+          50,
+          75,
+          100
+        ],
+        "estrategiaCosteo": "largo_consumido",
+        "permitirRotacion": true,
+        "prioridadNesting": "independientes",
+        "separacionVerticalMm": 0,
+        "separacionHorizontalMm": 0
+      },
+      "tipoImpresion": "directa",
+      "caras": "simple_faz",
+      "anchoMm": 800,
+      "altoMm": 1200
+    },
+    "tipoImpresion": "directa",
+    "caras": "simple_faz",
+    "multiplicadorCaras": 1,
+    "estrategiaCosteo": "largo_consumido",
+    "costeoDetalle": {
+      "precioPlaca": 30000,
+      "precioM2": 10077.94,
+      "placasCompletas": 2,
+      "costoPlacasCompletas": 49180.33,
+      "ultimaPlaca": null
+    },
+    "resumenTecnico": {
+      "anchoMm": 800,
+      "altoMm": 1200,
+      "placaAnchoMm": 1220,
+      "placaAltoMm": 2440,
+      "piezasPorPlaca": 5,
+      "placasNecesarias": 2,
+      "aprovechamientoPct": 82.64,
+      "rotada": false,
+      "sobrantes": 0
+    },
+    "medidasDetalle": [
+      {
+        "anchoMm": 800,
+        "altoMm": 1200,
+        "cantidad": 5,
+        "m2": 4.8
+      }
+    ],
+    "flexibleNestingPreview": null
+  }
+}

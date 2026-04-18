@@ -1,0 +1,9 @@
+{
+  "description": "Vinilo de corte, 1 trabajo con 1 pieza 100x30cm, color único (default del motor config)",
+  "method": "cotizarVariante",
+  "varianteId": "2e653683-c08b-4093-8b69-1fb0b16e5668",
+  "payload": {
+    "cantidad": 1,
+    "periodo": "2026-04"
+  }
+}

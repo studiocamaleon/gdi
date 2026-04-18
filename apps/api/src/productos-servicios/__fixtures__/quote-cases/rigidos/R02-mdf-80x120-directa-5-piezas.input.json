@@ -1,0 +1,18 @@
+{
+  "description": "MDF Impreso 80x120cm, 5 piezas, impresión directa UV simple faz",
+  "method": "cotizarRigidPrintedByProducto",
+  "productoId": "14516e74-5d26-464f-9589-95225ccb6bb6",
+  "payload": {
+    "cantidad": 5,
+    "periodo": "2026-04",
+    "parametros": {
+      "tipoImpresion": "directa",
+      "caras": "simple_faz",
+      "anchoMm": 800,
+      "altoMm": 1200
+    },
+    "nivelesSeleccionados": [
+      { "operacionId": "e2945058-5e37-439e-b7c1-7dd25e6249ec", "nivelId": "623129a0-642a-48c4-8bb0-fcdda5b7573c" }
+    ]
+  }
+}

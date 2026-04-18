@@ -1,0 +1,25 @@
+{
+  "description": "Vinilo de corte con 2 colores distintos — logo corporativo",
+  "method": "cotizarVariante",
+  "varianteId": "2e653683-c08b-4093-8b69-1fb0b16e5668",
+  "payload": {
+    "cantidad": 1,
+    "periodo": "2026-04",
+    "parametros": {
+      "colores": [
+        {
+          "id": "color-1",
+          "label": "Blanco",
+          "medidas": [{ "anchoMm": 200, "altoMm": 150, "cantidad": 10 }],
+          "materialVarianteId": "048006eb-5773-4dfe-b981-b33115761530"
+        },
+        {
+          "id": "color-2",
+          "label": "Rojo",
+          "medidas": [{ "anchoMm": 150, "altoMm": 100, "cantidad": 10 }],
+          "materialVarianteId": "00d7f676-d8f7-4c32-8541-afa9e4a85447"
+        }
+      ]
+    }
+  }
+}

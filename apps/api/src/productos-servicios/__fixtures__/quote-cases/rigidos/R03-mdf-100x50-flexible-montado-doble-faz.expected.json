@@ -1,0 +1,403 @@
+{
+  "productoServicioId": "14516e74-5d26-464f-9589-95225ccb6bb6",
+  "productoNombre": "MDF Impreso",
+  "varianteId": null,
+  "varianteNombre": "Medida libre",
+  "motorCodigo": "rigidos_impresos",
+  "motorVersion": 1,
+  "periodo": "2026-04",
+  "cantidad": 1.5,
+  "cantidadPiezas": 3,
+  "bloques": {
+    "procesos": [
+      {
+        "orden": 1,
+        "codigo": "OP-001",
+        "nombre": "Impresion Gran Formato: UV",
+        "centroCostoId": "7a6c6cd8-f7a3-4904-aeea-8e611e25f600",
+        "centroCostoNombre": "Impresion Laser",
+        "setupMin": 10,
+        "runMin": 6.67,
+        "totalMin": 16.67,
+        "tarifaHora": 4084.97,
+        "costo": 1134.94
+      },
+      {
+        "orden": 2,
+        "codigo": "OP-002",
+        "nombre": "Refilado de vinillos/lonas",
+        "centroCostoId": "04132714-0f74-4152-8006-af0203cb1062",
+        "centroCostoNombre": "Post-prensa",
+        "setupMin": 5,
+        "runMin": 9,
+        "totalMin": 14,
+        "tarifaHora": 17874.05,
+        "costo": 4170.61
+      }
+    ],
+    "materiales": [
+      {
+        "tipo": "Sustrato",
+        "nombre": "MDF",
+        "origen": "3× 100×50 cm",
+        "unidad": "m2",
+        "cantidad": 1.5,
+        "costoUnitario": 10077.94,
+        "costo": 15116.9
+      },
+      {
+        "tipo": "Sustrato",
+        "nombre": "MDF · Desperdicio",
+        "origen": "Desperdicio",
+        "unidad": "m2",
+        "cantidad": 0.33,
+        "costoUnitario": 10077.94,
+        "costo": 3325.72
+      },
+      {
+        "tipo": "Sustrato flexible",
+        "nombre": "Vinilo Adhesivo Blanco (×2 caras)",
+        "origen": "Base",
+        "unidad": "m2",
+        "cantidad": 3,
+        "costoUnitario": 3128.33,
+        "costo": 9384.99
+      },
+      {
+        "tipo": "Sustrato flexible",
+        "nombre": "Vinilo Adhesivo Blanco · Desperdicio",
+        "origen": "Desperdicio",
+        "unidad": "m2",
+        "cantidad": 0.5,
+        "costoUnitario": 3128.33,
+        "costo": 1551.65
+      },
+      {
+        "tipo": "Tinta",
+        "nombre": "Tinta UV",
+        "origen": "Base",
+        "unidad": "ml",
+        "cantidad": 7.5,
+        "costoUnitario": 125,
+        "costo": 937.5,
+        "variantChips": [
+          {
+            "label": "Color",
+            "value": "CIAN"
+          }
+        ]
+      },
+      {
+        "tipo": "Tinta",
+        "nombre": "Tinta UV",
+        "origen": "Base",
+        "unidad": "ml",
+        "cantidad": 7.5,
+        "costoUnitario": 125,
+        "costo": 937.5,
+        "variantChips": [
+          {
+            "label": "Color",
+            "value": "MAGENTA"
+          }
+        ]
+      },
+      {
+        "tipo": "Tinta",
+        "nombre": "Tinta UV",
+        "origen": "Base",
+        "unidad": "ml",
+        "cantidad": 7.5,
+        "costoUnitario": 125,
+        "costo": 937.5,
+        "variantChips": [
+          {
+            "label": "Color",
+            "value": "AMARILLO"
+          }
+        ]
+      },
+      {
+        "tipo": "Tinta",
+        "nombre": "Tinta UV",
+        "origen": "Base",
+        "unidad": "ml",
+        "cantidad": 7.5,
+        "costoUnitario": 125,
+        "costo": 937.5,
+        "variantChips": [
+          {
+            "label": "Color",
+            "value": "NEGRO"
+          }
+        ]
+      }
+    ]
+  },
+  "subtotales": {
+    "procesos": 5305.55,
+    "material": 18442.62,
+    "flexible": 10936.64,
+    "tinta": 3750,
+    "toner": 0,
+    "desgaste": 0,
+    "consumiblesTerminacion": 0,
+    "adicionalesMateriales": 0,
+    "adicionalesCostEffects": 0
+  },
+  "total": 38434.81,
+  "unitario": 25623.21,
+  "trazabilidad": {
+    "config": {
+      "tipoPlantilla": "rigidos_impresos",
+      "tiposImpresion": [
+        "flexible_montado",
+        "directa"
+      ],
+      "impresionDirecta": {
+        "perfilDefaultId": "2d013a97-cb59-4c98-a273-28ee6a8536d7",
+        "maquinaDefaultId": "ae862a5b-829d-4fd3-9c06-12aeabf5086d",
+        "maquinasCompatibles": [
+          "ae862a5b-829d-4fd3-9c06-12aeabf5086d"
+        ],
+        "perfilesCompatibles": [
+          "2d013a97-cb59-4c98-a273-28ee6a8536d7",
+          "77488dbf-8dd5-4c07-96c0-e8ca2518bcb5"
+        ]
+      },
+      "flexibleMontado": {
+        "perfilDefaultId": "2d013a97-cb59-4c98-a273-28ee6a8536d7",
+        "carasDisponibles": [
+          "simple_faz",
+          "doble_faz"
+        ],
+        "maquinaDefaultId": "ae862a5b-829d-4fd3-9c06-12aeabf5086d",
+        "maquinasCompatibles": [
+          "ae862a5b-829d-4fd3-9c06-12aeabf5086d"
+        ],
+        "perfilesCompatibles": [
+          "2d013a97-cb59-4c98-a273-28ee6a8536d7"
+        ],
+        "duplicarSustratoFlexibleEnDobleFaz": true
+      },
+      "rutaImpresionDirectaId": "52aa9142-4c31-4257-bfba-bf181c6dc1d7",
+      "rutaFlexibleMontadoId": "52aa9142-4c31-4257-bfba-bf181c6dc1d7",
+      "materialRigidoId": "4d5deff2-99a7-4966-b88e-24051f0ff625",
+      "variantesCompatibles": [
+        "d8073a52-8bbb-4d7d-ac1e-fa375f157e88",
+        "b347b7d5-0c14-4c01-b95a-9ccd1260d76f"
+      ],
+      "placaVarianteIdDefault": null,
+      "materialFlexibleId": "6d43ac4e-eafe-48b0-8eee-fea5c319f447",
+      "variantesFlexiblesCompatibles": [
+        "7b81c65e-e317-49e9-80e7-83e36f9789c7",
+        "ff94d258-60fd-4831-a93d-adf3f900483c",
+        "e5024a97-addf-4175-998a-2a42cd0b9677"
+      ],
+      "varianteFlexibleDefaultId": null,
+      "carasDisponibles": [
+        "simple_faz"
+      ],
+      "carasDefault": "simple_faz",
+      "modoMedidas": "libres",
+      "imposicion": {
+        "margenMaquina": {
+          "abajo": 10,
+          "arriba": 10,
+          "derecha": 10,
+          "izquierda": 10
+        },
+        "margenPlacaMm": 5,
+        "segmentosPlaca": [
+          25,
+          50,
+          75,
+          100
+        ],
+        "estrategiaCosteo": "largo_consumido",
+        "permitirRotacion": true,
+        "prioridadNesting": "independientes",
+        "separacionVerticalMm": 0,
+        "separacionHorizontalMm": 0
+      },
+      "tipoImpresion": "flexible_montado",
+      "caras": "doble_faz",
+      "anchoMm": 1000,
+      "altoMm": 500
+    },
+    "tipoImpresion": "flexible_montado",
+    "caras": "doble_faz",
+    "multiplicadorCaras": 2,
+    "estrategiaCosteo": "largo_consumido",
+    "costeoDetalle": {
+      "precioPlaca": 30000,
+      "precioM2": 10077.94,
+      "placasCompletas": 1,
+      "costoPlacasCompletas": 18442.62,
+      "ultimaPlaca": null
+    },
+    "resumenTecnico": {
+      "anchoMm": 1000,
+      "altoMm": 500,
+      "placaAnchoMm": 1220,
+      "placaAltoMm": 2440,
+      "piezasPorPlaca": 3,
+      "placasNecesarias": 1,
+      "aprovechamientoPct": 51.65,
+      "rotada": false,
+      "sobrantes": 0
+    },
+    "medidasDetalle": [
+      {
+        "anchoMm": 1000,
+        "altoMm": 500,
+        "cantidad": 3,
+        "m2": 1.5
+      }
+    ],
+    "flexibleNestingPreview": {
+      "rollWidth": 152,
+      "rollLength": 230,
+      "marginLeft": 1,
+      "marginRight": 1,
+      "marginStart": 15,
+      "marginEnd": 15,
+      "panelizado": false,
+      "panelAxis": null,
+      "panelCount": 1,
+      "panelOverlap": null,
+      "panelMaxWidth": null,
+      "panelDistribution": null,
+      "panelWidthInterpretation": null,
+      "panelMode": null,
+      "pieces": [
+        {
+          "id": "piece-0-0",
+          "w": 50,
+          "h": 100,
+          "originalW": 100,
+          "originalH": 50,
+          "usefulW": 100,
+          "usefulH": 50,
+          "cx": -50,
+          "cy": 65,
+          "color": "#ff9f43",
+          "label": "Pieza A",
+          "textColor": "#111111",
+          "rotated": true,
+          "panelIndex": null,
+          "panelCount": null,
+          "panelAxis": null,
+          "sourcePieceId": "piece-0-0",
+          "overlapStart": 0,
+          "overlapEnd": 0
+        },
+        {
+          "id": "piece-0-1",
+          "w": 50,
+          "h": 100,
+          "originalW": 100,
+          "originalH": 50,
+          "usefulW": 100,
+          "usefulH": 50,
+          "cx": 0,
+          "cy": 65,
+          "color": "#0abde3",
+          "label": "Pieza B",
+          "textColor": "#111111",
+          "rotated": true,
+          "panelIndex": null,
+          "panelCount": null,
+          "panelAxis": null,
+          "sourcePieceId": "piece-0-1",
+          "overlapStart": 0,
+          "overlapEnd": 0
+        },
+        {
+          "id": "piece-0-2",
+          "w": 50,
+          "h": 100,
+          "originalW": 100,
+          "originalH": 50,
+          "usefulW": 100,
+          "usefulH": 50,
+          "cx": 50,
+          "cy": 65,
+          "color": "#1dd1a1",
+          "label": "Pieza C",
+          "textColor": "#111111",
+          "rotated": true,
+          "panelIndex": null,
+          "panelCount": null,
+          "panelAxis": null,
+          "sourcePieceId": "piece-0-2",
+          "overlapStart": 0,
+          "overlapEnd": 0
+        },
+        {
+          "id": "piece-0-3",
+          "w": 50,
+          "h": 100,
+          "originalW": 100,
+          "originalH": 50,
+          "usefulW": 100,
+          "usefulH": 50,
+          "cx": -50,
+          "cy": 165,
+          "color": "#ff6b6b",
+          "label": "Pieza D",
+          "textColor": "#111111",
+          "rotated": true,
+          "panelIndex": null,
+          "panelCount": null,
+          "panelAxis": null,
+          "sourcePieceId": "piece-0-3",
+          "overlapStart": 0,
+          "overlapEnd": 0
+        },
+        {
+          "id": "piece-0-4",
+          "w": 50,
+          "h": 100,
+          "originalW": 100,
+          "originalH": 50,
+          "usefulW": 100,
+          "usefulH": 50,
+          "cx": 0,
+          "cy": 165,
+          "color": "#f97316",
+          "label": "Pieza E",
+          "textColor": "#111111",
+          "rotated": true,
+          "panelIndex": null,
+          "panelCount": null,
+          "panelAxis": null,
+          "sourcePieceId": "piece-0-4",
+          "overlapStart": 0,
+          "overlapEnd": 0
+        },
+        {
+          "id": "piece-0-5",
+          "w": 50,
+          "h": 100,
+          "originalW": 100,
+          "originalH": 50,
+          "usefulW": 100,
+          "usefulH": 50,
+          "cx": 50,
+          "cy": 165,
+          "color": "#22c55e",
+          "label": "Pieza F",
+          "textColor": "#111111",
+          "rotated": true,
+          "panelIndex": null,
+          "panelCount": null,
+          "panelAxis": null,
+          "sourcePieceId": "piece-0-5",
+          "overlapStart": 0,
+          "overlapEnd": 0
+        }
+      ]
+    }
+  }
+}

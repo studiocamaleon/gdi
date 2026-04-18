@@ -1,0 +1,19 @@
+{
+  "description": "Vinilo de corte 150x60cm, 2 piezas, color único — cartel vidriera",
+  "method": "cotizarVariante",
+  "varianteId": "2e653683-c08b-4093-8b69-1fb0b16e5668",
+  "payload": {
+    "cantidad": 1,
+    "periodo": "2026-04",
+    "parametros": {
+      "colores": [
+        {
+          "id": "color-1",
+          "label": "Negro",
+          "medidas": [{ "anchoMm": 1500, "altoMm": 600, "cantidad": 2 }],
+          "materialVarianteId": "048006eb-5773-4dfe-b981-b33115761530"
+        }
+      ]
+    }
+  }
+}

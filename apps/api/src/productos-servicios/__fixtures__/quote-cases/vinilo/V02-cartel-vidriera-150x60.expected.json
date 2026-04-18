@@ -1,0 +1,484 @@
+{
+  "varianteId": "2e653683-c08b-4093-8b69-1fb0b16e5668",
+  "productoServicioId": "43d7d1cd-f4e5-4a4c-b9ab-ef11a0b7a2e8",
+  "productoNombre": "Vinilo de corte",
+  "varianteNombre": "Genérico (variante fixture)",
+  "motorCodigo": "vinilo_de_corte",
+  "motorVersion": 1,
+  "periodo": "2026-04",
+  "cantidad": 1,
+  "piezasPorPliego": 2,
+  "pliegos": 1,
+  "warnings": [],
+  "bloques": {
+    "procesos": [
+      {
+        "orden": 1,
+        "codigo": "OP-001",
+        "nombre": "Medio corte con plotter",
+        "centroCostoId": "04132714-0f74-4152-8006-af0203cb1062",
+        "centroCostoNombre": "Post-prensa",
+        "origen": "Producto base",
+        "addonId": null,
+        "detalleTecnico": {
+          "maquina": "Skycut",
+          "perfilOperativo": "Medio corte",
+          "cantidadObjetivoSalida": 1.8
+        },
+        "setupMin": 0,
+        "runMin": 7.92,
+        "cleanupMin": 0,
+        "tiempoFijoMin": 0,
+        "totalMin": 7.92,
+        "tarifaHora": 17874.05,
+        "costo": 2359.37
+      }
+    ],
+    "materiales": [
+      {
+        "tipo": "VINILO",
+        "nombre": "Vinilo de corte",
+        "sku": "MPV-66741E47",
+        "variantChips": [
+          {
+            "label": "Acabado",
+            "value": "Brillante"
+          },
+          {
+            "label": "Color",
+            "value": "BLANCO"
+          },
+          {
+            "label": "Medida",
+            "value": "0.63 m × 3 m"
+          }
+        ],
+        "cantidad": 3,
+        "costoUnitario": 4000,
+        "costo": 12000,
+        "origen": "Base",
+        "unidad": "metro_lineal",
+        "colorId": "color-1",
+        "colorLabel": "Negro"
+      },
+      {
+        "tipo": "VINILO",
+        "nombre": "Vinilo de corte · Desperdicio",
+        "sku": "MPV-66741E47",
+        "variantChips": [
+          {
+            "label": "Acabado",
+            "value": "Brillante"
+          },
+          {
+            "label": "Color",
+            "value": "BLANCO"
+          },
+          {
+            "label": "Medida",
+            "value": "0.63 m × 0.03 m"
+          }
+        ],
+        "cantidad": 0.03,
+        "costoUnitario": 4000,
+        "costo": 120,
+        "origen": "Desperdicio",
+        "unidad": "metro_lineal",
+        "colorId": "color-1",
+        "colorLabel": "Negro"
+      }
+    ]
+  },
+  "subtotales": {
+    "procesos": 2359.37,
+    "papel": 12120,
+    "toner": 0,
+    "desgaste": 0,
+    "consumiblesTerminacion": 0,
+    "adicionalesMateriales": 0,
+    "adicionalesCostEffects": 0
+  },
+  "total": 14479.37,
+  "unitario": 4778.67,
+  "trazabilidad": {
+    "config": {
+      "tipoPlantilla": "vinilo_de_corte",
+      "criterioSeleccionMaterial": "menor_largo_consumido",
+      "plottersCompatibles": [
+        "6151db1b-e052-4276-9325-a5c48c33f0c9"
+      ],
+      "perfilesCompatibles": [
+        "241bab12-c43f-44ab-aae3-e7deb4a60d25",
+        "c8171ad9-7600-4e34-9141-0453f268915c"
+      ],
+      "materialesCompatibles": [
+        "12030480-1ae5-40d8-93eb-09abf792d73c"
+      ],
+      "materialBaseId": null,
+      "maquinaDefaultId": "6151db1b-e052-4276-9325-a5c48c33f0c9",
+      "perfilDefaultId": "c8171ad9-7600-4e34-9141-0453f268915c",
+      "permitirRotacion": true,
+      "separacionHorizontalMm": 10,
+      "separacionVerticalMm": 10,
+      "materialOverrideId": null,
+      "colores": [
+        {
+          "id": "color-1",
+          "label": "Negro",
+          "medidas": [
+            {
+              "anchoMm": 1500,
+              "altoMm": 600,
+              "cantidad": 2
+            }
+          ],
+          "materialVarianteId": "048006eb-5773-4dfe-b981-b33115761530"
+        }
+      ],
+      "variantesCompatibles": [
+        "048006eb-5773-4dfe-b981-b33115761530",
+        "00d7f676-d8f7-4c32-8541-afa9e4a85447"
+      ]
+    },
+    "configVersionBase": 9,
+    "configVersionOverride": null,
+    "resumenTecnico": {
+      "variantId": "048006eb-5773-4dfe-b981-b33115761530",
+      "rollWidthMm": 630,
+      "printableWidthMm": 620,
+      "marginLeftMm": 5,
+      "marginRightMm": 5,
+      "marginStartMm": 10,
+      "marginEndMm": 10,
+      "orientacion": "rotada",
+      "panelizado": false,
+      "panelAxis": null,
+      "panelCount": 1,
+      "panelOverlapMm": null,
+      "panelMaxWidthMm": null,
+      "panelDistribution": null,
+      "panelWidthInterpretation": null,
+      "panelMode": null,
+      "piecesPerRow": 1,
+      "rows": 2,
+      "consumedLengthMm": 3030,
+      "usefulAreaM2": 1.8,
+      "consumedAreaM2": 1.91,
+      "wasteAreaM2": 0.11,
+      "wastePct": 5.7,
+      "substrateCost": 12120,
+      "inkCost": 0,
+      "timeCost": 2359.37,
+      "totalCost": 14479.37,
+      "placements": [
+        {
+          "id": "piece-0-0",
+          "widthMm": 600,
+          "heightMm": 1500,
+          "usefulWidthMm": 1500,
+          "usefulHeightMm": 600,
+          "overlapStartMm": 0,
+          "overlapEndMm": 0,
+          "centerXMm": 305,
+          "centerYMm": 760,
+          "label": "150x60 cm",
+          "rotated": true,
+          "originalWidthMm": 1500,
+          "originalHeightMm": 600,
+          "panelIndex": null,
+          "panelCount": null,
+          "panelAxis": null,
+          "sourcePieceId": "piece-0-0"
+        },
+        {
+          "id": "piece-0-1",
+          "widthMm": 600,
+          "heightMm": 1500,
+          "usefulWidthMm": 1500,
+          "usefulHeightMm": 600,
+          "overlapStartMm": 0,
+          "overlapEndMm": 0,
+          "centerXMm": 305,
+          "centerYMm": 2270,
+          "label": "150x60 cm",
+          "rotated": true,
+          "originalWidthMm": 1500,
+          "originalHeightMm": 600,
+          "panelIndex": null,
+          "panelCount": null,
+          "panelAxis": null,
+          "sourcePieceId": "piece-0-1"
+        }
+      ],
+      "cantidadTrabajos": 1,
+      "totalPiezas": 2,
+      "unidadComercial": "metro_lineal",
+      "largoConsumidoMl": 3.03,
+      "areaConsumidaM2": 1.91
+    },
+    "nestingPreview": {
+      "rollWidth": 63,
+      "rollLength": 303,
+      "marginLeft": 0.5,
+      "marginRight": 0.5,
+      "marginStart": 1,
+      "marginEnd": 1,
+      "panelizado": false,
+      "panelAxis": null,
+      "panelCount": 1,
+      "panelOverlap": null,
+      "panelMaxWidth": null,
+      "panelDistribution": null,
+      "panelWidthInterpretation": null,
+      "panelMode": null,
+      "pieces": [
+        {
+          "id": "piece-0-0",
+          "w": 60,
+          "h": 150,
+          "originalW": 150,
+          "originalH": 60,
+          "usefulW": 150,
+          "usefulH": 60,
+          "cx": -1,
+          "cy": 76,
+          "color": "#ff9f43",
+          "label": "Pieza A",
+          "textColor": "#111111",
+          "rotated": true,
+          "panelIndex": null,
+          "panelCount": null,
+          "panelAxis": null,
+          "sourcePieceId": "piece-0-0",
+          "overlapStart": 0,
+          "overlapEnd": 0
+        },
+        {
+          "id": "piece-0-1",
+          "w": 60,
+          "h": 150,
+          "originalW": 150,
+          "originalH": 60,
+          "usefulW": 150,
+          "usefulH": 60,
+          "cx": -1,
+          "cy": 227,
+          "color": "#0abde3",
+          "label": "Pieza B",
+          "textColor": "#111111",
+          "rotated": true,
+          "panelIndex": null,
+          "panelCount": null,
+          "panelAxis": null,
+          "sourcePieceId": "piece-0-1",
+          "overlapStart": 0,
+          "overlapEnd": 0
+        }
+      ],
+      "separacionHorizontalCm": 1,
+      "separacionVerticalCm": 1
+    },
+    "coloresResumen": [
+      {
+        "colorId": "color-1",
+        "colorLabel": "Negro",
+        "materialVarianteId": "048006eb-5773-4dfe-b981-b33115761530",
+        "nestingPreview": {
+          "rollWidth": 63,
+          "rollLength": 303,
+          "marginLeft": 0.5,
+          "marginRight": 0.5,
+          "marginStart": 1,
+          "marginEnd": 1,
+          "panelizado": false,
+          "panelAxis": null,
+          "panelCount": 1,
+          "panelOverlap": null,
+          "panelMaxWidth": null,
+          "panelDistribution": null,
+          "panelWidthInterpretation": null,
+          "panelMode": null,
+          "pieces": [
+            {
+              "id": "piece-0-0",
+              "w": 60,
+              "h": 150,
+              "originalW": 150,
+              "originalH": 60,
+              "usefulW": 150,
+              "usefulH": 60,
+              "cx": -1,
+              "cy": 76,
+              "color": "#ff9f43",
+              "label": "Pieza A",
+              "textColor": "#111111",
+              "rotated": true,
+              "panelIndex": null,
+              "panelCount": null,
+              "panelAxis": null,
+              "sourcePieceId": "piece-0-0",
+              "overlapStart": 0,
+              "overlapEnd": 0
+            },
+            {
+              "id": "piece-0-1",
+              "w": 60,
+              "h": 150,
+              "originalW": 150,
+              "originalH": 60,
+              "usefulW": 150,
+              "usefulH": 60,
+              "cx": -1,
+              "cy": 227,
+              "color": "#0abde3",
+              "label": "Pieza B",
+              "textColor": "#111111",
+              "rotated": true,
+              "panelIndex": null,
+              "panelCount": null,
+              "panelAxis": null,
+              "sourcePieceId": "piece-0-1",
+              "overlapStart": 0,
+              "overlapEnd": 0
+            }
+          ],
+          "separacionHorizontalCm": 1,
+          "separacionVerticalCm": 1
+        },
+        "resumenTecnico": {
+          "variantId": "048006eb-5773-4dfe-b981-b33115761530",
+          "rollWidthMm": 630,
+          "printableWidthMm": 620,
+          "marginLeftMm": 5,
+          "marginRightMm": 5,
+          "marginStartMm": 10,
+          "marginEndMm": 10,
+          "orientacion": "rotada",
+          "panelizado": false,
+          "panelAxis": null,
+          "panelCount": 1,
+          "panelOverlapMm": null,
+          "panelMaxWidthMm": null,
+          "panelDistribution": null,
+          "panelWidthInterpretation": null,
+          "panelMode": null,
+          "piecesPerRow": 1,
+          "rows": 2,
+          "consumedLengthMm": 3030,
+          "usefulAreaM2": 1.8,
+          "consumedAreaM2": 1.91,
+          "wasteAreaM2": 0.11,
+          "wastePct": 5.7,
+          "substrateCost": 12120,
+          "inkCost": 0,
+          "timeCost": 2359.37,
+          "totalCost": 14479.37,
+          "placements": [
+            {
+              "id": "piece-0-0",
+              "widthMm": 600,
+              "heightMm": 1500,
+              "usefulWidthMm": 1500,
+              "usefulHeightMm": 600,
+              "overlapStartMm": 0,
+              "overlapEndMm": 0,
+              "centerXMm": 305,
+              "centerYMm": 760,
+              "label": "150x60 cm",
+              "rotated": true,
+              "originalWidthMm": 1500,
+              "originalHeightMm": 600,
+              "panelIndex": null,
+              "panelCount": null,
+              "panelAxis": null,
+              "sourcePieceId": "piece-0-0"
+            },
+            {
+              "id": "piece-0-1",
+              "widthMm": 600,
+              "heightMm": 1500,
+              "usefulWidthMm": 1500,
+              "usefulHeightMm": 600,
+              "overlapStartMm": 0,
+              "overlapEndMm": 0,
+              "centerXMm": 305,
+              "centerYMm": 2270,
+              "label": "150x60 cm",
+              "rotated": true,
+              "originalWidthMm": 1500,
+              "originalHeightMm": 600,
+              "panelIndex": null,
+              "panelCount": null,
+              "panelAxis": null,
+              "sourcePieceId": "piece-0-1"
+            }
+          ],
+          "cantidadTrabajos": 1,
+          "totalPiezas": 2,
+          "unidadComercial": "metro_lineal",
+          "largoConsumidoMl": 3.03,
+          "areaConsumidaM2": 1.91
+        },
+        "totales": {
+          "materiales": 12120,
+          "centrosCosto": 2359.37,
+          "tecnico": 14479.37
+        },
+        "materiasPrimas": [
+          {
+            "tipo": "VINILO",
+            "nombre": "Vinilo de corte",
+            "sku": "MPV-66741E47",
+            "variantChips": [
+              {
+                "label": "Acabado",
+                "value": "Brillante"
+              },
+              {
+                "label": "Color",
+                "value": "BLANCO"
+              },
+              {
+                "label": "Medida",
+                "value": "0.63 m × 3 m"
+              }
+            ],
+            "cantidad": 3,
+            "costoUnitario": 4000,
+            "costo": 12000,
+            "origen": "Base",
+            "unidad": "metro_lineal",
+            "colorId": "color-1",
+            "colorLabel": "Negro"
+          },
+          {
+            "tipo": "VINILO",
+            "nombre": "Vinilo de corte · Desperdicio",
+            "sku": "MPV-66741E47",
+            "variantChips": [
+              {
+                "label": "Acabado",
+                "value": "Brillante"
+              },
+              {
+                "label": "Color",
+                "value": "BLANCO"
+              },
+              {
+                "label": "Medida",
+                "value": "0.63 m × 0.03 m"
+              }
+            ],
+            "cantidad": 0.03,
+            "costoUnitario": 4000,
+            "costo": 120,
+            "origen": "Desperdicio",
+            "unidad": "metro_lineal",
+            "colorId": "color-1",
+            "colorLabel": "Negro"
+          }
+        ]
+      }
+    ]
+  }
+}

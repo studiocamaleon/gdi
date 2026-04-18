@@ -1,0 +1,18 @@
+{
+  "description": "MDF Impreso 60x40cm, 1 pieza, impresión directa UV, simple faz",
+  "method": "cotizarRigidPrintedByProducto",
+  "productoId": "14516e74-5d26-464f-9589-95225ccb6bb6",
+  "payload": {
+    "cantidad": 1,
+    "periodo": "2026-04",
+    "parametros": {
+      "tipoImpresion": "directa",
+      "caras": "simple_faz",
+      "anchoMm": 600,
+      "altoMm": 400
+    },
+    "nivelesSeleccionados": [
+      { "operacionId": "e2945058-5e37-439e-b7c1-7dd25e6249ec", "nivelId": "623129a0-642a-48c4-8bb0-fcdda5b7573c" }
+    ]
+  }
+}

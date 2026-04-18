@@ -1,0 +1,19 @@
+{
+  "description": "Vinilo de corte 8x5cm, 50 piezas, color único — stickers promocionales",
+  "method": "cotizarVariante",
+  "varianteId": "2e653683-c08b-4093-8b69-1fb0b16e5668",
+  "payload": {
+    "cantidad": 1,
+    "periodo": "2026-04",
+    "parametros": {
+      "colores": [
+        {
+          "id": "color-1",
+          "label": "Color único",
+          "medidas": [{ "anchoMm": 80, "altoMm": 50, "cantidad": 50 }],
+          "materialVarianteId": "048006eb-5773-4dfe-b981-b33115761530"
+        }
+      ]
+    }
+  }
+}
