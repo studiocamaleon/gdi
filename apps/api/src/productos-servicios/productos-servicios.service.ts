@@ -3560,27 +3560,71 @@ export class ProductosServiciosService {
     return this.findVarianteCompletaOrThrow(auth, varianteId, this.prisma);
   }
 
-  async loadGranFormatoV2Runtime(auth: CurrentAuth, productoId: string) {
-    const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
-    if (producto.motorCodigo !== 'gran_formato') {
-      throw new BadRequestException(`El producto no usa motor gran_formato (usa ${producto.motorCodigo}).`);
-    }
-    const configRow = await this.prisma.productoMotorConfig.findFirst({
+  /**
+   * Obtiene la config v2 de un producto/motor. Si no existe, la auto-crea
+   * copiando la parametrosJson de la v1 activa más reciente — esto permite
+   * que el tab "Simular costo (v2)" funcione sobre cualquier producto
+   * (con `?mode=v2`) sin requerir seed manual por producto.
+   *
+   * Racional: el v2 piloto usa el mismo schema de parámetros que el v1
+   * (tamanoPliegoImpresion, materialesCompatibles, etc.), así que la
+   * config es directamente reutilizable. Si en el futuro v2 introduce
+   * campos nuevos, los defaults internos del motor los cubren.
+   */
+  private async ensureV2ConfigFromV1(
+    auth: CurrentAuth,
+    productoId: string,
+    motorCodigo: string,
+  ): Promise<{ parametrosJson: Prisma.JsonValue }> {
+    const existing = await this.prisma.productoMotorConfig.findFirst({
       where: {
         tenantId: auth.tenantId,
         productoServicioId: productoId,
-        motorCodigo: 'gran_formato',
+        motorCodigo,
         motorVersion: 2,
         activo: true,
       },
       orderBy: [{ versionConfig: 'desc' }],
     });
-    if (!configRow) {
+    if (existing) {
+      return { parametrosJson: existing.parametrosJson };
+    }
+    const v1 = await this.prisma.productoMotorConfig.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        productoServicioId: productoId,
+        motorCodigo,
+        motorVersion: 1,
+        activo: true,
+      },
+      orderBy: [{ versionConfig: 'desc' }],
+    });
+    if (!v1) {
       throw new BadRequestException(
-        `El producto ${productoId} no tiene ProductoMotorConfig para gran_formato@2. Creá uno con los materiales y la máquina compatibles.`,
+        `El producto ${productoId} no tiene ProductoMotorConfig activa para ${motorCodigo} (ni v1 ni v2).`,
       );
     }
-    const config = configRow.parametrosJson as Record<string, unknown>;
+    await this.prisma.productoMotorConfig.create({
+      data: {
+        tenantId: auth.tenantId,
+        productoServicioId: productoId,
+        motorCodigo,
+        motorVersion: 2,
+        parametrosJson: v1.parametrosJson as Prisma.InputJsonValue,
+        versionConfig: 1,
+        activo: true,
+      },
+    });
+    return { parametrosJson: v1.parametrosJson };
+  }
+
+  async loadGranFormatoV2Runtime(auth: CurrentAuth, productoId: string) {
+    const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+    if (producto.motorCodigo !== 'gran_formato') {
+      throw new BadRequestException(`El producto no usa motor gran_formato (usa ${producto.motorCodigo}).`);
+    }
+    const { parametrosJson } = await this.ensureV2ConfigFromV1(auth, productoId, 'gran_formato');
+    const config = parametrosJson as Record<string, unknown>;
     const materialesIds = Array.isArray(config.materialesCompatibles)
       ? (config.materialesCompatibles as string[])
       : [];
@@ -3623,22 +3667,8 @@ export class ProductosServiciosService {
         `El producto no usa motor vinilo_de_corte (usa ${producto.motorCodigo}).`,
       );
     }
-    const configRow = await this.prisma.productoMotorConfig.findFirst({
-      where: {
-        tenantId: auth.tenantId,
-        productoServicioId: productoId,
-        motorCodigo: 'vinilo_de_corte',
-        motorVersion: 2,
-        activo: true,
-      },
-      orderBy: [{ versionConfig: 'desc' }],
-    });
-    if (!configRow) {
-      throw new BadRequestException(
-        `El producto ${productoId} no tiene ProductoMotorConfig para vinilo_de_corte@2. Creá uno con los materiales y plotters compatibles.`,
-      );
-    }
-    const config = configRow.parametrosJson as Record<string, unknown>;
+    const { parametrosJson } = await this.ensureV2ConfigFromV1(auth, productoId, 'vinilo_de_corte');
+    const config = parametrosJson as Record<string, unknown>;
     // vinyl_cut config distingue entre materialesCompatibles (MateriaPrima ids)
     // y variantesCompatibles (MateriaPrimaVariante ids con ancho/color específicos).
     // El motor v2 opera sobre variantes — aceptamos ambos, priorizando variantes.
@@ -3741,22 +3771,12 @@ export class ProductosServiciosService {
         `El producto no usa motor talonario (usa ${variante.productoServicio.motorCodigo}).`,
       );
     }
-    const configRow = await this.prisma.productoMotorConfig.findFirst({
-      where: {
-        tenantId: auth.tenantId,
-        productoServicioId: variante.productoServicioId,
-        motorCodigo: 'talonario',
-        motorVersion: 2,
-        activo: true,
-      },
-      orderBy: [{ versionConfig: 'desc' }],
-    });
-    if (!configRow) {
-      throw new BadRequestException(
-        `El producto ${variante.productoServicioId} no tiene ProductoMotorConfig para talonario@2.`,
-      );
-    }
-    const config = configRow.parametrosJson as Record<string, unknown>;
+    const { parametrosJson } = await this.ensureV2ConfigFromV1(
+      auth,
+      variante.productoServicioId,
+      'talonario',
+    );
+    const config = parametrosJson as Record<string, unknown>;
     return { variante, config };
   }
 
@@ -3775,22 +3795,8 @@ export class ProductosServiciosService {
         `El producto no usa motor rigidos_impresos (usa ${producto.motorCodigo}).`,
       );
     }
-    const configRow = await this.prisma.productoMotorConfig.findFirst({
-      where: {
-        tenantId: auth.tenantId,
-        productoServicioId: productoId,
-        motorCodigo: 'rigidos_impresos',
-        motorVersion: 2,
-        activo: true,
-      },
-      orderBy: [{ versionConfig: 'desc' }],
-    });
-    if (!configRow) {
-      throw new BadRequestException(
-        `El producto ${productoId} no tiene ProductoMotorConfig para rigidos_impresos@2.`,
-      );
-    }
-    const config = configRow.parametrosJson as Record<string, unknown>;
+    const { parametrosJson } = await this.ensureV2ConfigFromV1(auth, productoId, 'rigidos_impresos');
+    const config = parametrosJson as Record<string, unknown>;
     const variantesIds = Array.isArray(config.variantesCompatibles)
       ? (config.variantesCompatibles as string[])
       : [];
@@ -3837,22 +3843,12 @@ export class ProductosServiciosService {
         'La variante no tiene papel/sustrato asignado (requerido para digital@2).',
       );
     }
-    const configRow = await this.prisma.productoMotorConfig.findFirst({
-      where: {
-        tenantId: auth.tenantId,
-        productoServicioId: variante.productoServicioId,
-        motorCodigo: 'impresion_digital_laser',
-        motorVersion: 2,
-        activo: true,
-      },
-      orderBy: [{ versionConfig: 'desc' }],
-    });
-    if (!configRow) {
-      throw new BadRequestException(
-        `El producto ${variante.productoServicioId} no tiene ProductoMotorConfig para impresion_digital_laser@2.`,
-      );
-    }
-    const config = configRow.parametrosJson as Record<string, unknown>;
+    const { parametrosJson } = await this.ensureV2ConfigFromV1(
+      auth,
+      variante.productoServicioId,
+      'impresion_digital_laser',
+    );
+    const config = parametrosJson as Record<string, unknown>;
     const procesoDefinicionId = this.resolveRutaEfectivaId(variante);
     const proceso = procesoDefinicionId
       ? await this.findProcesoConOperacionesOrThrow(auth, procesoDefinicionId, this.prisma)
