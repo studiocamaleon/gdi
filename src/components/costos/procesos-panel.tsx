@@ -64,6 +64,7 @@ import {
   etapaProcesoItems,
   unidadProcesoItems,
 } from "@/lib/procesos";
+import { getOperacionSummary } from "@/lib/proceso-operacion-values";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -239,6 +240,8 @@ function buildDefaultOperacion(index = 0): LocalOperacion {
     mermaRuleMode: "fija",
     mermaTiers: [],
     niveles: [],
+    rol: undefined,
+    esOpcional: false,
     activo: true,
     orden: index + 1,
   };
@@ -263,6 +266,8 @@ function buildOperacionFromTemplate(
     mermaRuleMode: "fija",
     mermaTiers: [],
     niveles: [],
+    rol: undefined,
+    esOpcional: false,
     activo: templateOperation.activo ?? true,
     orden: index + 1,
   };
@@ -321,6 +326,8 @@ function buildOperacionFromBiblioteca(
       pasoPlantillaId: template.id,
     },
     niveles: normalizeNiveles(template.niveles ?? []),
+    rol: undefined,
+    esOpcional: false,
     activo: template.activo,
     orden: index + 1,
   };
@@ -995,14 +1002,25 @@ export function ProcesosPanel({
     return visibles.filter((item) => {
       const tipoLabel = getTipoOperacionLabel(item.tipoOperacion).toLowerCase();
       const centroLabel = item.centroCostoNombre.toLowerCase();
-      const maquinaLabel = item.maquinaNombre.toLowerCase();
-      const perfilLabel = item.perfilOperativoNombre.toLowerCase();
+      const summary = getOperacionSummary(item);
+      const maquinasSearch = [
+        item.maquinaNombre,
+        ...summary.maquinasDistintas,
+      ]
+        .join(" ")
+        .toLowerCase();
+      const perfilesSearch = [
+        item.perfilOperativoNombre,
+        ...summary.perfilesDistintos,
+      ]
+        .join(" ")
+        .toLowerCase();
       return (
         item.nombre.toLowerCase().includes(normalized) ||
         tipoLabel.includes(normalized) ||
         centroLabel.includes(normalized) ||
-        maquinaLabel.includes(normalized) ||
-        perfilLabel.includes(normalized)
+        maquinasSearch.includes(normalized) ||
+        perfilesSearch.includes(normalized)
       );
     });
   }, [bibliotecaOperaciones, bibliotecaSearchTerm, showInactiveBiblioteca]);
@@ -1065,14 +1083,25 @@ export function ProcesosPanel({
     return operationTemplateItems.filter((item) => {
       const tipoLabel = getTipoOperacionLabel(item.tipoOperacion).toLowerCase();
       const centroLabel = item.centroCostoNombre.toLowerCase();
-      const maquinaLabel = item.maquinaNombre.toLowerCase();
-      const perfilLabel = item.perfilOperativoNombre.toLowerCase();
+      const summary = getOperacionSummary(item);
+      const maquinasSearch = [
+        item.maquinaNombre,
+        ...summary.maquinasDistintas,
+      ]
+        .join(" ")
+        .toLowerCase();
+      const perfilesSearch = [
+        item.perfilOperativoNombre,
+        ...summary.perfilesDistintos,
+      ]
+        .join(" ")
+        .toLowerCase();
       return (
         item.nombre.toLowerCase().includes(normalized) ||
         tipoLabel.includes(normalized) ||
         centroLabel.includes(normalized) ||
-        maquinaLabel.includes(normalized) ||
-        perfilLabel.includes(normalized)
+        maquinasSearch.includes(normalized) ||
+        perfilesSearch.includes(normalized)
       );
     });
   }, [operacionTemplateSearch, operationTemplateItems]);
@@ -1291,6 +1320,8 @@ export function ProcesosPanel({
             mermaRuleMode: mermaBuilder.mode,
             mermaTiers: mermaBuilder.tiers,
             niveles: normalizeNiveles(operacion.niveles ?? []),
+            rol: operacion.rol ?? undefined,
+            esOpcional: operacion.esOpcional ?? false,
             activo: operacion.activo,
           };
         }),
@@ -1493,6 +1524,8 @@ export function ProcesosPanel({
       reglaVelocidad: undefined as Record<string, unknown> | undefined,
       reglaMerma: undefined as Record<string, unknown> | undefined,
       niveles: operacion.niveles,
+      rol: operacion.rol || undefined,
+      esOpcional: operacion.esOpcional ?? false,
       activo: operacion.activo,
     }));
 
@@ -1544,13 +1577,14 @@ export function ProcesosPanel({
         operacion.unidadTiempo = mappedUnit.unidadTiempo;
       }
 
+      const tieneVariantes = (operacion.niveles?.length ?? 0) > 0;
       const productivityMode = source.productividadModoUi ?? "variable";
       if (!operacion.perfilOperativoId) {
         if (productivityMode === "manual") {
           operacion.modoProductividad = "fija";
           operacion.productividadBase = undefined;
           operacion.reglaVelocidad = undefined;
-          if (!operacion.tiempoFijoMin || operacion.tiempoFijoMin <= 0) {
+          if (!tieneVariantes && (!operacion.tiempoFijoMin || operacion.tiempoFijoMin <= 0)) {
             toast.error(
               `La operacion ${index + 1} en modo manual requiere Tiempo total (min) mayor a 0.`,
             );
@@ -1560,7 +1594,7 @@ export function ProcesosPanel({
           operacion.modoProductividad = "variable";
           operacion.tiempoFijoMin = undefined;
           operacion.reglaVelocidad = undefined;
-          if (!operacion.productividadBase || operacion.productividadBase <= 0) {
+          if (!tieneVariantes && (!operacion.productividadBase || operacion.productividadBase <= 0)) {
             toast.error(
               `La operacion ${index + 1} en modo variable requiere un valor de productividad mayor a 0.`,
             );
@@ -1600,24 +1634,26 @@ export function ProcesosPanel({
         return null;
       }
 
-      if (operacion.modoProductividad === "fija") {
-        const hasTiempoFijo = Boolean(
-          operacion.tiempoFijoMin !== undefined && operacion.tiempoFijoMin > 0,
-        );
-        if (!hasTiempoFijo) {
+      if (!tieneVariantes) {
+        if (operacion.modoProductividad === "fija") {
+          const hasTiempoFijo = Boolean(
+            operacion.tiempoFijoMin !== undefined && operacion.tiempoFijoMin > 0,
+          );
+          if (!hasTiempoFijo) {
+            toast.error(
+              `La operacion ${index + 1} en modo fija requiere Tiempo fijo (min) mayor a 0.`,
+            );
+            return null;
+          }
+        } else if (
+          !operacion.perfilOperativoId &&
+          (!operacion.productividadBase || operacion.productividadBase <= 0)
+        ) {
           toast.error(
-            `La operacion ${index + 1} en modo fija requiere Tiempo fijo (min) mayor a 0.`,
+            `La operacion ${index + 1} en modo variable requiere Productividad base mayor a 0.`,
           );
           return null;
         }
-      } else if (
-        !operacion.perfilOperativoId &&
-        (!operacion.productividadBase || operacion.productividadBase <= 0)
-      ) {
-        toast.error(
-          `La operacion ${index + 1} en modo variable requiere Productividad base mayor a 0.`,
-        );
-        return null;
       }
 
       if (
@@ -2318,15 +2354,27 @@ export function ProcesosPanel({
                         <TableCell>{getTipoOperacionLabel(item.tipoOperacion)}</TableCell>
                         <TableCell>{item.centroCostoNombre || "Sin centro"}</TableCell>
                         <TableCell>
-                          {item.maquinaId
-                            ? `${item.maquinaNombre}${item.perfilOperativoId ? ` / ${item.perfilOperativoNombre}` : ""}`
-                            : "Sin maquina"}
+                          {(() => {
+                            const summary = getOperacionSummary(item);
+                            return (
+                              <div className="flex flex-col gap-0.5">
+                                <span>{summary.maquinasSummary}</span>
+                                {summary.tieneNiveles ? (
+                                  <span className="text-xs text-muted-foreground">
+                                    {summary.nivelesCount} variante
+                                    {summary.nivelesCount > 1 ? "s" : ""}
+                                  </span>
+                                ) : null}
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>{item.estacionNombre || "Sin estacion"}</TableCell>
                         <TableCell>
-                          {modoProductividadProcesoItems.find(
-                            (mode) => mode.value === item.modoProductividad,
-                          )?.label ?? item.modoProductividad}
+                          {(() => {
+                            const summary = getOperacionSummary(item);
+                            return summary.modoProductividadSummary;
+                          })()}
                         </TableCell>
                         <TableCell>
                           <Badge variant={item.activo ? "default" : "outline"}>
@@ -2524,7 +2572,7 @@ export function ProcesosPanel({
                                       <p className="text-xs text-muted-foreground">
                                         {getTipoOperacionLabel(item.tipoOperacion)} ·{" "}
                                         {item.centroCostoNombre || "Sin centro"} ·{" "}
-                                        {item.maquinaId ? item.maquinaNombre : "Sin maquina"}
+                                        {getOperacionSummary(item).maquinasSummary}
                                       </p>
                                     </button>
                                   );
@@ -2634,6 +2682,12 @@ export function ProcesosPanel({
                               <Badge variant="outline" className="ml-2">
                                 {operacion.niveles.length} variante{operacion.niveles.length === 1 ? "" : "s"}
                               </Badge>
+                              {operacion.rol === "impresion" ? (
+                                <Badge variant="default" className="ml-1">Impresión</Badge>
+                              ) : null}
+                              {operacion.esOpcional ? (
+                                <Badge variant="secondary" className="ml-1">Opcional</Badge>
+                              ) : null}
                             </span>
                           </Button>
                           <div className="flex items-center gap-2">
@@ -2680,8 +2734,51 @@ export function ProcesosPanel({
                         {isExpanded ? (
                           <CardContent className="space-y-3">
                           <div className="rounded-md border border-dashed px-3 py-3 text-sm text-muted-foreground">
-                            La ruta consume este paso desde la Biblioteca. Aquí solo puedes revisar la configuración y ordenar la secuencia.
+                            La ruta consume este paso desde la Biblioteca. Abajo podés configurar cómo se comporta este paso en esta ruta específica (rol y opcionalidad), y más abajo revisar la configuración heredada de la biblioteca.
                           </div>
+
+                          {/* Campos editables propios de la ruta (no vienen de la biblioteca) */}
+                          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 rounded-md border p-3 bg-muted/20">
+                            <Field>
+                              <FieldLabel>Rol en la ruta</FieldLabel>
+                              <Select
+                                value={operacion.rol ?? "__none__"}
+                                onValueChange={(value) =>
+                                  updateOperacion(operacion.id, (prev) => ({
+                                    ...prev,
+                                    rol: !value || value === "__none__" ? undefined : (value as "impresion"),
+                                  }))
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue>
+                                    {operacion.rol === "impresion" ? "Impresión" : "Ninguno"}
+                                  </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">Ninguno</SelectItem>
+                                  <SelectItem value="impresion">Impresión</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </Field>
+
+                            <Field>
+                              <FieldLabel>Opcionalidad</FieldLabel>
+                              <div className="flex h-9 items-center gap-2">
+                                <Checkbox
+                                  checked={operacion.esOpcional ?? false}
+                                  onCheckedChange={(checked) =>
+                                    updateOperacion(operacion.id, (prev) => ({
+                                      ...prev,
+                                      esOpcional: checked === true,
+                                    }))
+                                  }
+                                />
+                                <span className="text-sm">Paso opcional</span>
+                              </div>
+                            </Field>
+                          </div>
+
                           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 pointer-events-none opacity-80">
                           <Field>
                             <FieldLabel>Codigo</FieldLabel>
@@ -2770,6 +2867,12 @@ export function ProcesosPanel({
                             )}
                           </Field>
 
+                          {operacion.niveles.length > 0 ? (
+                            <div className="md:col-span-2 xl:col-span-3 rounded-md border border-dashed px-3 py-3 text-sm text-muted-foreground">
+                              Este paso usa variantes. La máquina, perfil, productividad y tiempos se definen por variante — los campos generales no aplican.
+                            </div>
+                          ) : (
+                          <>
                           <Field>
                             <FieldLabel>Maquina</FieldLabel>
                             <Select
@@ -3151,6 +3254,8 @@ export function ProcesosPanel({
                               }
                             />
                           </Field>
+                          </>
+                          )}
                           </div>
                           {/* Mult. doble faz — editable incluso en pasos de biblioteca */}
                           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 mt-3">

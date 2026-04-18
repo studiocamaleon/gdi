@@ -6,7 +6,6 @@ import { toast } from "sonner";
 
 import type { ProductTabProps } from "@/components/productos-servicios/product-detail-types";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
-import { ProductoServicioChecklistCotizador } from "@/components/productos-servicios/producto-servicio-checklist";
 import { formatCurrency, formatNumber } from "@/components/productos-servicios/producto-comercial.helpers";
 import { ProductoTabSection } from "@/components/productos-servicios/producto-tab-section";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +31,7 @@ import type {
   ProductoVariante,
   ValorOpcionProductiva,
 } from "@/lib/productos-servicios";
+import { operacionTieneNiveles } from "@/lib/proceso-operacion-values";
 
 const dimensionBaseLabelByValue: Record<DimensionOpcionProductiva, string> = {
   tipo_impresion: "Tipo de impresión",
@@ -156,8 +156,45 @@ export function DigitalSimularCostoTab(props: ProductTabProps) {
 
   const [cotizacionCantidad, setCotizacionCantidad] = React.useState("100");
   const [cotizacionPeriodo, setCotizacionPeriodo] = React.useState(buildDefaultPeriodo());
-  const [cotizacionChecklistRespuestas, setCotizacionChecklistRespuestas] = React.useState<Record<string, { respuestaId: string }>>({});
   const [cotizacionSeleccionesBase, setCotizacionSeleccionesBase] = React.useState<Partial<Record<DimensionOpcionProductiva, ValorOpcionProductiva>>>({});
+  const [opcionalesSeleccionados, setOpcionalesSeleccionados] = React.useState<Set<string>>(new Set());
+  // Mapa operacionId → nivelId seleccionado para pasos con niveles.
+  const [nivelesSeleccionados, setNivelesSeleccionados] = React.useState<Record<string, string>>({});
+
+  // Resolver el proceso activo de la variante actual
+  const procesoActivo = React.useMemo(() => {
+    const procesoId = props.producto.usarRutaComunVariantes
+      ? props.producto.procesoDefinicionDefaultId
+      : props.selectedVariant?.procesoDefinicionId;
+    if (!procesoId) return null;
+    return props.procesos.find((p) => p.id === procesoId) ?? null;
+  }, [props.producto, props.selectedVariant, props.procesos]);
+
+  // Lista de operaciones opcionales del proceso activo
+  const opcionalesDelProceso = React.useMemo(() => {
+    return procesoActivo?.operaciones.filter((op) => op.activo && op.esOpcional) ?? [];
+  }, [procesoActivo]);
+
+  // Pasos con variantes (niveles) que aplican a esta cotización:
+  //  - Activos
+  //  - Con niveles
+  //  - Rol distinto de "impresion" (impresión se resuelve desde config de variante)
+  //  - Obligatorios (no esOpcional) O opcionales seleccionados por el usuario
+  const pasosConNiveles = React.useMemo(() => {
+    if (!procesoActivo) return [];
+    return procesoActivo.operaciones.filter((op) => {
+      if (!op.activo) return false;
+      if (!operacionTieneNiveles(op)) return false;
+      if (op.rol === "impresion") return false;
+      if (op.esOpcional && !opcionalesSeleccionados.has(op.id)) return false;
+      return true;
+    });
+  }, [procesoActivo, opcionalesSeleccionados]);
+
+  const pasosConNivelesSinSeleccionar = React.useMemo(
+    () => pasosConNiveles.filter((op) => !nivelesSeleccionados[op.id]),
+    [pasosConNiveles, nivelesSeleccionados],
+  );
   const [cotizacion, setCotizacion] = React.useState<CotizacionProductoVariante | null>(null);
   const [cotizaciones, setCotizaciones] = React.useState<CotizacionProductoSnapshotResumen[]>([]);
   const [snapshotsOpen, setSnapshotsOpen] = React.useState(false);
@@ -167,8 +204,9 @@ export function DigitalSimularCostoTab(props: ProductTabProps) {
   const [isLoadingSnapshots, startLoadingSnapshots] = React.useTransition();
 
   React.useEffect(() => {
-    setCotizacionChecklistRespuestas({});
-  }, [props.checklist]);
+    setOpcionalesSeleccionados(new Set());
+    setNivelesSeleccionados({});
+  }, [procesoActivo?.id]);
 
   React.useEffect(() => {
     if (!props.selectedVariant) {
@@ -245,12 +283,10 @@ export function DigitalSimularCostoTab(props: ProductTabProps) {
               dimension: dimension as DimensionOpcionProductiva,
               valor: valor as ValorOpcionProductiva,
             })),
-          checklistRespuestas: Object.entries(cotizacionChecklistRespuestas)
-            .filter(([, value]) => Boolean(value?.respuestaId))
-            .map(([preguntaId, value]) => ({
-              preguntaId,
-              respuestaId: value.respuestaId,
-            })),
+          opcionalesSeleccionados: Array.from(opcionalesSeleccionados),
+          nivelesSeleccionados: Object.entries(nivelesSeleccionados)
+            .filter(([opId]) => pasosConNiveles.some((p) => p.id === opId))
+            .map(([operacionId, nivelId]) => ({ operacionId, nivelId })),
         });
         setCotizacion(result);
         const snapshots = await getCotizacionesProductoVariante(props.selectedVariant!.id);
@@ -375,10 +411,32 @@ export function DigitalSimularCostoTab(props: ProductTabProps) {
           description="Definí la variante, la cantidad y el período de costos antes de ejecutar la simulación."
           icon={Layers3Icon}
           actions={
-            <Button type="button" onClick={handleCotizar} disabled={isCotizando || !props.selectedVariant}>
-              {isCotizando ? <GdiSpinner className="size-4" data-icon="inline-start" /> : null}
-              Simular costo
-            </Button>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    onClick={handleCotizar}
+                    disabled={
+                      isCotizando ||
+                      !props.selectedVariant ||
+                      pasosConNivelesSinSeleccionar.length > 0
+                    }
+                  >
+                    {isCotizando ? (
+                      <GdiSpinner className="size-4" data-icon="inline-start" />
+                    ) : null}
+                    Simular costo
+                  </Button>
+                }
+              />
+              {pasosConNivelesSinSeleccionar.length > 0 ? (
+                <TooltipContent>
+                  Falta elegir variante para:{" "}
+                  {pasosConNivelesSinSeleccionar.map((p) => p.nombre).join(", ")}
+                </TooltipContent>
+              ) : null}
+            </Tooltip>
           }
         >
           <div className="grid gap-3 md:grid-cols-4">
@@ -498,15 +556,134 @@ export function DigitalSimularCostoTab(props: ProductTabProps) {
               <div className="mb-3">
                 <h4 className="text-sm font-semibold">Opcionales para cotizar</h4>
                 <p className="text-sm text-muted-foreground">
-                  Estas respuestas pueden agregar procesos, materiales o costos al trabajo actual.
+                  Pasos opcionales de la ruta de producción. Marcá los que querés incluir en esta cotización.
                 </p>
               </div>
-              <ProductoServicioChecklistCotizador
-                checklist={props.checklist}
-                value={cotizacionChecklistRespuestas}
-                onChange={setCotizacionChecklistRespuestas}
-              />
+              {!procesoActivo ? (
+                <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                  No hay ruta de producción asignada a esta variante.
+                </div>
+              ) : opcionalesDelProceso.length === 0 ? (
+                <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                  Este producto no tiene pasos opcionales. Podés marcar pasos como opcionales desde la ruta de producción.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {opcionalesDelProceso.map((op) => {
+                    const etapaLabel =
+                      op.tipoOperacion === "preprensa" ? "Pre-prensa"
+                      : op.tipoOperacion === "prensa" ? "Prensa"
+                      : op.tipoOperacion === "postprensa" ? "Post-prensa"
+                      : op.tipoOperacion === "instalacion" ? "Instalación"
+                      : op.tipoOperacion === "entrega_despacho" ? "Entrega / Despacho"
+                      : op.tipoOperacion;
+                    const checked = opcionalesSeleccionados.has(op.id);
+                    return (
+                      <label
+                        key={op.id}
+                        className="flex items-center gap-3 rounded-md border p-3 cursor-pointer hover:bg-muted/40"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            setOpcionalesSeleccionados((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(op.id);
+                              else next.delete(op.id);
+                              return next;
+                            });
+                          }}
+                          className="size-4"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm">{op.nombre}</span>
+                            {op.rol === "impresion" ? (
+                              <Badge variant="default" className="text-xs">Impresión</Badge>
+                            ) : null}
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {etapaLabel} · {op.centroCostoNombre || "Sin centro"}
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
+
+            {pasosConNiveles.length > 0 ? (
+              <div className="rounded-xl border bg-muted/10 p-4">
+                <div className="mb-3">
+                  <h4 className="text-sm font-semibold">Pasos con variantes</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Algunos pasos del proceso tienen variantes (ej. tipos de laminado).
+                    Elegí cuál usar en esta cotización.
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  {pasosConNiveles.map((op) => {
+                    const niveles = (op.niveles ?? []).filter((n) => n.activo);
+                    const selected = nivelesSeleccionados[op.id] ?? "";
+                    return (
+                      <div key={op.id} className="rounded-md border p-3">
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="font-medium text-sm">{op.nombre}</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {niveles.length} variante{niveles.length > 1 ? "s" : ""}
+                          </Badge>
+                          {op.esOpcional ? (
+                            <Badge variant="outline" className="text-xs">
+                              Opcional
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <div className="space-y-1.5">
+                          {niveles.map((nivel) => {
+                            const isChecked = selected === nivel.id;
+                            return (
+                              <label
+                                key={nivel.id}
+                                className="flex items-center gap-3 rounded border p-2 text-sm cursor-pointer hover:bg-muted/40"
+                              >
+                                <input
+                                  type="radio"
+                                  name={`nivel-${op.id}`}
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    setNivelesSeleccionados((prev) => ({
+                                      ...prev,
+                                      [op.id]: nivel.id,
+                                    }));
+                                  }}
+                                />
+                                <div className="flex-1">
+                                  <div className="font-medium">{nivel.nombre}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {nivel.maquinaNombre || "Sin máquina"}
+                                    {nivel.perfilOperativoNombre
+                                      ? ` · ${nivel.perfilOperativoNombre}`
+                                      : ""}
+                                    {nivel.resumen ? ` · ${nivel.resumen}` : ""}
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                          {niveles.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">
+                              No hay variantes activas para este paso.
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
           </div>
         </ProductoTabSection>
 

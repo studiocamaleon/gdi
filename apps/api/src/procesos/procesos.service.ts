@@ -11,6 +11,7 @@ import {
   ModoProductividadProceso,
   PlantillaMaquinaria,
   Prisma,
+  RolProcesoOperacion,
   TipoOperacionProceso,
   UnidadBaseCentroCosto,
   UnidadProduccionMaquina,
@@ -26,6 +27,7 @@ import {
   ModoProductividadProcesoDto,
   type PlantillaMaquinariaDto,
   type ProcesoOperacionItemDto,
+  RolProcesoOperacionDto,
   TipoOperacionProcesoDto,
   UnidadProcesoDto,
   UpsertProcesoDto,
@@ -38,6 +40,12 @@ import {
 import {
   evaluateProductividad,
 } from './proceso-productividad.engine';
+import {
+  getNivelesActivos,
+  operacionTieneNiveles,
+  todosLosNivelesCompletos,
+  getMaquinaIdsDeNiveles,
+} from './utils/operacion-values';
 
 type ProcesoCompleto = Prisma.ProcesoDefinicionGetPayload<{
   include: {
@@ -393,6 +401,14 @@ export class ProcesosService {
         warnings.push(unitWarning);
       }
 
+      const nivelesDelPaso = getNivelesActivos(operacion.detalleJson);
+      const tieneNivelesPaso = nivelesDelPaso.length > 0;
+      if (tieneNivelesPaso) {
+        warnings.push(
+          `Este paso tiene ${nivelesDelPaso.length} variante${nivelesDelPaso.length > 1 ? 's' : ''}; la simulación usa los valores generales, cada variante puede cotizar distinto.`,
+        );
+      }
+
       return {
         operacionId: operacion.id,
         orden: operacion.orden,
@@ -417,6 +433,25 @@ export class ProcesosService {
         modoProductividad: this.toApiModoProductividad(
           operacion.modoProductividad,
         ),
+        tieneNiveles: tieneNivelesPaso,
+        nivelesCount: nivelesDelPaso.length,
+        nivelesSnapshots: tieneNivelesPaso
+          ? nivelesDelPaso.map((nivel) => ({
+              nivelId: nivel.id,
+              nombre: nivel.nombre,
+              maquinaId: nivel.maquinaId,
+              maquinaNombre: nivel.maquinaNombre,
+              perfilOperativoId: nivel.perfilOperativoId,
+              perfilOperativoNombre: nivel.perfilOperativoNombre,
+              modoProductividadNivel: nivel.modoProductividadNivel,
+              productividadBase: nivel.productividadBase,
+              tiempoFijoMin: nivel.tiempoFijoMin,
+              setupMin: nivel.setupMin,
+              cleanupMin: nivel.cleanupMin,
+              unidadSalida: nivel.unidadSalida,
+              unidadTiempo: nivel.unidadTiempo,
+            }))
+          : [],
         warnings: Array.from(new Set(warnings)),
       };
     });
@@ -717,6 +752,8 @@ export class ProcesosService {
         payload.niveles,
         payload.baseCalculoProductividad,
       ),
+      rol: payload.rol ? this.toPrismaRol(payload.rol) : null,
+      esOpcional: payload.esOpcional ?? false,
       activo: payload.activo,
     };
   }
@@ -771,6 +808,7 @@ export class ProcesosService {
   private toPrismaTipoOperacion(value: TipoOperacionProcesoDto): TipoOperacionProceso {
     switch (value) {
       case TipoOperacionProcesoDto.preprensa:
+      case TipoOperacionProcesoDto.servicio: // legacy → preprensa
         return TipoOperacionProceso.PREPRENSA;
       case TipoOperacionProcesoDto.prensa:
         return TipoOperacionProceso.IMPRESION;
@@ -781,36 +819,43 @@ export class ProcesosService {
         return TipoOperacionProceso.LOGISTICA;
       case TipoOperacionProcesoDto.entrega_despacho:
         return TipoOperacionProceso.EMPAQUE;
-      case TipoOperacionProcesoDto.servicio: // legacy → preprensa
-        return TipoOperacionProceso.OTRO;
       default:
-        return TipoOperacionProceso.OTRO;
+        return TipoOperacionProceso.PREPRENSA;
     }
   }
 
   private fromPrismaTipoOperacion(value: TipoOperacionProceso): TipoOperacionProcesoDto {
     switch (value) {
       case TipoOperacionProceso.PREPRENSA:
-      case TipoOperacionProceso.PREFLIGHT:
-      case TipoOperacionProceso.OTRO:
         return TipoOperacionProcesoDto.preprensa;
       case TipoOperacionProceso.IMPRESION:
         return TipoOperacionProcesoDto.prensa;
+      case TipoOperacionProceso.TERMINACION:
+        return TipoOperacionProcesoDto.postprensa;
       case TipoOperacionProceso.LOGISTICA:
         return TipoOperacionProcesoDto.instalacion;
       case TipoOperacionProceso.EMPAQUE:
         return TipoOperacionProcesoDto.entrega_despacho;
-      case TipoOperacionProceso.LAMINADO:
-      case TipoOperacionProceso.CORTE:
-      case TipoOperacionProceso.MECANIZADO:
-      case TipoOperacionProceso.GRABADO:
-      case TipoOperacionProceso.CURADO:
-      case TipoOperacionProceso.TRANSFERENCIA:
-      case TipoOperacionProceso.TERMINACION:
-      case TipoOperacionProceso.CONTROL_CALIDAD:
-      case TipoOperacionProceso.TERCERIZADO:
       default:
-        return TipoOperacionProcesoDto.postprensa;
+        return TipoOperacionProcesoDto.preprensa;
+    }
+  }
+
+  private toPrismaRol(value: RolProcesoOperacionDto): RolProcesoOperacion {
+    switch (value) {
+      case RolProcesoOperacionDto.impresion:
+        return RolProcesoOperacion.IMPRESION;
+      default:
+        return RolProcesoOperacion.IMPRESION;
+    }
+  }
+
+  private fromPrismaRol(value: RolProcesoOperacion): RolProcesoOperacionDto {
+    switch (value) {
+      case RolProcesoOperacion.IMPRESION:
+        return RolProcesoOperacionDto.impresion;
+      default:
+        return RolProcesoOperacionDto.impresion;
     }
   }
 
@@ -1463,6 +1508,18 @@ export class ProcesosService {
         return true;
       }
 
+      // Si la operación tiene niveles activos, verificar que todos tengan máquina con centro principal.
+      const nivelesActivos = (operacion.niveles ?? []).filter(
+        (n) => n.activo !== false,
+      );
+      if (nivelesActivos.length > 0) {
+        return nivelesActivos.every((nivel) => {
+          if (!nivel.maquinaId) return false;
+          const maquina = references.maquinasById.get(nivel.maquinaId);
+          return Boolean(maquina?.centroCostoPrincipalId);
+        });
+      }
+
       if (!operacion.maquinaId) {
         return false;
       }
@@ -1477,6 +1534,19 @@ export class ProcesosService {
 
     const hasAllOperationsCostingSignals = payload.operaciones.every(
       (operacion) => {
+        // Si la operación tiene niveles activos, TODOS deben tener campos de costeo.
+        const nivelesActivos = (operacion.niveles ?? []).filter(
+          (n) => n.activo !== false,
+        );
+        if (nivelesActivos.length > 0) {
+          return nivelesActivos.every((nivel) => {
+            if (nivel.modoProductividadNivel === 'fija') {
+              return (nivel.tiempoFijoMin ?? 0) > 0;
+            }
+            return (nivel.productividadBase ?? 0) > 0;
+          });
+        }
+
         const derived = this.deriveOperationDefaultsFromPayload(
           operacion,
           references,
@@ -1601,7 +1671,10 @@ export class ProcesosService {
         operacion,
         references,
       );
+      const tieneNiveles = (operacion.niveles?.length ?? 0) > 0;
+
       if (
+        !tieneNiveles &&
         modoProductividad === ModoProductividadProceso.FIJA &&
         (!operacion.tiempoFijoMin || operacion.tiempoFijoMin <= 0)
       ) {
@@ -1611,6 +1684,7 @@ export class ProcesosService {
       }
 
       if (
+        !tieneNiveles &&
         modoProductividad === ModoProductividadProceso.FORMULA &&
         (!derived.productividadBase || Number(derived.productividadBase) <= 0)
       ) {
@@ -2207,6 +2281,8 @@ export class ProcesosService {
           this.getOperacionDetalle(operacion.detalleJson)?.baseCalculoProductividad ??
           null,
         niveles: this.getOperacionNiveles(operacion.detalleJson),
+        rol: operacion.rol ? this.fromPrismaRol(operacion.rol) : null,
+        esOpcional: operacion.esOpcional,
         activo: operacion.activo,
         warnings: this.getOperationWarnings(operacion),
       })),

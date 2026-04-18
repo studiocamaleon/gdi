@@ -82,6 +82,10 @@ export enum UnidadProcesoDto {
   lote = 'lote',
 }
 
+export enum RolProcesoOperacionDto {
+  impresion = 'impresion',
+}
+
 export enum BaseCalculoProductividadDto {
   cantidad = 'cantidad',
   area_total_m2 = 'area_total_m2',
@@ -190,6 +194,14 @@ export class ProcesoOperacionItemDto {
   @IsOptional()
   @IsEnum(BaseCalculoProductividadDto)
   baseCalculoProductividad?: BaseCalculoProductividadDto;
+
+  @IsOptional()
+  @IsEnum(RolProcesoOperacionDto)
+  rol?: RolProcesoOperacionDto;
+
+  @IsOptional()
+  @IsBoolean()
+  esOpcional?: boolean;
 
   @IsOptional()
   @IsArray()

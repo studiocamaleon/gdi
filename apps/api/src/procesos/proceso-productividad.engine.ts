@@ -523,31 +523,6 @@ function evaluateFormulaRule(
   return applyBounds(raw, rule.bounds);
 }
 
-function evaluateVelocidadTablaRule(
-  rule: TablaRule,
-  args: {
-    productividadBase: number;
-    contexto: JsonObject;
-  },
-): number | null {
-  const matched = rule.filas.find((row) =>
-    matchesTablaRow(row, rule.ejes, args.contexto),
-  );
-  if (matched) {
-    return toFiniteNumber(matched.productividad);
-  }
-
-  if (rule.fallback?.type === 'const') {
-    return rule.fallback.value;
-  }
-
-  if (!rule.fallback || rule.fallback.type === 'productividad_base') {
-    return args.productividadBase;
-  }
-
-  return null;
-}
-
 function evaluateMermaTablaRule(
   rule: TablaMermaRule,
   args: {
@@ -606,16 +581,6 @@ export function validateProductividadRulesByMode(args: {
         field: 'reglaVelocidad',
         message:
           'Modo formula requiere una Regla de velocidad valida con tipo formula_v1.',
-      });
-    }
-  }
-
-  if (args.modoProductividad === ModoProductividadProceso.TABLA) {
-    if (args.reglaVelocidadJson && !parseTablaRule(args.reglaVelocidadJson)) {
-      errors.push({
-        field: 'reglaVelocidad',
-        message:
-          'Modo tabla requiere una Regla de velocidad valida con tipo tabla_v1.',
       });
     }
   }
@@ -712,31 +677,6 @@ export function evaluateProductividad(
     } else {
       warnings.push(
         'Regla de velocidad formula invalida. Se usa run manual como fallback.',
-      );
-    }
-  } else {
-    const rule = parseTablaRule(input.reglaVelocidadJson);
-    if (rule) {
-      productividadAplicada = evaluateVelocidadTablaRule(rule, {
-        productividadBase,
-        contexto: input.contexto,
-      });
-
-      if (productividadAplicada === null) {
-        warnings.push(
-          'La tabla de velocidad no encontro coincidencia ni fallback valido. Se usa run manual.',
-        );
-      }
-    } else if (productividadBase > 0) {
-      productividadAplicada = productividadBase;
-      if (input.reglaVelocidadJson) {
-        warnings.push(
-          'Regla de velocidad tabla invalida. Se usa productividad base como fallback.',
-        );
-      }
-    } else {
-      warnings.push(
-        'Regla de velocidad tabla invalida. Se usa run manual como fallback.',
       );
     }
   }

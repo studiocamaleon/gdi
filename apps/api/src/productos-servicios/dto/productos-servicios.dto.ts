@@ -1459,6 +1459,13 @@ export class PreviewGranFormatoCostosDto {
   checklistRespuestas?: CotizarChecklistRespuestaDto[];
 
   @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => CotizarNivelSeleccionadoDto)
+  nivelesSeleccionados?: CotizarNivelSeleccionadoDto[];
+
+  @IsOptional()
   @IsObject()
   panelizado?: {
     activo?: boolean;
@@ -1497,8 +1504,29 @@ export class CotizarProductoVarianteDto {
   seleccionesBase?: CotizarSeleccionBaseDto[];
 
   @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsUUID('4', { each: true })
+  opcionalesSeleccionados?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => CotizarNivelSeleccionadoDto)
+  nivelesSeleccionados?: CotizarNivelSeleccionadoDto[];
+
+  @IsOptional()
   @IsObject()
   parametros?: Record<string, unknown>;
+}
+
+export class CotizarNivelSeleccionadoDto {
+  @IsUUID('4')
+  operacionId!: string;
+
+  @IsString()
+  nivelId!: string;
 }
 
 export class PreviewImposicionProductoVarianteDto {
