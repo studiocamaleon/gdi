@@ -30,6 +30,120 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { cotizarProductoVarianteV2 } from "@/lib/productos-servicios-api";
 import type { CotizacionCanonica } from "@/lib/productos-servicios";
+import {
+  NestingPreview,
+  type NestingContainer,
+  type NestingPlacement,
+} from "@/components/nesting-preview";
+
+/**
+ * Dado un paso canónico, si tiene datos de nesting en la trazabilidad,
+ * extrae el container + placements para renderizar con <NestingPreview>.
+ * Soporta los 3 algoritmos: nesting-rollo, nesting-hoja, nesting-placa-rigida.
+ */
+/**
+ * Normaliza el shape de un placement al canónico del NestingPreview.
+ * - nesting-hoja/placa-rigida emiten { x, y, anchoMm, altoMm, rotada }
+ * - nesting-rollo emite { centerXMm, centerYMm, widthMm, heightMm, rotated, label, ... }
+ */
+function normalizePlacement(raw: Record<string, unknown>): NestingPlacement | null {
+  // Shape rollo
+  if (
+    typeof raw.centerXMm === "number" &&
+    typeof raw.centerYMm === "number" &&
+    typeof raw.widthMm === "number" &&
+    typeof raw.heightMm === "number"
+  ) {
+    const w = Number(raw.widthMm);
+    const h = Number(raw.heightMm);
+    return {
+      x: Number(raw.centerXMm) - w / 2,
+      y: Number(raw.centerYMm) - h / 2,
+      anchoMm: w,
+      altoMm: h,
+      rotada: Boolean(raw.rotated),
+      label: typeof raw.label === "string" ? raw.label : undefined,
+      colorKey: typeof raw.sourcePieceId === "string" ? raw.sourcePieceId : undefined,
+    };
+  }
+  // Shape canónico (hoja/placa-rigida)
+  if (
+    typeof raw.x === "number" &&
+    typeof raw.y === "number" &&
+    typeof raw.anchoMm === "number" &&
+    typeof raw.altoMm === "number"
+  ) {
+    return {
+      x: Number(raw.x),
+      y: Number(raw.y),
+      anchoMm: Number(raw.anchoMm),
+      altoMm: Number(raw.altoMm),
+      rotada: Boolean(raw.rotada),
+      label: typeof raw.label === "string" ? raw.label : undefined,
+      colorKey: typeof raw.colorKey === "string" ? raw.colorKey : undefined,
+    };
+  }
+  return null;
+}
+
+function extractNestingPreview(
+  paso: CotizacionCanonica["pasos"][number],
+): { container: NestingContainer; placements: NestingPlacement[] } | null {
+  const traza = (paso.trazabilidad ?? {}) as Record<string, unknown>;
+  const nesting = traza.nesting as Record<string, unknown> | undefined;
+  if (!nesting) return null;
+  const placementsRaw = nesting.placements as unknown;
+  if (!Array.isArray(placementsRaw) || placementsRaw.length === 0) return null;
+  const placements = placementsRaw
+    .map((p) => normalizePlacement(p as Record<string, unknown>))
+    .filter((p): p is NestingPlacement => p !== null);
+  if (placements.length === 0) return null;
+
+  // Detectar algoritmo por shape.
+  // 1) Rollo (gran_formato / vinilo_de_corte): hermano `materialElegido`
+  //    con rolloAnchoMm + hay largoConsumidoMm en nesting.
+  const materialElegido = traza.materialElegido as Record<string, unknown> | undefined;
+  if (materialElegido?.rolloAnchoMm && nesting.largoConsumidoMm) {
+    const rolloAnchoMm = Number(materialElegido.rolloAnchoMm);
+    const consumed = Number(nesting.largoConsumidoMm);
+    return {
+      container: {
+        type: "rollo",
+        rolloAnchoTotalMm: rolloAnchoMm,
+        printableWidthMm: rolloAnchoMm,
+        consumedLengthMm: consumed,
+      },
+      placements,
+    };
+  }
+  // 2) Pliego (digital_laser / talonario): nesting.pliegoElegido + columnas/filas.
+  const pliegoElegido = nesting.pliegoElegido as Record<string, unknown> | undefined;
+  if (pliegoElegido) {
+    return {
+      container: {
+        type: "pliego",
+        anchoMm: Number(pliegoElegido.anchoMm),
+        altoMm: Number(pliegoElegido.altoMm),
+      },
+      placements,
+    };
+  }
+  // 3) Placa (rigidos_impresos): hermano `placaElegida.dimensionesMm`.
+  const placaElegida = traza.placaElegida as Record<string, unknown> | undefined;
+  const dims = placaElegida?.dimensionesMm as Record<string, unknown> | undefined;
+  if (placaElegida && dims?.anchoMm && dims?.altoMm) {
+    return {
+      container: {
+        type: "placa",
+        anchoMm: Number(dims.anchoMm),
+        altoMm: Number(dims.altoMm),
+        materialLabel: (placaElegida.nombre as string) ?? undefined,
+      },
+      placements,
+    };
+  }
+  return null;
+}
 
 function buildDefaultPeriodo() {
   const now = new Date();
@@ -195,6 +309,39 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
                 </TableBody>
               </Table>
             </div>
+
+            {/* Visualización del nesting — una card por paso `produce`. */}
+            {(() => {
+              const previews = cotizacion.pasos
+                .map((paso) => ({ paso, data: extractNestingPreview(paso) }))
+                .filter((x) => x.data !== null);
+              if (previews.length === 0) return null;
+              return (
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-sm font-semibold">Visualización del nesting</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Cómo se acomodan las piezas en el rollo/pliego/placa según el algoritmo
+                      del paso.
+                    </p>
+                  </div>
+                  {previews.map(({ paso, data }) => (
+                    <Card key={paso.id}>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm">{paso.nombre}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <NestingPreview
+                          container={data!.container}
+                          placements={data!.placements}
+                          maxHeightPx={450}
+                        />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              );
+            })()}
 
             {cotizacion.warnings.length > 0 ? (
               <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
