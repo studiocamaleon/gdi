@@ -117,6 +117,8 @@ import { DEFAULT_RIGID_PRINTED_CONFIG } from './motors/rigid-printed.types';
 import { VinylCutMotorModule } from './motors/vinyl-cut.motor';
 import { WideFormatMotorModule } from './motors/wide-format.motor';
 import { WideFormatMotorModuleV2 } from './motors/wide-format-v2.motor';
+import { v1ToCanonical } from './adapters/v1-to-canonical';
+import { logShadowDiff } from './shadow/shadow-logger';
 
 const DEFAULT_PERIOD_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
 type ServicioPricingNivel = {
@@ -5958,35 +5960,100 @@ export class ProductosServiciosService {
   }
 
   /**
-   * Modelo universal (A.6 + B.5): cotiza una variante y devuelve shape canónica.
+   * Modelo universal (A.6 + B + C.1.3): cotiza una variante y devuelve shape canónica.
    *
-   * Dispatcher:
-   *   1. Si `ENABLE_WIDE_FORMAT_V2=true` y el producto usa motor `gran_formato`,
-   *      llama al motor v2 nativo (gran_formato@2) que emite shape canónica.
-   *   2. Caso contrario, delega en el motor v1 + aplica adapter v1→canonical.
+   * Dispatcher por `ProductoServicio.motorPreferido`:
+   *   - V1      → adapter v1→canonical (shape canónica obtenida del motor v1 + mapeo).
+   *   - V2      → motor v2 nativo (si existe en el registry para este motorCodigo).
+   *   - SHADOW  → corre ambos en paralelo, retorna v1 al cliente, persiste diff
+   *               en CotizacionShadowLog para auditoría.
    *
-   * Esto permite probar el motor v2 en producción por feature flag sin afectar
-   * a los demás productos. En Etapa C cada motor migrado sumará su propia
-   * condición al dispatcher.
+   * Fallback legacy de Etapa B: si `ENABLE_WIDE_FORMAT_V2=true` y el producto
+   * es gran_formato con motorPreferido=V1, fuerza V2 (compat con el piloto B).
    */
   async cotizarVarianteV2(
     auth: CurrentAuth,
     varianteId: string,
     payload: CotizarProductoVarianteDto,
   ) {
-    const enableWideFormatV2 = process.env.ENABLE_WIDE_FORMAT_V2 === 'true';
+    const variante = await this.findVarianteCompletaOrThrow(auth, varianteId, this.prisma);
+    const producto = variante.productoServicio;
+    let modo = producto.motorPreferido as 'V1' | 'V2' | 'SHADOW';
 
-    if (enableWideFormatV2) {
-      const variante = await this.findVarianteCompletaOrThrow(auth, varianteId, this.prisma);
-      if (variante.productoServicio.motorCodigo === 'gran_formato') {
-        const motorV2 = this.motorRegistry.getModule('gran_formato', 2);
-        return motorV2.quoteVariant(auth, varianteId, payload);
-      }
+    // Fallback legacy: ENABLE_WIDE_FORMAT_V2 fuerza V2 para gran_formato en Etapa B.
+    if (
+      modo === 'V1' &&
+      producto.motorCodigo === 'gran_formato' &&
+      process.env.ENABLE_WIDE_FORMAT_V2 === 'true'
+    ) {
+      modo = 'V2';
     }
 
-    const { v1ToCanonical } = await import('./adapters/v1-to-canonical.js');
+    if (modo === 'V2') {
+      return this.runMotorV2OrThrow(auth, varianteId, payload, producto.motorCodigo);
+    }
+
+    if (modo === 'SHADOW') {
+      return this.cotizarEnShadowMode(auth, varianteId, payload, producto);
+    }
+
+    // Default: V1 con adapter.
+    return this.cotizarV1Adaptado(auth, varianteId, payload);
+  }
+
+  private async runMotorV2OrThrow(
+    auth: CurrentAuth,
+    varianteId: string,
+    payload: CotizarProductoVarianteDto,
+    motorCodigo: string,
+  ) {
+    if (!this.motorRegistry.hasModule(motorCodigo, 2)) {
+      throw new BadRequestException(
+        `motorPreferido=V2 pero no hay motor ${motorCodigo}@2 registrado. Migra el producto a motor V1 o registra el motor v2.`,
+      );
+    }
+    const motorV2 = this.motorRegistry.getModule(motorCodigo, 2);
+    return motorV2.quoteVariant(auth, varianteId, payload);
+  }
+
+  private async cotizarV1Adaptado(
+    auth: CurrentAuth,
+    varianteId: string,
+    payload: CotizarProductoVarianteDto,
+  ) {
     const v1 = await this.cotizarVariante(auth, varianteId, payload);
     return v1ToCanonical(v1 as never);
+  }
+
+  private async cotizarEnShadowMode(
+    auth: CurrentAuth,
+    varianteId: string,
+    payload: CotizarProductoVarianteDto,
+    producto: { id: string; motorCodigo: string },
+  ) {
+    // Primero v1 (lo que el cliente ve). Si falla, propagamos — shadow no puede
+    // enmascarar errores productivos.
+    const v1Canonica = await this.cotizarV1Adaptado(auth, varianteId, payload);
+
+    // v2 en paralelo, best-effort: si falla, se registra como anomalía.
+    let v2Resultado: Awaited<ReturnType<typeof this.runMotorV2OrThrow>> | { error: string };
+    try {
+      v2Resultado = await this.runMotorV2OrThrow(auth, varianteId, payload, producto.motorCodigo);
+    } catch (err) {
+      v2Resultado = { error: err instanceof Error ? err.message : String(err) };
+    }
+
+    // Fire-and-forget: el log no debe bloquear la respuesta.
+    void logShadowDiff(this.prisma, auth, {
+      productoServicioId: producto.id,
+      productoVarianteId: varianteId,
+      motorCodigo: producto.motorCodigo,
+      input: payload,
+      v1: v1Canonica as never,
+      v2: v2Resultado as never,
+    });
+
+    return v1Canonica;
   }
 
   async quoteDigitalVariant(

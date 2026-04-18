@@ -271,6 +271,18 @@ enum ActivacionPasoV2 {
   CONDICIONAL
 }
 
+// Modelo universal (C.1.2): versión de motor preferida por producto.
+// Controla qué motor se usa al cotizar, en 3 modos:
+//   V1      → motor legacy (default, comportamiento pre-refactor).
+//   V2      → motor nuevo del modelo universal (tras validación en shadow).
+//   SHADOW  → corre ambos motores en paralelo, entrega v1 al cliente y
+//             persiste el diff en CotizacionShadowLog para comparación.
+enum MotorVersionPreferida {
+  V1
+  V2
+  SHADOW
+}
+
 // Modelo universal (A.4): dominio sobre el que decide una ReglaDeSeleccion.
 // MATERIAL       → elige qué MateriaPrimaVariante consume un paso.
 // CENTRO_COSTO   → elige qué centro/máquina ejecuta un paso.
@@ -536,6 +548,7 @@ model Tenant {
   procesosOperacion                      ProcesoOperacion[]
   procesosVersion                        ProcesoVersion[]
   reglasDeSeleccion                      ReglaDeSeleccion[]
+  cotizacionShadowLogs                   CotizacionShadowLog[]
   materiasPrimas                         MateriaPrima[]
   materiaPrimaVariantes                  MateriaPrimaVariante[]
   almacenesMateriaPrima                  AlmacenMateriaPrima[]
@@ -1552,6 +1565,11 @@ model ProductoServicio {
   descripcion                String?
   motorCodigo                String                      @default("impresion_digital_laser")
   motorVersion               Int                         @default(1)
+  // Modelo universal (C.1.2): control granular de migración por producto.
+  //   V1      → usa motor v1 (legacy, comportamiento actual)
+  //   V2      → usa motor v2 (modelo universal)
+  //   SHADOW  → corre ambos en paralelo, devuelve v1, loguea diff en CotizacionShadowLog
+  motorPreferido             MotorVersionPreferida       @default(V1)
   usarRutaComunVariantes     Boolean                     @default(true)
   procesoDefinicionDefaultId String?                     @db.Uuid
   detalleJson                Json?
@@ -2096,4 +2114,31 @@ model CotizacionChecklistRespuestaSnapshot {
 
   @@index([tenantId, cotizacionProductoSnapshotId])
   @@index([tenantId, productoVarianteId])
+}
+
+// Modelo universal (C.1.1): log de comparación motor v1 vs v2.
+// Se escribe en cada cotización cuando ProductoServicio.motorPreferido = SHADOW.
+// El dispatcher corre ambos motores en paralelo, entrega el v1 al cliente, y
+// registra acá los diffs (total, subtotales, anomalías) para análisis.
+// Un diff sostenido < 0.01% durante ≥1 semana habilita el flip a V2.
+model CotizacionShadowLog {
+  id                 String   @id @default(uuid()) @db.Uuid
+  tenantId           String   @db.Uuid
+  productoServicioId String   @db.Uuid
+  productoVarianteId String?  @db.Uuid
+  motorCodigo        String
+  inputHash          String   // sha256 del input para agrupar corridas equivalentes
+  totalV1            Decimal  @db.Decimal(14, 6)
+  totalV2            Decimal  @db.Decimal(14, 6)
+  diffAbsoluto       Decimal  @db.Decimal(14, 6)
+  diffPct            Float    // (|v1-v2|/v1) × 100
+  subtotalesV1       Json
+  subtotalesV2       Json
+  anomalias          Json     // flags: { pasosExtra, pasosFaltantes, bucketMismatch, etc. }
+  createdAt          DateTime @default(now())
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, motorCodigo, createdAt])
+  @@index([tenantId, productoServicioId, createdAt])
+  @@index([diffPct])
 }
