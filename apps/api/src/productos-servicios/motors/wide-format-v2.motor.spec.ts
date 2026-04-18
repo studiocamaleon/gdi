@@ -8,6 +8,7 @@
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProductosServiciosService } from '../productos-servicios.service';
 import type { CurrentAuth } from '../../auth/auth.types';
+import type { CotizacionCanonica } from '../dto/cotizacion-canonica.dto';
 
 const VARIANTE_ID = '2a0f807e-ebe9-4706-b5ba-07a439474f25'; // Genérico del producto Vinilo adhesivo blanco
 
@@ -34,13 +35,17 @@ describe('WideFormatMotorModuleV2 (C.2 — nesting real + selección de material
     await prisma.$disconnect();
   });
 
-  async function cotizar(params: Record<string, unknown>, cantidad = 1, conLaminado = false) {
+  async function cotizar(
+    params: Record<string, unknown>,
+    cantidad = 1,
+    conLaminado = false,
+  ): Promise<CotizacionCanonica> {
     const motor = service['motorRegistry'].getModule('gran_formato', 2);
-    return motor.quoteVariant(AUTH, VARIANTE_ID, {
+    return (await motor.quoteVariant(AUTH, VARIANTE_ID, {
       cantidad,
       periodo: '2026-04',
       parametros: { ...params, conLaminado },
-    } as never);
+    } as never)) as CotizacionCanonica;
   }
 
   describe('Shape canónica + selección de material', () => {

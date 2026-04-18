@@ -15,6 +15,7 @@
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProductosServiciosService } from '../productos-servicios.service';
 import type { CurrentAuth } from '../../auth/auth.types';
+import type { CotizacionCanonica } from '../dto/cotizacion-canonica.dto';
 
 const TENANT_ID = '0e7937a0-c093-4cdd-bc5e-fe4de1385ce8';
 const PRODUCTO_TARJETAS_ID = '44e4133f-d097-472b-9d20-7bb6084a57b6';
@@ -58,7 +59,7 @@ describe('Dispatcher cotizarVarianteV2 — modo SHADOW (C.1)', () => {
       where: { tenantId: TENANT_ID, productoServicioId: PRODUCTO_TARJETAS_ID },
     });
 
-    const resultado = await service.cotizarVarianteV2(
+    const resultado = (await service.cotizarVarianteV2(
       AUTH,
       VARIANTE_TARJETAS_ESTANDAR_ID,
       {
@@ -66,7 +67,7 @@ describe('Dispatcher cotizarVarianteV2 — modo SHADOW (C.1)', () => {
         periodo: '2026-04',
         seleccionesBase: [{ dimension: 'caras', valor: 'doble_faz' }],
       } as never,
-    );
+    )) as CotizacionCanonica;
 
     // Respuesta: shape canónica (v1 adaptada)
     expect(resultado).toBeDefined();
@@ -110,7 +111,7 @@ describe('Dispatcher cotizarVarianteV2 — modo SHADOW (C.1)', () => {
       where: { tenantId: TENANT_ID, productoServicioId: PRODUCTO_TARJETAS_ID },
     });
 
-    const resultado = await service.cotizarVarianteV2(
+    const resultado = (await service.cotizarVarianteV2(
       AUTH,
       VARIANTE_TARJETAS_ESTANDAR_ID,
       {
@@ -118,7 +119,7 @@ describe('Dispatcher cotizarVarianteV2 — modo SHADOW (C.1)', () => {
         periodo: '2026-04',
         seleccionesBase: [{ dimension: 'caras', valor: 'doble_faz' }],
       } as never,
-    );
+    )) as CotizacionCanonica;
 
     expect(resultado).toBeDefined();
     await new Promise((r) => setTimeout(r, 300));

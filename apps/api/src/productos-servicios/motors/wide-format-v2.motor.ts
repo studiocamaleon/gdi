@@ -26,7 +26,11 @@ import type {
   CotizacionCanonica,
   PasoCotizado,
 } from '../dto/cotizacion-canonica.dto';
-import { nestOnRoll, type NestingRolloResult } from './wide-format-v2.calculations';
+import {
+  nestOnRoll,
+  type NestingRolloResult,
+  type NestingRolloPanelizadoConfig,
+} from '../nesting/nesting-rollo';
 
 type ParametrosWideFormatV2 = {
   anchoMm?: number;
@@ -120,7 +124,12 @@ type MaterialEvaluado = {
   precioRolloTotal: number;
   precioPorM2: number;
   nesting: NestingRolloResult;
-  sustratoCosto: number; // costo del sustrato para las piezas pedidas
+  /** Área efectivamente consumida del rollo = printableWidth × consumedLength. */
+  areaConsumidaM2: number;
+  /** % de aprovechamiento = areaUtil / areaConsumida. */
+  aprovechamientoPct: number;
+  /** Costo del sustrato aplicado a la cantidad pedida. */
+  sustratoCosto: number;
 };
 
 export class WideFormatMotorModuleV2 implements ProductMotorModule {
@@ -221,6 +230,10 @@ export class WideFormatMotorModuleV2 implements ProductMotorModule {
     const evaluados: MaterialEvaluado[] = [];
     const descartados: Array<{ sku: string; motivo: string }> = [];
 
+    // Panelizado opcional desde config del producto
+    const panelizadoConfig: NestingRolloPanelizadoConfig | undefined =
+      (config as unknown as { panelizado?: NestingRolloPanelizadoConfig }).panelizado;
+
     for (const material of runtime.materiales) {
       const rolloAnchoMm = rolloAnchoMmDeMaterial(material);
       const rolloLargoM = rolloLargoMDeMaterial(material);
@@ -241,26 +254,40 @@ export class WideFormatMotorModuleV2 implements ProductMotorModule {
         continue;
       }
 
+      // Ancho imprimible = ancho rollo menos márgenes laterales no-imprimibles.
+      // Cuando tengamos máquina cargada, usar min(rolloAncho, maquinaPrintableMax).
+      const printableWidthMm = Math.max(0, rolloAnchoMm - 2 * margen);
+
       const nesting = nestOnRoll({
-        piezas: medidas,
-        rolloAnchoMm,
-        separacionMm: sep,
-        margenLateralMm: margen,
+        medidas,
+        printableWidthMm,
+        marginLeftMm: margen,
+        marginStartMm: 0,
+        marginEndMm: 0,
+        separacionHorizontalMm: sep,
+        separacionVerticalMm: sep,
         permitirRotacion,
+        panelizado: panelizadoConfig,
       });
 
-      if (nesting.piezasRechazadas.length > 0) {
+      if (!nesting) {
         descartados.push({
           sku: material.sku,
-          motivo: `Rollo ${rolloAnchoMm}mm: ${nesting.piezasRechazadas.map((r) => r.motivo).join('; ')}`,
+          motivo: `Rollo ${rolloAnchoMm}mm: no se pudo acomodar las piezas (dimensiones incompatibles con el ancho imprimible ${printableWidthMm}mm).`,
         });
         continue;
       }
 
+      // Área consumida = ancho imprimible × largo consumido
+      const areaConsumidaM2 = (printableWidthMm * nesting.consumedLengthMm) / 1_000_000;
+      const aprovechamientoPct = areaConsumidaM2 > 0
+        ? Math.round((nesting.usefulAreaM2 / areaConsumidaM2) * 10000) / 100
+        : 0;
+
       // Precio por m² = precio del rollo / (ancho × largo del rollo)
       const areaRolloM2 = (rolloAnchoMm / 1000) * rolloLargoM;
       const precioPorM2 = precioRollo / areaRolloM2;
-      const sustratoCosto = roundMoney(nesting.areaConsumidaM2 * precioPorM2);
+      const sustratoCosto = roundMoney(areaConsumidaM2 * precioPorM2);
 
       evaluados.push({
         materialId: material.id,
@@ -271,6 +298,8 @@ export class WideFormatMotorModuleV2 implements ProductMotorModule {
         precioRolloTotal: precioRollo,
         precioPorM2: roundMoney(precioPorM2),
         nesting,
+        areaConsumidaM2,
+        aprovechamientoPct,
         sustratoCosto,
       });
     }
@@ -289,9 +318,9 @@ export class WideFormatMotorModuleV2 implements ProductMotorModule {
         `Se evaluaron ${evaluados.length} materiales; ganó ${ganador.sku} (${ganador.rolloAnchoMm}mm ancho) por criterio ${criterio}.`,
       );
     }
-    if (ganador.nesting.aprovechamientoPct < 30) {
+    if (ganador.aprovechamientoPct < 30) {
       warnings.push(
-        `Aprovechamiento bajo: ${ganador.nesting.aprovechamientoPct}%. Considerar otras medidas o combinar con otro pedido.`,
+        `Aprovechamiento bajo: ${ganador.aprovechamientoPct}%. Considerar otras medidas o combinar con otro pedido.`,
       );
     }
 
@@ -311,8 +340,8 @@ export class WideFormatMotorModuleV2 implements ProductMotorModule {
     };
 
     // Paso 2: impresion_por_area
-    const areaConsumidaM2 = ganador.nesting.areaConsumidaM2;
-    const areaUtilM2 = ganador.nesting.areaUtilM2;
+    const areaConsumidaM2 = ganador.areaConsumidaM2;
+    const areaUtilM2 = ganador.nesting.usefulAreaM2;
     const productividadM2h = Number(config.productividadM2h ?? CONFIG_DEFAULTS.productividadM2h);
     const tarifaImpresion = Number(config.tarifaMaquinaHora ?? CONFIG_DEFAULTS.tarifaMaquinaHora);
     const tintaMlPorM2 = Number(config.tintaMlPorM2 ?? CONFIG_DEFAULTS.tintaMlPorM2);
@@ -344,18 +373,21 @@ export class WideFormatMotorModuleV2 implements ProductMotorModule {
         materialesEvaluados: evaluados.map((e) => ({
           sku: e.sku,
           rolloAnchoMm: e.rolloAnchoMm,
-          aprovechamientoPct: e.nesting.aprovechamientoPct,
-          largoConsumidoMm: e.nesting.largoConsumidoMm,
+          aprovechamientoPct: e.aprovechamientoPct,
+          largoConsumidoMm: e.nesting.consumedLengthMm,
           sustratoCosto: e.sustratoCosto,
           esGanador: e.materialId === ganador.materialId,
         })),
         materialesDescartados: descartados,
         nesting: {
-          largoConsumidoMm: ganador.nesting.largoConsumidoMm,
-          areaUtilM2: ganador.nesting.areaUtilM2,
-          areaConsumidaM2: ganador.nesting.areaConsumidaM2,
-          aprovechamientoPct: ganador.nesting.aprovechamientoPct,
-          layoutsPorMedida: ganador.nesting.layoutsPorMedida,
+          largoConsumidoMm: ganador.nesting.consumedLengthMm,
+          areaUtilM2: ganador.nesting.usefulAreaM2,
+          areaConsumidaM2: ganador.areaConsumidaM2,
+          aprovechamientoPct: ganador.aprovechamientoPct,
+          orientacion: ganador.nesting.orientacion,
+          panelizado: ganador.nesting.panelizado,
+          panelCount: ganador.nesting.panelCount,
+          placements: ganador.nesting.placements,
         },
         productividadM2h,
         setupMin: impresionSetupMin,
@@ -454,10 +486,10 @@ function elegirMaterial(
   criterio: 'menor_costo_total' | 'menor_largo_consumido' | 'mayor_aprovechamiento',
 ): MaterialEvaluado {
   if (criterio === 'menor_largo_consumido') {
-    return [...evaluados].sort((a, b) => a.nesting.largoConsumidoMm - b.nesting.largoConsumidoMm)[0];
+    return [...evaluados].sort((a, b) => a.nesting.consumedLengthMm - b.nesting.consumedLengthMm)[0];
   }
   if (criterio === 'mayor_aprovechamiento') {
-    return [...evaluados].sort((a, b) => b.nesting.aprovechamientoPct - a.nesting.aprovechamientoPct)[0];
+    return [...evaluados].sort((a, b) => b.aprovechamientoPct - a.aprovechamientoPct)[0];
   }
   // menor_costo_total por default
   return [...evaluados].sort((a, b) => a.sustratoCosto - b.sustratoCosto)[0];
