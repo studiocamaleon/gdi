@@ -118,6 +118,7 @@ import { VinylCutMotorModule } from './motors/vinyl-cut.motor';
 import { WideFormatMotorModule } from './motors/wide-format.motor';
 import { WideFormatMotorModuleV2 } from './motors/wide-format-v2.motor';
 import { VinylCutMotorModuleV2 } from './motors/vinyl-cut-v2.motor';
+import { DigitalSheetMotorModuleV2 } from './motors/digital-sheet-v2.motor';
 import { v1ToCanonical } from './adapters/v1-to-canonical';
 import { logShadowDiff } from './shadow/shadow-logger';
 import { nestOnRoll as nestOnRollExternal, type NestingRolloResult } from './nesting/nesting-rollo';
@@ -522,6 +523,7 @@ export class ProductosServiciosService {
       new WideFormatMotorModuleV2(this), // gran_formato@2 — piloto Etapa B
       new VinylCutMotorModule(this),
       new VinylCutMotorModuleV2(this), // vinilo_de_corte@2 — Etapa C.3 piloto single-color
+      new DigitalSheetMotorModuleV2(this), // impresion_digital_laser@2 — Etapa C.4 piloto MVP
       new TalonarioMotorModule(this),
       new RigidPrintedMotorModule(this),
     ]);
@@ -3605,6 +3607,62 @@ export class ProductosServiciosService {
       config,
       materiales,
       plotters,
+    };
+  }
+
+  /**
+   * Modelo universal (C.4): carga runtime para impresion_digital_laser@2 —
+   * config v2 activa, variante con papel, proceso con operaciones y tarifas.
+   *
+   * Piloto MVP: retorna lo mínimo para que el motor v2 pueda emitir shape
+   * canónica. No resuelve checklist, configuracionesImpresion, ni reglas
+   * por variante (esas capas se agregan en iteraciones posteriores).
+   */
+  async loadDigitalV2Runtime(auth: CurrentAuth, varianteId: string, periodo: string) {
+    const variante = await this.findVarianteCompletaOrThrow(auth, varianteId, this.prisma);
+    if (variante.productoServicio.motorCodigo !== 'impresion_digital_laser') {
+      throw new BadRequestException(
+        `El producto no usa motor impresion_digital_laser (usa ${variante.productoServicio.motorCodigo}).`,
+      );
+    }
+    if (!variante.papelVariante) {
+      throw new BadRequestException(
+        'La variante no tiene papel/sustrato asignado (requerido para digital@2).',
+      );
+    }
+    const configRow = await this.prisma.productoMotorConfig.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        productoServicioId: variante.productoServicioId,
+        motorCodigo: 'impresion_digital_laser',
+        motorVersion: 2,
+        activo: true,
+      },
+      orderBy: [{ versionConfig: 'desc' }],
+    });
+    if (!configRow) {
+      throw new BadRequestException(
+        `El producto ${variante.productoServicioId} no tiene ProductoMotorConfig para impresion_digital_laser@2.`,
+      );
+    }
+    const config = configRow.parametrosJson as Record<string, unknown>;
+    const procesoDefinicionId = this.resolveRutaEfectivaId(variante);
+    const proceso = procesoDefinicionId
+      ? await this.findProcesoConOperacionesOrThrow(auth, procesoDefinicionId, this.prisma)
+      : null;
+    const tarifas = await this.prisma.centroCostoTarifaPeriodo.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        periodo,
+        estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
+      },
+      select: { centroCostoId: true, tarifaCalculada: true },
+    });
+    return {
+      variante,
+      config,
+      proceso,
+      tarifaByCentro: new Map(tarifas.map((t) => [t.centroCostoId, Number(t.tarifaCalculada)])),
     };
   }
 

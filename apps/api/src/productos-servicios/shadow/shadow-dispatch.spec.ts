@@ -1,15 +1,13 @@
 /**
  * C.1 — Test end-to-end del dispatcher en modo SHADOW.
  *
- * Usa un producto digital (con motor v1 real) en SHADOW mode. v2 aún no está
- * implementado para `impresion_digital_laser`, por lo que el log va a
- * registrar una anomalía `error_v2`. Eso es lo esperado hasta que C.3
- * implemente el motor digital v2.
+ * Usa un producto digital con motor v1 + v2 ambos registrados (C.4 piloto).
+ * En SHADOW mode: retorna v1, corre v2 en paralelo y loguea el diff.
  *
  * Flujo validado:
  *   1. Setea motorPreferido=SHADOW para el producto digital.
  *   2. Cotiza → devuelve shape canónica (v1 adaptada).
- *   3. Se persiste una entrada en CotizacionShadowLog con diff/anomalía.
+ *   3. Se persiste una entrada en CotizacionShadowLog con totalV1, totalV2, diff.
  *   4. Revierte a V1 para no dejar estado sucio.
  */
 import { PrismaService } from '../../prisma/prisma.service';
@@ -49,7 +47,7 @@ describe('Dispatcher cotizarVarianteV2 — modo SHADOW (C.1)', () => {
     await prisma.$disconnect();
   });
 
-  it('en modo SHADOW con v1 real + v2 no registrado: devuelve v1, loguea anomalía error_v2', async () => {
+  it('en modo SHADOW con v1 real + v2 piloto: devuelve v1, loguea diff v1 vs v2', async () => {
     await prisma.productoServicio.update({
       where: { id: PRODUCTO_TARJETAS_ID },
       data: { motorPreferido: 'SHADOW' },
@@ -90,15 +88,12 @@ describe('Dispatcher cotizarVarianteV2 — modo SHADOW (C.1)', () => {
     expect(ultimo).not.toBeNull();
     expect(ultimo?.motorCodigo).toBe('impresion_digital_laser');
     expect(Number(ultimo?.totalV1)).toBeGreaterThan(0);
-    expect(Number(ultimo?.totalV2)).toBe(0); // v2 no existe
+    expect(Number(ultimo?.totalV2)).toBeGreaterThan(0); // v2 piloto ahora produce cotización
     expect(ultimo?.inputHash).toHaveLength(16);
 
-    // Verificar que la anomalía incluye error_v2 (motor no registrado)
+    // El piloto v2 usa fórmulas simplificadas — se espera diff != 0 con v1.
     const anomalias = ultimo?.anomalias as unknown as Array<{ tipo: string; detalle: string }>;
     expect(Array.isArray(anomalias)).toBe(true);
-    const errorV2 = anomalias.find((a) => a.tipo === 'error_v2');
-    expect(errorV2).toBeDefined();
-    expect(errorV2?.detalle).toMatch(/impresion_digital_laser@2/);
   });
 
   it('en modo V1 (default): NO persiste log de shadow', async () => {
