@@ -27,6 +27,7 @@ type LastQuoteState = {
   snapshotId: string;
   cantidad: number | null;
   costoTotal: number | null;
+  costoCentroCosto: number | null;
   periodo: string | null;
   createdAt: string | null;
 };
@@ -35,10 +36,15 @@ function resolveQuoteState(result: Record<string, unknown>, fallback: { snapshot
   const total = Number(result.total ?? fallback.total ?? 0);
   const cantidad = Number(result.cantidad ?? fallback.cantidad ?? 0);
   const periodo = typeof result.periodo === "string" ? result.periodo : fallback.periodoTarifa;
+  const subtotales = (result.subtotales && typeof result.subtotales === "object")
+    ? (result.subtotales as Record<string, unknown>)
+    : null;
+  const procesos = Number(subtotales?.procesos ?? NaN);
   return {
     snapshotId: fallback.snapshotId,
     cantidad: Number.isFinite(cantidad) ? cantidad : null,
     costoTotal: Number.isFinite(total) ? total : null,
+    costoCentroCosto: Number.isFinite(procesos) ? procesos : null,
     periodo: periodo || null,
     createdAt: fallback.createdAt ?? null,
   };
@@ -226,10 +232,27 @@ export function ProductoSimularVentaTab(props: ProductTabProps) {
                   </TableHeader>
                   <TableBody>
                     <TableRow>
-                      <TableCell className="text-muted-foreground">Costo total</TableCell>
-                      <TableCell className="text-right font-medium">{formatCurrency(simulacionComercial.costoTotal)}</TableCell>
+                      <TableCell className="text-muted-foreground">Centro de costo</TableCell>
                       <TableCell className="text-right font-medium">
-                        {simulacionComercial.precioFinal ? `${formatNumber((simulacionComercial.costoTotal / simulacionComercial.precioFinal) * 100)}%` : "-"}
+                        {quoteState?.costoCentroCosto != null ? formatCurrency(quoteState.costoCentroCosto) : "-"}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {quoteState?.costoCentroCosto != null && simulacionComercial.precioFinal
+                          ? `${formatNumber((quoteState.costoCentroCosto / simulacionComercial.precioFinal) * 100)}%`
+                          : "-"}
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="text-muted-foreground">Materias primas</TableCell>
+                      <TableCell className="text-right font-medium">
+                        {quoteState?.costoCentroCosto != null
+                          ? formatCurrency(simulacionComercial.costoTotal - quoteState.costoCentroCosto)
+                          : "-"}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {quoteState?.costoCentroCosto != null && simulacionComercial.precioFinal
+                          ? `${formatNumber(((simulacionComercial.costoTotal - quoteState.costoCentroCosto) / simulacionComercial.precioFinal) * 100)}%`
+                          : "-"}
                       </TableCell>
                     </TableRow>
                     <TableRow>
