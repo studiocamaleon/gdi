@@ -116,6 +116,7 @@ import { RigidPrintedMotorModule } from './motors/rigid-printed.motor';
 import { DEFAULT_RIGID_PRINTED_CONFIG } from './motors/rigid-printed.types';
 import { VinylCutMotorModule } from './motors/vinyl-cut.motor';
 import { WideFormatMotorModule } from './motors/wide-format.motor';
+import { WideFormatMotorModuleV2 } from './motors/wide-format-v2.motor';
 
 const DEFAULT_PERIOD_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
 type ServicioPricingNivel = {
@@ -514,6 +515,7 @@ export class ProductosServiciosService {
     this.motorRegistry = new ProductMotorRegistry([
       new DigitalSheetMotorModule(this),
       new WideFormatMotorModule(this),
+      new WideFormatMotorModuleV2(this), // gran_formato@2 — piloto Etapa B
       new VinylCutMotorModule(this),
       new TalonarioMotorModule(this),
       new RigidPrintedMotorModule(this),
