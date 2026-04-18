@@ -1,183 +1,260 @@
-# Plan de Rollback — Refactor Arquitectónico Mayor
+# Plan de Rollback — Refactors mayores
 
-Este documento describe cómo volver al sistema estable anterior al refactor de módulos transversales en caso de que el refactor se vuelva inviable o rompa algo crítico.
-
----
-
-## Punto de restauración
-
-- **Tag git:** `v1.0-stable-pre-refactor`
-- **Commit:** `e8a3d1be` (merge de feature-troquelados en main)
-- **Fecha:** 2026-04-10
-- **Última migración estable:** `20260325160000_add_mutar_producto_base_to_checklist_regla_accion`
-- **Dump de base de datos:** `backups/gdi_saas_pre_refactor_20260410_1348.sql` (5.0 MB, 68 tablas)
+Este documento describe cómo volver a un estado estable anterior si alguno de los refactors en curso se vuelve inviable o rompe algo crítico. Cubre **dos puntos de restauración históricos**, del más reciente al más antiguo.
 
 ---
 
-## Estado del sistema en el punto de restauración
+## Puntos de restauración disponibles
 
-- 5 motores funcionales:
-  - `impresion_digital_laser` (con soporte completo de troquelado)
-  - `gran_formato`
-  - `vinilo_corte`
-  - `talonario`
-  - `rigidos_impresos`
-- 40 migraciones Prisma aplicadas
-- 4 archivos de tests jest
-- Base de datos PostgreSQL con schema + datos
+| Tag | Fecha | Propósito | Dump de DB |
+|---|---|---|---|
+| `v1.1-stable-pre-modelo-universal` | 2026-04-17 | Antes de la migración al modelo universal de costeo | `backups/gdi_saas_pre_modelo_universal_20260417_2234.sql` (5.3 MB) |
+| `v1.0-stable-pre-refactor` | 2026-04-10 | Antes del refactor arquitectónico mayor (módulos transversales) | `backups/gdi_saas_pre_refactor_20260410_1348.sql` (5.0 MB) |
+
+Usar el más reciente por default. El más antiguo sólo si también se quiere revertir el refactor arquitectónico previo (que ya está mergeado a main al 2026-04-17).
 
 ---
 
 ## Cuándo ejecutar este rollback
 
-Ejecutar **SOLO** si se cumple alguna de estas condiciones:
+**SOLO** cuando:
 
-1. El refactor ha llegado a un estado inconsistente imposible de recuperar por commits normales
-2. Los datos están corruptos por una migración mal aplicada
-3. El tiempo estimado para arreglar el estado actual supera al tiempo de volver al punto estable + rehacer el trabajo bueno
-4. El usuario decide descartar el refactor y continuar con la arquitectura actual
+1. El trabajo en `refactor/modelo-universal` llegó a un estado inconsistente imposible de recuperar con commits normales.
+2. Los datos en producción quedan corruptos por una migración mal aplicada.
+3. El tiempo estimado para arreglar el estado actual supera al tiempo de volver al punto estable + rehacer el trabajo bueno.
+4. El usuario decide descartar la migración y continuar con la arquitectura actual.
 
-**NO** ejecutar por problemas menores: usar `git revert <commit>` o fixes incrementales primero.
+**NO** ejecutar por problemas menores. Usar primero:
+- Feature flags (`ProductoServicio.motorPreferido = 'v1'`) — segundos.
+- `git revert <commit>` — minutos.
+- Abandonar sólo una etapa del plan (no mergear su branch) — cero costo.
 
 ---
 
-## Plan A — Descarte completo (rollback total)
+## Plan A — Rollback al punto pre-modelo-universal (lo más común)
 
-### Paso 1: Verificar estado actual
+Revierte toda la migración al modelo universal, pero preserva el refactor arquitectónico previo (ya mergeado a main).
+
+### Paso 1 — Verificar estado actual
+
 ```bash
 cd /Users/lucasgomez/gdi-saas
 git status
 git branch --show-current
 ```
 
-### Paso 2: Stashear cualquier cambio pendiente (si querés salvarlo)
+### Paso 2 — Stashear cambios sin commitear (opcional)
+
 ```bash
-git stash push -m "rollback: cambios sin commitear al momento del rollback $(date)"
+git stash push -m "rollback modelo-universal: cambios al $(date)"
 ```
 
-### Paso 3: Volver al tag estable en main
+### Paso 3 — Volver al tag estable
+
 ```bash
 git checkout main
-git reset --hard v1.0-stable-pre-refactor
+git reset --hard v1.1-stable-pre-modelo-universal
+git push origin main --force-with-lease   # confirmar con el equipo antes
 ```
 
-### Paso 4: Borrar la branch del refactor
+### Paso 4 — Borrar branch y tags del modelo universal
+
 ```bash
-git branch -D refactor/modulos-transversales
+git branch -D refactor/modelo-universal
+git push origin --delete refactor/modelo-universal
+# (opcional) borrar el tag si no querés conservarlo
+# git tag -d v1.1-stable-pre-modelo-universal
 ```
 
-### Paso 5: Restaurar la base de datos desde el dump
+### Paso 5 — Restaurar DB desde el dump
 
-**IMPORTANTE:** Este paso **BORRA TODA la base de datos actual** y la reemplaza por el snapshot del punto estable.
+**CUIDADO:** este paso **borra toda la DB actual** y la reemplaza por el snapshot del 2026-04-17.
 
 ```bash
-# Dropear la DB actual
 docker exec gdi-saas-postgres psql -U postgres -c "DROP DATABASE IF EXISTS gdi_saas;"
 docker exec gdi-saas-postgres psql -U postgres -c "CREATE DATABASE gdi_saas;"
-
-# Restaurar desde el dump
-docker exec -i gdi-saas-postgres psql -U postgres -d gdi_saas < backups/gdi_saas_pre_refactor_20260410_1348.sql
+docker exec -i gdi-saas-postgres psql -U postgres -d gdi_saas < backups/gdi_saas_pre_modelo_universal_20260417_2234.sql
 ```
 
-### Paso 6: Regenerar cliente Prisma y verificar
+### Paso 6 — Regenerar cliente Prisma y verificar
+
 ```bash
 cd apps/api
 npx prisma generate
 npx prisma migrate status
 ```
 
-El comando `migrate status` debería decir que la última migración aplicada es `20260325160000_add_mutar_producto_base_to_checklist_regla_accion` (la misma que está en `backups/last_stable_migration.txt`).
+Última migración esperada: `20260415210000_remove_rol_es_opcional_from_plantilla` (ver `backups/last_stable_migration.txt`).
 
-### Paso 7: Verificar que el sistema arranca
+### Paso 7 — Verificar arranque del sistema
+
 ```bash
-# Backend
-cd /Users/lucasgomez/gdi-saas/apps/api
-npm run start:dev
-
-# Frontend (otra terminal)
-cd /Users/lucasgomez/gdi-saas
-npm run dev
+# Terminal 1
+cd /Users/lucasgomez/gdi-saas/apps/api && npm run start:dev
+# Terminal 2
+cd /Users/lucasgomez/gdi-saas && npm run dev
 ```
 
-Ambos deberían levantar sin errores. Probar manualmente:
+Validar manualmente:
 - Login
 - Listar productos
-- Cotizar un producto existente
-- Crear un producto con troquelado digital laser
+- Cotizar un producto existente (digital, rígido, vinilo, talonario)
+- El endpoint `/cotizar-v2` retorna 404 o 501 (no existe en el punto de restauración)
 
 ---
 
-## Plan B — Rescate selectivo de commits
+## Plan B — Rollback profundo al punto pre-refactor arquitectónico
 
-Si durante el refactor se hicieron commits aislados que son estables por sí solos (por ejemplo: un fix de un bug en un motor existente), se pueden rescatar con cherry-pick.
+Revierte tanto la migración al modelo universal **como** el refactor arquitectónico previo. Sólo necesario si ambos esfuerzos fallan.
 
-### Paso 1: Identificar los commits a rescatar
+Mismos pasos que Plan A pero:
+- Paso 3: `git reset --hard v1.0-stable-pre-refactor`
+- Paso 5: restaurar desde `backups/gdi_saas_pre_refactor_20260410_1348.sql`
+- Paso 6: última migración esperada `20260325160000_add_mutar_producto_base_to_checklist_regla_accion`
+
+---
+
+## Plan C — Rescate selectivo de commits
+
+Si durante la migración hay commits aislados que son valiosos por sí solos (bug-fixes, mejoras a motores legacy que deberían preservarse), cherry-pick antes de ejecutar Plan A.
+
 ```bash
-git log refactor/modulos-transversales --oneline
-```
-
-### Paso 2: Cherry-pick uno por uno a main
-```bash
+git log refactor/modelo-universal --oneline
 git checkout main
-git cherry-pick <commit-hash>
-# Resolver conflictos si los hay
+git cherry-pick <sha>
+# resolver conflictos si aparecen
 ```
 
-### Paso 3: Luego ejecutar Plan A para descartar el resto del refactor
+Después ejecutar Plan A para descartar el resto.
 
 ---
 
-## Archivos que NO deben modificarse en main durante el refactor
+## Rollback por etapa (sin reset total)
 
-Para que el rollback sea limpio, **no hay que tocar los siguientes archivos en `main`** mientras el refactor está en curso en `refactor/modulos-transversales`:
+La mayoría de veces, el rollback que realmente se necesita es más granular. En orden de menor a mayor impacto:
+
+### Nivel 1 — Feature flag por producto
+
+Si un producto migrado a v2 tiene un bug detectado en producción:
+
+```sql
+UPDATE "ProductoServicio" SET "motorPreferido" = 'v1' WHERE id = '<producto-id>';
+```
+
+Segundos. Sin deploy. Sin rebuild.
+
+### Nivel 2 — Revert de un commit problemático
+
+```bash
+git checkout refactor/modelo-universal
+git revert <sha-malo>
+git push
+```
+
+Si el commit ya se había mergeado a la rama de integración, revert del merge commit:
+
+```bash
+git revert -m 1 <sha-del-merge>
+```
+
+### Nivel 3 — Abandonar una etapa
+
+Si una etapa del plan (ej. Etapa C intento vinyl-cut) no converge:
+
+```bash
+# No mergear feature/mu-etapa-C-vinyl a refactor/modelo-universal
+git branch -D feature/mu-etapa-C-vinyl   # local
+git push origin --delete feature/mu-etapa-C-vinyl   # remoto
+```
+
+Documentar razón en bitácora; pasar al siguiente producto/motor.
+
+### Nivel 4 — Abortar la migración entera
+
+Ejecutar Plan A.
+
+---
+
+## Archivos sensibles en main durante el refactor
+
+Para que Plan A (rollback) sea limpio, **no modificar** los siguientes archivos en `main` mientras `refactor/modelo-universal` está activa:
 
 - `apps/api/prisma/schema.prisma`
 - `apps/api/src/productos-servicios/productos-servicios.service.ts`
 - `apps/api/src/productos-servicios/motors/*.ts`
+- `apps/api/src/productos-servicios/pasos/*` (cuando se cree en Etapa A)
+- `apps/api/src/productos-servicios/reglas-seleccion/*` (cuando se cree en Etapa A)
 - `src/components/productos-servicios/motors/*.tsx`
 - `src/lib/productos-servicios*.ts`
+- `src/lib/propuestas.ts`
+- `src/components/comercial/*.tsx`
 
-Si hay que hacer un hotfix en estos archivos, hacerlo en `main` con un commit claro y luego hacer `merge main` en `refactor/modulos-transversales` para mantener sincronía.
-
----
+Si hay un hotfix crítico en alguno de esos archivos, hacerlo en `main` con commit claro, y después `git merge main` en `refactor/modelo-universal` para sincronizar.
 
 ## Archivos safe para hotfixes en main durante el refactor
 
-- Cualquier cosa en `/src/app/(dashboard)/` que no sea productos/cotización
+- Cualquier cosa en `src/app/(dashboard)/` que no sea `/costos/productos/*` ni `/comercial/*`
 - Autenticación, tenants, permisos
-- Módulo de materias primas base
+- Módulo de materias primas base (catálogos)
 - Editor de procesos y centros de costo
 - Módulo de máquinas/perfiles operativos
 - Dashboard, home, configuración
-- Correcciones de bugs visuales en componentes compartidos
 
 ---
 
 ## Verificación post-rollback
 
-Después de ejecutar Plan A, correr este checklist:
+Después de ejecutar Plan A:
 
-- [ ] `git log --oneline -5` muestra `v1.0-stable-pre-refactor` como HEAD
-- [ ] `git tag -l | grep v1.0` muestra el tag
-- [ ] `docker exec gdi-saas-postgres psql -U postgres -d gdi_saas -c "\dt"` lista 68 tablas
-- [ ] `npx prisma migrate status` reporta "database is up to date"
-- [ ] El sistema arranca (frontend + backend sin errores)
-- [ ] Se puede loguear al sistema
+- [ ] `git log --oneline -5` muestra `v1.1-stable-pre-modelo-universal` como HEAD (o un commit hijo si hay cherry-picks)
+- [ ] `git tag -l | grep stable` muestra ambos tags (`v1.0-stable-pre-refactor` y `v1.1-stable-pre-modelo-universal`)
+- [ ] `docker exec gdi-saas-postgres psql -U postgres -d gdi_saas -c "\dt" | wc -l` coincide con la cantidad esperada de tablas del punto de restauración
+- [ ] `cd apps/api && npx prisma migrate status` reporta "database schema is up to date"
+- [ ] `cat backups/last_stable_migration.txt` coincide con la última migración aplicada
+- [ ] Frontend y backend levantan sin errores
+- [ ] Login funciona
 - [ ] Se pueden listar productos existentes
-- [ ] Se puede cotizar un producto con troquelado digital laser
-- [ ] Los tests pasan: `cd apps/api && npm test`
+- [ ] Se puede cotizar un producto de cada motor activo
+- [ ] `cd apps/api && npm test` pasa
+- [ ] No queda referencia al endpoint `/cotizar-v2` (si existía)
+- [ ] No queda `ProductoServicio.motorPreferido` en el schema (si había llegado a introducirse)
+
+---
+
+## Dry-run del rollback (recomendado al cerrar Etapa A)
+
+Antes de que el refactor avance, validar que Plan A realmente funciona. Pasos para hacerlo sin afectar producción:
+
+1. Crear DB local de prueba:
+   ```bash
+   docker run --rm -d --name gdi-rollback-test -p 5437:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=gdi_saas postgres:16-alpine
+   ```
+2. Restaurar el dump en la DB de prueba:
+   ```bash
+   docker exec -i gdi-rollback-test psql -U postgres -d gdi_saas < backups/gdi_saas_pre_modelo_universal_20260417_2234.sql
+   ```
+3. Verificar:
+   ```bash
+   docker exec gdi-rollback-test psql -U postgres -d gdi_saas -c "SELECT COUNT(*) FROM \"ProductoServicio\";"
+   ```
+4. Limpiar:
+   ```bash
+   docker stop gdi-rollback-test
+   ```
+
+Si el restore no funciona (por tamaño del dump, permisos, schema mismatch, etc.), resolver antes de avanzar con la migración. Sin safety net probado, el refactor no es seguro.
 
 ---
 
 ## Contacto y soporte
 
-Si durante el rollback aparecen errores inesperados:
+Si durante un rollback aparecen errores inesperados:
 
-1. Revisar los logs del backend y frontend
-2. Verificar que el dump de DB es el correcto (`ls -lh backups/`)
-3. Verificar que el tag existe (`git tag -l v1.0-stable-pre-refactor`)
-4. Si todo falla, tenemos git reflog como última red: `git reflog` puede mostrar el estado previo al rollback para poder volver atrás del rollback
+1. Revisar logs del backend y frontend.
+2. Verificar que el dump correcto esté en `backups/` (`ls -lh backups/`).
+3. Verificar que los tags existen (`git tag -l`).
+4. Último recurso: `git reflog` muestra estados previos al rollback para poder volver atrás del rollback si hiciera falta.
 
 ---
 
-_Documento generado el 2026-04-10 como parte de la preparación del refactor de módulos transversales. Ver `docs/refactor-plan.md` para el plan completo del refactor._
+_Documento actualizado 2026-04-17 al iniciar la migración al modelo universal de costeo. La sección original (2026-04-10) del refactor arquitectónico previo se preservó reorganizada en este mismo documento._
