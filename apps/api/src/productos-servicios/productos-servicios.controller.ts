@@ -651,8 +651,11 @@ export class ProductosServiciosController {
     @CurrentSession() auth: CurrentAuth,
     @Param('varianteId') varianteId: string,
     @Body() payload: CotizarProductoVarianteDto,
+    @Query('mode') mode?: string,
   ) {
-    return this.service.cotizarVarianteV2(auth, varianteId, payload);
+    return this.service.cotizarVarianteV2(auth, varianteId, payload, {
+      forceMode: mode === 'v2' ? 'V2' : undefined,
+    });
   }
 
   @Post('variantes/:varianteId/imposicion-preview')

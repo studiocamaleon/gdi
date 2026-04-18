@@ -197,11 +197,15 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
           const n = Number(numerosXTalonario);
           if (Number.isFinite(n) && n > 0) parametros.numerosXTalonario = n;
         }
-        const result = await cotizarProductoVarianteV2(selectedVariantId, {
-          cantidad: Number(cantidad),
-          periodo,
-          parametros,
-        });
+        const result = await cotizarProductoVarianteV2(
+          selectedVariantId,
+          {
+            cantidad: Number(cantidad),
+            periodo,
+            parametros,
+          },
+          { forceV2: true },
+        );
         setCotizacion(result);
       } catch (error) {
         console.error(error);

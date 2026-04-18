@@ -6420,10 +6420,11 @@ export class ProductosServiciosService {
     auth: CurrentAuth,
     varianteId: string,
     payload: CotizarProductoVarianteDto,
+    options: { forceMode?: 'V1' | 'V2' | 'SHADOW' } = {},
   ) {
     const variante = await this.findVarianteCompletaOrThrow(auth, varianteId, this.prisma);
     const producto = variante.productoServicio;
-    let modo = producto.motorPreferido as 'V1' | 'V2' | 'SHADOW';
+    let modo = (options.forceMode ?? producto.motorPreferido) as 'V1' | 'V2' | 'SHADOW';
 
     // Fallback legacy: ENABLE_WIDE_FORMAT_V2 fuerza V2 para gran_formato en Etapa B.
     if (

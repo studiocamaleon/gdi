@@ -788,9 +788,11 @@ export async function cotizarProductoVarianteV2(
     nivelesSeleccionados?: Array<{ operacionId: string; nivelId: string }>;
     parametros?: Record<string, unknown>;
   },
+  options: { forceV2?: boolean } = {},
 ) {
+  const query = options.forceV2 ? '?mode=v2' : '';
   return apiRequest<CotizacionCanonica>(
-    `/productos-servicios/variantes/${varianteId}/cotizar-v2`,
+    `/productos-servicios/variantes/${varianteId}/cotizar-v2${query}`,
     {
       method: 'POST',
       body: JSON.stringify(payload),
