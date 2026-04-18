@@ -27,6 +27,30 @@ export type FamiliaPlantillaConfig = {
   required?: string[];
 };
 
+/**
+ * C.2.5 — Modo de nesting de una familia de paso.
+ *
+ * - `produce`: el paso ejecuta el nesting y emite el layout como output
+ *   (ej. impresion_por_hoja, impresion_por_area, impresion_por_pieza).
+ * - `consume`: el paso lee el layout de un paso anterior en la misma ruta
+ *   (ej. corte perimetral que corta las piezas ya impuestas por la impresora).
+ * - `none`: el paso no tiene relación con nesting
+ *   (ej. pre_prensa, encuadernado, embalaje, colocacion_in_situ).
+ *
+ * El runtime del motor v2 resuelve los grupos produce→consume automáticamente
+ * y propaga los placements/layout entre pasos encadenados.
+ */
+export type ModoNesting = 'produce' | 'consume' | 'none';
+
+/**
+ * Algoritmos de nesting disponibles (ver `apps/api/src/productos-servicios/nesting/`).
+ * Una familia con `modoNesting: 'produce'` declara cuál usa.
+ */
+export type NestingAlgoritmo =
+  | 'nesting-hoja'
+  | 'nesting-rollo'
+  | 'nesting-placa-rigida';
+
 export type FamiliaPaso = {
   codigo: string;
   nombre: string;
@@ -46,6 +70,12 @@ export type FamiliaPaso = {
   };
   requiereCentroCosto: boolean;
   ejemplos: string[];
+  /**
+   * Modo de nesting (C.2.5). Si es 'produce', `nestingAlgoritmo` debe especificar
+   * cuál se usa. Si es 'consume' o 'none', `nestingAlgoritmo` es null.
+   */
+  modoNesting: ModoNesting;
+  nestingAlgoritmo: NestingAlgoritmo | null;
 };
 
 const EMPTY_SCHEMA: FamiliaPlantillaConfig = { type: 'object', properties: {} };
@@ -68,6 +98,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['setup+productivo+cleanup'], material: ['papel_por_pliego', 'toner_por_impresion'] },
     requiereCentroCosto: true,
     ejemplos: ['Tarjetas personales láser', 'Folletos offset', 'Revistas grapadas'],
+    modoNesting: 'produce',
+    nestingAlgoritmo: 'nesting-hoja',
   },
 
   impresion_por_area: {
@@ -85,6 +117,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['m2_por_hora', 'ml_por_hora'], material: ['sustrato_por_m2', 'tinta_por_m2'] },
     requiereCentroCosto: true,
     ejemplos: ['Banners de lona', 'Vinilos adhesivos impresos', 'Back-lights', 'Gigantografías'],
+    modoNesting: 'produce',
+    nestingAlgoritmo: 'nesting-rollo',
   },
 
   impresion_por_pieza: {
@@ -101,6 +135,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['pieza_por_hora', 'placa_por_hora'], material: ['tinta_por_pieza', 'placa_rigida'] },
     requiereCentroCosto: true,
     ejemplos: ['Cartel PVC impreso UV', 'Tazas DTF UV', 'Placas acrílico con logo'],
+    modoNesting: 'produce',
+    nestingAlgoritmo: 'nesting-placa-rigida',
   },
 
   aplicacion_transfer: {
@@ -116,6 +152,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['prenda_por_hora'], material: ['film_por_arte_m2', 'prenda_cruda'] },
     requiereCentroCosto: true,
     ejemplos: ['Remeras personalizadas DTF', 'Buzos estampados'],
+    modoNesting: 'none',
+    nestingAlgoritmo: null,
   },
 
   // ──────────────────────────── CORTE Y FORMADO ────────────────────────────
@@ -133,6 +171,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['corte_por_hora', 'min_por_corte'], material: [] },
     requiereCentroCosto: true,
     ejemplos: ['Guillotinado de tarjetas', 'Plotter de vinilo', 'Láser CO2 sobre papel'],
+    modoNesting: 'consume',
+    nestingAlgoritmo: null,
   },
 
   corte_volumetrico: {
@@ -148,6 +188,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['ml_por_hora', 'area_por_hora'], material: [] },
     requiereCentroCosto: true,
     ejemplos: ['Letras corpóreas PVC', 'Muebles MDF a medida', 'Logos polifán'],
+    modoNesting: 'consume',
+    nestingAlgoritmo: null,
   },
 
   grabado: {
@@ -163,6 +205,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['m2_grabado_por_hora'], material: [] },
     requiereCentroCosto: true,
     ejemplos: ['Grabado láser madera', 'Grabado en acrílico', 'Marcado metálico'],
+    modoNesting: 'consume',
+    nestingAlgoritmo: null,
   },
 
   plegado: {
@@ -175,6 +219,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['pliegues_por_hora'], material: [] },
     requiereCentroCosto: true,
     ejemplos: ['Plegado tríptico', 'Plegado folletería'],
+    modoNesting: 'none',
+    nestingAlgoritmo: null,
   },
 
   perforado: {
@@ -187,6 +233,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['perf_por_hora'], material: [] },
     requiereCentroCosto: true,
     ejemplos: ['Perforación para anillado', 'Tickets arrancables'],
+    modoNesting: 'none',
+    nestingAlgoritmo: null,
   },
 
   troquelado: {
@@ -199,6 +247,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['golpe_por_hora'], material: ['matriz_troquel'] },
     requiereCentroCosto: true,
     ejemplos: ['Cajas plegables', 'Tarjetas con esquinas redondeadas', 'Packaging rígido'],
+    modoNesting: 'consume',
+    nestingAlgoritmo: null,
   },
 
   // ────────────────────────────── TERMINACIONES ──────────────────────────────
@@ -215,6 +265,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['m2_laminado_por_hora'], material: ['film_por_m2'] },
     requiereCentroCosto: true,
     ejemplos: ['Laminado brillo tarjetas', 'Plastificado menús', 'UV anti-rayadura'],
+    modoNesting: 'consume',
+    nestingAlgoritmo: null,
   },
 
   acabado_decorativo: {
@@ -227,6 +279,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['m2_decorado_por_hora'], material: ['foil_por_m2'] },
     requiereCentroCosto: true,
     ejemplos: ['Foil dorado en invitaciones', 'Hot-stamping tarjetas premium', 'Relieve en tapas'],
+    modoNesting: 'consume',
+    nestingAlgoritmo: null,
   },
 
   pintura_superficial: {
@@ -239,6 +293,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['m2_pintado_por_hora'], material: ['pintura_por_m2'] },
     requiereCentroCosto: true,
     ejemplos: ['Pintado estructura herrería', 'Barniz sobre MDF', 'Anti-corrosivo exterior'],
+    modoNesting: 'none',
+    nestingAlgoritmo: null,
   },
 
   encuadernado: {
@@ -256,6 +312,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['cuaderno_por_hora'], material: ['espiral_por_cuaderno', 'grapa_por_talonario'] },
     requiereCentroCosto: true,
     ejemplos: ['Libros tapa dura cosidos', 'Talonarios abrochados', 'Cuadernos anillados'],
+    modoNesting: 'none',
+    nestingAlgoritmo: null,
   },
 
   // ─────────────────────────── ESTRUCTURAL ───────────────────────────
@@ -269,6 +327,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['metros_soldados_por_hora'], material: ['perfil_por_metro', 'electrodos'] },
     requiereCentroCosto: true,
     ejemplos: ['Tótem de cartelería', 'Estructura de caja de luz', 'Pedestales'],
+    modoNesting: 'none',
+    nestingAlgoritmo: null,
   },
 
   ensamble_estructural: {
@@ -281,6 +341,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['pieza_por_hora'], material: ['tornilleria', 'adhesivos'] },
     requiereCentroCosto: true,
     ejemplos: ['Armado caja de luz (estructura + acrílico + LED + letras)', 'Ensamble mobiliario'],
+    modoNesting: 'none',
+    nestingAlgoritmo: null,
   },
 
   instalacion_electrica: {
@@ -296,6 +358,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['modulo_por_hora'], material: ['led_por_metro', 'fuente'] },
     requiereCentroCosto: true,
     ejemplos: ['Letras corpóreas iluminadas', 'Caja de luz LED', 'Neón LED flexible'],
+    modoNesting: 'none',
+    nestingAlgoritmo: null,
   },
 
   // ─────────────────────────── SERVICIOS ───────────────────────────
@@ -309,6 +373,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['horas_fijas', 'horas_por_archivo'], material: [] },
     requiereCentroCosto: true,
     ejemplos: ['Preparación de archivo para offset', 'Prueba de color digital'],
+    modoNesting: 'none',
+    nestingAlgoritmo: null,
   },
 
   diseno_grafico: {
@@ -321,6 +387,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['horas_por_nivel'], material: [] },
     requiereCentroCosto: true,
     ejemplos: ['Diseño logo', 'Adaptación a medida', 'Retoque de imagen'],
+    modoNesting: 'none',
+    nestingAlgoritmo: null,
   },
 
   toma_medidas: {
@@ -336,6 +404,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['visita_fija', 'horas_operario'], material: [] },
     requiereCentroCosto: true,
     ejemplos: ['Medidas para wrap vehicular', 'Relevamiento cartelería en local', 'Toma de datos vidriera'],
+    modoNesting: 'none',
+    nestingAlgoritmo: null,
   },
 
   colocacion_in_situ: {
@@ -351,6 +421,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['horas_operario', 'operarios_x_horas'], material: ['viaticos', 'combustible'] },
     requiereCentroCosto: true,
     ejemplos: ['Wrap vehicular', 'Colocación vinilo vidriera', 'Instalación cartel tótem'],
+    modoNesting: 'none',
+    nestingAlgoritmo: null,
   },
 
   // ───────────────────────── OPERACIONES MANUALES ─────────────────────────
@@ -367,6 +439,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['piezas_por_hora'], material: ['bolsas', 'cajas'] },
     requiereCentroCosto: true,
     ejemplos: ['Embolsado individual', 'Conteo final', 'Inserto promocional en sobres'],
+    modoNesting: 'none',
+    nestingAlgoritmo: null,
   },
 
   insumo_externo_gestion: {
@@ -379,6 +453,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     formulasDisponibles: { tiempo: ['horas_gestion_min'], material: ['insumo_externo_monto_flat'] },
     requiereCentroCosto: true,
     ejemplos: ['Compra de LEDs', 'Pedido de perfil metálico', 'Tercerización de troquelado'],
+    modoNesting: 'none',
+    nestingAlgoritmo: null,
   },
 };
 

@@ -1293,6 +1293,14 @@ model ProcesoOperacion {
   unidadProductivaV2          String?                    // 'cantidad', 'hojas', 'letras', 'modulosLED', etc.
   activacionV2                ActivacionPasoV2?          // OBLIGATORIO | OPCIONAL | CONDICIONAL
   condicionV2                 Json?                      // JsonLogic expression si activacionV2 = CONDICIONAL
+  // ── Config de nesting (C.2.5) ─────────────────────────────────────
+  // Config específica del nesting del paso. Forma depende del nestingAlgoritmo
+  // de la familia (ver pasos/familias.ts). Ejemplos:
+  //   - nesting-hoja:    { candidatosPliego, criterio, separacion, margen }
+  //   - nesting-rollo:   { panelizado: {...}, separacion, permitirRotacion }
+  //   - nesting-placa-rigida: { separacion, margen, permitirRotacion, estrategia }
+  // Null → se usan defaults del algoritmo.
+  configNestingV2             Json?
   // ───────────────────────────────────────────────────────────────────
   activo                      Boolean                    @default(true)
   createdAt                   DateTime                   @default(now())
