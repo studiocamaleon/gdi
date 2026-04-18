@@ -120,6 +120,7 @@ import { WideFormatMotorModuleV2 } from './motors/wide-format-v2.motor';
 import { VinylCutMotorModuleV2 } from './motors/vinyl-cut-v2.motor';
 import { DigitalSheetMotorModuleV2 } from './motors/digital-sheet-v2.motor';
 import { RigidPrintedMotorModuleV2 } from './motors/rigid-printed-v2.motor';
+import { TalonarioMotorModuleV2 } from './motors/talonario-v2.motor';
 import { v1ToCanonical } from './adapters/v1-to-canonical';
 import { logShadowDiff } from './shadow/shadow-logger';
 import { nestOnRoll as nestOnRollExternal, type NestingRolloResult } from './nesting/nesting-rollo';
@@ -526,6 +527,7 @@ export class ProductosServiciosService {
       new VinylCutMotorModuleV2(this), // vinilo_de_corte@2 — Etapa C.3 piloto single-color
       new DigitalSheetMotorModuleV2(this), // impresion_digital_laser@2 — Etapa C.4 piloto MVP
       new RigidPrintedMotorModuleV2(this), // rigidos_impresos@2 — Etapa C.5 piloto MVP
+      new TalonarioMotorModuleV2(this), // talonario@2 — Etapa C.6 piloto MVP (COPIA_SIMPLE)
       new TalonarioMotorModule(this),
       new RigidPrintedMotorModule(this),
     ]);
@@ -3610,6 +3612,39 @@ export class ProductosServiciosService {
       materiales,
       plotters,
     };
+  }
+
+  /**
+   * Modelo universal (C.6): carga runtime para talonario@2 — variante con
+   * medidas, config v2 activa.
+   *
+   * Piloto MVP: maneja COPIA_SIMPLE (1 capa). Multi-copia (duplicado/triplicado
+   * con química autocopiativa) se agrega en iteraciones posteriores.
+   */
+  async loadTalonarioV2Runtime(auth: CurrentAuth, varianteId: string) {
+    const variante = await this.findVarianteCompletaOrThrow(auth, varianteId, this.prisma);
+    if (variante.productoServicio.motorCodigo !== 'talonario') {
+      throw new BadRequestException(
+        `El producto no usa motor talonario (usa ${variante.productoServicio.motorCodigo}).`,
+      );
+    }
+    const configRow = await this.prisma.productoMotorConfig.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        productoServicioId: variante.productoServicioId,
+        motorCodigo: 'talonario',
+        motorVersion: 2,
+        activo: true,
+      },
+      orderBy: [{ versionConfig: 'desc' }],
+    });
+    if (!configRow) {
+      throw new BadRequestException(
+        `El producto ${variante.productoServicioId} no tiene ProductoMotorConfig para talonario@2.`,
+      );
+    }
+    const config = configRow.parametrosJson as Record<string, unknown>;
+    return { variante, config };
   }
 
   /**
