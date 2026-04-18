@@ -150,11 +150,25 @@ function buildDefaultPeriodo() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
+/** Motores que NO requieren medidas de pieza en parametros (las toman de la variante o config). */
+const MOTORS_SIN_MEDIDAS = new Set(["impresion_digital_laser", "talonario"]);
+/** Motores con checkbox "conLaminado". */
+const MOTORS_CON_LAMINADO = new Set(["gran_formato"]);
+/** Motores con filtro opcional de color (vinilos). */
+const MOTORS_CON_COLOR = new Set(["vinilo_de_corte"]);
+/** Motores con `numerosXTalonario`. */
+const MOTORS_CON_NUMEROS_TALONARIO = new Set(["talonario"]);
+
 export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
+  const motorCodigo = props.producto.motorCodigo;
+  const needsMedidas = !MOTORS_SIN_MEDIDAS.has(motorCodigo);
+
   const [cantidad, setCantidad] = React.useState("1");
   const [anchoMm, setAnchoMm] = React.useState("1000");
   const [altoMm, setAltoMm] = React.useState("500");
   const [conLaminado, setConLaminado] = React.useState(false);
+  const [color, setColor] = React.useState("");
+  const [numerosXTalonario, setNumerosXTalonario] = React.useState("50");
   const [periodo, setPeriodo] = React.useState(buildDefaultPeriodo());
   const [cotizacion, setCotizacion] = React.useState<CotizacionCanonica | null>(null);
   const [isCotizando, startCotizando] = React.useTransition();
@@ -168,14 +182,25 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
     }
     startCotizando(async () => {
       try {
+        const parametros: Record<string, unknown> = {};
+        if (needsMedidas) {
+          parametros.anchoMm = Number(anchoMm);
+          parametros.altoMm = Number(altoMm);
+        }
+        if (MOTORS_CON_LAMINADO.has(motorCodigo)) {
+          parametros.conLaminado = conLaminado;
+        }
+        if (MOTORS_CON_COLOR.has(motorCodigo) && color.trim()) {
+          parametros.color = color.trim();
+        }
+        if (MOTORS_CON_NUMEROS_TALONARIO.has(motorCodigo)) {
+          const n = Number(numerosXTalonario);
+          if (Number.isFinite(n) && n > 0) parametros.numerosXTalonario = n;
+        }
         const result = await cotizarProductoVarianteV2(selectedVariantId, {
           cantidad: Number(cantidad),
           periodo,
-          parametros: {
-            anchoMm: Number(anchoMm),
-            altoMm: Number(altoMm),
-            conLaminado,
-          },
+          parametros,
         });
         setCotizacion(result);
       } catch (error) {
@@ -183,7 +208,7 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
         toast.error(error instanceof Error ? error.message : "No se pudo cotizar.");
       }
     });
-  }, [selectedVariantId, cantidad, periodo, anchoMm, altoMm, conLaminado]);
+  }, [selectedVariantId, cantidad, periodo, anchoMm, altoMm, conLaminado, color, numerosXTalonario, motorCodigo, needsMedidas]);
 
   return (
     <Card>
@@ -200,7 +225,7 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Inputs */}
+        {/* Inputs — motor-aware */}
         <div className="grid gap-3 md:grid-cols-5">
           <Field>
             <FieldLabel>Cantidad</FieldLabel>
@@ -211,24 +236,28 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
               onChange={(e) => setCantidad(e.target.value)}
             />
           </Field>
-          <Field>
-            <FieldLabel>Ancho (mm)</FieldLabel>
-            <Input
-              type="number"
-              value={anchoMm}
-              min="1"
-              onChange={(e) => setAnchoMm(e.target.value)}
-            />
-          </Field>
-          <Field>
-            <FieldLabel>Alto (mm)</FieldLabel>
-            <Input
-              type="number"
-              value={altoMm}
-              min="1"
-              onChange={(e) => setAltoMm(e.target.value)}
-            />
-          </Field>
+          {needsMedidas ? (
+            <>
+              <Field>
+                <FieldLabel>Ancho (mm)</FieldLabel>
+                <Input
+                  type="number"
+                  value={anchoMm}
+                  min="1"
+                  onChange={(e) => setAnchoMm(e.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel>Alto (mm)</FieldLabel>
+                <Input
+                  type="number"
+                  value={altoMm}
+                  min="1"
+                  onChange={(e) => setAltoMm(e.target.value)}
+                />
+              </Field>
+            </>
+          ) : null}
           <Field>
             <FieldLabel>Periodo</FieldLabel>
             <Input
@@ -238,13 +267,40 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
               onChange={(e) => setPeriodo(e.target.value)}
             />
           </Field>
-          <Field>
-            <FieldLabel>Laminado UV</FieldLabel>
-            <label className="flex items-center gap-2 pt-2">
-              <Checkbox checked={conLaminado} onCheckedChange={(v) => setConLaminado(Boolean(v))} />
-              <span className="text-sm text-muted-foreground">Con laminado</span>
-            </label>
-          </Field>
+          {MOTORS_CON_LAMINADO.has(motorCodigo) ? (
+            <Field>
+              <FieldLabel>Laminado UV</FieldLabel>
+              <label className="flex items-center gap-2 pt-2">
+                <Checkbox
+                  checked={conLaminado}
+                  onCheckedChange={(v) => setConLaminado(Boolean(v))}
+                />
+                <span className="text-sm text-muted-foreground">Con laminado</span>
+              </label>
+            </Field>
+          ) : null}
+          {MOTORS_CON_COLOR.has(motorCodigo) ? (
+            <Field>
+              <FieldLabel>Color (opcional)</FieldLabel>
+              <Input
+                type="text"
+                value={color}
+                placeholder="ej. Blanco, Negro..."
+                onChange={(e) => setColor(e.target.value)}
+              />
+            </Field>
+          ) : null}
+          {MOTORS_CON_NUMEROS_TALONARIO.has(motorCodigo) ? (
+            <Field>
+              <FieldLabel>Nºs por talonario</FieldLabel>
+              <Input
+                type="number"
+                value={numerosXTalonario}
+                min="1"
+                onChange={(e) => setNumerosXTalonario(e.target.value)}
+              />
+            </Field>
+          ) : null}
         </div>
         <div className="flex justify-end">
           <Button type="button" onClick={handleCotizar} disabled={isCotizando || !selectedVariantId}>

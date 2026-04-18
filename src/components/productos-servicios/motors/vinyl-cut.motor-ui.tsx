@@ -10,6 +10,7 @@ import type {
 } from "@/components/productos-servicios/product-detail-types";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { VinylCutNestingWorkspace } from "@/components/vinyl-cut-nesting-workspace";
+import { ProductoSimularCostoV2Tab } from "@/components/productos-servicios/producto-simular-costo-v2-tab";
 import { formatCurrency, formatNumber } from "@/components/productos-servicios/producto-comercial.helpers";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -1576,6 +1577,8 @@ function VinylCutSimularCostoTab(props: ProductTabProps) {
 
 // ─── Motor UI Contract ───────────────────────────────────────────────────────
 
+const ENABLE_V2 = process.env.NEXT_PUBLIC_ENABLE_WIDE_FORMAT_V2 === "true";
+
 export const vinylCutMotorUi: ProductMotorUiContract = {
   key: "vinilo_de_corte@1",
   hiddenTabs: ["variantes"],
@@ -1585,6 +1588,7 @@ export const vinylCutMotorUi: ProductMotorUiContract = {
     "ruta_base",
     "imposicion",
     "simular_costo",
+    ...(ENABLE_V2 ? ["simular_costo_v2"] : []),
     "precio",
     "simular_venta",
   ],
@@ -1598,5 +1602,14 @@ export const vinylCutMotorUi: ProductMotorUiContract = {
       label: "Equipos y materiales",
       render: VinylCutEquiposMaterialesTab,
     },
+    ...(ENABLE_V2
+      ? [
+          {
+            key: "simular_costo_v2",
+            label: "Simular costo (v2)",
+            render: ProductoSimularCostoV2Tab,
+          },
+        ]
+      : []),
   ],
 };

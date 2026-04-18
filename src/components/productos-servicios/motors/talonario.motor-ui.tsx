@@ -6,6 +6,9 @@ import { DigitalRutaBaseTab } from "@/components/productos-servicios/motors/digi
 import { TalonarioVariantesTab } from "@/components/productos-servicios/motors/talonario-variantes-tab";
 import { DigitalImposicionTab } from "@/components/productos-servicios/motors/digital-imposicion-tab";
 import { DigitalSimularCostoTab } from "@/components/productos-servicios/motors/digital-simular-costo-tab";
+import { ProductoSimularCostoV2Tab } from "@/components/productos-servicios/producto-simular-costo-v2-tab";
+
+const ENABLE_V2 = process.env.NEXT_PUBLIC_ENABLE_WIDE_FORMAT_V2 === "true";
 
 export const talonarioMotorUi: ProductMotorUiContract = {
   key: "talonario@1",
@@ -16,6 +19,7 @@ export const talonarioMotorUi: ProductMotorUiContract = {
     "ruta_base",
     "imposicion",
     "simular_costo",
+    ...(ENABLE_V2 ? ["simular_costo_v2"] : []),
     "precio",
     "simular_venta",
   ],
@@ -31,5 +35,14 @@ export const talonarioMotorUi: ProductMotorUiContract = {
       label: "Composición",
       render: TalonarioComposicionTab,
     },
+    ...(ENABLE_V2
+      ? [
+          {
+            key: "simular_costo_v2",
+            label: "Simular costo (v2)",
+            render: ProductoSimularCostoV2Tab,
+          },
+        ]
+      : []),
   ],
 };
