@@ -5958,18 +5958,32 @@ export class ProductosServiciosService {
   }
 
   /**
-   * Modelo universal (A.6): cotiza una variante y devuelve shape canónica.
+   * Modelo universal (A.6 + B.5): cotiza una variante y devuelve shape canónica.
    *
-   * Flujo actual (Etapa A): delega en el motor v1 + aplica adapter v1→canonical.
-   * Cuando los motores v2 estén disponibles (Etapa B/C) el dispatcher elegirá
-   * v2 directo (sin adapter) para productos migrados; este método queda como
-   * entry point estable sin requerir cambio en clientes.
+   * Dispatcher:
+   *   1. Si `ENABLE_WIDE_FORMAT_V2=true` y el producto usa motor `gran_formato`,
+   *      llama al motor v2 nativo (gran_formato@2) que emite shape canónica.
+   *   2. Caso contrario, delega en el motor v1 + aplica adapter v1→canonical.
+   *
+   * Esto permite probar el motor v2 en producción por feature flag sin afectar
+   * a los demás productos. En Etapa C cada motor migrado sumará su propia
+   * condición al dispatcher.
    */
   async cotizarVarianteV2(
     auth: CurrentAuth,
     varianteId: string,
     payload: CotizarProductoVarianteDto,
   ) {
+    const enableWideFormatV2 = process.env.ENABLE_WIDE_FORMAT_V2 === 'true';
+
+    if (enableWideFormatV2) {
+      const variante = await this.findVarianteCompletaOrThrow(auth, varianteId, this.prisma);
+      if (variante.productoServicio.motorCodigo === 'gran_formato') {
+        const motorV2 = this.motorRegistry.getModule('gran_formato', 2);
+        return motorV2.quoteVariant(auth, varianteId, payload);
+      }
+    }
+
     const { v1ToCanonical } = await import('./adapters/v1-to-canonical.js');
     const v1 = await this.cotizarVariante(auth, varianteId, payload);
     return v1ToCanonical(v1 as never);

@@ -674,6 +674,40 @@ export type ProductoAdicionalEfecto = {
   updatedAt: string;
 };
 
+/**
+ * Modelo universal (A.6): shape canónica devuelta por /cotizar-v2.
+ * Espejo del DTO backend en apps/api/src/productos-servicios/dto/cotizacion-canonica.dto.ts.
+ */
+export type BucketsSubtotalesCanonica = {
+  centroCosto: number;
+  materiasPrimas: number;
+  cargosFlat: number;
+};
+
+export type PasoCotizadoCanonico = {
+  id: string;
+  tipo: string;
+  nombre: string;
+  costoCentroCosto: number;
+  costoMateriasPrimas: number;
+  cargosFlat: number;
+  trazabilidad?: Record<string, unknown>;
+};
+
+export type CotizacionCanonica = {
+  motorCodigo: string;
+  motorVersion: number;
+  periodo: string;
+  cantidad: number;
+  total: number;
+  unitario: number;
+  subtotales: BucketsSubtotalesCanonica;
+  pasos: PasoCotizadoCanonico[];
+  subProductos: CotizacionCanonica[];
+  warnings: string[];
+  trazabilidad?: Record<string, unknown>;
+};
+
 export type CotizacionProductoVariante = {
   snapshotId: string;
   varianteId: string;

@@ -10,6 +10,7 @@ import {
   GranFormatoImposicionConfig,
   GranFormatoCostosResponse,
   CotizacionProductoVariante,
+  CotizacionCanonica,
   EstadoProductoServicio,
   FamiliaProducto,
   GranFormatoConfig,
@@ -706,6 +707,32 @@ export async function cotizarProductoVariante(
 ) {
   return apiRequest<CotizacionProductoVariante>(
     `/productos-servicios/variantes/${varianteId}/cotizar`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+/**
+ * Modelo universal (Etapa B/A.6): cotiza y retorna la shape canónica.
+ * Endpoint estable que eventualmente reemplazará a cotizarProductoVariante
+ * en toda la UI (Etapa D). Hoy coexiste con el v1.
+ */
+export async function cotizarProductoVarianteV2(
+  varianteId: string,
+  payload: {
+    cantidad: number;
+    periodo?: string;
+    seleccionesBase?: Array<{ dimension: DimensionOpcionProductiva; valor: ValorOpcionProductiva }>;
+    checklistRespuestas?: Array<{ preguntaId: string; respuestaId: string }>;
+    opcionalesSeleccionados?: string[];
+    nivelesSeleccionados?: Array<{ operacionId: string; nivelId: string }>;
+    parametros?: Record<string, unknown>;
+  },
+) {
+  return apiRequest<CotizacionCanonica>(
+    `/productos-servicios/variantes/${varianteId}/cotizar-v2`,
     {
       method: 'POST',
       body: JSON.stringify(payload),
