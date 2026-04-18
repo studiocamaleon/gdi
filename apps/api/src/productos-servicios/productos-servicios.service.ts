@@ -119,6 +119,7 @@ import { WideFormatMotorModule } from './motors/wide-format.motor';
 import { WideFormatMotorModuleV2 } from './motors/wide-format-v2.motor';
 import { VinylCutMotorModuleV2 } from './motors/vinyl-cut-v2.motor';
 import { DigitalSheetMotorModuleV2 } from './motors/digital-sheet-v2.motor';
+import { RigidPrintedMotorModuleV2 } from './motors/rigid-printed-v2.motor';
 import { v1ToCanonical } from './adapters/v1-to-canonical';
 import { logShadowDiff } from './shadow/shadow-logger';
 import { nestOnRoll as nestOnRollExternal, type NestingRolloResult } from './nesting/nesting-rollo';
@@ -524,6 +525,7 @@ export class ProductosServiciosService {
       new VinylCutMotorModule(this),
       new VinylCutMotorModuleV2(this), // vinilo_de_corte@2 — Etapa C.3 piloto single-color
       new DigitalSheetMotorModuleV2(this), // impresion_digital_laser@2 — Etapa C.4 piloto MVP
+      new RigidPrintedMotorModuleV2(this), // rigidos_impresos@2 — Etapa C.5 piloto MVP
       new TalonarioMotorModule(this),
       new RigidPrintedMotorModule(this),
     ]);
@@ -3608,6 +3610,63 @@ export class ProductosServiciosService {
       materiales,
       plotters,
     };
+  }
+
+  /**
+   * Modelo universal (C.5): carga runtime para rigidos_impresos@2 — config
+   * activa + variantes de placa rígida compatibles (con sus dimensiones).
+   *
+   * Piloto MVP: carga la config y la variante de placa elegida (o la primera
+   * compatible). Las lógicas branching (flexibleMontado vs impresionDirecta),
+   * perfiles operativos y checklist se agregan en iteraciones posteriores.
+   */
+  async loadRigidPrintedV2Runtime(auth: CurrentAuth, productoId: string) {
+    const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+    if (producto.motorCodigo !== 'rigidos_impresos') {
+      throw new BadRequestException(
+        `El producto no usa motor rigidos_impresos (usa ${producto.motorCodigo}).`,
+      );
+    }
+    const configRow = await this.prisma.productoMotorConfig.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        productoServicioId: productoId,
+        motorCodigo: 'rigidos_impresos',
+        motorVersion: 2,
+        activo: true,
+      },
+      orderBy: [{ versionConfig: 'desc' }],
+    });
+    if (!configRow) {
+      throw new BadRequestException(
+        `El producto ${productoId} no tiene ProductoMotorConfig para rigidos_impresos@2.`,
+      );
+    }
+    const config = configRow.parametrosJson as Record<string, unknown>;
+    const variantesIds = Array.isArray(config.variantesCompatibles)
+      ? (config.variantesCompatibles as string[])
+      : [];
+    if (variantesIds.length === 0) {
+      throw new BadRequestException(
+        'La config de rigidos_impresos@2 no declara variantesCompatibles (placas rígidas).',
+      );
+    }
+    const placas = await this.prisma.materiaPrimaVariante.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        id: { in: variantesIds },
+        activo: true,
+      },
+      include: {
+        materiaPrima: { select: { id: true, nombre: true, subfamilia: true } },
+      },
+    });
+    if (placas.length === 0) {
+      throw new BadRequestException(
+        'Ninguna de las variantesCompatibles existe o está activa.',
+      );
+    }
+    return { producto, config, placas };
   }
 
   /**
