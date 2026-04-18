@@ -1,0 +1,12 @@
+{
+  "description": "Señaladores 5x18 (50x180mm), 300 unidades, simple faz, sin checklist",
+  "method": "cotizarVariante",
+  "varianteId": "f3ca118d-d74c-40cd-adba-803ba71004fc",
+  "payload": {
+    "cantidad": 300,
+    "periodo": "2026-04",
+    "seleccionesBase": [
+      { "dimension": "caras", "valor": "simple_faz" }
+    ]
+  }
+}

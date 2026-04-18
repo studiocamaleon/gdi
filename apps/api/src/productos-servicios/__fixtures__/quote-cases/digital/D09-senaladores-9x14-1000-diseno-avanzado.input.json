@@ -1,0 +1,15 @@
+{
+  "description": "Señaladores 9x14 (90x140mm), 1000 unidades, simple faz, diseño avanzado",
+  "method": "cotizarVariante",
+  "varianteId": "5ec226c5-47f2-4948-bddc-6501aa526058",
+  "payload": {
+    "cantidad": 1000,
+    "periodo": "2026-04",
+    "seleccionesBase": [
+      { "dimension": "caras", "valor": "simple_faz" }
+    ],
+    "checklistRespuestas": [
+      { "preguntaId": "0d5d0608-d026-4601-ab81-19d0fbccbb1c", "respuestaId": "c3474758-c6b7-4ad1-9d8c-aa273352cdb8" }
+    ]
+  }
+}

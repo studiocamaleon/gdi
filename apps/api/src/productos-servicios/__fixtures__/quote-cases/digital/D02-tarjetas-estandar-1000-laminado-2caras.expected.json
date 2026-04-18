@@ -1,0 +1,539 @@
+{
+  "varianteId": "947969f5-442f-4ede-b43b-26df9a3a4e8a",
+  "productoServicioId": "44e4133f-d097-472b-9d20-7bb6084a57b6",
+  "productoNombre": "Tarjetas de Visita",
+  "varianteNombre": "Estandar 9x5",
+  "motorCodigo": "impresion_digital_laser",
+  "motorVersion": 1,
+  "periodo": "2026-04",
+  "cantidad": 1000,
+  "piezasPorPliego": 10,
+  "pliegos": 100,
+  "warnings": [
+    "Configurador: no se encontró el paso de referencia para \"Diseño Grafico\". Se insertó al final.",
+    "Configurador: no se encontró el paso de referencia para \"Laminado BOPP\". Se insertó al final."
+  ],
+  "bloques": {
+    "procesos": [
+      {
+        "orden": 1,
+        "codigo": "OP-002",
+        "nombre": "Impresion Laser: Color",
+        "centroCostoId": "7a6c6cd8-f7a3-4904-aeea-8e611e25f600",
+        "centroCostoNombre": "Impresion Laser",
+        "origen": "Producto base",
+        "addonId": null,
+        "setupMin": 2,
+        "runMin": 6,
+        "cleanupMin": 2,
+        "tiempoFijoMin": 0,
+        "totalMin": 10,
+        "tarifaHora": 4084.97,
+        "costo": 680.83,
+        "detalleTecnico": {
+          "sourceProductividad": "fijo",
+          "maquina": "Ricoh PRO C5100",
+          "perfilOperativo": "A4 - Papel Grueso - Doble faz"
+        }
+      },
+      {
+        "orden": 2,
+        "codigo": "Corte con guillotina",
+        "nombre": "Corte con guillotina",
+        "centroCostoId": "04132714-0f74-4152-8006-af0203cb1062",
+        "centroCostoNombre": "Post-prensa",
+        "origen": "Producto base",
+        "addonId": null,
+        "setupMin": 2,
+        "runMin": 7,
+        "cleanupMin": 0,
+        "tiempoFijoMin": 0,
+        "totalMin": 9,
+        "tarifaHora": 17874.05,
+        "costo": 2681.11,
+        "detalleTecnico": {
+          "tipo": "guillotina",
+          "pliegosTotales": 100,
+          "alturaTandaEfectivaMm": 50,
+          "capacidadTanda": 142,
+          "tandas": 1,
+          "cortesPorImposicion": 14,
+          "cortesTotales": 14,
+          "productivityValue": 2,
+          "sourceProductividad": "override",
+          "maquina": "Guillotina",
+          "perfilOperativo": "Papel 300 grs"
+        }
+      },
+      {
+        "orden": 3,
+        "codigo": "CHK-LVL-462C53",
+        "nombre": "Diseño Grafico (Intermedio)",
+        "centroCostoId": "38a75446-e75e-4e1f-89b0-eaa01421c96f",
+        "centroCostoNombre": "Diseño Grafico",
+        "origen": "Configurador",
+        "addonId": null,
+        "setupMin": 0,
+        "runMin": 0,
+        "cleanupMin": 0,
+        "tiempoFijoMin": 60,
+        "totalMin": 60,
+        "tarifaHora": 15668.4,
+        "costo": 15668.4,
+        "detalleTecnico": {
+          "sourceProductividad": "nivel_fijo",
+          "variantePasoId": "f428d3cb-71a4-4561-9947-936c5d282e86",
+          "variantePasoNombre": "Intermedio",
+          "modoProductividadNivel": "fija"
+        }
+      },
+      {
+        "orden": 4,
+        "codigo": "CHK-LVL-0B3F64",
+        "nombre": "Laminado BOPP (Ambas caras)",
+        "centroCostoId": "04132714-0f74-4152-8006-af0203cb1062",
+        "centroCostoNombre": "Post-prensa",
+        "origen": "Configurador",
+        "addonId": null,
+        "setupMin": 9,
+        "runMin": 2.32,
+        "cleanupMin": 0,
+        "tiempoFijoMin": 0,
+        "totalMin": 11.32,
+        "tarifaHora": 17874.05,
+        "costo": 3372.24,
+        "detalleTecnico": {
+          "sourceProductividad": "nivel_variable_perfil",
+          "variantePasoId": "a1508ff1-3776-48cb-b05f-84b596c6346d",
+          "variantePasoNombre": "Ambas caras",
+          "modoProductividadNivel": "variable_perfil",
+          "maquina": "Laminadora BOPP",
+          "perfilOperativo": "Laminado - Dos caras (1 pasada)",
+          "tipo": "laminadora_bopp_rollo",
+          "modoLaminado": "dos_caras_simultaneo",
+          "pasadasLaminado": 1,
+          "filmFactor": 2,
+          "soportaDobleRollo": true,
+          "pliegosTotales": 100,
+          "hojasTotales": 100,
+          "orientacionEntrada": "rotada",
+          "pliegoOriginalAnchoMm": 210,
+          "pliegoOriginalAltoMm": 297,
+          "anchoRolloMm": 330,
+          "anchoHojaMm": 297,
+          "altoHojaMm": 210,
+          "gapEntreHojasMm": 6,
+          "mermaArranqueMm": 400,
+          "mermaCierreMm": 300,
+          "pasoLinealMm": 216,
+          "largoPliegosMm": 21594,
+          "anchoConsumidoMm": 330,
+          "largoConsumidoMm": 22294,
+          "areaConsumidaM2": 7.36,
+          "velocidadTrabajoMmSeg": 160,
+          "velocidadDobleRolloTrabajoMmSeg": 160,
+          "velocidadMmSegEfectiva": 160
+        }
+      }
+    ],
+    "materiales": [
+      {
+        "tipo": "PAPEL",
+        "nombre": "Hojas de papel",
+        "sku": "MPV-MMR119GA",
+        "cantidad": 100,
+        "costoUnitario": 90,
+        "costo": 9000,
+        "esCostoDerivado": true,
+        "pliegosPorSustrato": 2,
+        "orientacionConversion": "rotada",
+        "sustratoAnchoMm": 320,
+        "sustratoAltoMm": 450,
+        "pliegoImpresionAnchoMm": 210,
+        "pliegoImpresionAltoMm": 297,
+        "origen": "Base"
+      },
+      {
+        "tipo": "PAPEL",
+        "nombre": "Hojas de papel · Merma operativa",
+        "sku": "MPV-MMR119GA",
+        "cantidad": 20,
+        "costoUnitario": 90,
+        "costo": 1800,
+        "esCostoDerivado": true,
+        "pliegosPorSustrato": 2,
+        "orientacionConversion": "rotada",
+        "sustratoAnchoMm": 320,
+        "sustratoAltoMm": 450,
+        "pliegoImpresionAnchoMm": 210,
+        "pliegoImpresionAltoMm": 297,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "cian",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-B5990D61",
+        "unidad": "g",
+        "cantidad": 21.58,
+        "costoUnitario": 182,
+        "costo": 3927.56,
+        "origen": "Base"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "cian",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-B5990D61",
+        "unidad": "g",
+        "cantidad": 4.32,
+        "costoUnitario": 182,
+        "costo": 785.51,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "magenta",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-6AD3C4AB",
+        "unidad": "g",
+        "cantidad": 21.58,
+        "costoUnitario": 182,
+        "costo": 3927.56,
+        "origen": "Base"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "magenta",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-6AD3C4AB",
+        "unidad": "g",
+        "cantidad": 4.32,
+        "costoUnitario": 182,
+        "costo": 785.51,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "amarillo",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-852A06B1",
+        "unidad": "g",
+        "cantidad": 21.58,
+        "costoUnitario": 182,
+        "costo": 3927.56,
+        "origen": "Base"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "amarillo",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-852A06B1",
+        "unidad": "g",
+        "cantidad": 4.32,
+        "costoUnitario": 182,
+        "costo": 785.51,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "negro",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-4ACAF6A4",
+        "unidad": "g",
+        "cantidad": 21.58,
+        "costoUnitario": 182,
+        "costo": 3927.56,
+        "origen": "Base"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "negro",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-4ACAF6A4",
+        "unidad": "g",
+        "cantidad": 4.32,
+        "costoUnitario": 182,
+        "costo": 785.51,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cilindros (Drum)",
+        "sku": "MPV-19E856A3",
+        "unidad": "a4_eq",
+        "cantidad": 200,
+        "costoUnitario": 0.55,
+        "costo": 109.97,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cilindros (Drum)",
+        "sku": "MPV-19E856A3",
+        "unidad": "a4_eq",
+        "cantidad": 40,
+        "costoUnitario": 0.55,
+        "costo": 21.99,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Coating bar",
+        "sku": "MPV-D8EBBC5F",
+        "unidad": "a4_eq",
+        "cantidad": 200,
+        "costoUnitario": 0.38,
+        "costo": 75.09,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Coating bar",
+        "sku": "MPV-D8EBBC5F",
+        "unidad": "a4_eq",
+        "cantidad": 40,
+        "costoUnitario": 0.38,
+        "costo": 15.02,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cuchilla de cera (Cuchilla de Coating Bar)",
+        "sku": "MPV-B55539E7",
+        "unidad": "a4_eq",
+        "cantidad": 200,
+        "costoUnitario": 0.22,
+        "costo": 43.37,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cuchilla de cera (Cuchilla de Coating Bar)",
+        "sku": "MPV-B55539E7",
+        "unidad": "a4_eq",
+        "cantidad": 40,
+        "costoUnitario": 0.22,
+        "costo": 8.67,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cuchilla de cilindro",
+        "sku": "MPV-29B699C3",
+        "unidad": "a4_eq",
+        "cantidad": 200,
+        "costoUnitario": 0.12,
+        "costo": 23.07,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cuchilla de cilindro",
+        "sku": "MPV-29B699C3",
+        "unidad": "a4_eq",
+        "cantidad": 40,
+        "costoUnitario": 0.12,
+        "costo": 4.61,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Rodillo de Carga",
+        "sku": "MPV-FD4F2B3D",
+        "unidad": "a4_eq",
+        "cantidad": 200,
+        "costoUnitario": 0.52,
+        "costo": 103.82,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Rodillo de Carga",
+        "sku": "MPV-FD4F2B3D",
+        "unidad": "a4_eq",
+        "cantidad": 40,
+        "costoUnitario": 0.52,
+        "costo": 20.76,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "FILM",
+        "nombre": "Rollo Laminado BOPP",
+        "sku": "MPV-475A9DB9",
+        "unidad": "m",
+        "cantidad": 44.59,
+        "costoUnitario": 334,
+        "costo": 14892.39
+      }
+    ]
+  },
+  "subtotales": {
+    "procesos": 3361.94,
+    "papel": 9000,
+    "toner": 18852.31,
+    "desgaste": 426.39,
+    "consumiblesTerminacion": 14892.39,
+    "adicionalesMateriales": 0,
+    "adicionalesCostEffects": 19040.64
+  },
+  "total": 65573.67,
+  "unitario": 65.57,
+  "trazabilidad": {
+    "imposicion": {
+      "tipoCorte": "guillotina",
+      "piezasPorPliego": 10,
+      "orientacion": "normal",
+      "anchoImprimibleMm": 200,
+      "altoImprimibleMm": 287,
+      "anchoDisponibleMm": 194,
+      "altoDisponibleMm": 281,
+      "normal": 10,
+      "rotada": 6,
+      "demasiaCorteMm": 2,
+      "lineaCorteMm": 3,
+      "piezaAnchoMm": 90,
+      "piezaAltoMm": 50,
+      "piezaAnchoEfectivoMm": 94,
+      "piezaAltoEfectivoMm": 54,
+      "cols": 2,
+      "rows": 5,
+      "sheetAnchoMm": 210,
+      "sheetAltoMm": 297,
+      "machineMargins": {
+        "leftMm": 5,
+        "rightMm": 5,
+        "topMm": 5,
+        "bottomMm": 5
+      }
+    },
+    "conversionPapel": {
+      "esDerivado": true,
+      "pliegosPorSustrato": 2,
+      "orientacion": "rotada"
+    },
+    "matchingBaseAplicado": [],
+    "checklistAplicado": [
+      {
+        "preguntaId": "a35e5e0a-4079-4352-9763-1e9914c5910a",
+        "pregunta": "¿Debemos realizar el diseño grafico?",
+        "respuestaId": "138c8d6c-9b42-4d4f-aa93-28e681ae6b1f",
+        "respuesta": "Intermedio"
+      },
+      {
+        "preguntaId": "a25398eb-cb03-45c0-9e1f-e66cce02a87f",
+        "pregunta": "¿Debemos realizar terminacion de laminado?",
+        "respuestaId": "02249c90-af44-4f91-8078-4a3c10d13e30",
+        "respuesta": "Sí"
+      },
+      {
+        "preguntaId": "54a941ac-bb3d-4210-8559-fe575e37ee11",
+        "pregunta": "¿Debemos laminar ambas caras?",
+        "respuestaId": "c271a506-54e9-4e1e-93c4-4c75b5c519b2",
+        "respuesta": "Sí"
+      }
+    ],
+    "checklistRespuestasSeleccionadas": [
+      {
+        "preguntaId": "a35e5e0a-4079-4352-9763-1e9914c5910a",
+        "respuestaId": "138c8d6c-9b42-4d4f-aa93-28e681ae6b1f"
+      },
+      {
+        "preguntaId": "a25398eb-cb03-45c0-9e1f-e66cce02a87f",
+        "respuestaId": "02249c90-af44-4f91-8078-4a3c10d13e30"
+      },
+      {
+        "preguntaId": "54a941ac-bb3d-4210-8559-fe575e37ee11",
+        "respuestaId": "c271a506-54e9-4e1e-93c4-4c75b5c519b2"
+      }
+    ],
+    "atributosTecnicosConfigurados": [
+      {
+        "dimension": "tipo_impresion",
+        "valor": "cmyk"
+      },
+      {
+        "dimension": "caras",
+        "valor": "doble_faz"
+      }
+    ],
+    "opcionProductivaEfectiva": [
+      {
+        "dimension": "tipo_impresion",
+        "valores": [
+          "cmyk"
+        ]
+      },
+      {
+        "dimension": "caras",
+        "valores": [
+          "doble_faz"
+        ]
+      }
+    ],
+    "efectosAplicados": [],
+    "routeEffectsAplicados": [],
+    "costEffectsAplicados": [],
+    "materialEffectsAplicados": [],
+    "costosPorEfecto": [
+      {
+        "origen": "ConfiguradorVariante",
+        "reglaId": "462c53dd-ba5b-46d4-aea5-6b4ae16183f6",
+        "variantePasoId": "f428d3cb-71a4-4561-9947-936c5d282e86",
+        "variantePasoNombre": "Intermedio",
+        "tiempoMin": 60,
+        "monto": 15668.4
+      },
+      {
+        "origen": "ConfiguradorVariante",
+        "reglaId": "0b3f642e-550a-4a7c-9faf-c2b291e0e414",
+        "variantePasoId": "a1508ff1-3776-48cb-b05f-84b596c6346d",
+        "variantePasoNombre": "Ambas caras",
+        "tiempoMin": 11.32,
+        "monto": 3372.24
+      }
+    ],
+    "pasosCondicionalesActivos": [],
+    "config": {
+      "tipoCorte": "guillotina",
+      "demasiaCorteMm": 2,
+      "lineaCorteMm": 3,
+      "pasoCorteId": "81cb00fd-82f4-4b2c-98fc-4eb0f8bf3cdc",
+      "tamanoPliegoImpresion": {
+        "altoMm": 297,
+        "codigo": "A4",
+        "nombre": "A4",
+        "anchoMm": 210
+      },
+      "mermaAdicionalPct": 0,
+      "troquelado": {
+        "altoUtilPlotterMm": 420,
+        "anchoUtilPlotterMm": 290,
+        "sangriadoTroquelMm": 3,
+        "separacionEntreContornosMm": 3
+      },
+      "gapVerticalMm": 0,
+      "tipoImposicion": "doble_calle",
+      "gapHorizontalMm": 0,
+      "politicaCostoPapel": "derivado_conversion",
+      "margenPerimetralCorteMm": 3,
+      "factorConversionCostoPapel": 1,
+      "configuracionesImpresion": [
+        {
+          "caras": "simple_faz",
+          "maquinaId": "79a32daf-f59b-4709-b433-ee781b520e27",
+          "tipoImpresion": "cmyk",
+          "perfilOperativoId": "2eb89a57-76cc-4fd8-8b1b-a4c26f29a682"
+        },
+        {
+          "caras": "doble_faz",
+          "maquinaId": "79a32daf-f59b-4709-b433-ee781b520e27",
+          "tipoImpresion": "cmyk",
+          "perfilOperativoId": "48dd09ab-9429-4313-a357-d9d636c76a0d"
+        }
+      ]
+    },
+    "configVersionBase": 1,
+    "configVersionOverride": 6
+  }
+}

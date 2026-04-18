@@ -1,0 +1,368 @@
+{
+  "varianteId": "3ef2f01d-2558-42aa-8251-a916899fc795",
+  "productoServicioId": "49e83509-f109-4d94-ad5c-48560774eebb",
+  "productoNombre": "Señaladores",
+  "varianteNombre": "7x3,5",
+  "motorCodigo": "impresion_digital_laser",
+  "motorVersion": 1,
+  "periodo": "2026-04",
+  "cantidad": 500,
+  "piezasPorPliego": 20,
+  "pliegos": 25,
+  "warnings": [],
+  "bloques": {
+    "procesos": [
+      {
+        "orden": 1,
+        "codigo": "OP-002",
+        "nombre": "Impresion Laser",
+        "centroCostoId": "7a6c6cd8-f7a3-4904-aeea-8e611e25f600",
+        "centroCostoNombre": "Impresion Laser",
+        "origen": "Producto base",
+        "addonId": null,
+        "setupMin": 2,
+        "runMin": 1.44,
+        "cleanupMin": 2,
+        "tiempoFijoMin": 0,
+        "totalMin": 5.44,
+        "tarifaHora": 4084.97,
+        "costo": 370.37,
+        "detalleTecnico": {
+          "sourceProductividad": "fijo",
+          "maquina": "Ricoh PRO C5100",
+          "perfilOperativo": "A4 - Papel Grueso - Doble faz"
+        }
+      }
+    ],
+    "materiales": [
+      {
+        "tipo": "PAPEL",
+        "nombre": "Hojas de papel",
+        "sku": "MPV-66AECC04",
+        "cantidad": 25,
+        "costoUnitario": 45,
+        "costo": 1125,
+        "esCostoDerivado": true,
+        "pliegosPorSustrato": 2,
+        "orientacionConversion": "rotada",
+        "sustratoAnchoMm": 320,
+        "sustratoAltoMm": 450,
+        "pliegoImpresionAnchoMm": 210,
+        "pliegoImpresionAltoMm": 297,
+        "origen": "Base"
+      },
+      {
+        "tipo": "PAPEL",
+        "nombre": "Hojas de papel · Merma operativa",
+        "sku": "MPV-66AECC04",
+        "cantidad": 3.75,
+        "costoUnitario": 45,
+        "costo": 168.75,
+        "esCostoDerivado": true,
+        "pliegosPorSustrato": 2,
+        "orientacionConversion": "rotada",
+        "sustratoAnchoMm": 320,
+        "sustratoAltoMm": 450,
+        "pliegoImpresionAnchoMm": 210,
+        "pliegoImpresionAltoMm": 297,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "cian",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-B5990D61",
+        "unidad": "g",
+        "cantidad": 5.4,
+        "costoUnitario": 182,
+        "costo": 981.89,
+        "origen": "Base"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "cian",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-B5990D61",
+        "unidad": "g",
+        "cantidad": 0.81,
+        "costoUnitario": 182,
+        "costo": 147.28,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "magenta",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-6AD3C4AB",
+        "unidad": "g",
+        "cantidad": 5.4,
+        "costoUnitario": 182,
+        "costo": 981.89,
+        "origen": "Base"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "magenta",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-6AD3C4AB",
+        "unidad": "g",
+        "cantidad": 0.81,
+        "costoUnitario": 182,
+        "costo": 147.28,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "amarillo",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-852A06B1",
+        "unidad": "g",
+        "cantidad": 5.4,
+        "costoUnitario": 182,
+        "costo": 981.89,
+        "origen": "Base"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "amarillo",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-852A06B1",
+        "unidad": "g",
+        "cantidad": 0.81,
+        "costoUnitario": 182,
+        "costo": 147.28,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "negro",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-4ACAF6A4",
+        "unidad": "g",
+        "cantidad": 5.4,
+        "costoUnitario": 182,
+        "costo": 981.89,
+        "origen": "Base"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "negro",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-4ACAF6A4",
+        "unidad": "g",
+        "cantidad": 0.81,
+        "costoUnitario": 182,
+        "costo": 147.28,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cilindros (Drum)",
+        "sku": "MPV-19E856A3",
+        "unidad": "a4_eq",
+        "cantidad": 50,
+        "costoUnitario": 0.55,
+        "costo": 27.49,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cilindros (Drum)",
+        "sku": "MPV-19E856A3",
+        "unidad": "a4_eq",
+        "cantidad": 7.5,
+        "costoUnitario": 0.55,
+        "costo": 4.12,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Coating bar",
+        "sku": "MPV-D8EBBC5F",
+        "unidad": "a4_eq",
+        "cantidad": 50,
+        "costoUnitario": 0.38,
+        "costo": 18.77,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Coating bar",
+        "sku": "MPV-D8EBBC5F",
+        "unidad": "a4_eq",
+        "cantidad": 7.5,
+        "costoUnitario": 0.38,
+        "costo": 2.82,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cuchilla de cera (Cuchilla de Coating Bar)",
+        "sku": "MPV-B55539E7",
+        "unidad": "a4_eq",
+        "cantidad": 50,
+        "costoUnitario": 0.22,
+        "costo": 10.84,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cuchilla de cera (Cuchilla de Coating Bar)",
+        "sku": "MPV-B55539E7",
+        "unidad": "a4_eq",
+        "cantidad": 7.5,
+        "costoUnitario": 0.22,
+        "costo": 1.63,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cuchilla de cilindro",
+        "sku": "MPV-29B699C3",
+        "unidad": "a4_eq",
+        "cantidad": 50,
+        "costoUnitario": 0.12,
+        "costo": 5.77,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cuchilla de cilindro",
+        "sku": "MPV-29B699C3",
+        "unidad": "a4_eq",
+        "cantidad": 7.5,
+        "costoUnitario": 0.12,
+        "costo": 0.87,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Rodillo de Carga",
+        "sku": "MPV-FD4F2B3D",
+        "unidad": "a4_eq",
+        "cantidad": 50,
+        "costoUnitario": 0.52,
+        "costo": 25.95,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Rodillo de Carga",
+        "sku": "MPV-FD4F2B3D",
+        "unidad": "a4_eq",
+        "cantidad": 7.5,
+        "costoUnitario": 0.52,
+        "costo": 3.89,
+        "origen": "Merma operativa"
+      }
+    ]
+  },
+  "subtotales": {
+    "procesos": 370.37,
+    "papel": 1125,
+    "toner": 4516.7,
+    "desgaste": 102.16,
+    "consumiblesTerminacion": 0,
+    "adicionalesMateriales": 0,
+    "adicionalesCostEffects": 0
+  },
+  "total": 6114.22,
+  "unitario": 12.23,
+  "trazabilidad": {
+    "imposicion": {
+      "tipoCorte": "guillotina",
+      "piezasPorPliego": 20,
+      "orientacion": "rotada",
+      "anchoImprimibleMm": 200,
+      "altoImprimibleMm": 287,
+      "anchoDisponibleMm": 194,
+      "altoDisponibleMm": 281,
+      "normal": 16,
+      "rotada": 20,
+      "demasiaCorteMm": 0,
+      "lineaCorteMm": 3,
+      "piezaAnchoMm": 70,
+      "piezaAltoMm": 35,
+      "piezaAnchoEfectivoMm": 70,
+      "piezaAltoEfectivoMm": 35,
+      "cols": 5,
+      "rows": 4,
+      "sheetAnchoMm": 210,
+      "sheetAltoMm": 297,
+      "machineMargins": {
+        "leftMm": 5,
+        "rightMm": 5,
+        "topMm": 5,
+        "bottomMm": 5
+      }
+    },
+    "conversionPapel": {
+      "esDerivado": true,
+      "pliegosPorSustrato": 2,
+      "orientacion": "rotada"
+    },
+    "matchingBaseAplicado": [
+      {
+        "pasoPlantillaId": "20621bdb-35cb-4d0e-8832-395a7b46f935",
+        "pasoPlantillaNombre": "Impresion Laser",
+        "perfilOperativoId": "48dd09ab-9429-4313-a357-d9d636c76a0d",
+        "perfilOperativoNombre": "A4 - Papel Grueso - Doble faz",
+        "tipoImpresion": "cmyk",
+        "caras": "doble_faz"
+      }
+    ],
+    "checklistAplicado": [],
+    "checklistRespuestasSeleccionadas": [],
+    "atributosTecnicosConfigurados": [
+      {
+        "dimension": "tipo_impresion",
+        "valor": "cmyk"
+      },
+      {
+        "dimension": "caras",
+        "valor": "doble_faz"
+      }
+    ],
+    "opcionProductivaEfectiva": [
+      {
+        "dimension": "tipo_impresion",
+        "valores": [
+          "cmyk"
+        ]
+      },
+      {
+        "dimension": "caras",
+        "valores": [
+          "doble_faz"
+        ]
+      }
+    ],
+    "efectosAplicados": [],
+    "routeEffectsAplicados": [],
+    "costEffectsAplicados": [],
+    "materialEffectsAplicados": [],
+    "costosPorEfecto": [],
+    "pasosCondicionalesActivos": [],
+    "config": {
+      "tipoCorte": "guillotina",
+      "demasiaCorteMm": 0,
+      "lineaCorteMm": 3,
+      "pasoCorteId": null,
+      "tamanoPliegoImpresion": {
+        "codigo": "A4",
+        "nombre": "A4",
+        "anchoMm": 210,
+        "altoMm": 297
+      },
+      "mermaAdicionalPct": 0,
+      "troquelado": {
+        "anchoUtilPlotterMm": 290,
+        "altoUtilPlotterMm": 420,
+        "separacionEntreContornosMm": 3,
+        "sangriadoTroquelMm": 3
+      }
+    },
+    "configVersionBase": null,
+    "configVersionOverride": null
+  }
+}

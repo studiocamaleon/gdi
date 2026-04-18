@@ -1,0 +1,17 @@
+{
+  "description": "Tarjetas Estandar 9x5, 1000, doble faz, laminado brillo ambas caras, diseño intermedio",
+  "method": "cotizarVariante",
+  "varianteId": "947969f5-442f-4ede-b43b-26df9a3a4e8a",
+  "payload": {
+    "cantidad": 1000,
+    "periodo": "2026-04",
+    "seleccionesBase": [
+      { "dimension": "caras", "valor": "doble_faz" }
+    ],
+    "checklistRespuestas": [
+      { "preguntaId": "a35e5e0a-4079-4352-9763-1e9914c5910a", "respuestaId": "138c8d6c-9b42-4d4f-aa93-28e681ae6b1f" },
+      { "preguntaId": "a25398eb-cb03-45c0-9e1f-e66cce02a87f", "respuestaId": "02249c90-af44-4f91-8078-4a3c10d13e30" },
+      { "preguntaId": "54a941ac-bb3d-4210-8559-fe575e37ee11", "respuestaId": "c271a506-54e9-4e1e-93c4-4c75b5c519b2" }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "description": "Talonario abrochados Estandar 160x205mm, 20 talonarios, BN copia simple, diseño basico, laminado una cara",
+  "method": "cotizarVariante",
+  "varianteId": "187d38b7-8676-4edb-95ce-9d1a1cf3b862",
+  "payload": {
+    "cantidad": 20,
+    "periodo": "2026-04",
+    "seleccionesBase": [
+      { "dimension": "tipo_copia", "valor": "copia_simple" }
+    ],
+    "nivelesSeleccionados": [
+      { "operacionId": "bf7642bc-32d6-47d8-9294-da50e03084b7", "nivelId": "1b9bbfad-4793-4e13-9ca0-8b121377c02a" },
+      { "operacionId": "61ede3d5-fd6d-4c3e-977a-c3e3f169cff9", "nivelId": "f8ebf3a6-a831-4615-be71-2327d99e1743" }
+    ]
+  }
+}

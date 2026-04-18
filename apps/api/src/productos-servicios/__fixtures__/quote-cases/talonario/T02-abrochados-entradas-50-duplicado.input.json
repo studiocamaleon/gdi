@@ -1,0 +1,17 @@
+{
+  "description": "Talonario abrochados Entradas 205x80mm, 50 talonarios, CMYK duplicado",
+  "method": "cotizarVariante",
+  "varianteId": "82aceaaf-998c-4e7d-a786-4f374869458f",
+  "payload": {
+    "cantidad": 50,
+    "periodo": "2026-04",
+    "seleccionesBase": [
+      { "dimension": "tipo_copia", "valor": "duplicado" },
+      { "dimension": "tipo_impresion", "valor": "cmyk" }
+    ],
+    "nivelesSeleccionados": [
+      { "operacionId": "bf7642bc-32d6-47d8-9294-da50e03084b7", "nivelId": "1b9bbfad-4793-4e13-9ca0-8b121377c02a" },
+      { "operacionId": "61ede3d5-fd6d-4c3e-977a-c3e3f169cff9", "nivelId": "f8ebf3a6-a831-4615-be71-2327d99e1743" }
+    ]
+  }
+}

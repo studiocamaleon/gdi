@@ -1,0 +1,15 @@
+{
+  "description": "Folletos rápidos 10x15 (95x140mm), 200 unidades, simple faz, con diseño básico",
+  "method": "cotizarVariante",
+  "varianteId": "e1939b4c-4b23-4edf-8dd2-af4979f93a3d",
+  "payload": {
+    "cantidad": 200,
+    "periodo": "2026-04",
+    "seleccionesBase": [
+      { "dimension": "caras", "valor": "simple_faz" }
+    ],
+    "checklistRespuestas": [
+      { "preguntaId": "4e62c76c-a6e0-403b-8ed7-188651ce50f7", "respuestaId": "903ffaf6-ff08-4cc0-a359-2d4f4dd833d0" }
+    ]
+  }
+}

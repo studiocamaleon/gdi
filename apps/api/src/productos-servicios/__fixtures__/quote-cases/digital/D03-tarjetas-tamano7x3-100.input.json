@@ -1,0 +1,12 @@
+{
+  "description": "Tarjetas de Visita Tamaño 7x3 (70x30mm), 100 unidades, simple faz",
+  "method": "cotizarVariante",
+  "varianteId": "27239e67-b5a2-46a7-838a-3652e2eff49c",
+  "payload": {
+    "cantidad": 100,
+    "periodo": "2026-04",
+    "seleccionesBase": [
+      { "dimension": "caras", "valor": "simple_faz" }
+    ]
+  }
+}

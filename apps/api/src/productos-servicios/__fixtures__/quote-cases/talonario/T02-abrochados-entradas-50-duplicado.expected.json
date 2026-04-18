@@ -1,0 +1,717 @@
+{
+  "status": "disponible",
+  "varianteId": "82aceaaf-998c-4e7d-a786-4f374869458f",
+  "varianteNombre": "Entradas",
+  "motorCodigo": "talonario",
+  "motorVersion": 1,
+  "periodo": "2026-04",
+  "cantidad": 50,
+  "tipoCopia": "DUPLICADO",
+  "capas": 2,
+  "numerosXTalonario": 50,
+  "piezasPorPliego": 4,
+  "pliegos": 1300,
+  "pliegosXCapa": 650,
+  "pliegosTotales": 1300,
+  "warnings": [],
+  "bloques": {
+    "procesos": [
+      {
+        "codigo": "OP-001",
+        "nombre": "Diseño Grafico",
+        "centroCostoNombre": "Diseño Grafico",
+        "tipoOperacion": "PREPRENSA",
+        "cantidadObjetivo": 1300,
+        "setupMin": 0,
+        "runMin": 0,
+        "cleanupMin": 0,
+        "totalMin": 0,
+        "tarifaHora": 15668.4,
+        "costo": 0
+      },
+      {
+        "codigo": "OP-002",
+        "nombre": "Impresion Laser: Color",
+        "centroCostoNombre": "Impresion Laser",
+        "tipoOperacion": "IMPRESION",
+        "cantidadObjetivo": 1300,
+        "setupMin": 4,
+        "runMin": 28.89,
+        "cleanupMin": 2,
+        "totalMin": 34.89,
+        "tarifaHora": 4084.97,
+        "costo": 2375.33
+      },
+      {
+        "codigo": "OP-003",
+        "nombre": "Laminado BOPP",
+        "centroCostoNombre": "Post-prensa",
+        "tipoOperacion": "TERMINACION",
+        "cantidadObjetivo": 39,
+        "setupMin": 0,
+        "runMin": 0,
+        "cleanupMin": 0,
+        "totalMin": 0,
+        "tarifaHora": 17874.05,
+        "costo": 0
+      }
+    ],
+    "materiales": [
+      {
+        "tipo": "PAPEL_CAPA",
+        "nombre": "Papel Original (blanco)",
+        "cantidad": 650,
+        "costoUnitario": 10,
+        "costo": 6500
+      },
+      {
+        "tipo": "PAPEL_CAPA",
+        "nombre": "Papel Duplicado (amarillo)",
+        "cantidad": 650,
+        "costoUnitario": 16,
+        "costo": 10400
+      },
+      {
+        "tipo": "TONER",
+        "canal": "cian",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-B5990D61",
+        "unidad": "g",
+        "cantidad": 168.23,
+        "costoUnitario": 182,
+        "costo": 30616.99,
+        "origen": "Base"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "cian",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-B5990D61",
+        "unidad": "g",
+        "cantidad": 33.65,
+        "costoUnitario": 182,
+        "costo": 6123.4,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "magenta",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-6AD3C4AB",
+        "unidad": "g",
+        "cantidad": 168.23,
+        "costoUnitario": 182,
+        "costo": 30616.99,
+        "origen": "Base"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "magenta",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-6AD3C4AB",
+        "unidad": "g",
+        "cantidad": 33.65,
+        "costoUnitario": 182,
+        "costo": 6123.4,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "amarillo",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-852A06B1",
+        "unidad": "g",
+        "cantidad": 168.23,
+        "costoUnitario": 182,
+        "costo": 30616.99,
+        "origen": "Base"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "amarillo",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-852A06B1",
+        "unidad": "g",
+        "cantidad": 33.65,
+        "costoUnitario": 182,
+        "costo": 6123.4,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "negro",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-4ACAF6A4",
+        "unidad": "g",
+        "cantidad": 168.23,
+        "costoUnitario": 182,
+        "costo": 30616.99,
+        "origen": "Base"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "negro",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-4ACAF6A4",
+        "unidad": "g",
+        "cantidad": 33.65,
+        "costoUnitario": 182,
+        "costo": 6123.4,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cilindros (Drum)",
+        "sku": "MPV-19E856A3",
+        "unidad": "a4_eq",
+        "cantidad": 1559.08,
+        "costoUnitario": 0.55,
+        "costo": 857.26,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cilindros (Drum)",
+        "sku": "MPV-19E856A3",
+        "unidad": "a4_eq",
+        "cantidad": 311.82,
+        "costoUnitario": 0.55,
+        "costo": 171.45,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Coating bar",
+        "sku": "MPV-D8EBBC5F",
+        "unidad": "a4_eq",
+        "cantidad": 1559.08,
+        "costoUnitario": 0.38,
+        "costo": 585.39,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Coating bar",
+        "sku": "MPV-D8EBBC5F",
+        "unidad": "a4_eq",
+        "cantidad": 311.82,
+        "costoUnitario": 0.38,
+        "costo": 117.08,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cuchilla de cera (Cuchilla de Coating Bar)",
+        "sku": "MPV-B55539E7",
+        "unidad": "a4_eq",
+        "cantidad": 1559.08,
+        "costoUnitario": 0.22,
+        "costo": 338.11,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cuchilla de cera (Cuchilla de Coating Bar)",
+        "sku": "MPV-B55539E7",
+        "unidad": "a4_eq",
+        "cantidad": 311.82,
+        "costoUnitario": 0.22,
+        "costo": 67.62,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cuchilla de cilindro",
+        "sku": "MPV-29B699C3",
+        "unidad": "a4_eq",
+        "cantidad": 1559.08,
+        "costoUnitario": 0.12,
+        "costo": 179.85,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cuchilla de cilindro",
+        "sku": "MPV-29B699C3",
+        "unidad": "a4_eq",
+        "cantidad": 311.82,
+        "costoUnitario": 0.12,
+        "costo": 35.97,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Rodillo de Carga",
+        "sku": "MPV-FD4F2B3D",
+        "unidad": "a4_eq",
+        "cantidad": 1559.08,
+        "costoUnitario": 0.52,
+        "costo": 809.3,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Rodillo de Carga",
+        "sku": "MPV-FD4F2B3D",
+        "unidad": "a4_eq",
+        "cantidad": 311.82,
+        "costoUnitario": 0.52,
+        "costo": 161.86,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "MATERIAL_EXTRA",
+        "nombre": "Cartón base",
+        "cantidad": 13,
+        "costoUnitario": 0,
+        "costo": 0
+      }
+    ]
+  },
+  "subtotales": {
+    "procesos": 2375.33,
+    "papel": 16900,
+    "materialesExtra": 0,
+    "toner": 146961.53,
+    "desgaste": 3323.89,
+    "consumiblesTerminacion": 0,
+    "adicionalesMateriales": 0,
+    "adicionalesCostEffects": 0
+  },
+  "total": 169560.75,
+  "unitario": 3391.22,
+  "trazabilidad": {
+    "imposicion": {
+      "tipoCorte": "guillotina",
+      "piezasPorPliego": 4,
+      "orientacion": "normal",
+      "anchoImprimibleMm": 210,
+      "altoImprimibleMm": 330,
+      "anchoDisponibleMm": 206,
+      "altoDisponibleMm": 326,
+      "normal": 4,
+      "rotada": 2,
+      "demasiaCorteMm": 0,
+      "lineaCorteMm": 2,
+      "piezaAnchoMm": 205,
+      "piezaAltoMm": 80,
+      "piezaAnchoEfectivoMm": 205,
+      "piezaAltoEfectivoMm": 80,
+      "cols": 1,
+      "rows": 4,
+      "sheetAnchoMm": 220,
+      "sheetAltoMm": 340,
+      "machineMargins": {
+        "leftMm": 5,
+        "rightMm": 5,
+        "topMm": 5,
+        "bottomMm": 5
+      },
+      "teteBeche": false,
+      "puntilladoLineMm": 15,
+      "puntilladoBorde": "izquierdo",
+      "encuadernacionTipo": "abrochado"
+    },
+    "grouping": {
+      "talonariosEfectivos": 52,
+      "talonariosPedidos": 50,
+      "posesXPliego": 4,
+      "talonariosPorGrupo": 4,
+      "gruposCompletos": 12,
+      "talonariosResiduo": 2,
+      "pliegosXCapa": 650,
+      "pliegosDesperdicio": 100,
+      "numerosXTalonario": 50,
+      "modoIncompleto": "pose_completa"
+    },
+    "guillotinado": {
+      "espesorTalonarioHojas": 101,
+      "talonariosXTanda": 4,
+      "tandas": 13
+    },
+    "paperCosts": [
+      {
+        "capaIndex": 0,
+        "capaLabel": "Original",
+        "colorPapel": "blanco",
+        "papelVarianteId": "dfb4fd3e-7d20-4c56-b121-ed70d76dbe83",
+        "pliegos": 650,
+        "costoUnitario": 10,
+        "costoTotal": 6500
+      },
+      {
+        "capaIndex": 1,
+        "capaLabel": "Duplicado",
+        "colorPapel": "amarillo",
+        "papelVarianteId": "cc0fa3c5-b9d2-4e12-8037-1d2da6cb2d2b",
+        "pliegos": 650,
+        "costoUnitario": 16,
+        "costoTotal": 10400
+      }
+    ],
+    "extraMaterials": [
+      {
+        "tipo": "carton_base",
+        "nombre": "Cartón base",
+        "cantidad": 13,
+        "costoUnitario": 0,
+        "costoTotal": 0
+      }
+    ],
+    "config": {
+      "tamanoPliegoImpresion": {
+        "altoMm": 340,
+        "codigo": "22x34",
+        "nombre": "22x34",
+        "anchoMm": 220
+      },
+      "tipoCorte": "sin_demasia",
+      "demasiaCorteMm": 0,
+      "lineaCorteMm": 2,
+      "mermaAdicionalPct": 0,
+      "pasoCorteId": null,
+      "numerosXTalonarioDefault": 50,
+      "tipoCopiaDefiniciones": [
+        {
+          "capas": 1,
+          "valor": "COPIA_SIMPLE",
+          "papeles": [
+            {
+              "capaIndex": 0,
+              "capaLabel": "Original",
+              "colorPapel": "blanco",
+              "papelVarianteId": "dfb4fd3e-7d20-4c56-b121-ed70d76dbe83"
+            }
+          ],
+          "numerosXTalonarioSugerido": 100
+        },
+        {
+          "capas": 2,
+          "valor": "DUPLICADO",
+          "papeles": [
+            {
+              "capaIndex": 0,
+              "capaLabel": "Original",
+              "colorPapel": "blanco",
+              "papelVarianteId": "dfb4fd3e-7d20-4c56-b121-ed70d76dbe83"
+            },
+            {
+              "capaIndex": 1,
+              "capaLabel": "Duplicado",
+              "colorPapel": "amarillo",
+              "papelVarianteId": "cc0fa3c5-b9d2-4e12-8037-1d2da6cb2d2b"
+            }
+          ],
+          "numerosXTalonarioSugerido": 50
+        }
+      ],
+      "encuadernacion": {
+        "tipo": "abrochado",
+        "bordeEncolar": null,
+        "cantidadGrapas": 2,
+        "posicionGrapas": "lateral"
+      },
+      "puntillado": {
+        "tipo": "lateral",
+        "borde": "izquierdo",
+        "habilitado": true,
+        "distanciaBordeMm": 15
+      },
+      "modoTalonarioIncompleto": "pose_completa",
+      "materialesExtra": {
+        "cartonBase": {
+          "habilitado": true,
+          "materiaPrimaVarianteId": null
+        },
+        "hojaBlancaSuperior": {
+          "habilitado": false,
+          "materiaPrimaVarianteId": null
+        }
+      },
+      "numeracion": {
+        "posicion": "superior_derecho",
+        "habilitado": true
+      },
+      "parametros": {
+        "tipoCorte": "sin_demasia",
+        "numeracion": {
+          "posicion": "superior_derecho",
+          "habilitado": true
+        },
+        "parametros": {
+          "tipoCorte": "sin_demasia",
+          "numeracion": {
+            "posicion": "superior_derecho",
+            "habilitado": true
+          },
+          "parametros": {
+            "tipoCorte": "sin_demasia",
+            "numeracion": {
+              "posicion": "superior_derecho",
+              "habilitado": true
+            },
+            "puntillado": {
+              "tipo": null,
+              "borde": null,
+              "habilitado": true,
+              "distanciaBordeMm": 15
+            },
+            "lineaCorteMm": 3,
+            "demasiaCorteMm": 0,
+            "encuadernacion": {
+              "tipo": "abrochado",
+              "bordeEncolar": null,
+              "cantidadGrapas": 2,
+              "posicionGrapas": "superior"
+            },
+            "materialesExtra": {
+              "cartonBase": {
+                "habilitado": true,
+                "materiaPrimaVarianteId": null
+              },
+              "hojaBlancaSuperior": {
+                "habilitado": false,
+                "materiaPrimaVarianteId": null
+              }
+            },
+            "mermaAdicionalPct": 0,
+            "tamanoPliegoImpresion": {
+              "altoMm": 297,
+              "codigo": "A4",
+              "nombre": "A4",
+              "anchoMm": 210
+            },
+            "tipoCopiaDefiniciones": [
+              {
+                "capas": 1,
+                "valor": "COPIA_SIMPLE",
+                "papeles": [
+                  {
+                    "capaIndex": 0,
+                    "capaLabel": "Original",
+                    "colorPapel": "blanco",
+                    "papelVarianteId": null
+                  }
+                ],
+                "numerosXTalonarioSugerido": 100
+              },
+              {
+                "capas": 2,
+                "valor": "DUPLICADO",
+                "papeles": [
+                  {
+                    "capaIndex": 0,
+                    "capaLabel": "Original",
+                    "colorPapel": "blanco",
+                    "papelVarianteId": null
+                  },
+                  {
+                    "capaIndex": 1,
+                    "capaLabel": "Duplicado",
+                    "colorPapel": "amarillo",
+                    "papelVarianteId": null
+                  }
+                ],
+                "numerosXTalonarioSugerido": 50
+              }
+            ],
+            "modoTalonarioIncompleto": "pose_completa",
+            "numerosXTalonarioDefault": 50
+          },
+          "puntillado": {
+            "tipo": null,
+            "borde": null,
+            "habilitado": true,
+            "distanciaBordeMm": 15
+          },
+          "lineaCorteMm": 3,
+          "demasiaCorteMm": 0,
+          "encuadernacion": {
+            "tipo": "abrochado",
+            "bordeEncolar": null,
+            "cantidadGrapas": 2,
+            "posicionGrapas": "superior"
+          },
+          "materialesExtra": {
+            "cartonBase": {
+              "habilitado": true,
+              "materiaPrimaVarianteId": null
+            },
+            "hojaBlancaSuperior": {
+              "habilitado": false,
+              "materiaPrimaVarianteId": null
+            }
+          },
+          "mermaAdicionalPct": 0,
+          "tamanoPliegoImpresion": {
+            "altoMm": 297,
+            "codigo": "A4",
+            "nombre": "A4",
+            "anchoMm": 210
+          },
+          "tipoCopiaDefiniciones": [
+            {
+              "capas": 1,
+              "valor": "COPIA_SIMPLE",
+              "papeles": [
+                {
+                  "capaIndex": 0,
+                  "capaLabel": "Original",
+                  "colorPapel": "blanco",
+                  "papelVarianteId": null
+                }
+              ],
+              "numerosXTalonarioSugerido": 100
+            },
+            {
+              "capas": 2,
+              "valor": "DUPLICADO",
+              "papeles": [
+                {
+                  "capaIndex": 0,
+                  "capaLabel": "Original",
+                  "colorPapel": "blanco",
+                  "papelVarianteId": null
+                },
+                {
+                  "capaIndex": 1,
+                  "capaLabel": "Duplicado",
+                  "colorPapel": "amarillo",
+                  "papelVarianteId": null
+                }
+              ],
+              "numerosXTalonarioSugerido": 50
+            },
+            {
+              "capas": 3,
+              "valor": "TRIPLICADO",
+              "papeles": [
+                {
+                  "capaIndex": 0,
+                  "capaLabel": "Original",
+                  "colorPapel": "blanco",
+                  "papelVarianteId": null
+                },
+                {
+                  "capaIndex": 1,
+                  "capaLabel": "Duplicado",
+                  "colorPapel": "amarillo",
+                  "papelVarianteId": null
+                },
+                {
+                  "capaIndex": 2,
+                  "capaLabel": "Triplicado",
+                  "colorPapel": "rosa",
+                  "papelVarianteId": null
+                }
+              ],
+              "numerosXTalonarioSugerido": 25
+            },
+            {
+              "capas": 4,
+              "valor": "CUADRUPLICADO",
+              "papeles": [
+                {
+                  "capaIndex": 0,
+                  "capaLabel": "Original",
+                  "colorPapel": "blanco",
+                  "papelVarianteId": null
+                },
+                {
+                  "capaIndex": 1,
+                  "capaLabel": "Duplicado",
+                  "colorPapel": "amarillo",
+                  "papelVarianteId": null
+                },
+                {
+                  "capaIndex": 2,
+                  "capaLabel": "Triplicado",
+                  "colorPapel": "rosa",
+                  "papelVarianteId": null
+                },
+                {
+                  "capaIndex": 3,
+                  "capaLabel": "Cuadruplicado",
+                  "colorPapel": "celeste",
+                  "papelVarianteId": null
+                }
+              ],
+              "numerosXTalonarioSugerido": 25
+            }
+          ],
+          "modoTalonarioIncompleto": "pose_completa",
+          "numerosXTalonarioDefault": 50
+        },
+        "puntillado": {
+          "tipo": null,
+          "borde": null,
+          "habilitado": true,
+          "distanciaBordeMm": 15
+        },
+        "lineaCorteMm": 3,
+        "demasiaCorteMm": 0,
+        "encuadernacion": {
+          "tipo": "abrochado",
+          "bordeEncolar": null,
+          "cantidadGrapas": 2,
+          "posicionGrapas": "superior"
+        },
+        "materialesExtra": {
+          "cartonBase": {
+            "habilitado": true,
+            "materiaPrimaVarianteId": null
+          },
+          "hojaBlancaSuperior": {
+            "habilitado": false,
+            "materiaPrimaVarianteId": null
+          }
+        },
+        "mermaAdicionalPct": 0,
+        "tamanoPliegoImpresion": {
+          "altoMm": 297,
+          "codigo": "A4",
+          "nombre": "A4",
+          "anchoMm": 210
+        },
+        "tipoCopiaDefiniciones": [
+          {
+            "capas": 1,
+            "valor": "COPIA_SIMPLE",
+            "papeles": [
+              {
+                "capaIndex": 0,
+                "capaLabel": "Original",
+                "colorPapel": "blanco",
+                "papelVarianteId": null
+              }
+            ],
+            "numerosXTalonarioSugerido": 100
+          },
+          {
+            "capas": 2,
+            "valor": "DUPLICADO",
+            "papeles": [
+              {
+                "capaIndex": 0,
+                "capaLabel": "Original",
+                "colorPapel": "blanco",
+                "papelVarianteId": null
+              },
+              {
+                "capaIndex": 1,
+                "capaLabel": "Duplicado",
+                "colorPapel": "amarillo",
+                "papelVarianteId": null
+              }
+            ],
+            "numerosXTalonarioSugerido": 50
+          }
+        ],
+        "modoTalonarioIncompleto": "pose_completa",
+        "numerosXTalonarioDefault": 50
+      }
+    },
+    "configVersionBase": 12,
+    "configVersionOverride": 2
+  }
+}

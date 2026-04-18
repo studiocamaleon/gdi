@@ -1,0 +1,15 @@
+{
+  "description": "Tarjetas Estandar 9x5, 200 unidades, doble faz, con perforación",
+  "method": "cotizarVariante",
+  "varianteId": "947969f5-442f-4ede-b43b-26df9a3a4e8a",
+  "payload": {
+    "cantidad": 200,
+    "periodo": "2026-04",
+    "seleccionesBase": [
+      { "dimension": "caras", "valor": "doble_faz" }
+    ],
+    "checklistRespuestas": [
+      { "preguntaId": "2ce54df6-eac5-4ce9-97c9-94f86fb3cc46", "respuestaId": "df612730-ed77-4655-b3a4-508d2b7dcc62" }
+    ]
+  }
+}

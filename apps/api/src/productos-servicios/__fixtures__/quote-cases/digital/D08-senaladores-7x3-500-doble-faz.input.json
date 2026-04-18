@@ -1,0 +1,12 @@
+{
+  "description": "Señaladores 7x3,5 (70x35mm), 500 unidades, doble faz (variante trae doble_faz por default)",
+  "method": "cotizarVariante",
+  "varianteId": "3ef2f01d-2558-42aa-8251-a916899fc795",
+  "payload": {
+    "cantidad": 500,
+    "periodo": "2026-04",
+    "seleccionesBase": [
+      { "dimension": "caras", "valor": "doble_faz" }
+    ]
+  }
+}

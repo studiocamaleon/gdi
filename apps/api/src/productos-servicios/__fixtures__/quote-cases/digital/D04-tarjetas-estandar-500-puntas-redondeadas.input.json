@@ -1,0 +1,15 @@
+{
+  "description": "Tarjetas Estandar 9x5, 500, doble faz, con puntas redondeadas (sin laminado, sin diseño)",
+  "method": "cotizarVariante",
+  "varianteId": "947969f5-442f-4ede-b43b-26df9a3a4e8a",
+  "payload": {
+    "cantidad": 500,
+    "periodo": "2026-04",
+    "seleccionesBase": [
+      { "dimension": "caras", "valor": "doble_faz" }
+    ],
+    "checklistRespuestas": [
+      { "preguntaId": "2ce54df6-eac5-4ce9-97c9-94f86fb3cc46", "respuestaId": "8991e7bd-8fc3-48ec-9338-b4a09652d95d" }
+    ]
+  }
+}

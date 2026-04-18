@@ -1,0 +1,12 @@
+{
+  "description": "Tarjetas de Visita Estandar 9x5, 500 unidades, doble faz, sin checklist",
+  "method": "cotizarVariante",
+  "varianteId": "947969f5-442f-4ede-b43b-26df9a3a4e8a",
+  "payload": {
+    "cantidad": 500,
+    "periodo": "2026-04",
+    "seleccionesBase": [
+      { "dimension": "caras", "valor": "doble_faz" }
+    ]
+  }
+}

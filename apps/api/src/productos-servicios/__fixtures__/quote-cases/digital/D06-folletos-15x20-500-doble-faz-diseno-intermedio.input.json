@@ -1,0 +1,15 @@
+{
+  "description": "Folletos rápidos 15x20 (140x190mm), 500 unidades, doble faz, con diseño intermedio",
+  "method": "cotizarVariante",
+  "varianteId": "46984f6b-3a29-4e97-b5cc-6a55285d11e8",
+  "payload": {
+    "cantidad": 500,
+    "periodo": "2026-04",
+    "seleccionesBase": [
+      { "dimension": "caras", "valor": "doble_faz" }
+    ],
+    "checklistRespuestas": [
+      { "preguntaId": "4e62c76c-a6e0-403b-8ed7-188651ce50f7", "respuestaId": "718acf12-4976-4c04-8848-72a46023a2ff" }
+    ]
+  }
+}

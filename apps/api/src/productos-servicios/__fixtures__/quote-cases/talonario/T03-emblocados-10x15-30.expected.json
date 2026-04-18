@@ -1,0 +1,338 @@
+{
+  "status": "disponible",
+  "varianteId": "dd823592-1887-493e-93be-33f7b5232878",
+  "varianteNombre": "10x15",
+  "motorCodigo": "talonario",
+  "motorVersion": 1,
+  "periodo": "2026-04",
+  "cantidad": 30,
+  "tipoCopia": "COPIA_SIMPLE",
+  "capas": 1,
+  "numerosXTalonario": 100,
+  "piezasPorPliego": 4,
+  "pliegos": 800,
+  "pliegosXCapa": 800,
+  "pliegosTotales": 800,
+  "warnings": [],
+  "bloques": {
+    "procesos": [
+      {
+        "codigo": "OP-001",
+        "nombre": "Diseño Grafico",
+        "centroCostoNombre": "Diseño Grafico",
+        "tipoOperacion": "PREPRENSA",
+        "cantidadObjetivo": 800,
+        "setupMin": 0,
+        "runMin": 0,
+        "cleanupMin": 0,
+        "totalMin": 0,
+        "tarifaHora": 15668.4,
+        "costo": 0
+      },
+      {
+        "codigo": "OP-002",
+        "nombre": "Impresion Laser: Color",
+        "centroCostoNombre": "Impresion Laser",
+        "tipoOperacion": "IMPRESION",
+        "cantidadObjetivo": 800,
+        "setupMin": 4,
+        "runMin": 17.78,
+        "cleanupMin": 2,
+        "totalMin": 23.78,
+        "tarifaHora": 4084.97,
+        "costo": 1618.86
+      },
+      {
+        "codigo": "OP-003",
+        "nombre": "Laminado BOPP",
+        "centroCostoNombre": "Post-prensa",
+        "tipoOperacion": "TERMINACION",
+        "cantidadObjetivo": 16,
+        "setupMin": 0,
+        "runMin": 0,
+        "cleanupMin": 0,
+        "totalMin": 0,
+        "tarifaHora": 17874.05,
+        "costo": 0
+      }
+    ],
+    "materiales": [
+      {
+        "tipo": "PAPEL_CAPA",
+        "nombre": "Papel Original (blanco)",
+        "cantidad": 800,
+        "costoUnitario": 10,
+        "costo": 8000
+      },
+      {
+        "tipo": "TONER",
+        "canal": "negro",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-4ACAF6A4",
+        "unidad": "g",
+        "cantidad": 86.32,
+        "costoUnitario": 182,
+        "costo": 15710.25,
+        "origen": "Base"
+      },
+      {
+        "tipo": "TONER",
+        "canal": "negro",
+        "nombre": "Toner (Ricoh 5100/8003)",
+        "sku": "MPV-4ACAF6A4",
+        "unidad": "g",
+        "cantidad": 17.26,
+        "costoUnitario": 182,
+        "costo": 3142.05,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cilindros (Drum)",
+        "sku": "MPV-19E856A3",
+        "unidad": "a4_eq",
+        "cantidad": 800,
+        "costoUnitario": 0.55,
+        "costo": 439.88,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cilindros (Drum)",
+        "sku": "MPV-19E856A3",
+        "unidad": "a4_eq",
+        "cantidad": 160,
+        "costoUnitario": 0.55,
+        "costo": 87.98,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Coating bar",
+        "sku": "MPV-D8EBBC5F",
+        "unidad": "a4_eq",
+        "cantidad": 800,
+        "costoUnitario": 0.38,
+        "costo": 300.38,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Coating bar",
+        "sku": "MPV-D8EBBC5F",
+        "unidad": "a4_eq",
+        "cantidad": 160,
+        "costoUnitario": 0.38,
+        "costo": 60.08,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cuchilla de cera (Cuchilla de Coating Bar)",
+        "sku": "MPV-B55539E7",
+        "unidad": "a4_eq",
+        "cantidad": 800,
+        "costoUnitario": 0.22,
+        "costo": 173.49,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cuchilla de cera (Cuchilla de Coating Bar)",
+        "sku": "MPV-B55539E7",
+        "unidad": "a4_eq",
+        "cantidad": 160,
+        "costoUnitario": 0.22,
+        "costo": 34.7,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cuchilla de cilindro",
+        "sku": "MPV-29B699C3",
+        "unidad": "a4_eq",
+        "cantidad": 800,
+        "costoUnitario": 0.12,
+        "costo": 92.28,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Cuchilla de cilindro",
+        "sku": "MPV-29B699C3",
+        "unidad": "a4_eq",
+        "cantidad": 160,
+        "costoUnitario": 0.12,
+        "costo": 18.46,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Rodillo de Carga",
+        "sku": "MPV-FD4F2B3D",
+        "unidad": "a4_eq",
+        "cantidad": 800,
+        "costoUnitario": 0.52,
+        "costo": 415.27,
+        "origen": "Base"
+      },
+      {
+        "tipo": "DESGASTE",
+        "nombre": "Rodillo de Carga",
+        "sku": "MPV-FD4F2B3D",
+        "unidad": "a4_eq",
+        "cantidad": 160,
+        "costoUnitario": 0.52,
+        "costo": 83.05,
+        "origen": "Merma operativa"
+      },
+      {
+        "tipo": "MATERIAL_EXTRA",
+        "nombre": "Cartón base",
+        "cantidad": 8,
+        "costoUnitario": 0,
+        "costo": 0
+      }
+    ]
+  },
+  "subtotales": {
+    "procesos": 1618.86,
+    "papel": 8000,
+    "materialesExtra": 0,
+    "toner": 18852.31,
+    "desgaste": 1705.56,
+    "consumiblesTerminacion": 0,
+    "adicionalesMateriales": 0,
+    "adicionalesCostEffects": 0
+  },
+  "total": 30176.73,
+  "unitario": 1005.89,
+  "trazabilidad": {
+    "imposicion": {
+      "tipoCorte": "guillotina",
+      "piezasPorPliego": 4,
+      "orientacion": "normal",
+      "anchoImprimibleMm": 200,
+      "altoImprimibleMm": 287,
+      "anchoDisponibleMm": 194,
+      "altoDisponibleMm": 281,
+      "normal": 4,
+      "rotada": 2,
+      "demasiaCorteMm": 0,
+      "lineaCorteMm": 3,
+      "piezaAnchoMm": 95,
+      "piezaAltoMm": 140,
+      "piezaAnchoEfectivoMm": 95,
+      "piezaAltoEfectivoMm": 140,
+      "cols": 2,
+      "rows": 2,
+      "sheetAnchoMm": 210,
+      "sheetAltoMm": 297,
+      "machineMargins": {
+        "leftMm": 5,
+        "rightMm": 5,
+        "topMm": 5,
+        "bottomMm": 5
+      },
+      "teteBeche": true,
+      "puntilladoLineMm": null,
+      "puntilladoBorde": null,
+      "encuadernacionTipo": "emblocado"
+    },
+    "grouping": {
+      "talonariosEfectivos": 32,
+      "talonariosPedidos": 30,
+      "posesXPliego": 4,
+      "talonariosPorGrupo": 4,
+      "gruposCompletos": 7,
+      "talonariosResiduo": 2,
+      "pliegosXCapa": 800,
+      "pliegosDesperdicio": 200,
+      "numerosXTalonario": 100,
+      "modoIncompleto": "pose_completa"
+    },
+    "guillotinado": {
+      "espesorTalonarioHojas": 101,
+      "talonariosXTanda": 4,
+      "tandas": 8
+    },
+    "paperCosts": [
+      {
+        "capaIndex": 0,
+        "capaLabel": "Original",
+        "colorPapel": "blanco",
+        "papelVarianteId": "dfb4fd3e-7d20-4c56-b121-ed70d76dbe83",
+        "pliegos": 800,
+        "costoUnitario": 10,
+        "costoTotal": 8000
+      }
+    ],
+    "extraMaterials": [
+      {
+        "tipo": "carton_base",
+        "nombre": "Cartón base",
+        "cantidad": 8,
+        "costoUnitario": 0,
+        "costoTotal": 0
+      }
+    ],
+    "config": {
+      "tamanoPliegoImpresion": {
+        "altoMm": 297,
+        "codigo": "A4",
+        "nombre": "A4",
+        "anchoMm": 210
+      },
+      "tipoCorte": "sin_demasia",
+      "demasiaCorteMm": 0,
+      "lineaCorteMm": 3,
+      "mermaAdicionalPct": 0,
+      "pasoCorteId": null,
+      "numerosXTalonarioDefault": 50,
+      "tipoCopiaDefiniciones": [
+        {
+          "capas": 1,
+          "valor": "COPIA_SIMPLE",
+          "papeles": [
+            {
+              "capaIndex": 0,
+              "capaLabel": "Original",
+              "colorPapel": "blanco",
+              "papelVarianteId": "dfb4fd3e-7d20-4c56-b121-ed70d76dbe83"
+            }
+          ],
+          "numerosXTalonarioSugerido": 100
+        }
+      ],
+      "encuadernacion": {
+        "tipo": "emblocado",
+        "bordeEncolar": null,
+        "cantidadGrapas": 2,
+        "posicionGrapas": "superior"
+      },
+      "puntillado": {
+        "tipo": null,
+        "borde": null,
+        "habilitado": false,
+        "distanciaBordeMm": null
+      },
+      "modoTalonarioIncompleto": "pose_completa",
+      "materialesExtra": {
+        "cartonBase": {
+          "habilitado": true,
+          "materiaPrimaVarianteId": null
+        },
+        "hojaBlancaSuperior": {
+          "habilitado": false,
+          "materiaPrimaVarianteId": null
+        }
+      },
+      "numeracion": {
+        "posicion": "superior_derecho",
+        "habilitado": true
+      }
+    },
+    "configVersionBase": 1,
+    "configVersionOverride": null
+  }
+}
