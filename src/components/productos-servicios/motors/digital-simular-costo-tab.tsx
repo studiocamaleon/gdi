@@ -412,22 +412,24 @@ export function DigitalSimularCostoTab(props: ProductTabProps) {
           icon={Layers3Icon}
           actions={
             <Tooltip>
-              <TooltipTrigger>
-                <Button
-                  type="button"
-                  onClick={handleCotizar}
-                  disabled={
-                    isCotizando ||
-                    !props.selectedVariant ||
-                    pasosConNivelesSinSeleccionar.length > 0
-                  }
-                >
-                  {isCotizando ? (
-                    <GdiSpinner className="size-4" data-icon="inline-start" />
-                  ) : null}
-                  Simular costo
-                </Button>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    onClick={handleCotizar}
+                    disabled={
+                      isCotizando ||
+                      !props.selectedVariant ||
+                      pasosConNivelesSinSeleccionar.length > 0
+                    }
+                  >
+                    {isCotizando ? (
+                      <GdiSpinner className="size-4" data-icon="inline-start" />
+                    ) : null}
+                    Simular costo
+                  </Button>
+                }
+              />
               {pasosConNivelesSinSeleccionar.length > 0 ? (
                 <TooltipContent>
                   Falta elegir variante para:{" "}
