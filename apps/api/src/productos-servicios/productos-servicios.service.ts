@@ -3428,6 +3428,63 @@ export class ProductosServiciosService {
     };
   }
 
+  /**
+   * Modelo universal (C.2): carga todos los datos runtime que gran_formato@2
+   * necesita para cotizar — config activa + materiales con sus atributos de rollo.
+   * El motor v2 itera sobre materialesCompatibles y elige el de menor costo total.
+   */
+  /** Exposición pública para que los motores v2 puedan cargar variante completa. */
+  findVarianteCompletaOrThrowPublic(auth: CurrentAuth, varianteId: string) {
+    return this.findVarianteCompletaOrThrow(auth, varianteId, this.prisma);
+  }
+
+  async loadGranFormatoV2Runtime(auth: CurrentAuth, productoId: string) {
+    const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+    if (producto.motorCodigo !== 'gran_formato') {
+      throw new BadRequestException(`El producto no usa motor gran_formato (usa ${producto.motorCodigo}).`);
+    }
+    const configRow = await this.prisma.productoMotorConfig.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        productoServicioId: productoId,
+        motorCodigo: 'gran_formato',
+        motorVersion: 2,
+        activo: true,
+      },
+      orderBy: [{ versionConfig: 'desc' }],
+    });
+    if (!configRow) {
+      throw new BadRequestException(
+        `El producto ${productoId} no tiene ProductoMotorConfig para gran_formato@2. Creá uno con los materiales y la máquina compatibles.`,
+      );
+    }
+    const config = configRow.parametrosJson as Record<string, unknown>;
+    const materialesIds = Array.isArray(config.materialesCompatibles)
+      ? (config.materialesCompatibles as string[])
+      : [];
+    if (materialesIds.length === 0) {
+      throw new BadRequestException('La config de gran_formato@2 no declara materialesCompatibles.');
+    }
+    const materiales = await this.prisma.materiaPrimaVariante.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        id: { in: materialesIds },
+        activo: true,
+      },
+      include: {
+        materiaPrima: { select: { id: true, nombre: true, subfamilia: true } },
+      },
+    });
+    if (materiales.length === 0) {
+      throw new BadRequestException('Ninguno de los materialesCompatibles existe o está activo.');
+    }
+    return {
+      producto,
+      config,
+      materiales,
+    };
+  }
+
   async upsertWideFormatProductMotorConfig(
     auth: CurrentAuth,
     productoId: string,

@@ -1,20 +1,16 @@
 /**
- * Etapa B — WideFormatMotorModuleV2
+ * Etapa B/C — WideFormatMotorModuleV2
  *
- * Primer motor productivo sobre el modelo universal de costeo.
- * Cotiza vinilo adhesivo impreso UV (piloto) siguiendo la ruta de 5 pasos
- * definida en docs/etapa-B-ruta-gran-formato.md:
+ * Motor gran_formato@2 del modelo universal. Cotiza impresión por área sobre
+ * rollo continuo respetando:
+ *   - Config persistida del producto (`ProductoMotorConfig.parametrosJson`)
+ *   - Ancho real de cada material compatible (MateriaPrimaVariante.atributosVarianteJson.ancho)
+ *   - Regla de selección: prueba cada material, elige por criterio (menor_costo_total)
+ *   - Nesting real en rollo (función pura nestOnRoll)
+ *   - Rechazo de piezas que no encajan en ningún material disponible
  *
- *   pre_prensa → impresion_por_area → laminado(opcional) → corte → embalaje
- *
- * El motor arma la shape canónica directamente (sin pasar por adapter v1).
- * Los pasos se construyen con fórmulas simples y parámetros en su mayoría
- * hardcoded en esta etapa piloto; en etapas posteriores se parametrizan
- * desde ProductoMotorConfig.
- *
- * NO reemplaza al motor v1 stub (`wide-format.motor.ts`). Se registra como
- * `gran_formato@2` en paralelo. El feature flag `ENABLE_WIDE_FORMAT_V2`
- * decide cuándo el dispatcher rutea a v2.
+ * Ruta: pre_prensa → impresion_por_area → laminado(opcional) → corte → embalaje
+ * Emite shape canónica directamente.
  */
 import { BadRequestException } from '@nestjs/common';
 import type { CurrentAuth } from '../../auth/auth.types';
@@ -30,51 +26,60 @@ import type {
   CotizacionCanonica,
   PasoCotizado,
 } from '../dto/cotizacion-canonica.dto';
-import { nestOnRoll } from './wide-format-v2.calculations';
+import { nestOnRoll, type NestingRolloResult } from './wide-format-v2.calculations';
 
 type ParametrosWideFormatV2 = {
   anchoMm?: number;
   altoMm?: number;
   conLaminado?: boolean;
-  /** Medidas múltiples (override de anchoMm/altoMm si viene). */
   medidas?: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
 };
 
-/**
- * Parámetros default del piloto. En producción vendrán de ProductoMotorConfig;
- * hoy son literales para que el motor sea testeable y auto-contenido.
- *
- * NOTA C.2: los parámetros de material (rollo, precio, tinta) vienen del
- * material real del sustrato (vinilo adhesivo blanco). En etapa posterior se
- * leerán de ProductoMotorConfig.parametrosJson y MateriaPrimaVariante.
- */
-const DEFAULTS = {
-  // Pre-prensa
-  prePrensaSetupMin: 15,
-  prePrensaTarifaHora: 3500,
-  // Impresión UV en gran formato
-  impresionSetupMin: 5,
-  impresionProductividadM2h: 4,
-  impresionTarifaHora: 8000,
-  // Sustrato: vinilo adhesivo blanco (atributos reales del rollo disponible)
-  rolloAnchoMm: 630, // 63cm — ancho estándar del vinilo
-  rolloMargenLateralMm: 5,
+type GranFormatoConfigParametros = {
+  materialesCompatibles?: string[];
+  maquinasCompatibles?: string[];
+  maquinaDefaultId?: string;
+  separacionPiezasMm?: number;
+  margenLateralMm?: number;
+  permitirRotacion?: boolean;
+  criterioSeleccionMaterial?: 'menor_costo_total' | 'menor_largo_consumido' | 'mayor_aprovechamiento';
+  productividadM2h?: number;
+  tarifaMaquinaHora?: number;
+  tintaMlPorM2?: number;
+  tintaPrecioMl?: number;
+  prePrensaSetupMin?: number;
+  prePrensaTarifaHora?: number;
+  laminadoSetupMin?: number;
+  laminadoProductividadM2h?: number;
+  laminadoTarifaHora?: number;
+  laminadoMermaPct?: number;
+  laminadoFilmPrecioM2?: number;
+  cortePorPiezaMin?: number;
+  corteTarifaHora?: number;
+  embalajePorPiezaMin?: number;
+  embalajePrecioBolsa?: number;
+  embalajeTarifaHora?: number;
+};
+
+/** Valores por defecto si falta alguno en la config del producto. */
+const CONFIG_DEFAULTS = {
   separacionPiezasMm: 10,
+  margenLateralMm: 5,
   permitirRotacion: true,
-  // 1 rollo = 50m × 0.63m = 31.5 m². Precio del rollo dividido → ~precio/m² útil.
-  sustratoPrecioM2: 4800,
+  criterioSeleccionMaterial: 'menor_costo_total' as const,
+  productividadM2h: 4,
+  tarifaMaquinaHora: 8000,
   tintaMlPorM2: 15,
   tintaPrecioMl: 2.5,
-  // Laminado
+  prePrensaSetupMin: 15,
+  prePrensaTarifaHora: 3500,
   laminadoSetupMin: 3,
   laminadoProductividadM2h: 20,
   laminadoTarifaHora: 6000,
   laminadoMermaPct: 0.05,
   laminadoFilmPrecioM2: 1800,
-  // Corte perimetral manual/cutter
   cortePorPiezaMin: 2,
   corteTarifaHora: 6000,
-  // Embalaje
   embalajePorPiezaMin: 1,
   embalajePrecioBolsa: 45,
   embalajeTarifaHora: 2500,
@@ -87,6 +92,36 @@ function roundMoney(n: number): number {
 function costoTiempo(min: number, tarifaHora: number): number {
   return roundMoney((min / 60) * tarifaHora);
 }
+
+/** Resuelve el ancho del rollo en mm a partir del material (atributosVarianteJson.ancho en metros). */
+function rolloAnchoMmDeMaterial(material: { atributosVarianteJson: unknown }): number | null {
+  const attrs = material.atributosVarianteJson as Record<string, unknown> | null;
+  if (!attrs) return null;
+  const anchoM = Number(attrs.ancho);
+  if (!Number.isFinite(anchoM) || anchoM <= 0) return null;
+  return Math.round(anchoM * 1000);
+}
+
+/** Largo del rollo en metros (para derivar precio por m²). */
+function rolloLargoMDeMaterial(material: { atributosVarianteJson: unknown }): number | null {
+  const attrs = material.atributosVarianteJson as Record<string, unknown> | null;
+  if (!attrs) return null;
+  const largoM = Number(attrs.largo);
+  if (!Number.isFinite(largoM) || largoM <= 0) return null;
+  return largoM;
+}
+
+type MaterialEvaluado = {
+  materialId: string;
+  sku: string;
+  nombre: string;
+  rolloAnchoMm: number;
+  rolloLargoM: number;
+  precioRolloTotal: number;
+  precioPorM2: number;
+  nesting: NestingRolloResult;
+  sustratoCosto: number; // costo del sustrato para las piezas pedidas
+};
 
 export class WideFormatMotorModuleV2 implements ProductMotorModule {
   constructor(private readonly service: ProductosServiciosService) {}
@@ -108,8 +143,6 @@ export class WideFormatMotorModuleV2 implements ProductMotorModule {
     };
   }
 
-  // Los métodos de config delegan al v1 por ahora — durante el piloto
-  // no construimos un configurador nuevo; eso viene en etapa posterior.
   getProductConfig(auth: CurrentAuth, productoId: string) {
     return this.service.getWideFormatProductMotorConfig(auth, productoId);
   }
@@ -139,17 +172,16 @@ export class WideFormatMotorModuleV2 implements ProductMotorModule {
   }
 
   async quoteVariant(
-    _auth: CurrentAuth,
+    auth: CurrentAuth,
     varianteId: string,
     payload: CotizarProductoVarianteDto,
   ): Promise<CotizacionCanonica> {
-    const cantidad = Math.max(1, Math.floor(Number(payload.cantidad ?? 1)));
     const periodo = String(payload.periodo ?? '2026-04');
     const params = (payload.parametros ?? {}) as ParametrosWideFormatV2;
     const conLaminado = Boolean(params.conLaminado ?? false);
+    const cantidadPayload = Math.max(1, Math.floor(Number(payload.cantidad ?? 1)));
 
-    // Normalizo medidas: si viene `medidas[]` las uso; si no, construyo una
-    // lista a partir de anchoMm/altoMm + cantidad (backward-compat con piloto B).
+    // Normalizar medidas
     let medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }>;
     if (Array.isArray(params.medidas) && params.medidas.length > 0) {
       medidas = params.medidas
@@ -164,164 +196,235 @@ export class WideFormatMotorModuleV2 implements ProductMotorModule {
       const altoMm = Number(params.altoMm ?? 0);
       if (anchoMm <= 0 || altoMm <= 0) {
         throw new BadRequestException(
-          'gran_formato@2: debe especificar parametros.anchoMm y parametros.altoMm mayores a 0 (o pasar parametros.medidas).',
+          'gran_formato@2: falta parametros.anchoMm y parametros.altoMm (o parametros.medidas[]).',
         );
       }
-      medidas = [{ anchoMm, altoMm, cantidad }];
+      medidas = [{ anchoMm, altoMm, cantidad: cantidadPayload }];
     }
-
     if (medidas.length === 0) {
-      throw new BadRequestException('gran_formato@2: debe especificar al menos una medida válida.');
+      throw new BadRequestException('gran_formato@2: no se especificaron medidas válidas.');
     }
+    const cantidadTotal = medidas.reduce((a, m) => a + m.cantidad, 0);
 
-    // Cantidad total de piezas (suma de todas las medidas)
-    const cantidadTotal = medidas.reduce((acc, m) => acc + m.cantidad, 0);
+    // Cargar variante + config + materiales desde DB
+    const variante = await this.service.findVarianteCompletaOrThrowPublic(auth, varianteId);
+    const runtime = await this.service.loadGranFormatoV2Runtime(auth, variante.productoServicioId);
+    const config = runtime.config as GranFormatoConfigParametros;
+
+    const sep = Number(config.separacionPiezasMm ?? CONFIG_DEFAULTS.separacionPiezasMm);
+    const margen = Number(config.margenLateralMm ?? CONFIG_DEFAULTS.margenLateralMm);
+    const permitirRotacion = Boolean(config.permitirRotacion ?? CONFIG_DEFAULTS.permitirRotacion);
+    const criterio = config.criterioSeleccionMaterial ?? CONFIG_DEFAULTS.criterioSeleccionMaterial;
+
+    // ──────────────── Evaluar cada material compatible ────────────────
     const warnings: string[] = [];
+    const evaluados: MaterialEvaluado[] = [];
+    const descartados: Array<{ sku: string; motivo: string }> = [];
 
-    // ──────────────── Nesting real en rollo ────────────────
-    const nesting = nestOnRoll({
-      piezas: medidas,
-      rolloAnchoMm: DEFAULTS.rolloAnchoMm,
-      separacionMm: DEFAULTS.separacionPiezasMm,
-      margenLateralMm: DEFAULTS.rolloMargenLateralMm,
-      permitirRotacion: DEFAULTS.permitirRotacion,
-    });
+    for (const material of runtime.materiales) {
+      const rolloAnchoMm = rolloAnchoMmDeMaterial(material);
+      const rolloLargoM = rolloLargoMDeMaterial(material);
+      const precioRollo = Number(material.precioReferencia ?? 0);
 
-    if (nesting.piezasRechazadas.length > 0) {
-      const motivos = nesting.piezasRechazadas.map((r) => r.motivo).join('; ');
+      if (!rolloAnchoMm || !rolloLargoM) {
+        descartados.push({
+          sku: material.sku,
+          motivo: `Material sin atributos ancho/largo: no se puede calcular precio por m².`,
+        });
+        continue;
+      }
+      if (precioRollo <= 0) {
+        descartados.push({
+          sku: material.sku,
+          motivo: `Material sin precio de referencia.`,
+        });
+        continue;
+      }
+
+      const nesting = nestOnRoll({
+        piezas: medidas,
+        rolloAnchoMm,
+        separacionMm: sep,
+        margenLateralMm: margen,
+        permitirRotacion,
+      });
+
+      if (nesting.piezasRechazadas.length > 0) {
+        descartados.push({
+          sku: material.sku,
+          motivo: `Rollo ${rolloAnchoMm}mm: ${nesting.piezasRechazadas.map((r) => r.motivo).join('; ')}`,
+        });
+        continue;
+      }
+
+      // Precio por m² = precio del rollo / (ancho × largo del rollo)
+      const areaRolloM2 = (rolloAnchoMm / 1000) * rolloLargoM;
+      const precioPorM2 = precioRollo / areaRolloM2;
+      const sustratoCosto = roundMoney(nesting.areaConsumidaM2 * precioPorM2);
+
+      evaluados.push({
+        materialId: material.id,
+        sku: material.sku,
+        nombre: material.materiaPrima?.nombre ?? material.sku,
+        rolloAnchoMm,
+        rolloLargoM,
+        precioRolloTotal: precioRollo,
+        precioPorM2: roundMoney(precioPorM2),
+        nesting,
+        sustratoCosto,
+      });
+    }
+
+    if (evaluados.length === 0) {
+      const detalle = descartados.map((d) => `${d.sku}: ${d.motivo}`).join(' | ');
       throw new BadRequestException(
-        `gran_formato@2: hay piezas que no encajan en el rollo de ${DEFAULTS.rolloAnchoMm}mm. ${motivos}`,
-      );
-    }
-    if (nesting.aprovechamientoPct < 30) {
-      warnings.push(
-        `Aprovechamiento bajo: ${nesting.aprovechamientoPct}%. Considera usar un rollo más angosto o combinar con otro pedido.`,
+        `gran_formato@2: ninguno de los materiales compatibles puede procesar el trabajo. ${detalle}`,
       );
     }
 
-    // ──────────────── Cálculo por paso ────────────────
+    // Elegir ganador por criterio
+    const ganador = elegirMaterial(evaluados, criterio);
+    if (evaluados.length > 1) {
+      warnings.push(
+        `Se evaluaron ${evaluados.length} materiales; ganó ${ganador.sku} (${ganador.rolloAnchoMm}mm ancho) por criterio ${criterio}.`,
+      );
+    }
+    if (ganador.nesting.aprovechamientoPct < 30) {
+      warnings.push(
+        `Aprovechamiento bajo: ${ganador.nesting.aprovechamientoPct}%. Considerar otras medidas o combinar con otro pedido.`,
+      );
+    }
+
+    // ──────────────── Construir pasos ────────────────
 
     // Paso 1: pre_prensa
-    const prePrensaMin = DEFAULTS.prePrensaSetupMin;
-    const prePrensaCentro = costoTiempo(prePrensaMin, DEFAULTS.prePrensaTarifaHora);
+    const prePrensaMin = Number(config.prePrensaSetupMin ?? CONFIG_DEFAULTS.prePrensaSetupMin);
+    const prePrensaTarifa = Number(config.prePrensaTarifaHora ?? CONFIG_DEFAULTS.prePrensaTarifaHora);
     const pasoPrePrensa: PasoCotizado = {
       id: 'P01-pre_prensa',
       tipo: 'pre_prensa',
       nombre: 'Pre-prensa',
-      costoCentroCosto: prePrensaCentro,
+      costoCentroCosto: costoTiempo(prePrensaMin, prePrensaTarifa),
       costoMateriasPrimas: 0,
       cargosFlat: 0,
-      trazabilidad: { setupMin: prePrensaMin, tarifaHora: DEFAULTS.prePrensaTarifaHora },
+      trazabilidad: { setupMin: prePrensaMin, tarifaHora: prePrensaTarifa },
     };
 
     // Paso 2: impresion_por_area
-    // Tiempo sobre el AREA CONSUMIDA del rollo (incluye desperdicio real).
-    // Tinta sobre el AREA ÚTIL (sólo lo que tiene diseño).
-    const areaConsumidaM2 = nesting.areaConsumidaM2;
-    const areaUtilM2 = nesting.areaUtilM2;
-    const impresionProductivoMin = (areaConsumidaM2 / DEFAULTS.impresionProductividadM2h) * 60;
-    const impresionMin = DEFAULTS.impresionSetupMin + impresionProductivoMin;
-    const impresionCentro = costoTiempo(impresionMin, DEFAULTS.impresionTarifaHora);
-    const sustratoCosto = roundMoney(areaConsumidaM2 * DEFAULTS.sustratoPrecioM2);
-    const tintaMl = areaUtilM2 * DEFAULTS.tintaMlPorM2;
-    const tintaCosto = roundMoney(tintaMl * DEFAULTS.tintaPrecioMl);
+    const areaConsumidaM2 = ganador.nesting.areaConsumidaM2;
+    const areaUtilM2 = ganador.nesting.areaUtilM2;
+    const productividadM2h = Number(config.productividadM2h ?? CONFIG_DEFAULTS.productividadM2h);
+    const tarifaImpresion = Number(config.tarifaMaquinaHora ?? CONFIG_DEFAULTS.tarifaMaquinaHora);
+    const tintaMlPorM2 = Number(config.tintaMlPorM2 ?? CONFIG_DEFAULTS.tintaMlPorM2);
+    const tintaPrecioMl = Number(config.tintaPrecioMl ?? CONFIG_DEFAULTS.tintaPrecioMl);
+    const impresionProductivoMin = (areaConsumidaM2 / productividadM2h) * 60;
+    const impresionSetupMin = 5;
+    const impresionMin = impresionSetupMin + impresionProductivoMin;
+    const tintaMl = areaUtilM2 * tintaMlPorM2;
+    const tintaCosto = roundMoney(tintaMl * tintaPrecioMl);
+
     const pasoImpresion: PasoCotizado = {
       id: 'P02-impresion_por_area',
       tipo: 'impresion_por_area',
-      nombre: 'Impresión UV por área',
-      costoCentroCosto: impresionCentro,
-      costoMateriasPrimas: roundMoney(sustratoCosto + tintaCosto),
+      nombre: `Impresión UV (${ganador.nombre} ${ganador.rolloAnchoMm}mm)`,
+      costoCentroCosto: costoTiempo(impresionMin, tarifaImpresion),
+      costoMateriasPrimas: roundMoney(ganador.sustratoCosto + tintaCosto),
       cargosFlat: 0,
       trazabilidad: {
-        rollo: {
-          anchoMm: DEFAULTS.rolloAnchoMm,
-          margenLateralMm: DEFAULTS.rolloMargenLateralMm,
-          anchoUtilMm: DEFAULTS.rolloAnchoMm - 2 * DEFAULTS.rolloMargenLateralMm,
+        materialElegido: {
+          id: ganador.materialId,
+          sku: ganador.sku,
+          nombre: ganador.nombre,
+          rolloAnchoMm: ganador.rolloAnchoMm,
+          rolloLargoM: ganador.rolloLargoM,
+          precioRolloTotal: ganador.precioRolloTotal,
+          precioPorM2: ganador.precioPorM2,
         },
+        criterioAplicado: criterio,
+        materialesEvaluados: evaluados.map((e) => ({
+          sku: e.sku,
+          rolloAnchoMm: e.rolloAnchoMm,
+          aprovechamientoPct: e.nesting.aprovechamientoPct,
+          largoConsumidoMm: e.nesting.largoConsumidoMm,
+          sustratoCosto: e.sustratoCosto,
+          esGanador: e.materialId === ganador.materialId,
+        })),
+        materialesDescartados: descartados,
         nesting: {
-          largoConsumidoMm: nesting.largoConsumidoMm,
-          areaUtilM2: nesting.areaUtilM2,
-          areaConsumidaM2: nesting.areaConsumidaM2,
-          aprovechamientoPct: nesting.aprovechamientoPct,
-          layoutsPorMedida: nesting.layoutsPorMedida,
+          largoConsumidoMm: ganador.nesting.largoConsumidoMm,
+          areaUtilM2: ganador.nesting.areaUtilM2,
+          areaConsumidaM2: ganador.nesting.areaConsumidaM2,
+          aprovechamientoPct: ganador.nesting.aprovechamientoPct,
+          layoutsPorMedida: ganador.nesting.layoutsPorMedida,
         },
-        productividadM2h: DEFAULTS.impresionProductividadM2h,
-        setupMin: DEFAULTS.impresionSetupMin,
+        productividadM2h,
+        setupMin: impresionSetupMin,
         productivoMin: roundMoney(impresionProductivoMin),
-        sustrato: { m2Consumidos: areaConsumidaM2, precioM2: DEFAULTS.sustratoPrecioM2, costo: sustratoCosto },
-        tinta: { ml: roundMoney(tintaMl), precioMl: DEFAULTS.tintaPrecioMl, costo: tintaCosto },
+        sustrato: { m2Consumidos: areaConsumidaM2, precioM2: ganador.precioPorM2, costo: ganador.sustratoCosto },
+        tinta: { ml: roundMoney(tintaMl), precioMl: tintaPrecioMl, costo: tintaCosto },
       },
     };
 
     // Paso 3: laminado (opcional)
     let pasoLaminado: PasoCotizado | null = null;
     if (conLaminado) {
-      // Laminado sobre área consumida (cubre incluso lo que va a ser recortado).
-      const laminadoProductivoMin = (areaConsumidaM2 / DEFAULTS.laminadoProductividadM2h) * 60;
-      const laminadoMin = DEFAULTS.laminadoSetupMin + laminadoProductivoMin;
-      const laminadoCentro = costoTiempo(laminadoMin, DEFAULTS.laminadoTarifaHora);
-      const filmM2 = areaConsumidaM2 * (1 + DEFAULTS.laminadoMermaPct);
-      const filmCosto = roundMoney(filmM2 * DEFAULTS.laminadoFilmPrecioM2);
+      const lamSetup = Number(config.laminadoSetupMin ?? CONFIG_DEFAULTS.laminadoSetupMin);
+      const lamProd = Number(config.laminadoProductividadM2h ?? CONFIG_DEFAULTS.laminadoProductividadM2h);
+      const lamTarifa = Number(config.laminadoTarifaHora ?? CONFIG_DEFAULTS.laminadoTarifaHora);
+      const lamMerma = Number(config.laminadoMermaPct ?? CONFIG_DEFAULTS.laminadoMermaPct);
+      const lamFilmPrecio = Number(config.laminadoFilmPrecioM2 ?? CONFIG_DEFAULTS.laminadoFilmPrecioM2);
+      const lamProductivoMin = (areaConsumidaM2 / lamProd) * 60;
+      const lamMin = lamSetup + lamProductivoMin;
+      const lamFilmM2 = areaConsumidaM2 * (1 + lamMerma);
+      const lamFilmCosto = roundMoney(lamFilmM2 * lamFilmPrecio);
       pasoLaminado = {
         id: 'P03-laminado',
         tipo: 'laminado',
         nombre: 'Laminado UV',
-        costoCentroCosto: laminadoCentro,
-        costoMateriasPrimas: filmCosto,
+        costoCentroCosto: costoTiempo(lamMin, lamTarifa),
+        costoMateriasPrimas: lamFilmCosto,
         cargosFlat: 0,
         trazabilidad: {
-          setupMin: DEFAULTS.laminadoSetupMin,
-          productivoMin: roundMoney(laminadoProductivoMin),
-          film: { m2: roundMoney(filmM2), precioM2: DEFAULTS.laminadoFilmPrecioM2, costo: filmCosto },
+          setupMin: lamSetup,
+          productivoMin: roundMoney(lamProductivoMin),
+          film: { m2: roundMoney(lamFilmM2), precioM2: lamFilmPrecio, costo: lamFilmCosto },
         },
       };
     }
 
-    // Paso 4: corte perimetral (por pieza total)
-    const corteMin = cantidadTotal * DEFAULTS.cortePorPiezaMin;
-    const corteCentro = costoTiempo(corteMin, DEFAULTS.corteTarifaHora);
+    // Paso 4: corte
+    const corteMinPorPieza = Number(config.cortePorPiezaMin ?? CONFIG_DEFAULTS.cortePorPiezaMin);
+    const corteTarifa = Number(config.corteTarifaHora ?? CONFIG_DEFAULTS.corteTarifaHora);
+    const corteMin = cantidadTotal * corteMinPorPieza;
     const pasoCorte: PasoCotizado = {
       id: 'P04-corte',
       tipo: 'corte',
       nombre: 'Corte perimetral',
-      costoCentroCosto: corteCentro,
+      costoCentroCosto: costoTiempo(corteMin, corteTarifa),
       costoMateriasPrimas: 0,
       cargosFlat: 0,
-      trazabilidad: { cantidad: cantidadTotal, minPorPieza: DEFAULTS.cortePorPiezaMin, totalMin: corteMin },
+      trazabilidad: { cantidad: cantidadTotal, minPorPieza: corteMinPorPieza, totalMin: corteMin },
     };
 
-    // Paso 5: embalaje (por pieza total)
-    const embalajeMin = cantidadTotal * DEFAULTS.embalajePorPiezaMin;
-    const embalajeCentro = costoTiempo(embalajeMin, DEFAULTS.embalajeTarifaHora);
-    const bolsasCosto = roundMoney(cantidadTotal * DEFAULTS.embalajePrecioBolsa);
+    // Paso 5: embalaje
+    const embMinPorPieza = Number(config.embalajePorPiezaMin ?? CONFIG_DEFAULTS.embalajePorPiezaMin);
+    const embTarifa = Number(config.embalajeTarifaHora ?? CONFIG_DEFAULTS.embalajeTarifaHora);
+    const embPrecioBolsa = Number(config.embalajePrecioBolsa ?? CONFIG_DEFAULTS.embalajePrecioBolsa);
+    const embMin = cantidadTotal * embMinPorPieza;
     const pasoEmbalaje: PasoCotizado = {
       id: 'P05-embalaje',
       tipo: 'operacion_manual',
       nombre: 'Embalaje individual',
-      costoCentroCosto: embalajeCentro,
-      costoMateriasPrimas: bolsasCosto,
+      costoCentroCosto: costoTiempo(embMin, embTarifa),
+      costoMateriasPrimas: roundMoney(cantidadTotal * embPrecioBolsa),
       cargosFlat: 0,
-      trazabilidad: { cantidad: cantidadTotal, bolsas: cantidadTotal, precioBolsa: DEFAULTS.embalajePrecioBolsa },
+      trazabilidad: { cantidad: cantidadTotal, bolsas: cantidadTotal, precioBolsa: embPrecioBolsa },
     };
 
-    // ────────────── Agregación ──────────────
-    const pasos: PasoCotizado[] = [
-      pasoPrePrensa,
-      pasoImpresion,
-      ...(pasoLaminado ? [pasoLaminado] : []),
-      pasoCorte,
-      pasoEmbalaje,
-    ];
-
-    const centroCosto = roundMoney(
-      pasos.reduce((acc, p) => acc + p.costoCentroCosto, 0),
-    );
-    const materiasPrimas = roundMoney(
-      pasos.reduce((acc, p) => acc + p.costoMateriasPrimas, 0),
-    );
-    const cargosFlat = roundMoney(
-      pasos.reduce((acc, p) => acc + p.cargosFlat, 0),
-    );
+    const pasos = [pasoPrePrensa, pasoImpresion, ...(pasoLaminado ? [pasoLaminado] : []), pasoCorte, pasoEmbalaje];
+    const centroCosto = roundMoney(pasos.reduce((a, p) => a + p.costoCentroCosto, 0));
+    const materiasPrimas = roundMoney(pasos.reduce((a, p) => a + p.costoMateriasPrimas, 0));
+    const cargosFlat = roundMoney(pasos.reduce((a, p) => a + p.cargosFlat, 0));
     const total = roundMoney(centroCosto + materiasPrimas + cargosFlat);
     const unitario = cantidadTotal > 0 ? roundMoney(total / cantidadTotal) : 0;
 
@@ -340,15 +443,22 @@ export class WideFormatMotorModuleV2 implements ProductMotorModule {
         varianteId,
         medidas,
         conLaminado,
-        nesting: {
-          largoConsumidoMm: nesting.largoConsumidoMm,
-          areaUtilM2: nesting.areaUtilM2,
-          areaConsumidaM2: nesting.areaConsumidaM2,
-          aprovechamientoPct: nesting.aprovechamientoPct,
-          layoutsPorMedida: nesting.layoutsPorMedida,
-        },
-        defaultsUsados: DEFAULTS,
+        configVersion: runtime.config ? 'loaded' : 'defaults',
       },
     };
   }
+}
+
+function elegirMaterial(
+  evaluados: MaterialEvaluado[],
+  criterio: 'menor_costo_total' | 'menor_largo_consumido' | 'mayor_aprovechamiento',
+): MaterialEvaluado {
+  if (criterio === 'menor_largo_consumido') {
+    return [...evaluados].sort((a, b) => a.nesting.largoConsumidoMm - b.nesting.largoConsumidoMm)[0];
+  }
+  if (criterio === 'mayor_aprovechamiento') {
+    return [...evaluados].sort((a, b) => b.nesting.aprovechamientoPct - a.nesting.aprovechamientoPct)[0];
+  }
+  // menor_costo_total por default
+  return [...evaluados].sort((a, b) => a.sustratoCosto - b.sustratoCosto)[0];
 }
