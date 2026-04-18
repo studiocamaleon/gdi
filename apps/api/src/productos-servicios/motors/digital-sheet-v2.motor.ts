@@ -38,11 +38,16 @@ type DigitalConfigParametros = {
   gapVerticalMm?: number;
   mermaAdicionalPct?: number;
   permitirRotacion?: boolean;
+  /** Valor por defecto si la variante no soporta múltiples opciones. */
+  carasDefault?: 'simple_faz' | 'doble_faz';
+  tipoImpresionDefault?: 'CMYK' | 'BN';
   prePrensaSetupMin?: number;
   prePrensaTarifaHora?: number;
   impresionSetupMin?: number;
   impresionClicsPorPliego?: number;
   impresionCostoClic?: number;
+  /** Costo de clic en BN (si BN no está seteado, se usa impresionCostoClic). */
+  impresionCostoClicBN?: number;
   impresionTarifaHora?: number;
   impresionPliegosPorHora?: number;
   papelPrecioPorPliego?: number;
@@ -60,11 +65,14 @@ const CONFIG_DEFAULTS = {
   gapHorizontalMm: 0,
   gapVerticalMm: 0,
   permitirRotacion: true,
+  carasDefault: 'simple_faz' as const,
+  tipoImpresionDefault: 'CMYK' as const,
   prePrensaSetupMin: 10,
   prePrensaTarifaHora: 3500,
   impresionSetupMin: 5,
   impresionClicsPorPliego: 1,
   impresionCostoClic: 30,
+  impresionCostoClicBN: 10,
   impresionTarifaHora: 4500,
   impresionPliegosPorHora: 1200,
   papelPrecioPorPliego: 40,
@@ -143,6 +151,27 @@ export class DigitalSheetMotorModuleV2 implements ProductMotorModule {
     const config = runtime.config as DigitalConfigParametros;
     const variante = runtime.variante;
 
+    // Resolver selecciones técnicas (caras + tipoImpresion) desde seleccionesBase
+    // o defaults del producto/variante/config.
+    const selecciones = new Map(
+      (payload.seleccionesBase ?? []).map((s) => [String(s.dimension), String(s.valor)]),
+    );
+    const carasRaw =
+      selecciones.get('caras') ??
+      (String(variante.caras ?? '').toLowerCase() ||
+        config.carasDefault ||
+        CONFIG_DEFAULTS.carasDefault);
+    const caras = carasRaw.toLowerCase() as 'simple_faz' | 'doble_faz';
+    const tipoImpresionRaw =
+      selecciones.get('tipo_impresion') ??
+      selecciones.get('tipoImpresion') ??
+      (String(variante.tipoImpresion ?? '') ||
+        config.tipoImpresionDefault ||
+        CONFIG_DEFAULTS.tipoImpresionDefault);
+    const tipoImpresion = tipoImpresionRaw.toUpperCase() as 'CMYK' | 'BN';
+    const esDobleFaz = caras === 'doble_faz';
+    const multiplicadorCaras = esDobleFaz ? 2 : 1;
+
     const varianteAnchoMm = Number(variante.anchoMm);
     const varianteAltoMm = Number(variante.altoMm);
     if (!Number.isFinite(varianteAnchoMm) || !Number.isFinite(varianteAltoMm) || varianteAnchoMm <= 0 || varianteAltoMm <= 0) {
@@ -217,21 +246,33 @@ export class DigitalSheetMotorModuleV2 implements ProductMotorModule {
     const pliegosPorHora = Number(config.impresionPliegosPorHora ?? CONFIG_DEFAULTS.impresionPliegosPorHora);
     const impresionTarifa = Number(config.impresionTarifaHora ?? CONFIG_DEFAULTS.impresionTarifaHora);
     const clicsPorPliego = Number(config.impresionClicsPorPliego ?? CONFIG_DEFAULTS.impresionClicsPorPliego);
-    const costoClic = Number(config.impresionCostoClic ?? CONFIG_DEFAULTS.impresionCostoClic);
-    const impresionProductivoMin = pliegosPorHora > 0 ? (pliegosNecesarios / pliegosPorHora) * 60 : 0;
+    // Costo de clic depende del tipo de impresión (BN es más barato que CMYK).
+    const costoClic = tipoImpresion === 'BN'
+      ? Number(config.impresionCostoClicBN ?? CONFIG_DEFAULTS.impresionCostoClicBN)
+      : Number(config.impresionCostoClic ?? CONFIG_DEFAULTS.impresionCostoClic);
+    // Doble faz = 2 corridas por pliego (una por cara), cada una cuenta como clic.
+    const clicsTotales = pliegosNecesarios * clicsPorPliego * multiplicadorCaras;
+    // Tiempo de impresión también escala con caras (doble faz tarda el doble).
+    const impresionProductivoMin =
+      pliegosPorHora > 0 ? ((pliegosNecesarios * multiplicadorCaras) / pliegosPorHora) * 60 : 0;
     const impresionMin = impresionSetup + impresionProductivoMin;
-    const clicsCosto = roundMoney(pliegosNecesarios * clicsPorPliego * costoClic);
+    const clicsCosto = roundMoney(clicsTotales * costoClic);
     const papelPrecio = Number(config.papelPrecioPorPliego ?? CONFIG_DEFAULTS.papelPrecioPorPliego);
+    // El papel es el mismo — no se duplica por doble faz (se imprime sobre ambas caras del mismo pliego).
     const papelCosto = roundMoney(pliegosNecesarios * papelPrecio);
 
+    const cararLabel = esDobleFaz ? 'doble faz' : 'simple faz';
     const pasoImpresion: PasoCotizado = {
       id: 'P02-impresion_por_hoja',
       tipo: 'impresion_por_hoja',
-      nombre: `Impresión digital (${pliego.nombre ?? `${pliegoAncho}×${pliegoAlto}`})`,
+      nombre: `Impresión digital (${pliego.nombre ?? `${pliegoAncho}×${pliegoAlto}`} · ${tipoImpresion} · ${cararLabel})`,
       costoCentroCosto: costoTiempo(impresionMin, impresionTarifa),
       costoMateriasPrimas: roundMoney(clicsCosto + papelCosto),
       cargosFlat: 0,
       trazabilidad: {
+        caras,
+        tipoImpresion,
+        multiplicadorCaras,
         nesting: {
           algoritmo: 'nesting-hoja',
           pliegoElegido: nesting.pliegoElegido,
@@ -249,6 +290,7 @@ export class DigitalSheetMotorModuleV2 implements ProductMotorModule {
         productivoMin: roundMoney(impresionProductivoMin),
         pliegosPorHora,
         clicsPorPliego,
+        clicsTotales,
         costoClic,
         clicsCosto,
         papel: { pliegos: pliegosNecesarios, precioPorPliego: papelPrecio, costo: papelCosto },
@@ -304,6 +346,8 @@ export class DigitalSheetMotorModuleV2 implements ProductMotorModule {
       warnings: [],
       trazabilidad: {
         varianteId,
+        caras,
+        tipoImpresion,
         papelVariante: {
           id: variante.papelVariante?.id ?? null,
           sku: variante.papelVariante?.sku ?? null,

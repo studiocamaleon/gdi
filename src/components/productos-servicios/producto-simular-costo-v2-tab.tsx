@@ -158,6 +158,8 @@ const MOTORS_CON_LAMINADO = new Set(["gran_formato"]);
 const MOTORS_CON_COLOR = new Set(["vinilo_de_corte"]);
 /** Motores con `numerosXTalonario`. */
 const MOTORS_CON_NUMEROS_TALONARIO = new Set(["talonario"]);
+/** Motores con caras + tipoImpresion. */
+const MOTORS_CON_CARAS_TIPO = new Set(["impresion_digital_laser", "talonario"]);
 
 export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
   const motorCodigo = props.producto.motorCodigo;
@@ -169,6 +171,8 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
   const [conLaminado, setConLaminado] = React.useState(false);
   const [color, setColor] = React.useState("");
   const [numerosXTalonario, setNumerosXTalonario] = React.useState("50");
+  const [caras, setCaras] = React.useState<"simple_faz" | "doble_faz">("simple_faz");
+  const [tipoImpresion, setTipoImpresion] = React.useState<"CMYK" | "BN">("CMYK");
   const [periodo, setPeriodo] = React.useState(buildDefaultPeriodo());
   const [cotizacion, setCotizacion] = React.useState<CotizacionCanonica | null>(null);
   const [isCotizando, startCotizando] = React.useTransition();
@@ -197,11 +201,18 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
           const n = Number(numerosXTalonario);
           if (Number.isFinite(n) && n > 0) parametros.numerosXTalonario = n;
         }
+        const seleccionesBase = MOTORS_CON_CARAS_TIPO.has(motorCodigo)
+          ? [
+              { dimension: "caras" as const, valor: caras },
+              { dimension: "tipo_impresion" as const, valor: tipoImpresion },
+            ]
+          : undefined;
         const result = await cotizarProductoVarianteV2(
           selectedVariantId,
           {
             cantidad: Number(cantidad),
             periodo,
+            seleccionesBase: seleccionesBase as never,
             parametros,
           },
           { forceV2: true },
@@ -212,7 +223,7 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
         toast.error(error instanceof Error ? error.message : "No se pudo cotizar.");
       }
     });
-  }, [selectedVariantId, cantidad, periodo, anchoMm, altoMm, conLaminado, color, numerosXTalonario, motorCodigo, needsMedidas]);
+  }, [selectedVariantId, cantidad, periodo, anchoMm, altoMm, conLaminado, color, numerosXTalonario, caras, tipoImpresion, motorCodigo, needsMedidas]);
 
   return (
     <Card>
@@ -304,6 +315,32 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
                 onChange={(e) => setNumerosXTalonario(e.target.value)}
               />
             </Field>
+          ) : null}
+          {MOTORS_CON_CARAS_TIPO.has(motorCodigo) ? (
+            <>
+              <Field>
+                <FieldLabel>Caras</FieldLabel>
+                <select
+                  value={caras}
+                  onChange={(e) => setCaras(e.target.value as "simple_faz" | "doble_faz")}
+                  className="h-9 rounded-md border bg-background px-2 text-sm"
+                >
+                  <option value="simple_faz">Simple faz</option>
+                  <option value="doble_faz">Doble faz</option>
+                </select>
+              </Field>
+              <Field>
+                <FieldLabel>Tipo impresión</FieldLabel>
+                <select
+                  value={tipoImpresion}
+                  onChange={(e) => setTipoImpresion(e.target.value as "CMYK" | "BN")}
+                  className="h-9 rounded-md border bg-background px-2 text-sm"
+                >
+                  <option value="CMYK">Color (CMYK)</option>
+                  <option value="BN">Blanco y negro</option>
+                </select>
+              </Field>
+            </>
           ) : null}
         </div>
         <div className="flex justify-end">
