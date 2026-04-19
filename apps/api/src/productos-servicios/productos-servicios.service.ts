@@ -3847,6 +3847,9 @@ export class ProductosServiciosService {
         const mats = Array.isArray(op.materialesConsumidos)
           ? (op.materialesConsumidos as Array<Record<string, unknown>>)
           : [];
+        const alts = Array.isArray((op as { alternativas?: unknown }).alternativas)
+          ? ((op as { alternativas: Array<Record<string, unknown>> }).alternativas)
+          : [];
         return {
           id: String(op.id),
           orden: Number(op.orden),
@@ -3901,6 +3904,18 @@ export class ProductosServiciosService {
                 }
               : null,
           })),
+          alternativas: alts.map((a) => {
+            const maq = a.maquina as { id: string; nombre: string; plantilla: string | null } | null;
+            const perf = a.perfilOperativo as { id: string; nombre: string } | null;
+            return {
+              id: String(a.id),
+              label: String(a.label),
+              esDefault: Boolean(a.esDefault),
+              orden: Number(a.orden ?? 0),
+              maquina: maq ? { id: maq.id, nombre: maq.nombre, plantilla: maq.plantilla } : null,
+              perfilOperativo: perf ? { id: perf.id, nombre: perf.nombre } : null,
+            };
+          }),
         };
       }),
     };
@@ -13212,6 +13227,12 @@ export class ProductosServiciosService {
             materialesConsumidos: {
               where: { activo: true },
               include: { materiaPrimaVariante: true },
+              orderBy: [{ orden: 'asc' }],
+            },
+            // P1.3: alternativas de máquina+perfil seleccionables al cotizar.
+            alternativas: {
+              where: { activo: true },
+              include: { maquina: true, perfilOperativo: true },
               orderBy: [{ orden: 'asc' }],
             },
           },

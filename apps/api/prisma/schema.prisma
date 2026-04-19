@@ -547,6 +547,7 @@ model Tenant {
   procesoOperacionPlantillas             ProcesoOperacionPlantilla[]
   procesosOperacion                      ProcesoOperacion[]
   procesoOperacionMateriales             ProcesoOperacionMaterial[]
+  procesoOperacionAlternativas           ProcesoOperacionAlternativa[]
   procesosVersion                        ProcesoVersion[]
   reglasDeSeleccion                      ReglaDeSeleccion[]
   cotizacionShadowLogs                   CotizacionShadowLog[]
@@ -1077,6 +1078,7 @@ model Maquina {
   recursosCentroCosto                  CentroCostoRecurso[]               @relation("CentroCostoRecursoMaquina")
   costosCentroCostoPeriodo             CentroCostoRecursoMaquinaPeriodo[]
   procesosOperacion                    ProcesoOperacion[]                 @relation("ProcesoOperacionMaquina")
+  procesosOperacionAlternativas        ProcesoOperacionAlternativa[]      @relation("ProcesoOperacionAlternativaMaquina")
   procesosOperacionPlantilla           ProcesoOperacionPlantilla[]        @relation("ProcesoOperacionPlantillaMaquina")
   productosAdicionalesRouteEffectPasos ProductoAdicionalRouteEffectPaso[] @relation("ProductoAdicionalRouteEffectPasoMaquina")
   granFormatoVariantes                 GranFormatoVariante[]
@@ -1117,6 +1119,7 @@ model MaquinaPerfilOperativo {
   maquina                              Maquina                            @relation(fields: [maquinaId], references: [id], onDelete: Cascade)
   consumibles                          MaquinaConsumible[]
   procesosOperacion                    ProcesoOperacion[]                 @relation("ProcesoOperacionPerfil")
+  procesosOperacionAlternativas        ProcesoOperacionAlternativa[]      @relation("ProcesoOperacionAlternativaPerfil")
   procesosOperacionPlantilla           ProcesoOperacionPlantilla[]        @relation("ProcesoOperacionPlantillaPerfil")
   productosAdicionalesRouteEffectPasos ProductoAdicionalRouteEffectPaso[] @relation("ProductoAdicionalRouteEffectPasoPerfil")
   granFormatoVariantes                 GranFormatoVariante[]
@@ -1314,6 +1317,7 @@ model ProcesoOperacion {
   requiresProductoAdicional   ProductoAdicionalCatalogo? @relation("ProductoAdicionalCondicionOperacion", fields: [requiresProductoAdicionalId], references: [id], onDelete: SetNull)
   productoChecklistReglasPaso ProductoChecklistRegla[]   @relation("ProductoChecklistReglaOperacion")
   materialesConsumidos        ProcesoOperacionMaterial[] @relation("ProcesoOperacionMaterialOperacion")
+  alternativas                ProcesoOperacionAlternativa[] @relation("ProcesoOperacionAlternativaOperacion")
 
   @@unique([tenantId, procesoDefinicionId, orden])
   @@unique([tenantId, procesoDefinicionId, codigo])
@@ -1365,6 +1369,36 @@ model ProcesoOperacionMaterial {
 
   @@index([tenantId, procesoOperacionId, activo])
   @@index([tenantId, materiaPrimaVarianteId])
+}
+
+/// P1.3 — Alternativas de máquina+perfil para un paso.
+/// Un paso puede declarar N opciones que el cliente elige al cotizar
+/// (ej: gran formato con tecnología UV vs Látex, o perfil CMYK vs
+/// CMYK+Blanco). Si no tiene alternativas, usa la máquina/perfil default
+/// del `ProcesoOperacion`. La decisión NO es automática — es manual del
+/// vendedor/cliente en tiempo de cotización.
+model ProcesoOperacionAlternativa {
+  id                     String                    @id @default(uuid()) @db.Uuid
+  tenantId               String                    @db.Uuid
+  procesoOperacionId     String                    @db.Uuid
+  maquinaId              String                    @db.Uuid
+  perfilOperativoId      String?                   @db.Uuid
+  /// Etiqueta legible para la UI (ej. "Látex CMYK", "UV CMYK+Blanco").
+  label                  String
+  /// Si true, se pre-selecciona en la UI de cotización.
+  esDefault              Boolean                   @default(false)
+  orden                  Int                       @default(0)
+  activo                 Boolean                   @default(true)
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+  tenant                 Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  procesoOperacion       ProcesoOperacion          @relation("ProcesoOperacionAlternativaOperacion", fields: [procesoOperacionId], references: [id], onDelete: Cascade)
+  maquina                Maquina                   @relation("ProcesoOperacionAlternativaMaquina", fields: [maquinaId], references: [id], onDelete: Restrict)
+  perfilOperativo        MaquinaPerfilOperativo?   @relation("ProcesoOperacionAlternativaPerfil", fields: [perfilOperativoId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, procesoOperacionId, activo])
+  @@index([tenantId, maquinaId])
+  @@index([tenantId, perfilOperativoId])
 }
 
 model ProcesoVersion {
