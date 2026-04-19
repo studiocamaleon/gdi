@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { AlternativasEditorSheet } from "@/components/productos-servicios/alternativas-editor-sheet";
 import { MaterialesEditorSheet } from "@/components/productos-servicios/materiales-editor-sheet";
 import { PasoEditorSheet } from "@/components/productos-servicios/paso-editor-sheet";
+import { RutaAssignerCard } from "@/components/productos-servicios/ruta-assigner-card";
 import type { ProductTabProps } from "@/components/productos-servicios/product-detail-types";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { Badge } from "@/components/ui/badge";
@@ -127,31 +128,17 @@ export function ProductoRutaProduccionTab(props: ProductTabProps) {
 
   if (!ruta || !ruta.procesoDefinicionId) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Ruta de producción</CardTitle>
-          <CardDescription>
-            La variante seleccionada todavía no tiene una <strong>ruta de producción</strong>{" "}
-            asignada. Para que el super motor pueda cotizar este producto:
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ol className="list-inside list-decimal space-y-1 text-sm text-muted-foreground">
-            <li>
-              Elegí una ruta en el tab <strong>"Ruta (legacy)"</strong> y hacé click en{" "}
-              <strong>Guardar</strong> (el selector local no persiste hasta que guardás).
-            </li>
-            <li>
-              Volvé a este tab: vas a ver los pasos de esa ruta con familia, máquina, materiales y
-              el gestor de alternativas, y vas a poder cotizar con el super motor.
-            </li>
-          </ol>
-          <p className="mt-4 text-xs text-muted-foreground">
-            En próximas iteraciones (P1.4/P1.5) la ruta va a poder crearse/editarse directamente
-            desde este tab sin ir a la "Ruta (legacy)".
-          </p>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col gap-4">
+        <RutaAssignerCard
+          productoId={productoId}
+          currentProcesoDefinicionId={null}
+          currentProcesoNombre={null}
+          onChanged={async () => {
+            await load();
+            props.refreshProducto?.();
+          }}
+        />
+      </div>
     );
   }
 
@@ -160,17 +147,26 @@ export function ProductoRutaProduccionTab(props: ProductTabProps) {
 
   return (
     <div className="flex flex-col gap-4">
+      <RutaAssignerCard
+        productoId={productoId}
+        currentProcesoDefinicionId={ruta.procesoDefinicionId}
+        currentProcesoNombre={ruta.procesoNombre}
+        onChanged={async () => {
+          await load();
+          props.refreshProducto?.();
+        }}
+      />
+
       <Card>
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <CardTitle>Ruta de producción — {ruta.procesoNombre ?? "sin nombre"}</CardTitle>
+              <CardTitle>Pasos — {ruta.procesoNombre ?? "sin nombre"}</CardTitle>
               <CardDescription>
                 {totalPasos} {totalPasos === 1 ? "paso" : "pasos"} · {pasosObligatorios} obligatorios ·{" "}
                 {totalPasos - pasosObligatorios} opcionales
               </CardDescription>
             </div>
-            <Badge variant="outline">read-only · P1</Badge>
           </div>
         </CardHeader>
         <CardContent>
