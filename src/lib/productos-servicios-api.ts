@@ -788,9 +788,12 @@ export async function cotizarProductoVarianteV2(
     nivelesSeleccionados?: Array<{ operacionId: string; nivelId: string }>;
     parametros?: Record<string, unknown>;
   },
-  options: { forceV2?: boolean } = {},
+  options: { forceV2?: boolean; useSuperMotor?: boolean } = {},
 ) {
-  const query = options.forceV2 ? '?mode=v2' : '';
+  const params = new URLSearchParams();
+  if (options.forceV2) params.set('mode', 'v2');
+  if (options.useSuperMotor) params.set('motor', 'universal');
+  const query = params.toString() ? `?${params.toString()}` : '';
   return apiRequest<CotizacionCanonica>(
     `/productos-servicios/variantes/${varianteId}/cotizar-v2${query}`,
     {

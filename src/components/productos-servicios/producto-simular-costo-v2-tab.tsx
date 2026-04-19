@@ -176,6 +176,7 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
   const [opcionalesSeleccionados, setOpcionalesSeleccionados] = React.useState<Set<string>>(
     new Set(),
   );
+  const [useSuperMotor, setUseSuperMotor] = React.useState(false);
   const [periodo, setPeriodo] = React.useState(buildDefaultPeriodo());
   const [cotizacion, setCotizacion] = React.useState<CotizacionCanonica | null>(null);
   const [isCotizando, startCotizando] = React.useTransition();
@@ -224,7 +225,7 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
             opcionalesSeleccionados: Array.from(opcionalesSeleccionados),
             parametros,
           },
-          { forceV2: true },
+          { forceV2: !useSuperMotor, useSuperMotor },
         );
         setCotizacion(result);
       } catch (error) {
@@ -232,7 +233,7 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
         toast.error(error instanceof Error ? error.message : "No se pudo cotizar.");
       }
     });
-  }, [selectedVariantId, cantidad, periodo, anchoMm, altoMm, conLaminado, color, numerosXTalonario, caras, tipoImpresion, opcionalesSeleccionados, motorCodigo, needsMedidas]);
+  }, [selectedVariantId, cantidad, periodo, anchoMm, altoMm, conLaminado, color, numerosXTalonario, caras, tipoImpresion, opcionalesSeleccionados, useSuperMotor, motorCodigo, needsMedidas]);
 
   // Opcionales disponibles viene de la cotización anterior (lista en trazabilidad).
   // Primera vez que abre el tab aún no hay cotización → se muestra al regresar.
@@ -391,10 +392,19 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
           </div>
         ) : null}
 
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between gap-3">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Checkbox
+              checked={useSuperMotor}
+              onCheckedChange={(v) => setUseSuperMotor(Boolean(v))}
+            />
+            <span>
+              Usar <strong>super motor</strong> (ejecuta la ruta declarativamente)
+            </span>
+          </label>
           <Button type="button" onClick={handleCotizar} disabled={isCotizando || !selectedVariantId}>
             {isCotizando ? <GdiSpinner className="size-4" data-icon="inline-start" /> : null}
-            Cotizar v2
+            Cotizar {useSuperMotor ? '(super motor)' : 'v2'}
           </Button>
         </div>
 
