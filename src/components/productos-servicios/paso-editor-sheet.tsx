@@ -246,17 +246,22 @@ export function PasoEditorSheet({
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue>{draft.activacionV2}</SelectValue>
+                      <SelectValue>
+                        {draft.activacionV2 === "OBLIGATORIO" && "Obligatorio"}
+                        {draft.activacionV2 === "OPCIONAL" && "Opcional"}
+                        {draft.activacionV2 === "CONDICIONAL" && "Condicional"}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="OBLIGATORIO">OBLIGATORIO</SelectItem>
-                      <SelectItem value="OPCIONAL">OPCIONAL</SelectItem>
-                      <SelectItem value="CONDICIONAL">CONDICIONAL</SelectItem>
+                      <SelectItem value="OBLIGATORIO">Obligatorio</SelectItem>
+                      <SelectItem value="OPCIONAL">Opcional</SelectItem>
+                      <SelectItem value="CONDICIONAL">Condicional</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    OPCIONAL: sólo se ejecuta si el cliente lo marca. CONDICIONAL: requiere
-                    editar <code>condicionV2</code> en el tab legacy.
+                    <strong>Opcional</strong> sólo se ejecuta si el cliente lo marca.
+                    <strong> Condicional</strong> requiere editar la condición (JsonLogic)
+                    — la evaluación completa es pendiente en el super motor.
                   </p>
                 </div>
                 <div className="grid gap-2">

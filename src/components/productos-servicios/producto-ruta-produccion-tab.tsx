@@ -180,7 +180,7 @@ export function ProductoRutaProduccionTab(props: ProductTabProps) {
                 <TableHead>Máquina · Perfil</TableHead>
                 <TableHead>Tiempos</TableHead>
                 <TableHead>Productividad</TableHead>
-                <TableHead>Alternativas</TableHead>
+                <TableHead>Opciones</TableHead>
                 <TableHead>Activación</TableHead>
                 <TableHead className="w-36 text-right">Acciones</TableHead>
               </TableRow>

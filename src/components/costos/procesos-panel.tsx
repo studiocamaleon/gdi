@@ -3882,18 +3882,42 @@ export function ProcesosPanel({
                   </Field>
 
                   <Field>
-                    <FieldLabel>Unidad productiva V2</FieldLabel>
-                    <Input
-                      value={bibliotecaForm.unidadProductivaV2}
-                      onChange={(event) =>
+                    <FieldLabel>Unidad productiva</FieldLabel>
+                    <Select
+                      value={bibliotecaForm.unidadProductivaV2 || EMPTY_SELECT_VALUE}
+                      onValueChange={(value) =>
                         setBibliotecaForm((prev) => ({
                           ...prev,
-                          unidadProductivaV2: event.target.value,
+                          unidadProductivaV2:
+                            value === EMPTY_SELECT_VALUE ? "" : value ?? "",
                         }))
                       }
-                      placeholder="hojas, m2, piezas, letras…"
-                      maxLength={40}
-                    />
+                    >
+                      <SelectTrigger>
+                        <SelectValue>
+                          {bibliotecaForm.unidadProductivaV2 || "— derivar de la familia —"}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={EMPTY_SELECT_VALUE}>
+                          — derivar de la familia —
+                        </SelectItem>
+                        <SelectItem value="hojas">hojas</SelectItem>
+                        <SelectItem value="pliegos">pliegos</SelectItem>
+                        <SelectItem value="placas">placas</SelectItem>
+                        <SelectItem value="piezas">piezas</SelectItem>
+                        <SelectItem value="m2">m²</SelectItem>
+                        <SelectItem value="metros_lineales">metros lineales</SelectItem>
+                        <SelectItem value="letras">letras</SelectItem>
+                        <SelectItem value="modulos">módulos</SelectItem>
+                        <SelectItem value="unidades">unidades</SelectItem>
+                        <SelectItem value="corridas">corridas</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FieldDescription>
+                      Sobre qué cantidad opera el paso. Si dejás "derivar de la familia",
+                      el super motor la infiere de familiaV2.
+                    </FieldDescription>
                   </Field>
 
                   <Field>
@@ -3912,14 +3936,17 @@ export function ProcesosPanel({
                     >
                       <SelectTrigger>
                         <SelectValue>
-                          {bibliotecaForm.activacionV2 || "— sin configurar —"}
+                          {bibliotecaForm.activacionV2 === "OBLIGATORIO" && "Obligatorio"}
+                          {bibliotecaForm.activacionV2 === "OPCIONAL" && "Opcional"}
+                          {bibliotecaForm.activacionV2 === "CONDICIONAL" && "Condicional"}
+                          {!bibliotecaForm.activacionV2 && "— sin configurar —"}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value={EMPTY_SELECT_VALUE}>— sin configurar —</SelectItem>
-                        <SelectItem value="OBLIGATORIO">OBLIGATORIO</SelectItem>
-                        <SelectItem value="OPCIONAL">OPCIONAL</SelectItem>
-                        <SelectItem value="CONDICIONAL">CONDICIONAL</SelectItem>
+                        <SelectItem value="OBLIGATORIO">Obligatorio</SelectItem>
+                        <SelectItem value="OPCIONAL">Opcional</SelectItem>
+                        <SelectItem value="CONDICIONAL">Condicional</SelectItem>
                       </SelectContent>
                     </Select>
                   </Field>

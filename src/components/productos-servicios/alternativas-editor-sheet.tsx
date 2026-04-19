@@ -52,10 +52,15 @@ const NONE = "__none__";
 type DraftForm = {
   id: string | null; // null => creando
   maquinaId: string;
-  perfilOperativoId: string; // "" (NONE) significa null
+  perfilOperativoId: string; // NONE significa null
   label: string;
   esDefault: boolean;
   orden: number;
+  // P4.1 — overrides opcionales. "" significa "usar valor base del paso".
+  setupMin: string;
+  cleanupMin: string;
+  tiempoFijoMin: string;
+  productividadBase: string;
 };
 
 const emptyDraft: DraftForm = {
@@ -65,6 +70,10 @@ const emptyDraft: DraftForm = {
   label: "",
   esDefault: false,
   orden: 0,
+  setupMin: "",
+  cleanupMin: "",
+  tiempoFijoMin: "",
+  productividadBase: "",
 };
 
 export function AlternativasEditorSheet({
@@ -98,7 +107,7 @@ export function AlternativasEditorSheet({
       setMaquinas(maqs.filter((m) => m.activo));
     } catch (err) {
       console.error(err);
-      toast.error(err instanceof Error ? err.message : "No se pudieron cargar las alternativas.");
+      toast.error(err instanceof Error ? err.message : "No se pudieron cargar las opciones.");
     } finally {
       setIsLoading(false);
     }
@@ -134,6 +143,11 @@ export function AlternativasEditorSheet({
       label: alt.label,
       esDefault: alt.esDefault,
       orden: alt.orden,
+      setupMin: alt.setupMin != null ? String(alt.setupMin) : "",
+      cleanupMin: alt.cleanupMin != null ? String(alt.cleanupMin) : "",
+      tiempoFijoMin: alt.tiempoFijoMin != null ? String(alt.tiempoFijoMin) : "",
+      productividadBase:
+        alt.productividadBase != null ? String(alt.productividadBase) : "",
     });
     setShowForm(true);
   }
@@ -152,38 +166,63 @@ export function AlternativasEditorSheet({
       toast.error("El label es obligatorio.");
       return;
     }
+    const parseOverride = (s: string): number | null | undefined => {
+      const t = s.trim();
+      if (t === "") return null; // empty → null → usa valor base
+      const n = Number(t);
+      if (!Number.isFinite(n) || n < 0) return undefined; // inválido → mantener sin tocar
+      return n;
+    };
+    const setupMinVal = parseOverride(draft.setupMin);
+    const cleanupMinVal = parseOverride(draft.cleanupMin);
+    const tiempoFijoMinVal = parseOverride(draft.tiempoFijoMin);
+    const productividadBaseVal = parseOverride(draft.productividadBase);
+    if (
+      setupMinVal === undefined ||
+      cleanupMinVal === undefined ||
+      tiempoFijoMinVal === undefined ||
+      productividadBaseVal === undefined
+    ) {
+      toast.error("Los overrides deben ser números >= 0 o quedar vacíos.");
+      return;
+    }
+
     const payload = {
       maquinaId: draft.maquinaId,
       perfilOperativoId: draft.perfilOperativoId === NONE ? null : draft.perfilOperativoId,
       label: draft.label.trim(),
       esDefault: draft.esDefault,
       orden: draft.orden,
+      setupMin: setupMinVal,
+      cleanupMin: cleanupMinVal,
+      tiempoFijoMin: tiempoFijoMinVal,
+      productividadBase: productividadBaseVal,
     };
     setIsSaving(true);
     try {
       if (draft.id) {
         await updateProcesoOperacionAlternativa(operacionId, draft.id, payload);
-        toast.success("Alternativa actualizada.");
+        toast.success("Opción actualizada.");
       } else {
         await createProcesoOperacionAlternativa(operacionId, payload);
-        toast.success("Alternativa creada.");
+        toast.success("Opción creada.");
       }
       cancelForm();
       await reload();
       onChanged?.();
     } catch (err) {
       console.error(err);
-      toast.error(err instanceof Error ? err.message : "No se pudo guardar la alternativa.");
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar la opción.");
     } finally {
       setIsSaving(false);
     }
   }
 
   async function remove(alt: ProcesoOperacionAlternativa) {
-    if (!confirm(`¿Eliminar la alternativa "${alt.label}"?`)) return;
+    if (!confirm(`¿Eliminar la opción "${alt.label}"?`)) return;
     try {
       await deleteProcesoOperacionAlternativa(operacionId, alt.id);
-      toast.success("Alternativa eliminada.");
+      toast.success("Opción eliminada.");
       await reload();
       onChanged?.();
     } catch (err) {
@@ -196,10 +235,11 @@ export function AlternativasEditorSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full max-w-2xl overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Alternativas de "{operacionNombre}"</SheetTitle>
+          <SheetTitle>Opciones del paso "{operacionNombre}"</SheetTitle>
           <SheetDescription>
-            Cada alternativa declara una combinación máquina + perfil que el cliente puede elegir al
-            cotizar. Si no elige, se usa la marcada <strong>default</strong>.
+            Cada opción declara una combinación máquina + perfil (y opcionalmente
+            override de tiempos/productividad) que el cliente puede elegir al cotizar.
+            Si no elige, se usa la marcada <strong>default</strong>.
           </SheetDescription>
         </SheetHeader>
 
@@ -210,18 +250,18 @@ export function AlternativasEditorSheet({
             <>
               <div className="flex items-center justify-between">
                 <div className="text-sm text-muted-foreground">
-                  {alternativas.length} {alternativas.length === 1 ? "alternativa" : "alternativas"}
+                  {alternativas.length} {alternativas.length === 1 ? "opción" : "opciones"}
                 </div>
                 {!showForm && (
                   <Button size="sm" onClick={startCreate}>
-                    + Nueva alternativa
+                    + Nueva opción
                   </Button>
                 )}
               </div>
 
               {alternativas.length === 0 && !showForm ? (
                 <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-                  Este paso todavía no tiene alternativas. Si no agregás ninguna, el super motor usa
+                  Este paso todavía no tiene opciones. Si no agregás ninguna, el super motor usa
                   la máquina + perfil por defecto declarados en el paso.
                 </div>
               ) : (
@@ -267,7 +307,7 @@ export function AlternativasEditorSheet({
               {showForm && (
                 <div className="rounded-md border p-4 space-y-4">
                   <div className="text-sm font-medium">
-                    {draft.id ? "Editar alternativa" : "Nueva alternativa"}
+                    {draft.id ? "Editar opción" : "Nueva opción"}
                   </div>
 
                   <div className="grid gap-2">
@@ -364,6 +404,73 @@ export function AlternativasEditorSheet({
                       <Label htmlFor="esDefault" className="cursor-pointer">
                         Marcar como default
                       </Label>
+                    </div>
+                  </div>
+
+                  {/* P4.1 — Overrides respecto al paso base. Si se dejan
+                      vacíos, la opción usa los valores base del paso. */}
+                  <div className="rounded-md border p-3 space-y-3">
+                    <div className="text-sm font-medium">
+                      Overrides respecto al paso base
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Dejá vacío para usar el valor base del paso. Completá solo los
+                      que querés que esta opción cambie (ej: misma máquina pero
+                      distinto tiempo de setup y productividad).
+                    </p>
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                      <div className="grid gap-1">
+                        <Label>Setup (min)</Label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          min={0}
+                          value={draft.setupMin}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...d, setupMin: e.target.value }))
+                          }
+                          placeholder="— base —"
+                        />
+                      </div>
+                      <div className="grid gap-1">
+                        <Label>Cleanup (min)</Label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          min={0}
+                          value={draft.cleanupMin}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...d, cleanupMin: e.target.value }))
+                          }
+                          placeholder="— base —"
+                        />
+                      </div>
+                      <div className="grid gap-1">
+                        <Label>Tiempo fijo (min)</Label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          min={0}
+                          value={draft.tiempoFijoMin}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...d, tiempoFijoMin: e.target.value }))
+                          }
+                          placeholder="— base —"
+                        />
+                      </div>
+                      <div className="grid gap-1">
+                        <Label>Productividad</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          value={draft.productividadBase}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...d, productividadBase: e.target.value }))
+                          }
+                          placeholder="— base —"
+                        />
+                      </div>
                     </div>
                   </div>
 

@@ -155,7 +155,9 @@ export async function bulkAssignEstacionPlantillas(
   );
 }
 
-// P1.3 — ProcesoOperacionAlternativa: múltiples máquina+perfil por paso.
+// P1.3 + P4.1 — ProcesoOperacionAlternativa: "Opciones del paso".
+// Cada opción override máquina + perfil, y opcionalmente tiempos /
+// productividad / configNestingV2 respecto al paso base.
 export type ProcesoOperacionAlternativa = {
   id: string;
   procesoOperacionId: string;
@@ -167,6 +169,12 @@ export type ProcesoOperacionAlternativa = {
   perfilOperativoId: string | null;
   maquina: { id: string; nombre: string; plantilla: string | null } | null;
   perfilOperativo: { id: string; nombre: string } | null;
+  // P4.1 — overrides (null = usar el valor base del paso)
+  setupMin: number | null;
+  cleanupMin: number | null;
+  tiempoFijoMin: number | null;
+  productividadBase: number | null;
+  configNestingV2: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -178,6 +186,12 @@ export type ProcesoOperacionAlternativaPayload = {
   esDefault?: boolean;
   orden?: number;
   activo?: boolean;
+  // P4.1 — overrides opcionales
+  setupMin?: number | null;
+  cleanupMin?: number | null;
+  tiempoFijoMin?: number | null;
+  productividadBase?: number | null;
+  configNestingV2?: Record<string, unknown> | null;
 };
 
 export async function listProcesoOperacionAlternativas(operacionId: string) {
