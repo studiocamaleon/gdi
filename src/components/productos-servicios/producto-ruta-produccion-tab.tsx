@@ -76,9 +76,13 @@ export function ProductoRutaProduccionTab(props: ProductTabProps) {
   if (!selectedVariantId) {
     return (
       <Card>
-        <CardContent className="p-6 text-center text-sm text-muted-foreground">
-          Seleccioná una variante para ver su ruta de producción.
-        </CardContent>
+        <CardHeader>
+          <CardTitle>Ruta de producción</CardTitle>
+          <CardDescription>
+            Este producto todavía no tiene variantes creadas. Creá al menos una desde el tab
+            "Variantes" para poder ver (y eventualmente editar) su ruta de producción.
+          </CardDescription>
+        </CardHeader>
       </Card>
     );
   }
@@ -99,10 +103,26 @@ export function ProductoRutaProduccionTab(props: ProductTabProps) {
         <CardHeader>
           <CardTitle>Ruta de producción</CardTitle>
           <CardDescription>
-            Esta variante todavía no tiene ruta asignada. El super motor necesita una ruta para
-            cotizar — asigná una desde el tab "Ruta base" o creá una nueva.
+            La variante seleccionada todavía no tiene una <strong>ruta de producción</strong>{" "}
+            asignada. Para que el super motor pueda cotizar este producto:
           </CardDescription>
         </CardHeader>
+        <CardContent>
+          <ol className="list-inside list-decimal space-y-1 text-sm text-muted-foreground">
+            <li>
+              Creá o asigná una ruta desde el tab <strong>"Ruta (legacy)"</strong> (selector de
+              <code className="mx-1">procesoDefinicionId</code>).
+            </li>
+            <li>
+              Acá aparecerán los pasos de esa ruta (con familia, máquina, materiales, etc.) y
+              podrás cotizar con el super motor.
+            </li>
+          </ol>
+          <p className="mt-4 text-xs text-muted-foreground">
+            En próximas iteraciones (P1.3) la ruta va a poder crearse/editarse directamente desde
+            este tab sin ir a la "Ruta (legacy)".
+          </p>
+        </CardContent>
       </Card>
     );
   }
