@@ -36,7 +36,7 @@ const v2ExtraTab = {
 
 export const wideFormatMotorUi: ProductMotorUiContract = {
   key: "gran_formato@1",
-  hiddenTabs: ["variantes"],
+  // modoMedidas=LIBRE en el producto oculta automáticamente "variantes" (P3.a.2).
   tabOrder: [
     "general",
     "tecnologias",

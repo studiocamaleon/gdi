@@ -27,6 +27,7 @@ type ProductoGeneralDraft = {
   familiaProductoId: string;
   subfamiliaProductoId: string;
   unidadComercial: UnidadComercialProducto;
+  modoMedidas: 'ESTANDAR' | 'LIBRE';
   motorCodigo: string;
   motorVersion: number;
 };
@@ -43,6 +44,7 @@ function buildDraft(props: ProductTabProps): ProductoGeneralDraft {
     familiaProductoId: props.producto.familiaProductoId,
     subfamiliaProductoId: props.producto.subfamiliaProductoId ?? "",
     unidadComercial,
+    modoMedidas: props.producto.modoMedidas ?? "ESTANDAR",
     motorCodigo: props.producto.motorCodigo,
     motorVersion: props.producto.motorVersion,
   };
@@ -60,6 +62,7 @@ export function ProductoGeneralTab(props: ProductTabProps) {
     props.producto.familiaProductoId,
     props.producto.subfamiliaProductoId,
     props.producto.unidadComercial,
+    props.producto.modoMedidas,
     props.producto.motorCodigo,
     props.producto.motorVersion,
   ]);
@@ -91,6 +94,7 @@ export function ProductoGeneralTab(props: ProductTabProps) {
     draft.familiaProductoId !== props.producto.familiaProductoId ||
     draft.subfamiliaProductoId !== (props.producto.subfamiliaProductoId ?? "") ||
     draft.unidadComercial !== props.producto.unidadComercial ||
+    draft.modoMedidas !== (props.producto.modoMedidas ?? "ESTANDAR") ||
     draft.motorCodigo !== props.producto.motorCodigo ||
     draft.motorVersion !== props.producto.motorVersion;
 
@@ -103,6 +107,7 @@ export function ProductoGeneralTab(props: ProductTabProps) {
           familiaProductoId: draft.familiaProductoId,
           subfamiliaProductoId: draft.subfamiliaProductoId || undefined,
           unidadComercial: draft.unidadComercial,
+          modoMedidas: draft.modoMedidas,
           estado: props.producto.estado as EstadoProductoServicio,
           activo: props.producto.activo,
         });
@@ -226,6 +231,34 @@ export function ProductoGeneralTab(props: ProductTabProps) {
               ))}
             </SelectContent>
           </Select>
+        </div>
+        <div className="rounded-lg border p-3">
+          <p className="text-xs text-muted-foreground">Modo de medidas</p>
+          <Select
+            value={draft.modoMedidas}
+            onValueChange={(value) =>
+              setDraft((prev) => ({
+                ...prev,
+                modoMedidas: (value as "ESTANDAR" | "LIBRE") ?? "ESTANDAR",
+              }))
+            }
+          >
+            <SelectTrigger>
+              <SelectValue>
+                {draft.modoMedidas === "LIBRE"
+                  ? "Libre (el cliente ingresa medidas)"
+                  : "Estándar (variantes con medidas fijas)"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ESTANDAR">Estándar (variantes con medidas fijas)</SelectItem>
+              <SelectItem value="LIBRE">Libre (el cliente ingresa medidas)</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            En modo <strong>libre</strong> el tab "Variantes" se oculta y las cotizaciones piden
+            las medidas al cliente.
+          </p>
         </div>
         <div className="rounded-lg border p-3 md:col-span-2">
           <p className="text-xs text-muted-foreground">Descripción</p>

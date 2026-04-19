@@ -175,6 +175,12 @@ function UnifiedProductDetailShell(props: ProductDetailViewProps) {
     ? motorUi.hiddenTabs(motorConfig)
     : (motorUi?.hiddenTabs ?? []);
   const hiddenTabs = new Set(hiddenTabsRaw);
+  // P3.a.2 — En modo LIBRE el producto no usa variantes (el cliente
+  // ingresa medidas al cotizar). Esta regla vive en el shell ahora,
+  // reemplazando los hardcodes motor-específicos.
+  if (producto.modoMedidas === "LIBRE") {
+    hiddenTabs.add("variantes");
+  }
   const defaultVisibleStandardTabs = STANDARD_TABS.filter((tab) => !hiddenTabs.has(tab.value));
   const orderedTabs: DetailShellTab[] = (() => {
     const order = motorUi?.tabOrder;

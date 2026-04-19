@@ -3312,6 +3312,7 @@ export class ProductosServiciosService {
           familiaProductoId: payload.familiaProductoId,
           subfamiliaProductoId: payload.subfamiliaProductoId || null,
           unidadComercial: payload.unidadComercial,
+          modoMedidas: payload.modoMedidas ?? undefined,
           estado: this.toEstadoProducto(payload.estado),
           activo: payload.activo,
         },
@@ -3350,6 +3351,7 @@ export class ProductosServiciosService {
           familiaProductoId: payload.familiaProductoId,
           subfamiliaProductoId: payload.subfamiliaProductoId || null,
           unidadComercial: payload.unidadComercial,
+          modoMedidas: payload.modoMedidas ?? undefined,
           estado: this.toEstadoProducto(payload.estado),
           activo: payload.activo,
         },
@@ -11329,6 +11331,7 @@ export class ProductosServiciosService {
     subfamiliaProductoId: string | null;
     subfamiliaProducto?: { nombre: string; unidadComercial?: string | null } | null;
     unidadComercial?: string | null;
+    modoMedidas?: 'ESTANDAR' | 'LIBRE' | null;
     procesoDefinicionDefault?: { nombre: string } | null;
     createdAt: Date;
     updatedAt: Date;
@@ -11351,6 +11354,7 @@ export class ProductosServiciosService {
       subfamiliaProductoId: item.subfamiliaProductoId,
       subfamiliaProductoNombre: item.subfamiliaProducto?.nombre ?? '',
       unidadComercial: this.normalizeUnidadComercialProductoValue(item.unidadComercial) || 'unidad',
+      modoMedidas: item.modoMedidas ?? 'ESTANDAR',
       precio: this.getProductoPrecioConfig(item.detalleJson),
       precioEspecialClientes: this.getProductoPrecioEspecialClientes(item.detalleJson),
       dimensionesBaseConsumidas: this.getProductoDimensionesBaseConsumidas(item.detalleJson).map((dimension) =>

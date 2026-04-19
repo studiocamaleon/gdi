@@ -1581,7 +1581,7 @@ const ENABLE_V2 = process.env.NEXT_PUBLIC_ENABLE_WIDE_FORMAT_V2 === "true";
 
 export const vinylCutMotorUi: ProductMotorUiContract = {
   key: "vinilo_de_corte@1",
-  hiddenTabs: ["variantes"],
+  // modoMedidas=LIBRE en el producto oculta automáticamente "variantes" (P3.a.2).
   tabOrder: [
     "general",
     "equipos_materiales",

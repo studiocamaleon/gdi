@@ -39,6 +39,13 @@ export enum UnidadComercialProductoDto {
   metro_lineal = 'metro_lineal',
 }
 
+// P3.a.2 — Modo de medidas del producto: variantes con medidas fijas
+// (ESTANDAR) vs. medidas ingresadas por el cliente al cotizar (LIBRE).
+export enum ModoMedidasProductoDto {
+  ESTANDAR = 'ESTANDAR',
+  LIBRE = 'LIBRE',
+}
+
 export enum GranFormatoImposicionCriterioOptimizacionDto {
   menor_costo_total = 'menor_costo_total',
   menor_desperdicio = 'menor_desperdicio',
@@ -659,6 +666,10 @@ export class UpsertProductoServicioDto {
 
   @IsEnum(UnidadComercialProductoDto)
   unidadComercial: UnidadComercialProductoDto;
+
+  @IsOptional()
+  @IsEnum(ModoMedidasProductoDto)
+  modoMedidas?: ModoMedidasProductoDto;
 
   @IsEnum(EstadoProductoServicioDto)
   estado: EstadoProductoServicioDto;

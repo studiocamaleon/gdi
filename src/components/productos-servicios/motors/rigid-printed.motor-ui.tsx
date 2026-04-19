@@ -2,9 +2,7 @@
 
 import type {
   ProductMotorUiContract,
-  ProductTabKey,
 } from "@/components/productos-servicios/product-detail-types";
-import type { ProductoMotorConfig } from "@/lib/productos-servicios";
 import { RigidPrintedTecnologiasTab } from "@/components/productos-servicios/motors/rigid-printed-tecnologias-tab";
 import { RigidPrintedImposicionTab } from "@/components/productos-servicios/motors/rigid-printed-imposicion-tab";
 import { RigidPrintedSimularCostoTab } from "@/components/productos-servicios/motors/rigid-printed-simular-costo-tab";
@@ -14,13 +12,9 @@ const ENABLE_V2 = process.env.NEXT_PUBLIC_ENABLE_WIDE_FORMAT_V2 === "true";
 
 export const rigidPrintedMotorUi: ProductMotorUiContract = {
   key: "rigidos_impresos@1",
-  hiddenTabs: (motorConfig: ProductoMotorConfig | null): ProductTabKey[] => {
-    const params = (motorConfig?.parametros ?? {}) as Record<string, unknown>;
-    const modoMedidas = params.modoMedidas as string | undefined;
-    // Si modo es "libres", ocultar variantes (no se necesitan medidas estándar)
-    if (modoMedidas === "libres") return ["variantes"];
-    return [];
-  },
+  // modoMedidas=LIBRE en el producto oculta automáticamente "variantes" (P3.a.2).
+  // Antes vivía como motorConfig.parametros.modoMedidas === 'libres' — migrado
+  // al campo first-class del producto.
   tabOrder: [
     "general",
     "tecnologias",

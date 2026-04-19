@@ -384,6 +384,7 @@ export async function createProductoServicio(payload: {
   familiaProductoId: string;
   subfamiliaProductoId?: string;
   unidadComercial: UnidadComercialProducto;
+  modoMedidas?: 'ESTANDAR' | 'LIBRE';
   estado: EstadoProductoServicio;
   activo: boolean;
 }) {
@@ -405,6 +406,7 @@ export async function updateProductoServicio(
     familiaProductoId: string;
     subfamiliaProductoId?: string;
     unidadComercial: UnidadComercialProducto;
+    modoMedidas?: 'ESTANDAR' | 'LIBRE';
     estado: EstadoProductoServicio;
     activo: boolean;
   },

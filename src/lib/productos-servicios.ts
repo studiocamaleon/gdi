@@ -248,6 +248,9 @@ export type ProductoServicio = {
   subfamiliaProductoId: string | null;
   subfamiliaProductoNombre: string;
   unidadComercial: string;
+  // P3.a.2 — Modo de medidas del producto. ESTANDAR: variantes con medidas
+  // fijas. LIBRE: el cliente ingresa medidas al cotizar (sin variantes).
+  modoMedidas: 'ESTANDAR' | 'LIBRE';
   precio?: ProductoPrecioConfig | null;
   precioEspecialClientes?: ProductoPrecioEspecialCliente[];
   dimensionesBaseConsumidas?: DimensionOpcionProductiva[];

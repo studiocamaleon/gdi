@@ -283,6 +283,16 @@ enum MotorVersionPreferida {
   SHADOW
 }
 
+// P3.a.2 — Modo de medidas del producto.
+//   ESTANDAR → variantes con medidas fijas (SKUs). Se cotiza sobre la
+//              variante elegida y sus dimensiones.
+//   LIBRE    → el cliente ingresa medidas al cotizar. No hay variantes
+//              (o se ocultan en la UI).
+enum ModoMedidasProducto {
+  ESTANDAR
+  LIBRE
+}
+
 // Modelo universal (A.4): dominio sobre el que decide una ReglaDeSeleccion.
 // MATERIAL       → elige qué MateriaPrimaVariante consume un paso.
 // CENTRO_COSTO   → elige qué centro/máquina ejecuta un paso.
@@ -1673,6 +1683,9 @@ model ProductoServicio {
   //   SHADOW  → corre ambos en paralelo, devuelve v1, loguea diff en CotizacionShadowLog
   motorPreferido             MotorVersionPreferida       @default(V1)
   usarRutaComunVariantes     Boolean                     @default(true)
+  // P3.a.2 — Modo de medidas: ESTANDAR = variantes con dimensiones fijas;
+  // LIBRE = el cliente ingresa dimensiones al cotizar (oculta el tab de variantes).
+  modoMedidas                ModoMedidasProducto         @default(ESTANDAR)
   procesoDefinicionDefaultId String?                     @db.Uuid
   detalleJson                Json?
   familiaProductoId          String                      @db.Uuid
@@ -1697,6 +1710,7 @@ model ProductoServicio {
   @@index([tenantId, nombre, activo])
   @@index([tenantId, familiaProductoId, subfamiliaProductoId])
   @@index([tenantId, procesoDefinicionDefaultId])
+  @@index([tenantId, modoMedidas])
 }
 
 model ProductoVariante {
