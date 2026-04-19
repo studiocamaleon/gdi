@@ -121,6 +121,7 @@ import { VinylCutMotorModuleV2 } from './motors/vinyl-cut-v2.motor';
 import { DigitalSheetMotorModuleV2 } from './motors/digital-sheet-v2.motor';
 import { RigidPrintedMotorModuleV2 } from './motors/rigid-printed-v2.motor';
 import { TalonarioMotorModuleV2 } from './motors/talonario-v2.motor';
+import { SuperMotorModule } from './motors/super-motor';
 import { v1ToCanonical } from './adapters/v1-to-canonical';
 import { logShadowDiff } from './shadow/shadow-logger';
 import { nestOnRoll as nestOnRollExternal, type NestingRolloResult } from './nesting/nesting-rollo';
@@ -528,6 +529,7 @@ export class ProductosServiciosService {
       new DigitalSheetMotorModuleV2(this), // impresion_digital_laser@2 — Etapa C.4 piloto MVP
       new RigidPrintedMotorModuleV2(this), // rigidos_impresos@2 — Etapa C.5 piloto MVP
       new TalonarioMotorModuleV2(this), // talonario@2 — Etapa C.6 piloto MVP (COPIA_SIMPLE)
+      new SuperMotorModule(this), // universal@1 — SM.1 super motor que reemplaza los 5 v2
       new TalonarioMotorModule(this),
       new RigidPrintedMotorModule(this),
     ]);
@@ -3759,6 +3761,33 @@ export class ProductosServiciosService {
   }
 
   /**
+   * Modelo universal (SM.1): carga runtime genérico para el super motor.
+   * No se especializa por motorCodigo — sirve a cualquier producto que tenga
+   * ruta asignada. Usado por SuperMotorModule para cotizar declarativamente.
+   */
+  async loadSuperMotorRuntime(auth: CurrentAuth, varianteId: string, periodo: string) {
+    const variante = await this.findVarianteCompletaOrThrow(auth, varianteId, this.prisma);
+    const procesoDefinicionId = this.resolveRutaEfectivaId(variante);
+    const proceso = procesoDefinicionId
+      ? await this.findProcesoConOperacionesOrThrow(auth, procesoDefinicionId, this.prisma)
+      : null;
+    const tarifas = await this.prisma.centroCostoTarifaPeriodo.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        periodo,
+        estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
+      },
+      select: { centroCostoId: true, tarifaCalculada: true },
+    });
+    return {
+      variante,
+      producto: variante.productoServicio,
+      proceso,
+      tarifaByCentro: new Map(tarifas.map((t) => [t.centroCostoId, Number(t.tarifaCalculada)])),
+    };
+  }
+
+  /**
    * Modelo universal (C.6): carga runtime para talonario@2 — variante con
    * medidas, config v2 activa.
    *
@@ -6493,11 +6522,17 @@ export class ProductosServiciosService {
     auth: CurrentAuth,
     varianteId: string,
     payload: CotizarProductoVarianteDto,
-    options: { forceMode?: 'V1' | 'V2' | 'SHADOW' } = {},
+    options: { forceMode?: 'V1' | 'V2' | 'SHADOW'; forceMotor?: 'universal' } = {},
   ) {
     const variante = await this.findVarianteCompletaOrThrow(auth, varianteId, this.prisma);
     const producto = variante.productoServicio;
     let modo = (options.forceMode ?? producto.motorPreferido) as 'V1' | 'V2' | 'SHADOW';
+
+    // SM.1: `?motor=universal` fuerza el super motor (cualquier producto, mismo dispatcher).
+    if (options.forceMotor === 'universal') {
+      const superMotor = this.motorRegistry.getModule('universal', 1);
+      return superMotor.quoteVariant(auth, varianteId, payload);
+    }
 
     // Fallback legacy: ENABLE_WIDE_FORMAT_V2 fuerza V2 para gran_formato en Etapa B.
     if (

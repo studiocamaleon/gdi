@@ -652,9 +652,11 @@ export class ProductosServiciosController {
     @Param('varianteId') varianteId: string,
     @Body() payload: CotizarProductoVarianteDto,
     @Query('mode') mode?: string,
+    @Query('motor') motor?: string,
   ) {
     return this.service.cotizarVarianteV2(auth, varianteId, payload, {
       forceMode: mode === 'v2' ? 'V2' : undefined,
+      forceMotor: motor === 'universal' ? 'universal' : undefined,
     });
   }
 
