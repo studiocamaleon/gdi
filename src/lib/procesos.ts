@@ -28,10 +28,6 @@ export type TipoOperacionProceso =
 export type RolProcesoOperacion = 'impresion';
 
 export type ModoProductividadProceso = 'fija' | 'variable';
-export type ModoProductividadNivel =
-  | 'fija'
-  | 'variable_manual'
-  | 'variable_perfil';
 export type BaseCalculoProductividad =
   | 'cantidad'
   | 'area_total_m2'
@@ -66,32 +62,14 @@ export type ProcesoOperacion = {
   reglaMerma: Record<string, unknown> | null;
   detalle: Record<string, unknown> | null;
   baseCalculoProductividad?: BaseCalculoProductividad | null;
-  niveles: ProcesoOperacionNivel[];
   rol: RolProcesoOperacion | null;
   esOpcional: boolean;
   activo: boolean;
   warnings?: string[];
 };
 
-export type ProcesoOperacionNivel = {
-  id: string;
-  nombre: string;
-  orden: number;
-  activo: boolean;
-  modoProductividadNivel: ModoProductividadNivel;
-  tiempoFijoMin: number | null;
-  productividadBase: number | null;
-  unidadSalida: UnidadProceso | null;
-  unidadTiempo: UnidadProceso | null;
-  maquinaId: string | null;
-  maquinaNombre: string;
-  perfilOperativoId: string | null;
-  perfilOperativoNombre: string;
-  setupMin: number | null;
-  cleanupMin: number | null;
-  resumen: string;
-  detalle: Record<string, unknown> | null;
-};
+// P4.1 — ProcesoOperacionNivel eliminado. Las "variantes de productividad"
+// se representan ahora como ProcesoOperacionAlternativa con overrides.
 
 export type Proceso = {
   id: string;
@@ -133,27 +111,9 @@ export type ProcesoOperacionPayload = {
   reglaMerma?: Record<string, unknown>;
   detalle?: Record<string, unknown>;
   baseCalculoProductividad?: BaseCalculoProductividad;
-  niveles?: ProcesoOperacionNivelPayload[];
   rol?: RolProcesoOperacion;
   esOpcional?: boolean;
   activo: boolean;
-};
-
-export type ProcesoOperacionNivelPayload = {
-  id?: string;
-  nombre: string;
-  orden?: number;
-  activo: boolean;
-  modoProductividadNivel: ModoProductividadNivel;
-  tiempoFijoMin?: number;
-  productividadBase?: number;
-  unidadSalida?: UnidadProceso;
-  unidadTiempo?: UnidadProceso;
-  maquinaId?: string;
-  perfilOperativoId?: string;
-  setupMin?: number;
-  cleanupMin?: number;
-  detalle?: Record<string, unknown>;
 };
 
 export type ProcesoPayload = {
@@ -193,7 +153,6 @@ export type ProcesoOperacionPlantilla = {
   detalle: Record<string, unknown> | null;
   baseCalculoProductividad?: BaseCalculoProductividad | null;
   observaciones: string;
-  niveles: ProcesoOperacionNivel[];
   estacionId: string | null;
   estacionNombre: string;
   // P3.a.1 — Modelo universal en plantilla
@@ -230,7 +189,6 @@ export type ProcesoOperacionPlantillaPayload = {
   reglaMerma?: Record<string, unknown>;
   baseCalculoProductividad?: BaseCalculoProductividad;
   observaciones?: string;
-  niveles?: ProcesoOperacionNivelPayload[];
   estacionId?: string;
   // P3.a.1 — Modelo universal
   familiaV2?: string;

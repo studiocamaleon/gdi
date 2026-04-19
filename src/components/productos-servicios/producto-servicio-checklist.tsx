@@ -794,7 +794,6 @@ export function ProductoServicioChecklistEditor({
           label: plantilla.nombre,
           centroCostoId: plantilla.centroCostoId || null,
           centroCostoNombre: plantilla.centroCostoNombre || "",
-          niveles: plantilla.niveles ?? [],
         })),
     [plantillasPaso],
   );
@@ -1151,38 +1150,19 @@ export function ProductoServicioChecklistEditor({
               value={regla.pasoPlantillaId ?? "__none__"}
               onValueChange={(value) => {
                 const selected = operaciones.find((item) => item.id === value);
-                const variantes = selected?.niveles ?? [];
-                const varianteDefault = variantes.find((item) => item.activo)?.id ?? null;
-                const forcedTipoPregunta = getRequiredTipoPreguntaForVariantes(
-                  variantes.filter((item) => item.activo).length,
-                );
-                if (selected && forcedTipoPregunta === "single_select") {
-                  toast.info("Este paso tiene 3 o más variantes. Se generó una opción por variante.");
-                  updatePregunta(
-                    pregunta.id,
-                    (current) => buildPreguntaRespuestasPorVariantes(current, selected, variantes),
-                  );
-                  return;
-                }
+                // P4.1 — `selected.niveles` eliminado. El flujo de
+                // "seleccionar_variante_paso" queda inerte hasta que migre
+                // a ProcesoOperacionAlternativa.
                 updateRegla(pregunta.id, respuesta.id, regla.id, (current) => ({
                   ...current,
                   pasoPlantillaId: value === "__none__" ? null : value,
                   pasoPlantillaNombre: selected?.label ?? "",
                   centroCostoId: selected?.centroCostoId ?? null,
                   centroCostoNombre: selected?.centroCostoNombre ?? "",
-                  nivelesDisponibles: variantes,
-                  variantePasoId:
-                    current.accion === "seleccionar_variante_paso" && variantes.length
-                      ? varianteDefault
-                      : null,
-                  variantePasoNombre:
-                    current.accion === "seleccionar_variante_paso"
-                      ? variantes.find((item) => item.id === varianteDefault)?.nombre ?? ""
-                      : "",
-                  variantePasoResumen:
-                    current.accion === "seleccionar_variante_paso"
-                      ? variantes.find((item) => item.id === varianteDefault)?.resumen ?? ""
-                      : "",
+                  nivelesDisponibles: [],
+                  variantePasoId: null,
+                  variantePasoNombre: "",
+                  variantePasoResumen: "",
                 }));
               }}
             >
