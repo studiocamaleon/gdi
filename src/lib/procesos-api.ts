@@ -216,3 +216,84 @@ export async function deleteProcesoOperacionAlternativa(
     { method: 'DELETE' },
   );
 }
+
+// P1.4 — ProcesoOperacionMaterial: materiales declarativos por paso.
+export const MATERIAL_FORMULAS = [
+  'por_unidad_productiva',
+  'por_m2',
+  'por_pieza',
+  'por_metro_lineal',
+  'fijo',
+] as const;
+export type MaterialFormula = (typeof MATERIAL_FORMULAS)[number];
+
+export type ProcesoOperacionMaterial = {
+  id: string;
+  procesoOperacionId: string;
+  materiaPrimaVarianteId: string | null;
+  nombre: string;
+  formula: MaterialFormula;
+  cantidadPorUnidad: number;
+  unidad: string;
+  precioManual: number | null;
+  aplicaMultiCaras: boolean;
+  orden: number;
+  activo: boolean;
+  materiaPrimaVariante: {
+    id: string;
+    sku: string;
+    nombreVariante: string | null;
+    precioReferencia: number | null;
+  } | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ProcesoOperacionMaterialPayload = {
+  nombre: string;
+  materiaPrimaVarianteId?: string | null;
+  formula: MaterialFormula;
+  cantidadPorUnidad: number;
+  unidad: string;
+  precioManual?: number | null;
+  aplicaMultiCaras?: boolean;
+  orden?: number;
+  activo?: boolean;
+};
+
+export async function listProcesoOperacionMateriales(operacionId: string) {
+  return apiRequest<ProcesoOperacionMaterial[]>(
+    `/procesos/operaciones/${operacionId}/materiales`,
+  );
+}
+
+export async function createProcesoOperacionMaterial(
+  operacionId: string,
+  payload: ProcesoOperacionMaterialPayload,
+) {
+  return apiRequest<ProcesoOperacionMaterial>(
+    `/procesos/operaciones/${operacionId}/materiales`,
+    { method: 'POST', body: JSON.stringify(payload) },
+  );
+}
+
+export async function updateProcesoOperacionMaterial(
+  operacionId: string,
+  materialId: string,
+  payload: ProcesoOperacionMaterialPayload,
+) {
+  return apiRequest<ProcesoOperacionMaterial>(
+    `/procesos/operaciones/${operacionId}/materiales/${materialId}`,
+    { method: 'PUT', body: JSON.stringify(payload) },
+  );
+}
+
+export async function deleteProcesoOperacionMaterial(
+  operacionId: string,
+  materialId: string,
+) {
+  return apiRequest<{ ok: true }>(
+    `/procesos/operaciones/${operacionId}/materiales/${materialId}`,
+    { method: 'DELETE' },
+  );
+}

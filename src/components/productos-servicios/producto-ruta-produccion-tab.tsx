@@ -16,6 +16,7 @@ import * as React from "react";
 import { toast } from "sonner";
 
 import { AlternativasEditorSheet } from "@/components/productos-servicios/alternativas-editor-sheet";
+import { MaterialesEditorSheet } from "@/components/productos-servicios/materiales-editor-sheet";
 import type { ProductTabProps } from "@/components/productos-servicios/product-detail-types";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { Badge } from "@/components/ui/badge";
@@ -60,6 +61,10 @@ export function ProductoRutaProduccionTab(props: ProductTabProps) {
   const [ruta, setRuta] = React.useState<RutaCompleta | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [altEditorState, setAltEditorState] = React.useState<{
+    operacionId: string;
+    operacionNombre: string;
+  } | null>(null);
+  const [matEditorState, setMatEditorState] = React.useState<{
     operacionId: string;
     operacionNombre: string;
   } | null>(null);
@@ -230,82 +235,104 @@ export function ProductoRutaProduccionTab(props: ProductTabProps) {
       {/* Materiales declarativos por paso */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Materiales declarativos</CardTitle>
-          <CardDescription>
-            Consumos declarados en <code>ProcesoOperacionMaterial</code>. Si un paso no aparece
-            acá, el super motor usa plantillas imperativas como fallback.
-          </CardDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-base">Materiales declarativos</CardTitle>
+              <CardDescription>
+                Consumos declarados en <code>ProcesoOperacionMaterial</code>. Si un paso no tiene
+                materiales, el super motor usa plantillas imperativas como fallback.
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-          {ruta.operaciones.every((op) => op.materialesConsumidos.length === 0) ? (
-            <p className="text-sm text-muted-foreground">
-              Ningún paso de esta ruta tiene materiales declarativos todavía.
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {ruta.operaciones
-                .filter((op) => op.materialesConsumidos.length > 0)
-                .map((op) => (
-                  <div key={op.id}>
-                    <h4 className="mb-2 text-sm font-medium">
-                      Paso {op.orden}: {op.nombre}
-                    </h4>
-                    <Table>
-                      <TableHeader className="bg-muted/30">
-                        <TableRow>
-                          <TableHead>Material</TableHead>
-                          <TableHead>Variante</TableHead>
-                          <TableHead>Fórmula</TableHead>
-                          <TableHead className="text-right">Cantidad</TableHead>
-                          <TableHead>Unidad</TableHead>
-                          <TableHead className="text-right">Precio</TableHead>
-                          <TableHead>Multi-caras</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {op.materialesConsumidos
-                          .sort((a, b) => a.orden - b.orden)
-                          .map((m) => (
-                            <TableRow key={m.id}>
-                              <TableCell className="font-medium text-sm">{m.nombre}</TableCell>
-                              <TableCell className="text-xs">
-                                {m.materiaPrimaVariante ? (
-                                  <code>{m.materiaPrimaVariante.sku}</code>
-                                ) : (
-                                  <span className="text-muted-foreground">manual</span>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-xs">
-                                <code>{m.formula}</code>
-                              </TableCell>
-                              <TableCell className="text-right text-sm">
-                                {m.cantidadPorUnidad}
-                              </TableCell>
-                              <TableCell className="text-xs">{m.unidad}</TableCell>
-                              <TableCell className="text-right text-sm">
-                                {m.materiaPrimaVariante?.precioReferencia != null
-                                  ? `$${m.materiaPrimaVariante.precioReferencia}`
-                                  : m.precioManual != null
-                                    ? `$${m.precioManual}`
-                                    : "—"}
-                              </TableCell>
-                              <TableCell>
-                                {m.aplicaMultiCaras ? (
-                                  <Badge variant="secondary" className="text-xs">
-                                    ×2 doble faz
-                                  </Badge>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">—</span>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ))}
-            </div>
-          )}
+          <div className="space-y-4">
+            {ruta.operaciones.map((op) => (
+              <div key={op.id}>
+                <div className="mb-2 flex items-center justify-between">
+                  <h4 className="text-sm font-medium">
+                    Paso {op.orden}: {op.nombre}
+                    <Badge
+                      variant={op.materialesConsumidos.length > 0 ? "secondary" : "outline"}
+                      className="ml-2"
+                    >
+                      {op.materialesConsumidos.length}{" "}
+                      {op.materialesConsumidos.length === 1 ? "material" : "materiales"}
+                    </Badge>
+                  </h4>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setMatEditorState({ operacionId: op.id, operacionNombre: op.nombre })
+                    }
+                  >
+                    Gestionar materiales
+                  </Button>
+                </div>
+                {op.materialesConsumidos.length > 0 ? (
+                  <Table>
+                    <TableHeader className="bg-muted/30">
+                      <TableRow>
+                        <TableHead>Material</TableHead>
+                        <TableHead>Variante</TableHead>
+                        <TableHead>Fórmula</TableHead>
+                        <TableHead className="text-right">Cantidad</TableHead>
+                        <TableHead>Unidad</TableHead>
+                        <TableHead className="text-right">Precio</TableHead>
+                        <TableHead>Multi-caras</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {op.materialesConsumidos
+                        .slice()
+                        .sort((a, b) => a.orden - b.orden)
+                        .map((m) => (
+                          <TableRow key={m.id}>
+                            <TableCell className="font-medium text-sm">{m.nombre}</TableCell>
+                            <TableCell className="text-xs">
+                              {m.materiaPrimaVariante ? (
+                                <code>{m.materiaPrimaVariante.sku}</code>
+                              ) : (
+                                <span className="text-muted-foreground">manual</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <code>{m.formula}</code>
+                            </TableCell>
+                            <TableCell className="text-right text-sm">
+                              {m.cantidadPorUnidad}
+                            </TableCell>
+                            <TableCell className="text-xs">{m.unidad}</TableCell>
+                            <TableCell className="text-right text-sm">
+                              {m.materiaPrimaVariante?.precioReferencia != null
+                                ? `$${m.materiaPrimaVariante.precioReferencia}`
+                                : m.precioManual != null
+                                  ? `$${m.precioManual}`
+                                  : "—"}
+                            </TableCell>
+                            <TableCell>
+                              {m.aplicaMultiCaras ? (
+                                <Badge variant="secondary" className="text-xs">
+                                  ×2 doble faz
+                                </Badge>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <p className="text-xs text-muted-foreground pl-4">
+                    — sin materiales declarativos (se aplica la plantilla imperativa de la
+                    familia) —
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
 
@@ -317,6 +344,18 @@ export function ProductoRutaProduccionTab(props: ProductTabProps) {
           }}
           operacionId={altEditorState.operacionId}
           operacionNombre={altEditorState.operacionNombre}
+          onChanged={load}
+        />
+      ) : null}
+
+      {matEditorState ? (
+        <MaterialesEditorSheet
+          open={matEditorState !== null}
+          onOpenChange={(open) => {
+            if (!open) setMatEditorState(null);
+          }}
+          operacionId={matEditorState.operacionId}
+          operacionNombre={matEditorState.operacionNombre}
           onChanged={load}
         />
       ) : null}
