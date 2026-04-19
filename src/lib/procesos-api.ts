@@ -154,3 +154,65 @@ export async function bulkAssignEstacionPlantillas(
     },
   );
 }
+
+// P1.3 — ProcesoOperacionAlternativa: múltiples máquina+perfil por paso.
+export type ProcesoOperacionAlternativa = {
+  id: string;
+  procesoOperacionId: string;
+  label: string;
+  esDefault: boolean;
+  orden: number;
+  activo: boolean;
+  maquinaId: string;
+  perfilOperativoId: string | null;
+  maquina: { id: string; nombre: string; plantilla: string | null } | null;
+  perfilOperativo: { id: string; nombre: string } | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ProcesoOperacionAlternativaPayload = {
+  maquinaId: string;
+  perfilOperativoId?: string | null;
+  label: string;
+  esDefault?: boolean;
+  orden?: number;
+  activo?: boolean;
+};
+
+export async function listProcesoOperacionAlternativas(operacionId: string) {
+  return apiRequest<ProcesoOperacionAlternativa[]>(
+    `/procesos/operaciones/${operacionId}/alternativas`,
+  );
+}
+
+export async function createProcesoOperacionAlternativa(
+  operacionId: string,
+  payload: ProcesoOperacionAlternativaPayload,
+) {
+  return apiRequest<ProcesoOperacionAlternativa>(
+    `/procesos/operaciones/${operacionId}/alternativas`,
+    { method: 'POST', body: JSON.stringify(payload) },
+  );
+}
+
+export async function updateProcesoOperacionAlternativa(
+  operacionId: string,
+  alternativaId: string,
+  payload: ProcesoOperacionAlternativaPayload,
+) {
+  return apiRequest<ProcesoOperacionAlternativa>(
+    `/procesos/operaciones/${operacionId}/alternativas/${alternativaId}`,
+    { method: 'PUT', body: JSON.stringify(payload) },
+  );
+}
+
+export async function deleteProcesoOperacionAlternativa(
+  operacionId: string,
+  alternativaId: string,
+) {
+  return apiRequest<{ ok: true }>(
+    `/procesos/operaciones/${operacionId}/alternativas/${alternativaId}`,
+    { method: 'DELETE' },
+  );
+}

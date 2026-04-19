@@ -86,6 +86,14 @@ export type RutaCompletaOperacion = {
     orden: number;
     materiaPrimaVariante: { id: string; sku: string; precioReferencia: number | null } | null;
   }>;
+  alternativas: Array<{
+    id: string;
+    label: string;
+    esDefault: boolean;
+    orden: number;
+    maquina: { id: string; nombre: string; plantilla: string | null } | null;
+    perfilOperativo: { id: string; nombre: string } | null;
+  }>;
 };
 
 export type RutaCompleta = {

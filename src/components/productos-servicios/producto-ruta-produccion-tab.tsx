@@ -15,9 +15,11 @@
 import * as React from "react";
 import { toast } from "sonner";
 
+import { AlternativasEditorSheet } from "@/components/productos-servicios/alternativas-editor-sheet";
 import type { ProductTabProps } from "@/components/productos-servicios/product-detail-types";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -57,10 +59,14 @@ function getActivacionBadge(op: RutaCompleta["operaciones"][number]) {
 export function ProductoRutaProduccionTab(props: ProductTabProps) {
   const [ruta, setRuta] = React.useState<RutaCompleta | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [altEditorState, setAltEditorState] = React.useState<{
+    operacionId: string;
+    operacionNombre: string;
+  } | null>(null);
   const selectedVariantId = props.selectedVariantId;
   const productoId = props.producto.id;
 
-  React.useEffect(() => {
+  const load = React.useCallback(() => {
     setIsLoading(true);
     // Prioridad: si hay variante seleccionada, usar ruta efectiva de la variante.
     // Si no, cargar ruta directa del producto (para productos "medida libre"
@@ -68,7 +74,7 @@ export function ProductoRutaProduccionTab(props: ProductTabProps) {
     const promise = selectedVariantId
       ? getRutaCompletaPorVariante(selectedVariantId)
       : getRutaCompletaPorProducto(productoId);
-    promise
+    return promise
       .then((r) => setRuta(r))
       .catch((err) => {
         console.error(err);
@@ -76,6 +82,10 @@ export function ProductoRutaProduccionTab(props: ProductTabProps) {
       })
       .finally(() => setIsLoading(false));
   }, [selectedVariantId, productoId]);
+
+  React.useEffect(() => {
+    void load();
+  }, [load]);
 
   if (isLoading) {
     return (
@@ -146,6 +156,7 @@ export function ProductoRutaProduccionTab(props: ProductTabProps) {
                 <TableHead>Máquina · Perfil</TableHead>
                 <TableHead>Tiempos</TableHead>
                 <TableHead>Productividad</TableHead>
+                <TableHead>Alternativas</TableHead>
                 <TableHead>Activación</TableHead>
               </TableRow>
             </TableHeader>
@@ -189,6 +200,22 @@ export function ProductoRutaProduccionTab(props: ProductTabProps) {
                       <div>Fijo: {formatMin(op.tiempoFijoMin)}</div>
                     </TableCell>
                     <TableCell className="text-xs">{formatProductividad(op)}</TableCell>
+                    <TableCell className="text-xs">
+                      <div className="flex items-center gap-2">
+                        <Badge variant={op.alternativas.length > 0 ? "secondary" : "outline"}>
+                          {op.alternativas.length}
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            setAltEditorState({ operacionId: op.id, operacionNombre: op.nombre })
+                          }
+                        >
+                          Gestionar
+                        </Button>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Badge variant={act.variant}>{act.label}</Badge>
                     </TableCell>
@@ -281,6 +308,18 @@ export function ProductoRutaProduccionTab(props: ProductTabProps) {
           )}
         </CardContent>
       </Card>
+
+      {altEditorState ? (
+        <AlternativasEditorSheet
+          open={altEditorState !== null}
+          onOpenChange={(open) => {
+            if (!open) setAltEditorState(null);
+          }}
+          operacionId={altEditorState.operacionId}
+          operacionNombre={altEditorState.operacionNombre}
+          onChanged={load}
+        />
+      ) : null}
     </div>
   );
 }
