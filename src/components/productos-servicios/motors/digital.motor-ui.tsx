@@ -2,7 +2,6 @@
 
 import type { ProductMotorUiContract } from "@/components/productos-servicios/product-detail-types";
 import { DigitalImposicionTab } from "@/components/productos-servicios/motors/digital-imposicion-tab";
-import { DigitalRutaBaseTab } from "@/components/productos-servicios/motors/digital-ruta-base-tab";
 import { DigitalSimularCostoTab } from "@/components/productos-servicios/motors/digital-simular-costo-tab";
 import { DigitalVariantesTab } from "@/components/productos-servicios/motors/digital-variantes-tab";
 import { ProductoSimularCostoV2Tab } from "@/components/productos-servicios/producto-simular-costo-v2-tab";
@@ -20,7 +19,6 @@ export const digitalMotorUi: ProductMotorUiContract = {
   tabOrder: [
     "general",
     "variantes",
-    "ruta_base",
     "ruta_produccion",
     "imposicion",
     "simular_costo",
@@ -30,7 +28,6 @@ export const digitalMotorUi: ProductMotorUiContract = {
   ],
   tabs: {
     variantes: DigitalVariantesTab,
-    ruta_base: DigitalRutaBaseTab,
     imposicion: DigitalImposicionTab,
     simular_costo: DigitalSimularCostoTab,
   },

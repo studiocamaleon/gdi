@@ -1585,7 +1585,6 @@ export const vinylCutMotorUi: ProductMotorUiContract = {
   tabOrder: [
     "general",
     "equipos_materiales",
-    "ruta_base",
     "ruta_produccion",
     "imposicion",
     "simular_costo",

@@ -2,7 +2,6 @@
 
 import type { ProductMotorUiContract, ProductTabProps } from "@/components/productos-servicios/product-detail-types";
 import { WideFormatImposicionTab } from "@/components/productos-servicios/motors/wide-format-imposicion-tab";
-import { WideFormatRutaBaseTab } from "@/components/productos-servicios/motors/wide-format-ruta-base-tab";
 import { WideFormatSimularCostoTab } from "@/components/productos-servicios/motors/wide-format-simular-costo-tab";
 import { WideFormatTecnologiasTab } from "@/components/productos-servicios/motors/wide-format-tecnologias-tab";
 import { ProductoSimularCostoV2Tab } from "@/components/productos-servicios/producto-simular-costo-v2-tab";
@@ -41,7 +40,6 @@ export const wideFormatMotorUi: ProductMotorUiContract = {
   tabOrder: [
     "general",
     "tecnologias",
-    "ruta_base",
     "ruta_produccion",
     "imposicion",
     "simular_costo",
@@ -51,7 +49,6 @@ export const wideFormatMotorUi: ProductMotorUiContract = {
   ],
   tabs: {
     variantes: WideFormatVariantesPlaceholder,
-    ruta_base: WideFormatRutaBaseTab,
     imposicion: WideFormatImposicionTab,
     simular_costo: WideFormatSimularCostoTab,
   },

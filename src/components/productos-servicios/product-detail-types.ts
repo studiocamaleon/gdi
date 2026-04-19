@@ -21,7 +21,6 @@ export type ProductTabKey =
   | "general"
   | "variantes"
   | "imposicion"
-  | "ruta_base"
   | "ruta_produccion"
   | "simular_costo"
   | "precio"

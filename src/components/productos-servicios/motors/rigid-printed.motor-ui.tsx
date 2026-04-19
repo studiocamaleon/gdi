@@ -5,7 +5,6 @@ import type {
   ProductTabKey,
 } from "@/components/productos-servicios/product-detail-types";
 import type { ProductoMotorConfig } from "@/lib/productos-servicios";
-import { RigidPrintedRutaBaseTab } from "@/components/productos-servicios/motors/rigid-printed-ruta-base-tab";
 import { RigidPrintedTecnologiasTab } from "@/components/productos-servicios/motors/rigid-printed-tecnologias-tab";
 import { RigidPrintedImposicionTab } from "@/components/productos-servicios/motors/rigid-printed-imposicion-tab";
 import { RigidPrintedSimularCostoTab } from "@/components/productos-servicios/motors/rigid-printed-simular-costo-tab";
@@ -26,7 +25,6 @@ export const rigidPrintedMotorUi: ProductMotorUiContract = {
     "general",
     "tecnologias",
     "variantes",
-    "ruta_base",
     "ruta_produccion",
     "imposicion",
     "simular_costo",
@@ -35,7 +33,6 @@ export const rigidPrintedMotorUi: ProductMotorUiContract = {
     "simular_venta",
   ],
   tabs: {
-    ruta_base: RigidPrintedRutaBaseTab,
     imposicion: RigidPrintedImposicionTab,
     simular_costo: RigidPrintedSimularCostoTab,
   },
