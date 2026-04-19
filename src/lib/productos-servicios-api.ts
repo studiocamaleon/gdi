@@ -116,64 +116,6 @@ export async function getRutaCompletaPorProducto(productoId: string) {
   );
 }
 
-// ────────────── C.7: Shadow logs dashboard ──────────────
-
-export type ShadowLogListItem = {
-  id: string;
-  motorCodigo: string;
-  productoServicioId: string;
-  productoNombre: string | null;
-  productoVarianteId: string | null;
-  inputHash: string;
-  totalV1: number;
-  totalV2: number;
-  diffAbsoluto: number;
-  diffPct: number;
-  createdAt: string;
-};
-
-export type ShadowLogDetail = ShadowLogListItem & {
-  subtotalesV1: Record<string, unknown>;
-  subtotalesV2: Record<string, unknown>;
-  anomalias: unknown;
-};
-
-export type ShadowLogsSummary = {
-  total: number;
-  porMotor: Array<{
-    motor: string;
-    count: number;
-    diffPctPromedio: number;
-    diffPctMax: number;
-  }>;
-  distribucionDiff: { cero: number; bajo: number; medio: number; alto: number };
-};
-
-export async function getShadowLogs(filtros: {
-  motor?: string;
-  productoId?: string;
-  minDiffPct?: number;
-  limit?: number;
-} = {}) {
-  const params = new URLSearchParams();
-  if (filtros.motor) params.set('motor', filtros.motor);
-  if (filtros.productoId) params.set('productoId', filtros.productoId);
-  if (filtros.minDiffPct != null) params.set('minDiffPct', String(filtros.minDiffPct));
-  if (filtros.limit != null) params.set('limit', String(filtros.limit));
-  const query = params.toString();
-  return apiRequest<ShadowLogListItem[]>(
-    `/productos-servicios/shadow-logs${query ? '?' + query : ''}`,
-  );
-}
-
-export async function getShadowLogsSummary() {
-  return apiRequest<ShadowLogsSummary>('/productos-servicios/shadow-logs/summary');
-}
-
-export async function getShadowLogDetail(id: string) {
-  return apiRequest<ShadowLogDetail>(`/productos-servicios/shadow-logs/${id}`);
-}
-
 export async function getFamiliasProducto() {
   return apiRequest<FamiliaProducto[]>('/productos-servicios/familias');
 }

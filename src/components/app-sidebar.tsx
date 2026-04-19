@@ -21,7 +21,6 @@ import {
   PrinterIcon,
   UsersIcon,
   WorkflowIcon,
-  GitCompareArrowsIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -107,11 +106,6 @@ const costos = [
     title: "Catalogo de productos",
     href: "/costos/productos",
     icon: BoxesIcon,
-  },
-  {
-    title: "Shadow diffs (v1 vs v2)",
-    href: "/costos/shadow-diffs",
-    icon: GitCompareArrowsIcon,
   },
 ];
 
