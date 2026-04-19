@@ -196,6 +196,15 @@ export type ProcesoOperacionPlantilla = {
   niveles: ProcesoOperacionNivel[];
   estacionId: string | null;
   estacionNombre: string;
+  // P3.a.1 — Modelo universal en plantilla
+  familiaV2: string | null;
+  unidadProductivaV2: string | null;
+  activacionV2: "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL" | null;
+  condicionV2: Record<string, unknown> | null;
+  leeDelTrabajoV2: string[] | null;
+  leeDePasosV2: string[] | null;
+  produceV2: string[] | null;
+  configNestingV2: Record<string, unknown> | null;
   activo: boolean;
   createdAt: string;
   updatedAt: string;
@@ -223,6 +232,15 @@ export type ProcesoOperacionPlantillaPayload = {
   observaciones?: string;
   niveles?: ProcesoOperacionNivelPayload[];
   estacionId?: string;
+  // P3.a.1 — Modelo universal
+  familiaV2?: string;
+  unidadProductivaV2?: string;
+  activacionV2?: "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL";
+  condicionV2?: Record<string, unknown>;
+  leeDelTrabajoV2?: string[];
+  leeDePasosV2?: string[];
+  produceV2?: string[];
+  configNestingV2?: Record<string, unknown>;
   activo: boolean;
 };
 

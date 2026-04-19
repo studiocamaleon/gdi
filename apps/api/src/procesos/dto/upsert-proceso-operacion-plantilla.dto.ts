@@ -1,12 +1,15 @@
 import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsEnum,
+  IsIn,
   IsNumber,
   IsObject,
   IsOptional,
   IsString,
   IsUUID,
+  MaxLength,
   MinLength,
   ValidateNested,
 } from 'class-validator';
@@ -103,6 +106,45 @@ export class UpsertProcesoOperacionPlantillaDto {
   @IsOptional()
   @IsUUID()
   estacionId?: string;
+
+  // ── Extensiones modelo universal (P3.a.1) ───────────────────────────
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  familiaV2?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  unidadProductivaV2?: string;
+
+  @IsOptional()
+  @IsIn(['OBLIGATORIO', 'OPCIONAL', 'CONDICIONAL'])
+  activacionV2?: 'OBLIGATORIO' | 'OPCIONAL' | 'CONDICIONAL';
+
+  @IsOptional()
+  @IsObject()
+  condicionV2?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  leeDelTrabajoV2?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  leeDePasosV2?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  produceV2?: string[];
+
+  @IsOptional()
+  @IsObject()
+  configNestingV2?: Record<string, unknown>;
+  // ────────────────────────────────────────────────────────────────────
 
   @IsBoolean()
   activo: boolean;

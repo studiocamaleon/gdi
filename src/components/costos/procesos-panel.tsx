@@ -156,10 +156,45 @@ type BibliotecaFormState = {
   niveles: ProcesoOperacionNivelPayload[];
   activo: boolean;
   observaciones: string;
+  // P3.a.1 — Modelo universal en plantilla
+  familiaV2: string;
+  unidadProductivaV2: string;
+  activacionV2: "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL" | "";
 };
 
 const EMPTY_SELECT_VALUE = "__none__";
 const DEFAULT_PLANTILLA: PlantillaMaquinaria = "impresora_laser";
+
+// P3.a.1 — Familias del modelo universal. Espejo de
+// apps/api/src/productos-servicios/pasos/familias.ts — mantener en sync.
+const FAMILIAS_V2_ITEMS: Array<{ codigo: string; label: string }> = [
+  { codigo: "impresion_por_hoja", label: "Impresión por hoja" },
+  { codigo: "impresion_por_area", label: "Impresión por área" },
+  { codigo: "impresion_por_pieza", label: "Impresión por pieza" },
+  { codigo: "aplicacion_transfer", label: "Aplicación de transfer" },
+  { codigo: "corte", label: "Corte" },
+  { codigo: "corte_volumetrico", label: "Corte volumétrico" },
+  { codigo: "grabado", label: "Grabado" },
+  { codigo: "plegado", label: "Plegado" },
+  { codigo: "perforado", label: "Perforado" },
+  { codigo: "troquelado", label: "Troquelado" },
+  { codigo: "laminado", label: "Laminado" },
+  { codigo: "acabado_decorativo", label: "Acabado decorativo" },
+  { codigo: "pintura_superficial", label: "Pintura superficial" },
+  { codigo: "encuadernado", label: "Encuadernado" },
+  { codigo: "soldadura_herreria", label: "Soldadura / herrería" },
+  { codigo: "ensamble_estructural", label: "Ensamble estructural" },
+  { codigo: "instalacion_electrica", label: "Instalación eléctrica" },
+  { codigo: "pre_prensa", label: "Pre-prensa" },
+  { codigo: "diseno_grafico", label: "Diseño gráfico" },
+  { codigo: "toma_medidas", label: "Toma de medidas (in situ)" },
+  { codigo: "colocacion_in_situ", label: "Colocación in situ" },
+  { codigo: "operacion_manual", label: "Operación manual" },
+  { codigo: "insumo_externo_gestion", label: "Insumo externo (gestión)" },
+];
+const FAMILIAS_V2_LABELS: Record<string, string> = Object.fromEntries(
+  FAMILIAS_V2_ITEMS.map((f) => [f.codigo, f.label]),
+);
 
 function formatTechnicalValue(value: string) {
   return value
@@ -368,6 +403,9 @@ function createEmptyBibliotecaForm(): BibliotecaFormState {
     niveles: [],
     activo: true,
     observaciones: "",
+    familiaV2: "",
+    unidadProductivaV2: "",
+    activacionV2: "",
   };
 }
 
@@ -1861,6 +1899,9 @@ export function ProcesosPanel({
         niveles: normalizeNiveles(item.niveles ?? []),
         activo: item.activo,
         observaciones: item.observaciones,
+        familiaV2: item.familiaV2 ?? "",
+        unidadProductivaV2: item.unidadProductivaV2 ?? "",
+        activacionV2: item.activacionV2 ?? "",
       };
       setEditingBibliotecaId(item.id);
       setBibliotecaFormSnapshot(formData);
@@ -2013,6 +2054,10 @@ export function ProcesosPanel({
         niveles: bibliotecaForm.usaNiveles ? bibliotecaForm.niveles : [],
         reglaVelocidad: undefined,
         observaciones: bibliotecaForm.observaciones.trim() || undefined,
+        // P3.a.1 — Modelo universal
+        familiaV2: bibliotecaForm.familiaV2.trim() || undefined,
+        unidadProductivaV2: bibliotecaForm.unidadProductivaV2.trim() || undefined,
+        activacionV2: bibliotecaForm.activacionV2 || undefined,
         activo: bibliotecaForm.activo,
       };
     },
@@ -4435,6 +4480,84 @@ export function ProcesosPanel({
                         }
                       />
                     </div>
+                  </Field>
+
+                  {/* P3.a.1 — Sección "Modelo universal" */}
+                  <Field className="md:col-span-2">
+                    <FieldLabel>Familia del paso (modelo universal)</FieldLabel>
+                    <Select
+                      value={bibliotecaForm.familiaV2 || EMPTY_SELECT_VALUE}
+                      onValueChange={(value) =>
+                        setBibliotecaForm((prev) => ({
+                          ...prev,
+                          familiaV2: value === EMPTY_SELECT_VALUE ? "" : value ?? "",
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue>
+                          {bibliotecaForm.familiaV2
+                            ? FAMILIAS_V2_LABELS[bibliotecaForm.familiaV2] ??
+                              bibliotecaForm.familiaV2
+                            : "— sin familia —"}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={EMPTY_SELECT_VALUE}>— sin familia —</SelectItem>
+                        {FAMILIAS_V2_ITEMS.map((f) => (
+                          <SelectItem key={f.codigo} value={f.codigo}>
+                            {f.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FieldDescription>
+                      Determina cómo el super motor interpreta el paso (impresión por hoja,
+                      corte, laminado, etc.). Dejá vacío para pasos legacy v1.
+                    </FieldDescription>
+                  </Field>
+
+                  <Field>
+                    <FieldLabel>Unidad productiva V2</FieldLabel>
+                    <Input
+                      value={bibliotecaForm.unidadProductivaV2}
+                      onChange={(event) =>
+                        setBibliotecaForm((prev) => ({
+                          ...prev,
+                          unidadProductivaV2: event.target.value,
+                        }))
+                      }
+                      placeholder="hojas, m2, piezas, letras…"
+                      maxLength={40}
+                    />
+                  </Field>
+
+                  <Field>
+                    <FieldLabel>Activación</FieldLabel>
+                    <Select
+                      value={bibliotecaForm.activacionV2 || EMPTY_SELECT_VALUE}
+                      onValueChange={(value) =>
+                        setBibliotecaForm((prev) => ({
+                          ...prev,
+                          activacionV2:
+                            value === EMPTY_SELECT_VALUE
+                              ? ""
+                              : (value as BibliotecaFormState["activacionV2"]),
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue>
+                          {bibliotecaForm.activacionV2 || "— sin configurar —"}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={EMPTY_SELECT_VALUE}>— sin configurar —</SelectItem>
+                        <SelectItem value="OBLIGATORIO">OBLIGATORIO</SelectItem>
+                        <SelectItem value="OPCIONAL">OPCIONAL</SelectItem>
+                        <SelectItem value="CONDICIONAL">CONDICIONAL</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </Field>
 
                   <Field className="md:col-span-2">

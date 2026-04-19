@@ -1223,6 +1223,19 @@ model ProcesoOperacionPlantilla {
   reglaMermaJson     Json?
   detalleJson        Json?
   observaciones      String?
+  // ── Extensiones modelo universal (P3.a.1) ─────────────────────────
+  // Mismas semánticas que en ProcesoOperacion — al instanciar un paso
+  // desde una plantilla, estos campos se copian para arrastrar la
+  // declaración del modelo universal (familia, nesting, activación).
+  familiaV2          String?
+  unidadProductivaV2 String?
+  activacionV2       ActivacionPasoV2?
+  condicionV2        Json?
+  leeDelTrabajoV2    Json?
+  leeDePasosV2       Json?
+  produceV2          Json?
+  configNestingV2    Json?
+  // ──────────────────────────────────────────────────────────────────
   activo             Boolean                  @default(true)
   createdAt          DateTime                 @default(now())
   updatedAt          DateTime                 @updatedAt
@@ -1241,6 +1254,7 @@ model ProcesoOperacionPlantilla {
   @@index([tenantId, perfilOperativoId])
   @@index([tenantId, estacionId])
   @@index([tenantId, nombre])
+  @@index([tenantId, familiaV2])
 }
 
 model Estacion {

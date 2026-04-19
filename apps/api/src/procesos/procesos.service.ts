@@ -804,6 +804,20 @@ export class ProcesosService {
         payload.baseCalculoProductividad,
       ),
       observaciones: payload.observaciones?.trim() || null,
+      // P3.a.1 — Modelo universal en plantilla
+      familiaV2: payload.familiaV2?.trim() || null,
+      unidadProductivaV2: payload.unidadProductivaV2?.trim() || null,
+      activacionV2: payload.activacionV2 ?? null,
+      condicionV2:
+        payload.condicionV2 != null ? (payload.condicionV2 as Prisma.InputJsonValue) : Prisma.JsonNull,
+      leeDelTrabajoV2:
+        payload.leeDelTrabajoV2 != null ? (payload.leeDelTrabajoV2 as Prisma.InputJsonValue) : Prisma.JsonNull,
+      leeDePasosV2:
+        payload.leeDePasosV2 != null ? (payload.leeDePasosV2 as Prisma.InputJsonValue) : Prisma.JsonNull,
+      produceV2:
+        payload.produceV2 != null ? (payload.produceV2 as Prisma.InputJsonValue) : Prisma.JsonNull,
+      configNestingV2:
+        payload.configNestingV2 != null ? (payload.configNestingV2 as Prisma.InputJsonValue) : Prisma.JsonNull,
       activo: payload.activo,
     };
   }
@@ -2329,6 +2343,16 @@ export class ProcesosService {
       niveles: this.getOperacionNiveles(detalleJson),
       estacionId: item.estacionId ?? null,
       estacionNombre: item.estacion?.nombre ?? '',
+      // P3.a.1 — Modelo universal
+      familiaV2: item.familiaV2 ?? null,
+      unidadProductivaV2: item.unidadProductivaV2 ?? null,
+      activacionV2: item.activacionV2 ?? null,
+      condicionV2: (item.condicionV2 as Record<string, unknown> | null) ?? null,
+      leeDelTrabajoV2: (item.leeDelTrabajoV2 as string[] | null) ?? null,
+      leeDePasosV2: (item.leeDePasosV2 as string[] | null) ?? null,
+      produceV2: (item.produceV2 as string[] | null) ?? null,
+      configNestingV2:
+        (item.configNestingV2 as Record<string, unknown> | null) ?? null,
       activo: item.activo,
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
