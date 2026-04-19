@@ -173,6 +173,9 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
   const [numerosXTalonario, setNumerosXTalonario] = React.useState("50");
   const [caras, setCaras] = React.useState<"simple_faz" | "doble_faz">("simple_faz");
   const [tipoImpresion, setTipoImpresion] = React.useState<"CMYK" | "BN">("CMYK");
+  const [opcionalesSeleccionados, setOpcionalesSeleccionados] = React.useState<Set<string>>(
+    new Set(),
+  );
   const [periodo, setPeriodo] = React.useState(buildDefaultPeriodo());
   const [cotizacion, setCotizacion] = React.useState<CotizacionCanonica | null>(null);
   const [isCotizando, startCotizando] = React.useTransition();
@@ -218,6 +221,7 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
             cantidad: Number(cantidad),
             periodo,
             seleccionesBase: seleccionesBase as never,
+            opcionalesSeleccionados: Array.from(opcionalesSeleccionados),
             parametros,
           },
           { forceV2: true },
@@ -228,7 +232,24 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
         toast.error(error instanceof Error ? error.message : "No se pudo cotizar.");
       }
     });
-  }, [selectedVariantId, cantidad, periodo, anchoMm, altoMm, conLaminado, color, numerosXTalonario, caras, tipoImpresion, motorCodigo, needsMedidas]);
+  }, [selectedVariantId, cantidad, periodo, anchoMm, altoMm, conLaminado, color, numerosXTalonario, caras, tipoImpresion, opcionalesSeleccionados, motorCodigo, needsMedidas]);
+
+  // Opcionales disponibles viene de la cotización anterior (lista en trazabilidad).
+  // Primera vez que abre el tab aún no hay cotización → se muestra al regresar.
+  type OpcionalCatalogItem = { id: string; codigo: string; nombre: string; familiaV2: string | null; seleccionado: boolean };
+  const opcionalesDisponibles: OpcionalCatalogItem[] = React.useMemo(() => {
+    const arr = (cotizacion?.trazabilidad as { opcionalesDisponibles?: OpcionalCatalogItem[] } | undefined)?.opcionalesDisponibles;
+    return Array.isArray(arr) ? arr : [];
+  }, [cotizacion]);
+
+  const toggleOpcional = (id: string) => {
+    setOpcionalesSeleccionados((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   return (
     <Card>
@@ -348,6 +369,28 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
             </>
           ) : null}
         </div>
+
+        {/* Pasos opcionales — visibles tras la primera cotización */}
+        {opcionalesDisponibles.length > 0 ? (
+          <div className="rounded-lg border bg-muted/10 p-3">
+            <p className="mb-2 text-sm font-medium">Pasos opcionales</p>
+            <div className="flex flex-wrap gap-3">
+              {opcionalesDisponibles.map((op) => (
+                <label key={op.id} className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={opcionalesSeleccionados.has(op.id)}
+                    onCheckedChange={() => toggleOpcional(op.id)}
+                  />
+                  <span>{op.nombre}</span>
+                </label>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Los pasos opcionales de la ruta del producto se suman al costo cuando los marcás.
+            </p>
+          </div>
+        ) : null}
+
         <div className="flex justify-end">
           <Button type="button" onClick={handleCotizar} disabled={isCotizando || !selectedVariantId}>
             {isCotizando ? <GdiSpinner className="size-4" data-icon="inline-start" /> : null}

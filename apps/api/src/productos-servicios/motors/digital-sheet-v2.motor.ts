@@ -363,7 +363,47 @@ export class DigitalSheetMotorModuleV2 implements ProductMotorModule {
       trazabilidad: { cantidad, precioBolsa: embPrecioBolsa },
     };
 
-    const pasos = [pasoPrePrensa, pasoImpresion, pasoCorte, pasoEmbalaje];
+    // D.1a.3: pasos opcionales activados por el usuario.
+    // Toma operaciones de la ruta con esOpcional=true cuyo id esté en payload.opcionalesSeleccionados.
+    // Cada una se convierte en un PasoCotizado con tiempo fijo (setup + cleanup + tiempoFijo)
+    // por ahora — runMin productivo queda fuera del scope de este piloto.
+    const opcionalesSeleccionados = new Set(payload.opcionalesSeleccionados ?? []);
+    const pasosOpcionales: PasoCotizado[] = [];
+    const operaciones = runtime.proceso?.operaciones ?? [];
+    for (const op of operaciones) {
+      if (!op.activo || !op.esOpcional || !opcionalesSeleccionados.has(op.id)) continue;
+      const setupMin = Number(op.setupMin ?? 0);
+      const cleanupMin = Number(op.cleanupMin ?? 0);
+      const tiempoFijoMin = Number(op.tiempoFijoMin ?? 0);
+      const totalMin = setupMin + cleanupMin + tiempoFijoMin;
+      const tarifaOp = op.centroCostoId ? runtime.tarifaByCentro.get(op.centroCostoId) : null;
+      const tarifaValor = tarifaOp != null && tarifaOp > 0 ? tarifaOp : 0;
+      const centroCostoCosto = roundMoney((totalMin / 60) * tarifaValor);
+      pasosOpcionales.push({
+        id: `P-OPC-${op.orden}-${op.codigo}`,
+        tipo: op.familiaV2 ?? 'operacion_manual',
+        nombre: `${op.nombre} (opcional)`,
+        costoCentroCosto: centroCostoCosto,
+        costoMateriasPrimas: 0,
+        cargosFlat: 0,
+        trazabilidad: {
+          operacionId: op.id,
+          orden: op.orden,
+          setupMin,
+          cleanupMin,
+          tiempoFijoMin,
+          totalMin,
+          tarifaHora: tarifaValor,
+          maquina: op.maquina ? { id: op.maquina.id, nombre: op.maquina.nombre } : null,
+          perfilOperativo: op.perfilOperativo
+            ? { id: op.perfilOperativo.id, nombre: op.perfilOperativo.nombre }
+            : null,
+          fuente: 'ProcesoOperacion (opcional)',
+        },
+      });
+    }
+
+    const pasos = [pasoPrePrensa, pasoImpresion, pasoCorte, pasoEmbalaje, ...pasosOpcionales];
     const centroCosto = roundMoney(pasos.reduce((a, p) => a + p.costoCentroCosto, 0));
     const materiasPrimas = roundMoney(pasos.reduce((a, p) => a + p.costoMateriasPrimas, 0));
     const cargosFlat = roundMoney(pasos.reduce((a, p) => a + p.cargosFlat, 0));
@@ -390,6 +430,17 @@ export class DigitalSheetMotorModuleV2 implements ProductMotorModule {
           sku: variante.papelVariante?.sku ?? null,
         },
         pliegoImpresion: { anchoMm: pliegoAncho, altoMm: pliegoAlto, codigo: pliego.codigo ?? null },
+        // D.1a.3: catálogo de opcionales disponibles para la UI.
+        opcionalesDisponibles: operaciones
+          .filter((op) => op.activo && op.esOpcional)
+          .map((op) => ({
+            id: op.id,
+            orden: op.orden,
+            codigo: op.codigo,
+            nombre: op.nombre,
+            familiaV2: op.familiaV2 ?? null,
+            seleccionado: opcionalesSeleccionados.has(op.id),
+          })),
       },
     };
   }
