@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getMateriaPrimaVarianteLabel } from "@/lib/materias-primas-variantes-display";
+import { NestingPreview } from "@/components/nesting-preview";
 import {
   getCatalogoPliegosImpresion,
   getVarianteMotorOverride,
@@ -88,6 +89,47 @@ const tipoCorteItems: ReadonlyArray<{ value: TipoCorte; label: string; help: str
 ] as const;
 
 /** Mapea valores legacy a los nuevos tipos de corte */
+/**
+ * Adapta un PreviewImposicionState (shape legacy) al contrato canónico del
+ * componente <NestingPreview>: container (pliego + márgenes mecánicos) +
+ * placements (rects de las piezas con su grid position).
+ *
+ * La pieza visualizada incluye demasía (efectiva), igual que el layout real
+ * del nesting-hoja que ejecuta el super motor.
+ */
+function toNestingPreviewInputs(state: PreviewImposicionState): {
+  container: import('@/components/nesting-preview').NestingContainer;
+  placements: import('@/components/nesting-preview').NestingPlacement[];
+} {
+  const container: import('@/components/nesting-preview').NestingContainer = {
+    type: 'pliego',
+    anchoMm: state.hojaW,
+    altoMm: state.hojaH,
+    machineMargins: state.margins,
+  };
+  const placements: import('@/components/nesting-preview').NestingPlacement[] = [];
+  const pieceW = state.orientacion === 'rotada' ? state.effectiveH : state.effectiveW;
+  const pieceH = state.orientacion === 'rotada' ? state.effectiveW : state.effectiveH;
+  const gridW = state.cols * pieceW;
+  const gridH = state.rows * pieceH;
+  const utilX = state.margins.leftMm;
+  const utilY = state.margins.topMm;
+  const originX = utilX + Math.max(0, (state.utilW - gridW) / 2);
+  const originY = utilY + Math.max(0, (state.utilH - gridH) / 2);
+  for (let row = 0; row < state.rows; row++) {
+    for (let col = 0; col < state.cols; col++) {
+      placements.push({
+        x: originX + col * pieceW,
+        y: originY + row * pieceH,
+        anchoMm: pieceW,
+        altoMm: pieceH,
+        rotada: state.orientacion === 'rotada',
+      });
+    }
+  }
+  return { container, placements };
+}
+
 function normalizeTipoCorte(raw: unknown): TipoCorte {
   const value = String(raw ?? "");
   if (value === "sin_corte" || value === "guillotina" || value === "corte_manual" || value === "troquelado") return value;
@@ -211,104 +253,6 @@ function readTerminacionesArray(value: unknown): TerminacionConfig[] {
     });
 }
 
-function buildRoundedRectPath(
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-  corners: { tl: boolean; tr: boolean; bl: boolean; br: boolean },
-): string {
-  const tl = corners.tl ? r : 0;
-  const tr = corners.tr ? r : 0;
-  const br = corners.br ? r : 0;
-  const bl = corners.bl ? r : 0;
-  return [
-    `M ${x + tl} ${y}`,
-    `L ${x + w - tr} ${y}`,
-    tr ? `A ${tr} ${tr} 0 0 1 ${x + w} ${y + tr}` : `L ${x + w} ${y}`,
-    `L ${x + w} ${y + h - br}`,
-    br ? `A ${br} ${br} 0 0 1 ${x + w - br} ${y + h}` : `L ${x + w} ${y + h}`,
-    `L ${x + bl} ${y + h}`,
-    bl ? `A ${bl} ${bl} 0 0 1 ${x} ${y + h - bl}` : `L ${x} ${y + h}`,
-    `L ${x} ${y + tl}`,
-    tl ? `A ${tl} ${tl} 0 0 1 ${x + tl} ${y}` : `L ${x} ${y}`,
-    "Z",
-  ].join(" ");
-}
-
-const ROTATED_TERMINACION_BORDE_MAP: Record<string, string> = {
-  superior: "derecho",
-  inferior: "izquierdo",
-  izquierdo: "superior",
-  derecho: "inferior",
-};
-
-function renderTerminacionNodes(
-  terminaciones: TerminacionConfig[],
-  trimX: number,
-  trimY: number,
-  pieceW: number,
-  pieceH: number,
-  scale: number,
-  orientacion: "normal" | "rotada",
-): { nodes: React.ReactNode[]; roundedPath: string | null } {
-  const nodes: React.ReactNode[] = [];
-  let roundedPath: string | null = null;
-
-  for (let ti = 0; ti < terminaciones.length; ti++) {
-    const term = terminaciones[ti];
-    if (term.tipoTerminacion === "perforacion") {
-      const diam = Math.max(0, Number(term.parametros.diametroMm ?? 0)) * scale;
-      if (diam <= 0) continue;
-      const posObj = (term.parametros.posicion && typeof term.parametros.posicion === "object"
-        ? term.parametros.posicion
-        : term.parametros) as Record<string, unknown>;
-      const bordeOriginal = String(posObj.referenciaBorde ?? "superior");
-      const borde = orientacion === "rotada"
-        ? (ROTATED_TERMINACION_BORDE_MAP[bordeOriginal] ?? bordeOriginal)
-        : bordeOriginal;
-      const distPx = Math.max(0, Number(posObj.distanciaBordeMm ?? 0)) * scale;
-      const centrado = posObj.centradoEnEje !== false;
-      let cx: number;
-      let cy: number;
-      if (borde === "superior" || borde === "inferior") {
-        cy = borde === "superior" ? trimY + distPx : trimY + pieceH - distPx;
-        cx = centrado ? trimX + pieceW / 2 : trimX + distPx;
-      } else {
-        cx = borde === "izquierdo" ? trimX + distPx : trimX + pieceW - distPx;
-        cy = centrado ? trimY + pieceH / 2 : trimY + distPx;
-      }
-      nodes.push(
-        <circle
-          key={`perf-${ti}`}
-          cx={cx}
-          cy={cy}
-          r={diam / 2}
-          fill="white"
-          stroke="#dc2626"
-          strokeWidth="0.8"
-          strokeDasharray="2 1"
-        />,
-      );
-    }
-    if (term.tipoTerminacion === "puntas_redondeadas") {
-      const radioMm = Math.max(0, Number(term.parametros.radioMm ?? 0));
-      if (radioMm <= 0) continue;
-      const r = Math.min(radioMm * scale, pieceW / 3, pieceH / 3);
-      const esqObj = (term.parametros.esquinas && typeof term.parametros.esquinas === "object"
-        ? term.parametros.esquinas
-        : {}) as Record<string, boolean>;
-      roundedPath = buildRoundedRectPath(trimX, trimY, pieceW, pieceH, r, {
-        tl: esqObj.superiorIzquierda !== false,
-        tr: esqObj.superiorDerecha !== false,
-        bl: esqObj.inferiorIzquierda !== false,
-        br: esqObj.inferiorDerecha !== false,
-      });
-    }
-  }
-  return { nodes, roundedPath };
-}
 
 function buildDefaultConfig() {
   return {
@@ -569,7 +513,6 @@ export function DigitalImposicionTab(props: ProductTabProps) {
     normalizeDigitalImposicionSnapshot(mergeImposicionConfig(props.motorConfig?.parametros, null)),
   );
   const [imposicionPreviewRaw, setImposicionPreviewRaw] = React.useState<Record<string, unknown> | null>(null);
-  const [svgZoom, setSvgZoom] = React.useState({ active: false, x: 50, y: 50 });
   const [isSavingConfig, startSavingConfig] = React.useTransition();
 
   React.useEffect(() => {
@@ -1223,248 +1166,16 @@ export function DigitalImposicionTab(props: ProductTabProps) {
               </div>
               <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
             <div className="rounded-lg border p-3">
-              <div
-                className="relative overflow-hidden rounded-md border bg-muted/20"
-                onMouseEnter={() => setSvgZoom((prev) => ({ ...prev, active: true }))}
-                onMouseLeave={() => setSvgZoom((prev) => ({ ...prev, active: false, x: 50, y: 50 }))}
-                onMouseMove={(event) => {
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  const x = ((event.clientX - rect.left) / rect.width) * 100;
-                  const y = ((event.clientY - rect.top) / rect.height) * 100;
-                  setSvgZoom({ active: true, x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)) });
-                }}
-              >
-                <svg
-                  viewBox="0 0 800 520"
-                  className="h-[320px] w-full transition-transform duration-150 ease-out"
-                  style={{
-                    transform: svgZoom.active ? "scale(2.35)" : "scale(1)",
-                    transformOrigin: `${svgZoom.x}% ${svgZoom.y}%`,
-                  }}
-                >
-                  {(() => {
-                    const canvasW = 800;
-                    const canvasH = 520;
-                    const pad = 30;
-                    const scale = Math.min((canvasW - pad * 2) / previewImposicion.hojaW, (canvasH - pad * 2) / previewImposicion.hojaH);
-                    const sheetW = previewImposicion.hojaW * scale;
-                    const sheetH = previewImposicion.hojaH * scale;
-                    const ox = (canvasW - sheetW) / 2;
-                    const oy = (canvasH - sheetH) / 2;
-                    const marginLeft = previewImposicion.margins.leftMm * scale;
-                    const marginRight = previewImposicion.margins.rightMm * scale;
-                    const marginTop = previewImposicion.margins.topMm * scale;
-                    const marginBottom = previewImposicion.margins.bottomMm * scale;
-                    const printableX = ox + marginLeft;
-                    const printableY = oy + marginTop;
-                    const printableW = Math.max(0, sheetW - marginLeft - marginRight);
-                    const printableH = Math.max(0, sheetH - marginTop - marginBottom);
-                    const lineCutMm = tipoCorteValue === "troquelado" || tipoCorteValue === "sin_corte" ? 0 : lineaCorteMm;
-                    const lineCut = previewImposicion.piezaW > 0 ? lineCutMm * scale : 0;
-                    const utilX = printableX + lineCut;
-                    const utilY = printableY + lineCut;
-                    const utilW = Math.max(0, printableW - lineCut * 2);
-                    const utilH = Math.max(0, printableH - lineCut * 2);
-                    const effectivePieceW = (previewImposicion.orientacion === "rotada" ? previewImposicion.effectiveH : previewImposicion.effectiveW) * scale;
-                    const effectivePieceH = (previewImposicion.orientacion === "rotada" ? previewImposicion.effectiveW : previewImposicion.effectiveH) * scale;
-                    // Para troquelado, la demasía visual es el sangrado del troquel
-                    const demasiaEfectivaMm = tipoCorteValue === "troquelado" ? troqueladoConfig.sangriadoTroquelMm : demasiaCorteMm;
-                    const demasiaPx = Math.max(0, demasiaEfectivaMm) * scale;
-                    // Para troquelado, el effectiveW incluye separación entre contornos que es gap vacío
-                    const sepPx = tipoCorteValue === "troquelado" ? (troqueladoConfig.separacionEntreContornosMm * scale) : 0;
-                    const pieceW = Math.max(0, effectivePieceW - demasiaPx * 2 - sepPx);
-                    const pieceH = Math.max(0, effectivePieceH - demasiaPx * 2 - sepPx);
-                    const gridW = previewImposicion.cols * effectivePieceW;
-                    const gridH = previewImposicion.rows * effectivePieceH;
-                    const centeredGridX = utilX + Math.max(0, (utilW - gridW) / 2);
-                    const centeredGridY = utilY + Math.max(0, (utilH - gridH) / 2);
-                    const blockLeft = centeredGridX;
-                    const blockTop = centeredGridY;
-                    const blockRight = centeredGridX + gridW;
-                    const blockBottom = centeredGridY + gridH;
-                    const markLen = Math.max(0, lineCutMm * scale);
-                    const markOffset = 1.6;
-
-                    // Puntillado config (para motor talonario)
-                    // El borde se define en la orientación ORIGINAL de la pieza.
-                    // Si la imposición rota la pieza 90° CW, mapeamos el borde:
-                    //   original superior → render derecho
-                    //   original inferior → render izquierdo
-                    //   original izquierdo → render superior
-                    //   original derecho → render inferior
-                    const puntilladoCfg = readConfigRecord(config.puntillado);
-                    const puntilladoHabilitado = puntilladoCfg.habilitado === true || puntilladoCfg.habilitado === "true";
-                    const puntilladoDistMm = Number(puntilladoCfg.distanciaBordeMm ?? 0);
-                    const puntilladoBordeOriginal = String(puntilladoCfg.borde ?? "superior");
-                    const puntilladoBordeRender = (() => {
-                      if (previewImposicion.orientacion !== "rotada") return puntilladoBordeOriginal;
-                      const rotMap: Record<string, string> = {
-                        superior: "derecho",
-                        inferior: "izquierdo",
-                        izquierdo: "superior",
-                        derecho: "inferior",
-                      };
-                      return rotMap[puntilladoBordeOriginal] ?? puntilladoBordeOriginal;
-                    })();
-
-                    // Encuadernación config (broches para abrochado)
-                    const encCfg = readConfigRecord(config.encuadernacion);
-                    const esAbrochado = encCfg.tipo === "abrochado";
-                    const cantGrapas = Math.max(0, Number(encCfg.cantidadGrapas ?? 0));
-
-                    // Terminaciones configuradas (desde config o trazabilidad)
-                    const terminacionesCfg = readTerminacionesArray(config.terminaciones);
-
-                    const cells = [];
-                    const cutXMap = new Map<string, number>();
-                    const cutYMap = new Map<string, number>();
-                    for (let r = 0; r < previewImposicion.rows; r++) {
-                      for (let c = 0; c < previewImposicion.cols; c++) {
-                        const x = centeredGridX + c * effectivePieceW;
-                        const y = centeredGridY + r * effectivePieceH;
-                        const halfSep = sepPx / 2;
-                        const trimX = x + demasiaPx + halfSep;
-                        const trimY = y + demasiaPx + halfSep;
-                        cutXMap.set(trimX.toFixed(2), trimX);
-                        cutXMap.set((trimX + pieceW).toFixed(2), trimX + pieceW);
-                        cutYMap.set(trimY.toFixed(2), trimY);
-                        cutYMap.set((trimY + pieceH).toFixed(2), trimY + pieceH);
-
-                        // Línea de puntillado dentro de la pieza
-                        // La distancia se mide en mm desde el borde ORIGINAL,
-                        // mapeado al borde de render según la orientación.
-                        let puntilladoLine: React.ReactNode = null;
-                        let puntilladoLinePx: { isHorizontal: boolean; pos: number; edgeStart: number; edgeEnd: number } | null = null;
-                        if (puntilladoHabilitado && puntilladoDistMm > 0) {
-                          const distPx = puntilladoDistMm * scale;
-                          if (puntilladoBordeRender === "superior" || puntilladoBordeRender === "inferior") {
-                            const ly = puntilladoBordeRender === "superior" ? trimY + distPx : trimY + pieceH - distPx;
-                            puntilladoLinePx = { isHorizontal: true, pos: ly, edgeStart: trimX, edgeEnd: trimX + pieceW };
-                            puntilladoLine = (
-                              <line x1={trimX} y1={ly} x2={trimX + pieceW} y2={ly}
-                                stroke="#d97706" strokeWidth="1.2" strokeDasharray="3 2" />
-                            );
-                          } else {
-                            const lx = puntilladoBordeRender === "izquierdo" ? trimX + distPx : trimX + pieceW - distPx;
-                            puntilladoLinePx = { isHorizontal: false, pos: lx, edgeStart: trimY, edgeEnd: trimY + pieceH };
-                            puntilladoLine = (
-                              <line x1={lx} y1={trimY} x2={lx} y2={trimY + pieceH}
-                                stroke="#d97706" strokeWidth="1.2" strokeDasharray="3 2" />
-                            );
-                          }
-                        }
-
-                        // Broches: se dibujan entre el puntillado y el borde de corte
-                        // (en la zona del "talón" que queda sujeto)
-                        const brochesNodes: React.ReactNode[] = [];
-                        if (esAbrochado && cantGrapas > 0 && puntilladoLinePx) {
-                          const br = 1.8; // radio visual del broche
-                          for (let gi = 0; gi < cantGrapas; gi++) {
-                            const t = cantGrapas === 1 ? 0.5 : (gi + 1) / (cantGrapas + 1);
-                            if (puntilladoLinePx.isHorizontal) {
-                              // Broches entre borde horizontal y línea de puntillado
-                              const bx = puntilladoLinePx.edgeStart + (puntilladoLinePx.edgeEnd - puntilladoLinePx.edgeStart) * t;
-                              // Punto medio entre la línea de puntillado y el borde de la pieza
-                              const byEdge = puntilladoBordeRender === "superior" ? trimY : trimY + pieceH;
-                              const by = (puntilladoLinePx.pos + byEdge) / 2;
-                              brochesNodes.push(
-                                <g key={`broche-${gi}`}>
-                                  <circle cx={bx} cy={by} r={br} fill="#7c3aed" fillOpacity="0.85" />
-                                  <line x1={bx - br * 0.7} y1={by} x2={bx + br * 0.7} y2={by}
-                                    stroke="#fff" strokeWidth="0.5" />
-                                </g>,
-                              );
-                            } else {
-                              // Broches entre borde vertical y línea de puntillado
-                              const by = puntilladoLinePx.edgeStart + (puntilladoLinePx.edgeEnd - puntilladoLinePx.edgeStart) * t;
-                              const bxEdge = puntilladoBordeRender === "izquierdo" ? trimX : trimX + pieceW;
-                              const bx = (puntilladoLinePx.pos + bxEdge) / 2;
-                              brochesNodes.push(
-                                <g key={`broche-${gi}`}>
-                                  <circle cx={bx} cy={by} r={br} fill="#7c3aed" fillOpacity="0.85" />
-                                  <line x1={bx} y1={by - br * 0.7} x2={bx} y2={by + br * 0.7}
-                                    stroke="#fff" strokeWidth="0.5" />
-                                </g>,
-                              );
-                            }
-                          }
-                        }
-
-                        // Terminaciones
-                        const termResult = terminacionesCfg.length > 0
-                          ? renderTerminacionNodes(terminacionesCfg, trimX, trimY, pieceW, pieceH, scale, previewImposicion.orientacion)
-                          : null;
-
-                        // Para troquelado, el rectángulo de demasía no incluye la separación (es gap vacío)
-                        const cellVisualW = effectivePieceW - sepPx;
-                        const cellVisualH = effectivePieceH - sepPx;
-                        // El rectángulo de demasía empieza en x + halfSep (trimX - demasiaPx = x + halfSep)
-                        const demasiaX = trimX - demasiaPx;
-                        const demasiaY = trimY - demasiaPx;
-
-                        cells.push(
-                          <g key={`cell-${r}-${c}`}>
-                            <rect
-                              x={demasiaX}
-                              y={demasiaY}
-                              width={cellVisualW}
-                              height={cellVisualH}
-                              fill={demasiaEfectivaMm > 0 ? "#e5e7eb" : "#dcfce7"}
-                              stroke={demasiaEfectivaMm > 0 ? "#9ca3af" : "#16a34a"}
-                              strokeWidth="0.8"
-                            />
-                            {termResult?.roundedPath ? (
-                              <path d={termResult.roundedPath} fill="#22c55e" />
-                            ) : (
-                              <rect x={trimX} y={trimY} width={pieceW} height={pieceH} fill="#22c55e" />
-                            )}
-                            {puntilladoLine}
-                            {brochesNodes}
-                            {termResult?.nodes}
-                          </g>,
-                        );
-                      }
-                    }
-
-                    const guillotinaMarks: React.ReactNode[] = [];
-                    if (markLen > 0) {
-                      for (const x of cutXMap.values()) {
-                        const topY = blockTop - markOffset;
-                        const botY = blockBottom + markOffset;
-                        guillotinaMarks.push(
-                          <g key={`cut-x-${x.toFixed(2)}`}>
-                            <line x1={x} y1={topY - markLen / 2} x2={x} y2={topY + markLen / 2} stroke="#111827" strokeWidth="0.9" />
-                            <line x1={x} y1={botY - markLen / 2} x2={x} y2={botY + markLen / 2} stroke="#111827" strokeWidth="0.9" />
-                          </g>,
-                        );
-                      }
-                      for (const y of cutYMap.values()) {
-                        const leftX = blockLeft - markOffset;
-                        const rightX = blockRight + markOffset;
-                        guillotinaMarks.push(
-                          <g key={`cut-y-${y.toFixed(2)}`}>
-                            <line x1={leftX - markLen / 2} y1={y} x2={leftX + markLen / 2} y2={y} stroke="#111827" strokeWidth="0.9" />
-                            <line x1={rightX - markLen / 2} y1={y} x2={rightX + markLen / 2} y2={y} stroke="#111827" strokeWidth="0.9" />
-                          </g>,
-                        );
-                      }
-                    }
-
-                    return (
-                      <>
-                        <rect x={ox} y={oy} width={sheetW} height={sheetH} fill="#fecaca" stroke="#7f1d1d" strokeWidth="1.6" />
-                        <rect x={printableX} y={printableY} width={printableW} height={printableH} fill="#fff" stroke="#b91c1c" strokeWidth="0.9" />
-                        <rect x={utilX} y={utilY} width={utilW} height={utilH} fill="#ecfccb" fillOpacity="0.4" />
-                        {cells}
-                        {guillotinaMarks}
-                      </>
-                    );
-                  })()}
-                </svg>
-                <div className="pointer-events-none absolute bottom-2 right-2 rounded bg-background/90 px-2 py-1 text-[11px] text-muted-foreground">
-                  Hover para zoom
-                </div>
-              </div>
+              {(() => {
+                const { container, placements } = toNestingPreviewInputs(previewImposicion);
+                return (
+                  <NestingPreview
+                    container={container}
+                    placements={placements}
+                    maxHeightPx={360}
+                  />
+                );
+              })()}
             </div>
                 <div className="rounded-lg border p-3">
                   <div className="overflow-hidden rounded-md border">
