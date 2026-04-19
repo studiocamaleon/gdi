@@ -48,6 +48,60 @@ export async function getMotoresCostoCatalogo() {
   return apiRequest<MotorCostoCatalogItem[]>('/productos-servicios/motores');
 }
 
+// P1.1 · Ruta completa read-only de una variante
+export type RutaCompletaOperacion = {
+  id: string;
+  orden: number;
+  codigo: string;
+  nombre: string;
+  tipoOperacion: string;
+  familiaV2: string | null;
+  unidadProductivaV2: string | null;
+  activacionV2: string | null;
+  esOpcional: boolean;
+  activo: boolean;
+  setupMin: number | null;
+  cleanupMin: number | null;
+  tiempoFijoMin: number | null;
+  productividadBase: number | null;
+  modoProductividad: string;
+  unidadTiempo: string;
+  centroCosto: { id: string; nombre: string } | null;
+  maquina: { id: string; nombre: string; plantilla: string | null } | null;
+  perfilOperativo: {
+    id: string;
+    nombre: string;
+    productivityValue: number | null;
+    setupMin: number | null;
+  } | null;
+  configNestingV2: unknown;
+  materialesConsumidos: Array<{
+    id: string;
+    nombre: string;
+    formula: string;
+    cantidadPorUnidad: number;
+    unidad: string;
+    precioManual: number | null;
+    aplicaMultiCaras: boolean;
+    orden: number;
+    materiaPrimaVariante: { id: string; sku: string; precioReferencia: number | null } | null;
+  }>;
+};
+
+export type RutaCompleta = {
+  varianteId: string;
+  productoServicioId: string;
+  procesoDefinicionId: string | null;
+  procesoNombre: string | null;
+  operaciones: RutaCompletaOperacion[];
+};
+
+export async function getRutaCompletaPorVariante(varianteId: string) {
+  return apiRequest<RutaCompleta>(
+    `/productos-servicios/variantes/${varianteId}/ruta-completa`,
+  );
+}
+
 // ────────────── C.7: Shadow logs dashboard ──────────────
 
 export type ShadowLogListItem = {

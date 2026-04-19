@@ -25,6 +25,7 @@ import { digitalMotorUi } from "@/components/productos-servicios/motors/digital.
 import { ProductoGeneralTab } from "@/components/productos-servicios/producto-general-tab";
 import { ProductoPrecioTab } from "@/components/productos-servicios/producto-precio-tab";
 import { ProductoRutaBaseTab } from "@/components/productos-servicios/producto-ruta-base-tab";
+import { ProductoRutaProduccionTab } from "@/components/productos-servicios/producto-ruta-produccion-tab";
 import { ProductoSimularVentaTab } from "@/components/productos-servicios/producto-simular-venta-tab";
 import { ProductoStandardTabPlaceholder } from "@/components/productos-servicios/producto-standard-tab-placeholder";
 import { ProductoVariantesTab } from "@/components/productos-servicios/producto-variantes-tab";
@@ -60,7 +61,8 @@ const STANDARD_TABS: Array<{
 }> = [
   { value: "general", label: "General", group: "configuracion", icon: FileTextIcon },
   { value: "variantes", label: "Variantes", group: "configuracion", icon: Layers3Icon },
-  { value: "ruta_base", label: "Ruta de producción", group: "configuracion", icon: RouteIcon },
+  { value: "ruta_base", label: "Ruta (legacy)", group: "configuracion", icon: RouteIcon },
+  { value: "ruta_produccion", label: "Ruta de producción", group: "configuracion", icon: RouteIcon },
   { value: "imposicion", label: "Imposición", group: "configuracion", icon: BlocksIcon },
   { value: "simular_costo", label: "Simular costo", group: "comercial", icon: ScanSearchIcon },
   { value: "precio", label: "Precio", group: "comercial", icon: BanknoteIcon },
@@ -90,6 +92,7 @@ function buildCommonTabRenderer(tab: ProductTabKey): React.ComponentType<Product
   if (tab === "general") return ProductoGeneralTab;
   if (tab === "variantes") return ProductoVariantesTab;
   if (tab === "ruta_base") return ProductoRutaBaseTab;
+  if (tab === "ruta_produccion") return ProductoRutaProduccionTab;
   if (tab === "precio") return ProductoPrecioTab;
   if (tab === "simular_venta") return ProductoSimularVentaTab;
   return () => <ProductTabFallback title={STANDARD_TABS.find((item) => item.value === tab)?.label ?? "Tab"} />;

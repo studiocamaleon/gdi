@@ -27,6 +27,7 @@ export const rigidPrintedMotorUi: ProductMotorUiContract = {
     "tecnologias",
     "variantes",
     "ruta_base",
+    "ruta_produccion",
     "imposicion",
     "simular_costo",
     ...(ENABLE_V2 ? ["simular_costo_v2"] : []),

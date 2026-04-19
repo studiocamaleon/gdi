@@ -646,6 +646,19 @@ export class ProductosServiciosController {
    * directo sin adapter. Los consumidores del nuevo shape ya pueden apuntar
    * a este endpoint.
    */
+  /**
+   * P1.1 — Ruta completa de una variante para el tab "Ruta de producción".
+   * Devuelve proceso + operaciones con familia, máquina, perfil, centro de
+   * costo, materiales declarativos (ProcesoOperacionMaterial).
+   */
+  @Get('variantes/:varianteId/ruta-completa')
+  getRutaCompletaPorVariante(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('varianteId') varianteId: string,
+  ) {
+    return this.service.getRutaCompletaPorVariante(auth, varianteId);
+  }
+
   @Post('variantes/:varianteId/cotizar-v2')
   cotizarVarianteV2(
     @CurrentSession() auth: CurrentAuth,

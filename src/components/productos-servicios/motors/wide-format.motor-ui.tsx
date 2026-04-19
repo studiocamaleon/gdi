@@ -42,6 +42,7 @@ export const wideFormatMotorUi: ProductMotorUiContract = {
     "general",
     "tecnologias",
     "ruta_base",
+    "ruta_produccion",
     "imposicion",
     "simular_costo",
     ...(ENABLE_V2 ? ["simular_costo_v2"] : []),

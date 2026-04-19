@@ -22,6 +22,7 @@ export type ProductTabKey =
   | "variantes"
   | "imposicion"
   | "ruta_base"
+  | "ruta_produccion"
   | "simular_costo"
   | "precio"
   | "simular_venta";

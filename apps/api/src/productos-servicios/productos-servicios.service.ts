@@ -3765,6 +3765,102 @@ export class ProductosServiciosService {
    * No se especializa por motorCodigo — sirve a cualquier producto que tenga
    * ruta asignada. Usado por SuperMotorModule para cotizar declarativamente.
    */
+  /**
+   * P1.1 — Endpoint de lectura de ruta completa para el tab "Ruta de
+   * producción". Devuelve el proceso con sus operaciones (familiaV2,
+   * máquina, perfil, centro de costo, materiales declarativos) enriquecidas
+   * para renderizar un listado read-only.
+   */
+  async getRutaCompletaPorVariante(auth: CurrentAuth, varianteId: string) {
+    const variante = await this.findVarianteCompletaOrThrow(auth, varianteId, this.prisma);
+    const procesoDefinicionId = this.resolveRutaEfectivaId(variante);
+    if (!procesoDefinicionId) {
+      return {
+        varianteId,
+        productoServicioId: variante.productoServicioId,
+        procesoDefinicionId: null,
+        procesoNombre: null,
+        operaciones: [],
+      };
+    }
+    const proceso = await this.findProcesoConOperacionesOrThrow(
+      auth,
+      procesoDefinicionId,
+      this.prisma,
+    );
+    return {
+      varianteId,
+      productoServicioId: variante.productoServicioId,
+      procesoDefinicionId: proceso.id,
+      procesoNombre: proceso.nombre,
+      operaciones: proceso.operaciones.map((op) => ({
+        id: op.id,
+        orden: op.orden,
+        codigo: op.codigo,
+        nombre: op.nombre,
+        tipoOperacion: op.tipoOperacion,
+        familiaV2: op.familiaV2,
+        unidadProductivaV2: op.unidadProductivaV2,
+        activacionV2: op.activacionV2,
+        esOpcional: op.esOpcional,
+        activo: op.activo,
+        setupMin: op.setupMin != null ? Number(op.setupMin) : null,
+        cleanupMin: op.cleanupMin != null ? Number(op.cleanupMin) : null,
+        tiempoFijoMin: op.tiempoFijoMin != null ? Number(op.tiempoFijoMin) : null,
+        productividadBase:
+          op.productividadBase != null ? Number(op.productividadBase) : null,
+        modoProductividad: op.modoProductividad,
+        unidadTiempo: op.unidadTiempo,
+        centroCosto: op.centroCosto
+          ? { id: op.centroCosto.id, nombre: op.centroCosto.nombre }
+          : null,
+        maquina: op.maquina
+          ? { id: op.maquina.id, nombre: op.maquina.nombre, plantilla: op.maquina.plantilla }
+          : null,
+        perfilOperativo: op.perfilOperativo
+          ? {
+              id: op.perfilOperativo.id,
+              nombre: op.perfilOperativo.nombre,
+              productivityValue:
+                op.perfilOperativo.productivityValue != null
+                  ? Number(op.perfilOperativo.productivityValue)
+                  : null,
+              setupMin:
+                op.perfilOperativo.setupMin != null
+                  ? Number(op.perfilOperativo.setupMin)
+                  : null,
+            }
+          : null,
+        configNestingV2: op.configNestingV2,
+        materialesConsumidos: (op as { materialesConsumidos?: unknown[] }).materialesConsumidos
+          ? ((op as { materialesConsumidos: Array<Record<string, unknown>> })
+              .materialesConsumidos).map((m) => ({
+              id: String(m.id),
+              nombre: String(m.nombre),
+              formula: String(m.formula),
+              cantidadPorUnidad: Number(m.cantidadPorUnidad),
+              unidad: String(m.unidad),
+              precioManual: m.precioManual != null ? Number(m.precioManual) : null,
+              aplicaMultiCaras: Boolean(m.aplicaMultiCaras),
+              orden: Number(m.orden ?? 0),
+              materiaPrimaVariante: m.materiaPrimaVariante
+                ? {
+                    id: String((m.materiaPrimaVariante as { id: string }).id),
+                    sku: String((m.materiaPrimaVariante as { sku: string }).sku),
+                    precioReferencia:
+                      (m.materiaPrimaVariante as { precioReferencia?: unknown }).precioReferencia != null
+                        ? Number(
+                            (m.materiaPrimaVariante as { precioReferencia: unknown }).precioReferencia,
+                          )
+                        : null,
+                  }
+                : null,
+            }))
+          : [],
+      })),
+    };
+  }
+
   async loadSuperMotorRuntime(auth: CurrentAuth, varianteId: string, periodo: string) {
     const variante = await this.findVarianteCompletaOrThrow(auth, varianteId, this.prisma);
     const procesoDefinicionId = this.resolveRutaEfectivaId(variante);

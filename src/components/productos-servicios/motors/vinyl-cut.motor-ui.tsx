@@ -1586,6 +1586,7 @@ export const vinylCutMotorUi: ProductMotorUiContract = {
     "general",
     "equipos_materiales",
     "ruta_base",
+    "ruta_produccion",
     "imposicion",
     "simular_costo",
     ...(ENABLE_V2 ? ["simular_costo_v2"] : []),
