@@ -257,8 +257,11 @@ export function MaterialesEditorSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full max-w-3xl overflow-y-auto">
-        <SheetHeader>
+      <SheetContent
+        side="right"
+        className="w-screen max-w-none overflow-y-auto data-[side=right]:w-[94vw] data-[side=right]:sm:max-w-[94vw] xl:data-[side=right]:w-[1120px] xl:data-[side=right]:sm:max-w-[1120px]"
+      >
+        <SheetHeader className="px-6 pt-6">
           <SheetTitle>Materiales de "{operacionNombre}"</SheetTitle>
           <SheetDescription>
             Cada fila declara un consumo. La <strong>fórmula</strong> define cómo escala la
@@ -268,7 +271,7 @@ export function MaterialesEditorSheet({
           </SheetDescription>
         </SheetHeader>
 
-        <div className="mt-6 space-y-6">
+        <div className="mt-6 space-y-6 px-6 pb-6">
           {isLoading ? (
             <div className="flex justify-center p-6"><GdiSpinner className="size-6" /></div>
           ) : (

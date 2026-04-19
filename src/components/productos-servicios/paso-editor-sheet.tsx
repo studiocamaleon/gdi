@@ -208,16 +208,19 @@ export function PasoEditorSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full max-w-2xl overflow-y-auto">
-        <SheetHeader>
+      <SheetContent
+        side="right"
+        className="w-screen max-w-none overflow-y-auto data-[side=right]:w-[94vw] data-[side=right]:sm:max-w-[94vw] xl:data-[side=right]:w-[1120px] xl:data-[side=right]:sm:max-w-[1120px]"
+      >
+        <SheetHeader className="px-6 pt-6">
           <SheetTitle>Editar paso "{operacion.nombre}"</SheetTitle>
           <SheetDescription>
-            Campos avanzados (<code>configNestingV2</code>, condiciones JsonLogic, niveles de
-            productividad variable) siguen viviendo en el tab "Ruta (legacy)".
+            Campos avanzados (<code>configNestingV2</code>, condiciones JsonLogic) van a
+            incorporarse a este editor en una iteración futura.
           </SheetDescription>
         </SheetHeader>
 
-        <div className="mt-6 space-y-4">
+        <div className="mt-6 space-y-4 px-6 pb-6">
           {isLoading ? (
             <div className="flex justify-center p-6">
               <GdiSpinner className="size-6" />
