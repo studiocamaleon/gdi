@@ -3,6 +3,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { InfoIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { NestingPreview } from "@/components/nesting-preview";
 
 import type { ProductTabProps } from "@/components/productos-servicios/product-detail-types";
 import { ProductoTabSection } from "@/components/productos-servicios/producto-tab-section";
@@ -765,103 +766,51 @@ function SegmentosChipEditor({
 
 // ── SVG de placa ──────────────────────────────────────────────────
 
+
+// SM.D: PlacaSvg y MultiMedidaPlacaSvg usan el componente canónico <NestingPreview>.
+// Las funciones conservan la API pública (props en mm + margenMaquina separado)
+// que los callers internos usan.
+
 export function MultiMedidaPlacaSvg({
   placaAnchoMm,
   placaAltoMm,
   posiciones,
-  largoConsumidoMm,
-  estrategia,
-  segmentoAplicadoPct,
-  segmentosPlaca,
   margenMaquina,
 }: {
   placaAnchoMm: number;
   placaAltoMm: number;
   posiciones: Array<{ x: number; y: number; anchoMm: number; altoMm: number; medidaIndex: number }>;
-  largoConsumidoMm: number;
-  estrategia: string;
-  segmentoAplicadoPct: number | null;
+  largoConsumidoMm?: number;
+  estrategia?: string;
+  segmentoAplicadoPct?: number | null;
   segmentosPlaca?: number[];
   margenMaquina: { arriba: number; abajo: number; izquierda: number; derecha: number };
 }) {
-  const needsRotate = placaAltoMm > placaAnchoMm;
-  const displayW = needsRotate ? placaAltoMm : placaAnchoMm;
-  const displayH = needsRotate ? placaAnchoMm : placaAltoMm;
-  const maxWidth = 600;
-  const scale = maxWidth / displayW;
-  const svgW = displayW * scale;
-  const svgH = displayH * scale;
-
-  const mg = needsRotate
-    ? { arriba: margenMaquina.izquierda, abajo: margenMaquina.derecha, izquierda: margenMaquina.abajo, derecha: margenMaquina.arriba }
-    : margenMaquina;
-
-  const displayPositions = needsRotate
-    ? posiciones.map((pos) => ({ ...pos, x: pos.y, y: placaAnchoMm - pos.x - pos.anchoMm, anchoMm: pos.altoMm, altoMm: pos.anchoMm }))
-    : posiciones;
-
-  // Calcular área útil de las piezas en esta placa para determinar desperdicio
-  const areaUtilPiezas = posiciones.reduce((s, p) => s + p.anchoMm * p.altoMm, 0);
-  const areaPlaca = placaAnchoMm * placaAltoMm;
-  const ocupacionPct = areaPlaca > 0 ? (areaUtilPiezas / areaPlaca) * 100 : 0;
-
-  // Área cobrada según estrategia
-  let cobradoW = 0, cobradoH = 0;
-  if (estrategia === "largo_consumido") {
-    if (needsRotate) { cobradoW = Math.min(largoConsumidoMm, displayW); cobradoH = displayH; }
-    else { cobradoW = displayW; cobradoH = Math.min(largoConsumidoMm, displayH); }
-  } else if (estrategia === "segmentos_placa") {
-    // Calcular segmento real para esta placa basado en ocupación
-    const escalones = (segmentosPlaca && segmentosPlaca.length > 0)
-      ? [...segmentosPlaca].sort((a, b) => a - b)
-      : [25, 50, 75, 100];
-    const segReal = segmentoAplicadoPct != null
-      ? segmentoAplicadoPct
-      : (escalones.find((s) => s >= ocupacionPct) ?? 100);
-    const f = segReal / 100;
-    if (needsRotate) { cobradoW = displayW * f; cobradoH = displayH; }
-    else { cobradoW = displayW; cobradoH = displayH * f; }
-  } else if (estrategia === "m2_exacto") {
-    // M² exacto: el área cobrada es exactamente el bounding box de las piezas
-    cobradoW = 0;
-    cobradoH = 0;
-  }
-
-  const MARGEN_COLOR = "#fecaca";
-  const LIBRE_COLOR = "#e0e7ef";
-  const DESPERDICIO_COLOR = "#fbbf24";
-
+  const placements = posiciones.map((pos, idx) => ({
+    x: pos.x,
+    y: pos.y,
+    anchoMm: pos.anchoMm,
+    altoMm: pos.altoMm,
+    label: `M${pos.medidaIndex + 1}`,
+    colorKey: `medida-${pos.medidaIndex}`,
+    id: `pos-${idx}`,
+  }));
   return (
-    <div className="space-y-2">
-      <svg width={svgW} height={svgH} viewBox={`0 0 ${displayW} ${displayH}`} className="border rounded bg-white">
-        <rect x={0} y={0} width={displayW} height={displayH} fill={LIBRE_COLOR} stroke="#94a3b8" strokeWidth={1} />
-        {mg.arriba > 0 && <rect x={0} y={0} width={displayW} height={mg.arriba} fill={MARGEN_COLOR} opacity={0.8} />}
-        {mg.abajo > 0 && <rect x={0} y={displayH - mg.abajo} width={displayW} height={mg.abajo} fill={MARGEN_COLOR} opacity={0.8} />}
-        {mg.izquierda > 0 && <rect x={0} y={0} width={mg.izquierda} height={displayH} fill={MARGEN_COLOR} opacity={0.8} />}
-        {mg.derecha > 0 && <rect x={displayW - mg.derecha} y={0} width={mg.derecha} height={displayH} fill={MARGEN_COLOR} opacity={0.8} />}
-        {cobradoW > 0 && cobradoH > 0 && (
-          <rect x={0} y={0} width={cobradoW} height={cobradoH} fill={DESPERDICIO_COLOR} opacity={0.5} stroke="#f59e0b" strokeWidth={0.5} strokeDasharray="4 2" />
-        )}
-        {displayPositions.map((pos, i) => (
-          <rect key={i} x={pos.x} y={pos.y} width={pos.anchoMm} height={pos.altoMm}
-            fill={MEDIDA_COLORS[pos.medidaIndex % MEDIDA_COLORS.length]}
-            stroke={MEDIDA_COLORS[pos.medidaIndex % MEDIDA_COLORS.length]}
-            strokeWidth={0.5} opacity={0.85} />
-        ))}
-        {(mg.arriba > 0 || mg.abajo > 0 || mg.izquierda > 0 || mg.derecha > 0) && (
-          <rect x={mg.izquierda} y={mg.arriba}
-            width={displayW - mg.izquierda - mg.derecha} height={displayH - mg.arriba - mg.abajo}
-            fill="none" stroke="#64748b" strokeWidth={0.5} strokeDasharray="2 2" />
-        )}
-      </svg>
-      <div className="flex gap-4 flex-wrap text-[10px] text-muted-foreground">
-        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-sm" style={{ backgroundColor: DESPERDICIO_COLOR, opacity: 0.5 }} /><span>Desperdicio cobrado</span></div>
-        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-sm" style={{ backgroundColor: LIBRE_COLOR }} /><span>Espacio libre</span></div>
-        {(mg.arriba > 0 || mg.abajo > 0 || mg.izquierda > 0 || mg.derecha > 0) && (
-          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-sm" style={{ backgroundColor: MARGEN_COLOR }} /><span>Margen no imprimible</span></div>
-        )}
-      </div>
-    </div>
+    <NestingPreview
+      container={{
+        type: 'placa',
+        anchoMm: placaAnchoMm,
+        altoMm: placaAltoMm,
+        machineMargins: {
+          topMm: margenMaquina.arriba,
+          bottomMm: margenMaquina.abajo,
+          leftMm: margenMaquina.izquierda,
+          rightMm: margenMaquina.derecha,
+        },
+      }}
+      placements={placements}
+      maxHeightPx={500}
+    />
   );
 }
 
@@ -869,156 +818,39 @@ function PlacaSvg({
   placaAnchoMm,
   placaAltoMm,
   posiciones,
-  cantidadPedida,
-  estrategia,
-  largoConsumidoMm,
-  segmentoAplicadoPct,
   margenMaquina,
 }: {
   placaAnchoMm: number;
   placaAltoMm: number;
   posiciones: Array<{ x: number; y: number; anchoMm: number; altoMm: number }>;
-  cantidadPedida: number;
-  estrategia: string;
-  largoConsumidoMm: number;
-  segmentoAplicadoPct: number | null;
+  cantidadPedida?: number;
+  estrategia?: string;
+  largoConsumidoMm?: number;
+  segmentoAplicadoPct?: number | null;
   margenMaquina: { arriba: number; abajo: number; izquierda: number; derecha: number };
 }) {
-  // Siempre dibujar lado largo horizontal
-  const needsRotate = placaAltoMm > placaAnchoMm;
-  const displayW = needsRotate ? placaAltoMm : placaAnchoMm;
-  const displayH = needsRotate ? placaAnchoMm : placaAltoMm;
-
-  const maxWidth = 600;
-  const scale = maxWidth / displayW;
-  const svgW = displayW * scale;
-  const svgH = displayH * scale;
-
-  // Rotar posiciones y márgenes si la placa se muestra rotada
-  const mg = needsRotate
-    ? { arriba: margenMaquina.izquierda, abajo: margenMaquina.derecha, izquierda: margenMaquina.abajo, derecha: margenMaquina.arriba }
-    : margenMaquina;
-
-  const displayPositions = needsRotate
-    ? posiciones.map((pos) => ({
-        x: pos.y,
-        y: placaAnchoMm - pos.x - pos.anchoMm,
-        anchoMm: pos.altoMm,
-        altoMm: pos.anchoMm,
-      }))
-    : posiciones;
-
-  // Bounding box de las piezas pedidas (para mostrar área de trabajo)
-  const piezasPedidas = displayPositions.slice(0, cantidadPedida);
-  const trabajoMaxX = piezasPedidas.reduce((max, p) => Math.max(max, p.x + p.anchoMm), 0);
-  const trabajoMaxY = piezasPedidas.reduce((max, p) => Math.max(max, p.y + p.altoMm), 0);
-
-  // Área cobrada según estrategia
-  let cobradoW = 0;
-  let cobradoH = 0;
-  if (estrategia === "largo_consumido") {
-    // Se cobra todo el ancho, hasta el largo consumido
-    if (needsRotate) {
-      cobradoW = Math.min(largoConsumidoMm, displayW);
-      cobradoH = displayH;
-    } else {
-      cobradoW = displayW;
-      cobradoH = Math.min(largoConsumidoMm, displayH);
-    }
-  } else if (estrategia === "segmentos_placa" && segmentoAplicadoPct != null) {
-    // Se cobra un % de la placa → mostrar ese % como área
-    // Distribuir proporcionalmente: cobrar desde el inicio hasta el % del largo
-    const fraccion = segmentoAplicadoPct / 100;
-    if (needsRotate) {
-      cobradoW = displayW * fraccion;
-      cobradoH = displayH;
-    } else {
-      cobradoW = displayW;
-      cobradoH = displayH * fraccion;
-    }
-  } else if (estrategia === "m2_exacto") {
-    // M² exacto: no hay desperdicio cobrado — solo se cobran las piezas
-    // No mostrar área amarilla, las piezas azules son lo que se cobra
-    cobradoW = 0;
-    cobradoH = 0;
-  }
-
-  const MARGEN_COLOR = "#fecaca";     // rojo claro — no imprimible (consistente con otros módulos)
-  const LIBRE_COLOR = "#e0e7ef";       // gris claro — espacio libre reutilizable
-  const DESPERDICIO_COLOR = "#fbbf24"; // amarillo brillante — desperdicio cobrado
-  const TRABAJO_COLOR = "#dbeafe";     // azul muy claro — zona de trabajo
-
+  const placements = posiciones.map((pos, idx) => ({
+    x: pos.x,
+    y: pos.y,
+    anchoMm: pos.anchoMm,
+    altoMm: pos.altoMm,
+    id: `pos-${idx}`,
+  }));
   return (
-    <div className="space-y-2">
-      <svg width={svgW} height={svgH} viewBox={`0 0 ${displayW} ${displayH}`} className="border rounded bg-white">
-        {/* 1. Placa completa (espacio libre reutilizable) */}
-        <rect x={0} y={0} width={displayW} height={displayH}
-          fill={LIBRE_COLOR} stroke="#94a3b8" strokeWidth={1} />
-
-        {/* 2. Márgenes no imprimibles */}
-        {mg.arriba > 0 && <rect x={0} y={0} width={displayW} height={mg.arriba} fill={MARGEN_COLOR} opacity={0.8} />}
-        {mg.abajo > 0 && <rect x={0} y={displayH - mg.abajo} width={displayW} height={mg.abajo} fill={MARGEN_COLOR} opacity={0.8} />}
-        {mg.izquierda > 0 && <rect x={0} y={0} width={mg.izquierda} height={displayH} fill={MARGEN_COLOR} opacity={0.8} />}
-        {mg.derecha > 0 && <rect x={displayW - mg.derecha} y={0} width={mg.derecha} height={displayH} fill={MARGEN_COLOR} opacity={0.8} />}
-
-        {/* 3. Área cobrada (desperdicio incluido) */}
-        {cobradoW > 0 && cobradoH > 0 && (
-          <rect x={0} y={0} width={cobradoW} height={cobradoH}
-            fill={DESPERDICIO_COLOR} opacity={0.5} stroke="#f59e0b" strokeWidth={0.5} strokeDasharray="4 2" />
-        )}
-
-        {/* 4. Piezas del trabajo (azul) */}
-        {piezasPedidas.map((pos, i) => (
-          <rect key={`work-${i}`} x={pos.x} y={pos.y} width={pos.anchoMm} height={pos.altoMm}
-            fill={PIEZA_COLOR} stroke={PIEZA_STROKE} strokeWidth={0.5} opacity={0.85} />
-        ))}
-
-        {/* Línea de corte (largo consumido) */}
-        {estrategia === "largo_consumido" && (
-          needsRotate ? (
-            cobradoW < displayW && (
-              <line x1={cobradoW} y1={0} x2={cobradoW} y2={displayH}
-                stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="6 3" />
-            )
-          ) : (
-            cobradoH < displayH && (
-              <line x1={0} y1={cobradoH} x2={displayW} y2={cobradoH}
-                stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="6 3" />
-            )
-          )
-        )}
-
-        {/* Borde de márgenes de máquina */}
-        {(mg.arriba > 0 || mg.abajo > 0 || mg.izquierda > 0 || mg.derecha > 0) && (
-          <rect x={mg.izquierda} y={mg.arriba}
-            width={displayW - mg.izquierda - mg.derecha}
-            height={displayH - mg.arriba - mg.abajo}
-            fill="none" stroke="#64748b" strokeWidth={0.5} strokeDasharray="2 2" />
-        )}
-      </svg>
-
-      {/* Leyenda */}
-      <div className="flex gap-4 flex-wrap text-[10px] text-muted-foreground">
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: PIEZA_COLOR, opacity: 0.85 }} />
-          <span>Piezas del trabajo</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: DESPERDICIO_COLOR, opacity: 0.5 }} />
-          <span>Desperdicio cobrado</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: LIBRE_COLOR }} />
-          <span>Espacio libre (otro trabajo)</span>
-        </div>
-        {(mg.arriba > 0 || mg.abajo > 0 || mg.izquierda > 0 || mg.derecha > 0) && (
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: MARGEN_COLOR }} />
-            <span>Margen no imprimible</span>
-          </div>
-        )}
-      </div>
-    </div>
+    <NestingPreview
+      container={{
+        type: 'placa',
+        anchoMm: placaAnchoMm,
+        altoMm: placaAltoMm,
+        machineMargins: {
+          topMm: margenMaquina.arriba,
+          bottomMm: margenMaquina.abajo,
+          leftMm: margenMaquina.izquierda,
+          rightMm: margenMaquina.derecha,
+        },
+      }}
+      placements={placements}
+      maxHeightPx={500}
+    />
   );
 }
-
