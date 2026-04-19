@@ -1,18 +1,18 @@
 "use client";
 
 /**
- * Etapa B.4 — Tab "Simular costo (v2)" genérico.
+ * Tab "Simular costo" — único para todos los productos (P3.b).
  *
- * Consume la shape canónica del modelo universal (/cotizar-v2) y la renderiza
- * de forma agnóstica del motor. Reemplazará los tabs motor-específicos en
- * Etapa D; por ahora convive con ellos como tab adicional cuando el feature
- * flag `ENABLE_WIDE_FORMAT_V2` está activo (Etapa B.5).
+ * Consume la shape canónica del modelo universal y la renderiza de forma
+ * agnóstica. El super motor universal es el único motor, así que este tab
+ * reemplaza a los tabs motor-específicos v1/v2 eliminados en P3.b.1/2.
  *
  * Secciones:
- *   1. Inputs de cotización (cantidad, periodo, opcional laminado, medidas)
- *   2. Resumen: total, unitario, 3 buckets
- *   3. Tabla de pasos ejecutados con desglose por paso
- *   4. Trazabilidad global (JSON expandible)
+ *   1. Inputs (cantidad, periodo, medidas si modoMedidas=LIBRE, opcionales)
+ *   2. Resumen: total, unitario, 3 buckets (centro costo, materiales, flat)
+ *   3. Tabla de pasos ejecutados
+ *   4. Selector de alternativas por paso (P1.3.e)
+ *   5. Trazabilidad técnica
  */
 
 import * as React from "react";
@@ -161,7 +161,7 @@ const MOTORS_CON_NUMEROS_TALONARIO = new Set(["talonario"]);
 /** Motores con caras + tipoImpresion. */
 const MOTORS_CON_CARAS_TIPO = new Set(["impresion_digital_laser", "talonario"]);
 
-export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
+export function ProductoSimularCostoTab(props: ProductTabProps) {
   const motorCodigo = props.producto.motorCodigo;
   const needsMedidas = !MOTORS_SIN_MEDIDAS.has(motorCodigo);
 
@@ -182,7 +182,8 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
   const [opcionesAlternativas, setOpcionesAlternativas] = React.useState<Map<string, string>>(
     new Map(),
   );
-  const [useSuperMotor, setUseSuperMotor] = React.useState(false);
+  // Post-P3.b, el super motor es el único motor; el dispatcher ya no
+  // necesita forzar nada. Se mantiene por forma.
   const [periodo, setPeriodo] = React.useState(buildDefaultPeriodo());
   const [cotizacion, setCotizacion] = React.useState<CotizacionCanonica | null>(null);
   const [isCotizando, startCotizando] = React.useTransition();
@@ -237,7 +238,7 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
               : undefined,
             parametros,
           },
-          { forceV2: !useSuperMotor, useSuperMotor },
+          {},
         );
         setCotizacion(result);
       } catch (error) {
@@ -245,7 +246,7 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
         toast.error(error instanceof Error ? error.message : "No se pudo cotizar.");
       }
     });
-  }, [selectedVariantId, cantidad, periodo, anchoMm, altoMm, conLaminado, color, numerosXTalonario, caras, tipoImpresion, opcionalesSeleccionados, opcionesAlternativas, useSuperMotor, motorCodigo, needsMedidas]);
+  }, [selectedVariantId, cantidad, periodo, anchoMm, altoMm, conLaminado, color, numerosXTalonario, caras, tipoImpresion, opcionalesSeleccionados, opcionesAlternativas, motorCodigo, needsMedidas]);
 
   // Opcionales disponibles viene de la cotización anterior (lista en trazabilidad).
   // Primera vez que abre el tab aún no hay cotización → se muestra al regresar.
@@ -272,7 +273,7 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
     alternativas: Array<{ id: string; label: string; esDefault: boolean }>;
   };
   const pasosConAlternativas: PasoConAlternativas[] = React.useMemo(() => {
-    if (!cotizacion || !useSuperMotor) return [];
+    if (!cotizacion) return [];
     const out: PasoConAlternativas[] = [];
     for (const paso of cotizacion.pasos) {
       const traza = (paso.trazabilidad ?? {}) as Record<string, unknown>;
@@ -292,7 +293,7 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
       });
     }
     return out;
-  }, [cotizacion, useSuperMotor]);
+  }, [cotizacion]);
 
   const setAlternativa = (pasoId: string, alternativaId: string | null) => {
     setOpcionesAlternativas((prev) => {
@@ -308,13 +309,12 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <CardTitle>Simular costo (v2 — modelo universal)</CardTitle>
+            <CardTitle>Simular costo</CardTitle>
             <CardDescription>
-              Cotización sobre el motor nuevo que emite la shape canónica.
-              Los costos se desglosan en 3 buckets: centro de costo, materias primas, cargos flat.
+              Cotización sobre el super motor universal. Los costos se desglosan
+              en 3 buckets: centro de costo, materias primas, cargos flat.
             </CardDescription>
           </div>
-          <Badge variant="outline">piloto Etapa B</Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -443,8 +443,8 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
           </div>
         ) : null}
 
-        {/* P1.3.e — Selector de alternativas por paso (solo super motor).
-            Visible tras la primera cotización si algún paso declara alternativas. */}
+        {/* P1.3.e — Selector de alternativas por paso. Visible tras la primera
+            cotización si algún paso declara alternativas máquina+perfil. */}
         {pasosConAlternativas.length > 0 ? (
           <div className="rounded-lg border bg-muted/10 p-3">
             <p className="mb-2 text-sm font-medium">
@@ -485,19 +485,10 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between gap-3">
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Checkbox
-              checked={useSuperMotor}
-              onCheckedChange={(v) => setUseSuperMotor(Boolean(v))}
-            />
-            <span>
-              Usar <strong>super motor</strong> (ejecuta la ruta declarativamente)
-            </span>
-          </label>
+        <div className="flex items-center justify-end gap-3">
           <Button type="button" onClick={handleCotizar} disabled={isCotizando || !selectedVariantId}>
             {isCotizando ? <GdiSpinner className="size-4" data-icon="inline-start" /> : null}
-            Cotizar {useSuperMotor ? '(super motor)' : 'v2'}
+            Cotizar
           </Button>
         </div>
 

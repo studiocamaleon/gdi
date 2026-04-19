@@ -41,8 +41,6 @@ import {
 import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sheet";
 import { CostosProductoDialog } from "@/components/comercial/costos-producto-dialog";
 import { ImposicionPreviewDialog } from "@/components/comercial/imposicion-preview-dialog";
-import { GranFormatoNestingDialog } from "@/components/comercial/gran-formato-nesting-dialog";
-import { RigidPrintedNestingDialog } from "@/components/comercial/rigid-printed-nesting-dialog";
 import { VinylCutNestingDialog } from "@/components/comercial/vinyl-cut-nesting-dialog";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -686,15 +684,8 @@ function ItemRow({
         />
       )}
 
-      {/* Nesting preview dialog — Gran Formato (always mounted to avoid 3D re-init glitch) */}
-      {hasNesting && (
-        <GranFormatoNestingDialog
-          open={nestingOpen}
-          onOpenChange={setNestingOpen}
-          productoNombre={item.productoNombre}
-          costosResponse={item.granFormato!.costosResponse}
-        />
-      )}
+      {/* Gran Formato y Rigid Printed dialogs eliminados en P3.b.3 — migrarán
+          al componente canónico <NestingPreview> contra data del super motor. */}
 
       {/* Vinyl cut nesting dialog */}
       {hasVinylNesting && vinylNestingOpen && (
@@ -703,15 +694,6 @@ function ItemRow({
           onOpenChange={setVinylNestingOpen}
           productoNombre={item.productoNombre}
           costosResponse={item.viniloCut!.costosResponse}
-        />
-      )}
-
-      {/* Rigid printed nesting dialog */}
-      {hasRpNesting && rpNestingOpen && (
-        <RigidPrintedNestingDialog
-          open={rpNestingOpen}
-          onOpenChange={setRpNestingOpen}
-          item={item}
         />
       )}
 

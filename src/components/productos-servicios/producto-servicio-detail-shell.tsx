@@ -25,6 +25,7 @@ import { digitalMotorUi } from "@/components/productos-servicios/motors/digital.
 import { ProductoGeneralTab } from "@/components/productos-servicios/producto-general-tab";
 import { ProductoPrecioTab } from "@/components/productos-servicios/producto-precio-tab";
 import { ProductoRutaProduccionTab } from "@/components/productos-servicios/producto-ruta-produccion-tab";
+import { ProductoSimularCostoTab } from "@/components/productos-servicios/producto-simular-costo-tab";
 import { ProductoSimularVentaTab } from "@/components/productos-servicios/producto-simular-venta-tab";
 import { ProductoStandardTabPlaceholder } from "@/components/productos-servicios/producto-standard-tab-placeholder";
 import { ProductoVariantesTab } from "@/components/productos-servicios/producto-variantes-tab";
@@ -90,8 +91,11 @@ function buildCommonTabRenderer(tab: ProductTabKey): React.ComponentType<Product
   if (tab === "general") return ProductoGeneralTab;
   if (tab === "variantes") return ProductoVariantesTab;
   if (tab === "ruta_produccion") return ProductoRutaProduccionTab;
+  if (tab === "simular_costo") return ProductoSimularCostoTab;
   if (tab === "precio") return ProductoPrecioTab;
   if (tab === "simular_venta") return ProductoSimularVentaTab;
+  // "imposicion" sigue usando placeholder hasta que P3.b.4 arme el visor
+  // unificado de nesting por paso.
   return () => <ProductTabFallback title={STANDARD_TABS.find((item) => item.value === tab)?.label ?? "Tab"} />;
 }
 

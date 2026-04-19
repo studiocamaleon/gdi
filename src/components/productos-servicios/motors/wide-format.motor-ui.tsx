@@ -1,56 +1,10 @@
 "use client";
 
-import type { ProductMotorUiContract, ProductTabProps } from "@/components/productos-servicios/product-detail-types";
-import { WideFormatImposicionTab } from "@/components/productos-servicios/motors/wide-format-imposicion-tab";
-import { WideFormatSimularCostoTab } from "@/components/productos-servicios/motors/wide-format-simular-costo-tab";
-import { WideFormatTecnologiasTab } from "@/components/productos-servicios/motors/wide-format-tecnologias-tab";
-import { ProductoSimularCostoV2Tab } from "@/components/productos-servicios/producto-simular-costo-v2-tab";
-import { ProductoStandardTabPlaceholder } from "@/components/productos-servicios/producto-standard-tab-placeholder";
+import type { ProductMotorUiContract } from "@/components/productos-servicios/product-detail-types";
 
-function WideFormatVariantesPlaceholder(_props: ProductTabProps) {
-  return (
-    <ProductoStandardTabPlaceholder
-      title="Variantes"
-      description="Gran formato todavía administra sus variantes técnicas fuera del esquema común de variantes."
-    />
-  );
-}
-
-// Feature flag Etapa B.5: habilita el tab "Simular costo (v2)" sobre el motor v2.
-// Convive con el tab v1; se elimina el v1 en Etapa D/E.
-const ENABLE_V2 = process.env.NEXT_PUBLIC_ENABLE_WIDE_FORMAT_V2 === "true";
-
-const baseExtraTabs = [
-  {
-    key: "tecnologias",
-    label: "Tecnologías",
-    render: WideFormatTecnologiasTab,
-  },
-];
-
-const v2ExtraTab = {
-  key: "simular_costo_v2",
-  label: "Simular costo (v2)",
-  render: ProductoSimularCostoV2Tab,
-};
-
+// P3.b.3 — Tabs estándar. "Tecnologías" subsumido por alternativas (P1.3).
+// modoMedidas=LIBRE oculta "variantes" (P3.a.2).
 export const wideFormatMotorUi: ProductMotorUiContract = {
   key: "gran_formato@1",
-  // modoMedidas=LIBRE en el producto oculta automáticamente "variantes" (P3.a.2).
-  tabOrder: [
-    "general",
-    "tecnologias",
-    "ruta_produccion",
-    "imposicion",
-    "simular_costo",
-    ...(ENABLE_V2 ? ["simular_costo_v2"] : []),
-    "precio",
-    "simular_venta",
-  ],
-  tabs: {
-    variantes: WideFormatVariantesPlaceholder,
-    imposicion: WideFormatImposicionTab,
-    simular_costo: WideFormatSimularCostoTab,
-  },
-  extraTabs: ENABLE_V2 ? [...baseExtraTabs, v2ExtraTab] : baseExtraTabs,
+  tabs: {},
 };
