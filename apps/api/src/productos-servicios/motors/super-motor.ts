@@ -235,29 +235,45 @@ export class SuperMotorModule implements ProductMotorModule {
       const totalMin = setupMin + cleanupMin + tiempoFijoMin + productividad.runMin;
       const costoCentroCosto = roundMoney((totalMin / 60) * tarifaHora);
 
-      // SM.4: materiales consumidos por el paso según su familia.
+      // SM.4 + SM.D: materiales consumidos por el paso.
+      // Prioridad:
+      //   (1) Materiales declarados en la DB (ProcesoOperacionMaterial) —
+      //       modelo universal declarativo.
+      //   (2) Fallback a plantilla imperativa por familia (transición).
       const selecciones = new Map(
         (payload.seleccionesBase ?? []).map((s) => [String(s.dimension), String(s.valor)]),
       );
-      const materialesConsumidos = calcularMaterialesDelPaso(familiaCodigo, {
-        cantidadPedida: cantidad,
-        layout: layoutAplicable,
-        configPaso: (op.configNestingV2 as Record<string, unknown> | null) ?? null,
-        variante: {
-          anchoMm: variante.anchoMm,
-          altoMm: variante.altoMm,
-          papelVariante: variante.papelVariante
-            ? {
-                id: variante.papelVariante.id,
-                sku: variante.papelVariante.sku,
-                precioReferencia: variante.papelVariante.precioReferencia,
-                atributosVarianteJson: variante.papelVariante.atributosVarianteJson,
-              }
-            : null,
-        },
-        configProducto: runtime.configProducto ?? {},
-        selecciones,
-      });
+      const materialesDeclarados = Array.isArray(
+        (op as { materialesConsumidos?: unknown }).materialesConsumidos,
+      )
+        ? ((op as { materialesConsumidos: Array<Record<string, unknown>> })
+            .materialesConsumidos)
+        : [];
+      const materialesConsumidos = materialesDeclarados.length > 0
+        ? calcularMaterialesDeclarados(materialesDeclarados, {
+            cantidadPedida: cantidad,
+            layout: layoutAplicable,
+            selecciones,
+          })
+        : calcularMaterialesDelPaso(familiaCodigo, {
+            cantidadPedida: cantidad,
+            layout: layoutAplicable,
+            configPaso: (op.configNestingV2 as Record<string, unknown> | null) ?? null,
+            variante: {
+              anchoMm: variante.anchoMm,
+              altoMm: variante.altoMm,
+              papelVariante: variante.papelVariante
+                ? {
+                    id: variante.papelVariante.id,
+                    sku: variante.papelVariante.sku,
+                    precioReferencia: variante.papelVariante.precioReferencia,
+                    atributosVarianteJson: variante.papelVariante.atributosVarianteJson,
+                  }
+                : null,
+            },
+            configProducto: runtime.configProducto ?? {},
+            selecciones,
+          });
       const costoMateriasPrimas = roundMoney(
         materialesConsumidos.reduce((acc, m) => acc + m.costo, 0),
       );
@@ -438,6 +454,73 @@ function layoutToCantidadObjetivo(layout: NestingResultUnion | null): number | n
     return Math.max(1, Math.ceil(1 / layout.result.piezasPorPlaca));
   }
   return null;
+}
+
+/**
+ * Calcula materiales consumidos a partir de las declaraciones explícitas
+ * en ProcesoOperacionMaterial. Cada declaración trae fórmula + cantidad
+ * por unidad + precio, y se evalúa contra el contexto del paso (layout
+ * del nesting, cantidad, caras).
+ */
+function calcularMaterialesDeclarados(
+  declarados: Array<Record<string, unknown>>,
+  ctx: {
+    cantidadPedida: number;
+    layout: NestingResultUnion | null;
+    selecciones: Map<string, string>;
+  },
+): import('../pasos/material-plantillas').MaterialConsumido[] {
+  const caras = (ctx.selecciones.get('caras') ?? 'simple_faz').toLowerCase();
+  const multCaras = caras === 'doble_faz' ? 2 : 1;
+  return declarados
+    .map((m) => {
+      const formula = String(m.formula ?? 'fijo');
+      const cantidadPorUnidad = Number(m.cantidadPorUnidad ?? 0);
+      const aplicaMultiCaras = Boolean(m.aplicaMultiCaras ?? false);
+      // Determinar "unidades base" según la fórmula.
+      let unidadesBase = 0;
+      if (formula === 'por_unidad_productiva') {
+        // Usa el resultado del nesting: pliegos, placas, metros lineales.
+        if (ctx.layout?.algoritmo === 'nesting-hoja') unidadesBase = ctx.layout.result.pliegosNecesarios;
+        else if (ctx.layout?.algoritmo === 'nesting-rollo')
+          unidadesBase = ctx.layout.result.consumedLengthMm / 1000;
+        else if (ctx.layout?.algoritmo === 'nesting-placa-rigida')
+          unidadesBase = Math.ceil(ctx.cantidadPedida / (ctx.layout.result.piezasPorPlaca || 1));
+        else unidadesBase = ctx.cantidadPedida;
+      } else if (formula === 'por_m2') {
+        if (ctx.layout?.algoritmo === 'nesting-hoja') {
+          const r = ctx.layout.result;
+          unidadesBase = (r.pliegoElegido.anchoMm * r.pliegoElegido.altoMm * r.pliegosNecesarios) / 1_000_000;
+        } else if (ctx.layout?.algoritmo === 'nesting-rollo') {
+          unidadesBase = ctx.layout.result.usefulAreaM2;
+        }
+      } else if (formula === 'por_pieza') {
+        unidadesBase = ctx.cantidadPedida;
+      } else if (formula === 'por_metro_lineal') {
+        if (ctx.layout?.algoritmo === 'nesting-rollo')
+          unidadesBase = ctx.layout.result.consumedLengthMm / 1000;
+      } else {
+        // 'fijo': la cantidad no escala — se usa cantidadPorUnidad directo.
+        unidadesBase = 1;
+      }
+      const cantidadReal = unidadesBase * cantidadPorUnidad * (aplicaMultiCaras ? multCaras : 1);
+      if (cantidadReal <= 0) return null;
+      // Precio: variante.precioReferencia o precioManual.
+      const variante = m.materiaPrimaVariante as { precioReferencia?: unknown } | null;
+      const precioUnitario =
+        Number(variante?.precioReferencia ?? 0) > 0
+          ? Number(variante!.precioReferencia)
+          : Number(m.precioManual ?? 0);
+      return {
+        nombre: String(m.nombre ?? 'Material'),
+        cantidad: Math.round(cantidadReal * 1000) / 1000,
+        unidad: String(m.unidad ?? 'unidad'),
+        precioUnitario,
+        costo: cantidadReal * precioUnitario,
+        fuente: 'ProcesoOperacionMaterial',
+      };
+    })
+    .filter((m): m is NonNullable<typeof m> => m !== null && m.costo > 0);
 }
 
 /**

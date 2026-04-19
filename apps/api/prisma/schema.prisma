@@ -546,6 +546,7 @@ model Tenant {
   procesosDefinicion                     ProcesoDefinicion[]
   procesoOperacionPlantillas             ProcesoOperacionPlantilla[]
   procesosOperacion                      ProcesoOperacion[]
+  procesoOperacionMateriales             ProcesoOperacionMaterial[]
   procesosVersion                        ProcesoVersion[]
   reglasDeSeleccion                      ReglaDeSeleccion[]
   cotizacionShadowLogs                   CotizacionShadowLog[]
@@ -1312,6 +1313,7 @@ model ProcesoOperacion {
   perfilOperativo             MaquinaPerfilOperativo?    @relation("ProcesoOperacionPerfil", fields: [perfilOperativoId], references: [id], onDelete: SetNull)
   requiresProductoAdicional   ProductoAdicionalCatalogo? @relation("ProductoAdicionalCondicionOperacion", fields: [requiresProductoAdicionalId], references: [id], onDelete: SetNull)
   productoChecklistReglasPaso ProductoChecklistRegla[]   @relation("ProductoChecklistReglaOperacion")
+  materialesConsumidos        ProcesoOperacionMaterial[] @relation("ProcesoOperacionMaterialOperacion")
 
   @@unique([tenantId, procesoDefinicionId, orden])
   @@unique([tenantId, procesoDefinicionId, codigo])
@@ -1320,6 +1322,49 @@ model ProcesoOperacion {
   @@index([tenantId, maquinaId])
   @@index([tenantId, perfilOperativoId])
   @@index([tenantId, requiresProductoAdicionalId])
+}
+
+/// SM.D — Materiales consumidos por un paso de producción (modelo universal).
+/// Cada paso declara sus consumos: qué materia prima, fórmula de cálculo,
+/// cantidad por unidad productiva, si aplica multiplicador por caras, etc.
+/// Reemplaza las "plantillas" imperativas por paso-a-paso declarativo.
+model ProcesoOperacionMaterial {
+  id                      String                 @id @default(uuid()) @db.Uuid
+  tenantId                String                 @db.Uuid
+  procesoOperacionId      String                 @db.Uuid
+  /// Variante específica que se consume. Null = material "genérico"
+  /// (ej: clics de impresora — no tienen MateriaPrima).
+  materiaPrimaVarianteId  String?                @db.Uuid
+  /// Etiqueta legible del material (ej. "Papel Opalina 250gr", "Clics CMYK").
+  nombre                  String
+  /// Fórmula de cálculo de la cantidad consumida:
+  ///   - por_unidad_productiva: usa la unidad productiva del paso × cantidad
+  ///     (ej. 1 pliego de papel × pliegos nesting = cantidad pliegos)
+  ///   - por_m2: usa m² útil del nesting
+  ///   - por_pieza: usa cantidad de piezas pedidas
+  ///   - por_metro_lineal: usa metros consumidos del rollo
+  ///   - fijo: usa `cantidadPorUnidad` directo, ignora multiplicadores
+  formula                 String
+  cantidadPorUnidad       Decimal                @db.Decimal(14, 6)
+  unidad                  String                 // 'pliego', 'm2', 'ml', 'gramo', 'unidad', etc.
+  /// Precio unitario si no hay materiaPrimaVariante (ej. clics). Si hay
+  /// variante, se lee `MateriaPrimaVariante.precioReferencia` y este campo
+  /// queda nulo o como override manual.
+  precioManual            Decimal?               @db.Decimal(14, 4)
+  /// Para pasos con modoNesting=produce y selección "caras": si true, la
+  /// cantidad se multiplica × 2 en doble faz (ej. clics). Si false, no
+  /// se duplica (ej. papel — misma hoja se imprime ambas caras).
+  aplicaMultiCaras        Boolean                @default(false)
+  orden                   Int                    @default(0)
+  activo                  Boolean                @default(true)
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  tenant                  Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  procesoOperacion        ProcesoOperacion       @relation("ProcesoOperacionMaterialOperacion", fields: [procesoOperacionId], references: [id], onDelete: Cascade)
+  materiaPrimaVariante    MateriaPrimaVariante?  @relation("ProcesoOperacionMaterialMateriaPrimaVariante", fields: [materiaPrimaVarianteId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, procesoOperacionId, activo])
+  @@index([tenantId, materiaPrimaVarianteId])
 }
 
 model ProcesoVersion {
@@ -1412,6 +1457,7 @@ model MateriaPrimaVariante {
   productoAdicionalMaterialEffects ProductoAdicionalMaterialEffect[]
   productoChecklistReglasMaterial  ProductoChecklistRegla[] @relation("ProductoChecklistReglaMateriaPrima")
   granFormatoVariantes             GranFormatoVariante[]
+  procesoOperacionMateriales       ProcesoOperacionMaterial[] @relation("ProcesoOperacionMaterialMateriaPrimaVariante")
 
   @@unique([tenantId, sku])
   @@index([tenantId, materiaPrimaId, activo])

@@ -13067,6 +13067,12 @@ export class ProductosServiciosService {
             maquina: true,
             perfilOperativo: true,
             requiresProductoAdicional: true,
+            // SM.D: materiales declarativos por paso.
+            materialesConsumidos: {
+              where: { activo: true },
+              include: { materiaPrimaVariante: true },
+              orderBy: [{ orden: 'asc' }],
+            },
           },
           orderBy: [{ orden: 'asc' }],
         },
