@@ -38,6 +38,13 @@ import type {
 import { evaluateProductividad } from '../../procesos/proceso-productividad.engine';
 import { ModoProductividadProceso } from '@prisma/client';
 import { FAMILIAS_PASO } from '../pasos/familias';
+import {
+  runNestingPipeline,
+  getLayoutHeredado,
+  type PasoRuntime,
+  type MaterialMaquinaContext,
+  type NestingResultUnion,
+} from '../engine/nesting-runner';
 
 function roundMoney(n: number): number {
   return Math.round(n * 100) / 100;
@@ -128,6 +135,32 @@ export class SuperMotorModule implements ProductMotorModule {
     const pasos: PasoCotizado[] = [];
     const warnings: string[] = [];
 
+    // ──────────────── SM.2: Nesting pipeline ────────────────
+    // Ejecuta el nesting una sola vez para toda la ruta. El output se usa
+    // para mejorar cantidadObjetivoSalida (pliegos vs piezas) y para
+    // exponer placements en la trazabilidad del paso `produce`.
+    const trabajoMedidas = this.resolverMedidasTrabajo(payload, variante, cantidad);
+    const materialMaquina = this.resolverMaterialMaquinaContext(
+      runtime,
+      operacionesAEjecutar,
+    );
+    const pasosRuntime: PasoRuntime[] = operacionesAEjecutar
+      .map((op) => ({
+        id: op.id,
+        familiaCodigo: op.familiaV2 ?? inferirFamiliaDesdeTipo(op.tipoOperacion, op.nombre),
+        configNesting: (op.configNestingV2 as Record<string, unknown> | null) ?? null,
+      }))
+      .filter((p) => FAMILIAS_PASO[p.familiaCodigo] != null);
+    const nestingOutput =
+      pasosRuntime.length > 0
+        ? runNestingPipeline({
+            pasos: pasosRuntime,
+            familiasMap: FAMILIAS_PASO,
+            trabajo: { medidas: trabajoMedidas, cantidadTotal: cantidad },
+            materialMaquina,
+          })
+        : null;
+
     for (const op of operacionesAEjecutar) {
       const tarifaHora =
         op.centroCostoId && tarifaByCentro.get(op.centroCostoId) != null
@@ -139,10 +172,23 @@ export class SuperMotorModule implements ProductMotorModule {
         );
       }
 
-      // Productividad: usa la engine existente.
-      // cantidadObjetivoSalida = cantidad pedida (simplificación inicial;
-      // en SM.1.b usa nesting para pliegos/piezas por placa).
-      const cantidadObjetivoSalida = cantidad;
+      // Productividad: `cantidadObjetivoSalida` depende del modoNesting:
+      //  - 'produce' → pliegos/placas/largo que el paso efectivamente imprime.
+      //  - 'consume' → lo mismo que el produce del que hereda (ej. cortes
+      //    sobre los mismos pliegos).
+      //  - 'none'    → cantidad de piezas pedidas.
+      const familiaCodigo = op.familiaV2 ?? inferirFamiliaDesdeTipo(op.tipoOperacion, op.nombre);
+      const familia = FAMILIAS_PASO[familiaCodigo] ?? null;
+      const nestingPropio = nestingOutput?.layoutsPorPasoId.get(op.id) ?? null;
+      const nestingHeredado =
+        nestingOutput && familia?.modoNesting === 'consume'
+          ? getLayoutHeredado(nestingOutput, op.id)
+          : null;
+      const layoutAplicable = nestingPropio ?? nestingHeredado;
+      const cantidadObjetivoSalida =
+        familia?.modoNesting === 'produce' || familia?.modoNesting === 'consume'
+          ? layoutToCantidadObjetivo(layoutAplicable) ?? cantidad
+          : cantidad;
       const productividad = evaluateProductividad({
         modoProductividad: op.modoProductividad ?? ModoProductividadProceso.FIJA,
         productividadBase: op.productividadBase,
@@ -167,11 +213,9 @@ export class SuperMotorModule implements ProductMotorModule {
       const totalMin = setupMin + cleanupMin + tiempoFijoMin + productividad.runMin;
       const costoCentroCosto = roundMoney((totalMin / 60) * tarifaHora);
 
-      const familia = op.familiaV2 ? FAMILIAS_PASO[op.familiaV2] ?? null : null;
-
       pasos.push({
         id: `P-${String(op.orden).padStart(2, '0')}-${op.codigo}`,
-        tipo: op.familiaV2 ?? 'operacion_manual',
+        tipo: familiaCodigo,
         nombre: op.nombre,
         costoCentroCosto,
         costoMateriasPrimas: 0, // SM.2: plantillas por familia
@@ -203,7 +247,11 @@ export class SuperMotorModule implements ProductMotorModule {
           productividadAplicada: productividad.productividadAplicada,
           mermaRunPctAplicada: productividad.mermaRunPctAplicada,
           mermaSetupAplicada: productividad.mermaSetupAplicada,
-          // SM.2: aquí irán los detalles de materiales consumidos
+          // SM.2: layout del nesting aplicable al paso (propio o heredado).
+          nesting: layoutAplicable
+            ? summarizeLayout(layoutAplicable, Boolean(nestingHeredado))
+            : null,
+          // SM.3: aquí irán los detalles de materiales consumidos por familia.
           materiales: [],
         },
       });
@@ -244,7 +292,174 @@ export class SuperMotorModule implements ProductMotorModule {
         procesoDefinicionId: proceso.id,
         procesoNombre: proceso.nombre,
         opcionalesDisponibles,
+        nestingRuta: nestingOutput
+          ? {
+              pasosProduce: Array.from(nestingOutput.layoutsPorPasoId.keys()),
+              consumeMap: Array.from(nestingOutput.consumeMap.entries()).map(
+                ([consumerId, produceId]) => ({ consumerId, produceId }),
+              ),
+              consumersSinProduce: nestingOutput.consumersSinProduce,
+            }
+          : null,
       },
     };
   }
+
+  // ──────────────── Helpers privados ────────────────
+
+  /**
+   * Resuelve las medidas de piezas a nestar. Prioridad:
+   * (a) payload.parametros.medidas (explícito del cliente)
+   * (b) payload.parametros.{anchoMm, altoMm} + cantidad
+   * (c) variante.{anchoMm, altoMm} + cantidad (default)
+   */
+  private resolverMedidasTrabajo(
+    payload: CotizarProductoVarianteDto,
+    variante: { anchoMm: unknown; altoMm: unknown },
+    cantidad: number,
+  ): Array<{ anchoMm: number; altoMm: number; cantidad: number }> {
+    const params = (payload.parametros ?? {}) as Record<string, unknown>;
+    if (Array.isArray(params.medidas) && params.medidas.length > 0) {
+      return (params.medidas as Array<Record<string, unknown>>)
+        .map((m) => ({
+          anchoMm: Number(m.anchoMm ?? 0),
+          altoMm: Number(m.altoMm ?? 0),
+          cantidad: Math.max(1, Math.floor(Number(m.cantidad ?? 1))),
+        }))
+        .filter((m) => m.anchoMm > 0 && m.altoMm > 0);
+    }
+    const anchoPayload = Number(params.anchoMm ?? 0);
+    const altoPayload = Number(params.altoMm ?? 0);
+    if (anchoPayload > 0 && altoPayload > 0) {
+      return [{ anchoMm: anchoPayload, altoMm: altoPayload, cantidad }];
+    }
+    const anchoV = Number(variante.anchoMm ?? 0);
+    const altoV = Number(variante.altoMm ?? 0);
+    if (anchoV > 0 && altoV > 0) {
+      return [{ anchoMm: anchoV, altoMm: altoV, cantidad }];
+    }
+    return [];
+  }
+
+  /**
+   * Resuelve el contexto material/máquina para el nesting:
+   *  - nesting-hoja: no requiere material context (los pliegos candidatos vienen de configNestingV2).
+   *  - nesting-rollo: lee printableWidth y márgenes de la máquina del paso produce.
+   *  - nesting-placa-rigida: lee placa ancho/alto del material asignado al paso produce
+   *    (en este piloto, si la config del paso tiene placaAnchoMm/placaAltoMm se usa directo).
+   */
+  private resolverMaterialMaquinaContext(
+    _runtime: Awaited<ReturnType<ProductosServiciosService['loadSuperMotorRuntime']>>,
+    operacionesAEjecutar: Array<{
+      familiaV2: string | null;
+      maquina: { parametrosTecnicosJson?: unknown } | null;
+    }>,
+  ): MaterialMaquinaContext | undefined {
+    const opImpresion = operacionesAEjecutar.find((op) => {
+      if (!op.familiaV2) return false;
+      const f = FAMILIAS_PASO[op.familiaV2];
+      return f?.modoNesting === 'produce';
+    });
+    if (!opImpresion?.maquina?.parametrosTecnicosJson) return undefined;
+    const p = opImpresion.maquina.parametrosTecnicosJson as Record<string, unknown>;
+    return {
+      maquinaPrintableWidthMm: Number(p.printableWidthMm ?? p.anchoMaximo ?? 0) || undefined,
+      maquinaMarginLeftMm: Number(p.margenIzquierdo ?? 0) || undefined,
+      maquinaMarginStartMm: Number(p.margenSuperior ?? 0) || undefined,
+      maquinaMarginEndMm: Number(p.margenInferior ?? 0) || undefined,
+    };
+  }
+}
+
+/**
+ * Dado un layout, devuelve el número de "unidades productivas" para usar
+ * como cantidadObjetivoSalida en la engine de productividad.
+ *   - nesting-hoja: pliegosNecesarios
+ *   - nesting-rollo: metros lineales consumidos (⌈ consumedLengthMm / 1000 ⌉)
+ *   - nesting-placa-rigida: placas necesarias (piezasPorPlaca=0 → 0)
+ */
+function layoutToCantidadObjetivo(layout: NestingResultUnion | null): number | null {
+  if (!layout) return null;
+  if (layout.algoritmo === 'nesting-hoja') return layout.result.pliegosNecesarios;
+  if (layout.algoritmo === 'nesting-rollo') {
+    return Math.ceil(layout.result.consumedLengthMm / 1000);
+  }
+  if (layout.algoritmo === 'nesting-placa-rigida') {
+    if (layout.result.piezasPorPlaca === 0) return 0;
+    return Math.max(1, Math.ceil(1 / layout.result.piezasPorPlaca));
+  }
+  return null;
+}
+
+/**
+ * Infere el familiaV2 de una operación a partir de su tipoOperacion +
+ * nombre, para productos legacy donde `familiaV2` no está seteado todavía
+ * (pre-migración). Permite que el super motor funcione sin backfill de data.
+ */
+function inferirFamiliaDesdeTipo(tipoOperacion: string, nombre: string): string {
+  const low = nombre.toLowerCase();
+  switch (tipoOperacion) {
+    case 'PREPRENSA':
+      return 'pre_prensa';
+    case 'IMPRESION':
+      if (low.includes('rollo') || low.includes('latex') || low.includes('solvente')) {
+        return 'impresion_por_area';
+      }
+      if (low.includes('uv') || low.includes('pieza') || low.includes('cnc')) {
+        return 'impresion_por_pieza';
+      }
+      return 'impresion_por_hoja';
+    case 'TERMINACION':
+      if (low.includes('laminado') || low.includes('plastif')) return 'laminado';
+      if (low.includes('corte') || low.includes('guillot') || low.includes('plotter'))
+        return 'corte';
+      if (low.includes('encuadern') || low.includes('anillado') || low.includes('espiral'))
+        return 'encuadernado';
+      if (low.includes('foil') || low.includes('relieve') || low.includes('hot-stamp'))
+        return 'acabado_decorativo';
+      if (low.includes('troquelado')) return 'troquelado';
+      if (low.includes('perforado')) return 'perforado';
+      if (low.includes('plegado')) return 'plegado';
+      return 'operacion_manual';
+    case 'EMPAQUE':
+    case 'LOGISTICA':
+      return 'operacion_manual';
+    default:
+      return 'operacion_manual';
+  }
+}
+
+/** Sumario compacto del layout para trazabilidad del paso. */
+function summarizeLayout(layout: NestingResultUnion, heredado: boolean) {
+  const base = { algoritmo: layout.algoritmo, heredado };
+  if (layout.algoritmo === 'nesting-hoja') {
+    return {
+      ...base,
+      pliegoElegido: layout.result.pliegoElegido,
+      pliegosNecesarios: layout.result.pliegosNecesarios,
+      piezasPorPliego: layout.result.piezasPorPliego,
+      columnas: layout.result.columnas,
+      filas: layout.result.filas,
+      aprovechamientoPct: layout.result.aprovechamientoPct,
+      placements: layout.result.placements,
+    };
+  }
+  if (layout.algoritmo === 'nesting-rollo') {
+    return {
+      ...base,
+      consumedLengthMm: layout.result.consumedLengthMm,
+      usefulAreaM2: layout.result.usefulAreaM2,
+      panelCount: layout.result.panelCount,
+      orientacion: layout.result.orientacion,
+      placements: layout.result.placements,
+    };
+  }
+  return {
+    ...base,
+    piezasPorPlaca: layout.result.piezasPorPlaca,
+    columnas: layout.result.columnas,
+    filas: layout.result.filas,
+    rotada: layout.result.rotada,
+    placements: layout.result.placements,
+  };
 }
