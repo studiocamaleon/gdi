@@ -854,6 +854,7 @@ export async function cotizarProductoVarianteV2(
     checklistRespuestas?: Array<{ preguntaId: string; respuestaId: string }>;
     opcionalesSeleccionados?: string[];
     nivelesSeleccionados?: Array<{ operacionId: string; nivelId: string }>;
+    opcionesSeleccionadas?: Array<{ pasoId: string; alternativaId: string }>;
     parametros?: Record<string, unknown>;
   },
   options: { forceV2?: boolean; useSuperMotor?: boolean } = {},

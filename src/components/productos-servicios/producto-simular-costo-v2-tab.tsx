@@ -176,6 +176,12 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
   const [opcionalesSeleccionados, setOpcionalesSeleccionados] = React.useState<Set<string>>(
     new Set(),
   );
+  // P1.3.e — selección de alternativas por paso (Map pasoId → alternativaId).
+  // Se recopila tras la primera cotización con el super motor (los pasos
+  // exponen `alternativasDisponibles` en su trazabilidad).
+  const [opcionesAlternativas, setOpcionesAlternativas] = React.useState<Map<string, string>>(
+    new Map(),
+  );
   const [useSuperMotor, setUseSuperMotor] = React.useState(false);
   const [periodo, setPeriodo] = React.useState(buildDefaultPeriodo());
   const [cotizacion, setCotizacion] = React.useState<CotizacionCanonica | null>(null);
@@ -216,6 +222,9 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
               },
             ]
           : undefined;
+        const opcionesSeleccionadas = Array.from(opcionesAlternativas.entries()).map(
+          ([pasoId, alternativaId]) => ({ pasoId, alternativaId }),
+        );
         const result = await cotizarProductoVarianteV2(
           selectedVariantId,
           {
@@ -223,6 +232,9 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
             periodo,
             seleccionesBase: seleccionesBase as never,
             opcionalesSeleccionados: Array.from(opcionalesSeleccionados),
+            opcionesSeleccionadas: opcionesSeleccionadas.length > 0
+              ? opcionesSeleccionadas
+              : undefined,
             parametros,
           },
           { forceV2: !useSuperMotor, useSuperMotor },
@@ -233,7 +245,7 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
         toast.error(error instanceof Error ? error.message : "No se pudo cotizar.");
       }
     });
-  }, [selectedVariantId, cantidad, periodo, anchoMm, altoMm, conLaminado, color, numerosXTalonario, caras, tipoImpresion, opcionalesSeleccionados, useSuperMotor, motorCodigo, needsMedidas]);
+  }, [selectedVariantId, cantidad, periodo, anchoMm, altoMm, conLaminado, color, numerosXTalonario, caras, tipoImpresion, opcionalesSeleccionados, opcionesAlternativas, useSuperMotor, motorCodigo, needsMedidas]);
 
   // Opcionales disponibles viene de la cotización anterior (lista en trazabilidad).
   // Primera vez que abre el tab aún no hay cotización → se muestra al regresar.
@@ -248,6 +260,45 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  };
+
+  // P1.3.e — Extraer pasos con alternativas de la trazabilidad para armar selectores.
+  type PasoConAlternativas = {
+    operacionId: string;
+    pasoNombre: string;
+    seleccionadaId: string | null;
+    alternativas: Array<{ id: string; label: string; esDefault: boolean }>;
+  };
+  const pasosConAlternativas: PasoConAlternativas[] = React.useMemo(() => {
+    if (!cotizacion || !useSuperMotor) return [];
+    const out: PasoConAlternativas[] = [];
+    for (const paso of cotizacion.pasos) {
+      const traza = (paso.trazabilidad ?? {}) as Record<string, unknown>;
+      const operacionId = traza.operacionId as string | undefined;
+      const alts = traza.alternativasDisponibles as
+        | Array<{ id: string; label: string; esDefault: boolean }>
+        | undefined;
+      const sel = traza.alternativaSeleccionada as
+        | { id: string; fuente: "cliente" | "default" }
+        | undefined;
+      if (!operacionId || !Array.isArray(alts) || alts.length === 0) continue;
+      out.push({
+        operacionId,
+        pasoNombre: paso.nombre,
+        seleccionadaId: sel?.id ?? null,
+        alternativas: alts,
+      });
+    }
+    return out;
+  }, [cotizacion, useSuperMotor]);
+
+  const setAlternativa = (pasoId: string, alternativaId: string | null) => {
+    setOpcionesAlternativas((prev) => {
+      const next = new Map(prev);
+      if (alternativaId === null) next.delete(pasoId);
+      else next.set(pasoId, alternativaId);
       return next;
     });
   };
@@ -388,6 +439,48 @@ export function ProductoSimularCostoV2Tab(props: ProductTabProps) {
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
               Los pasos opcionales de la ruta del producto se suman al costo cuando los marcás.
+            </p>
+          </div>
+        ) : null}
+
+        {/* P1.3.e — Selector de alternativas por paso (solo super motor).
+            Visible tras la primera cotización si algún paso declara alternativas. */}
+        {pasosConAlternativas.length > 0 ? (
+          <div className="rounded-lg border bg-muted/10 p-3">
+            <p className="mb-2 text-sm font-medium">
+              Alternativas por paso (máquina · perfil)
+            </p>
+            <div className="grid gap-3 md:grid-cols-2">
+              {pasosConAlternativas.map((p) => {
+                const clienteElegida = opcionesAlternativas.get(p.operacionId);
+                const value = clienteElegida ?? p.seleccionadaId ?? "";
+                return (
+                  <label key={p.operacionId} className="flex flex-col gap-1 text-sm">
+                    <span className="font-medium">{p.pasoNombre}</span>
+                    <select
+                      value={value}
+                      onChange={(e) =>
+                        setAlternativa(
+                          p.operacionId,
+                          e.target.value === "" ? null : e.target.value,
+                        )
+                      }
+                      className="h-9 rounded-md border bg-background px-2 text-sm"
+                    >
+                      {p.alternativas.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.label}
+                          {a.esDefault ? " · default" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Cuando un paso de la ruta declara alternativas, acá elegís cuál aplicar. Si no
+              cambiás nada, se usa la marcada <strong>default</strong>.
             </p>
           </div>
         ) : null}
