@@ -3779,11 +3779,27 @@ export class ProductosServiciosService {
       },
       select: { centroCostoId: true, tarifaCalculada: true },
     });
+    // SM.4: levanta la config v2 del producto (auto-crea desde v1 si falta).
+    // Contiene valores default de precios (papel, tinta, film, bolsa) que
+    // las plantillas de materiales usan como fallback.
+    let configProducto: Record<string, unknown> = {};
+    try {
+      const { parametrosJson } = await this.ensureV2ConfigFromV1(
+        auth,
+        variante.productoServicioId,
+        variante.productoServicio.motorCodigo,
+      );
+      configProducto = (parametrosJson as Record<string, unknown>) ?? {};
+    } catch {
+      // Si el producto no tiene ni v1 ni v2 ni defaults del motor, seguimos
+      // con config vacía — las plantillas usarán sus propios defaults.
+    }
     return {
       variante,
       producto: variante.productoServicio,
       proceso,
       tarifaByCentro: new Map(tarifas.map((t) => [t.centroCostoId, Number(t.tarifaCalculada)])),
+      configProducto,
     };
   }
 

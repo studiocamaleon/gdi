@@ -45,6 +45,7 @@ import {
   type MaterialMaquinaContext,
   type NestingResultUnion,
 } from '../engine/nesting-runner';
+import { calcularMaterialesDelPaso } from '../pasos/material-plantillas';
 
 function roundMoney(n: number): number {
   return Math.round(n * 100) / 100;
@@ -213,12 +214,39 @@ export class SuperMotorModule implements ProductMotorModule {
       const totalMin = setupMin + cleanupMin + tiempoFijoMin + productividad.runMin;
       const costoCentroCosto = roundMoney((totalMin / 60) * tarifaHora);
 
+      // SM.4: materiales consumidos por el paso según su familia.
+      const selecciones = new Map(
+        (payload.seleccionesBase ?? []).map((s) => [String(s.dimension), String(s.valor)]),
+      );
+      const materialesConsumidos = calcularMaterialesDelPaso(familiaCodigo, {
+        cantidadPedida: cantidad,
+        layout: layoutAplicable,
+        configPaso: (op.configNestingV2 as Record<string, unknown> | null) ?? null,
+        variante: {
+          anchoMm: variante.anchoMm,
+          altoMm: variante.altoMm,
+          papelVariante: variante.papelVariante
+            ? {
+                id: variante.papelVariante.id,
+                sku: variante.papelVariante.sku,
+                precioReferencia: variante.papelVariante.precioReferencia,
+                atributosVarianteJson: variante.papelVariante.atributosVarianteJson,
+              }
+            : null,
+        },
+        configProducto: runtime.configProducto ?? {},
+        selecciones,
+      });
+      const costoMateriasPrimas = roundMoney(
+        materialesConsumidos.reduce((acc, m) => acc + m.costo, 0),
+      );
+
       pasos.push({
         id: `P-${String(op.orden).padStart(2, '0')}-${op.codigo}`,
         tipo: familiaCodigo,
         nombre: op.nombre,
         costoCentroCosto,
-        costoMateriasPrimas: 0, // SM.2: plantillas por familia
+        costoMateriasPrimas,
         cargosFlat: 0,
         trazabilidad: {
           operacionId: op.id,
@@ -251,8 +279,8 @@ export class SuperMotorModule implements ProductMotorModule {
           nesting: layoutAplicable
             ? summarizeLayout(layoutAplicable, Boolean(nestingHeredado))
             : null,
-          // SM.3: aquí irán los detalles de materiales consumidos por familia.
-          materiales: [],
+          // SM.4: materiales consumidos por la plantilla de la familia.
+          materiales: materialesConsumidos,
         },
       });
     }
