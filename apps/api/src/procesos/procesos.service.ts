@@ -35,6 +35,7 @@ import {
 import { UpsertProcesoOperacionPlantillaDto } from './dto/upsert-proceso-operacion-plantilla.dto';
 import { UpsertProcesoOperacionAlternativaDto } from './dto/upsert-proceso-operacion-alternativa.dto';
 import { UpsertProcesoOperacionMaterialDto } from './dto/upsert-proceso-operacion-material.dto';
+import { UpdateProcesoOperacionDto } from './dto/update-proceso-operacion.dto';
 import { BulkAssignEstacionPlantillasDto } from './dto/bulk-assign-estacion-plantillas.dto';
 import {
   EvaluarProcesoCostoDto,
@@ -3013,6 +3014,191 @@ export class ProcesosService {
         : null,
       createdAt: m.createdAt,
       updatedAt: m.updatedAt,
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // P1.5 — Edición y reordenamiento de pasos (ProcesoOperacion).
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async updateOperacion(
+    auth: CurrentAuth,
+    operacionId: string,
+    payload: UpdateProcesoOperacionDto,
+  ) {
+    const op = await this.prisma.procesoOperacion.findFirst({
+      where: { id: operacionId, tenantId: auth.tenantId },
+    });
+    if (!op) {
+      throw new NotFoundException('La operación del proceso no existe.');
+    }
+
+    if (payload.centroCostoId !== undefined) {
+      const cc = await this.prisma.centroCosto.findFirst({
+        where: { id: payload.centroCostoId, tenantId: auth.tenantId },
+        select: { id: true },
+      });
+      if (!cc) {
+        throw new BadRequestException('El centro de costo indicado no existe.');
+      }
+    }
+
+    if (payload.maquinaId) {
+      const maq = await this.prisma.maquina.findFirst({
+        where: { id: payload.maquinaId, tenantId: auth.tenantId },
+        select: { id: true },
+      });
+      if (!maq) {
+        throw new BadRequestException('La máquina indicada no existe.');
+      }
+    }
+
+    if (payload.perfilOperativoId) {
+      const maquinaId = payload.maquinaId !== undefined ? payload.maquinaId : op.maquinaId;
+      if (!maquinaId) {
+        throw new BadRequestException(
+          'No se puede asignar un perfil operativo a un paso sin máquina.',
+        );
+      }
+      const perfil = await this.prisma.maquinaPerfilOperativo.findFirst({
+        where: {
+          id: payload.perfilOperativoId,
+          tenantId: auth.tenantId,
+          maquinaId,
+        },
+        select: { id: true },
+      });
+      if (!perfil) {
+        throw new BadRequestException(
+          'El perfil operativo no existe o no pertenece a la máquina indicada.',
+        );
+      }
+    }
+
+    const data: Prisma.ProcesoOperacionUpdateInput = {};
+    if (payload.nombre !== undefined) data.nombre = payload.nombre.trim();
+    if (payload.esOpcional !== undefined) data.esOpcional = payload.esOpcional;
+    if (payload.activacionV2 !== undefined) data.activacionV2 = payload.activacionV2;
+    if (payload.familiaV2 !== undefined) data.familiaV2 = payload.familiaV2.trim() || null;
+    if (payload.unidadProductivaV2 !== undefined)
+      data.unidadProductivaV2 = payload.unidadProductivaV2.trim() || null;
+    if (payload.centroCostoId !== undefined)
+      data.centroCosto = { connect: { id: payload.centroCostoId } };
+    if (payload.maquinaId !== undefined) {
+      data.maquina = payload.maquinaId
+        ? { connect: { id: payload.maquinaId } }
+        : { disconnect: true };
+      // Si se limpia la máquina, también se limpia el perfil (FK).
+      if (!payload.maquinaId && payload.perfilOperativoId === undefined) {
+        data.perfilOperativo = { disconnect: true };
+      }
+    }
+    if (payload.perfilOperativoId !== undefined) {
+      data.perfilOperativo = payload.perfilOperativoId
+        ? { connect: { id: payload.perfilOperativoId } }
+        : { disconnect: true };
+    }
+    if (payload.setupMin !== undefined)
+      data.setupMin = new Prisma.Decimal(payload.setupMin);
+    if (payload.cleanupMin !== undefined)
+      data.cleanupMin = new Prisma.Decimal(payload.cleanupMin);
+    if (payload.tiempoFijoMin !== undefined)
+      data.tiempoFijoMin = new Prisma.Decimal(payload.tiempoFijoMin);
+    if (payload.productividadBase !== undefined)
+      data.productividadBase = new Prisma.Decimal(payload.productividadBase);
+
+    const updated = await this.prisma.procesoOperacion.update({
+      where: { id: operacionId },
+      data,
+      include: { centroCosto: true, maquina: true, perfilOperativo: true },
+    });
+
+    return this.toOperacionSummaryResponse(updated);
+  }
+
+  /**
+   * Mueve un paso una posición arriba o abajo intercambiando `orden` con
+   * el paso vecino. Respeta la constraint única (tenantId, procesoDefinicionId, orden)
+   * haciendo el swap en una transacción con un valor temporal.
+   */
+  async moveOperacion(
+    auth: CurrentAuth,
+    operacionId: string,
+    direction: 'up' | 'down',
+  ) {
+    const op = await this.prisma.procesoOperacion.findFirst({
+      where: { id: operacionId, tenantId: auth.tenantId },
+    });
+    if (!op) {
+      throw new NotFoundException('La operación del proceso no existe.');
+    }
+
+    const neighborOrden =
+      direction === 'up' ? op.orden - 1 : op.orden + 1;
+    const neighbor = await this.prisma.procesoOperacion.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        procesoDefinicionId: op.procesoDefinicionId,
+        orden: neighborOrden,
+      },
+    });
+
+    if (!neighbor) {
+      throw new BadRequestException(
+        direction === 'up'
+          ? 'El paso ya está en la primera posición.'
+          : 'El paso ya está en la última posición.',
+      );
+    }
+
+    // Swap con valor temporal negativo para no violar el unique (tenant, proceso, orden).
+    const temp = -1 * (Math.abs(op.orden) + Math.abs(neighbor.orden) + 1);
+    await this.prisma.$transaction([
+      this.prisma.procesoOperacion.update({
+        where: { id: op.id },
+        data: { orden: temp },
+      }),
+      this.prisma.procesoOperacion.update({
+        where: { id: neighbor.id },
+        data: { orden: op.orden },
+      }),
+      this.prisma.procesoOperacion.update({
+        where: { id: op.id },
+        data: { orden: neighbor.orden },
+      }),
+    ]);
+
+    return { ok: true, moved: { id: op.id, fromOrden: op.orden, toOrden: neighbor.orden } };
+  }
+
+  private toOperacionSummaryResponse(
+    op: Prisma.ProcesoOperacionGetPayload<{
+      include: { centroCosto: true; maquina: true; perfilOperativo: true };
+    }>,
+  ) {
+    return {
+      id: op.id,
+      orden: op.orden,
+      codigo: op.codigo,
+      nombre: op.nombre,
+      familiaV2: op.familiaV2,
+      unidadProductivaV2: op.unidadProductivaV2,
+      activacionV2: op.activacionV2,
+      esOpcional: op.esOpcional,
+      setupMin: op.setupMin != null ? Number(op.setupMin) : null,
+      cleanupMin: op.cleanupMin != null ? Number(op.cleanupMin) : null,
+      tiempoFijoMin: op.tiempoFijoMin != null ? Number(op.tiempoFijoMin) : null,
+      productividadBase:
+        op.productividadBase != null ? Number(op.productividadBase) : null,
+      centroCosto: op.centroCosto
+        ? { id: op.centroCosto.id, nombre: op.centroCosto.nombre }
+        : null,
+      maquina: op.maquina
+        ? { id: op.maquina.id, nombre: op.maquina.nombre, plantilla: op.maquina.plantilla }
+        : null,
+      perfilOperativo: op.perfilOperativo
+        ? { id: op.perfilOperativo.id, nombre: op.perfilOperativo.nombre }
+        : null,
     };
   }
 }

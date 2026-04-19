@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -17,6 +18,7 @@ import { BulkAssignEstacionPlantillasDto } from './dto/bulk-assign-estacion-plan
 import { UpsertProcesoOperacionPlantillaDto } from './dto/upsert-proceso-operacion-plantilla.dto';
 import { UpsertProcesoOperacionAlternativaDto } from './dto/upsert-proceso-operacion-alternativa.dto';
 import { UpsertProcesoOperacionMaterialDto } from './dto/upsert-proceso-operacion-material.dto';
+import { UpdateProcesoOperacionDto } from './dto/update-proceso-operacion.dto';
 import { UpsertProcesoDto } from './dto/upsert-proceso.dto';
 import { ProcesosService } from './procesos.service';
 
@@ -206,5 +208,27 @@ export class ProcesosController {
     @Param('materialId') materialId: string,
   ) {
     return this.procesosService.deleteMaterial(auth, operacionId, materialId);
+  }
+
+  // P1.5 — Update parcial y reorden de pasos
+  @Patch('operaciones/:operacionId')
+  updateOperacion(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('operacionId') operacionId: string,
+    @Body() payload: UpdateProcesoOperacionDto,
+  ) {
+    return this.procesosService.updateOperacion(auth, operacionId, payload);
+  }
+
+  @Post('operaciones/:operacionId/move')
+  moveOperacion(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('operacionId') operacionId: string,
+    @Query('direction') direction: 'up' | 'down',
+  ) {
+    if (direction !== 'up' && direction !== 'down') {
+      throw new BadRequestException('direction debe ser "up" o "down".');
+    }
+    return this.procesosService.moveOperacion(auth, operacionId, direction);
   }
 }
