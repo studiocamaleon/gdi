@@ -33,6 +33,7 @@ import {
   UpsertProcesoDto,
 } from './dto/upsert-proceso.dto';
 import { UpsertProcesoOperacionPlantillaDto } from './dto/upsert-proceso-operacion-plantilla.dto';
+import { UpsertProcesoOperacionAlternativaDto } from './dto/upsert-proceso-operacion-alternativa.dto';
 import { BulkAssignEstacionPlantillasDto } from './dto/bulk-assign-estacion-plantillas.dto';
 import {
   EvaluarProcesoCostoDto,
@@ -2641,5 +2642,189 @@ export class ProcesosService {
       return Number.isFinite(parsed) ? parsed : null;
     }
     return null;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // P1.3.b — CRUD de ProcesoOperacionAlternativa (alternativas máquina+perfil
+  // por paso de ruta). El cliente elige al cotizar cuál aplicar.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async listAlternativas(auth: CurrentAuth, operacionId: string) {
+    await this.findOperacionOrThrow(auth, operacionId);
+    const alternativas = await this.prisma.procesoOperacionAlternativa.findMany({
+      where: { tenantId: auth.tenantId, procesoOperacionId: operacionId },
+      include: { maquina: true, perfilOperativo: true },
+      orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+    });
+    return alternativas.map((a) => this.toAlternativaResponse(a));
+  }
+
+  async createAlternativa(
+    auth: CurrentAuth,
+    operacionId: string,
+    payload: UpsertProcesoOperacionAlternativaDto,
+  ) {
+    await this.findOperacionOrThrow(auth, operacionId);
+    await this.validateAlternativaReferences(auth, payload);
+
+    if (payload.esDefault) {
+      await this.clearEsDefault(auth.tenantId, operacionId);
+    }
+
+    const created = await this.prisma.procesoOperacionAlternativa.create({
+      data: {
+        tenantId: auth.tenantId,
+        procesoOperacionId: operacionId,
+        maquinaId: payload.maquinaId,
+        perfilOperativoId: payload.perfilOperativoId ?? null,
+        label: payload.label.trim(),
+        esDefault: Boolean(payload.esDefault),
+        orden: typeof payload.orden === 'number' ? payload.orden : 0,
+        activo: payload.activo ?? true,
+      },
+      include: { maquina: true, perfilOperativo: true },
+    });
+
+    return this.toAlternativaResponse(created);
+  }
+
+  async updateAlternativa(
+    auth: CurrentAuth,
+    operacionId: string,
+    alternativaId: string,
+    payload: UpsertProcesoOperacionAlternativaDto,
+  ) {
+    await this.findAlternativaOrThrow(auth, operacionId, alternativaId);
+    await this.validateAlternativaReferences(auth, payload);
+
+    if (payload.esDefault) {
+      await this.clearEsDefault(auth.tenantId, operacionId, alternativaId);
+    }
+
+    const updated = await this.prisma.procesoOperacionAlternativa.update({
+      where: { id: alternativaId },
+      data: {
+        maquinaId: payload.maquinaId,
+        perfilOperativoId: payload.perfilOperativoId ?? null,
+        label: payload.label.trim(),
+        esDefault: Boolean(payload.esDefault),
+        orden: typeof payload.orden === 'number' ? payload.orden : 0,
+        activo: payload.activo ?? true,
+      },
+      include: { maquina: true, perfilOperativo: true },
+    });
+
+    return this.toAlternativaResponse(updated);
+  }
+
+  async deleteAlternativa(
+    auth: CurrentAuth,
+    operacionId: string,
+    alternativaId: string,
+  ) {
+    await this.findAlternativaOrThrow(auth, operacionId, alternativaId);
+    await this.prisma.procesoOperacionAlternativa.delete({
+      where: { id: alternativaId },
+    });
+    return { ok: true };
+  }
+
+  private async findOperacionOrThrow(auth: CurrentAuth, operacionId: string) {
+    const op = await this.prisma.procesoOperacion.findFirst({
+      where: { id: operacionId, tenantId: auth.tenantId },
+      select: { id: true },
+    });
+    if (!op) {
+      throw new NotFoundException('La operación del proceso no existe.');
+    }
+    return op;
+  }
+
+  private async findAlternativaOrThrow(
+    auth: CurrentAuth,
+    operacionId: string,
+    alternativaId: string,
+  ) {
+    const alt = await this.prisma.procesoOperacionAlternativa.findFirst({
+      where: {
+        id: alternativaId,
+        tenantId: auth.tenantId,
+        procesoOperacionId: operacionId,
+      },
+    });
+    if (!alt) {
+      throw new NotFoundException('La alternativa no existe para esta operación.');
+    }
+    return alt;
+  }
+
+  private async validateAlternativaReferences(
+    auth: CurrentAuth,
+    payload: UpsertProcesoOperacionAlternativaDto,
+  ) {
+    const maquina = await this.prisma.maquina.findFirst({
+      where: { id: payload.maquinaId, tenantId: auth.tenantId },
+      select: { id: true },
+    });
+    if (!maquina) {
+      throw new BadRequestException('La máquina indicada no existe.');
+    }
+
+    if (payload.perfilOperativoId) {
+      const perfil = await this.prisma.maquinaPerfilOperativo.findFirst({
+        where: {
+          id: payload.perfilOperativoId,
+          tenantId: auth.tenantId,
+          maquinaId: payload.maquinaId,
+        },
+        select: { id: true },
+      });
+      if (!perfil) {
+        throw new BadRequestException(
+          'El perfil operativo no existe o no pertenece a la máquina indicada.',
+        );
+      }
+    }
+  }
+
+  private async clearEsDefault(
+    tenantId: string,
+    operacionId: string,
+    excludeId?: string,
+  ) {
+    await this.prisma.procesoOperacionAlternativa.updateMany({
+      where: {
+        tenantId,
+        procesoOperacionId: operacionId,
+        esDefault: true,
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+      },
+      data: { esDefault: false },
+    });
+  }
+
+  private toAlternativaResponse(
+    a: Prisma.ProcesoOperacionAlternativaGetPayload<{
+      include: { maquina: true; perfilOperativo: true };
+    }>,
+  ) {
+    return {
+      id: a.id,
+      procesoOperacionId: a.procesoOperacionId,
+      label: a.label,
+      esDefault: a.esDefault,
+      orden: a.orden,
+      activo: a.activo,
+      maquinaId: a.maquinaId,
+      perfilOperativoId: a.perfilOperativoId,
+      maquina: a.maquina
+        ? { id: a.maquina.id, nombre: a.maquina.nombre, plantilla: a.maquina.plantilla }
+        : null,
+      perfilOperativo: a.perfilOperativo
+        ? { id: a.perfilOperativo.id, nombre: a.perfilOperativo.nombre }
+        : null,
+      createdAt: a.createdAt,
+      updatedAt: a.updatedAt,
+    };
   }
 }

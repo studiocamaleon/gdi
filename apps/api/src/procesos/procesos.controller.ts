@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -14,6 +15,7 @@ import { PaginationDto } from '../common/dto/pagination.dto';
 import { EvaluarProcesoCostoDto } from './dto/evaluar-proceso-costo.dto';
 import { BulkAssignEstacionPlantillasDto } from './dto/bulk-assign-estacion-plantillas.dto';
 import { UpsertProcesoOperacionPlantillaDto } from './dto/upsert-proceso-operacion-plantilla.dto';
+import { UpsertProcesoOperacionAlternativaDto } from './dto/upsert-proceso-operacion-alternativa.dto';
 import { UpsertProcesoDto } from './dto/upsert-proceso.dto';
 import { ProcesosService } from './procesos.service';
 
@@ -115,5 +117,51 @@ export class ProcesosController {
     @Body() payload: EvaluarProcesoCostoDto,
   ) {
     return this.procesosService.evaluarCosto(auth, id, payload);
+  }
+
+  // P1.3.b — CRUD de alternativas máquina+perfil por paso de ruta
+  @Get('operaciones/:operacionId/alternativas')
+  listAlternativas(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('operacionId') operacionId: string,
+  ) {
+    return this.procesosService.listAlternativas(auth, operacionId);
+  }
+
+  @Post('operaciones/:operacionId/alternativas')
+  createAlternativa(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('operacionId') operacionId: string,
+    @Body() payload: UpsertProcesoOperacionAlternativaDto,
+  ) {
+    return this.procesosService.createAlternativa(auth, operacionId, payload);
+  }
+
+  @Put('operaciones/:operacionId/alternativas/:alternativaId')
+  updateAlternativa(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('operacionId') operacionId: string,
+    @Param('alternativaId') alternativaId: string,
+    @Body() payload: UpsertProcesoOperacionAlternativaDto,
+  ) {
+    return this.procesosService.updateAlternativa(
+      auth,
+      operacionId,
+      alternativaId,
+      payload,
+    );
+  }
+
+  @Delete('operaciones/:operacionId/alternativas/:alternativaId')
+  deleteAlternativa(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('operacionId') operacionId: string,
+    @Param('alternativaId') alternativaId: string,
+  ) {
+    return this.procesosService.deleteAlternativa(
+      auth,
+      operacionId,
+      alternativaId,
+    );
   }
 }
