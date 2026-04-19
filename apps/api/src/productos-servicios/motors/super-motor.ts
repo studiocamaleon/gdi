@@ -140,7 +140,28 @@ export class SuperMotorModule implements ProductMotorModule {
     // Ejecuta el nesting una sola vez para toda la ruta. El output se usa
     // para mejorar cantidadObjetivoSalida (pliegos vs piezas) y para
     // exponer placements en la trazabilidad del paso `produce`.
-    const trabajoMedidas = this.resolverMedidasTrabajo(payload, variante, cantidad);
+    //
+    // Demasía + línea de corte: infla cada pieza antes de nestar.
+    // En imprenta real, cada pieza se imprime con sangrado para que al
+    // guillotinar no queden bordes blancos. Si la ruta tiene un paso
+    // `corte` después de la impresión, se aplican los valores del
+    // configProducto (demasiaCorteMm + lineaCorteMm).
+    const tieneCortePosterior = operacionesAEjecutar.some((op) => {
+      const fam = op.familiaV2 ?? inferirFamiliaDesdeTipo(op.tipoOperacion, op.nombre);
+      return fam === 'corte' || fam === 'corte_volumetrico';
+    });
+    const demasiaMm = tieneCortePosterior
+      ? Number(runtime.configProducto?.demasiaCorteMm ?? 0)
+      : 0;
+    const lineaCorteMm = tieneCortePosterior
+      ? Number(runtime.configProducto?.lineaCorteMm ?? 0)
+      : 0;
+    const expansionPorLado = demasiaMm + lineaCorteMm;
+    const trabajoMedidas = this.resolverMedidasTrabajo(payload, variante, cantidad).map((m) => ({
+      ...m,
+      anchoMm: m.anchoMm + 2 * expansionPorLado,
+      altoMm: m.altoMm + 2 * expansionPorLado,
+    }));
     const materialMaquina = this.resolverMaterialMaquinaContext(
       runtime,
       operacionesAEjecutar,
