@@ -34,6 +34,7 @@ import {
 } from './dto/upsert-proceso.dto';
 import { UpsertProcesoOperacionPlantillaDto } from './dto/upsert-proceso-operacion-plantilla.dto';
 import { UpsertProcesoOperacionAlternativaDto } from './dto/upsert-proceso-operacion-alternativa.dto';
+import { UpsertProcesoOperacionMaterialDto } from './dto/upsert-proceso-operacion-material.dto';
 import { BulkAssignEstacionPlantillasDto } from './dto/bulk-assign-estacion-plantillas.dto';
 import {
   EvaluarProcesoCostoDto,
@@ -2825,6 +2826,193 @@ export class ProcesosService {
         : null,
       createdAt: a.createdAt,
       updatedAt: a.updatedAt,
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // P1.4 — CRUD de ProcesoOperacionMaterial (materiales declarativos por paso).
+  // El super motor lee estos registros para calcular costoMateriasPrimas. Si
+  // un paso no tiene materiales declarativos, el motor usa plantillas
+  // imperativas como fallback (material-plantillas.ts).
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async listMateriales(auth: CurrentAuth, operacionId: string) {
+    await this.findOperacionOrThrow(auth, operacionId);
+    const materiales = await this.prisma.procesoOperacionMaterial.findMany({
+      where: { tenantId: auth.tenantId, procesoOperacionId: operacionId },
+      include: {
+        materiaPrimaVariante: {
+          select: {
+            id: true,
+            sku: true,
+            nombreVariante: true,
+            precioReferencia: true,
+          },
+        },
+      },
+      orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+    });
+    return materiales.map((m) => this.toMaterialResponse(m));
+  }
+
+  async createMaterial(
+    auth: CurrentAuth,
+    operacionId: string,
+    payload: UpsertProcesoOperacionMaterialDto,
+  ) {
+    await this.findOperacionOrThrow(auth, operacionId);
+    await this.validateMaterialReferences(auth, payload);
+
+    const created = await this.prisma.procesoOperacionMaterial.create({
+      data: {
+        tenantId: auth.tenantId,
+        procesoOperacionId: operacionId,
+        materiaPrimaVarianteId: payload.materiaPrimaVarianteId ?? null,
+        nombre: payload.nombre.trim(),
+        formula: payload.formula,
+        cantidadPorUnidad: new Prisma.Decimal(payload.cantidadPorUnidad),
+        unidad: payload.unidad.trim(),
+        precioManual:
+          payload.precioManual != null ? new Prisma.Decimal(payload.precioManual) : null,
+        aplicaMultiCaras: Boolean(payload.aplicaMultiCaras),
+        orden: typeof payload.orden === 'number' ? payload.orden : 0,
+        activo: payload.activo ?? true,
+      },
+      include: {
+        materiaPrimaVariante: {
+          select: {
+            id: true,
+            sku: true,
+            nombreVariante: true,
+            precioReferencia: true,
+          },
+        },
+      },
+    });
+
+    return this.toMaterialResponse(created);
+  }
+
+  async updateMaterial(
+    auth: CurrentAuth,
+    operacionId: string,
+    materialId: string,
+    payload: UpsertProcesoOperacionMaterialDto,
+  ) {
+    await this.findMaterialOrThrow(auth, operacionId, materialId);
+    await this.validateMaterialReferences(auth, payload);
+
+    const updated = await this.prisma.procesoOperacionMaterial.update({
+      where: { id: materialId },
+      data: {
+        materiaPrimaVarianteId: payload.materiaPrimaVarianteId ?? null,
+        nombre: payload.nombre.trim(),
+        formula: payload.formula,
+        cantidadPorUnidad: new Prisma.Decimal(payload.cantidadPorUnidad),
+        unidad: payload.unidad.trim(),
+        precioManual:
+          payload.precioManual != null ? new Prisma.Decimal(payload.precioManual) : null,
+        aplicaMultiCaras: Boolean(payload.aplicaMultiCaras),
+        orden: typeof payload.orden === 'number' ? payload.orden : 0,
+        activo: payload.activo ?? true,
+      },
+      include: {
+        materiaPrimaVariante: {
+          select: {
+            id: true,
+            sku: true,
+            nombreVariante: true,
+            precioReferencia: true,
+          },
+        },
+      },
+    });
+
+    return this.toMaterialResponse(updated);
+  }
+
+  async deleteMaterial(
+    auth: CurrentAuth,
+    operacionId: string,
+    materialId: string,
+  ) {
+    await this.findMaterialOrThrow(auth, operacionId, materialId);
+    await this.prisma.procesoOperacionMaterial.delete({ where: { id: materialId } });
+    return { ok: true };
+  }
+
+  private async findMaterialOrThrow(
+    auth: CurrentAuth,
+    operacionId: string,
+    materialId: string,
+  ) {
+    const mat = await this.prisma.procesoOperacionMaterial.findFirst({
+      where: {
+        id: materialId,
+        tenantId: auth.tenantId,
+        procesoOperacionId: operacionId,
+      },
+    });
+    if (!mat) {
+      throw new NotFoundException('El material no existe para esta operación.');
+    }
+    return mat;
+  }
+
+  private async validateMaterialReferences(
+    auth: CurrentAuth,
+    payload: UpsertProcesoOperacionMaterialDto,
+  ) {
+    if (payload.materiaPrimaVarianteId) {
+      const mp = await this.prisma.materiaPrimaVariante.findFirst({
+        where: { id: payload.materiaPrimaVarianteId, tenantId: auth.tenantId },
+        select: { id: true },
+      });
+      if (!mp) {
+        throw new BadRequestException('La variante de materia prima no existe.');
+      }
+    }
+  }
+
+  private toMaterialResponse(
+    m: Prisma.ProcesoOperacionMaterialGetPayload<{
+      include: {
+        materiaPrimaVariante: {
+          select: {
+            id: true;
+            sku: true;
+            nombreVariante: true;
+            precioReferencia: true;
+          };
+        };
+      };
+    }>,
+  ) {
+    return {
+      id: m.id,
+      procesoOperacionId: m.procesoOperacionId,
+      materiaPrimaVarianteId: m.materiaPrimaVarianteId,
+      nombre: m.nombre,
+      formula: m.formula,
+      cantidadPorUnidad: Number(m.cantidadPorUnidad),
+      unidad: m.unidad,
+      precioManual: m.precioManual != null ? Number(m.precioManual) : null,
+      aplicaMultiCaras: m.aplicaMultiCaras,
+      orden: m.orden,
+      activo: m.activo,
+      materiaPrimaVariante: m.materiaPrimaVariante
+        ? {
+            id: m.materiaPrimaVariante.id,
+            sku: m.materiaPrimaVariante.sku,
+            nombreVariante: m.materiaPrimaVariante.nombreVariante,
+            precioReferencia:
+              m.materiaPrimaVariante.precioReferencia != null
+                ? Number(m.materiaPrimaVariante.precioReferencia)
+                : null,
+          }
+        : null,
+      createdAt: m.createdAt,
+      updatedAt: m.updatedAt,
     };
   }
 }

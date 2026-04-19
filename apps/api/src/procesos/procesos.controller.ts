@@ -16,6 +16,7 @@ import { EvaluarProcesoCostoDto } from './dto/evaluar-proceso-costo.dto';
 import { BulkAssignEstacionPlantillasDto } from './dto/bulk-assign-estacion-plantillas.dto';
 import { UpsertProcesoOperacionPlantillaDto } from './dto/upsert-proceso-operacion-plantilla.dto';
 import { UpsertProcesoOperacionAlternativaDto } from './dto/upsert-proceso-operacion-alternativa.dto';
+import { UpsertProcesoOperacionMaterialDto } from './dto/upsert-proceso-operacion-material.dto';
 import { UpsertProcesoDto } from './dto/upsert-proceso.dto';
 import { ProcesosService } from './procesos.service';
 
@@ -163,5 +164,47 @@ export class ProcesosController {
       operacionId,
       alternativaId,
     );
+  }
+
+  // P1.4 — CRUD de materiales declarativos (ProcesoOperacionMaterial)
+  @Get('operaciones/:operacionId/materiales')
+  listMateriales(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('operacionId') operacionId: string,
+  ) {
+    return this.procesosService.listMateriales(auth, operacionId);
+  }
+
+  @Post('operaciones/:operacionId/materiales')
+  createMaterial(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('operacionId') operacionId: string,
+    @Body() payload: UpsertProcesoOperacionMaterialDto,
+  ) {
+    return this.procesosService.createMaterial(auth, operacionId, payload);
+  }
+
+  @Put('operaciones/:operacionId/materiales/:materialId')
+  updateMaterial(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('operacionId') operacionId: string,
+    @Param('materialId') materialId: string,
+    @Body() payload: UpsertProcesoOperacionMaterialDto,
+  ) {
+    return this.procesosService.updateMaterial(
+      auth,
+      operacionId,
+      materialId,
+      payload,
+    );
+  }
+
+  @Delete('operaciones/:operacionId/materiales/:materialId')
+  deleteMaterial(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('operacionId') operacionId: string,
+    @Param('materialId') materialId: string,
+  ) {
+    return this.procesosService.deleteMaterial(auth, operacionId, materialId);
   }
 }
