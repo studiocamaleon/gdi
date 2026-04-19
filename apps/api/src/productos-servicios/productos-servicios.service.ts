@@ -3862,11 +3862,87 @@ export class ProductosServiciosService {
       },
       select: { centroCostoId: true, tarifaCalculada: true },
     });
+
+    // D.1a.2: normalizar 2 modelos de resolución máquina+perfil:
+    // (a) Nuevo: config.configuracionesImpresion: [{tipoImpresion, caras, maquinaId, perfilOperativoId}]
+    // (b) Legacy: producto.detalleJson.matchingBasePorVariante[varianteId].matching:
+    //     [{tipoImpresion, caras, pasoPlantillaId, perfilOperativoId}]
+    //     → el maquinaId se resuelve via ProcesoOperacionPlantilla.maquinaId.
+    let configuracionesImpresionRaw: Array<Record<string, unknown>> = Array.isArray(
+      (config as Record<string, unknown>).configuracionesImpresion,
+    )
+      ? ((config as Record<string, unknown>).configuracionesImpresion as Array<
+          Record<string, unknown>
+        >)
+      : [];
+    if (configuracionesImpresionRaw.length === 0) {
+      const detalle = (variante.productoServicio.detalleJson ?? {}) as Record<string, unknown>;
+      const matchingBase = Array.isArray(detalle.matchingBasePorVariante)
+        ? (detalle.matchingBasePorVariante as Array<Record<string, unknown>>)
+        : [];
+      const entry = matchingBase.find((m) => m.varianteId === variante.id);
+      const matching = Array.isArray(entry?.matching)
+        ? (entry!.matching as Array<Record<string, unknown>>)
+        : [];
+      if (matching.length > 0) {
+        const pasoPlantillaIds = [
+          ...new Set(
+            matching.map((m) => String(m.pasoPlantillaId ?? '')).filter((id) => id.length > 0),
+          ),
+        ];
+        const plantillas = pasoPlantillaIds.length
+          ? await this.prisma.procesoOperacionPlantilla.findMany({
+              where: { tenantId: auth.tenantId, id: { in: pasoPlantillaIds } },
+              select: { id: true, maquinaId: true },
+            })
+          : [];
+        const maquinaByPlantilla = new Map(plantillas.map((p) => [p.id, p.maquinaId]));
+        configuracionesImpresionRaw = matching
+          .map((m) => ({
+            tipoImpresion: String(m.tipoImpresion ?? ''),
+            caras: String(m.caras ?? ''),
+            maquinaId: String(maquinaByPlantilla.get(String(m.pasoPlantillaId)) ?? ''),
+            perfilOperativoId: String(m.perfilOperativoId ?? ''),
+          }))
+          .filter((c) => c.maquinaId && c.perfilOperativoId);
+      }
+    }
+    const maquinaIds = [
+      ...new Set(
+        configuracionesImpresionRaw
+          .map((c) => String(c.maquinaId ?? ''))
+          .filter((id) => id.length > 0),
+      ),
+    ];
+    const perfilIds = [
+      ...new Set(
+        configuracionesImpresionRaw
+          .map((c) => String(c.perfilOperativoId ?? ''))
+          .filter((id) => id.length > 0),
+      ),
+    ];
+    const [maquinas, perfiles] = await Promise.all([
+      maquinaIds.length
+        ? this.prisma.maquina.findMany({
+            where: { tenantId: auth.tenantId, id: { in: maquinaIds } },
+            include: { centroCostoPrincipal: true },
+          })
+        : Promise.resolve([]),
+      perfilIds.length
+        ? this.prisma.maquinaPerfilOperativo.findMany({
+            where: { tenantId: auth.tenantId, id: { in: perfilIds } },
+          })
+        : Promise.resolve([]),
+    ]);
+
     return {
       variante,
       config,
       proceso,
       tarifaByCentro: new Map(tarifas.map((t) => [t.centroCostoId, Number(t.tarifaCalculada)])),
+      configuracionesImpresion: configuracionesImpresionRaw,
+      maquinaById: new Map(maquinas.map((m) => [m.id, m])),
+      perfilById: new Map(perfiles.map((p) => [p.id, p])),
     };
   }
 

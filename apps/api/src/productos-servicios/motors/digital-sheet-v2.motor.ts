@@ -242,30 +242,60 @@ export class DigitalSheetMotorModuleV2 implements ProductMotorModule {
     };
 
     // Paso 2: impresión por hoja
-    const impresionSetup = Number(config.impresionSetupMin ?? CONFIG_DEFAULTS.impresionSetupMin);
-    const pliegosPorHora = Number(config.impresionPliegosPorHora ?? CONFIG_DEFAULTS.impresionPliegosPorHora);
-    const impresionTarifa = Number(config.impresionTarifaHora ?? CONFIG_DEFAULTS.impresionTarifaHora);
+    // D.1a.2: resolver máquina + perfil real desde configuracionesImpresion[{caras, tipo}]
+    const configMatch = (runtime.configuracionesImpresion ?? []).find(
+      (c: Record<string, unknown>) => {
+        const tipoOk =
+          !c.tipoImpresion ||
+          String(c.tipoImpresion).toUpperCase() === tipoImpresion;
+        const carasOk = !c.caras || String(c.caras).toLowerCase() === caras;
+        return tipoOk && carasOk;
+      },
+    );
+    const maquinaReal = configMatch ? runtime.maquinaById.get(String(configMatch.maquinaId)) : null;
+    const perfilReal = configMatch ? runtime.perfilById.get(String(configMatch.perfilOperativoId)) : null;
+
+    const impresionSetup =
+      perfilReal?.setupMin != null
+        ? Number(perfilReal.setupMin)
+        : Number(config.impresionSetupMin ?? CONFIG_DEFAULTS.impresionSetupMin);
+    // Productividad del perfil real (pliegos/hora), fallback al config/default.
+    const pliegosPorHora =
+      perfilReal?.productivityValue != null && Number(perfilReal.productivityValue) > 0
+        ? Number(perfilReal.productivityValue)
+        : Number(config.impresionPliegosPorHora ?? CONFIG_DEFAULTS.impresionPliegosPorHora);
+    // Tarifa del centro de costo de la máquina en el período (si no, fallback al config/default).
+    const centroCostoId = maquinaReal?.centroCostoPrincipal?.id ?? null;
+    const tarifaReal = centroCostoId ? runtime.tarifaByCentro.get(centroCostoId) : undefined;
+    const impresionTarifa =
+      tarifaReal != null && tarifaReal > 0
+        ? tarifaReal
+        : Number(config.impresionTarifaHora ?? CONFIG_DEFAULTS.impresionTarifaHora);
+
     const clicsPorPliego = Number(config.impresionClicsPorPliego ?? CONFIG_DEFAULTS.impresionClicsPorPliego);
-    // Costo de clic depende del tipo de impresión (BN es más barato que CMYK).
     const costoClic = tipoImpresion === 'BN'
       ? Number(config.impresionCostoClicBN ?? CONFIG_DEFAULTS.impresionCostoClicBN)
       : Number(config.impresionCostoClic ?? CONFIG_DEFAULTS.impresionCostoClic);
-    // Doble faz = 2 corridas por pliego (una por cara), cada una cuenta como clic.
     const clicsTotales = pliegosNecesarios * clicsPorPliego * multiplicadorCaras;
-    // Tiempo de impresión también escala con caras (doble faz tarda el doble).
     const impresionProductivoMin =
       pliegosPorHora > 0 ? ((pliegosNecesarios * multiplicadorCaras) / pliegosPorHora) * 60 : 0;
     const impresionMin = impresionSetup + impresionProductivoMin;
     const clicsCosto = roundMoney(clicsTotales * costoClic);
-    const papelPrecio = Number(config.papelPrecioPorPliego ?? CONFIG_DEFAULTS.papelPrecioPorPliego);
-    // El papel es el mismo — no se duplica por doble faz (se imprime sobre ambas caras del mismo pliego).
+
+    // Precio del papel: prioridad (a) precioReferencia de la variante,
+    // (b) config.papelPrecioPorPliego, (c) default del motor.
+    const papelPrecio =
+      Number(variante.papelVariante?.precioReferencia ?? 0) > 0
+        ? Number(variante.papelVariante!.precioReferencia)
+        : Number(config.papelPrecioPorPliego ?? CONFIG_DEFAULTS.papelPrecioPorPliego);
     const papelCosto = roundMoney(pliegosNecesarios * papelPrecio);
 
     const cararLabel = esDobleFaz ? 'doble faz' : 'simple faz';
+    const maquinaLabel = maquinaReal?.nombre ?? '—';
     const pasoImpresion: PasoCotizado = {
       id: 'P02-impresion_por_hoja',
       tipo: 'impresion_por_hoja',
-      nombre: `Impresión digital (${pliego.nombre ?? `${pliegoAncho}×${pliegoAlto}`} · ${tipoImpresion} · ${cararLabel})`,
+      nombre: `Impresión digital (${pliego.nombre ?? `${pliegoAncho}×${pliegoAlto}`} · ${tipoImpresion} · ${cararLabel} · ${maquinaLabel})`,
       costoCentroCosto: costoTiempo(impresionMin, impresionTarifa),
       costoMateriasPrimas: roundMoney(clicsCosto + papelCosto),
       cargosFlat: 0,
@@ -273,6 +303,14 @@ export class DigitalSheetMotorModuleV2 implements ProductMotorModule {
         caras,
         tipoImpresion,
         multiplicadorCaras,
+        maquina: maquinaReal
+          ? { id: maquinaReal.id, nombre: maquinaReal.nombre, fuente: 'configuracionesImpresion' }
+          : { fuente: 'default' },
+        perfilOperativo: perfilReal
+          ? { id: perfilReal.id, nombre: perfilReal.nombre, productivityValue: Number(perfilReal.productivityValue ?? 0), setupMin: Number(perfilReal.setupMin ?? 0), fuente: 'configuracionesImpresion' }
+          : { fuente: 'default' },
+        tarifaHora: { valor: impresionTarifa, fuente: tarifaReal != null ? 'centroCostoTarifaPeriodo' : 'default' },
+        papel: { pliegos: pliegosNecesarios, precioPorPliego: papelPrecio, costo: papelCosto, fuente: Number(variante.papelVariante?.precioReferencia ?? 0) > 0 ? 'papelVariante.precioReferencia' : 'default' },
         nesting: {
           algoritmo: 'nesting-hoja',
           pliegoElegido: nesting.pliegoElegido,
@@ -293,7 +331,6 @@ export class DigitalSheetMotorModuleV2 implements ProductMotorModule {
         clicsTotales,
         costoClic,
         clicsCosto,
-        papel: { pliegos: pliegosNecesarios, precioPorPliego: papelPrecio, costo: papelCosto },
       },
     };
 
