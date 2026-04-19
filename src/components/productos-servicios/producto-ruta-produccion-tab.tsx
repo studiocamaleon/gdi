@@ -28,6 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  getRutaCompletaPorProducto,
   getRutaCompletaPorVariante,
   type RutaCompleta,
 } from "@/lib/productos-servicios-api";
@@ -57,35 +58,24 @@ export function ProductoRutaProduccionTab(props: ProductTabProps) {
   const [ruta, setRuta] = React.useState<RutaCompleta | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const selectedVariantId = props.selectedVariantId;
+  const productoId = props.producto.id;
 
   React.useEffect(() => {
-    if (!selectedVariantId) {
-      setRuta(null);
-      return;
-    }
     setIsLoading(true);
-    getRutaCompletaPorVariante(selectedVariantId)
+    // Prioridad: si hay variante seleccionada, usar ruta efectiva de la variante.
+    // Si no, cargar ruta directa del producto (para productos "medida libre"
+    // como MDF, gran formato por m², etc., que no tienen variantes).
+    const promise = selectedVariantId
+      ? getRutaCompletaPorVariante(selectedVariantId)
+      : getRutaCompletaPorProducto(productoId);
+    promise
       .then((r) => setRuta(r))
       .catch((err) => {
         console.error(err);
         toast.error(err instanceof Error ? err.message : "No se pudo cargar la ruta.");
       })
       .finally(() => setIsLoading(false));
-  }, [selectedVariantId]);
-
-  if (!selectedVariantId) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Ruta de producción</CardTitle>
-          <CardDescription>
-            Este producto todavía no tiene variantes creadas. Creá al menos una desde el tab
-            "Variantes" para poder ver (y eventualmente editar) su ruta de producción.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
+  }, [selectedVariantId, productoId]);
 
   if (isLoading) {
     return (

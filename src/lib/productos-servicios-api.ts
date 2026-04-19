@@ -102,6 +102,12 @@ export async function getRutaCompletaPorVariante(varianteId: string) {
   );
 }
 
+export async function getRutaCompletaPorProducto(productoId: string) {
+  return apiRequest<RutaCompleta>(
+    `/productos-servicios/${productoId}/ruta-completa`,
+  );
+}
+
 // ────────────── C.7: Shadow logs dashboard ──────────────
 
 export type ShadowLogListItem = {

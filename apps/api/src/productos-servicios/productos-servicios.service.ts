@@ -3766,6 +3766,40 @@ export class ProductosServiciosService {
    * ruta asignada. Usado por SuperMotorModule para cotizar declarativamente.
    */
   /**
+   * P1.1 — Ruta completa a nivel producto (independiente de variante).
+   * Útil para productos de "medida libre" (MDF, wrap, etc.) que no tienen
+   * variantes pero sí tienen ruta asignada a nivel producto.
+   */
+  async getRutaCompletaPorProducto(auth: CurrentAuth, productoId: string) {
+    const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
+    // Prioridad 1: ruta default del producto (cuando usarRutaComunVariantes=true).
+    let procesoDefinicionId = producto.procesoDefinicionDefaultId;
+    // Prioridad 2: si no hay default, buscar una variante activa con ruta propia.
+    if (!procesoDefinicionId) {
+      const variante = await this.prisma.productoVariante.findFirst({
+        where: { tenantId: auth.tenantId, productoServicioId: productoId, activo: true },
+        orderBy: [{ createdAt: 'asc' }],
+      });
+      procesoDefinicionId = variante?.procesoDefinicionId ?? null;
+    }
+    if (!procesoDefinicionId) {
+      return {
+        varianteId: null,
+        productoServicioId: productoId,
+        procesoDefinicionId: null,
+        procesoNombre: null,
+        operaciones: [],
+      };
+    }
+    const proceso = await this.findProcesoConOperacionesOrThrow(
+      auth,
+      procesoDefinicionId,
+      this.prisma,
+    );
+    return this.mapRutaCompletaResponse(productoId, null, proceso);
+  }
+
+  /**
    * P1.1 — Endpoint de lectura de ruta completa para el tab "Ruta de
    * producción". Devuelve el proceso con sus operaciones (familiaV2,
    * máquina, perfil, centro de costo, materiales declarativos) enriquecidas
@@ -3788,76 +3822,87 @@ export class ProductosServiciosService {
       procesoDefinicionId,
       this.prisma,
     );
+    return this.mapRutaCompletaResponse(variante.productoServicioId, varianteId, proceso);
+  }
+
+  private mapRutaCompletaResponse(
+    productoServicioId: string,
+    varianteId: string | null,
+    proceso: { id: string; nombre: string; operaciones: Array<Record<string, unknown>> },
+  ) {
     return {
       varianteId,
-      productoServicioId: variante.productoServicioId,
+      productoServicioId,
       procesoDefinicionId: proceso.id,
       procesoNombre: proceso.nombre,
-      operaciones: proceso.operaciones.map((op) => ({
-        id: op.id,
-        orden: op.orden,
-        codigo: op.codigo,
-        nombre: op.nombre,
-        tipoOperacion: op.tipoOperacion,
-        familiaV2: op.familiaV2,
-        unidadProductivaV2: op.unidadProductivaV2,
-        activacionV2: op.activacionV2,
-        esOpcional: op.esOpcional,
-        activo: op.activo,
-        setupMin: op.setupMin != null ? Number(op.setupMin) : null,
-        cleanupMin: op.cleanupMin != null ? Number(op.cleanupMin) : null,
-        tiempoFijoMin: op.tiempoFijoMin != null ? Number(op.tiempoFijoMin) : null,
-        productividadBase:
-          op.productividadBase != null ? Number(op.productividadBase) : null,
-        modoProductividad: op.modoProductividad,
-        unidadTiempo: op.unidadTiempo,
-        centroCosto: op.centroCosto
-          ? { id: op.centroCosto.id, nombre: op.centroCosto.nombre }
-          : null,
-        maquina: op.maquina
-          ? { id: op.maquina.id, nombre: op.maquina.nombre, plantilla: op.maquina.plantilla }
-          : null,
-        perfilOperativo: op.perfilOperativo
-          ? {
-              id: op.perfilOperativo.id,
-              nombre: op.perfilOperativo.nombre,
-              productivityValue:
-                op.perfilOperativo.productivityValue != null
-                  ? Number(op.perfilOperativo.productivityValue)
-                  : null,
-              setupMin:
-                op.perfilOperativo.setupMin != null
-                  ? Number(op.perfilOperativo.setupMin)
-                  : null,
-            }
-          : null,
-        configNestingV2: op.configNestingV2,
-        materialesConsumidos: (op as { materialesConsumidos?: unknown[] }).materialesConsumidos
-          ? ((op as { materialesConsumidos: Array<Record<string, unknown>> })
-              .materialesConsumidos).map((m) => ({
-              id: String(m.id),
-              nombre: String(m.nombre),
-              formula: String(m.formula),
-              cantidadPorUnidad: Number(m.cantidadPorUnidad),
-              unidad: String(m.unidad),
-              precioManual: m.precioManual != null ? Number(m.precioManual) : null,
-              aplicaMultiCaras: Boolean(m.aplicaMultiCaras),
-              orden: Number(m.orden ?? 0),
-              materiaPrimaVariante: m.materiaPrimaVariante
-                ? {
-                    id: String((m.materiaPrimaVariante as { id: string }).id),
-                    sku: String((m.materiaPrimaVariante as { sku: string }).sku),
-                    precioReferencia:
-                      (m.materiaPrimaVariante as { precioReferencia?: unknown }).precioReferencia != null
-                        ? Number(
-                            (m.materiaPrimaVariante as { precioReferencia: unknown }).precioReferencia,
-                          )
-                        : null,
-                  }
-                : null,
-            }))
-          : [],
-      })),
+      operaciones: proceso.operaciones.map((op) => {
+        const centro = op.centroCosto as { id: string; nombre: string } | null;
+        const maquina = op.maquina as { id: string; nombre: string; plantilla: string | null } | null;
+        const perfil = op.perfilOperativo as {
+          id: string;
+          nombre: string;
+          productivityValue: unknown;
+          setupMin: unknown;
+        } | null;
+        const mats = Array.isArray(op.materialesConsumidos)
+          ? (op.materialesConsumidos as Array<Record<string, unknown>>)
+          : [];
+        return {
+          id: String(op.id),
+          orden: Number(op.orden),
+          codigo: String(op.codigo),
+          nombre: String(op.nombre),
+          tipoOperacion: String(op.tipoOperacion),
+          familiaV2: (op.familiaV2 as string | null) ?? null,
+          unidadProductivaV2: (op.unidadProductivaV2 as string | null) ?? null,
+          activacionV2: (op.activacionV2 as string | null) ?? null,
+          esOpcional: Boolean(op.esOpcional),
+          activo: Boolean(op.activo),
+          setupMin: op.setupMin != null ? Number(op.setupMin) : null,
+          cleanupMin: op.cleanupMin != null ? Number(op.cleanupMin) : null,
+          tiempoFijoMin: op.tiempoFijoMin != null ? Number(op.tiempoFijoMin) : null,
+          productividadBase:
+            op.productividadBase != null ? Number(op.productividadBase) : null,
+          modoProductividad: String(op.modoProductividad),
+          unidadTiempo: String(op.unidadTiempo),
+          centroCosto: centro ? { id: centro.id, nombre: centro.nombre } : null,
+          maquina: maquina
+            ? { id: maquina.id, nombre: maquina.nombre, plantilla: maquina.plantilla }
+            : null,
+          perfilOperativo: perfil
+            ? {
+                id: perfil.id,
+                nombre: perfil.nombre,
+                productivityValue:
+                  perfil.productivityValue != null ? Number(perfil.productivityValue) : null,
+                setupMin: perfil.setupMin != null ? Number(perfil.setupMin) : null,
+              }
+            : null,
+          configNestingV2: op.configNestingV2,
+          materialesConsumidos: mats.map((m) => ({
+            id: String(m.id),
+            nombre: String(m.nombre),
+            formula: String(m.formula),
+            cantidadPorUnidad: Number(m.cantidadPorUnidad),
+            unidad: String(m.unidad),
+            precioManual: m.precioManual != null ? Number(m.precioManual) : null,
+            aplicaMultiCaras: Boolean(m.aplicaMultiCaras),
+            orden: Number(m.orden ?? 0),
+            materiaPrimaVariante: m.materiaPrimaVariante
+              ? {
+                  id: String((m.materiaPrimaVariante as { id: string }).id),
+                  sku: String((m.materiaPrimaVariante as { sku: string }).sku),
+                  precioReferencia:
+                    (m.materiaPrimaVariante as { precioReferencia?: unknown }).precioReferencia != null
+                      ? Number(
+                          (m.materiaPrimaVariante as { precioReferencia: unknown }).precioReferencia,
+                        )
+                      : null,
+                }
+              : null,
+          })),
+        };
+      }),
     };
   }
 

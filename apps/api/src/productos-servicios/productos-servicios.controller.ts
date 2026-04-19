@@ -659,6 +659,19 @@ export class ProductosServiciosController {
     return this.service.getRutaCompletaPorVariante(auth, varianteId);
   }
 
+  /**
+   * P1.1 · Ruta completa por producto (independiente de variante). Para
+   * productos de "medida libre" (MDF, wrap, etc.) que no tienen variantes
+   * pre-creadas pero sí ruta de producción asignada.
+   */
+  @Get(':productoId/ruta-completa')
+  getRutaCompletaPorProducto(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('productoId') productoId: string,
+  ) {
+    return this.service.getRutaCompletaPorProducto(auth, productoId);
+  }
+
   @Post('variantes/:varianteId/cotizar-v2')
   cotizarVarianteV2(
     @CurrentSession() auth: CurrentAuth,
