@@ -2256,6 +2256,19 @@ export class ProcesosService {
         esDefault: Boolean(payload.esDefault),
         orden: typeof payload.orden === 'number' ? payload.orden : 0,
         activo: payload.activo ?? true,
+        // P4.1 — overrides opcionales
+        setupMin: payload.setupMin != null ? new Prisma.Decimal(payload.setupMin) : null,
+        cleanupMin: payload.cleanupMin != null ? new Prisma.Decimal(payload.cleanupMin) : null,
+        tiempoFijoMin:
+          payload.tiempoFijoMin != null ? new Prisma.Decimal(payload.tiempoFijoMin) : null,
+        productividadBase:
+          payload.productividadBase != null
+            ? new Prisma.Decimal(payload.productividadBase)
+            : null,
+        configNestingV2:
+          payload.configNestingV2 != null
+            ? (payload.configNestingV2 as Prisma.InputJsonValue)
+            : Prisma.JsonNull,
       },
       include: { maquina: true, perfilOperativo: true },
     });
@@ -2285,6 +2298,19 @@ export class ProcesosService {
         esDefault: Boolean(payload.esDefault),
         orden: typeof payload.orden === 'number' ? payload.orden : 0,
         activo: payload.activo ?? true,
+        // P4.1 — overrides opcionales
+        setupMin: payload.setupMin != null ? new Prisma.Decimal(payload.setupMin) : null,
+        cleanupMin: payload.cleanupMin != null ? new Prisma.Decimal(payload.cleanupMin) : null,
+        tiempoFijoMin:
+          payload.tiempoFijoMin != null ? new Prisma.Decimal(payload.tiempoFijoMin) : null,
+        productividadBase:
+          payload.productividadBase != null
+            ? new Prisma.Decimal(payload.productividadBase)
+            : null,
+        configNestingV2:
+          payload.configNestingV2 != null
+            ? (payload.configNestingV2 as Prisma.InputJsonValue)
+            : Prisma.JsonNull,
       },
       include: { maquina: true, perfilOperativo: true },
     });
@@ -2398,6 +2424,13 @@ export class ProcesosService {
       perfilOperativo: a.perfilOperativo
         ? { id: a.perfilOperativo.id, nombre: a.perfilOperativo.nombre }
         : null,
+      // P4.1 — overrides (null si la opción usa el valor base del paso)
+      setupMin: a.setupMin != null ? Number(a.setupMin) : null,
+      cleanupMin: a.cleanupMin != null ? Number(a.cleanupMin) : null,
+      tiempoFijoMin: a.tiempoFijoMin != null ? Number(a.tiempoFijoMin) : null,
+      productividadBase: a.productividadBase != null ? Number(a.productividadBase) : null,
+      configNestingV2:
+        (a.configNestingV2 as Record<string, unknown> | null) ?? null,
       createdAt: a.createdAt,
       updatedAt: a.updatedAt,
     };

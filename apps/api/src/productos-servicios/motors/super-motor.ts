@@ -121,8 +121,29 @@ export class SuperMotorModule implements ProductMotorModule {
     }
 
     const opcionalesSeleccionados = new Set(payload.opcionalesSeleccionados ?? []);
+    // P4.2 — gate de activación del paso:
+    //   `activacionV2` (si está seteado) manda:
+    //     OBLIGATORIO → corre siempre.
+    //     OPCIONAL    → corre solo si el cliente lo marcó en opcionalesSeleccionados.
+    //     CONDICIONAL → corre si condicionV2 evalúa truthy (hoy evaluación
+    //                   simplificada; JsonLogic completo queda para iteración
+    //                   cuando haya un caso real).
+    //   Fallback a `esOpcional` (bool v1) para pasos sin activacionV2.
     const operacionesAEjecutar = proceso.operaciones.filter((op) => {
       if (!op.activo) return false;
+      const activacion = (op as { activacionV2?: string }).activacionV2 ?? null;
+      if (activacion === 'OPCIONAL') {
+        return opcionalesSeleccionados.has(op.id);
+      }
+      if (activacion === 'CONDICIONAL') {
+        // TODO: evaluar op.condicionV2 contra el JobContext cuando exista un caso real.
+        // Por ahora, CONDICIONAL se comporta como OPCIONAL (requiere marcado explícito).
+        return opcionalesSeleccionados.has(op.id);
+      }
+      if (activacion === 'OBLIGATORIO') {
+        return true;
+      }
+      // Fallback a comportamiento legacy basado en esOpcional.
       if (op.esOpcional && !opcionalesSeleccionados.has(op.id)) return false;
       return true;
     });
@@ -194,7 +215,10 @@ export class SuperMotorModule implements ProductMotorModule {
         : null;
 
     for (const opOriginal of operacionesAEjecutar) {
-      // P1.3: si hay alternativa seleccionada, reemplaza máquina/perfil.
+      // P1.3 + P4.1: si hay alternativa seleccionada, reemplaza máquina/perfil
+      // y aplica overrides opcionales (setupMin, cleanupMin, tiempoFijoMin,
+      // productividadBase, configNestingV2). Los valores null de la alternativa
+      // significan "usar el valor base del paso".
       const alternativaIdSel = opcionesSeleccionadasMap.get(opOriginal.id);
       const alternativas = ((opOriginal as { alternativas?: unknown }).alternativas ?? []) as Array<{
         id: string;
@@ -209,12 +233,16 @@ export class SuperMotorModule implements ProductMotorModule {
           productivityValue: unknown;
           setupMin: unknown;
         } | null;
+        setupMin?: unknown;
+        cleanupMin?: unknown;
+        tiempoFijoMin?: unknown;
+        productividadBase?: unknown;
+        configNestingV2?: unknown;
       }>;
       const alternativaElegida =
         alternativaIdSel
           ? alternativas.find((a) => a.id === alternativaIdSel) ?? null
           : alternativas.find((a) => a.esDefault) ?? null;
-      // Clonar la op con máquina/perfil de la alternativa si se aplicó.
       const op = alternativaElegida
         ? {
             ...opOriginal,
@@ -222,6 +250,26 @@ export class SuperMotorModule implements ProductMotorModule {
             perfilOperativoId: alternativaElegida.perfilOperativoId ?? null,
             maquina: alternativaElegida.maquina,
             perfilOperativo: alternativaElegida.perfilOperativo,
+            setupMin:
+              alternativaElegida.setupMin != null
+                ? (alternativaElegida.setupMin as typeof opOriginal.setupMin)
+                : opOriginal.setupMin,
+            cleanupMin:
+              alternativaElegida.cleanupMin != null
+                ? (alternativaElegida.cleanupMin as typeof opOriginal.cleanupMin)
+                : opOriginal.cleanupMin,
+            tiempoFijoMin:
+              alternativaElegida.tiempoFijoMin != null
+                ? (alternativaElegida.tiempoFijoMin as typeof opOriginal.tiempoFijoMin)
+                : opOriginal.tiempoFijoMin,
+            productividadBase:
+              alternativaElegida.productividadBase != null
+                ? (alternativaElegida.productividadBase as typeof opOriginal.productividadBase)
+                : opOriginal.productividadBase,
+            configNestingV2:
+              alternativaElegida.configNestingV2 != null
+                ? (alternativaElegida.configNestingV2 as typeof opOriginal.configNestingV2)
+                : opOriginal.configNestingV2,
           }
         : opOriginal;
       const tarifaHora =
@@ -333,6 +381,11 @@ export class SuperMotorModule implements ProductMotorModule {
             ? { codigo: familia.codigo, nombre: familia.nombre, modoNesting: familia.modoNesting }
             : null,
           esOpcional: op.esOpcional,
+          activacionV2: (op as { activacionV2?: string }).activacionV2 ?? null,
+          // P4.2 — unidadProductivaV2: override del paso sobre la unidad
+          // derivada de la familia. Si null, el consumer debe derivarla de
+          // familia.modoNesting + contexto.
+          unidadProductivaV2: (op as { unidadProductivaV2?: string }).unidadProductivaV2 ?? null,
           maquina: op.maquina
             ? { id: op.maquina.id, nombre: op.maquina.nombre }
             : null,
@@ -383,14 +436,23 @@ export class SuperMotorModule implements ProductMotorModule {
     const unitario = cantidad > 0 ? roundMoney(total / cantidad) : 0;
 
     // Exponer opcionales disponibles para que la UI arme los checkboxes.
+    // P4.2: incluye pasos con activacionV2 en (OPCIONAL, CONDICIONAL) o,
+    // para pasos sin activacionV2 declarada, los con esOpcional=true.
     const opcionalesDisponibles = proceso.operaciones
-      .filter((op) => op.activo && op.esOpcional)
+      .filter((op) => {
+        if (!op.activo) return false;
+        const activacion = (op as { activacionV2?: string }).activacionV2 ?? null;
+        if (activacion === 'OPCIONAL' || activacion === 'CONDICIONAL') return true;
+        if (activacion === 'OBLIGATORIO') return false;
+        return op.esOpcional;
+      })
       .map((op) => ({
         id: op.id,
         orden: op.orden,
         codigo: op.codigo,
         nombre: op.nombre,
         familiaV2: op.familiaV2 ?? null,
+        activacionV2: (op as { activacionV2?: string }).activacionV2 ?? null,
         seleccionado: opcionalesSeleccionados.has(op.id),
       }));
 
