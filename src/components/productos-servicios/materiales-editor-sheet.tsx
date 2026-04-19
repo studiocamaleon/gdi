@@ -64,14 +64,22 @@ type VarianteOption = {
   id: string;
   sku: string;
   nombreVariante: string | null;
+  materiaPrimaId: string;
   materiaPrimaNombre: string;
   precioReferencia: number | null;
+};
+
+type MateriaPrimaOption = {
+  id: string;
+  nombre: string;
+  variantesCount: number;
 };
 
 type DraftForm = {
   id: string | null;
   nombre: string;
-  materiaPrimaVarianteId: string; // NONE => null (material genérico tipo "clics")
+  materiaPrimaId: string; // NONE => material genérico sin variante
+  materiaPrimaVarianteId: string; // NONE => aún no elegida dentro de la MP
   formula: MaterialFormula;
   cantidadPorUnidad: string;
   unidad: string;
@@ -83,6 +91,7 @@ type DraftForm = {
 const emptyDraft: DraftForm = {
   id: null,
   nombre: "",
+  materiaPrimaId: NONE,
   materiaPrimaVarianteId: NONE,
   formula: "por_unidad_productiva",
   cantidadPorUnidad: "1",
@@ -107,6 +116,7 @@ export function MaterialesEditorSheet({
 }) {
   const [materiales, setMateriales] = React.useState<ProcesoOperacionMaterial[]>([]);
   const [variantesOptions, setVariantesOptions] = React.useState<VarianteOption[]>([]);
+  const [materiaPrimaOptions, setMateriaPrimaOptions] = React.useState<MateriaPrimaOption[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const [draft, setDraft] = React.useState<DraftForm>(emptyDraft);
@@ -121,16 +131,27 @@ export function MaterialesEditorSheet({
       ]);
       setMateriales(mats);
       const options: VarianteOption[] = [];
+      const mps: MateriaPrimaOption[] = [];
       for (const mp of primas as MateriaPrima[]) {
-        for (const v of (mp.variantes ?? []) as MateriaPrimaVariante[]) {
-          if (!v.activo) continue;
+        const variantesActivas = ((mp.variantes ?? []) as MateriaPrimaVariante[]).filter(
+          (v) => v.activo,
+        );
+        for (const v of variantesActivas) {
           options.push({
             id: v.id,
             sku: v.sku,
             nombreVariante: v.nombreVariante ?? null,
+            materiaPrimaId: mp.id,
             materiaPrimaNombre: mp.nombre,
             precioReferencia:
               v.precioReferencia != null ? Number(v.precioReferencia) : null,
+          });
+        }
+        if (variantesActivas.length > 0) {
+          mps.push({
+            id: mp.id,
+            nombre: mp.nombre,
+            variantesCount: variantesActivas.length,
           });
         }
       }
@@ -139,7 +160,9 @@ export function MaterialesEditorSheet({
         if (byMp !== 0) return byMp;
         return a.sku.localeCompare(b.sku);
       });
+      mps.sort((a, b) => a.nombre.localeCompare(b.nombre));
       setVariantesOptions(options);
+      setMateriaPrimaOptions(mps);
     } catch (err) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : "No se pudieron cargar los materiales.");
@@ -165,9 +188,15 @@ export function MaterialesEditorSheet({
   }
 
   function startEdit(m: ProcesoOperacionMaterial) {
+    // Si el material tiene una variante asignada, derivar su materia prima
+    // desde el catálogo para que el Select se muestre con la MP correcta.
+    const varianteActual = m.materiaPrimaVarianteId
+      ? variantesOptions.find((v) => v.id === m.materiaPrimaVarianteId) ?? null
+      : null;
     setDraft({
       id: m.id,
       nombre: m.nombre,
+      materiaPrimaId: varianteActual?.materiaPrimaId ?? NONE,
       materiaPrimaVarianteId: m.materiaPrimaVarianteId ?? NONE,
       formula: m.formula,
       cantidadPorUnidad: String(m.cantidadPorUnidad),
@@ -371,38 +400,79 @@ export function MaterialesEditorSheet({
                     />
                   </div>
 
-                  <div className="grid gap-2">
-                    <Label>Variante de materia prima (opcional)</Label>
-                    <Select
-                      value={draft.materiaPrimaVarianteId}
-                      onValueChange={(v) =>
-                        setDraft((d) => ({ ...d, materiaPrimaVarianteId: v ?? NONE }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue>
-                          {draft.materiaPrimaVarianteId === NONE
-                            ? "Material genérico (sin variante)"
-                            : varianteElegida
-                              ? `${varianteElegida.materiaPrimaNombre} · ${varianteElegida.sku}`
-                              : "—"}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={NONE}>Material genérico (sin variante)</SelectItem>
-                        {variantesOptions.map((v) => (
-                          <SelectItem key={v.id} value={v.id}>
-                            {v.materiaPrimaNombre} · {v.sku}
-                            {v.nombreVariante ? ` — ${v.nombreVariante}` : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Si no elegís variante, se usa el <strong>precio manual</strong>. Útil para
-                      conceptos que no tienen stock (ej: clics, toner, tinta UV por ml).
-                    </p>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label>Materia prima</Label>
+                      <Select
+                        value={draft.materiaPrimaId}
+                        onValueChange={(v) =>
+                          setDraft((d) => ({
+                            ...d,
+                            materiaPrimaId: v ?? NONE,
+                            // Al cambiar la MP, se resetea la variante: el usuario
+                            // tiene que elegir una válida dentro del nuevo catálogo.
+                            materiaPrimaVarianteId: NONE,
+                          }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue>
+                            {draft.materiaPrimaId === NONE
+                              ? "Material genérico (sin MP)"
+                              : materiaPrimaOptions.find((mp) => mp.id === draft.materiaPrimaId)
+                                  ?.nombre ?? "—"}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={NONE}>Material genérico (sin MP)</SelectItem>
+                          {materiaPrimaOptions.map((mp) => (
+                            <SelectItem key={mp.id} value={mp.id}>
+                              {mp.nombre} ({mp.variantesCount} variante
+                              {mp.variantesCount === 1 ? "" : "s"})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Variante</Label>
+                      <Select
+                        value={draft.materiaPrimaVarianteId}
+                        onValueChange={(v) =>
+                          setDraft((d) => ({ ...d, materiaPrimaVarianteId: v ?? NONE }))
+                        }
+                        disabled={draft.materiaPrimaId === NONE}
+                      >
+                        <SelectTrigger>
+                          <SelectValue>
+                            {draft.materiaPrimaId === NONE
+                              ? "— sin MP —"
+                              : draft.materiaPrimaVarianteId === NONE
+                                ? "Seleccioná una variante"
+                                : varianteElegida
+                                  ? `${varianteElegida.sku}${varianteElegida.nombreVariante ? ` — ${varianteElegida.nombreVariante}` : ""}`
+                                  : "—"}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={NONE}>— seleccionar —</SelectItem>
+                          {variantesOptions
+                            .filter((v) => v.materiaPrimaId === draft.materiaPrimaId)
+                            .map((v) => (
+                              <SelectItem key={v.id} value={v.id}>
+                                {v.sku}
+                                {v.nombreVariante ? ` — ${v.nombreVariante}` : ""}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Si elegís <strong>material genérico</strong>, se usa el{" "}
+                    <strong>precio manual</strong>. Útil para conceptos que no tienen stock
+                    (ej: clics, toner, tinta UV por ml).
+                  </p>
 
                   <div className="grid gap-4 md:grid-cols-3">
                     <div className="grid gap-2">
