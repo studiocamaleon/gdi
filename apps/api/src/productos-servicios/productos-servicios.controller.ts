@@ -400,15 +400,6 @@ export class ProductosServiciosController {
     return this.service.updateGranFormatoChecklist(auth, id, payload);
   }
 
-  @Post(':id/rigidos-impresos/cotizar')
-  cotizarRigidPrintedByProducto(
-    @CurrentSession() auth: CurrentAuth,
-    @Param('id') id: string,
-    @Body() payload: CotizarProductoVarianteDto,
-  ) {
-    return this.service.cotizarRigidPrintedByProducto(auth, id, payload);
-  }
-
   @Post(':id/rigidos-impresos/preview-flexible')
   previewRigidPrintedFlexible(
     @CurrentSession() auth: CurrentAuth,
@@ -630,22 +621,6 @@ export class ProductosServiciosController {
     return this.service.upsertVarianteMotorOverride(auth, varianteId, payload);
   }
 
-  @Post('variantes/:varianteId/cotizar')
-  cotizarVariante(
-    @CurrentSession() auth: CurrentAuth,
-    @Param('varianteId') varianteId: string,
-    @Body() payload: CotizarProductoVarianteDto,
-  ) {
-    return this.service.cotizarVariante(auth, varianteId, payload);
-  }
-
-  /**
-   * Modelo universal (A.6): endpoint alternativo que devuelve la cotización
-   * en la shape canónica del modelo universal. Hoy detrás llama al motor v1
-   * y adapta el resultado; en Etapa B/C se enchufarán motores v2 que emitan
-   * directo sin adapter. Los consumidores del nuevo shape ya pueden apuntar
-   * a este endpoint.
-   */
   /**
    * P1.1 — Ruta completa de una variante para el tab "Ruta de producción".
    * Devuelve proceso + operaciones con familia, máquina, perfil, centro de
@@ -693,15 +668,6 @@ export class ProductosServiciosController {
     @Body() payload: PreviewImposicionProductoVarianteDto,
   ) {
     return this.service.previewVarianteImposicion(auth, varianteId, payload);
-  }
-
-  @Post(':productoId/vinilo-corte/imposicion-preview')
-  previewViniloCortImposicion(
-    @CurrentSession() auth: CurrentAuth,
-    @Param('productoId') productoId: string,
-    @Body() payload: PreviewImposicionProductoVarianteDto,
-  ) {
-    return this.service.previewVinylCutByProducto(auth, productoId, payload);
   }
 
   @Get('variantes/:varianteId/cotizaciones')
