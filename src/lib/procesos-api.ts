@@ -297,3 +297,39 @@ export async function deleteProcesoOperacionMaterial(
     { method: 'DELETE' },
   );
 }
+
+// P1.5 — Update parcial de un paso (ProcesoOperacion) y reorden.
+export type UpdateProcesoOperacionPayload = {
+  nombre?: string;
+  esOpcional?: boolean;
+  activacionV2?: 'OBLIGATORIO' | 'OPCIONAL' | 'CONDICIONAL';
+  familiaV2?: string;
+  unidadProductivaV2?: string;
+  centroCostoId?: string;
+  maquinaId?: string | null;
+  perfilOperativoId?: string | null;
+  setupMin?: number;
+  cleanupMin?: number;
+  tiempoFijoMin?: number;
+  productividadBase?: number;
+};
+
+export async function updateProcesoOperacion(
+  operacionId: string,
+  payload: UpdateProcesoOperacionPayload,
+) {
+  return apiRequest<unknown>(
+    `/procesos/operaciones/${operacionId}`,
+    { method: 'PATCH', body: JSON.stringify(payload) },
+  );
+}
+
+export async function moveProcesoOperacion(
+  operacionId: string,
+  direction: 'up' | 'down',
+) {
+  return apiRequest<{ ok: true; moved: { id: string; fromOrden: number; toOrden: number } }>(
+    `/procesos/operaciones/${operacionId}/move?direction=${direction}`,
+    { method: 'POST' },
+  );
+}

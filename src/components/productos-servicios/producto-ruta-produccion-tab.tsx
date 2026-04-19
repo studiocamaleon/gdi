@@ -17,6 +17,7 @@ import { toast } from "sonner";
 
 import { AlternativasEditorSheet } from "@/components/productos-servicios/alternativas-editor-sheet";
 import { MaterialesEditorSheet } from "@/components/productos-servicios/materiales-editor-sheet";
+import { PasoEditorSheet } from "@/components/productos-servicios/paso-editor-sheet";
 import type { ProductTabProps } from "@/components/productos-servicios/product-detail-types";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { Badge } from "@/components/ui/badge";
@@ -30,10 +31,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { moveProcesoOperacion } from "@/lib/procesos-api";
 import {
   getRutaCompletaPorProducto,
   getRutaCompletaPorVariante,
   type RutaCompleta,
+  type RutaCompletaOperacion,
 } from "@/lib/productos-servicios-api";
 
 function formatMin(v: number | null): string {
@@ -68,6 +71,10 @@ export function ProductoRutaProduccionTab(props: ProductTabProps) {
     operacionId: string;
     operacionNombre: string;
   } | null>(null);
+  const [pasoEditorState, setPasoEditorState] = React.useState<RutaCompletaOperacion | null>(
+    null,
+  );
+  const [movingId, setMovingId] = React.useState<string | null>(null);
   const selectedVariantId = props.selectedVariantId;
   const productoId = props.producto.id;
 
@@ -91,6 +98,22 @@ export function ProductoRutaProduccionTab(props: ProductTabProps) {
   React.useEffect(() => {
     void load();
   }, [load]);
+
+  const handleMove = React.useCallback(
+    async (operacionId: string, direction: "up" | "down") => {
+      setMovingId(operacionId);
+      try {
+        await moveProcesoOperacion(operacionId, direction);
+        await load();
+      } catch (err) {
+        console.error(err);
+        toast.error(err instanceof Error ? err.message : "No se pudo mover el paso.");
+      } finally {
+        setMovingId(null);
+      }
+    },
+    [load],
+  );
 
   if (isLoading) {
     return (
@@ -163,6 +186,7 @@ export function ProductoRutaProduccionTab(props: ProductTabProps) {
                 <TableHead>Productividad</TableHead>
                 <TableHead>Alternativas</TableHead>
                 <TableHead>Activación</TableHead>
+                <TableHead className="w-36 text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -223,6 +247,35 @@ export function ProductoRutaProduccionTab(props: ProductTabProps) {
                     </TableCell>
                     <TableCell>
                       <Badge variant={act.variant}>{act.label}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={movingId !== null || op.orden === 1}
+                          title="Mover arriba"
+                          onClick={() => handleMove(op.id, "up")}
+                        >
+                          ↑
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={movingId !== null || op.orden === ruta.operaciones.length}
+                          title="Mover abajo"
+                          onClick={() => handleMove(op.id, "down")}
+                        >
+                          ↓
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setPasoEditorState(op)}
+                        >
+                          Editar
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -357,6 +410,17 @@ export function ProductoRutaProduccionTab(props: ProductTabProps) {
           operacionId={matEditorState.operacionId}
           operacionNombre={matEditorState.operacionNombre}
           onChanged={load}
+        />
+      ) : null}
+
+      {pasoEditorState ? (
+        <PasoEditorSheet
+          open={pasoEditorState !== null}
+          onOpenChange={(open) => {
+            if (!open) setPasoEditorState(null);
+          }}
+          operacion={pasoEditorState}
+          onSaved={load}
         />
       ) : null}
     </div>
