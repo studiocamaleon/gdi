@@ -1406,6 +1406,15 @@ model ProcesoOperacionAlternativa {
   esDefault              Boolean                   @default(false)
   orden                  Int                       @default(0)
   activo                 Boolean                   @default(true)
+  /// P4.1 — Overrides respecto al paso base. Si null, el super motor
+  /// usa el valor del `ProcesoOperacion` padre. Unifican los antiguos
+  /// `detalleJson.niveles[]` del modelo v1: "diseño básico vs avanzado"
+  /// son ahora dos Opciones con distinto productividadBase.
+  setupMin               Decimal?                  @db.Decimal(12, 2)
+  cleanupMin             Decimal?                  @db.Decimal(12, 2)
+  tiempoFijoMin          Decimal?                  @db.Decimal(12, 2)
+  productividadBase      Decimal?                  @db.Decimal(12, 4)
+  configNestingV2        Json?
   createdAt              DateTime                  @default(now())
   updatedAt              DateTime                  @updatedAt
   tenant                 Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)

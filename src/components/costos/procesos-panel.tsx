@@ -2404,12 +2404,6 @@ export function ProcesosPanel({
                             return (
                               <div className="flex flex-col gap-0.5">
                                 <span>{summary.maquinasSummary}</span>
-                                {summary.tieneNiveles ? (
-                                  <span className="text-xs text-muted-foreground">
-                                    {summary.nivelesCount} variante
-                                    {summary.nivelesCount > 1 ? "s" : ""}
-                                  </span>
-                                ) : null}
                               </div>
                             );
                           })()}

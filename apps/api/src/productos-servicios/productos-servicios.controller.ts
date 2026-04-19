@@ -396,15 +396,6 @@ export class ProductosServiciosController {
     return this.service.updateRigidPrintedChecklist(auth, id, payload);
   }
 
-  @Post(':id/gran-formato-costos/preview')
-  previewGranFormatoCostos(
-    @CurrentSession() auth: CurrentAuth,
-    @Param('id') id: string,
-    @Body() payload: PreviewGranFormatoCostosDto,
-  ) {
-    return this.service.previewGranFormatoCostos(auth, id, payload);
-  }
-
   @Get(':id/gran-formato-variantes')
   getGranFormatoVariantes(
     @CurrentSession() auth: CurrentAuth,

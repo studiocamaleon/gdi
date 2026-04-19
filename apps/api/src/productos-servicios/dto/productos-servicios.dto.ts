@@ -1470,13 +1470,6 @@ export class PreviewGranFormatoCostosDto {
   checklistRespuestas?: CotizarChecklistRespuestaDto[];
 
   @IsOptional()
-  @IsArray()
-  @ArrayMaxSize(100)
-  @ValidateNested({ each: true })
-  @Type(() => CotizarNivelSeleccionadoDto)
-  nivelesSeleccionados?: CotizarNivelSeleccionadoDto[];
-
-  @IsOptional()
   @IsObject()
   panelizado?: {
     activo?: boolean;
@@ -1520,13 +1513,6 @@ export class CotizarProductoVarianteDto {
   @IsUUID('4', { each: true })
   opcionalesSeleccionados?: string[];
 
-  @IsOptional()
-  @IsArray()
-  @ArrayMaxSize(100)
-  @ValidateNested({ each: true })
-  @Type(() => CotizarNivelSeleccionadoDto)
-  nivelesSeleccionados?: CotizarNivelSeleccionadoDto[];
-
   /**
    * P1.3 — Alternativas de máquina+perfil seleccionadas por el cliente para
    * los pasos de la ruta que declaran múltiples opciones (ej. gran formato
@@ -1552,14 +1538,6 @@ export class CotizarOpcionSeleccionadaDto {
 
   @IsUUID('4')
   alternativaId!: string;
-}
-
-export class CotizarNivelSeleccionadoDto {
-  @IsUUID('4')
-  operacionId!: string;
-
-  @IsString()
-  nivelId!: string;
 }
 
 export class PreviewImposicionProductoVarianteDto {

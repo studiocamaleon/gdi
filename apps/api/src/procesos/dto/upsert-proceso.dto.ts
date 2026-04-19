@@ -58,12 +58,6 @@ export enum ModoProductividadProcesoDto {
   variable = 'variable',
 }
 
-export enum ModoProductividadNivelDto {
-  fija = 'fija',
-  variable_manual = 'variable_manual',
-  variable_perfil = 'variable_perfil',
-}
-
 export enum UnidadProcesoDto {
   ninguna = 'ninguna',
   hora = 'hora',
@@ -203,83 +197,12 @@ export class ProcesoOperacionItemDto {
   @IsBoolean()
   esOpcional?: boolean;
 
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => ProcesoOperacionNivelDto)
-  niveles?: ProcesoOperacionNivelDto[];
-
   @IsBoolean()
   activo: boolean;
 }
 
-export class ProcesoOperacionNivelDto {
-  @IsOptional()
-  @IsString()
-  @MinLength(1)
-  id?: string;
-
-  @IsString()
-  @MinLength(1)
-  nombre: string;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  orden?: number;
-
-  @IsOptional()
-  @IsBoolean()
-  activo?: boolean;
-
-  @IsEnum(ModoProductividadNivelDto)
-  modoProductividadNivel: ModoProductividadNivelDto;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  tiempoFijoMin?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  multiplicadorDobleFaz?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  productividadBase?: number;
-
-  @IsOptional()
-  @IsEnum(UnidadProcesoDto)
-  unidadSalida?: UnidadProcesoDto;
-
-  @IsOptional()
-  @IsEnum(UnidadProcesoDto)
-  unidadTiempo?: UnidadProcesoDto;
-
-  @IsOptional()
-  @IsUUID()
-  maquinaId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  perfilOperativoId?: string;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  setupMin?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  cleanupMin?: number;
-
-  @IsOptional()
-  @IsObject()
-  detalle?: Record<string, unknown>;
-}
+// P4.1 — ProcesoOperacionNivelDto eliminado. Los niveles se consolidaron
+// en ProcesoOperacionAlternativa con overrides de tiempos/productividad.
 
 export class UpsertProcesoDto {
   @IsOptional()

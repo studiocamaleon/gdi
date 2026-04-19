@@ -43,12 +43,6 @@ import {
 import {
   evaluateProductividad,
 } from './proceso-productividad.engine';
-import {
-  getNivelesActivos,
-  operacionTieneNiveles,
-  todosLosNivelesCompletos,
-  getMaquinaIdsDeNiveles,
-} from './utils/operacion-values';
 
 type ProcesoCompleto = Prisma.ProcesoDefinicionGetPayload<{
   include: {
@@ -173,7 +167,6 @@ export class ProcesosService {
     payload: UpsertProcesoOperacionPlantillaDto,
   ) {
     this.validateBibliotecaOperacionPayload(payload);
-    await this.validateBibliotecaOperacionNivelReferences(auth, payload.niveles ?? []);
     const refs = await this.resolveBibliotecaOperacionReferences(auth, payload);
 
     let created: { id: string };
@@ -197,7 +190,6 @@ export class ProcesosService {
   ) {
     await this.findBibliotecaOperacionOrThrow(auth, id);
     this.validateBibliotecaOperacionPayload(payload);
-    await this.validateBibliotecaOperacionNivelReferences(auth, payload.niveles ?? []);
     const refs = await this.resolveBibliotecaOperacionReferences(auth, payload);
 
     let updated: { id: string };
@@ -404,14 +396,6 @@ export class ProcesosService {
         warnings.push(unitWarning);
       }
 
-      const nivelesDelPaso = getNivelesActivos(operacion.detalleJson);
-      const tieneNivelesPaso = nivelesDelPaso.length > 0;
-      if (tieneNivelesPaso) {
-        warnings.push(
-          `Este paso tiene ${nivelesDelPaso.length} variante${nivelesDelPaso.length > 1 ? 's' : ''}; la simulación usa los valores generales, cada variante puede cotizar distinto.`,
-        );
-      }
-
       return {
         operacionId: operacion.id,
         orden: operacion.orden,
@@ -436,25 +420,6 @@ export class ProcesosService {
         modoProductividad: this.toApiModoProductividad(
           operacion.modoProductividad,
         ),
-        tieneNiveles: tieneNivelesPaso,
-        nivelesCount: nivelesDelPaso.length,
-        nivelesSnapshots: tieneNivelesPaso
-          ? nivelesDelPaso.map((nivel) => ({
-              nivelId: nivel.id,
-              nombre: nivel.nombre,
-              maquinaId: nivel.maquinaId,
-              maquinaNombre: nivel.maquinaNombre,
-              perfilOperativoId: nivel.perfilOperativoId,
-              perfilOperativoNombre: nivel.perfilOperativoNombre,
-              modoProductividadNivel: nivel.modoProductividadNivel,
-              productividadBase: nivel.productividadBase,
-              tiempoFijoMin: nivel.tiempoFijoMin,
-              setupMin: nivel.setupMin,
-              cleanupMin: nivel.cleanupMin,
-              unidadSalida: nivel.unidadSalida,
-              unidadTiempo: nivel.unidadTiempo,
-            }))
-          : [],
         warnings: Array.from(new Set(warnings)),
       };
     });
@@ -752,7 +717,6 @@ export class ProcesosService {
       reglaMermaJson: this.toNullableJson(payload.reglaMerma),
       detalleJson: this.buildOperacionDetalleJson(
         payload.detalle,
-        payload.niveles,
         payload.baseCalculoProductividad,
       ),
       rol: payload.rol ? this.toPrismaRol(payload.rol) : null,
@@ -800,7 +764,6 @@ export class ProcesosService {
       reglaMermaJson: this.toNullableJson(payload.reglaMerma),
       detalleJson: this.buildOperacionDetalleJson(
         undefined,
-        payload.niveles,
         payload.baseCalculoProductividad,
       ),
       observaciones: payload.observaciones?.trim() || null,
@@ -878,88 +841,13 @@ export class ProcesosService {
 
   private buildOperacionDetalleJson(
     detalle: Record<string, unknown> | undefined,
-    niveles: Array<{
-      id?: string;
-      nombre: string;
-      orden?: number;
-      activo?: boolean;
-      modoProductividadNivel?: string;
-      tiempoFijoMin?: number;
-      productividadBase?: number;
-      unidadSalida?: string;
-      unidadTiempo?: string;
-      maquinaId?: string;
-      perfilOperativoId?: string;
-      setupMin?: number;
-      cleanupMin?: number;
-      detalle?: Record<string, unknown>;
-    }> = [],
     baseCalculoProductividad?: BaseCalculoProductividadDto,
   ) {
     const base = detalle && typeof detalle === 'object' && !Array.isArray(detalle) ? { ...detalle } : {};
     if (baseCalculoProductividad) {
       base.baseCalculoProductividad = baseCalculoProductividad;
     }
-    const nivelesSanitizados = niveles
-      .filter((nivel) => nivel.nombre?.trim())
-      .map((nivel, index) => {
-        const modoProductividadNivel =
-          nivel.modoProductividadNivel === 'variable_manual' ||
-          nivel.modoProductividadNivel === 'variable_perfil'
-            ? nivel.modoProductividadNivel
-            : 'fija';
-        const sanitized = {
-          id: nivel.id?.trim() || randomUUID(),
-          nombre: nivel.nombre.trim(),
-          orden: nivel.orden ?? index + 1,
-          activo: nivel.activo ?? true,
-          modoProductividadNivel,
-          tiempoFijoMin:
-            nivel.tiempoFijoMin === undefined || nivel.tiempoFijoMin === null
-              ? null
-              : Number(nivel.tiempoFijoMin),
-          productividadBase:
-            nivel.productividadBase === undefined || nivel.productividadBase === null
-              ? null
-              : Number(nivel.productividadBase),
-          unidadSalida: nivel.unidadSalida?.trim() || null,
-          unidadTiempo: nivel.unidadTiempo?.trim() || null,
-          maquinaId: nivel.maquinaId?.trim() || null,
-          perfilOperativoId: nivel.perfilOperativoId?.trim() || null,
-          setupMin:
-            nivel.setupMin === undefined || nivel.setupMin === null
-              ? null
-              : Number(nivel.setupMin),
-          cleanupMin:
-            nivel.cleanupMin === undefined || nivel.cleanupMin === null
-              ? null
-              : Number(nivel.cleanupMin),
-          resumen: this.buildNivelResumen({
-            nombre: nivel.nombre.trim(),
-            modoProductividadNivel,
-            tiempoFijoMin:
-              nivel.tiempoFijoMin === undefined || nivel.tiempoFijoMin === null
-                ? null
-                : Number(nivel.tiempoFijoMin),
-            productividadBase:
-              nivel.productividadBase === undefined || nivel.productividadBase === null
-                ? null
-                : Number(nivel.productividadBase),
-            unidadSalida: nivel.unidadSalida?.trim() || null,
-            unidadTiempo: nivel.unidadTiempo?.trim() || null,
-            perfilOperativoNombre: '',
-          }),
-          detalle:
-            nivel.detalle && typeof nivel.detalle === 'object' && !Array.isArray(nivel.detalle)
-              ? nivel.detalle
-              : null,
-        };
-        return sanitized;
-      });
-    return this.toNullableJson({
-      ...base,
-      niveles: nivelesSanitizados,
-    });
+    return this.toNullableJson(base);
   }
 
   private getOperacionDetalle(detalleJson: Prisma.JsonValue | null) {
@@ -967,126 +855,9 @@ export class ProcesosService {
       return null;
     }
     const detalle = { ...(detalleJson as Record<string, unknown>) };
-    delete detalle.niveles;
     return Object.keys(detalle).length > 0 ? detalle : null;
   }
 
-  private getOperacionNiveles(detalleJson: Prisma.JsonValue | null) {
-    if (!detalleJson || typeof detalleJson !== 'object' || Array.isArray(detalleJson)) {
-      return [];
-    }
-    const raw = (detalleJson as Record<string, unknown>).niveles;
-    if (!Array.isArray(raw)) {
-      return [];
-    }
-    return raw
-      .map((item, index) => {
-        if (!item || typeof item !== 'object' || Array.isArray(item)) {
-          return null;
-        }
-        const nivel = item as Record<string, unknown>;
-        const nombre = String(nivel.nombre ?? '').trim();
-        if (!nombre) {
-          return null;
-        }
-        return {
-          id: String(nivel.id ?? randomUUID()),
-          nombre,
-          orden: Number(nivel.orden ?? index + 1),
-          activo: nivel.activo !== false,
-          modoProductividadNivel:
-            nivel.modoProductividadNivel === 'variable_manual' ||
-            nivel.modoProductividadNivel === 'variable_perfil'
-              ? nivel.modoProductividadNivel
-              : 'fija',
-          tiempoFijoMin:
-            typeof nivel.tiempoFijoMin === 'number'
-              ? nivel.tiempoFijoMin
-              : nivel.tiempoFijoMin == null
-                ? null
-                : Number(nivel.tiempoFijoMin),
-          productividadBase:
-            typeof nivel.productividadBase === 'number'
-              ? nivel.productividadBase
-              : nivel.productividadBase == null
-                ? null
-                : Number(nivel.productividadBase),
-          unidadSalida:
-            typeof nivel.unidadSalida === 'string' && nivel.unidadSalida.trim().length
-              ? nivel.unidadSalida.trim()
-              : null,
-          unidadTiempo:
-            typeof nivel.unidadTiempo === 'string' && nivel.unidadTiempo.trim().length
-              ? nivel.unidadTiempo.trim()
-              : null,
-          maquinaId:
-            typeof nivel.maquinaId === 'string' && nivel.maquinaId.trim().length
-              ? nivel.maquinaId.trim()
-              : null,
-          maquinaNombre:
-            typeof nivel.maquinaNombre === 'string' && nivel.maquinaNombre.trim().length
-              ? nivel.maquinaNombre.trim()
-              : '',
-          perfilOperativoId:
-            typeof nivel.perfilOperativoId === 'string' && nivel.perfilOperativoId.trim().length
-              ? nivel.perfilOperativoId.trim()
-              : null,
-          perfilOperativoNombre:
-            typeof nivel.perfilOperativoNombre === 'string' && nivel.perfilOperativoNombre.trim().length
-              ? nivel.perfilOperativoNombre.trim()
-              : '',
-          setupMin:
-            typeof nivel.setupMin === 'number'
-              ? nivel.setupMin
-              : nivel.setupMin == null
-                ? null
-                : Number(nivel.setupMin),
-          cleanupMin:
-            typeof nivel.cleanupMin === 'number'
-              ? nivel.cleanupMin
-              : nivel.cleanupMin == null
-                ? null
-                : Number(nivel.cleanupMin),
-          resumen:
-            typeof nivel.resumen === 'string' && nivel.resumen.trim().length
-              ? nivel.resumen.trim()
-              : this.buildNivelResumen({
-                  nombre,
-                  modoProductividadNivel:
-                    nivel.modoProductividadNivel === 'variable_manual' ||
-                    nivel.modoProductividadNivel === 'variable_perfil'
-                      ? nivel.modoProductividadNivel
-                      : 'fija',
-                  tiempoFijoMin:
-                    typeof nivel.tiempoFijoMin === 'number'
-                      ? nivel.tiempoFijoMin
-                      : nivel.tiempoFijoMin == null
-                        ? null
-                        : Number(nivel.tiempoFijoMin),
-                  productividadBase:
-                    typeof nivel.productividadBase === 'number'
-                      ? nivel.productividadBase
-                      : nivel.productividadBase == null
-                        ? null
-                        : Number(nivel.productividadBase),
-                  unidadSalida:
-                    typeof nivel.unidadSalida === 'string' ? nivel.unidadSalida : null,
-                  unidadTiempo:
-                    typeof nivel.unidadTiempo === 'string' ? nivel.unidadTiempo : null,
-                  perfilOperativoNombre:
-                    typeof nivel.perfilOperativoNombre === 'string'
-                      ? nivel.perfilOperativoNombre
-                      : '',
-                }),
-          detalle:
-            nivel.detalle && typeof nivel.detalle === 'object' && !Array.isArray(nivel.detalle)
-              ? (nivel.detalle as Record<string, unknown>)
-              : null,
-        };
-      })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item))
-      .sort((a, b) => a.orden - b.orden);
-  }
 
   private validateBibliotecaOperacionPayload(
     payload: UpsertProcesoOperacionPlantillaDto,
@@ -1142,8 +913,6 @@ export class ProcesosService {
       baseCalculoProductividad: payload.baseCalculoProductividad,
       unidadSalida: payload.unidadSalida ?? UnidadProcesoDto.ninguna,
     });
-
-    this.validateOperacionNivelesPayload(payload.niveles ?? [], payload.nombre.trim());
   }
 
   private validateBaseCalculoProductividad(input: {
@@ -1524,23 +1293,9 @@ export class ProcesosService {
       if (operacion.centroCostoId) {
         return true;
       }
-
-      // Si la operación tiene niveles activos, verificar que todos tengan máquina con centro principal.
-      const nivelesActivos = (operacion.niveles ?? []).filter(
-        (n) => n.activo !== false,
-      );
-      if (nivelesActivos.length > 0) {
-        return nivelesActivos.every((nivel) => {
-          if (!nivel.maquinaId) return false;
-          const maquina = references.maquinasById.get(nivel.maquinaId);
-          return Boolean(maquina?.centroCostoPrincipalId);
-        });
-      }
-
       if (!operacion.maquinaId) {
         return false;
       }
-
       const maquina = references.maquinasById.get(operacion.maquinaId);
       return Boolean(maquina?.centroCostoPrincipalId);
     });
@@ -1551,19 +1306,6 @@ export class ProcesosService {
 
     const hasAllOperationsCostingSignals = payload.operaciones.every(
       (operacion) => {
-        // Si la operación tiene niveles activos, TODOS deben tener campos de costeo.
-        const nivelesActivos = (operacion.niveles ?? []).filter(
-          (n) => n.activo !== false,
-        );
-        if (nivelesActivos.length > 0) {
-          return nivelesActivos.every((nivel) => {
-            if (nivel.modoProductividadNivel === 'fija') {
-              return (nivel.tiempoFijoMin ?? 0) > 0;
-            }
-            return (nivel.productividadBase ?? 0) > 0;
-          });
-        }
-
         const derived = this.deriveOperationDefaultsFromPayload(
           operacion,
           references,
@@ -1632,12 +1374,6 @@ export class ProcesosService {
     }
 
     for (const operacion of operaciones) {
-      this.validateOperacionNivelesBusinessRules(
-        operacion.nombre.trim(),
-        operacion.niveles ?? [],
-        references,
-      );
-
       if (!operacion.perfilOperativoId) {
         continue;
       }
@@ -1688,10 +1424,8 @@ export class ProcesosService {
         operacion,
         references,
       );
-      const tieneNiveles = (operacion.niveles?.length ?? 0) > 0;
 
       if (
-        !tieneNiveles &&
         modoProductividad === ModoProductividadProceso.FIJA &&
         (!operacion.tiempoFijoMin || operacion.tiempoFijoMin <= 0)
       ) {
@@ -1701,7 +1435,6 @@ export class ProcesosService {
       }
 
       if (
-        !tieneNiveles &&
         modoProductividad === ModoProductividadProceso.FORMULA &&
         (!derived.productividadBase || Number(derived.productividadBase) <= 0)
       ) {
@@ -1755,10 +1488,7 @@ export class ProcesosService {
     const machineIds = Array.from(
       new Set(
         operaciones
-          .flatMap((operacion) => [
-            operacion.maquinaId,
-            ...(operacion.niveles ?? []).map((nivel) => nivel.maquinaId),
-          ])
+          .map((operacion) => operacion.maquinaId)
           .filter((value): value is string => Boolean(value)),
       ),
     );
@@ -1766,10 +1496,7 @@ export class ProcesosService {
     const perfilIds = Array.from(
       new Set(
         operaciones
-          .flatMap((operacion) => [
-            operacion.perfilOperativoId,
-            ...(operacion.niveles ?? []).map((nivel) => nivel.perfilOperativoId),
-          ])
+          .map((operacion) => operacion.perfilOperativoId)
           .filter((value): value is string => Boolean(value)),
       ),
     );
@@ -2012,182 +1739,6 @@ export class ProcesosService {
       estacionId,
     };
   }
-
-  private validateOperacionNivelesPayload(
-    niveles: Array<{
-      nombre?: string;
-      modoProductividadNivel?: string;
-      tiempoFijoMin?: number;
-      productividadBase?: number;
-      unidadSalida?: string;
-      unidadTiempo?: string;
-      maquinaId?: string;
-      perfilOperativoId?: string;
-      setupMin?: number;
-      cleanupMin?: number;
-    }>,
-    operationName: string,
-  ) {
-    for (const nivel of niveles) {
-      const nombre = nivel.nombre?.trim();
-      if (!nombre) {
-        throw new BadRequestException(`Todos los niveles de ${operationName} requieren nombre.`);
-      }
-      const modo =
-        nivel.modoProductividadNivel === 'variable_manual' ||
-        nivel.modoProductividadNivel === 'variable_perfil'
-          ? nivel.modoProductividadNivel
-          : 'fija';
-      if (nivel.setupMin !== undefined && nivel.setupMin < 0) {
-        throw new BadRequestException(`El setup del nivel ${nombre} no puede ser negativo.`);
-      }
-      if (nivel.cleanupMin !== undefined && nivel.cleanupMin < 0) {
-        throw new BadRequestException(`El cleanup del nivel ${nombre} no puede ser negativo.`);
-      }
-      if (modo === 'fija') {
-        if (nivel.tiempoFijoMin === undefined || Number(nivel.tiempoFijoMin) <= 0) {
-          throw new BadRequestException(`El nivel ${nombre} debe definir Tiempo total (min).`);
-        }
-        if (nivel.maquinaId || nivel.perfilOperativoId) {
-          throw new BadRequestException(`El nivel ${nombre} en modo fija no puede usar máquina ni perfil.`);
-        }
-      }
-      if (modo === 'variable_manual') {
-        if (nivel.productividadBase === undefined || Number(nivel.productividadBase) <= 0) {
-          throw new BadRequestException(`El nivel ${nombre} debe definir Valor productividad.`);
-        }
-        if (!nivel.unidadSalida || !nivel.unidadTiempo) {
-          throw new BadRequestException(`El nivel ${nombre} debe definir Unidad de productividad.`);
-        }
-        if (nivel.maquinaId || nivel.perfilOperativoId) {
-          throw new BadRequestException(`El nivel ${nombre} en modo variable manual no puede usar máquina ni perfil.`);
-        }
-      }
-      if (modo === 'variable_perfil') {
-        if (!nivel.maquinaId || !nivel.perfilOperativoId) {
-          throw new BadRequestException(`El nivel ${nombre} debe definir máquina y perfil operativo.`);
-        }
-      }
-    }
-  }
-
-  private validateOperacionNivelesBusinessRules(
-    operationName: string,
-    niveles: Array<{
-      nombre?: string;
-      maquinaId?: string;
-      perfilOperativoId?: string;
-      modoProductividadNivel?: string;
-    }>,
-    references: ReferenceContext,
-  ) {
-    for (const nivel of niveles) {
-      const modo =
-        nivel.modoProductividadNivel === 'variable_manual' ||
-        nivel.modoProductividadNivel === 'variable_perfil'
-          ? nivel.modoProductividadNivel
-          : 'fija';
-      if (modo !== 'variable_perfil') {
-        continue;
-      }
-      const nivelNombre = nivel.nombre?.trim() || 'sin nombre';
-      const maquina = nivel.maquinaId ? references.maquinasById.get(nivel.maquinaId) : null;
-      if (!maquina) {
-        throw new BadRequestException(`La máquina del nivel ${nivelNombre} (${operationName}) no existe.`);
-      }
-      const perfil = nivel.perfilOperativoId
-        ? references.perfilesById.get(nivel.perfilOperativoId)
-        : null;
-      if (!perfil) {
-        throw new BadRequestException(`El perfil operativo del nivel ${nivelNombre} (${operationName}) no existe.`);
-      }
-      if (perfil.maquinaId !== maquina.id) {
-        throw new BadRequestException(`El perfil operativo del nivel ${nivelNombre} (${operationName}) no pertenece a la máquina seleccionada.`);
-      }
-    }
-  }
-
-  private async validateBibliotecaOperacionNivelReferences(
-    auth: CurrentAuth,
-    niveles: Array<{
-      nombre?: string;
-      maquinaId?: string;
-      perfilOperativoId?: string;
-      modoProductividadNivel?: string;
-    }>,
-  ) {
-    const machineIds = Array.from(
-      new Set(
-        niveles
-          .filter((nivel) => nivel.modoProductividadNivel === 'variable_perfil')
-          .map((nivel) => nivel.maquinaId)
-          .filter((value): value is string => Boolean(value)),
-      ),
-    );
-    const perfilIds = Array.from(
-      new Set(
-        niveles
-          .filter((nivel) => nivel.modoProductividadNivel === 'variable_perfil')
-          .map((nivel) => nivel.perfilOperativoId)
-          .filter((value): value is string => Boolean(value)),
-      ),
-    );
-    if (!machineIds.length && !perfilIds.length) {
-      return;
-    }
-    const [maquinas, perfiles] = await Promise.all([
-      machineIds.length
-        ? this.prisma.maquina.findMany({
-            where: { tenantId: auth.tenantId, id: { in: machineIds } },
-            select: { id: true },
-          })
-        : Promise.resolve([]),
-      perfilIds.length
-        ? this.prisma.maquinaPerfilOperativo.findMany({
-            where: { tenantId: auth.tenantId, id: { in: perfilIds } },
-            select: { id: true, maquinaId: true },
-          })
-        : Promise.resolve([]),
-    ]);
-    const machineSet = new Set(maquinas.map((item) => item.id));
-    const perfilesMap = new Map(perfiles.map((item) => [item.id, item.maquinaId]));
-    for (const nivel of niveles) {
-      if (nivel.modoProductividadNivel !== 'variable_perfil') {
-        continue;
-      }
-      const nivelNombre = nivel.nombre?.trim() || 'sin nombre';
-      if (!nivel.maquinaId || !machineSet.has(nivel.maquinaId)) {
-        throw new BadRequestException(`La máquina del nivel ${nivelNombre} no existe para este tenant.`);
-      }
-      const perfilMaquinaId = nivel.perfilOperativoId ? perfilesMap.get(nivel.perfilOperativoId) : null;
-      if (!perfilMaquinaId) {
-        throw new BadRequestException(`El perfil operativo del nivel ${nivelNombre} no existe para este tenant.`);
-      }
-      if (perfilMaquinaId !== nivel.maquinaId) {
-        throw new BadRequestException(`El perfil operativo del nivel ${nivelNombre} no pertenece a la máquina seleccionada.`);
-      }
-    }
-  }
-
-  private buildNivelResumen(input: {
-    nombre: string;
-    modoProductividadNivel: 'fija' | 'variable_manual' | 'variable_perfil';
-    tiempoFijoMin: number | null;
-    productividadBase: number | null;
-    unidadSalida: string | null;
-    unidadTiempo: string | null;
-    perfilOperativoNombre: string;
-  }) {
-    if (input.modoProductividadNivel === 'fija') {
-      return `${input.nombre} · Fija · ${input.tiempoFijoMin ?? 0} min`;
-    }
-    if (input.modoProductividadNivel === 'variable_manual') {
-      const unidad = [input.unidadSalida, input.unidadTiempo].filter(Boolean).join('/');
-      return `${input.nombre} · Variable manual · ${input.productividadBase ?? 0} ${unidad}`.trim();
-    }
-    return `${input.nombre} · Variable por perfil${input.perfilOperativoNombre ? ` · ${input.perfilOperativoNombre}` : ''}`;
-  }
-
   private async findProcesoOrThrow(auth: CurrentAuth, id: string) {
     const proceso = await this.prisma.procesoDefinicion.findFirst({
       where: {
@@ -2297,7 +1848,6 @@ export class ProcesosService {
         baseCalculoProductividad:
           this.getOperacionDetalle(operacion.detalleJson)?.baseCalculoProductividad ??
           null,
-        niveles: this.getOperacionNiveles(operacion.detalleJson),
         rol: operacion.rol ? this.fromPrismaRol(operacion.rol) : null,
         esOpcional: operacion.esOpcional,
         activo: operacion.activo,
@@ -2340,7 +1890,6 @@ export class ProcesosService {
       baseCalculoProductividad:
         this.getOperacionDetalle(detalleJson)?.baseCalculoProductividad ?? null,
       observaciones: item.observaciones ?? '',
-      niveles: this.getOperacionNiveles(detalleJson),
       estacionId: item.estacionId ?? null,
       estacionNombre: item.estacion?.nombre ?? '',
       // P3.a.1 — Modelo universal
