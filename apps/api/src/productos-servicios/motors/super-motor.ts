@@ -136,6 +136,16 @@ export class SuperMotorModule implements ProductMotorModule {
     const pasos: PasoCotizado[] = [];
     const warnings: string[] = [];
 
+    // P1.3: resolver alternativas seleccionadas por paso.
+    // Si el cliente envió `opcionesSeleccionadas`, sobreescribe máquina/perfil
+    // del paso con los de la alternativa elegida.
+    const opcionesSeleccionadasMap = new Map(
+      (
+        (payload as { opcionesSeleccionadas?: Array<{ pasoId: string; alternativaId: string }> })
+          .opcionesSeleccionadas ?? []
+      ).map((o) => [o.pasoId, o.alternativaId]),
+    );
+
     // ──────────────── SM.2: Nesting pipeline ────────────────
     // Ejecuta el nesting una sola vez para toda la ruta. El output se usa
     // para mejorar cantidadObjetivoSalida (pliegos vs piezas) y para
@@ -183,7 +193,37 @@ export class SuperMotorModule implements ProductMotorModule {
           })
         : null;
 
-    for (const op of operacionesAEjecutar) {
+    for (const opOriginal of operacionesAEjecutar) {
+      // P1.3: si hay alternativa seleccionada, reemplaza máquina/perfil.
+      const alternativaIdSel = opcionesSeleccionadasMap.get(opOriginal.id);
+      const alternativas = ((opOriginal as { alternativas?: unknown }).alternativas ?? []) as Array<{
+        id: string;
+        label: string;
+        esDefault: boolean;
+        maquinaId: string;
+        perfilOperativoId: string | null;
+        maquina: { id: string; nombre: string; plantilla: string | null } | null;
+        perfilOperativo: {
+          id: string;
+          nombre: string;
+          productivityValue: unknown;
+          setupMin: unknown;
+        } | null;
+      }>;
+      const alternativaElegida =
+        alternativaIdSel
+          ? alternativas.find((a) => a.id === alternativaIdSel) ?? null
+          : alternativas.find((a) => a.esDefault) ?? null;
+      // Clonar la op con máquina/perfil de la alternativa si se aplicó.
+      const op = alternativaElegida
+        ? {
+            ...opOriginal,
+            maquinaId: alternativaElegida.maquinaId,
+            perfilOperativoId: alternativaElegida.perfilOperativoId ?? null,
+            maquina: alternativaElegida.maquina,
+            perfilOperativo: alternativaElegida.perfilOperativo,
+          }
+        : opOriginal;
       const tarifaHora =
         op.centroCostoId && tarifaByCentro.get(op.centroCostoId) != null
           ? tarifaByCentro.get(op.centroCostoId)!
@@ -312,6 +352,20 @@ export class SuperMotorModule implements ProductMotorModule {
           productividadAplicada: productividad.productividadAplicada,
           mermaRunPctAplicada: productividad.mermaRunPctAplicada,
           mermaSetupAplicada: productividad.mermaSetupAplicada,
+          // P1.3: alternativa aplicada (si el paso tenía alternativas).
+          alternativaSeleccionada: alternativaElegida
+            ? {
+                id: alternativaElegida.id,
+                label: alternativaElegida.label,
+                esDefault: alternativaElegida.esDefault,
+                fuente: alternativaIdSel ? 'cliente' : 'default',
+              }
+            : null,
+          alternativasDisponibles: alternativas.map((a) => ({
+            id: a.id,
+            label: a.label,
+            esDefault: a.esDefault,
+          })),
           // SM.2: layout del nesting aplicable al paso (propio o heredado).
           nesting: layoutAplicable
             ? summarizeLayout(layoutAplicable, Boolean(nestingHeredado))

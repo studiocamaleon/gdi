@@ -1516,9 +1516,31 @@ export class CotizarProductoVarianteDto {
   @Type(() => CotizarNivelSeleccionadoDto)
   nivelesSeleccionados?: CotizarNivelSeleccionadoDto[];
 
+  /**
+   * P1.3 — Alternativas de máquina+perfil seleccionadas por el cliente para
+   * los pasos de la ruta que declaran múltiples opciones (ej. gran formato
+   * con tecnología UV vs Látex). Si un paso tiene alternativas pero este
+   * array no incluye selección para él, el super motor usa la marcada como
+   * esDefault (o la máquina/perfil default del paso como fallback).
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => CotizarOpcionSeleccionadaDto)
+  opcionesSeleccionadas?: CotizarOpcionSeleccionadaDto[];
+
   @IsOptional()
   @IsObject()
   parametros?: Record<string, unknown>;
+}
+
+export class CotizarOpcionSeleccionadaDto {
+  @IsUUID('4')
+  pasoId!: string;
+
+  @IsUUID('4')
+  alternativaId!: string;
 }
 
 export class CotizarNivelSeleccionadoDto {
