@@ -64,23 +64,17 @@ type ProductoFormState = {
   familiaProductoId: string;
   subfamiliaProductoId: string;
   unidadComercial: UnidadComercialProducto;
-  motorCodigo: string;
-  motorVersion: number;
 };
 
 function createEmptyProductoForm(
   familias: FamiliaProducto[],
-  motores: MotorCostoCatalogItem[],
 ): ProductoFormState {
-  const motor = motores[0];
   return {
     nombre: "",
     descripcion: "",
     familiaProductoId: familias[0]?.id ?? "",
     subfamiliaProductoId: "",
     unidadComercial: "unidad",
-    motorCodigo: motor?.code ?? "impresion_digital_laser",
-    motorVersion: motor?.version ?? 1,
   };
 }
 
@@ -117,7 +111,7 @@ export function ProductosServiciosTable({
   const { paged, page, pages, total, setPage, pageSize } = usePagination(filtered);
   const [isSaving, startSaving] = React.useTransition();
   const [form, setForm] = React.useState<ProductoFormState>(() =>
-    createEmptyProductoForm(familias, motores),
+    createEmptyProductoForm(familias),
   );
 
   const filteredSubfamilias = React.useMemo(
@@ -153,17 +147,9 @@ export function ProductosServiciosTable({
   }, [subfamiliaSeleccionada]);
 
   const openCreateSheet = () => {
-    setForm(createEmptyProductoForm(familias, motores));
+    setForm(createEmptyProductoForm(familias));
     setOpenCreate(true);
   };
-
-  const motorCostoValue = `${form.motorCodigo}@${form.motorVersion}`;
-  const motorCostoLabel = React.useMemo(
-    () =>
-      motores.find((item) => `${item.code}@${item.version}` === motorCostoValue)?.label ??
-      "Seleccionar motor de costo",
-    [motores, motorCostoValue],
-  );
 
   const handleCreate = () => {
     if (!form.nombre.trim() || !form.familiaProductoId) {
@@ -176,8 +162,10 @@ export function ProductosServiciosTable({
         const created = await createProductoServicio({
           descripcion: form.descripcion.trim() || undefined,
           nombre: form.nombre.trim(),
-          motorCodigo: form.motorCodigo,
-          motorVersion: form.motorVersion,
+          // motorCodigo/motorVersion los infiere el backend (default
+          // impresion_digital_laser@1). Post-P3 el motor universal es
+          // el único que ejecuta cotizaciones, así que este campo es
+          // sólo metadata.
           familiaProductoId: form.familiaProductoId,
           subfamiliaProductoId: form.subfamiliaProductoId || undefined,
           unidadComercial: form.unidadComercial,
@@ -399,34 +387,6 @@ export function ProductosServiciosTable({
               />
             </Field>
 
-            <Field>
-              <FieldLabel>Motor de costo</FieldLabel>
-              <Select
-                value={motorCostoValue}
-                onValueChange={(value) =>
-                  setForm((prev) => {
-                    const [motorCodigo, motorVersionRaw] = String(value ?? "").split("@");
-                    const parsedVersion = Number(motorVersionRaw ?? "1");
-                    return {
-                      ...prev,
-                      motorCodigo: motorCodigo || prev.motorCodigo,
-                      motorVersion: Number.isFinite(parsedVersion) ? parsedVersion : prev.motorVersion,
-                    };
-                  })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar motor de costo">{motorCostoLabel}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {motores.map((item) => (
-                    <SelectItem key={`${item.code}@${item.version}`} value={`${item.code}@${item.version}`}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
           </div>
 
           <SheetFooter className="mt-6 flex flex-col gap-2 sm:flex-col">

@@ -321,8 +321,10 @@ export async function createProductoServicio(payload: {
   tipo?: TipoProductoServicio;
   nombre: string;
   descripcion?: string;
-  motorCodigo: string;
-  motorVersion: number;
+  // Post-P3: opcionales. El backend los infiere (default
+  // impresion_digital_laser@1) y son metadata, no afectan la cotización.
+  motorCodigo?: string;
+  motorVersion?: number;
   familiaProductoId: string;
   subfamiliaProductoId?: string;
   unidadComercial: UnidadComercialProducto;
