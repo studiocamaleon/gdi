@@ -19,7 +19,7 @@ import {
   type EstadoProductoServicio,
   type UnidadComercialProducto,
 } from "@/lib/productos-servicios";
-import { assignProductoMotor, updateProductoServicio } from "@/lib/productos-servicios-api";
+import { updateProductoServicio } from "@/lib/productos-servicios-api";
 
 type ProductoGeneralDraft = {
   nombre: string;
@@ -28,8 +28,6 @@ type ProductoGeneralDraft = {
   subfamiliaProductoId: string;
   unidadComercial: UnidadComercialProducto;
   modoMedidas: 'ESTANDAR' | 'LIBRE';
-  motorCodigo: string;
-  motorVersion: number;
 };
 
 function buildDraft(props: ProductTabProps): ProductoGeneralDraft {
@@ -45,8 +43,6 @@ function buildDraft(props: ProductTabProps): ProductoGeneralDraft {
     subfamiliaProductoId: props.producto.subfamiliaProductoId ?? "",
     unidadComercial,
     modoMedidas: props.producto.modoMedidas ?? "ESTANDAR",
-    motorCodigo: props.producto.motorCodigo,
-    motorVersion: props.producto.motorVersion,
   };
 }
 
@@ -63,8 +59,6 @@ export function ProductoGeneralTab(props: ProductTabProps) {
     props.producto.subfamiliaProductoId,
     props.producto.unidadComercial,
     props.producto.modoMedidas,
-    props.producto.motorCodigo,
-    props.producto.motorVersion,
   ]);
 
   const familySubfamilies = React.useMemo(
@@ -72,13 +66,6 @@ export function ProductoGeneralTab(props: ProductTabProps) {
     [draft.familiaProductoId, props.subfamilias],
   );
 
-  const motorCostoValue = `${draft.motorCodigo}@${draft.motorVersion}`;
-  const motorCostoLabel = React.useMemo(
-    () =>
-      props.motores.find((item) => `${item.code}@${item.version}` === motorCostoValue)?.label ??
-      "Selecciona motor de costo",
-    [props.motores, motorCostoValue],
-  );
   const familiaGeneralLabel =
     props.familias.find((item) => item.id === draft.familiaProductoId)?.nombre ?? "Seleccionar familia";
   const subfamiliaGeneralLabel =
@@ -94,14 +81,12 @@ export function ProductoGeneralTab(props: ProductTabProps) {
     draft.familiaProductoId !== props.producto.familiaProductoId ||
     draft.subfamiliaProductoId !== (props.producto.subfamiliaProductoId ?? "") ||
     draft.unidadComercial !== props.producto.unidadComercial ||
-    draft.modoMedidas !== (props.producto.modoMedidas ?? "ESTANDAR") ||
-    draft.motorCodigo !== props.producto.motorCodigo ||
-    draft.motorVersion !== props.producto.motorVersion;
+    draft.modoMedidas !== (props.producto.modoMedidas ?? "ESTANDAR");
 
   const save = () =>
     startSaving(async () => {
       try {
-        const updated = await updateProductoServicio(props.producto.id, {
+        await updateProductoServicio(props.producto.id, {
           nombre: draft.nombre.trim(),
           descripcion: draft.descripcion.trim() || undefined,
           familiaProductoId: draft.familiaProductoId,
@@ -111,15 +96,6 @@ export function ProductoGeneralTab(props: ProductTabProps) {
           estado: props.producto.estado as EstadoProductoServicio,
           activo: props.producto.activo,
         });
-        if (
-          draft.motorCodigo !== props.producto.motorCodigo ||
-          draft.motorVersion !== props.producto.motorVersion
-        ) {
-          await assignProductoMotor(updated.id, {
-            motorCodigo: draft.motorCodigo,
-            motorVersion: draft.motorVersion,
-          });
-        }
         await props.refreshProducto();
         toast.success("Producto actualizado.");
       } catch (error) {
@@ -132,7 +108,7 @@ export function ProductoGeneralTab(props: ProductTabProps) {
     <Card>
       <CardHeader>
         <CardTitle>General</CardTitle>
-        <CardDescription>Identidad comercial y motor de costo del producto.</CardDescription>
+        <CardDescription>Identidad comercial y configuración básica del producto.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 md:grid-cols-2">
         <div className="rounded-lg border p-3">
@@ -268,34 +244,6 @@ export function ProductoGeneralTab(props: ProductTabProps) {
             placeholder="Descripción del producto"
             className="min-h-[96px] w-full rounded-md border bg-background px-3 py-2 text-sm"
           />
-        </div>
-        <div className="rounded-lg border p-3 md:col-span-2">
-          <p className="text-xs text-muted-foreground">Motor de costo</p>
-          <Select
-            value={motorCostoValue}
-            onValueChange={(value) =>
-              setDraft((prev) => {
-                const [motorCodigo, motorVersionRaw] = String(value ?? "").split("@");
-                const parsedVersion = Number(motorVersionRaw ?? "1");
-                return {
-                  ...prev,
-                  motorCodigo: motorCodigo || prev.motorCodigo,
-                  motorVersion: Number.isFinite(parsedVersion) ? parsedVersion : prev.motorVersion,
-                };
-              })
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecciona motor de costo">{motorCostoLabel}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {props.motores.map((item) => (
-                <SelectItem key={`${item.code}@${item.version}`} value={`${item.code}@${item.version}`}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
         <div className="md:col-span-2">
         <Button onClick={save} disabled={isSaving || !isGeneralDirty || !draft.nombre.trim() || !draft.familiaProductoId}>
