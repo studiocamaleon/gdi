@@ -43,6 +43,7 @@ import {
   type UpdateProcesoOperacionPayload,
 } from "@/lib/procesos-api";
 import type { RutaCompletaOperacion } from "@/lib/productos-servicios-api";
+import { CondicionBuilder } from "@/components/productos-servicios/condicion-builder";
 
 const NONE = "__none__";
 
@@ -90,6 +91,8 @@ type DraftForm = {
   cleanupMin: string;
   tiempoFijoMin: string;
   productividadBase: string;
+  // null = sin condición declarada. Solo relevante cuando activacionV2=CONDICIONAL.
+  condicionV2: Record<string, unknown> | null;
 };
 
 function toDraft(op: RutaCompletaOperacion): DraftForm {
@@ -109,6 +112,7 @@ function toDraft(op: RutaCompletaOperacion): DraftForm {
     tiempoFijoMin: op.tiempoFijoMin != null ? String(op.tiempoFijoMin) : "",
     productividadBase:
       op.productividadBase != null ? String(op.productividadBase) : "",
+    condicionV2: op.condicionV2 ?? null,
   };
 }
 
@@ -192,6 +196,11 @@ export function PasoEditorSheet({
     const productividadBase = parseOptionalNumber(draft.productividadBase);
     if (productividadBase !== undefined) payload.productividadBase = productividadBase;
 
+    // condicionV2 solo tiene sentido cuando activacionV2=CONDICIONAL; en otros
+    // modos se limpia automáticamente para evitar datos huérfanos.
+    payload.condicionV2 =
+      draft.activacionV2 === "CONDICIONAL" ? draft.condicionV2 : null;
+
     setIsSaving(true);
     try {
       await updateProcesoOperacion(operacion.id, payload);
@@ -215,8 +224,8 @@ export function PasoEditorSheet({
         <SheetHeader className="px-6 pt-6">
           <SheetTitle>Editar paso "{operacion.nombre}"</SheetTitle>
           <SheetDescription>
-            Campos avanzados (<code>configNestingV2</code>, condiciones JsonLogic) van a
-            incorporarse a este editor en una iteración futura.
+            Identidad, activación (obligatorio / opcional / condicional con
+            reglas), familia, centro de costo, máquina, tiempos y productividad.
           </SheetDescription>
         </SheetHeader>
 
@@ -262,9 +271,9 @@ export function PasoEditorSheet({
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    <strong>Opcional</strong> sólo se ejecuta si el cliente lo marca.
-                    <strong> Condicional</strong> requiere editar la condición (JsonLogic)
-                    — la evaluación completa es pendiente en el super motor.
+                    <strong>Opcional</strong> sólo se ejecuta si el cliente lo
+                    marca. <strong>Condicional</strong> se ejecuta automáticamente
+                    cuando la condición de abajo es verdadera.
                   </p>
                 </div>
                 <div className="grid gap-2">
@@ -295,6 +304,23 @@ export function PasoEditorSheet({
                   </Select>
                 </div>
               </div>
+
+              {draft.activacionV2 === "CONDICIONAL" && (
+                <div className="grid gap-2">
+                  <Label>Condición de activación</Label>
+                  <p className="text-xs text-muted-foreground">
+                    El paso se ejecuta automáticamente cuando todas (o
+                    cualquiera, según elijas) las condiciones se cumplen al
+                    cotizar.
+                  </p>
+                  <CondicionBuilder
+                    value={draft.condicionV2}
+                    onChange={(expr) =>
+                      setDraft((d) => ({ ...d, condicionV2: expr }))
+                    }
+                  />
+                </div>
+              )}
 
               <div className="grid gap-2">
                 <Label>Unidad productiva</Label>

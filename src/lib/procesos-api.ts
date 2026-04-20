@@ -326,6 +326,8 @@ export type UpdateProcesoOperacionPayload = {
   cleanupMin?: number;
   tiempoFijoMin?: number;
   productividadBase?: number;
+  // null limpia la condición; ausente no toca el campo.
+  condicionV2?: Record<string, unknown> | null;
 };
 
 export async function updateProcesoOperacion(

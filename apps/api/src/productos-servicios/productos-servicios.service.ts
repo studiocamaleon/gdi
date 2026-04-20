@@ -2318,6 +2318,8 @@ export class ProductosServiciosService {
           familiaV2: (op.familiaV2 as string | null) ?? null,
           unidadProductivaV2: (op.unidadProductivaV2 as string | null) ?? null,
           activacionV2: (op.activacionV2 as string | null) ?? null,
+          condicionV2:
+            (op.condicionV2 as Record<string, unknown> | null) ?? null,
           esOpcional: Boolean(op.esOpcional),
           activo: Boolean(op.activo),
           setupMin: op.setupMin != null ? Number(op.setupMin) : null,

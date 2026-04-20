@@ -58,6 +58,7 @@ export type RutaCompletaOperacion = {
   familiaV2: string | null;
   unidadProductivaV2: string | null;
   activacionV2: string | null;
+  condicionV2: Record<string, unknown> | null;
   esOpcional: boolean;
   activo: boolean;
   setupMin: number | null;

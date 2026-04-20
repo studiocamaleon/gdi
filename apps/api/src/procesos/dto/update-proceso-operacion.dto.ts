@@ -3,6 +3,7 @@ import {
   IsBoolean,
   IsIn,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -84,4 +85,13 @@ export class UpdateProcesoOperacionDto {
   @IsNumber()
   @Min(0)
   productividadBase?: number;
+
+  /**
+   * Expresión JsonLogic para la activación CONDICIONAL. `null` limpia la
+   * condición; ausente (undefined) no toca el campo.
+   */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsObject()
+  condicionV2?: Record<string, unknown> | null;
 }

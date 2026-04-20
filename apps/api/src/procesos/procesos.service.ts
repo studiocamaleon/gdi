@@ -2712,6 +2712,12 @@ export class ProcesosService {
       data.tiempoFijoMin = new Prisma.Decimal(payload.tiempoFijoMin);
     if (payload.productividadBase !== undefined)
       data.productividadBase = new Prisma.Decimal(payload.productividadBase);
+    if (payload.condicionV2 !== undefined) {
+      data.condicionV2 =
+        payload.condicionV2 === null
+          ? Prisma.JsonNull
+          : (payload.condicionV2 as Prisma.InputJsonValue);
+    }
 
     const updated = await this.prisma.procesoOperacion.update({
       where: { id: operacionId },
