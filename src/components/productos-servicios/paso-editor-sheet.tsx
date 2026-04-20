@@ -298,16 +298,37 @@ export function PasoEditorSheet({
 
               <div className="grid gap-2">
                 <Label>Unidad productiva</Label>
-                <Input
-                  value={draft.unidadProductivaV2}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, unidadProductivaV2: e.target.value }))
+                <Select
+                  value={draft.unidadProductivaV2 || NONE}
+                  onValueChange={(v) =>
+                    setDraft((d) => ({
+                      ...d,
+                      unidadProductivaV2: v === NONE ? "" : v ?? "",
+                    }))
                   }
-                  placeholder="hojas, m2, piezas, letras, modulosLED…"
-                  maxLength={40}
-                />
+                >
+                  <SelectTrigger>
+                    <SelectValue>
+                      {draft.unidadProductivaV2 || "— derivar de la familia —"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>— derivar de la familia —</SelectItem>
+                    <SelectItem value="hojas">hojas</SelectItem>
+                    <SelectItem value="pliegos">pliegos</SelectItem>
+                    <SelectItem value="placas">placas</SelectItem>
+                    <SelectItem value="piezas">piezas</SelectItem>
+                    <SelectItem value="m2">m²</SelectItem>
+                    <SelectItem value="metros_lineales">metros lineales</SelectItem>
+                    <SelectItem value="letras">letras</SelectItem>
+                    <SelectItem value="modulos">módulos</SelectItem>
+                    <SelectItem value="unidades">unidades</SelectItem>
+                    <SelectItem value="corridas">corridas</SelectItem>
+                  </SelectContent>
+                </Select>
                 <p className="text-xs text-muted-foreground">
-                  Sobre qué cantidad opera el paso (derivada del trabajo o de outputs previos).
+                  Sobre qué cantidad opera el paso. Si dejás "derivar de la familia",
+                  el motor la infiere de familiaV2 (ej: impresion_por_hoja → pliegos).
                 </p>
               </div>
 
