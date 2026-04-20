@@ -1881,11 +1881,28 @@ export class ProductosServiciosService {
   }
 
   async getProductoMotorConfig(auth: CurrentAuth, productoId: string) {
+    // Post-P3: el super motor no tiene "config propia" por motor. Leemos
+    // directo el ProductoMotorConfig de la DB (si existe) como metadata
+    // expuesta al shell. El motorConfig solo lo consumen hoy algunos
+    // flujos comerciales legacy (vinyl-cut config, gran-formato ruta-base).
     const producto = await this.findProductoOrThrow(auth, productoId, this.prisma);
-    return this.resolveProductMotorModule(producto.motorCodigo, producto.motorVersion).getProductConfig(
-      auth,
-      producto.id,
-    );
+    const config = await this.prisma.productoMotorConfig.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        productoServicioId: producto.id,
+        activo: true,
+      },
+      orderBy: [{ versionConfig: 'desc' }],
+    });
+    return {
+      productoId: producto.id,
+      motorCodigo: producto.motorCodigo,
+      motorVersion: producto.motorVersion,
+      parametros: config?.parametrosJson ?? {},
+      versionConfig: config?.versionConfig ?? 1,
+      activo: config?.activo ?? true,
+      updatedAt: config?.updatedAt?.toISOString() ?? null,
+    };
   }
 
   async getDigitalProductMotorConfig(auth: CurrentAuth, productoId: string) {
