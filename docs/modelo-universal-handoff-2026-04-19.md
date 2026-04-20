@@ -1,29 +1,36 @@
-# Modelo Universal · Handoff 2026-04-19
+# Modelo Universal · Handoff 2026-04-19 (rev. 2)
 
 Documento auto-contenido para retomar el refactor del modelo universal de
-costeo en otra sesión sin pérdida de contexto.
+costeo en otra sesión sin pérdida de contexto. Esta revisión refleja el
+estado tras completar P1→P4 y la consolidación de alternativas.
 
-> **Rama**: `refactor/modelo-universal` · **Estado**: arquitectura completa,
-> UI y adopción pendiente · **Última sesión**: 2026-04-19 · **Punto de corte**:
-> commit `d489618d` (previews unificados).
+> **Rama**: `refactor/modelo-universal` · **Estado**: super motor único
+> en producción, UI unificada completa, consolidación data model terminada ·
+> **HEAD**: `8442bfd9` · **LOC neto vs main**: +12.820 / −25.668.
 
 ---
 
 ## TL;DR
 
-El sistema pasó de **5 motores específicos v1 enredados** (~15k LOC entrelazados
-con el service) a un **super motor universal** (`universal@1`) que ejecuta
-cualquier producto cotizando declarativamente su ruta de producción, con
-**un solo preview visual** (`<NestingPreview>`), **3 utilities de nesting puras**
-y **materiales declarativos por paso** en DB. Los motores v1 siguen funcionando
-como default seguro. El super motor está listo para ser el default cuando las
-rutas estén completas.
+El sistema pasó de **5 motores específicos v1+v2 enredados** (~15k LOC
+entrelazados con el service) a un **super motor universal único**
+(`universal@1`) que ejecuta cualquier producto cotizando declarativamente
+su ruta. Los motores v1, v2 específicos, shadow mode y adapter
+desaparecieron (−25k LOC). La UI se unificó en 7 tabs para todos los
+productos. Niveles y alternativas se consolidaron en una sola entidad
+con campos de override.
 
 **Lo que queda**:
-1. UI para crear/editar rutas con materiales (único gap fundamental).
-2. Retiro progresivo de motores v2 específicos.
-3. Retiro de tabs legacy por motor.
-4. Feature parity en casos avanzados (sub-productos, multi-color vinyl, tira+retira).
+1. Deuda de consolidación P4 (evaluador JsonLogic real, `unidadProductivaV2`
+   al runtime, editor UI de `configNestingV2`).
+2. Feature parity avanzada (tira+retira, multi-color vinyl, sub-productos,
+   productividades no lineales).
+3. UI de `ReglaDeSeleccion` (infra existe, falta autoría + wire-up).
+4. Cleanup técnico (Three.js, `material-plantillas.ts` fallback,
+   `inferirFamiliaDesdeTipo`, `/cotizar-v2` → `/cotizar`).
+5. Data migration masiva de materiales declarativos (hoy solo 2 pasos demo
+   tienen `ProcesoOperacionMaterial`).
+6. Tests unitarios + docs de usuario.
 
 ---
 
@@ -34,306 +41,224 @@ rutas estén completas.
 > Costo de un producto = Σ costo de cada paso de su ruta de producción.
 
 Cada paso tiene los mismos **3 buckets**:
-- **Centro de costo**: `tiempo × tarifa del centro` (incluye máquina+operario+amortización)
+- **Centro de costo**: `tiempo × tarifa del centro` (máquina+operario+amortización)
 - **Materias primas**: `Σ (cantidad × precio)` por material consumido
-- **Cargos flat**: costos fijos o externos (tercerización, royalties, viáticos, mínimos)
+- **Cargos flat**: fijos o externos (tercerización, royalties, viáticos, mínimos)
 
 ### 1.2 Familias de paso (23)
 
-Definidas en `apps/api/src/productos-servicios/pasos/familias.ts`. Cada familia declara:
-- `codigo`, `nombre`, `categoria`
-- `modoNesting`: `produce | consume | none`
-- `nestingAlgoritmo`: `nesting-rollo | nesting-hoja | nesting-placa-rigida | null`
-- `outputsCanonicos`, `formulasDisponibles`, `requiereCentroCosto`
+Definidas en `apps/api/src/productos-servicios/pasos/familias.ts`. Cada
+familia declara `codigo`, `nombre`, `categoria`, `modoNesting`
+(`produce | consume | none`), `nestingAlgoritmo`, `outputsCanonicos`,
+`formulasDisponibles`, `requiereCentroCosto`.
 
-Agrupadas en 6 categorías:
-1. **Impresión**: `impresion_por_hoja`, `impresion_por_area`, `impresion_por_pieza`, `aplicacion_transfer`
-2. **Corte y formado**: `corte`, `corte_volumetrico`, `grabado`, `plegado`, `perforado`, `troquelado`
-3. **Terminaciones**: `laminado`, `acabado_decorativo`, `pintura_superficial`, `encuadernado`
-4. **Estructural y montaje**: `soldadura_herreria`, `ensamble_estructural`, `instalacion_electrica`
-5. **Servicios pre/post**: `pre_prensa`, `diseno_grafico`, `toma_medidas`, `colocacion_in_situ`
-6. **Operaciones manuales y logística**: `operacion_manual`, `insumo_externo_gestion`
+6 categorías: impresión · corte y formado · terminaciones · estructural y
+montaje · servicios pre/post · operaciones manuales.
 
 ### 1.3 Unidades canónicas
 
-Stress-tested con 46 ejemplos de la industria (ver sesión 2026-04-18):
+**Productivas** (6): `unidad`, `pliego`, `placa`, `metro_lineal`, `m2`, `hora`.
+**De material** (6): `unidad`, `m2`, `metro_lineal`, `gramo/kg`, `ml/litro`, `pliego`.
 
-**Unidades productivas** (6):
-- `unidad` (pieza, remera, mug, visita, ensamble, arte, módulo)
-- `pliego` (de nesting-hoja)
-- `placa` (de nesting-placa-rigida)
-- `metro_lineal` (rollo, cable, perímetro)
-- `m2` (laminado, pintura, vinilo aplicado)
-- `hora` (asesoría, servicios por tiempo)
+El paso declara `unidadProductivaV2` (hoy solo metadata — ver deuda §4.2).
 
-**Unidades de material** (6):
-- `unidad`, `m2`, `metro_lineal`, `gramo/kg`, `ml/litro`, `pliego`
+### 1.4 Entidades clave de la ruta
 
-### 1.4 Flujo de ejecución del super motor
+- `ProcesoDefinicion` — cabecera de ruta (producto opcional, familia, estado).
+- `ProcesoOperacion` — paso dentro de la ruta. Tiene `familiaV2`,
+  `unidadProductivaV2`, `configNestingV2`, `activacionV2`
+  (`OBLIGATORIO | OPCIONAL | CONDICIONAL`), `condicionActivacionV2` (JsonLogic).
+- `ProcesoOperacionAlternativa` — variante del paso (antes "niveles" +
+  "alternativas" separadas; unificadas en P4). Override fields:
+  `setupMin`, `cleanupMin`, `tiempoFijoMin`, `productividadBase`,
+  `configNestingV2`, `maquinaId`, `perfilOperativoId`.
+- `ProcesoOperacionMaterial` — consumo declarativo de material por paso.
+  Fórmulas: fija, por pliego, por m², por pieza, por metro lineal, con
+  flag `aplicaMultiCaras`.
+
+### 1.5 Flujo de ejecución del super motor
 
 ```
 producto.rutaDeProduccion → operaciones activas/seleccionadas
     ↓
     Para cada operación:
-    ├── Resolver: centroCosto → tarifa del período
-    ├── Resolver: máquina + perfil operativo
-    ├── Resolver: familia (desde familiaV2 o inferencia por tipoOperacion)
-    ├── Si familia.modoNesting = 'produce':
-    │       Ejecutar nesting (rollo | hoja | placa-rigida)
-    │       Guardar layout
-    ├── Si familia.modoNesting = 'consume':
-    │       Heredar layout del último 'produce' upstream
-    ├── Calcular tiempo: setup + cleanup + tiempoFijo + productivo
+    ├── Si activacionV2 = CONDICIONAL: evaluar condicionActivacionV2 (hoy gate pasa-todo, ver §4.1)
+    ├── Si se eligió alternativa: aplicar overrides (tiempos, productividad, nesting, máquina)
+    ├── Resolver centroCosto → tarifa del período
+    ├── Resolver máquina + perfil operativo (si familia.modoNesting ≠ none)
+    ├── Resolver familia (familiaV2 o inferencia por tipoOperacion — legacy, §4.3)
+    ├── Si familia.modoNesting = 'produce': ejecutar nesting, guardar layout
+    ├── Si familia.modoNesting = 'consume': heredar layout del último 'produce' upstream
+    ├── Tiempo: setup + cleanup + tiempoFijo + productivo
     │       productivo ← evaluateProductividad(op, cantidadObjetivoSalida)
-    │       cantidadObjetivoSalida ← unidades del layout (pliegos, m², etc.)
     │       costoCentroCosto ← (tiempo / 60) × tarifa
-    ├── Calcular materiales:
-    │       Prioridad 1: materiales declarados en ProcesoOperacionMaterial (SM.D)
-    │       Prioridad 2: plantilla imperativa por familia (fallback)
-    │       Σ (cantidad × precio) = costoMateriasPrimas
+    ├── Materiales: ProcesoOperacionMaterial (prioridad) o material-plantillas.ts (fallback, §4.4)
     └── Emitir PasoCotizado {centroCosto, materiasPrimas, cargosFlat, trazabilidad}
     ↓
 Σ pasos → Cotización canónica {total, unitario, subtotales, pasos, trazabilidad}
 ```
 
-### 1.5 Componentes clave
+### 1.6 Componentes clave
 
 | Componente | Ubicación | Responsabilidad |
 |---|---|---|
-| `FAMILIAS_PASO` | `apps/api/src/productos-servicios/pasos/familias.ts` | Catálogo de 23 familias |
+| `FAMILIAS_PASO` | `apps/api/src/productos-servicios/pasos/familias.ts` | Catálogo 23 familias |
 | `nesting-hoja.ts` | `.../nesting/` | Bin-packing en pliego |
-| `nesting-rollo.ts` | `.../nesting/` | Mixed-shelf en rollo + panelizado + 4 márgenes |
+| `nesting-rollo.ts` | `.../nesting/` | Mixed-shelf en rollo + panelizado |
 | `nesting-placa-rigida.ts` | `.../nesting/` | Grid en placa rígida |
 | `nesting-runner.ts` | `.../engine/` | Pipeline produce/consume |
 | `ruta-validator.ts` | `.../engine/` | Validación R1-R5 de rutas |
-| `evaluateProductividad` | `apps/api/src/procesos/proceso-productividad.engine.ts` | Tiempo por paso (FIJA/FORMULA/TABLA) |
-| `calcularMaterialesDelPaso` | `.../pasos/material-plantillas.ts` | Plantillas imperativas (fallback) |
-| `calcularMaterialesDeclarados` | `.../motors/super-motor.ts` | Fórmulas desde ProcesoOperacionMaterial |
-| `SuperMotorModule` | `.../motors/super-motor.ts` | Motor universal que reemplaza v2 específicos |
+| `evaluateProductividad` | `apps/api/src/procesos/proceso-productividad.engine.ts` | Tiempo por paso |
+| `SuperMotor` | `.../motors/super-motor.ts` | **Único motor** (713 LOC) |
 | `<NestingPreview>` | `src/components/nesting-preview/` | Único preview visual 2D SVG |
 
-### 1.6 Dispatcher de cotización
+Registry (`product-motor.registry.ts`) aún existe, pero solo registra
+`universal@1`. Se puede eliminar cuando se consolide `/cotizar-v2` → `/cotizar`.
+
+### 1.7 Endpoint de cotización
 
 ```
 POST /productos-servicios/variantes/:varianteId/cotizar-v2
-  ?mode=v2        → forza V2 motor específico (ignora motorPreferido del producto)
-  ?motor=universal → usa super motor (bypass del dispatch normal)
-  sin flags       → lee producto.motorPreferido:
-                      V1     → adapter v1→canonical
-                      V2     → motor v2 específico
-                      SHADOW → corre ambos, persiste diff en CotizacionShadowLog
+  body: { cantidad, opcionesSeleccionadas?: [{operacionId, alternativaId}] }
 ```
+
+Sin flags de motor ni `motorPreferido` (ambos eliminados en P3.b.5).
 
 ---
 
-## 2. Estado detallado por etapa
+## 2. Estado detallado del refactor
 
-Las etapas se ejecutaron secuencialmente. Todas committeadas en la rama.
+### Etapas A-D (arquitectura) — completa
+Preparación, piloto gran_formato, nestings extraídos, motores v2 piloto,
+super motor core + nesting + materiales declarativos, previews unificados.
 
-### Etapa A — Preparación (completa)
-- Red de seguridad (goldens + tests), 23 familias catalogadas, schema
-  extendido (`familiaV2`, `unidadProductivaV2`, `configNestingV2`, etc.),
-  `ReglaDeSeleccion` entity, evaluador JsonLogic, shape canónica DTO,
-  endpoint `/cotizar-v2`.
+### P1 — Tab "Ruta de producción" — completa
+- P1.2 vista read-only
+- P1.3 alternativas (schema, CRUD, UI, selector en cotización, motor las consume)
+- P1.4 materiales por paso (CRUD + editor UI)
+- P1.5 editor de paso + reorden
+- P1.6 asignar/cambiar ruta
 
-### Etapa B — Piloto gran_formato@2 (completa)
-- `WideFormatMotorModuleV2` registrado con feature flag, tab "Simular
-  costo (v2)" agregado, `loadGranFormatoV2Runtime` lee config+materiales.
+### P2 — Retirar tabs legacy — completa
+−1.431 LOC. Los 7 tabs universales son: General · Variantes · Ruta de
+producción · Imposición · Precio · Simular costo · Simular venta.
 
-### Etapa C — Nestings + motores v2 piloto (completa)
-- C.1 Shadow infra (`CotizacionShadowLog`, `MotorVersionPreferida`).
-- C.2 3 nestings extraídos + runner + validator + gran_formato usa
-  `nestOnRoll` real (no el toy).
-- C.3-C.6 4 motores v2 piloto: vinilo, digital láser, rígidos, talonario.
-- C.7 Dashboard shadow diffs (`/costos/shadow-diffs`).
+### P3 — Erradicar motores v1 + v2 específicos — completa
+- P3.a.1 biblioteca de pasos alineada
+- P3.a.2 `modoMedidas` first-class (`ESTANDAR | LIBRE`) en `ProductoServicio`
+- P3.a.3 suite de paridad super motor vs v1 (obsoleta post-erradicación,
+  pero documenta gaps conocidos — ver §3.2)
+- P3.b.1 motores v2 específicos borrados (−3k)
+- P3.b.2 motores v1 + métodos inline borrados (−5k)
+- P3.b.3 tabs estándar (−14.191 LOC)
+- P3.b.4 tab Imposición unificado con `<NestingPreview>`
+- P3.b.5 cleanup: shadow infra, `motorPreferido`, specs legacy (−17.919 LOC)
 
-### Etapa D — Ajustes + super motor (completa arquitectónicamente)
-- D.0 `ensureV2ConfigFromV1` auto-crea config v2 desde v1 (o defaults).
-- D.1a Digital v2: caras, tipoImpresion, opcionales desde ruta, tarifa+papel reales.
-- `<NestingPreview>` 2D SVG unificado con márgenes mecánicos CAD-style.
-- Preview digital migrado a `<NestingPreview>`.
-- SM.1-SM.4 Super motor universal (core + nesting + UI toggle + materiales).
-- SM.5.a Data migration `familiaV2` + `unidadProductivaV2` en ops existentes.
-- SM.5.b Benchmark super motor vs v2 (diffs residuales identificados como
-  *data* no *arquitectura*).
-- Fix super motor: aplica demasía + línea de corte, respeta pliego del paso.
-- SM.D Materiales declarativos a nivel paso (`ProcesoOperacionMaterial`).
-- Previews vinilo + rígidos + gran formato migrados a `<NestingPreview>`.
+### P4 — Consolidar niveles + alternativas — completa
+Antes: dos conceptos paralelos (`niveles` por paso + `alternativas` UI-only).
+Ahora: `ProcesoOperacionAlternativa` con override fields cubre ambos casos.
+- P4.1 data model unificado (−2.8k LOC de código niveles)
+- P4.2 super motor consume overrides + gate `activacionV2` + `unidadProductivaV2`
+  en trazabilidad
+- P4.3a UI elimina editor de niveles (biblioteca + checklist)
+- P4.3b UI "Opciones del paso" con overrides + labels title case
 
-### Commits clave de la rama (últimos en orden cronológico)
-```
-d489618d refactor(imposicion): 3 previews legacy → <NestingPreview>
-6b1d1769 feat: SM.D materiales declarativos a nivel paso
-b80c4f99 refactor: preview digital migrado a <NestingPreview>
-7f3f584c feat(super-motor): demasía + línea de corte
-5cd26a5a feat: SM.5.a data migration familiaV2 + unidadProductivaV2
-422817e8 test: SM.5.b benchmark super motor vs v2
-094c36bf feat(digital-v2): D.1a.2 máquina + perfil + tarifa + papel reales
-6b1d1769 feat: SM.D materiales declarativos
-15c39edd feat: SM.4 plantillas de materiales por familia
-d92ad55d feat: SM.2 nesting pipeline en super motor
-9eadccc7 feat: SM.1 super motor core
-e37597d2 feat(digital-v2): D.1a.3 pasos opcionales desde la ruta
-3d47cd58 feat(digital-v2): D.1a caras + tipoImpresion
-54997de5 feat: D.0 auto-creación config v2 desde v1
-```
-
-Ver `git log main..HEAD` para el listado completo.
+### Extras de UX (esta sesión)
+- Sheets anchos (1120px xl) con padding consistente
+- Selector Materia Prima → Variante de 2 pasos
+- `unidadProductivaV2` como Select en editor de paso (consistente con biblioteca)
+- Selector "Motor de costo" removido de General tab y Crear producto sheet
+- Fix `getProductoMotorConfig` lee DB directo (evita "Motor no soportado")
 
 ---
 
 ## 3. Pendientes priorizados
 
-### P1 · Tab unificado "Ruta de producción" (GRANDE - CRÍTICO)
+### P4-debt · Consolidación alternativas (chica) — más urgente
 
-**Por qué crítico**: hoy editar una ruta requiere SQL directo. Sin UI, el
-modelo universal no es utilizable en producción.
+Tres hilos sueltos del P4:
 
-**Scope**:
-1. **Vista read-only (mínimo)**: lista ordenada de pasos con familia,
-   centro costo, máquina, perfil, materiales declarados (SM.D).
-2. **Editor de paso**: formulario con:
-   - Nombre, código, obligatorio/opcional
-   - Familia (dropdown 23 familias)
-   - Centro de costo (dropdown)
-   - Máquina + perfil (opcional, aparece según familia.modoNesting)
-   - Setup/cleanup/tiempoFijo
-   - Modo productividad (FIJA/FORMULA/TABLA) + productividadBase
-   - `configNestingV2` según algoritmo de la familia (expandible JSON editor)
-3. **Editor de materiales por paso** (sección embebida en editor paso):
-   - Tabla de ProcesoOperacionMaterial: nombre, variante (optional),
-     formula (dropdown), cantidad, unidad, precio manual, aplicaMultiCaras.
-   - Add/remove/reorder.
-4. **Drag-and-drop reordenar pasos** (React DnD o similar).
-5. **Validación al guardar** (reusa `validateRuta` ya existente en `engine/`).
+1. **`CONDICIONAL` con JsonLogic real**. El motor tiene la compuerta
+   (`activacionV2 === 'CONDICIONAL'`) pero evalúa siempre true. Falta
+   leer `condicionActivacionV2` del paso y ejecutar el evaluador
+   JsonLogic existente contra Job Context + outputs upstream.
+2. **`unidadProductivaV2` cableada al runtime**. Hoy es metadata. El
+   motor hardcodea la unidad desde `familiaV2`. Deberia leer
+   `op.unidadProductivaV2` y solo fallback a familia si está en null.
+3. **Editor UI de `configNestingV2` en "Opciones del paso"**. El override
+   persiste y el motor lo consume, pero no hay editor — el usuario no
+   puede setearlo sin SQL.
 
-**Archivos a crear/editar**:
-- `src/app/(dashboard)/costos/productos/[productoId]/ruta/page.tsx` (nuevo)
-- `src/components/productos-servicios/ruta-produccion-editor.tsx` (nuevo)
-- `src/components/productos-servicios/paso-editor.tsx` (nuevo)
-- `src/components/productos-servicios/materiales-paso-editor.tsx` (nuevo)
-- `apps/api/src/productos-servicios/productos-servicios.controller.ts` (nuevos endpoints CRUD de pasos/materiales)
-- Registro del tab en `producto-servicio-detail-shell.tsx` y retiro de tabs legacy.
+**Estimado**: 1 sesión.
 
-**Estimado**: 2-3 sesiones.
+### P5 · Feature parity avanzada del super motor
 
-### P2 · Retirar tabs legacy por motor
+Gaps conocidos (identificados en suite P3.a.3 antes de borrarla):
 
-Cuando el tab "Ruta de producción" esté funcional:
-- Eliminar `imposicion` tab de todos los motores (el preview ya no es
-  motor-specific).
-- Eliminar `simular_costo` tab v1 (el super motor reemplaza a todos).
-- Eliminar `tecnologias` tab (gran formato, rígidos) — info pasa a la ruta.
-- Eliminar `composicion` tab (talonario).
-- Eliminar `equipos_materiales` tab (vinilo).
+- **Tira+retira**. Super motor calcula doble faz como 2 corridas.
+  Agregar flag en `configNestingV2` para impresión una-pasada doble-faz.
+- **Multi-color en vinilo de corte**. V2 específico iteraba por color.
+  Solución: ruta con N ejecuciones paralelas o sub-producto por color.
+- **Vinyl medidas libres**. Super motor no lee `anchoMm/altoMm` de
+  parámetros del trabajo cuando el producto es `modoMedidas=LIBRE`.
+- **Talonario copias**. No modela N copias por original (carbónico).
+- **Rígidos flexibles por producto**. No soporta cotizar sin variante.
+- **Digital materiales declarativos**. Algunas rutas solo parcial (solo
+  OP-002 y OP-006 tienen materiales; el resto usa fallback imperativo).
+- **Productividades no lineales**. Usar `ModoProductividadProceso.FORMULA`
+  con JsonLogic en `reglaVelocidadJson`. Infra existe, falta poblar casos.
 
-Resultado esperado: **7 tabs universales** para todos los productos:
-General · Variantes · Ruta de producción · Precio · Simular costo · Simular venta.
+### P6 · Sub-productos / productos componentes
 
-**Archivos afectados**: `*-motor-ui.tsx` de cada motor.
-
-### P3 · Retirar motores v2 específicos + adapter v1
-
-Cuando (1) el tab ruta esté listo y (2) las rutas de productos en DB
-estén completas, el super motor pasa a ser el default:
-
-```ts
-// En productos-servicios.service.ts cotizarVarianteV2:
-if (producto.motorPreferido === 'V1') {
-  // Antes: return cotizarV1Adaptado(...)
-  return superMotor.quoteVariant(...);  // Nuevo default
-}
-```
-
-Borrar `wide-format-v2.motor.ts`, `vinyl-cut-v2.motor.ts`,
-`digital-sheet-v2.motor.ts`, `rigid-printed-v2.motor.ts`,
-`talonario-v2.motor.ts`. Estimado: ~5.000 LOC eliminadas.
-
-### P4 · Feature parity avanzada del super motor
-
-Lo que NO está cubierto aún:
-
-**Tira+retira** (doble faz en una sola pasada sin cambiar plancha): el
-super motor calcula doble faz como 2 corridas separadas. Para tira+retira
-agregar una flag en el paso `impresion_por_hoja` que ajuste la fórmula.
-
-**Multi-color en vinyl_cut**: el motor v2 específico itera por color.
-El super motor hoy cotiza 1 trabajo; falta soporte para rutas con N
-ejecuciones paralelas (una por color), o un sub-producto por color.
-
-**Sub-productos / productos componentes**: la shape canónica ya tiene
-`subProductos[]`, pero el super motor no resuelve recursión. Caso
-típico: tapa dura de libro cosido (sub-producto con ruta propia). Falta:
+Shape canónica ya tiene `subProductos[]` pero el super motor no resuelve
+recursión. Falta:
 - Schema: relación producto-padre-incluye-producto-componente con cantidad.
-- Runtime: cuando un paso consume un componente, invocar super motor
-  recursivamente para el componente.
+- Runtime: al consumir un componente, invocar super motor recursivamente.
 
-**Productividades no lineales**: algunos pasos tienen fórmulas complejas
-(diseño gráfico que no escala con cantidad). Usar `ModoProductividadProceso.FORMULA`
-y poblar `reglaVelocidadJson` con fórmula JsonLogic.
+Caso típico: tapa dura de libro cosido.
 
-### P5 · Reglas de selección (ya existe infra, falta UI)
+### P7 · Reglas de selección (UI)
 
-`ReglaDeSeleccion` existe en schema + evaluador JsonLogic funciona. Falta:
-- UI para definir reglas (condición + resultado) en un nivel (producto o global).
+`ReglaDeSeleccion` existe en schema y el evaluador JsonLogic funciona.
+Falta:
+- UI de autoría de reglas (condición + resultado).
 - Trigger al cotizar: si un paso tiene reglas asociadas, evaluar contra
-  el Job Context y aplicar su resultado (elegir material, activar paso, etc.).
+  Job Context y aplicar resultado (elegir material, activar paso, etc.).
 
-Caso de uso: encuadernado espiral → diámetro del espiral según cantidad
-de páginas (regla: `páginas <= 50 → espiral 8mm; páginas <= 100 → 12mm; ...`).
+Caso de uso: espiral según páginas (`páginas ≤ 50 → 8mm`, etc.).
 
-### P6 · Data migration masiva (cuando se decida retirar v2)
+### P8 · Data migration masiva
 
-Para cada producto que usa motor v2 específico:
-1. Identificar qué pasos "invisibles" agregaba el v2 (pre-prensa, corte,
-   embalaje) y agregarlos a su `ProcesoDefinicion`.
-2. Poblar `configNestingV2` en pasos `produce` con `{pliegos: [{anchoMm,
-   altoMm, codigo}]}` desde la config actual del producto.
-3. Poblar `ProcesoOperacionMaterial` para todos los pasos (hoy solo OP-002
-   y OP-006 de digital en el seed demo tienen materiales declarativos).
+Poblar `ProcesoOperacionMaterial` en todos los productos de producción.
+Hoy solo el seed digital (OP-002, OP-006) tiene materiales declarativos;
+el resto depende del fallback imperativo `material-plantillas.ts`.
 
-Recomendación: hacer un script standalone que itere productos y genere
-el SQL/INSERTs. Ver `apps/api/prisma/migrations/20260419120000_populate_familia_v2_ops/`
-como template.
+Script standalone iterando productos. Template:
+`apps/api/prisma/migrations/20260419120000_populate_familia_v2_ops/`.
 
-### P7 · Shadow mode adoption
+### P9 · Cleanup técnico (quick wins)
 
-Cuando el super motor esté estable, activar SHADOW en productos de
-producción:
-```sql
-UPDATE "ProductoServicio" SET "motorPreferido" = 'SHADOW'
-  WHERE id IN (...);
-```
-
-Monitorear `/costos/shadow-diffs`. Umbrales sugeridos:
-- < 1% diff: motor listo para V2.
-- 1-10% diff: revisar datos de config (no arquitectura).
-- > 10% diff: revisar schema/fórmulas.
-
-### P8 · Cleanup técnico
-
-1. **Desinstalar Three.js** (ya no se usa):
+1. **Desinstalar Three.js** — no está usado en ningún archivo (grepeado):
    ```bash
-   npm uninstall three @react-three/fiber three-stdlib troika-three-text
+   npm uninstall three @react-three/fiber @react-three/drei three-stdlib troika-three-text
    ```
-2. **Remover plantillas imperativas** (`material-plantillas.ts`) cuando
-   todos los pasos tengan materiales declarativos en DB.
-3. **Remover `inferirFamiliaDesdeTipo`** cuando todas las ops tengan
-   `familiaV2` seteado.
-4. **Remover fallback** a plantillas en super motor.
-5. **Consolidar endpoint** a `/cotizar` (sin `-v2`) una vez que V1 no exista.
+2. **Eliminar `material-plantillas.ts`** (253 LOC) cuando P8 termine.
+3. **Eliminar `inferirFamiliaDesdeTipo`** en super motor (§4.3) cuando
+   todas las ops tengan `familiaV2` seteado. SM.5.a ya migró la mayoría;
+   validar con `SELECT COUNT(*) FROM "ProcesoOperacion" WHERE "familiaV2" IS NULL;`.
+4. **Renombrar endpoint** `/cotizar-v2` → `/cotizar` (V1 ya no existe).
+5. **Eliminar registry** de motores (`product-motor.registry.ts`) — solo
+   registra `universal@1`; el controller puede invocar `SuperMotor` directo.
 
-### P9 · Tests
+### P10 · Tests
 
-Los tests actuales son mayormente integration contra DB real. Falta:
+Hoy son mayormente integration contra DB real. Falta:
 - Unit tests del super motor con mocks (más rápidos).
 - Tests de `calcularMaterialesDeclarados` cubriendo las 5 fórmulas.
-- Tests end-to-end que corran contra `/cotizar-v2?motor=universal` y
-  comparen con golden expected.
+- Tests E2E contra `/cotizar-v2` comparando con golden expected.
 
-### P10 · Documentación de usuario
+### P11 · Documentación de usuario
 
-(Fuera de alcance técnico pero crítico para adopción)
 - Cómo crear un producto desde cero con el super motor.
 - Cómo modelar una ruta simple (tarjetas digital).
 - Cómo modelar una ruta compleja (cartel iluminado con sub-productos).
@@ -341,83 +266,87 @@ Los tests actuales son mayormente integration contra DB real. Falta:
 
 ---
 
-## 4. Decisiones arquitectónicas importantes
+## 4. Deuda técnica conocida
 
-No re-discutir:
+### 4.1 `CONDICIONAL` sin evaluador
+Super motor tiene la compuerta pero no evalúa `condicionActivacionV2`.
+Hoy todo paso `CONDICIONAL` se ejecuta. Fix en P4-debt.
 
-### 4.1 La ruta es la única fuente de verdad
-Los motores v2 específicos agregaban pasos "invisibles" hardcodeados
-(pre-prensa, corte, embalaje). El super motor respeta la ruta 100%. Si
-un paso no está en la ruta, no se cobra.
+### 4.2 `unidadProductivaV2` solo metadata
+El motor infiere la unidad desde `familiaV2` ignorando la del paso. El
+campo se persiste y se muestra en UI pero no afecta el cálculo. Fix en
+P4-debt.
 
-### 4.2 Los 3 buckets cubren todo
-Centro de costo + materias primas + cargos flat cubren CUALQUIER paso
-de la industria (46 ejemplos validados). Algunos pasos tienen uno o
-dos en $0.
+### 4.3 `inferirFamiliaDesdeTipo`
+Fallback que infiere `familia` por `tipoOperacion + nombre` cuando
+`op.familiaV2` está null. Remover cuando P8 termine.
 
-### 4.3 Un solo preview visual
-`<NestingPreview>` 2D SVG es el único preview en todo el sistema. No
-hay 3D (Three.js removido). Consistencia entre digital, vinilo, rígidos,
-gran formato.
+### 4.4 `material-plantillas.ts` (fallback imperativo)
+253 LOC con plantillas por familia (cuántas placas, cuántos ml de tinta,
+etc.). Se usa cuando un paso no tiene `ProcesoOperacionMaterial`. Remover
+cuando P8 termine.
 
-### 4.4 Checklist eliminado (reemplazado por ruta opcional)
-Los checklists del v1 NO se portan. Su función (preguntas que agregan
-pasos/materiales) la cumplen:
-- Pasos `esOpcional=true` en la ruta (el cliente los activa al cotizar).
-- `ReglaDeSeleccion` para casos que requieren lógica condicional.
+### 4.5 Config producto con defaults de precio
+El `configProducto` tiene `papelPrecioPorPliego`, `embalajePrecioBolsa`,
+`impresionCostoClic`. Esos valores deberían vivir en
+`ProcesoOperacionMaterial.precioManual`. Migración gradual.
 
-### 4.5 Máquinas son opcionales
-Solo impresoras y equipos con productividad variable por perfil
-(hot-melt, plotter con distintas cuchillas) necesitan `MaquinaPerfilOperativo`.
-Pasos manuales (embalaje, soldadura) solo necesitan centro de costo.
+### 4.6 Variante → papel no extensible
+`ProductoVariante.papelVarianteId` asume papel. Para vinilo, rígidos,
+textil no aplica. Solución: generalizar a `sustratoVariantes[]` o que los
+materiales del paso lo declaren.
 
-### 4.6 Productos componentes son sub-productos recursivos
-Una tapa dura de libro es un producto con su propia ruta. El super motor
-invocará recursivamente cuando SM-componentes esté implementado (P4).
+### 4.7 Endpoint `/cotizar-v2` con sufijo legacy
+V1 ya no existe, pero el sufijo quedó. Renombrar a `/cotizar`.
 
-### 4.7 Shape canónica se mantiene
-`CotizacionCanonica { total, unitario, subtotales: {centroCosto,
-materiasPrimas, cargosFlat}, pasos[], subProductos[], warnings[] }`.
-Esta shape es estable y es el contrato público.
+### 4.8 Migrations aplicadas directo
+`20260419120000_populate_familia_v2_ops` y
+`20260419130000_proceso_operacion_material` se aplicaron manualmente
+(Prisma shadow DB falla). Workaround: `npx prisma db execute --stdin`.
+Ver `ROLLBACK_PLAN.md`.
+
+### 4.9 Three.js instalado sin uso
+5 paquetes (`three`, `@react-three/fiber`, `@react-three/drei`,
+`three-stdlib`, `troika-three-text`) sin imports en el código. Quick win.
 
 ---
 
-## 5. Technical debt conocida
+## 5. Decisiones arquitectónicas importantes
 
-### 5.1 Divergencias super motor vs v2
-Los benchmarks muestran diferencias -10% a -70% entre motores en el seed
-demo. Causa: los motores v2 usan **defaults hardcodeados**; el super motor
-usa **datos reales del tenant**. No es bug. Ver `super-motor.benchmark.spec.ts`.
+No re-discutir:
 
-### 5.2 `inferirFamiliaDesdeTipo`
-Función de fallback en super motor que infiere `familia` por
-`tipoOperacion + nombre` cuando `op.familiaV2` está null. Legacy —
-remover cuando la migration masiva (P6) termine.
+### 5.1 La ruta es la única fuente de verdad
+Si un paso no está en la ruta, no se cobra. Los motores v2 específicos
+agregaban pasos "invisibles" hardcodeados; el super motor no.
 
-### 5.3 Plantillas imperativas `material-plantillas.ts`
-Fallback cuando un paso no tiene `ProcesoOperacionMaterial` declarados.
-Remover cuando todos los pasos tengan materiales en DB.
+### 5.2 Los 3 buckets cubren todo
+Centro de costo + materias primas + cargos flat cubren cualquier paso
+de la industria (46 ejemplos validados).
 
-### 5.4 Config producto con defaults de precio
-Hoy el configProducto tiene `papelPrecioPorPliego`, `embalajePrecioBolsa`,
-`impresionCostoClic`, etc. Esos valores deberían vivir en
-`ProcesoOperacionMaterial.precioManual` del paso correspondiente, no a
-nivel producto. Migración gradual.
+### 5.3 Un solo preview visual
+`<NestingPreview>` 2D SVG es el único preview. Sin 3D.
 
-### 5.5 Vínculo "variante → papel" no extensible
-`ProductoVariante.papelVarianteId` asume siempre papel. Para productos
-que no son de papel (vinilo, rígidos, textil) no aplica. Solución:
-generalizar a `ProductoVariante.sustratoVariantes[]` o dejar que los
-materiales del paso los declaren (enfoque más modelo-universal).
+### 5.4 Checklist eliminado (reemplazado por ruta + alternativas)
+Pasos `opcional` + `ProcesoOperacionAlternativa` + `ReglaDeSeleccion`
+cubren la funcionalidad del checklist v1.
 
-### 5.6 Endpoints `/cotizar` y `/cotizar-v2` coexisten
-Eliminar `/cotizar` cuando el retiro P3 termine.
+### 5.5 Máquinas opcionales
+Solo pasos con productividad variable por perfil necesitan
+`MaquinaPerfilOperativo`. Manuales (embalaje, soldadura) solo centro
+de costo.
 
-### 5.7 Migrations aplicadas directo a DB
-Las migrations `20260419120000_populate_familia_v2_ops` y
-`20260419130000_proceso_operacion_material` fueron aplicadas manualmente
-(Prisma shadow DB falla). Ver `Prisma migrate dev` issue — workaround
-documentado en ROLLBACK_PLAN.md.
+### 5.6 Niveles + alternativas → una sola entidad
+`ProcesoOperacionAlternativa` con override fields (P4).
+
+### 5.7 Shape canónica estable
+`CotizacionCanonica { total, unitario, subtotales: {centroCosto,
+materiasPrimas, cargosFlat}, pasos[], subProductos[], warnings[] }`.
+Contrato público.
+
+### 5.8 `modoMedidas` first-class
+`ProductoServicio.modoMedidas: ESTANDAR | LIBRE` (P3.a.2). En modo
+`LIBRE` el tab "Variantes" se oculta y las cotizaciones piden medidas
+al cliente.
 
 ---
 
@@ -426,29 +355,25 @@ documentado en ROLLBACK_PLAN.md.
 **Tenant**: `0e7937a0-c093-4cdd-bc5e-fe4de1385ce8` (Grafica Corporearte)
 **Admin**: `admin@gdi-demo.local` / `Admin123!`
 
-### Productos seed con motor v2 + ruta:
-- **Tarjetas de Visita** (`44e4133f-...`) motor digital_laser, ruta "Digital Estandar" con 6 pasos tras completar.
-- **Vinilo adhesivo blanco** (`668f59e6-...`) motor gran_formato, SIN ruta (motor v2 trabaja sin ella).
-- **Vinilo de corte** (`43d7d1cd-...`) motor vinilo_de_corte.
-- **MDF Impreso** (`14516e74-...`) motor rigidos_impresos, SIN variantes (producto-level).
-- **Talonarios emblocados** (`ef0f03ee-...`) motor talonario.
+### Productos seed con ruta:
+- **Tarjetas de Visita** (`44e4133f-...`) ruta "Digital Estandar" 6 pasos.
+- **Vinilo adhesivo blanco** (`668f59e6-...`).
+- **Vinilo de corte** (`43d7d1cd-...`).
+- **MDF Impreso** (`14516e74-...`) `modoMedidas=LIBRE`.
+- **Talonarios emblocados** (`ef0f03ee-...`).
 
-### Productos huérfanos (sin ProductoMotorConfig):
-- Folletos rápidos, Señaladores, Tarjetas test.
-- El super motor levanta config default del motor para cotizar.
-
-### Ruta digital seed (poblada en esta sesión):
+### Ruta digital seed:
 `0e0f3a51-5508-4fa5-a700-d29d4e18dd63` "Impresión Digital Laser (Estandar)":
 ```
 1. OP-001 Diseño Grafico (opcional, tiempoFijo=30min)
 2. OP-002 Impresion Laser: Color (obligatorio, perfil 40 pliegos/h, Ricoh)
 3. OP-003 Laminado BOPP (opcional)
-4. OP-004 Pre-prensa (obligatorio, tiempoFijo=10min)  ← poblado hoy
-5. OP-005 Guillotinado (obligatorio, 500 pliegos/h)   ← poblado hoy
-6. OP-006 Embalaje (obligatorio, 600 piezas/h)        ← poblado hoy
+4. OP-004 Pre-prensa (obligatorio, tiempoFijo=10min)
+5. OP-005 Guillotinado (obligatorio, 500 pliegos/h)
+6. OP-006 Embalaje (obligatorio, 600 piezas/h)
 ```
 
-Con materiales declarativos (SM.D):
+Materiales declarativos (SM.D):
 - OP-002: Papel Opalina 250gr × pliego + Clics CMYK × pliego (aplicaMultiCaras)
 - OP-006: Bolsa celofán × pieza
 
@@ -457,40 +382,36 @@ Con materiales declarativos (SM.D):
 ## 7. Cómo retomar en la próxima sesión
 
 1. **Contexto**: leer este documento + `memory/` del usuario.
-2. **Branch**: `git checkout refactor/modelo-universal && git pull` (o rebasear si main avanzó).
+2. **Branch**: `git checkout refactor/modelo-universal && git pull`.
 3. **Infra local**:
    ```bash
-   docker start gdi-saas-postgres  # si está detenido
-   cd apps/api && npm run dev       # API
-   cd ../.. && npm run dev          # Frontend
+   docker start gdi-saas-postgres
+   cd apps/api && npm run dev       # API 3001
+   cd ../.. && npm run dev          # Frontend 3000
    ```
-4. **Verificar que funciona** (smoke test):
+4. **Smoke test**:
    ```bash
    cd apps/api && npx jest productos-servicios/motors
    ```
-   Esperado: 111+ tests passing.
-5. **Verificar super motor end-to-end**:
-   Login → producto Tarjetas de Visita → tab "Simular costo (v2)" →
-   checkbox "Usar super motor" → Cotizar. Debería devolver ~$8.500
-   con 4 pasos (impresión, pre-prensa, guillotinado, embalaje).
-6. **Empezar por P1** (Tab ruta) o el pendiente que acordaste con el
-   usuario. El resto son ortogonales.
+5. **E2E super motor**:
+   Login → Tarjetas de Visita → tab "Simular costo (v2)" → Cotizar.
+   Debería devolver ~$8.500 con 4 pasos activos.
+6. **Siguiente foco sugerido**: **P4-debt** (los tres hilos sueltos de
+   consolidación) porque cierra el capítulo de P4. Después **P9 cleanup**
+   como quick win. P5-P11 son frentes grandes independientes.
 
 ---
 
-## 8. Ideas fuera de alcance pero vale la pena registrar
+## 8. Ideas fuera de alcance pero vale registrar
 
-- **Optimizador de rutas**: sugerir combinaciones de trabajos similares
-  para aprovechar una misma corrida.
-- **Versionado de rutas**: snapshot histórico para reproducir
-  cotizaciones pasadas cuando la ruta cambia.
-- **Multi-tenant catálogo de familias**: permitir que un tenant agregue
-  familias custom a las 23 base.
-- **Exportar a DXF/PDF**: desde el `<NestingPreview>` actual (ya es SVG).
-- **Preview interactivo**: arrastrar piezas manualmente en el layout.
+- **Optimizador de rutas**: combinar trabajos similares en una corrida.
+- **Versionado de rutas**: snapshot para reproducir cotizaciones pasadas.
+- **Familias custom por tenant**.
+- **Exportar DXF/PDF** desde `<NestingPreview>` (ya es SVG).
+- **Preview interactivo** (arrastrar piezas en layout).
 
 ---
 
-*Última actualización*: 2026-04-19 · *Rama*: `refactor/modelo-universal` ·
-*Commit HEAD al escribir*: `d489618d` · *Aprox LOC eliminadas totales*:
-~12.000.
+*Última actualización*: 2026-04-19 (rev. 2) · *Rama*:
+`refactor/modelo-universal` · *Commit HEAD*: `8442bfd9` ·
+*LOC neto vs main*: +12.820 / −25.668.
