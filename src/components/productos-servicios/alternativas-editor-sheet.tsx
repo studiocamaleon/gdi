@@ -61,6 +61,9 @@ type DraftForm = {
   cleanupMin: string;
   tiempoFijoMin: string;
   productividadBase: string;
+  // P4-debt #3 — configNestingV2 override como JSON stringified.
+  // "" significa "usar configNestingV2 base del paso".
+  configNestingV2Json: string;
 };
 
 const emptyDraft: DraftForm = {
@@ -74,6 +77,7 @@ const emptyDraft: DraftForm = {
   cleanupMin: "",
   tiempoFijoMin: "",
   productividadBase: "",
+  configNestingV2Json: "",
 };
 
 export function AlternativasEditorSheet({
@@ -148,6 +152,10 @@ export function AlternativasEditorSheet({
       tiempoFijoMin: alt.tiempoFijoMin != null ? String(alt.tiempoFijoMin) : "",
       productividadBase:
         alt.productividadBase != null ? String(alt.productividadBase) : "",
+      configNestingV2Json:
+        alt.configNestingV2 != null
+          ? JSON.stringify(alt.configNestingV2, null, 2)
+          : "",
     });
     setShowForm(true);
   }
@@ -187,6 +195,25 @@ export function AlternativasEditorSheet({
       return;
     }
 
+    // P4-debt #3 — parse configNestingV2 override. Empty → null; JSON inválido → abort.
+    let configNestingV2Val: Record<string, unknown> | null;
+    const configRaw = draft.configNestingV2Json.trim();
+    if (configRaw === "") {
+      configNestingV2Val = null;
+    } else {
+      try {
+        const parsed = JSON.parse(configRaw);
+        if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+          toast.error("configNestingV2 debe ser un objeto JSON.");
+          return;
+        }
+        configNestingV2Val = parsed as Record<string, unknown>;
+      } catch {
+        toast.error("configNestingV2 no es JSON válido.");
+        return;
+      }
+    }
+
     const payload = {
       maquinaId: draft.maquinaId,
       perfilOperativoId: draft.perfilOperativoId === NONE ? null : draft.perfilOperativoId,
@@ -197,6 +224,7 @@ export function AlternativasEditorSheet({
       cleanupMin: cleanupMinVal,
       tiempoFijoMin: tiempoFijoMinVal,
       productividadBase: productividadBaseVal,
+      configNestingV2: configNestingV2Val,
     };
     setIsSaving(true);
     try {
@@ -474,6 +502,27 @@ export function AlternativasEditorSheet({
                           placeholder="— base —"
                         />
                       </div>
+                    </div>
+
+                    {/* P4-debt #3 — Override de configNestingV2. Si se deja
+                        vacío, la opción usa el configNestingV2 base del paso. */}
+                    <div className="grid gap-2 pt-3">
+                      <Label>Override de configuración de nesting (JSON)</Label>
+                      <textarea
+                        value={draft.configNestingV2Json}
+                        onChange={(e) =>
+                          setDraft((d) => ({ ...d, configNestingV2Json: e.target.value }))
+                        }
+                        placeholder={'— base —\n\nEjemplo:\n{\n  "pliegos": [{ "anchoMm": 320, "altoMm": 450, "codigo": "SRA3" }]\n}'}
+                        className="min-h-[140px] w-full rounded-md border bg-background px-3 py-2 font-mono text-xs"
+                        spellCheck={false}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Objeto JSON con la forma que la familia de paso espera
+                        (ej. <code className="font-mono">pliegos</code> en nesting-hoja,
+                        <code className="font-mono"> placas</code> en nesting-placa-rigida).
+                        Dejá vacío para usar el configNestingV2 base del paso.
+                      </p>
                     </div>
                   </div>
 

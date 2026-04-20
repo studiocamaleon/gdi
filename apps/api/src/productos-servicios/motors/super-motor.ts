@@ -46,6 +46,7 @@ import {
   type NestingResultUnion,
 } from '../engine/nesting-runner';
 import { calcularMaterialesDelPaso } from '../pasos/material-plantillas';
+import { evaluarBool } from '../reglas-seleccion/evaluador';
 
 function roundMoney(n: number): number {
   return Math.round(n * 100) / 100;
@@ -121,13 +122,36 @@ export class SuperMotorModule implements ProductMotorModule {
     }
 
     const opcionalesSeleccionados = new Set(payload.opcionalesSeleccionados ?? []);
+    const warnings: string[] = [];
+
+    // P4-debt #1 — Job Context para evaluar CONDICIONAL.
+    // Expone variables del trabajo (cantidad, parámetros, variante) para que
+    // reglas JsonLogic puedan decidir si un paso corre o no. Outputs de pasos
+    // previos se agregan al Job Context cuando tengamos una orquestación
+    // topológica real; hoy los CONDICIONAL deciden solo con inputs del job.
+    const parametros = (payload.parametros ?? {}) as Record<string, unknown>;
+    const selecciones: Record<string, string> = {};
+    for (const s of payload.seleccionesBase ?? []) {
+      selecciones[String(s.dimension)] = String(s.valor);
+    }
+    const jobContext: Record<string, unknown> = {
+      cantidad,
+      varianteId,
+      parametros,
+      selecciones,
+      variante: {
+        anchoMm: Number(variante.anchoMm ?? 0),
+        altoMm: Number(variante.altoMm ?? 0),
+      },
+      opcionalesSeleccionados: Array.from(opcionalesSeleccionados),
+    };
+
     // P4.2 — gate de activación del paso:
     //   `activacionV2` (si está seteado) manda:
     //     OBLIGATORIO → corre siempre.
     //     OPCIONAL    → corre solo si el cliente lo marcó en opcionalesSeleccionados.
-    //     CONDICIONAL → corre si condicionV2 evalúa truthy (hoy evaluación
-    //                   simplificada; JsonLogic completo queda para iteración
-    //                   cuando haya un caso real).
+    //     CONDICIONAL → si condicionV2 existe, evaluar JsonLogic contra el Job Context;
+    //                   si no existe, fallback a selección explícita (como OPCIONAL).
     //   Fallback a `esOpcional` (bool v1) para pasos sin activacionV2.
     const operacionesAEjecutar = proceso.operaciones.filter((op) => {
       if (!op.activo) return false;
@@ -136,8 +160,18 @@ export class SuperMotorModule implements ProductMotorModule {
         return opcionalesSeleccionados.has(op.id);
       }
       if (activacion === 'CONDICIONAL') {
-        // TODO: evaluar op.condicionV2 contra el JobContext cuando exista un caso real.
-        // Por ahora, CONDICIONAL se comporta como OPCIONAL (requiere marcado explícito).
+        const condicion = (op as { condicionV2?: unknown }).condicionV2;
+        if (condicion != null) {
+          try {
+            return evaluarBool(condicion, jobContext);
+          } catch (err) {
+            warnings.push(
+              `Paso "${op.nombre}": condición CONDICIONAL inválida (${err instanceof Error ? err.message : String(err)}). Se omite el paso.`,
+            );
+            return false;
+          }
+        }
+        // Sin condicionV2 declarada, requiere marcado explícito como fallback.
         return opcionalesSeleccionados.has(op.id);
       }
       if (activacion === 'OBLIGATORIO') {
@@ -155,7 +189,6 @@ export class SuperMotorModule implements ProductMotorModule {
     }
 
     const pasos: PasoCotizado[] = [];
-    const warnings: string[] = [];
 
     // P1.3: resolver alternativas seleccionadas por paso.
     // Si el cliente envió `opcionesSeleccionadas`, sobreescribe máquina/perfil
@@ -295,10 +328,18 @@ export class SuperMotorModule implements ProductMotorModule {
           ? getLayoutHeredado(nestingOutput, op.id)
           : null;
       const layoutAplicable = nestingPropio ?? nestingHeredado;
-      const cantidadObjetivoSalida =
-        familia?.modoNesting === 'produce' || familia?.modoNesting === 'consume'
-          ? layoutToCantidadObjetivo(layoutAplicable) ?? cantidad
-          : cantidad;
+      // P4-debt #2 — cantidadObjetivoSalida respeta unidadProductivaV2 del paso.
+      // Si el paso declara explícitamente su unidad, la usamos para proyectar
+      // desde el layout (pliegos, placas, metros, m², piezas…). Si no, fallback
+      // a la inferencia por modoNesting de la familia.
+      const unidadProductivaPaso =
+        ((op as { unidadProductivaV2?: string }).unidadProductivaV2 ?? null) || null;
+      const cantidadObjetivoSalida = resolverCantidadObjetivoSalida({
+        unidadProductiva: unidadProductivaPaso,
+        layout: layoutAplicable,
+        cantidadPedida: cantidad,
+        familiaModoNesting: familia?.modoNesting ?? 'none',
+      });
       const productividad = evaluateProductividad({
         modoProductividad: op.modoProductividad ?? ModoProductividadProceso.FIJA,
         productividadBase: op.productividadBase,
@@ -550,6 +591,75 @@ export class SuperMotorModule implements ProductMotorModule {
       maquinaMarginEndMm: Number(p.margenInferior ?? 0) || undefined,
     };
   }
+}
+
+/**
+ * P4-debt #2 — Resuelve `cantidadObjetivoSalida` respetando la unidad
+ * productiva declarada por el paso (unidadProductivaV2). Si la unidad está
+ * seteada, se proyecta desde el layout según esa unidad. Si está en null,
+ * se infiere por modoNesting de la familia (fallback legacy).
+ */
+function resolverCantidadObjetivoSalida(args: {
+  unidadProductiva: string | null;
+  layout: NestingResultUnion | null;
+  cantidadPedida: number;
+  familiaModoNesting: 'produce' | 'consume' | 'none';
+}): number {
+  const { unidadProductiva, layout, cantidadPedida, familiaModoNesting } = args;
+  const unidad = (unidadProductiva ?? '').toLowerCase();
+
+  // Mapeo explícito por unidad declarada.
+  if (unidad === 'pliego' || unidad === 'pliegos' || unidad === 'hoja' || unidad === 'hojas') {
+    if (layout?.algoritmo === 'nesting-hoja') return layout.result.pliegosNecesarios;
+    return cantidadPedida;
+  }
+  if (unidad === 'placa' || unidad === 'placas') {
+    if (layout?.algoritmo === 'nesting-placa-rigida') {
+      if (layout.result.piezasPorPlaca === 0) return 0;
+      return Math.max(1, Math.ceil(cantidadPedida / layout.result.piezasPorPlaca));
+    }
+    return cantidadPedida;
+  }
+  if (unidad === 'metro_lineal' || unidad === 'metros_lineales') {
+    if (layout?.algoritmo === 'nesting-rollo') {
+      return Math.ceil(layout.result.consumedLengthMm / 1000);
+    }
+    return cantidadPedida;
+  }
+  if (unidad === 'm2') {
+    if (layout?.algoritmo === 'nesting-rollo') return layout.result.usefulAreaM2;
+    if (layout?.algoritmo === 'nesting-hoja') {
+      const r = layout.result;
+      return (r.pliegoElegido.anchoMm * r.pliegoElegido.altoMm * r.pliegosNecesarios) / 1_000_000;
+    }
+    return cantidadPedida;
+  }
+  if (
+    unidad === 'unidad' ||
+    unidad === 'unidades' ||
+    unidad === 'pieza' ||
+    unidad === 'piezas' ||
+    unidad === 'letra' ||
+    unidad === 'letras' ||
+    unidad === 'modulo' ||
+    unidad === 'modulos' ||
+    unidad === 'módulo' ||
+    unidad === 'módulos'
+  ) {
+    return cantidadPedida;
+  }
+  if (unidad === 'corrida' || unidad === 'corridas') {
+    return 1;
+  }
+  if (unidad === 'hora' || unidad === 'horas') {
+    return 1;
+  }
+
+  // Fallback: inferencia por modoNesting de la familia.
+  if (familiaModoNesting === 'produce' || familiaModoNesting === 'consume') {
+    return layoutToCantidadObjetivo(layout) ?? cantidadPedida;
+  }
+  return cantidadPedida;
 }
 
 /**
