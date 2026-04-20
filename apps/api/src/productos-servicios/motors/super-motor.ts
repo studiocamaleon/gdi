@@ -109,11 +109,37 @@ export class SuperMotorModule implements ProductMotorModule {
     varianteId: string,
     payload: CotizarProductoVarianteDto,
   ): Promise<CotizacionCanonica> {
+    return this.quoteInternal(auth, varianteId, payload, new Set());
+  }
+
+  /**
+   * Implementación real de la cotización. Acepta un set `visited` de
+   * productoServicioIds ya resueltos en la cadena padre→hijos para cortar
+   * ciclos infinitos cuando un producto se declara como componente de sí
+   * mismo (directa o transitivamente).
+   */
+  private async quoteInternal(
+    auth: CurrentAuth,
+    varianteId: string,
+    payload: CotizarProductoVarianteDto,
+    visited: Set<string>,
+  ): Promise<CotizacionCanonica> {
     const periodo = String(payload.periodo ?? '2026-04');
     const cantidad = Math.max(1, Math.floor(Number(payload.cantidad ?? 1)));
 
     const runtime = await this.service.loadSuperMotorRuntime(auth, varianteId, periodo);
     const { variante, proceso, tarifaByCentro } = runtime;
+
+    // Cycle detection: si este producto ya apareció en la cadena padre,
+    // hay una referencia circular (A consume B que consume A). Abortamos
+    // con error claro en vez de stack-overflow.
+    if (visited.has(variante.productoServicioId)) {
+      throw new BadRequestException(
+        `Ciclo detectado en sub-productos: el producto ${variante.productoServicioId} se consume recursivamente a sí mismo.`,
+      );
+    }
+    const visitedChild = new Set(visited);
+    visitedChild.add(variante.productoServicioId);
 
     if (!proceso) {
       throw new BadRequestException(
@@ -189,6 +215,7 @@ export class SuperMotorModule implements ProductMotorModule {
     }
 
     const pasos: PasoCotizado[] = [];
+    const subProductos: CotizacionCanonica[] = [];
 
     // P1.3: resolver alternativas seleccionadas por paso.
     // Si el cliente envió `opcionesSeleccionadas`, sobreescribe máquina/perfil
@@ -378,12 +405,36 @@ export class SuperMotorModule implements ProductMotorModule {
         ? ((op as { materialesConsumidos: Array<Record<string, unknown>> })
             .materialesConsumidos)
         : [];
-      const materialesConsumidos = materialesDeclarados.length > 0
-        ? calcularMaterialesDeclarados(materialesDeclarados, {
+      // Separar materiales stock vs sub-producto. Los primeros se calculan
+      // con la función sincrónica; los segundos disparan cotizaciones
+      // recursivas del super motor.
+      const matsStock: Array<Record<string, unknown>> = [];
+      const matsSubProducto: Array<Record<string, unknown>> = [];
+      for (const m of materialesDeclarados) {
+        if (m.productoComponenteId != null) matsSubProducto.push(m);
+        else matsStock.push(m);
+      }
+      const materialesStock = matsStock.length > 0
+        ? calcularMaterialesDeclarados(matsStock, {
             cantidadPedida: cantidad,
             layout: layoutAplicable,
             selecciones,
           })
+        : [];
+      const materialesSubProductos = await this.resolverMaterialesSubProducto(
+        auth,
+        matsSubProducto,
+        {
+          cantidadPedida: cantidad,
+          layout: layoutAplicable,
+          selecciones,
+          periodo,
+          visited: visitedChild,
+          subProductos, // acumulador compartido: cada sub-cotización se agrega acá
+        },
+      );
+      const materialesConsumidos = materialesDeclarados.length > 0
+        ? [...materialesStock, ...materialesSubProductos]
         : calcularMaterialesDelPaso(familiaCodigo, {
             cantidadPedida: cantidad,
             layout: layoutAplicable,
@@ -506,7 +557,7 @@ export class SuperMotorModule implements ProductMotorModule {
       unitario,
       subtotales: { centroCosto, materiasPrimas, cargosFlat },
       pasos,
-      subProductos: [],
+      subProductos,
       warnings,
       trazabilidad: {
         varianteId,
@@ -561,6 +612,117 @@ export class SuperMotorModule implements ProductMotorModule {
       return [{ anchoMm: anchoV, altoMm: altoV, cantidad }];
     }
     return [];
+  }
+
+  /**
+   * Resuelve sub-productos declarados como materiales consumidos por el paso.
+   * Para cada fila con `productoComponenteId`:
+   *   1. Calcula la cantidad (cuántas instancias del sub-producto consume el paso).
+   *   2. Resuelve la variante (la explícita o la primera activa del componente).
+   *   3. Invoca recursivamente `quoteInternal` para cotizar el sub-producto
+   *      en esa cantidad, propagando `visited` para cortar ciclos.
+   *   4. Emite un MaterialConsumido cuyo costo = total de la sub-cotización, y
+   *      agrega la sub-cotización al acumulador `subProductos` (se adjunta al
+   *      padre en CotizacionCanonica.subProductos[]).
+   */
+  private async resolverMaterialesSubProducto(
+    auth: CurrentAuth,
+    declarados: Array<Record<string, unknown>>,
+    ctx: {
+      cantidadPedida: number;
+      layout: NestingResultUnion | null;
+      selecciones: Map<string, string>;
+      periodo: string;
+      visited: Set<string>;
+      subProductos: CotizacionCanonica[];
+    },
+  ): Promise<import('../pasos/material-plantillas').MaterialConsumido[]> {
+    const resultado: import('../pasos/material-plantillas').MaterialConsumido[] = [];
+    for (const m of declarados) {
+      const productoComponenteId = String(m.productoComponenteId ?? '');
+      const varianteComponenteIdExplicito =
+        m.varianteComponenteId != null ? String(m.varianteComponenteId) : null;
+      if (!productoComponenteId) continue;
+
+      // Cantidad base: igual que en calcularMaterialesDeclarados (misma semántica
+      // de fórmulas). Para sub-productos, el resultado se redondea hacia arriba
+      // (no cotizás media tapa dura).
+      const formula = String(m.formula ?? 'fijo');
+      const cantidadPorUnidad = Number(m.cantidadPorUnidad ?? 0);
+      const aplicaMultiCaras = Boolean(m.aplicaMultiCaras ?? false);
+      const caras = (ctx.selecciones.get('caras') ?? 'simple_faz').toLowerCase();
+      const multCaras = caras === 'doble_faz' ? 2 : 1;
+      let unidadesBase = 0;
+      if (formula === 'por_unidad_productiva') {
+        if (ctx.layout?.algoritmo === 'nesting-hoja') unidadesBase = ctx.layout.result.pliegosNecesarios;
+        else if (ctx.layout?.algoritmo === 'nesting-rollo')
+          unidadesBase = ctx.layout.result.consumedLengthMm / 1000;
+        else if (ctx.layout?.algoritmo === 'nesting-placa-rigida')
+          unidadesBase = Math.ceil(ctx.cantidadPedida / (ctx.layout.result.piezasPorPlaca || 1));
+        else unidadesBase = ctx.cantidadPedida;
+      } else if (formula === 'por_m2') {
+        if (ctx.layout?.algoritmo === 'nesting-hoja') {
+          const r = ctx.layout.result;
+          unidadesBase = (r.pliegoElegido.anchoMm * r.pliegoElegido.altoMm * r.pliegosNecesarios) / 1_000_000;
+        } else if (ctx.layout?.algoritmo === 'nesting-rollo') {
+          unidadesBase = ctx.layout.result.usefulAreaM2;
+        }
+      } else if (formula === 'por_pieza') {
+        unidadesBase = ctx.cantidadPedida;
+      } else if (formula === 'por_metro_lineal') {
+        if (ctx.layout?.algoritmo === 'nesting-rollo')
+          unidadesBase = ctx.layout.result.consumedLengthMm / 1000;
+      } else {
+        // fijo
+        unidadesBase = 1;
+      }
+      const cantidadRealFloat =
+        unidadesBase * cantidadPorUnidad * (aplicaMultiCaras ? multCaras : 1);
+      if (cantidadRealFloat <= 0) continue;
+      const cantidadSubProducto = Math.max(1, Math.ceil(cantidadRealFloat));
+
+      // Resolver variante del componente: explícita > primera activa del producto.
+      let varianteComponenteId = varianteComponenteIdExplicito;
+      if (!varianteComponenteId) {
+        const fallback = await this.service.findDefaultVarianteDeProducto(
+          auth,
+          productoComponenteId,
+        );
+        if (!fallback) {
+          resultado.push({
+            nombre: String(m.nombre ?? 'Sub-producto'),
+            cantidad: cantidadSubProducto,
+            unidad: 'unidad',
+            precioUnitario: 0,
+            costo: 0,
+            fuente: 'SubProducto (sin variante — no se pudo cotizar)',
+          });
+          continue;
+        }
+        varianteComponenteId = fallback;
+      }
+
+      // Recursión: cotizar el sub-producto en la cantidad calculada.
+      const subCotizacion = await this.quoteInternal(
+        auth,
+        varianteComponenteId,
+        {
+          periodo: ctx.periodo,
+          cantidad: cantidadSubProducto,
+        } as CotizarProductoVarianteDto,
+        ctx.visited,
+      );
+      ctx.subProductos.push(subCotizacion);
+      resultado.push({
+        nombre: String(m.nombre ?? 'Sub-producto'),
+        cantidad: cantidadSubProducto,
+        unidad: 'unidad',
+        precioUnitario: subCotizacion.unitario,
+        costo: subCotizacion.total,
+        fuente: `SubProducto ${subCotizacion.motorCodigo}@${subCotizacion.motorVersion}`,
+      });
+    }
+    return resultado;
   }
 
   /**

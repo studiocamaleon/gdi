@@ -1354,8 +1354,18 @@ model ProcesoOperacionMaterial {
   tenantId                String                 @db.Uuid
   procesoOperacionId      String                 @db.Uuid
   /// Variante específica que se consume. Null = material "genérico"
-  /// (ej: clics de impresora — no tienen MateriaPrima).
+  /// (ej: clics de impresora — no tienen MateriaPrima) o sub-producto.
   materiaPrimaVarianteId  String?                @db.Uuid
+  /// Sub-producto consumido como insumo. Cuando está seteado, el super motor
+  /// cotiza recursivamente `productoComponente` en la cantidad calculada
+  /// (por_pieza × cantidadReal) y usa `total` como el costo del material.
+  /// Invariante: exactamente uno de {materiaPrimaVarianteId, productoComponenteId}
+  /// debe estar seteado por fila (se valida en el DTO).
+  productoComponenteId    String?                @db.Uuid
+  /// Variante específica del sub-producto. Opcional: si el componente
+  /// tiene variantes y el usuario eligió una, se cotiza esa; si está null
+  /// se toma la primera variante activa (o se falla si no hay ninguna).
+  varianteComponenteId    String?                @db.Uuid
   /// Etiqueta legible del material (ej. "Papel Opalina 250gr", "Clics CMYK").
   nombre                  String
   /// Fórmula de cálculo de la cantidad consumida:
@@ -1383,9 +1393,13 @@ model ProcesoOperacionMaterial {
   tenant                  Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   procesoOperacion        ProcesoOperacion       @relation("ProcesoOperacionMaterialOperacion", fields: [procesoOperacionId], references: [id], onDelete: Cascade)
   materiaPrimaVariante    MateriaPrimaVariante?  @relation("ProcesoOperacionMaterialMateriaPrimaVariante", fields: [materiaPrimaVarianteId], references: [id], onDelete: SetNull)
+  productoComponente      ProductoServicio?      @relation("ProcesoOperacionMaterialProductoComponente", fields: [productoComponenteId], references: [id], onDelete: SetNull)
+  varianteComponente      ProductoVariante?      @relation("ProcesoOperacionMaterialVarianteComponente", fields: [varianteComponenteId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, procesoOperacionId, activo])
   @@index([tenantId, materiaPrimaVarianteId])
+  @@index([tenantId, productoComponenteId])
+  @@index([tenantId, varianteComponenteId])
 }
 
 /// P1.3 — Alternativas de máquina+perfil para un paso.
@@ -1702,6 +1716,8 @@ model ProductoServicio {
   adicionalesAsignados       ProductoServicioAdicional[]
   checklist                  ProductoChecklist?
   cotizaciones               CotizacionProductoSnapshot[]
+  /// Usos de este producto como sub-producto en otros (consumo recursivo).
+  usadoComoComponente        ProcesoOperacionMaterial[]  @relation("ProcesoOperacionMaterialProductoComponente")
 
   @@unique([tenantId, codigo])
   @@index([tenantId, nombre, activo])
@@ -1735,6 +1751,7 @@ model ProductoVariante {
   opcionesProductivasSet   ProductoVarianteOpcionProductivaSet?
   addonEffectScopes        ProductoAdicionalEfectoScope[]
   checklistRespuestas      CotizacionChecklistRespuestaSnapshot[]
+  usadaComoVarianteComponente ProcesoOperacionMaterial[]          @relation("ProcesoOperacionMaterialVarianteComponente")
 
   @@unique([tenantId, productoServicioId, nombre])
   @@index([tenantId, productoServicioId, activo])

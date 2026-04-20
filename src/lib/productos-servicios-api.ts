@@ -86,6 +86,8 @@ export type RutaCompletaOperacion = {
     aplicaMultiCaras: boolean;
     orden: number;
     materiaPrimaVariante: { id: string; sku: string; precioReferencia: number | null } | null;
+    productoComponente: { id: string; codigo: string; nombre: string; modoMedidas: string } | null;
+    varianteComponente: { id: string; nombre: string; anchoMm: number; altoMm: number } | null;
   }>;
   alternativas: Array<{
     id: string;

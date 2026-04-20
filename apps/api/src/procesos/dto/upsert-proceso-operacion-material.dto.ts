@@ -31,6 +31,20 @@ export class UpsertProcesoOperacionMaterialDto {
   @IsUUID('4')
   materiaPrimaVarianteId?: string | null;
 
+  /**
+   * Sub-producto consumido como insumo (recursión en super motor). Si está
+   * seteado, `materiaPrimaVarianteId` debe ser null: un material es o stock
+   * o sub-producto, no ambos. El service valida esta invariante.
+   */
+  @IsOptional()
+  @IsUUID('4')
+  productoComponenteId?: string | null;
+
+  /** Variante específica del sub-producto. Solo válido si productoComponenteId está seteado. */
+  @IsOptional()
+  @IsUUID('4')
+  varianteComponenteId?: string | null;
+
   @IsIn(MATERIAL_FORMULAS)
   formula!: MaterialFormula;
 

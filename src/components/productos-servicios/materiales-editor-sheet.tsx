@@ -49,6 +49,11 @@ import {
   type MaterialFormula,
   type ProcesoOperacionMaterial,
 } from "@/lib/procesos-api";
+import {
+  getProductosServicios,
+  getProductoVariantes,
+} from "@/lib/productos-servicios-api";
+import type { ProductoServicio, ProductoVariante } from "@/lib/productos-servicios";
 
 const NONE = "__none__";
 
@@ -75,11 +80,19 @@ type MateriaPrimaOption = {
   variantesCount: number;
 };
 
+type DraftKind = "stock" | "subProducto";
+
 type DraftForm = {
   id: string | null;
+  kind: DraftKind;
   nombre: string;
+  // Stock fields:
   materiaPrimaId: string; // NONE => material genérico sin variante
   materiaPrimaVarianteId: string; // NONE => aún no elegida dentro de la MP
+  // Sub-producto fields:
+  productoComponenteId: string; // NONE => no elegido
+  varianteComponenteId: string; // NONE => usar default del producto componente
+  // Shared:
   formula: MaterialFormula;
   cantidadPorUnidad: string;
   unidad: string;
@@ -90,9 +103,12 @@ type DraftForm = {
 
 const emptyDraft: DraftForm = {
   id: null,
+  kind: "stock",
   nombre: "",
   materiaPrimaId: NONE,
   materiaPrimaVarianteId: NONE,
+  productoComponenteId: NONE,
+  varianteComponenteId: NONE,
   formula: "por_unidad_productiva",
   cantidadPorUnidad: "1",
   unidad: "unidad",
@@ -117,6 +133,10 @@ export function MaterialesEditorSheet({
   const [materiales, setMateriales] = React.useState<ProcesoOperacionMaterial[]>([]);
   const [variantesOptions, setVariantesOptions] = React.useState<VarianteOption[]>([]);
   const [materiaPrimaOptions, setMateriaPrimaOptions] = React.useState<MateriaPrimaOption[]>([]);
+  const [productos, setProductos] = React.useState<ProductoServicio[]>([]);
+  const [variantesPorProducto, setVariantesPorProducto] = React.useState<
+    Record<string, ProductoVariante[]>
+  >({});
   const [isLoading, setIsLoading] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const [draft, setDraft] = React.useState<DraftForm>(emptyDraft);
@@ -125,11 +145,13 @@ export function MaterialesEditorSheet({
   const reload = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const [mats, primas] = await Promise.all([
+      const [mats, primas, prods] = await Promise.all([
         listProcesoOperacionMateriales(operacionId),
         getMateriasPrimas(),
+        getProductosServicios(),
       ]);
       setMateriales(mats);
+      setProductos((prods ?? []).filter((p) => p.activo));
       const options: VarianteOption[] = [];
       const mps: MateriaPrimaOption[] = [];
       for (const mp of primas as MateriaPrima[]) {
@@ -188,6 +210,7 @@ export function MaterialesEditorSheet({
   }
 
   function startEdit(m: ProcesoOperacionMaterial) {
+    const kind: DraftKind = m.productoComponenteId ? "subProducto" : "stock";
     // Si el material tiene una variante asignada, derivar su materia prima
     // desde el catálogo para que el Select se muestre con la MP correcta.
     const varianteActual = m.materiaPrimaVarianteId
@@ -195,9 +218,12 @@ export function MaterialesEditorSheet({
       : null;
     setDraft({
       id: m.id,
+      kind,
       nombre: m.nombre,
       materiaPrimaId: varianteActual?.materiaPrimaId ?? NONE,
       materiaPrimaVarianteId: m.materiaPrimaVarianteId ?? NONE,
+      productoComponenteId: m.productoComponenteId ?? NONE,
+      varianteComponenteId: m.varianteComponenteId ?? NONE,
       formula: m.formula,
       cantidadPorUnidad: String(m.cantidadPorUnidad),
       unidad: m.unidad,
@@ -205,8 +231,21 @@ export function MaterialesEditorSheet({
       aplicaMultiCaras: m.aplicaMultiCaras,
       orden: m.orden,
     });
+    if (kind === "subProducto" && m.productoComponenteId) {
+      void loadVariantesDeProducto(m.productoComponenteId);
+    }
     setShowForm(true);
   }
+
+  const loadVariantesDeProducto = React.useCallback(async (productoId: string) => {
+    if (variantesPorProducto[productoId]) return;
+    try {
+      const vs = await getProductoVariantes(productoId);
+      setVariantesPorProducto((prev) => ({ ...prev, [productoId]: vs }));
+    } catch (err) {
+      console.error(err);
+    }
+  }, [variantesPorProducto]);
 
   function cancelForm() {
     setShowForm(false);
@@ -233,10 +272,25 @@ export function MaterialesEditorSheet({
       return;
     }
 
+    if (draft.kind === "subProducto" && draft.productoComponenteId === NONE) {
+      toast.error("Seleccioná el producto componente.");
+      return;
+    }
+
     const payload = {
       nombre: draft.nombre.trim(),
       materiaPrimaVarianteId:
-        draft.materiaPrimaVarianteId === NONE ? null : draft.materiaPrimaVarianteId,
+        draft.kind === "stock" && draft.materiaPrimaVarianteId !== NONE
+          ? draft.materiaPrimaVarianteId
+          : null,
+      productoComponenteId:
+        draft.kind === "subProducto" && draft.productoComponenteId !== NONE
+          ? draft.productoComponenteId
+          : null,
+      varianteComponenteId:
+        draft.kind === "subProducto" && draft.varianteComponenteId !== NONE
+          ? draft.varianteComponenteId
+          : null,
       formula: draft.formula,
       cantidadPorUnidad: cantidad,
       unidad: draft.unidad.trim(),
@@ -341,7 +395,19 @@ export function MaterialesEditorSheet({
                         <TableCell className="font-mono text-xs">{m.orden}</TableCell>
                         <TableCell>
                           <div className="font-medium">{m.nombre}</div>
-                          {m.materiaPrimaVariante ? (
+                          {m.productoComponente ? (
+                            <div className="mt-0.5 flex items-center gap-1 text-xs">
+                              <Badge variant="outline" className="text-[10px]">
+                                sub-producto
+                              </Badge>
+                              <span className="text-muted-foreground">
+                                {m.productoComponente.nombre}
+                                {m.varianteComponente
+                                  ? ` · ${m.varianteComponente.nombre}`
+                                  : " · (variante default)"}
+                              </span>
+                            </div>
+                          ) : m.materiaPrimaVariante ? (
                             <div className="text-xs text-muted-foreground">
                               <code>{m.materiaPrimaVariante.sku}</code>
                             </div>
@@ -400,6 +466,100 @@ export function MaterialesEditorSheet({
                     />
                   </div>
 
+                  {/* Toggle entre material de stock y sub-producto. El sub-producto
+                      se cotiza recursivamente con su propia ruta; el stock consume
+                      directamente una MateriaPrimaVariante. */}
+                  <div className="grid gap-2">
+                    <Label>Tipo de insumo</Label>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={draft.kind === "stock" ? "default" : "outline"}
+                        onClick={() => setDraft((d) => ({ ...d, kind: "stock" }))}
+                      >
+                        Material de stock
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={draft.kind === "subProducto" ? "default" : "outline"}
+                        onClick={() => setDraft((d) => ({ ...d, kind: "subProducto" }))}
+                      >
+                        Sub-producto
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Un <strong>sub-producto</strong> es otro producto del catálogo que este paso
+                      consume como insumo — se cotiza recursivamente con su propia ruta (ej: una
+                      tapa dura que el libro consume en el paso "ensamble").
+                    </p>
+                  </div>
+
+                  {draft.kind === "subProducto" ? (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="grid gap-2">
+                        <Label>Producto componente</Label>
+                        <Select
+                          value={draft.productoComponenteId}
+                          onValueChange={(v) => {
+                            const next = v ?? NONE;
+                            setDraft((d) => ({
+                              ...d,
+                              productoComponenteId: next,
+                              varianteComponenteId: NONE,
+                            }));
+                            if (next !== NONE) void loadVariantesDeProducto(next);
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue>
+                              {draft.productoComponenteId === NONE
+                                ? "Seleccioná un producto"
+                                : productos.find((p) => p.id === draft.productoComponenteId)
+                                    ?.nombre ?? "—"}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={NONE}>— seleccionar —</SelectItem>
+                            {productos.map((p) => (
+                              <SelectItem key={p.id} value={p.id}>
+                                {p.nombre} <code className="text-xs text-muted-foreground">({p.codigo})</code>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Variante (opcional)</Label>
+                        <Select
+                          value={draft.varianteComponenteId}
+                          onValueChange={(v) =>
+                            setDraft((d) => ({ ...d, varianteComponenteId: v ?? NONE }))
+                          }
+                          disabled={draft.productoComponenteId === NONE}
+                        >
+                          <SelectTrigger>
+                            <SelectValue>
+                              {draft.varianteComponenteId === NONE
+                                ? "— usar default del producto —"
+                                : (variantesPorProducto[draft.productoComponenteId] ?? []).find(
+                                    (v) => v.id === draft.varianteComponenteId,
+                                  )?.nombre ?? "—"}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={NONE}>— usar default del producto —</SelectItem>
+                            {(variantesPorProducto[draft.productoComponenteId] ?? []).map((v) => (
+                              <SelectItem key={v.id} value={v.id}>
+                                {v.nombre}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  ) : (
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="grid gap-2">
                       <Label>Materia prima</Label>
@@ -468,11 +628,14 @@ export function MaterialesEditorSheet({
                       </Select>
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Si elegís <strong>material genérico</strong>, se usa el{" "}
-                    <strong>precio manual</strong>. Útil para conceptos que no tienen stock
-                    (ej: clics, toner, tinta UV por ml).
-                  </p>
+                  )}
+                  {draft.kind === "stock" && (
+                    <p className="text-xs text-muted-foreground">
+                      Si elegís <strong>material genérico</strong>, se usa el{" "}
+                      <strong>precio manual</strong>. Útil para conceptos que no tienen stock
+                      (ej: clics, toner, tinta UV por ml).
+                    </p>
+                  )}
 
                   <div className="grid gap-4 md:grid-cols-3">
                     <div className="grid gap-2">

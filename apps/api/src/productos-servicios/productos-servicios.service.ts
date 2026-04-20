@@ -2343,28 +2343,52 @@ export class ProductosServiciosService {
               }
             : null,
           configNestingV2: op.configNestingV2,
-          materialesConsumidos: mats.map((m) => ({
-            id: String(m.id),
-            nombre: String(m.nombre),
-            formula: String(m.formula),
-            cantidadPorUnidad: Number(m.cantidadPorUnidad),
-            unidad: String(m.unidad),
-            precioManual: m.precioManual != null ? Number(m.precioManual) : null,
-            aplicaMultiCaras: Boolean(m.aplicaMultiCaras),
-            orden: Number(m.orden ?? 0),
-            materiaPrimaVariante: m.materiaPrimaVariante
-              ? {
-                  id: String((m.materiaPrimaVariante as { id: string }).id),
-                  sku: String((m.materiaPrimaVariante as { sku: string }).sku),
-                  precioReferencia:
-                    (m.materiaPrimaVariante as { precioReferencia?: unknown }).precioReferencia != null
-                      ? Number(
-                          (m.materiaPrimaVariante as { precioReferencia: unknown }).precioReferencia,
-                        )
-                      : null,
-                }
-              : null,
-          })),
+          materialesConsumidos: mats.map((m) => {
+            const compRaw = m.productoComponente as
+              | { id: string; codigo: string; nombre: string; modoMedidas: string }
+              | null;
+            const varCompRaw = m.varianteComponente as
+              | { id: string; nombre: string; anchoMm: unknown; altoMm: unknown }
+              | null;
+            return {
+              id: String(m.id),
+              nombre: String(m.nombre),
+              formula: String(m.formula),
+              cantidadPorUnidad: Number(m.cantidadPorUnidad),
+              unidad: String(m.unidad),
+              precioManual: m.precioManual != null ? Number(m.precioManual) : null,
+              aplicaMultiCaras: Boolean(m.aplicaMultiCaras),
+              orden: Number(m.orden ?? 0),
+              materiaPrimaVariante: m.materiaPrimaVariante
+                ? {
+                    id: String((m.materiaPrimaVariante as { id: string }).id),
+                    sku: String((m.materiaPrimaVariante as { sku: string }).sku),
+                    precioReferencia:
+                      (m.materiaPrimaVariante as { precioReferencia?: unknown }).precioReferencia != null
+                        ? Number(
+                            (m.materiaPrimaVariante as { precioReferencia: unknown }).precioReferencia,
+                          )
+                        : null,
+                  }
+                : null,
+              productoComponente: compRaw
+                ? {
+                    id: compRaw.id,
+                    codigo: compRaw.codigo,
+                    nombre: compRaw.nombre,
+                    modoMedidas: compRaw.modoMedidas,
+                  }
+                : null,
+              varianteComponente: varCompRaw
+                ? {
+                    id: varCompRaw.id,
+                    nombre: varCompRaw.nombre,
+                    anchoMm: Number(varCompRaw.anchoMm),
+                    altoMm: Number(varCompRaw.altoMm),
+                  }
+                : null,
+            };
+          }),
           alternativas: alts.map((a) => {
             const maq = a.maquina as { id: string; nombre: string; plantilla: string | null } | null;
             const perf = a.perfilOperativo as { id: string; nombre: string } | null;
@@ -2380,6 +2404,28 @@ export class ProductosServiciosService {
         };
       }),
     };
+  }
+
+  /**
+   * Busca la variante default de un producto para cotización recursiva como
+   * sub-producto cuando el usuario no especificó una variante explícita en el
+   * material. Devuelve el ID de la primera variante activa (ordenada por
+   * createdAt) o null si no hay ninguna.
+   */
+  async findDefaultVarianteDeProducto(
+    auth: CurrentAuth,
+    productoId: string,
+  ): Promise<string | null> {
+    const v = await this.prisma.productoVariante.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        productoServicioId: productoId,
+        activo: true,
+      },
+      orderBy: [{ createdAt: 'asc' }],
+      select: { id: true },
+    });
+    return v?.id ?? null;
   }
 
   async loadSuperMotorRuntime(auth: CurrentAuth, varianteId: string, periodo: string) {
@@ -8107,10 +8153,15 @@ export class ProductosServiciosService {
             maquina: true,
             perfilOperativo: true,
             requiresProductoAdicional: true,
-            // SM.D: materiales declarativos por paso.
+            // SM.D: materiales declarativos por paso. Incluye producto
+            // componente + variante cuando el material es un sub-producto.
             materialesConsumidos: {
               where: { activo: true },
-              include: { materiaPrimaVariante: true },
+              include: {
+                materiaPrimaVariante: true,
+                productoComponente: true,
+                varianteComponente: true,
+              },
               orderBy: [{ orden: 'asc' }],
             },
             // P1.3: alternativas de máquina+perfil seleccionables al cotizar.

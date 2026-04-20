@@ -245,6 +245,10 @@ export type ProcesoOperacionMaterial = {
   id: string;
   procesoOperacionId: string;
   materiaPrimaVarianteId: string | null;
+  /** Sub-producto: si está seteado, el motor cotiza recursivamente este producto. */
+  productoComponenteId: string | null;
+  /** Variante específica del sub-producto; null = usar default del producto. */
+  varianteComponenteId: string | null;
   nombre: string;
   formula: MaterialFormula;
   cantidadPorUnidad: number;
@@ -259,6 +263,18 @@ export type ProcesoOperacionMaterial = {
     nombreVariante: string | null;
     precioReferencia: number | null;
   } | null;
+  productoComponente: {
+    id: string;
+    codigo: string;
+    nombre: string;
+    modoMedidas: string;
+  } | null;
+  varianteComponente: {
+    id: string;
+    nombre: string;
+    anchoMm: number;
+    altoMm: number;
+  } | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -266,6 +282,8 @@ export type ProcesoOperacionMaterial = {
 export type ProcesoOperacionMaterialPayload = {
   nombre: string;
   materiaPrimaVarianteId?: string | null;
+  productoComponenteId?: string | null;
+  varianteComponenteId?: string | null;
   formula: MaterialFormula;
   cantidadPorUnidad: number;
   unidad: string;

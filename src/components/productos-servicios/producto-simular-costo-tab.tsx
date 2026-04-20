@@ -161,6 +161,92 @@ const MOTORS_CON_NUMEROS_TALONARIO = new Set(["talonario"]);
 /** Motores con caras + tipoImpresion. */
 const MOTORS_CON_CARAS_TIPO = new Set(["impresion_digital_laser", "talonario"]);
 
+/**
+ * Renderiza un sub-producto cotizado recursivamente, con breakdown expandible.
+ * Soporta recursión ilimitada (un sub-producto puede tener sus propios
+ * sub-productos — ej. libro → tapa dura → cartoné).
+ */
+function SubProductoCard({ cotizacion }: { cotizacion: CotizacionCanonica }) {
+  const [expandido, setExpandido] = React.useState(false);
+  const traz = (cotizacion.trazabilidad ?? {}) as Record<string, unknown>;
+  const procesoNombre = typeof traz.procesoNombre === "string" ? traz.procesoNombre : "";
+  return (
+    <div className="rounded-md border bg-muted/30 p-3">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-3 text-left"
+        onClick={() => setExpandido((e) => !e)}
+      >
+        <div>
+          <div className="text-sm font-medium">
+            {procesoNombre || `Sub-producto (motor ${cotizacion.motorCodigo}@${cotizacion.motorVersion})`}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {cotizacion.cantidad} × {formatCurrency(cotizacion.unitario)} c/u
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold">{formatCurrency(cotizacion.total)}</span>
+          <Badge variant="outline" className="text-[10px]">
+            {expandido ? "−" : "+"}
+          </Badge>
+        </div>
+      </button>
+      {expandido && (
+        <div className="mt-3 space-y-2 border-t pt-3">
+          <div className="grid grid-cols-3 gap-2 text-xs">
+            <div>
+              <div className="text-muted-foreground">Centro costo</div>
+              <div className="font-medium">{formatCurrency(cotizacion.subtotales.centroCosto)}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Materias primas</div>
+              <div className="font-medium">{formatCurrency(cotizacion.subtotales.materiasPrimas)}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Cargos flat</div>
+              <div className="font-medium">{formatCurrency(cotizacion.subtotales.cargosFlat)}</div>
+            </div>
+          </div>
+          {cotizacion.pasos.length > 0 && (
+            <div>
+              <div className="mb-1 text-xs font-medium text-muted-foreground">Pasos:</div>
+              <ul className="space-y-0.5 text-xs">
+                {cotizacion.pasos.map((paso) => {
+                  const subtotal = paso.costoCentroCosto + paso.costoMateriasPrimas + paso.cargosFlat;
+                  return (
+                    <li key={paso.id} className="flex justify-between">
+                      <span>{paso.nombre}</span>
+                      <span className="font-mono">{formatCurrency(subtotal)}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+          {cotizacion.subProductos.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <div className="text-xs font-medium text-muted-foreground">
+                Sub-sub-productos:
+              </div>
+              {cotizacion.subProductos.map((sub, i) => (
+                <SubProductoCard key={i} cotizacion={sub} />
+              ))}
+            </div>
+          )}
+          {cotizacion.warnings.length > 0 && (
+            <div className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
+              {cotizacion.warnings.map((w, i) => (
+                <div key={i}>⚠ {w}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ProductoSimularCostoTab(props: ProductTabProps) {
   const motorCodigo = props.producto.motorCodigo;
   const needsMedidas = !MOTORS_SIN_MEDIDAS.has(motorCodigo);
@@ -581,6 +667,24 @@ export function ProductoSimularCostoTab(props: ProductTabProps) {
                 </div>
               );
             })()}
+
+            {cotizacion.subProductos.length > 0 && (
+              <div className="space-y-2">
+                <div>
+                  <h3 className="text-sm font-semibold">Sub-productos cotizados</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Productos consumidos como insumos por algún paso de la ruta. Cada uno se
+                    cotiza recursivamente con su propia ruta; su total entra como material
+                    en el paso que lo consume.
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  {cotizacion.subProductos.map((sub, i) => (
+                    <SubProductoCard key={i} cotizacion={sub} />
+                  ))}
+                </div>
+              </div>
+            )}
 
             {cotizacion.warnings.length > 0 ? (
               <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">

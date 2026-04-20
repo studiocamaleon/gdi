@@ -44,6 +44,35 @@ import {
   evaluateProductividad,
 } from './proceso-productividad.engine';
 
+const MATERIAL_INCLUDE = {
+  materiaPrimaVariante: {
+    select: {
+      id: true,
+      sku: true,
+      nombreVariante: true,
+      precioReferencia: true,
+    },
+  },
+  productoComponente: {
+    select: {
+      id: true,
+      codigo: true,
+      nombre: true,
+      modoMedidas: true,
+    },
+  },
+  varianteComponente: {
+    select: {
+      id: true,
+      nombre: true,
+      anchoMm: true,
+      altoMm: true,
+    },
+  },
+} as const;
+
+const MATERIAL_INCLUDE_PAYLOAD = { include: MATERIAL_INCLUDE } as const;
+
 type ProcesoCompleto = Prisma.ProcesoDefinicionGetPayload<{
   include: {
     operaciones: {
@@ -2447,16 +2476,7 @@ export class ProcesosService {
     await this.findOperacionOrThrow(auth, operacionId);
     const materiales = await this.prisma.procesoOperacionMaterial.findMany({
       where: { tenantId: auth.tenantId, procesoOperacionId: operacionId },
-      include: {
-        materiaPrimaVariante: {
-          select: {
-            id: true,
-            sku: true,
-            nombreVariante: true,
-            precioReferencia: true,
-          },
-        },
-      },
+      include: MATERIAL_INCLUDE,
       orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
     });
     return materiales.map((m) => this.toMaterialResponse(m));
@@ -2475,6 +2495,8 @@ export class ProcesosService {
         tenantId: auth.tenantId,
         procesoOperacionId: operacionId,
         materiaPrimaVarianteId: payload.materiaPrimaVarianteId ?? null,
+        productoComponenteId: payload.productoComponenteId ?? null,
+        varianteComponenteId: payload.varianteComponenteId ?? null,
         nombre: payload.nombre.trim(),
         formula: payload.formula,
         cantidadPorUnidad: new Prisma.Decimal(payload.cantidadPorUnidad),
@@ -2485,16 +2507,7 @@ export class ProcesosService {
         orden: typeof payload.orden === 'number' ? payload.orden : 0,
         activo: payload.activo ?? true,
       },
-      include: {
-        materiaPrimaVariante: {
-          select: {
-            id: true,
-            sku: true,
-            nombreVariante: true,
-            precioReferencia: true,
-          },
-        },
-      },
+      include: MATERIAL_INCLUDE,
     });
 
     return this.toMaterialResponse(created);
@@ -2513,6 +2526,8 @@ export class ProcesosService {
       where: { id: materialId },
       data: {
         materiaPrimaVarianteId: payload.materiaPrimaVarianteId ?? null,
+        productoComponenteId: payload.productoComponenteId ?? null,
+        varianteComponenteId: payload.varianteComponenteId ?? null,
         nombre: payload.nombre.trim(),
         formula: payload.formula,
         cantidadPorUnidad: new Prisma.Decimal(payload.cantidadPorUnidad),
@@ -2523,16 +2538,7 @@ export class ProcesosService {
         orden: typeof payload.orden === 'number' ? payload.orden : 0,
         activo: payload.activo ?? true,
       },
-      include: {
-        materiaPrimaVariante: {
-          select: {
-            id: true,
-            sku: true,
-            nombreVariante: true,
-            precioReferencia: true,
-          },
-        },
-      },
+      include: MATERIAL_INCLUDE,
     });
 
     return this.toMaterialResponse(updated);
@@ -2570,6 +2576,18 @@ export class ProcesosService {
     auth: CurrentAuth,
     payload: UpsertProcesoOperacionMaterialDto,
   ) {
+    // Invariante: un material es o stock o sub-producto, no ambos ni ninguno
+    // (ninguno ≠ null ∧ ninguno ≠ null ⇒ "material genérico", ej. clics).
+    if (payload.materiaPrimaVarianteId && payload.productoComponenteId) {
+      throw new BadRequestException(
+        'Un material no puede ser a la vez materia prima y sub-producto.',
+      );
+    }
+    if (!payload.productoComponenteId && payload.varianteComponenteId) {
+      throw new BadRequestException(
+        'La varianteComponente solo es válida si hay productoComponente.',
+      );
+    }
     if (payload.materiaPrimaVarianteId) {
       const mp = await this.prisma.materiaPrimaVariante.findFirst({
         where: { id: payload.materiaPrimaVarianteId, tenantId: auth.tenantId },
@@ -2579,26 +2597,41 @@ export class ProcesosService {
         throw new BadRequestException('La variante de materia prima no existe.');
       }
     }
+    if (payload.productoComponenteId) {
+      const comp = await this.prisma.productoServicio.findFirst({
+        where: { id: payload.productoComponenteId, tenantId: auth.tenantId },
+        select: { id: true },
+      });
+      if (!comp) {
+        throw new BadRequestException('El producto componente no existe.');
+      }
+      if (payload.varianteComponenteId) {
+        const v = await this.prisma.productoVariante.findFirst({
+          where: {
+            id: payload.varianteComponenteId,
+            tenantId: auth.tenantId,
+            productoServicioId: payload.productoComponenteId,
+          },
+          select: { id: true },
+        });
+        if (!v) {
+          throw new BadRequestException(
+            'La variante del componente no existe o no pertenece al producto indicado.',
+          );
+        }
+      }
+    }
   }
 
   private toMaterialResponse(
-    m: Prisma.ProcesoOperacionMaterialGetPayload<{
-      include: {
-        materiaPrimaVariante: {
-          select: {
-            id: true;
-            sku: true;
-            nombreVariante: true;
-            precioReferencia: true;
-          };
-        };
-      };
-    }>,
+    m: Prisma.ProcesoOperacionMaterialGetPayload<typeof MATERIAL_INCLUDE_PAYLOAD>,
   ) {
     return {
       id: m.id,
       procesoOperacionId: m.procesoOperacionId,
       materiaPrimaVarianteId: m.materiaPrimaVarianteId,
+      productoComponenteId: m.productoComponenteId,
+      varianteComponenteId: m.varianteComponenteId,
       nombre: m.nombre,
       formula: m.formula,
       cantidadPorUnidad: Number(m.cantidadPorUnidad),
@@ -2616,6 +2649,22 @@ export class ProcesosService {
               m.materiaPrimaVariante.precioReferencia != null
                 ? Number(m.materiaPrimaVariante.precioReferencia)
                 : null,
+          }
+        : null,
+      productoComponente: m.productoComponente
+        ? {
+            id: m.productoComponente.id,
+            codigo: m.productoComponente.codigo,
+            nombre: m.productoComponente.nombre,
+            modoMedidas: m.productoComponente.modoMedidas,
+          }
+        : null,
+      varianteComponente: m.varianteComponente
+        ? {
+            id: m.varianteComponente.id,
+            nombre: m.varianteComponente.nombre,
+            anchoMm: Number(m.varianteComponente.anchoMm),
+            altoMm: Number(m.varianteComponente.altoMm),
           }
         : null,
       createdAt: m.createdAt,
