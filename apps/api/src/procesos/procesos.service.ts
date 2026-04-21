@@ -69,9 +69,27 @@ const MATERIAL_INCLUDE = {
       altoMm: true,
     },
   },
-} as const;
+  // SM.1.d — Variantes habilitadas cuando esSustratoNesting=true.
+  variantesHabilitadas: {
+    where: { activo: true },
+    orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }] as Prisma.ProcesoOperacionMaterialVarianteOrderByWithRelationInput[],
+    include: {
+      materiaPrimaVariante: {
+        select: {
+          id: true,
+          sku: true,
+          nombreVariante: true,
+          precioReferencia: true,
+          atributosVarianteJson: true,
+          activo: true,
+          materiaPrimaId: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.ProcesoOperacionMaterialInclude;
 
-const MATERIAL_INCLUDE_PAYLOAD = { include: MATERIAL_INCLUDE } as const;
+const MATERIAL_INCLUDE_PAYLOAD = { include: MATERIAL_INCLUDE } satisfies Prisma.ProcesoOperacionMaterialDefaultArgs;
 
 type ProcesoCompleto = Prisma.ProcesoDefinicionGetPayload<{
   include: {
@@ -2489,25 +2507,35 @@ export class ProcesosService {
   ) {
     await this.findOperacionOrThrow(auth, operacionId);
     await this.validateMaterialReferences(auth, payload);
+    await this.validateUniqueSustratoPorPaso(auth, operacionId, payload, null);
 
-    const created = await this.prisma.procesoOperacionMaterial.create({
-      data: {
-        tenantId: auth.tenantId,
-        procesoOperacionId: operacionId,
-        materiaPrimaVarianteId: payload.materiaPrimaVarianteId ?? null,
-        productoComponenteId: payload.productoComponenteId ?? null,
-        varianteComponenteId: payload.varianteComponenteId ?? null,
-        nombre: payload.nombre.trim(),
-        formula: payload.formula,
-        cantidadPorUnidad: new Prisma.Decimal(payload.cantidadPorUnidad),
-        unidad: payload.unidad.trim(),
-        precioManual:
-          payload.precioManual != null ? new Prisma.Decimal(payload.precioManual) : null,
-        aplicaMultiCaras: Boolean(payload.aplicaMultiCaras),
-        orden: typeof payload.orden === 'number' ? payload.orden : 0,
-        activo: payload.activo ?? true,
-      },
-      include: MATERIAL_INCLUDE,
+    const created = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.procesoOperacionMaterial.create({
+        data: {
+          tenantId: auth.tenantId,
+          procesoOperacionId: operacionId,
+          materiaPrimaVarianteId: payload.materiaPrimaVarianteId ?? null,
+          productoComponenteId: payload.productoComponenteId ?? null,
+          varianteComponenteId: payload.varianteComponenteId ?? null,
+          nombre: payload.nombre.trim(),
+          formula: payload.formula,
+          cantidadPorUnidad: new Prisma.Decimal(payload.cantidadPorUnidad),
+          unidad: payload.unidad.trim(),
+          precioManual:
+            payload.precioManual != null
+              ? new Prisma.Decimal(payload.precioManual)
+              : null,
+          aplicaMultiCaras: Boolean(payload.aplicaMultiCaras),
+          esSustratoNesting: Boolean(payload.esSustratoNesting),
+          orden: typeof payload.orden === 'number' ? payload.orden : 0,
+          activo: payload.activo ?? true,
+        },
+      });
+      await this.syncVariantesHabilitadas(tx, auth, row.id, payload);
+      return tx.procesoOperacionMaterial.findUniqueOrThrow({
+        where: { id: row.id },
+        include: MATERIAL_INCLUDE,
+      });
     });
 
     return this.toMaterialResponse(created);
@@ -2521,24 +2549,34 @@ export class ProcesosService {
   ) {
     await this.findMaterialOrThrow(auth, operacionId, materialId);
     await this.validateMaterialReferences(auth, payload);
+    await this.validateUniqueSustratoPorPaso(auth, operacionId, payload, materialId);
 
-    const updated = await this.prisma.procesoOperacionMaterial.update({
-      where: { id: materialId },
-      data: {
-        materiaPrimaVarianteId: payload.materiaPrimaVarianteId ?? null,
-        productoComponenteId: payload.productoComponenteId ?? null,
-        varianteComponenteId: payload.varianteComponenteId ?? null,
-        nombre: payload.nombre.trim(),
-        formula: payload.formula,
-        cantidadPorUnidad: new Prisma.Decimal(payload.cantidadPorUnidad),
-        unidad: payload.unidad.trim(),
-        precioManual:
-          payload.precioManual != null ? new Prisma.Decimal(payload.precioManual) : null,
-        aplicaMultiCaras: Boolean(payload.aplicaMultiCaras),
-        orden: typeof payload.orden === 'number' ? payload.orden : 0,
-        activo: payload.activo ?? true,
-      },
-      include: MATERIAL_INCLUDE,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.procesoOperacionMaterial.update({
+        where: { id: materialId },
+        data: {
+          materiaPrimaVarianteId: payload.materiaPrimaVarianteId ?? null,
+          productoComponenteId: payload.productoComponenteId ?? null,
+          varianteComponenteId: payload.varianteComponenteId ?? null,
+          nombre: payload.nombre.trim(),
+          formula: payload.formula,
+          cantidadPorUnidad: new Prisma.Decimal(payload.cantidadPorUnidad),
+          unidad: payload.unidad.trim(),
+          precioManual:
+            payload.precioManual != null
+              ? new Prisma.Decimal(payload.precioManual)
+              : null,
+          aplicaMultiCaras: Boolean(payload.aplicaMultiCaras),
+          esSustratoNesting: Boolean(payload.esSustratoNesting),
+          orden: typeof payload.orden === 'number' ? payload.orden : 0,
+          activo: payload.activo ?? true,
+        },
+      });
+      await this.syncVariantesHabilitadas(tx, auth, materialId, payload);
+      return tx.procesoOperacionMaterial.findUniqueOrThrow({
+        where: { id: materialId },
+        include: MATERIAL_INCLUDE,
+      });
     });
 
     return this.toMaterialResponse(updated);
@@ -2621,6 +2659,96 @@ export class ProcesosService {
         }
       }
     }
+
+    // SM.1.d — Validaciones de sustrato + variantes habilitadas
+    if (payload.esSustratoNesting) {
+      if (payload.productoComponenteId) {
+        throw new BadRequestException(
+          'Un sub-producto no puede declararse como sustrato del nesting.',
+        );
+      }
+      const variantes = payload.variantesHabilitadas ?? [];
+      if (variantes.length === 0) {
+        throw new BadRequestException(
+          'Un material declarado como sustrato del nesting requiere al menos una variante habilitada.',
+        );
+      }
+      // Todas las variantes deben existir, pertenecer al tenant y a la
+      // misma materia prima (no se mezclan tipos de material en sustrato).
+      const ids = variantes.map((v) => v.materiaPrimaVarianteId);
+      const rows = await this.prisma.materiaPrimaVariante.findMany({
+        where: { id: { in: ids }, tenantId: auth.tenantId },
+        select: { id: true, materiaPrimaId: true },
+      });
+      if (rows.length !== ids.length) {
+        throw new BadRequestException(
+          'Una o más variantes habilitadas no existen.',
+        );
+      }
+      const materiaPrimaIds = new Set(rows.map((r) => r.materiaPrimaId));
+      if (materiaPrimaIds.size > 1) {
+        throw new BadRequestException(
+          'Todas las variantes habilitadas deben pertenecer a la misma materia prima.',
+        );
+      }
+    }
+  }
+
+  /**
+   * SM.1.d — Garantiza la invariante "máximo UN material por paso puede tener
+   * `esSustratoNesting=true`". Llamado desde create/update con el payload
+   * propuesto + ID actual (null en create).
+   */
+  private async validateUniqueSustratoPorPaso(
+    auth: CurrentAuth,
+    procesoOperacionId: string,
+    payload: UpsertProcesoOperacionMaterialDto,
+    currentMaterialId: string | null,
+  ) {
+    if (!payload.esSustratoNesting) return;
+    const otroSustrato = await this.prisma.procesoOperacionMaterial.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        procesoOperacionId,
+        esSustratoNesting: true,
+        ...(currentMaterialId ? { id: { not: currentMaterialId } } : {}),
+      },
+      select: { id: true, nombre: true },
+    });
+    if (otroSustrato) {
+      throw new BadRequestException(
+        `Solo un material por paso puede ser sustrato del nesting. El paso ya tiene "${otroSustrato.nombre}" como sustrato.`,
+      );
+    }
+  }
+
+  /**
+   * SM.1.d — Reemplaza las variantes habilitadas de un POM. Si el material no
+   * es sustrato (o no se envió `variantesHabilitadas`), borra todas las filas
+   * existentes del bridge.
+   */
+  private async syncVariantesHabilitadas(
+    tx: Prisma.TransactionClient,
+    auth: CurrentAuth,
+    procesoOperacionMaterialId: string,
+    payload: UpsertProcesoOperacionMaterialDto,
+  ) {
+    // Wipe siempre (idempotente). Si esSustrato=false → queda limpio.
+    await tx.procesoOperacionMaterialVariante.deleteMany({
+      where: { procesoOperacionMaterialId },
+    });
+    if (!payload.esSustratoNesting) return;
+    const variantes = payload.variantesHabilitadas ?? [];
+    if (variantes.length === 0) return;
+    await tx.procesoOperacionMaterialVariante.createMany({
+      data: variantes.map((v, idx) => ({
+        tenantId: auth.tenantId,
+        procesoOperacionMaterialId,
+        materiaPrimaVarianteId: v.materiaPrimaVarianteId,
+        orden: typeof v.orden === 'number' ? v.orden : idx,
+        activo: v.activo ?? true,
+      })),
+    });
   }
 
   private toMaterialResponse(
@@ -2638,6 +2766,7 @@ export class ProcesosService {
       unidad: m.unidad,
       precioManual: m.precioManual != null ? Number(m.precioManual) : null,
       aplicaMultiCaras: m.aplicaMultiCaras,
+      esSustratoNesting: m.esSustratoNesting,
       orden: m.orden,
       activo: m.activo,
       materiaPrimaVariante: m.materiaPrimaVariante
@@ -2667,6 +2796,27 @@ export class ProcesosService {
             altoMm: Number(m.varianteComponente.altoMm),
           }
         : null,
+      // SM.1.d — Variantes habilitadas (solo cuando esSustratoNesting=true).
+      // Cada variante incluye su SKU + atributos (ej. ancho del rollo en
+      // metros) para que el frontend pueda mostrar chips informativos.
+      variantesHabilitadas: m.variantesHabilitadas.map((v) => ({
+        id: v.id,
+        materiaPrimaVarianteId: v.materiaPrimaVarianteId,
+        orden: v.orden,
+        activo: v.activo,
+        materiaPrimaVariante: {
+          id: v.materiaPrimaVariante.id,
+          sku: v.materiaPrimaVariante.sku,
+          nombreVariante: v.materiaPrimaVariante.nombreVariante,
+          materiaPrimaId: v.materiaPrimaVariante.materiaPrimaId,
+          precioReferencia:
+            v.materiaPrimaVariante.precioReferencia != null
+              ? Number(v.materiaPrimaVariante.precioReferencia)
+              : null,
+          atributosVariante: v.materiaPrimaVariante.atributosVarianteJson,
+          activo: v.materiaPrimaVariante.activo,
+        },
+      })),
       createdAt: m.createdAt,
       updatedAt: m.updatedAt,
     };
@@ -2766,6 +2916,12 @@ export class ProcesosService {
         payload.condicionV2 === null
           ? Prisma.JsonNull
           : (payload.condicionV2 as Prisma.InputJsonValue);
+    }
+    if (payload.configNestingV2 !== undefined) {
+      data.configNestingV2 =
+        payload.configNestingV2 === null
+          ? Prisma.JsonNull
+          : (payload.configNestingV2 as Prisma.InputJsonValue);
     }
 
     const updated = await this.prisma.procesoOperacion.update({

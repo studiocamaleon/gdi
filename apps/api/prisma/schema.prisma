@@ -551,6 +551,7 @@ model Tenant {
   procesoOperacionPlantillas             ProcesoOperacionPlantilla[]
   procesosOperacion                      ProcesoOperacion[]
   procesoOperacionMateriales             ProcesoOperacionMaterial[]
+  procesoOperacionMaterialVariantes      ProcesoOperacionMaterialVariante[]
   procesoOperacionAlternativas           ProcesoOperacionAlternativa[]
   procesosVersion                        ProcesoVersion[]
   reglasDeSeleccion                      ReglaDeSeleccion[]
@@ -1386,6 +1387,14 @@ model ProcesoOperacionMaterial {
   /// cantidad se multiplica × 2 en doble faz (ej. clics). Si false, no
   /// se duplica (ej. papel — misma hoja se imprime ambas caras).
   aplicaMultiCaras        Boolean                @default(false)
+  /// SM.1.d — Marca este material como SUSTRATO del nesting del paso. Cuando
+  /// es true, el motor itera las variantes habilitadas (ver
+  /// `ProcesoOperacionMaterialVariante`) en lugar de usar `materiaPrimaVarianteId`,
+  /// corre el algoritmo (ej. nesting-rollo) por cada variante y elige la
+  /// mejor por `configNestingV2.criterioSeleccionMaterial`.
+  /// Invariante: máximo UN material por paso puede tener `esSustratoNesting=true`
+  /// (validado en el service). Solo aplica si `familiaV2` del paso produce nesting.
+  esSustratoNesting       Boolean                @default(false)
   orden                   Int                    @default(0)
   activo                  Boolean                @default(true)
   createdAt               DateTime               @default(now())
@@ -1395,11 +1404,40 @@ model ProcesoOperacionMaterial {
   materiaPrimaVariante    MateriaPrimaVariante?  @relation("ProcesoOperacionMaterialMateriaPrimaVariante", fields: [materiaPrimaVarianteId], references: [id], onDelete: SetNull)
   productoComponente      ProductoServicio?      @relation("ProcesoOperacionMaterialProductoComponente", fields: [productoComponenteId], references: [id], onDelete: SetNull)
   varianteComponente      ProductoVariante?      @relation("ProcesoOperacionMaterialVarianteComponente", fields: [varianteComponenteId], references: [id], onDelete: SetNull)
+  variantesHabilitadas    ProcesoOperacionMaterialVariante[] @relation("ProcesoOperacionMaterialVarianteParent")
 
   @@index([tenantId, procesoOperacionId, activo])
   @@index([tenantId, materiaPrimaVarianteId])
   @@index([tenantId, productoComponenteId])
   @@index([tenantId, varianteComponenteId])
+}
+
+/// SM.1.d — Variantes habilitadas de la materia prima sustrato para un paso.
+/// Tabla puente entre `ProcesoOperacionMaterial` (cuando `esSustratoNesting=true`)
+/// y `MateriaPrimaVariante`. El motor itera estas filas para evaluar cada
+/// ancho de rollo / pliego candidato y elegir el mejor por criterio.
+///
+/// Ejemplo: paso "Impresión UV" del producto "Calco vinilo blanco":
+///   ProcesoOperacionMaterial (esSustratoNesting=true)
+///   ├─ Vinilo blanco 1060mm × 50m  ← variante habilitada
+///   └─ Vinilo blanco 1370mm × 50m  ← variante habilitada
+///   (la 1520mm existe en catálogo pero no está habilitada para este producto)
+model ProcesoOperacionMaterialVariante {
+  id                          String                   @id @default(uuid()) @db.Uuid
+  tenantId                    String                   @db.Uuid
+  procesoOperacionMaterialId  String                   @db.Uuid
+  materiaPrimaVarianteId      String                   @db.Uuid
+  orden                       Int                      @default(0)
+  activo                      Boolean                  @default(true)
+  createdAt                   DateTime                 @default(now())
+  updatedAt                   DateTime                 @updatedAt
+  tenant                      Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  procesoOperacionMaterial    ProcesoOperacionMaterial @relation("ProcesoOperacionMaterialVarianteParent", fields: [procesoOperacionMaterialId], references: [id], onDelete: Cascade)
+  materiaPrimaVariante        MateriaPrimaVariante     @relation("ProcesoOperacionMaterialVarianteMateriaPrima", fields: [materiaPrimaVarianteId], references: [id], onDelete: Cascade)
+
+  @@unique([procesoOperacionMaterialId, materiaPrimaVarianteId])
+  @@index([tenantId, procesoOperacionMaterialId, activo, orden])
+  @@index([tenantId, materiaPrimaVarianteId])
 }
 
 /// P1.3 — Alternativas de máquina+perfil para un paso.
@@ -1532,6 +1570,7 @@ model MateriaPrimaVariante {
   productoChecklistReglasMaterial  ProductoChecklistRegla[] @relation("ProductoChecklistReglaMateriaPrima")
   granFormatoVariantes             GranFormatoVariante[]
   procesoOperacionMateriales       ProcesoOperacionMaterial[] @relation("ProcesoOperacionMaterialMateriaPrimaVariante")
+  procesoOperacionMaterialVariantesHabilitadas ProcesoOperacionMaterialVariante[] @relation("ProcesoOperacionMaterialVarianteMateriaPrima")
 
   @@unique([tenantId, sku])
   @@index([tenantId, materiaPrimaId, activo])

@@ -1,18 +1,25 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Inter } from "next/font/google";
+import { Geist, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import "./globals.css";
 
-const inter = Inter({
+const geist = Geist({
   subsets: ["latin"],
   variable: "--font-sans",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
+  variable: "--font-mono-source",
+});
+
+const instrumentSerif = Instrument_Serif({
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+  variable: "--font-serif-source",
 });
 
 export const metadata: Metadata = {
@@ -26,8 +33,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" className={cn("font-sans", inter.variable)}>
-      <body className={`${geistMono.variable} antialiased`}>
+    <html
+      lang="es"
+      className={cn(
+        "dark font-sans",
+        geist.variable,
+        jetbrainsMono.variable,
+        instrumentSerif.variable,
+      )}
+    >
+      <body className="antialiased">
         <TooltipProvider>
           {children}
           <Toaster />

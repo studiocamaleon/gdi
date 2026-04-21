@@ -2350,6 +2350,12 @@ export class ProductosServiciosService {
             const varCompRaw = m.varianteComponente as
               | { id: string; nombre: string; anchoMm: unknown; altoMm: unknown }
               | null;
+            const variantesHabRaw = Array.isArray(
+              (m as { variantesHabilitadas?: unknown }).variantesHabilitadas,
+            )
+              ? ((m as { variantesHabilitadas: Array<Record<string, unknown>> })
+                  .variantesHabilitadas)
+              : [];
             return {
               id: String(m.id),
               nombre: String(m.nombre),
@@ -2358,6 +2364,9 @@ export class ProductosServiciosService {
               unidad: String(m.unidad),
               precioManual: m.precioManual != null ? Number(m.precioManual) : null,
               aplicaMultiCaras: Boolean(m.aplicaMultiCaras),
+              esSustratoNesting: Boolean(
+                (m as { esSustratoNesting?: unknown }).esSustratoNesting,
+              ),
               orden: Number(m.orden ?? 0),
               materiaPrimaVariante: m.materiaPrimaVariante
                 ? {
@@ -2387,6 +2396,32 @@ export class ProductosServiciosService {
                     altoMm: Number(varCompRaw.altoMm),
                   }
                 : null,
+              // SM.1.d — Variantes habilitadas (subset cuando esSustrato=true).
+              variantesHabilitadas: variantesHabRaw.map((v) => {
+                const mp = v.materiaPrimaVariante as Record<string, unknown> | null;
+                return {
+                  id: String(v.id),
+                  materiaPrimaVarianteId: String(v.materiaPrimaVarianteId),
+                  orden: Number(v.orden ?? 0),
+                  activo: Boolean(v.activo),
+                  materiaPrimaVariante: mp
+                    ? {
+                        id: String(mp.id),
+                        sku: String(mp.sku),
+                        nombreVariante: (mp.nombreVariante as string | null) ?? null,
+                        materiaPrimaId: String(mp.materiaPrimaId),
+                        precioReferencia:
+                          mp.precioReferencia != null
+                            ? Number(mp.precioReferencia)
+                            : null,
+                        atributosVariante:
+                          (mp.atributosVarianteJson as Record<string, unknown> | null) ??
+                          null,
+                        activo: Boolean(mp.activo),
+                      }
+                    : null,
+                };
+              }),
             };
           }),
           alternativas: alts.map((a) => {
@@ -8150,7 +8185,21 @@ export class ProductosServiciosService {
         operaciones: {
           include: {
             centroCosto: true,
-            maquina: true,
+            // SM.5: maquina con consumibles + componentes de desgaste para
+            // que el motor pueda absorber automáticamente esos costos según
+            // perfil del paso (ya no se cargan manualmente como POM).
+            maquina: {
+              include: {
+                consumibles: {
+                  where: { activo: true },
+                  include: { materiaPrimaVariante: true },
+                },
+                componentesDesgaste: {
+                  where: { activo: true },
+                  include: { materiaPrimaVariante: true },
+                },
+              },
+            },
             perfilOperativo: true,
             requiresProductoAdicional: true,
             // SM.D: materiales declarativos por paso. Incluye producto
@@ -8161,6 +8210,12 @@ export class ProductosServiciosService {
                 materiaPrimaVariante: true,
                 productoComponente: true,
                 varianteComponente: true,
+                // SM.1.d: variantes habilitadas cuando esSustratoNesting=true
+                variantesHabilitadas: {
+                  where: { activo: true },
+                  orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+                  include: { materiaPrimaVariante: true },
+                },
               },
               orderBy: [{ orden: 'asc' }],
             },

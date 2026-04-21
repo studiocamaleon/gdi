@@ -84,10 +84,28 @@ export type RutaCompletaOperacion = {
     unidad: string;
     precioManual: number | null;
     aplicaMultiCaras: boolean;
+    /** SM.1.d — Marca este material como sustrato del nesting del paso. */
+    esSustratoNesting: boolean;
     orden: number;
     materiaPrimaVariante: { id: string; sku: string; precioReferencia: number | null } | null;
     productoComponente: { id: string; codigo: string; nombre: string; modoMedidas: string } | null;
     varianteComponente: { id: string; nombre: string; anchoMm: number; altoMm: number } | null;
+    /** SM.1.d — Subset de variantes habilitadas (vacío si esSustratoNesting=false). */
+    variantesHabilitadas: Array<{
+      id: string;
+      materiaPrimaVarianteId: string;
+      orden: number;
+      activo: boolean;
+      materiaPrimaVariante: {
+        id: string;
+        sku: string;
+        nombreVariante: string | null;
+        materiaPrimaId: string;
+        precioReferencia: number | null;
+        atributosVariante: Record<string, unknown> | null;
+        activo: boolean;
+      } | null;
+    }>;
   }>;
   alternativas: Array<{
     id: string;

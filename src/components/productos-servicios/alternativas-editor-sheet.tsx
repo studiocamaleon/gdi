@@ -354,7 +354,7 @@ export function AlternativasEditorSheet({
                   <div className="grid gap-2">
                     <Label>Máquina</Label>
                     <Select
-                      value={draft.maquinaId || undefined}
+                      value={draft.maquinaId}
                       onValueChange={(v) =>
                         setDraft((d) => ({
                           ...d,

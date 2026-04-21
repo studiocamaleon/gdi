@@ -1,4 +1,6 @@
+import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -9,7 +11,27 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+
+/**
+ * SM.1.d — Variante habilitada como candidata para nesting cuando el material
+ * padre tiene `esSustratoNesting=true`. El motor itera estas variantes,
+ * corre el algoritmo (ej. nesting-rollo) por cada una y elige la mejor.
+ */
+export class UpsertProcesoOperacionMaterialVarianteDto {
+  @IsUUID('4')
+  materiaPrimaVarianteId!: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  orden?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  activo?: boolean;
+}
 
 export const MATERIAL_FORMULAS = [
   'por_unidad_productiva',
@@ -65,6 +87,29 @@ export class UpsertProcesoOperacionMaterialDto {
   @IsOptional()
   @IsBoolean()
   aplicaMultiCaras?: boolean;
+
+  /**
+   * SM.1.d — Marca este material como SUSTRATO del nesting del paso. Cuando
+   * es true, el motor itera `variantesHabilitadas` (en lugar de usar
+   * `materiaPrimaVarianteId`) y elige la mejor por criterio.
+   * Reglas validadas en service:
+   *   - Máximo 1 material por paso puede tener `esSustratoNesting=true`
+   *   - Solo aplica si `familiaV2` del paso produce nesting
+   *   - Si true, se requiere al menos 1 variante en `variantesHabilitadas`
+   */
+  @IsOptional()
+  @IsBoolean()
+  esSustratoNesting?: boolean;
+
+  /**
+   * Variantes habilitadas. Solo se persisten cuando `esSustratoNesting=true`.
+   * Cada elemento es una variante de la misma materia prima padre.
+   */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => UpsertProcesoOperacionMaterialVarianteDto)
+  variantesHabilitadas?: UpsertProcesoOperacionMaterialVarianteDto[];
 
   @IsOptional()
   @IsInt()

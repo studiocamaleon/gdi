@@ -276,71 +276,126 @@ function UnifiedProductDetailShell(props: ProductDetailViewProps) {
     refreshMotorConfig,
   };
 
-  return (
-    <div className="flex flex-col gap-4">
-      <Button
-        variant="sidebar"
-        nativeButton={false}
-        size="sm"
-        className="w-fit"
-        render={<Link href="/costos/productos" />}
-      >
-        <ArrowLeftIcon data-icon="inline-start" />
-        Volver a productos
-      </Button>
+  const estadoMeta = (() => {
+    const e = producto.estado as string;
+    if (e === "ACTIVO" || e === "activo")
+      return { label: "Activo", tone: "ok" as const };
+    if (e === "BORRADOR" || e === "borrador")
+      return { label: "Borrador", tone: "warn" as const };
+    if (e === "ARCHIVADO" || e === "archivado")
+      return { label: "Archivado", tone: "muted" as const };
+    return { label: e, tone: "muted" as const };
+  })();
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col gap-4">
-      <div className="sticky top-0 z-20 overflow-hidden rounded-2xl border border-border/60 bg-[linear-gradient(135deg,rgba(234,241,248,0.92),rgba(247,250,253,0.98)_42%,rgba(255,255,255,0.98))] shadow-[0_14px_36px_-28px_rgba(15,23,42,0.45)] backdrop-blur supports-[backdrop-filter]:bg-[linear-gradient(135deg,rgba(234,241,248,0.8),rgba(247,250,253,0.92)_42%,rgba(255,255,255,0.94))]">
-        <div className="absolute inset-y-0 left-0 w-24 bg-[linear-gradient(90deg,rgba(0,178,255,0.12),transparent)]" />
-        <div className="absolute inset-y-0 right-0 w-28 bg-[linear-gradient(270deg,rgba(255,163,26,0.16),transparent)]" />
-        <div className="relative flex min-h-16 items-center overflow-x-auto px-2 py-2 lg:min-h-[4.5rem] lg:overflow-visible lg:px-3 lg:py-3">
-          <TabsList className="flex h-auto min-w-max items-center gap-1.5 rounded-none bg-transparent p-0 lg:w-full lg:min-w-0 lg:flex-wrap lg:content-center">
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Pageback */}
+      <Link
+        href="/costos/productos"
+        className="inline-flex w-fit items-center gap-2 rounded-full border border-line-hi px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.06em] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink-0"
+      >
+        <ArrowLeftIcon className="size-3.5" />
+        Volver a productos
+      </Link>
+
+      {/* Editorial header */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <h1 className="font-serif text-5xl font-normal leading-none tracking-[-0.02em] text-ink-0">
+            {producto.nombre}
+          </h1>
+          <div className="mt-2.5 flex flex-wrap items-baseline gap-3 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-3">
+            <span>
+              Código <span className="text-ink-1">{producto.codigo}</span>
+            </span>
+            <span className="text-line-hi">·</span>
+            <span>
+              Familia:{" "}
+              <span className="text-ink-1">{producto.familiaProductoNombre}</span>
+            </span>
+            <span className="text-line-hi">·</span>
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5",
+                estadoMeta.tone === "ok"
+                  ? "border-ok text-ok"
+                  : estadoMeta.tone === "warn"
+                    ? "border-warn text-warn"
+                    : "border-line-hi text-ink-2",
+              )}
+            >
+              <span
+                className={cn(
+                  "size-[5px] rounded-full",
+                  estadoMeta.tone === "ok" &&
+                    "bg-ok shadow-[0_0_8px_var(--ok)]",
+                  estadoMeta.tone === "warn" && "bg-warn",
+                  estadoMeta.tone === "muted" && "bg-ink-3",
+                )}
+              />
+              {estadoMeta.label}
+            </span>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => toast.info("Duplicar producto — próximamente")}
+          >
+            Duplicar
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => toast.info("Archivar producto — próximamente")}
+          >
+            Archivar
+          </Button>
+        </div>
+      </div>
+
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="flex flex-col gap-5"
+      >
+        <div className="sticky top-0 z-20 overflow-hidden rounded-[10px] border border-line bg-bg-1">
+          <TabsList
+            className="grid w-full gap-0 rounded-none bg-transparent p-0 !h-auto group-data-horizontal/tabs:h-auto"
+            style={{
+              gridTemplateColumns: `repeat(${orderedTabs.length}, minmax(0, 1fr))`,
+            }}
+          >
             {orderedTabs.map((tab, index) => {
               const Icon = tab.icon;
-              const previousTab = orderedTabs[index - 1];
-              const startsCommercialGroup =
-                index > 0 && previousTab?.group !== tab.group && tab.group === "comercial";
-
+              const isLast = index === orderedTabs.length - 1;
+              const num = String(index + 1).padStart(2, "0");
               return (
-                <React.Fragment key={tab.key}>
-                  {startsCommercialGroup ? (
-                    <div className="mx-1 hidden h-9 w-px self-center bg-gradient-to-b from-transparent via-border/80 to-transparent lg:block" />
-                  ) : null}
-                  <TabsTrigger
-                    value={tab.key}
-                    className={cn(
-                      "h-auto min-h-10 shrink-0 rounded-xl border px-2.5 py-2 text-left lg:px-3",
-                      "bg-white/62 text-foreground/72 transition-all duration-200",
-                      "border-white/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]",
-                      "hover:border-border/60 hover:bg-white/82 hover:text-foreground",
-                      tab.group === "configuracion"
-                        ? "data-active:border-sky-200/80"
-                        : "data-active:border-amber-200/90",
-                      "data-active:bg-white data-active:text-foreground",
-                      "data-active:shadow-[0_10px_24px_-18px_rgba(15,23,42,0.7)]",
-                    )}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "inline-flex size-6 items-center justify-center rounded-full border text-muted-foreground transition-colors",
-                          tab.group === "configuracion"
-                            ? "border-sky-200/80 bg-sky-50/80"
-                            : "border-amber-200/80 bg-amber-50/80",
-                          "group-data-[active]/tabs-trigger:border-transparent",
-                        )}
-                      >
-                        <Icon className="size-3.5" />
-                      </span>
-                      <span className="text-[13px] font-medium leading-none lg:text-sm">{tab.label}</span>
-                    </span>
-                  </TabsTrigger>
-                </React.Fragment>
+                <TabsTrigger
+                  key={tab.key}
+                  value={tab.key}
+                  className={cn(
+                    "group relative flex h-auto min-h-[68px] flex-col items-center justify-center gap-1 rounded-none px-2 py-3.5",
+                    "border-0 bg-transparent text-ink-3 transition-colors",
+                    !isLast && "border-r border-line",
+                    "hover:bg-bg-2 hover:text-ink-1",
+                    "data-[state=active]:bg-bg-2 data-[state=active]:text-ink-0",
+                    "data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-0 data-[state=active]:after:right-0 data-[state=active]:after:h-[2px] data-[state=active]:after:bg-lime",
+                  )}
+                >
+                  <Icon className="size-3.5 text-ink-3 transition-colors group-data-[state=active]:text-lime" />
+                  <span className="text-xs leading-none tracking-[-0.01em]">
+                    {tab.label}
+                  </span>
+                  <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-ink-4 group-data-[state=active]:text-lime">
+                    {num}
+                  </span>
+                </TabsTrigger>
               );
             })}
           </TabsList>
         </div>
-      </div>
 
       {orderedTabs.map((tab) => {
         if (tab.isStandard) {

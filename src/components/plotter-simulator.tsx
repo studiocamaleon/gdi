@@ -107,6 +107,7 @@ export default function PlotterSimulator({
           marginEndMm,
         }}
         placements={placements}
+        variant="compact"
         maxHeightPx={700}
       />
     </div>

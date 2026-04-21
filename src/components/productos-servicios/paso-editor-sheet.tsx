@@ -93,6 +93,29 @@ type DraftForm = {
   productividadBase: string;
   // null = sin condición declarada. Solo relevante cuando activacionV2=CONDICIONAL.
   condicionV2: Record<string, unknown> | null;
+  // Config completa actual del paso. Mantengo el objeto entero para no
+  // perder campos avanzados que la UI no expone (ej. panelizado.distribution).
+  configNestingV2: Record<string, unknown> | null;
+};
+
+// ──────────────── Algoritmos de nesting ────────────────
+
+const FAMILIAS_PRODUCEN_NESTING = new Set([
+  "impresion_por_hoja",
+  "impresion_por_area",
+  "impresion_por_pieza",
+]);
+
+type CriterioHoja =
+  | "menor_cantidad_pliegos"
+  | "mayor_aprovechamiento"
+  | "mayor_piezas_por_pliego";
+
+type PliegoCandidato = {
+  codigo?: string;
+  nombre?: string;
+  anchoMm: number;
+  altoMm: number;
 };
 
 function toDraft(op: RutaCompletaOperacion): DraftForm {
@@ -113,6 +136,9 @@ function toDraft(op: RutaCompletaOperacion): DraftForm {
     productividadBase:
       op.productividadBase != null ? String(op.productividadBase) : "",
     condicionV2: op.condicionV2 ?? null,
+    configNestingV2:
+      (op.configNestingV2 as Record<string, unknown> | null | undefined) ??
+      null,
   };
 }
 
@@ -120,6 +146,107 @@ function parseOptionalNumber(s: string): number | undefined {
   if (s.trim() === "") return undefined;
   const n = Number(s);
   return Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * Conversión cm ↔ mm. El motor guarda todo en mm; los forms muestran cm para
+ * matchear la convención del editor de maquinaria. Round a 4 decimales para
+ * limpiar ruido de floating point al dividir por 10.
+ */
+function mmToCmStr(mm: number | undefined | null): string {
+  if (mm == null || !Number.isFinite(mm)) return "";
+  return String(Number((mm / 10).toFixed(4)));
+}
+function cmInputToMm(cmStr: string): number | undefined {
+  if (cmStr.trim() === "") return undefined;
+  const n = Number(cmStr);
+  if (!Number.isFinite(n)) return undefined;
+  return Number((n * 10).toFixed(4));
+}
+
+// ──────────────── Helpers de configNestingV2 ────────────────
+
+function getCfgNumber(
+  cfg: Record<string, unknown> | null,
+  key: string,
+): string {
+  if (!cfg) return "";
+  const v = cfg[key];
+  if (typeof v === "number" && Number.isFinite(v)) return String(v);
+  return "";
+}
+
+function getCfgBool(
+  cfg: Record<string, unknown> | null,
+  key: string,
+  fallback: boolean,
+): boolean {
+  if (!cfg) return fallback;
+  const v = cfg[key];
+  if (typeof v === "boolean") return v;
+  return fallback;
+}
+
+function getCfgString(
+  cfg: Record<string, unknown> | null,
+  key: string,
+): string {
+  if (!cfg) return "";
+  const v = cfg[key];
+  return typeof v === "string" ? v : "";
+}
+
+function getCfgArray<T = unknown>(
+  cfg: Record<string, unknown> | null,
+  key: string,
+): T[] {
+  if (!cfg) return [];
+  const v = cfg[key];
+  return Array.isArray(v) ? (v as T[]) : [];
+}
+
+function getCfgObject(
+  cfg: Record<string, unknown> | null,
+  key: string,
+): Record<string, unknown> {
+  if (!cfg) return {};
+  const v = cfg[key];
+  return v && typeof v === "object" && !Array.isArray(v)
+    ? (v as Record<string, unknown>)
+    : {};
+}
+
+/** Setea una key del config en un nuevo objeto. `undefined` la elimina. */
+function setCfgKey(
+  cfg: Record<string, unknown> | null,
+  key: string,
+  value: unknown,
+): Record<string, unknown> | null {
+  const next = { ...(cfg ?? {}) };
+  if (value === undefined) {
+    delete next[key];
+  } else {
+    next[key] = value;
+  }
+  return Object.keys(next).length === 0 ? null : next;
+}
+
+/** Setea panelizado.{key} preservando el resto del sub-objeto. */
+function setPanelizadoKey(
+  cfg: Record<string, unknown> | null,
+  key: string,
+  value: unknown,
+): Record<string, unknown> | null {
+  const panelizado = { ...getCfgObject(cfg, "panelizado") };
+  if (value === undefined) {
+    delete panelizado[key];
+  } else {
+    panelizado[key] = value;
+  }
+  if (Object.keys(panelizado).length === 0) {
+    return setCfgKey(cfg, "panelizado", undefined);
+  }
+  return setCfgKey(cfg, "panelizado", panelizado);
 }
 
 export function PasoEditorSheet({
@@ -200,6 +327,12 @@ export function PasoEditorSheet({
     // modos se limpia automáticamente para evitar datos huérfanos.
     payload.condicionV2 =
       draft.activacionV2 === "CONDICIONAL" ? draft.condicionV2 : null;
+
+    // configNestingV2 solo aplica si la familia produce nesting; en otros
+    // casos la limpiamos para evitar datos huérfanos.
+    payload.configNestingV2 = FAMILIAS_PRODUCEN_NESTING.has(draft.familiaV2)
+      ? draft.configNestingV2
+      : null;
 
     setIsSaving(true);
     try {
@@ -361,7 +494,7 @@ export function PasoEditorSheet({
               <div className="grid gap-2">
                 <Label>Centro de costo</Label>
                 <Select
-                  value={draft.centroCostoId || undefined}
+                  value={draft.centroCostoId}
                   onValueChange={(v) =>
                     setDraft((d) => ({ ...d, centroCostoId: v ?? "" }))
                   }
@@ -492,6 +625,15 @@ export function PasoEditorSheet({
                 operativo tiene su propio valor, el motor lo prioriza sobre este.
               </p>
 
+              <NestingSection
+                familia={draft.familiaV2}
+                config={draft.configNestingV2}
+                onChange={(next) =>
+                  setDraft((d) => ({ ...d, configNestingV2: next }))
+                }
+                maquina={maquinaElegida}
+              />
+
               <div className="flex items-center justify-end gap-2 pt-2">
                 <Button
                   variant="outline"
@@ -510,5 +652,657 @@ export function PasoEditorSheet({
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+// ──────────────── Sección Nesting ────────────────
+
+function NestingSection({
+  familia,
+  config,
+  onChange,
+  maquina,
+}: {
+  familia: string;
+  config: Record<string, unknown> | null;
+  onChange: (next: Record<string, unknown> | null) => void;
+  maquina: Maquina | null;
+}) {
+  const algoritmo = (() => {
+    switch (familia) {
+      case "impresion_por_hoja":
+        return { code: "nesting-hoja", label: "Nesting por hoja (pliegos)" };
+      case "impresion_por_area":
+        return { code: "nesting-rollo", label: "Nesting por área (rollo)" };
+      case "impresion_por_pieza":
+        return {
+          code: "nesting-placa-rigida",
+          label: "Nesting por pieza (placa rígida)",
+        };
+      default:
+        return null;
+    }
+  })();
+
+  return (
+    <div className="rounded-md border bg-muted/30 p-4">
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <div>
+          <Label className="text-sm">Nesting</Label>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Configura cómo el motor distribuye las piezas en el material para
+            este paso.
+          </p>
+        </div>
+        {algoritmo && (
+          <span className="rounded-sm border border-input px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary">
+            {algoritmo.code}
+          </span>
+        )}
+      </div>
+
+      {!algoritmo ? (
+        <div className="rounded border border-dashed border-input bg-background px-3 py-2.5 text-xs text-muted-foreground">
+          {familia ? (
+            <>
+              La familia <code className="font-mono">{familia}</code> no produce
+              nesting. Solo las familias{" "}
+              <code className="font-mono">impresion_por_hoja</code>,{" "}
+              <code className="font-mono">impresion_por_area</code> y{" "}
+              <code className="font-mono">impresion_por_pieza</code> ejecutan
+              algoritmo. Este paso consume el layout del paso anterior, o no
+              participa.
+            </>
+          ) : (
+            <>
+              Asigná una familia arriba para configurar el nesting. Solo las 3
+              familias <code className="font-mono">impresion_por_*</code> lo
+              soportan.
+            </>
+          )}
+        </div>
+      ) : familia === "impresion_por_hoja" ? (
+        <NestingHojaForm config={config} onChange={onChange} />
+      ) : familia === "impresion_por_area" ? (
+        <NestingRolloForm
+          config={config}
+          onChange={onChange}
+          maquina={maquina}
+        />
+      ) : (
+        <NestingPlacaForm config={config} onChange={onChange} />
+      )}
+    </div>
+  );
+}
+
+function NestingHojaForm({
+  config,
+  onChange,
+}: {
+  config: Record<string, unknown> | null;
+  onChange: (next: Record<string, unknown> | null) => void;
+}) {
+  const pliegos = getCfgArray<PliegoCandidato>(config, "pliegos");
+  const criterio = (getCfgString(config, "criterio") || "menor_cantidad_pliegos") as CriterioHoja;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <NumberField
+          label="Margen (cm)"
+          value={mmToCmStr(parseOptionalNumber(getCfgNumber(config, "margenMm")))}
+          placeholder="0"
+          onChange={(s) =>
+            onChange(setCfgKey(config, "margenMm", cmInputToMm(s)))
+          }
+        />
+        <NumberField
+          label="Sep. horizontal (cm)"
+          value={mmToCmStr(parseOptionalNumber(getCfgNumber(config, "separacionHMm")))}
+          placeholder="0"
+          onChange={(s) =>
+            onChange(setCfgKey(config, "separacionHMm", cmInputToMm(s)))
+          }
+        />
+        <NumberField
+          label="Sep. vertical (cm)"
+          value={mmToCmStr(parseOptionalNumber(getCfgNumber(config, "separacionVMm")))}
+          placeholder="0"
+          onChange={(s) =>
+            onChange(setCfgKey(config, "separacionVMm", cmInputToMm(s)))
+          }
+        />
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label className="text-xs">Criterio de selección</Label>
+          <Select
+            value={criterio}
+            onValueChange={(v) => {
+              if (!v) return;
+              onChange(setCfgKey(config, "criterio", v));
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue>
+                {criterio === "menor_cantidad_pliegos" && "Menor cantidad de pliegos"}
+                {criterio === "mayor_aprovechamiento" && "Mayor aprovechamiento"}
+                {criterio === "mayor_piezas_por_pliego" && "Más piezas por pliego"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="menor_cantidad_pliegos">
+                Menor cantidad de pliegos
+              </SelectItem>
+              <SelectItem value="mayor_aprovechamiento">
+                Mayor aprovechamiento
+              </SelectItem>
+              <SelectItem value="mayor_piezas_por_pliego">
+                Más piezas por pliego
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center justify-between gap-2 pt-6">
+          <Label htmlFor="hoja-rotacion" className="text-xs">
+            Permitir rotación 90° de piezas
+          </Label>
+          <Switch
+            id="hoja-rotacion"
+            checked={getCfgBool(config, "permitirRotacion", true)}
+            onCheckedChange={(v) =>
+              onChange(setCfgKey(config, "permitirRotacion", v))
+            }
+          />
+        </div>
+      </div>
+
+      <PliegosListEditor
+        pliegos={pliegos}
+        onChange={(next) =>
+          onChange(setCfgKey(config, "pliegos", next.length === 0 ? undefined : next))
+        }
+      />
+    </div>
+  );
+}
+
+function NestingRolloForm({
+  config,
+  onChange,
+  maquina,
+}: {
+  config: Record<string, unknown> | null;
+  onChange: (next: Record<string, unknown> | null) => void;
+  maquina: Maquina | null;
+}) {
+  // Defaults visibles desde la máquina (solo placeholder, no se guardan).
+  // Las plantillas de máquina guardan en CENTÍMETROS — el form también muestra
+  // cm. Internamente la config se guarda en mm para no romper el motor.
+  const params = (maquina?.parametrosTecnicos ?? null) as Record<
+    string,
+    unknown
+  > | null;
+  // Todos los campos dimensionales en `parametrosTecnicos` se guardan en cm
+  // (ver `maquinaria-templates.ts`, `unit: "cm"`). Hay 2 convenciones de
+  // naming según el tipo de máquina; aceptamos ambas como cm raw.
+  const cmRaw = (v: unknown): number | null => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  const anchoTotalCm =
+    cmRaw(params?.anchoImprimibleMaximo) ??
+    cmRaw(params?.anchoBoca) ??
+    cmRaw(params?.anchoCama) ??
+    cmRaw(params?.anchoMaxHoja);
+  const margenIzqCm =
+    cmRaw(params?.margenLateralIzquierdoNoImprimible) ??
+    cmRaw(params?.margenIzquierdo);
+  const margenDerCm =
+    cmRaw(params?.margenLateralDerechoNoImprimible) ??
+    cmRaw(params?.margenDerecho);
+  const margenInicioCm =
+    cmRaw(params?.margenInicioNoImprimible) ?? cmRaw(params?.margenSuperior);
+  const margenFinCm =
+    cmRaw(params?.margenFinalNoImprimible) ?? cmRaw(params?.margenInferior);
+
+  // El ancho imprimible es el ancho total menos los márgenes laterales.
+  const anchoImprimibleCm =
+    anchoTotalCm != null
+      ? Math.max(
+          0,
+          anchoTotalCm - (margenIzqCm ?? 0) - (margenDerCm ?? 0),
+        )
+      : null;
+
+  const fmt = (n: number | null): string =>
+    n != null ? `auto: ${Number(n.toFixed(4))}` : "auto";
+  const phPrintable = fmt(anchoImprimibleCm);
+  const phMargenIzq = fmt(margenIzqCm);
+  const phMargenDer = fmt(margenDerCm);
+  const phMargenSup = fmt(margenInicioCm);
+  const phMargenInf = fmt(margenFinCm);
+
+  const panelizado = getCfgObject(config, "panelizado");
+  const panelizadoActivo =
+    typeof panelizado.activo === "boolean" ? panelizado.activo : false;
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="mb-2 text-xs text-muted-foreground">
+          Las dimensiones imprimibles y márgenes se toman de la máquina si los
+          dejás vacíos. Cargá un valor para overridearlos solo en este paso. Si
+          overrideás los márgenes laterales, el motor recalcula el ancho
+          imprimible como{" "}
+          <code className="font-mono">
+            ancho total − margen izquierdo − margen derecho
+          </code>
+          .
+        </p>
+        <div className="mb-3">
+          <NumberField
+            label="Ancho imprimible (cm)"
+            value={mmToCmStr(parseOptionalNumber(getCfgNumber(config, "printableWidthMm")))}
+            placeholder={phPrintable}
+            onChange={(s) =>
+              onChange(setCfgKey(config, "printableWidthMm", cmInputToMm(s)))
+            }
+          />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <NumberField
+            label="Margen izquierdo (cm)"
+            value={mmToCmStr(parseOptionalNumber(getCfgNumber(config, "marginLeftMm")))}
+            placeholder={phMargenIzq}
+            onChange={(s) =>
+              onChange(setCfgKey(config, "marginLeftMm", cmInputToMm(s)))
+            }
+          />
+          <NumberField
+            label="Margen derecho (cm)"
+            value={mmToCmStr(parseOptionalNumber(getCfgNumber(config, "marginRightMm")))}
+            placeholder={phMargenDer}
+            onChange={(s) =>
+              onChange(setCfgKey(config, "marginRightMm", cmInputToMm(s)))
+            }
+          />
+          <NumberField
+            label="Margen inicio (cm)"
+            value={mmToCmStr(parseOptionalNumber(getCfgNumber(config, "marginStartMm")))}
+            placeholder={phMargenSup}
+            onChange={(s) =>
+              onChange(setCfgKey(config, "marginStartMm", cmInputToMm(s)))
+            }
+          />
+          <NumberField
+            label="Margen fin (cm)"
+            value={mmToCmStr(parseOptionalNumber(getCfgNumber(config, "marginEndMm")))}
+            placeholder={phMargenInf}
+            onChange={(s) =>
+              onChange(setCfgKey(config, "marginEndMm", cmInputToMm(s)))
+            }
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <NumberField
+          label="Sep. horizontal (cm)"
+          value={mmToCmStr(parseOptionalNumber(getCfgNumber(config, "separacionHorizontalMm")))}
+          placeholder="0"
+          onChange={(s) =>
+            onChange(setCfgKey(config, "separacionHorizontalMm", cmInputToMm(s)))
+          }
+        />
+        <NumberField
+          label="Sep. vertical (cm)"
+          value={mmToCmStr(parseOptionalNumber(getCfgNumber(config, "separacionVerticalMm")))}
+          placeholder="0"
+          onChange={(s) =>
+            onChange(setCfgKey(config, "separacionVerticalMm", cmInputToMm(s)))
+          }
+        />
+        <div className="flex items-center justify-between gap-2 pt-6">
+          <Label htmlFor="rollo-rotacion" className="text-xs">
+            Permitir rotación
+          </Label>
+          <Switch
+            id="rollo-rotacion"
+            checked={getCfgBool(config, "permitirRotacion", true)}
+            onCheckedChange={(v) =>
+              onChange(setCfgKey(config, "permitirRotacion", v))
+            }
+          />
+        </div>
+      </div>
+
+      {/* SM.1.d — Criterio para elegir variante ganadora cuando el paso
+          tiene un material con esSustratoNesting=true. */}
+      <div className="grid gap-2">
+        <Label className="text-xs">Criterio para elegir variante</Label>
+        <Select
+          value={(getCfgString(config, "criterioSeleccionMaterial") ||
+            "mayor_aprovechamiento") as string}
+          onValueChange={(v) => {
+            if (!v) return;
+            onChange(
+              setCfgKey(
+                config,
+                "criterioSeleccionMaterial",
+                v === "mayor_aprovechamiento" ? undefined : v,
+              ),
+            );
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue>
+              {(() => {
+                const c = getCfgString(config, "criterioSeleccionMaterial") ||
+                  "mayor_aprovechamiento";
+                if (c === "menor_costo_total") return "Menor costo total";
+                if (c === "menor_largo_consumido") return "Menor largo consumido";
+                return "Mayor aprovechamiento";
+              })()}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="mayor_aprovechamiento">
+              Mayor aprovechamiento
+            </SelectItem>
+            <SelectItem value="menor_largo_consumido">
+              Menor largo consumido
+            </SelectItem>
+            <SelectItem value="menor_costo_total">Menor costo total</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">
+          Aplica cuando el paso tiene un material declarado como{" "}
+          <strong>sustrato del nesting</strong> con varias variantes habilitadas
+          (ej: rollo de 1060mm vs 1370mm). Si no hay sustrato, este criterio se ignora.
+          <br />
+          <em>Menor costo</em> requiere que las variantes tengan precio referencia y largo
+          de rollo cargados.
+        </p>
+      </div>
+
+      <div className="rounded border border-input bg-background p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <div>
+            <Label className="text-xs">Panelizado</Label>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Para piezas más anchas que el material — divide la pieza en
+              paneles que se imprimen por separado.
+            </p>
+          </div>
+          <Switch
+            id="rollo-panelizado-activo"
+            checked={panelizadoActivo}
+            onCheckedChange={(v) =>
+              onChange(setPanelizadoKey(config, "activo", v ? true : undefined))
+            }
+          />
+        </div>
+        {panelizadoActivo && (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-2">
+              <Label className="text-xs">Modo</Label>
+              <Select
+                value={getCfgString(panelizado, "mode") || "auto"}
+                onValueChange={(v) => {
+                  if (!v) return;
+                  onChange(
+                    setPanelizadoKey(config, "mode", v === "auto" ? undefined : v),
+                  );
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue>
+                    {getCfgString(panelizado, "mode") || "auto"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">auto</SelectItem>
+                  <SelectItem value="igual_ancho">igual ancho</SelectItem>
+                  <SelectItem value="manual">manual</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <NumberField
+              label="Overlap (cm)"
+              value={mmToCmStr(parseOptionalNumber(getCfgNumber(panelizado, "overlapMm")))}
+              placeholder="0"
+              onChange={(s) =>
+                onChange(
+                  setPanelizadoKey(
+                    config,
+                    "overlapMm",
+                    cmInputToMm(s),
+                  ),
+                )
+              }
+            />
+            <NumberField
+              label="Ancho máx panel (cm)"
+              value={mmToCmStr(parseOptionalNumber(getCfgNumber(panelizado, "maxPanelWidthMm")))}
+              placeholder="auto"
+              onChange={(s) =>
+                onChange(
+                  setPanelizadoKey(
+                    config,
+                    "maxPanelWidthMm",
+                    cmInputToMm(s),
+                  ),
+                )
+              }
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function NestingPlacaForm({
+  config,
+  onChange,
+}: {
+  config: Record<string, unknown> | null;
+  onChange: (next: Record<string, unknown> | null) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <NumberField
+          label="Placa ancho (cm)"
+          value={mmToCmStr(parseOptionalNumber(getCfgNumber(config, "placaAnchoMm")))}
+          placeholder="ej: 122"
+          onChange={(s) =>
+            onChange(setCfgKey(config, "placaAnchoMm", cmInputToMm(s)))
+          }
+        />
+        <NumberField
+          label="Placa alto (cm)"
+          value={mmToCmStr(parseOptionalNumber(getCfgNumber(config, "placaAltoMm")))}
+          placeholder="ej: 244"
+          onChange={(s) =>
+            onChange(setCfgKey(config, "placaAltoMm", cmInputToMm(s)))
+          }
+        />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <NumberField
+          label="Margen (cm)"
+          value={mmToCmStr(parseOptionalNumber(getCfgNumber(config, "margenMm")))}
+          placeholder="0"
+          onChange={(s) =>
+            onChange(setCfgKey(config, "margenMm", cmInputToMm(s)))
+          }
+        />
+        <NumberField
+          label="Sep. horizontal (cm)"
+          value={mmToCmStr(parseOptionalNumber(getCfgNumber(config, "separacionHMm")))}
+          placeholder="0"
+          onChange={(s) =>
+            onChange(setCfgKey(config, "separacionHMm", cmInputToMm(s)))
+          }
+        />
+        <NumberField
+          label="Sep. vertical (cm)"
+          value={mmToCmStr(parseOptionalNumber(getCfgNumber(config, "separacionVMm")))}
+          placeholder="0"
+          onChange={(s) =>
+            onChange(setCfgKey(config, "separacionVMm", cmInputToMm(s)))
+          }
+        />
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <Label htmlFor="placa-rotacion" className="text-xs">
+          Permitir rotación 90° de piezas
+        </Label>
+        <Switch
+          id="placa-rotacion"
+          checked={getCfgBool(config, "permitirRotacion", true)}
+          onCheckedChange={(v) =>
+            onChange(setCfgKey(config, "permitirRotacion", v))
+          }
+        />
+      </div>
+      <div className="rounded border border-dashed border-input bg-background p-3 text-xs text-muted-foreground">
+        ⚠️ <strong>Pricing escalonado / m² / largo consumido</strong> — los
+        modos de cálculo de costo de placas rígidas (heredados del motor
+        anterior) todavía no están disponibles. Próxima fase.
+      </div>
+    </div>
+  );
+}
+
+function NumberField({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  onChange: (s: string) => void;
+}) {
+  return (
+    <div className="grid gap-2">
+      <Label className="text-xs">{label}</Label>
+      <Input
+        type="number"
+        min={0}
+        step="0.1"
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
+function PliegosListEditor({
+  pliegos,
+  onChange,
+}: {
+  pliegos: PliegoCandidato[];
+  onChange: (next: PliegoCandidato[]) => void;
+}) {
+  const updateAt = (idx: number, patch: Partial<PliegoCandidato>) => {
+    const next = pliegos.slice();
+    next[idx] = { ...next[idx], ...patch } as PliegoCandidato;
+    onChange(next);
+  };
+  const removeAt = (idx: number) => {
+    onChange(pliegos.filter((_, i) => i !== idx));
+  };
+  const addRow = () => {
+    onChange([...pliegos, { anchoMm: 0, altoMm: 0 }]);
+  };
+
+  return (
+    <div className="rounded border border-input bg-background p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <div>
+          <Label className="text-xs">Pliegos candidatos</Label>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            El motor evalúa cada pliego y elige el mejor según el criterio.
+            Vacío = sin restricción de pliego (usa default del motor).
+          </p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={addRow}>
+          + Agregar pliego
+        </Button>
+      </div>
+      {pliegos.length === 0 ? (
+        <p className="py-2 text-center text-xs text-muted-foreground">
+          Sin pliegos candidatos.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {pliegos.map((p, idx) => (
+            <div
+              key={idx}
+              className="grid grid-cols-[1fr_1.4fr_0.7fr_0.7fr_28px] items-center gap-2"
+            >
+              <Input
+                value={p.codigo ?? ""}
+                placeholder="código"
+                onChange={(e) =>
+                  updateAt(idx, { codigo: e.target.value || undefined })
+                }
+                className="text-xs"
+              />
+              <Input
+                value={p.nombre ?? ""}
+                placeholder="nombre"
+                onChange={(e) =>
+                  updateAt(idx, { nombre: e.target.value || undefined })
+                }
+                className="text-xs"
+              />
+              <Input
+                type="number"
+                value={p.anchoMm ? String(Number((p.anchoMm / 10).toFixed(4))) : ""}
+                placeholder="ancho cm"
+                step="0.1"
+                onChange={(e) =>
+                  updateAt(idx, {
+                    anchoMm: Number((Number(e.target.value) * 10).toFixed(4)) || 0,
+                  })
+                }
+                className="text-xs"
+              />
+              <Input
+                type="number"
+                value={p.altoMm ? String(Number((p.altoMm / 10).toFixed(4))) : ""}
+                placeholder="alto cm"
+                step="0.1"
+                onChange={(e) =>
+                  updateAt(idx, {
+                    altoMm: Number((Number(e.target.value) * 10).toFixed(4)) || 0,
+                  })
+                }
+                className="text-xs"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="size-7 p-0"
+                onClick={() => removeAt(idx)}
+                title="Quitar"
+              >
+                ×
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -72,6 +73,9 @@ type VarianteOption = {
   materiaPrimaId: string;
   materiaPrimaNombre: string;
   precioReferencia: number | null;
+  /** atributosVarianteJson — para rollos: { ancho: m, largo: m }; para pliegos:
+   * { anchoMm, altoMm }; para tintas/otros: shape libre. */
+  atributosVariante: Record<string, unknown> | null;
 };
 
 type MateriaPrimaOption = {
@@ -98,6 +102,9 @@ type DraftForm = {
   unidad: string;
   precioManual: string; // "" => null
   aplicaMultiCaras: boolean;
+  // SM.1.d — Sustrato del nesting + variantes habilitadas
+  esSustratoNesting: boolean;
+  variantesHabilitadasIds: string[];
   orden: number;
 };
 
@@ -114,22 +121,96 @@ const emptyDraft: DraftForm = {
   unidad: "unidad",
   precioManual: "",
   aplicaMultiCaras: false,
+  esSustratoNesting: false,
+  variantesHabilitadasIds: [],
   orden: 0,
 };
+
+/** SM.1.d — Familias del modelo universal que producen nesting y soportan
+ * sustrato multi-variante. Espejo de FAMILIAS_PASO en el backend. */
+const FAMILIAS_PRODUCEN_NESTING = new Set([
+  "impresion_por_hoja",
+  "impresion_por_area",
+  "impresion_por_pieza",
+]);
+
+/** Formatea precio como `$ 237.753` con separador de miles ARS. */
+function formatPrecio(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return `$ ${new Intl.NumberFormat("es-AR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(n)}`;
+}
+
+/**
+ * SM.1.d — Build user-friendly chips of variante atributos para mostrarlos en
+ * el multi-select de variantes habilitadas. Reconoce shapes comunes:
+ *   - Rollo: { ancho: 1.06, largo: 50 } (en metros) → "1060 mm × 50 m"
+ *   - Pliego: { anchoMm: 700, altoMm: 1000 } → "700 × 1000 mm"
+ *   - Otros atributos texto → "key: value"
+ */
+function describeVarianteAtributos(
+  attrs: Record<string, unknown> | null | undefined,
+): string[] {
+  if (!attrs) return [];
+  const chips: string[] = [];
+  // Rollo (ancho/largo en metros)
+  if (typeof attrs.ancho === "number" || typeof attrs.largo === "number") {
+    const anchoM = Number(attrs.ancho);
+    const largoM = Number(attrs.largo);
+    if (Number.isFinite(anchoM) && anchoM > 0) {
+      chips.push(`${Math.round(anchoM * 1000)} mm`);
+    }
+    if (Number.isFinite(largoM) && largoM > 0) {
+      chips.push(`× ${largoM} m`);
+    }
+  }
+  // Pliego/placa (anchoMm/altoMm)
+  if (typeof attrs.anchoMm === "number" || typeof attrs.altoMm === "number") {
+    const a = Number(attrs.anchoMm);
+    const h = Number(attrs.altoMm);
+    if (Number.isFinite(a) && a > 0 && Number.isFinite(h) && h > 0) {
+      chips.push(`${a} × ${h} mm`);
+    }
+  }
+  // Otros atributos que aporten contexto (gramaje, color, acabado, etc.)
+  for (const key of [
+    "gramaje",
+    "color",
+    "acabado",
+    "material",
+    "calibre",
+    "espesorMm",
+    "tipo",
+  ] as const) {
+    const v = (attrs as Record<string, unknown>)[key];
+    if (v != null && v !== "") {
+      chips.push(`${key}: ${v}`);
+    }
+  }
+  return chips;
+}
 
 export function MaterialesEditorSheet({
   open,
   onOpenChange,
   operacionId,
   operacionNombre,
+  familiaV2,
   onChanged,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   operacionId: string;
   operacionNombre: string;
+  /** SM.1.d — Familia del paso. Habilita el toggle "Sustrato del nesting"
+   * solo cuando la familia produce nesting (impresion_por_*). */
+  familiaV2?: string | null;
   onChanged?: () => void;
 }) {
+  const familiaProduceNesting =
+    !!familiaV2 && FAMILIAS_PRODUCEN_NESTING.has(familiaV2);
   const [materiales, setMateriales] = React.useState<ProcesoOperacionMaterial[]>([]);
   const [variantesOptions, setVariantesOptions] = React.useState<VarianteOption[]>([]);
   const [materiaPrimaOptions, setMateriaPrimaOptions] = React.useState<MateriaPrimaOption[]>([]);
@@ -167,6 +248,8 @@ export function MaterialesEditorSheet({
             materiaPrimaNombre: mp.nombre,
             precioReferencia:
               v.precioReferencia != null ? Number(v.precioReferencia) : null,
+            atributosVariante:
+              (v.atributosVariante as Record<string, unknown> | null) ?? null,
           });
         }
         if (variantesActivas.length > 0) {
@@ -216,11 +299,23 @@ export function MaterialesEditorSheet({
     const varianteActual = m.materiaPrimaVarianteId
       ? variantesOptions.find((v) => v.id === m.materiaPrimaVarianteId) ?? null
       : null;
+    // SM.1.d — Si es sustrato, derivar la materia prima desde la primera
+    // variante habilitada (todas comparten la misma MP por validación backend).
+    const habilitadasIds = m.variantesHabilitadas
+      .filter((v) => v.activo)
+      .map((v) => v.materiaPrimaVarianteId);
+    const mpFromHabilitadas =
+      habilitadasIds.length > 0
+        ? variantesOptions.find((v) => v.id === habilitadasIds[0])?.materiaPrimaId ?? NONE
+        : NONE;
     setDraft({
       id: m.id,
       kind,
       nombre: m.nombre,
-      materiaPrimaId: varianteActual?.materiaPrimaId ?? NONE,
+      materiaPrimaId:
+        m.esSustratoNesting && mpFromHabilitadas !== NONE
+          ? mpFromHabilitadas
+          : varianteActual?.materiaPrimaId ?? NONE,
       materiaPrimaVarianteId: m.materiaPrimaVarianteId ?? NONE,
       productoComponenteId: m.productoComponenteId ?? NONE,
       varianteComponenteId: m.varianteComponenteId ?? NONE,
@@ -229,6 +324,8 @@ export function MaterialesEditorSheet({
       unidad: m.unidad,
       precioManual: m.precioManual != null ? String(m.precioManual) : "",
       aplicaMultiCaras: m.aplicaMultiCaras,
+      esSustratoNesting: m.esSustratoNesting,
+      variantesHabilitadasIds: habilitadasIds,
       orden: m.orden,
     });
     if (kind === "subProducto" && m.productoComponenteId) {
@@ -277,6 +374,22 @@ export function MaterialesEditorSheet({
       return;
     }
 
+    // SM.1.d — Validaciones de sustrato (paralelo al backend, mensajes amigables)
+    if (draft.esSustratoNesting) {
+      if (draft.kind === "subProducto") {
+        toast.error("Un sub-producto no puede ser sustrato del nesting.");
+        return;
+      }
+      if (draft.materiaPrimaId === NONE) {
+        toast.error("Seleccioná la materia prima del sustrato.");
+        return;
+      }
+      if (draft.variantesHabilitadasIds.length === 0) {
+        toast.error("Marcá al menos una variante habilitada.");
+        return;
+      }
+    }
+
     const payload = {
       nombre: draft.nombre.trim(),
       materiaPrimaVarianteId:
@@ -296,6 +409,15 @@ export function MaterialesEditorSheet({
       unidad: draft.unidad.trim(),
       precioManual,
       aplicaMultiCaras: draft.aplicaMultiCaras,
+      // SM.1.d — Sustrato + variantes habilitadas. Solo se persisten si el
+      // toggle está ON; si OFF se mandan false + array vacío.
+      esSustratoNesting: draft.esSustratoNesting,
+      variantesHabilitadas: draft.esSustratoNesting
+        ? draft.variantesHabilitadasIds.map((id, idx) => ({
+            materiaPrimaVarianteId: id,
+            orden: idx,
+          }))
+        : [],
       orden: draft.orden,
     };
 
@@ -394,7 +516,14 @@ export function MaterialesEditorSheet({
                       <TableRow key={m.id}>
                         <TableCell className="font-mono text-xs">{m.orden}</TableCell>
                         <TableCell>
-                          <div className="font-medium">{m.nombre}</div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="font-medium">{m.nombre}</div>
+                            {m.esSustratoNesting && (
+                              <Badge variant="default" className="text-[10px]">
+                                ⚡ sustrato
+                              </Badge>
+                            )}
+                          </div>
                           {m.productoComponente ? (
                             <div className="mt-0.5 flex items-center gap-1 text-xs">
                               <Badge variant="outline" className="text-[10px]">
@@ -406,6 +535,15 @@ export function MaterialesEditorSheet({
                                   ? ` · ${m.varianteComponente.nombre}`
                                   : " · (variante default)"}
                               </span>
+                            </div>
+                          ) : m.esSustratoNesting && m.variantesHabilitadas.length > 0 ? (
+                            <div className="mt-0.5 text-xs text-muted-foreground">
+                              {m.variantesHabilitadas.length} variante
+                              {m.variantesHabilitadas.length === 1 ? "" : "s"} habilitada
+                              {m.variantesHabilitadas.length === 1 ? "" : "s"}:{" "}
+                              {m.variantesHabilitadas
+                                .map((v) => v.materiaPrimaVariante?.sku ?? "—")
+                                .join(", ")}
                             </div>
                           ) : m.materiaPrimaVariante ? (
                             <div className="text-xs text-muted-foreground">
@@ -560,74 +698,211 @@ export function MaterialesEditorSheet({
                       </div>
                     </div>
                   ) : (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="grid gap-2">
-                      <Label>Materia prima</Label>
-                      <Select
-                        value={draft.materiaPrimaId}
-                        onValueChange={(v) =>
-                          setDraft((d) => ({
-                            ...d,
-                            materiaPrimaId: v ?? NONE,
-                            // Al cambiar la MP, se resetea la variante: el usuario
-                            // tiene que elegir una válida dentro del nuevo catálogo.
-                            materiaPrimaVarianteId: NONE,
-                          }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue>
-                            {draft.materiaPrimaId === NONE
-                              ? "Material genérico (sin MP)"
-                              : materiaPrimaOptions.find((mp) => mp.id === draft.materiaPrimaId)
-                                  ?.nombre ?? "—"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={NONE}>Material genérico (sin MP)</SelectItem>
-                          {materiaPrimaOptions.map((mp) => (
-                            <SelectItem key={mp.id} value={mp.id}>
-                              {mp.nombre} ({mp.variantesCount} variante
-                              {mp.variantesCount === 1 ? "" : "s"})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label>Variante</Label>
-                      <Select
-                        value={draft.materiaPrimaVarianteId}
-                        onValueChange={(v) =>
-                          setDraft((d) => ({ ...d, materiaPrimaVarianteId: v ?? NONE }))
-                        }
-                        disabled={draft.materiaPrimaId === NONE}
-                      >
-                        <SelectTrigger>
-                          <SelectValue>
-                            {draft.materiaPrimaId === NONE
-                              ? "— sin MP —"
-                              : draft.materiaPrimaVarianteId === NONE
-                                ? "Seleccioná una variante"
-                                : varianteElegida
-                                  ? `${varianteElegida.sku}${varianteElegida.nombreVariante ? ` — ${varianteElegida.nombreVariante}` : ""}`
-                                  : "—"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={NONE}>— seleccionar —</SelectItem>
-                          {variantesOptions
-                            .filter((v) => v.materiaPrimaId === draft.materiaPrimaId)
-                            .map((v) => (
-                              <SelectItem key={v.id} value={v.id}>
-                                {v.sku}
-                                {v.nombreVariante ? ` — ${v.nombreVariante}` : ""}
+                  <>
+                    {/* SM.1.d — Toggle "Sustrato del nesting" — solo visible si la
+                        familia del paso produce nesting. */}
+                    {familiaProduceNesting && (
+                      <div className="flex items-start gap-3 rounded-md border border-primary/30 bg-primary/[0.03] px-3 py-2.5">
+                        <Switch
+                          id="esSustratoNesting"
+                          checked={draft.esSustratoNesting}
+                          onCheckedChange={(v) =>
+                            setDraft((d) => ({
+                              ...d,
+                              esSustratoNesting: v,
+                              // Al activar, limpiar la variante única (pasa a multi)
+                              materiaPrimaVarianteId: v ? NONE : d.materiaPrimaVarianteId,
+                              // Al desactivar, limpiar las variantes habilitadas
+                              variantesHabilitadasIds: v ? d.variantesHabilitadasIds : [],
+                            }))
+                          }
+                        />
+                        <div className="flex-1">
+                          <Label htmlFor="esSustratoNesting" className="cursor-pointer">
+                            Sustrato del nesting
+                          </Label>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            Marcá este material si define las dimensiones del nesting
+                            (ej: rollo de vinilo, pliego de papel). El motor evaluará{" "}
+                            <strong>todas las variantes habilitadas</strong> y elegirá la
+                            mejor por el criterio configurado en la sección Nesting del paso.
+                            Solo un material por paso puede ser sustrato.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="grid gap-2">
+                        <Label>Materia prima</Label>
+                        <Select
+                          value={draft.materiaPrimaId}
+                          onValueChange={(v) =>
+                            setDraft((d) => ({
+                              ...d,
+                              materiaPrimaId: v ?? NONE,
+                              // Al cambiar la MP, se resetea la variante: el usuario
+                              // tiene que elegir una válida dentro del nuevo catálogo.
+                              materiaPrimaVarianteId: NONE,
+                              // Y se limpian las variantes habilitadas (pertenecen a otra MP).
+                              variantesHabilitadasIds: [],
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue>
+                              {draft.materiaPrimaId === NONE
+                                ? "Material genérico (sin MP)"
+                                : materiaPrimaOptions.find((mp) => mp.id === draft.materiaPrimaId)
+                                    ?.nombre ?? "—"}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {!draft.esSustratoNesting && (
+                              <SelectItem value={NONE}>Material genérico (sin MP)</SelectItem>
+                            )}
+                            {materiaPrimaOptions.map((mp) => (
+                              <SelectItem key={mp.id} value={mp.id}>
+                                {mp.nombre} ({mp.variantesCount} variante
+                                {mp.variantesCount === 1 ? "" : "s"})
                               </SelectItem>
                             ))}
-                        </SelectContent>
-                      </Select>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {draft.esSustratoNesting ? (
+                        <div className="grid gap-2">
+                          <Label>Variantes habilitadas</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Marcá las variantes que el motor debe evaluar.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="grid gap-2">
+                          <Label>Variante</Label>
+                          <Select
+                            value={draft.materiaPrimaVarianteId}
+                            onValueChange={(v) =>
+                              setDraft((d) => ({ ...d, materiaPrimaVarianteId: v ?? NONE }))
+                            }
+                            disabled={draft.materiaPrimaId === NONE}
+                          >
+                            <SelectTrigger>
+                              <SelectValue>
+                                {draft.materiaPrimaId === NONE
+                                  ? "— sin MP —"
+                                  : draft.materiaPrimaVarianteId === NONE
+                                    ? "Seleccioná una variante"
+                                    : varianteElegida
+                                      ? `${varianteElegida.sku}${varianteElegida.nombreVariante ? ` — ${varianteElegida.nombreVariante}` : ""}`
+                                      : "—"}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NONE}>— seleccionar —</SelectItem>
+                              {variantesOptions
+                                .filter((v) => v.materiaPrimaId === draft.materiaPrimaId)
+                                .map((v) => (
+                                  <SelectItem key={v.id} value={v.id}>
+                                    {v.sku}
+                                    {v.nombreVariante ? ` — ${v.nombreVariante}` : ""}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
-                  </div>
+
+                    {/* SM.1.d — Multi-checkbox de variantes habilitadas */}
+                    {draft.esSustratoNesting && (
+                      <div className="rounded-md border bg-background p-3">
+                        {draft.materiaPrimaId === NONE ? (
+                          <p className="text-sm text-muted-foreground">
+                            Seleccioná primero una materia prima para habilitar sus variantes.
+                          </p>
+                        ) : (
+                          (() => {
+                            const candidatas = variantesOptions.filter(
+                              (v) => v.materiaPrimaId === draft.materiaPrimaId,
+                            );
+                            if (candidatas.length === 0) {
+                              return (
+                                <p className="text-sm text-muted-foreground">
+                                  Esta materia prima no tiene variantes activas.{" "}
+                                  <a
+                                    href="/inventario/materias-primas"
+                                    className="underline"
+                                  >
+                                    Cargá variantes en Inventario
+                                  </a>{" "}
+                                  y volvé.
+                                </p>
+                              );
+                            }
+                            return (
+                              <div className="space-y-2">
+                                {candidatas.map((v) => {
+                                  const checked = draft.variantesHabilitadasIds.includes(v.id);
+                                  const chips = describeVarianteAtributos(v.atributosVariante);
+                                  // Título legible: nombre custom si hay, sino la
+                                  // descripción derivada de atributos (ej. "1060 mm × 50 m");
+                                  // como último recurso, el SKU.
+                                  const titulo =
+                                    v.nombreVariante?.trim() ||
+                                    chips.join(" ").trim() ||
+                                    v.sku;
+                                  return (
+                                    <label
+                                      key={v.id}
+                                      className="flex items-start gap-3 rounded border p-2.5 text-sm transition-colors hover:bg-muted/30"
+                                    >
+                                      <Checkbox
+                                        checked={checked}
+                                        onCheckedChange={(next) => {
+                                          setDraft((d) => ({
+                                            ...d,
+                                            variantesHabilitadasIds:
+                                              next === true
+                                                ? Array.from(
+                                                    new Set([...d.variantesHabilitadasIds, v.id]),
+                                                  )
+                                                : d.variantesHabilitadasIds.filter(
+                                                    (id) => id !== v.id,
+                                                  ),
+                                          }));
+                                        }}
+                                      />
+                                      <div className="flex-1 space-y-1">
+                                        <div className="font-medium">{titulo}</div>
+                                        {chips.length > 0 && titulo !== chips.join(" ").trim() && (
+                                          <div className="flex flex-wrap gap-1">
+                                            {chips.map((c, i) => (
+                                              <span
+                                                key={i}
+                                                className="rounded border border-border/60 bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                                              >
+                                                {c}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        )}
+                                        {v.precioReferencia != null && (
+                                          <div className="text-xs text-muted-foreground">
+                                            {formatPrecio(v.precioReferencia)}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()
+                        )}
+                      </div>
+                    )}
+                  </>
                   )}
                   {draft.kind === "stock" && (
                     <p className="text-xs text-muted-foreground">

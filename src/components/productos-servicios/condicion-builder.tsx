@@ -304,7 +304,7 @@ function FilaEditor({
       {/* Campo */}
       <div className="min-w-[220px] flex-1">
         <Select
-          value={fila.campo || undefined}
+          value={fila.campo}
           onValueChange={(v) =>
             onChange({
               ...fila,
@@ -337,7 +337,7 @@ function FilaEditor({
       {/* Operador */}
       <div className="min-w-[160px]">
         <Select
-          value={fila.operador || undefined}
+          value={fila.operador}
           onValueChange={(v) => onChange({ ...fila, operador: v ?? "" })}
           disabled={!fila.campo}
         >
@@ -361,7 +361,7 @@ function FilaEditor({
       <div className="min-w-[180px] flex-1">
         {campo?.tipo === "enum" && campo.opciones ? (
           <Select
-            value={fila.valor || undefined}
+            value={fila.valor}
             onValueChange={(v) => onChange({ ...fila, valor: v ?? "" })}
             disabled={!fila.operador}
           >

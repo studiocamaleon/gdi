@@ -10,7 +10,6 @@ import {
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  ClipboardListIcon,
   CoinsIcon,
   FactoryIcon,
   FolderIcon,
@@ -72,7 +71,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -94,28 +92,97 @@ function TipoToggle({
   value: TipoPropuesta;
   onChange: (v: TipoPropuesta) => void;
 }) {
-  const options: { key: TipoPropuesta; label: string }[] = [
-    { key: "orden_trabajo", label: "Orden de trabajo" },
-    { key: "presupuesto", label: "Presupuesto" },
+  const options: {
+    key: TipoPropuesta;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }[] = [
+    { key: "orden_trabajo", label: "Orden de trabajo", icon: LayoutGridIcon },
+    { key: "presupuesto", label: "Presupuesto", icon: CoinsIcon },
   ];
 
   return (
-    <div className="inline-flex items-center rounded-lg border border-input bg-muted p-0.5">
-      {options.map((opt) => (
-        <button
-          key={opt.key}
-          type="button"
-          onClick={() => onChange(opt.key)}
-          className={`rounded-md px-4 py-1.5 text-sm font-medium transition-all ${
-            value === opt.key
-              ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {opt.label}
-        </button>
-      ))}
+    <div className="inline-flex items-center rounded-lg border border-line-hi bg-bg-1 p-[3px]">
+      {options.map((opt) => {
+        const isActive = value === opt.key;
+        return (
+          <button
+            key={opt.key}
+            type="button"
+            onClick={() => onChange(opt.key)}
+            className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-xs font-medium tracking-[-0.01em] transition-colors ${
+              isActive
+                ? "bg-lime text-lime-ink"
+                : "text-ink-3 hover:text-ink-1"
+            }`}
+          >
+            <opt.icon className="size-3.5" />
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
+  );
+}
+
+function PropuestaEmptyState({ onAddProduct }: { onAddProduct: () => void }) {
+  return (
+    <div className="relative flex flex-col items-center gap-4 overflow-hidden rounded-b-[10px] border border-t-0 border-line bg-bg-1 px-10 py-20 text-center">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-30 [background-image:linear-gradient(var(--line)_1px,transparent_1px),linear-gradient(90deg,var(--line)_1px,transparent_1px)] [background-size:32px_32px] [mask-image:radial-gradient(ellipse_at_center,black_0%,transparent_70%)]"
+      />
+      <div className="relative h-[120px] w-[220px]">
+        <svg viewBox="0 0 220 120" className="h-full w-full overflow-visible">
+          <line x1="30" y1="30" x2="110" y2="30" stroke="var(--line-hi)" strokeWidth="1" strokeDasharray="3 3" />
+          <line x1="110" y1="30" x2="190" y2="30" stroke="var(--line-hi)" strokeWidth="1" strokeDasharray="3 3" />
+          <line x1="110" y1="30" x2="70" y2="90" stroke="var(--line-hi)" strokeWidth="1" strokeDasharray="3 3" />
+          <line x1="110" y1="30" x2="150" y2="90" stroke="var(--line-hi)" strokeWidth="1" strokeDasharray="3 3" />
+          <circle cx="30" cy="30" r="6" fill="var(--bg)" stroke="var(--line-hi)" strokeWidth="1" />
+          <circle cx="110" cy="30" r="6" fill="var(--bg)" stroke="var(--line-hi)" strokeWidth="1" />
+          <circle cx="190" cy="30" r="6" fill="var(--bg)" stroke="var(--line-hi)" strokeWidth="1" />
+          <circle cx="70" cy="90" r="6" fill="var(--bg)" stroke="var(--line-hi)" strokeWidth="1" />
+          <circle cx="150" cy="90" r="6" fill="var(--bg)" stroke="var(--line-hi)" strokeWidth="1" />
+          <text x="30" y="18" fontFamily="var(--font-mono)" fontSize="8" fill="var(--ink-3)" letterSpacing="0.08em">?</text>
+          <text x="110" y="18" textAnchor="middle" fontFamily="var(--font-mono)" fontSize="8" fill="var(--ink-3)" letterSpacing="0.08em">?</text>
+          <text x="190" y="18" textAnchor="end" fontFamily="var(--font-mono)" fontSize="8" fill="var(--ink-3)" letterSpacing="0.08em">?</text>
+        </svg>
+      </div>
+      <h3 className="relative m-0 mt-1.5 font-serif text-3xl font-normal italic leading-tight tracking-[-0.01em] text-ink-0">
+        Tu orden todavía no tiene <em className="text-ink-2">nodos</em>.
+      </h3>
+      <p className="relative m-0 max-w-[380px] text-sm text-ink-2">
+        Agregá productos del catálogo para empezar a armar la propuesta. Los
+        precios, tiempos y ruta de producción se calculan en automático.
+      </p>
+      <div className="relative mt-2 flex gap-2.5">
+        <Button variant="outline" size="sm" onClick={onAddProduct}>
+          Buscar en catálogo
+        </Button>
+        <Button size="sm" onClick={onAddProduct}>
+          <PlusIcon />
+          Agregar producto
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function TabCounter({
+  value,
+  active,
+}: {
+  value: number | string;
+  active?: boolean;
+}) {
+  return (
+    <span
+      className={`ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full border px-1.5 font-mono text-[10px] tracking-tight ${
+        active ? "border-lime text-lime" : "border-line text-ink-4"
+      }`}
+    >
+      {value}
+    </span>
   );
 }
 
@@ -1051,6 +1118,16 @@ export function PropuestaFicha({
   );
   const [activeTab, setActiveTab] = React.useState("productos");
   const [sheetOpen, setSheetOpen] = React.useState(false);
+  const [borradorCode, setBorradorCode] = React.useState("");
+  const [creadaHora, setCreadaHora] = React.useState("");
+  React.useEffect(() => {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    const seq = Math.floor(Math.random() * 9000) + 1000;
+    setBorradorCode(`DRF-${seq}`);
+    setCreadaHora(`${hh}:${mm}`);
+  }, []);
 
   function handleAddItem(item: PropuestaItem) {
     setItems((prev) => [...prev, item]);
@@ -1075,120 +1152,130 @@ export function PropuestaFicha({
 
   return (
     <section className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-      {/* Back button */}
-      <Button
-        variant="sidebar"
-        size="sm"
-        className="w-fit"
-        nativeButton={false}
-        render={<Link href="/" />}
+      {/* Back link */}
+      <Link
+        href="/"
+        className="inline-flex w-fit items-center gap-2 rounded-full border border-line-hi px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.06em] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink-0"
       >
-        <ArrowLeftIcon />
-        Volver
-      </Button>
+        <ArrowLeftIcon className="size-3.5" />
+        Volver a órdenes
+      </Link>
 
-      {/* Title + tipo toggle */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      {/* Editorial header + tipo toggle */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">
-            {tipo === "orden_trabajo"
-              ? "Nueva orden de trabajo"
-              : "Nuevo presupuesto"}
+          <h1 className="font-serif text-5xl font-normal leading-none tracking-[-0.02em] text-ink-0">
+            {tipo === "orden_trabajo" ? (
+              <>
+                Nueva orden de <em className="italic text-ink-2">trabajo</em>
+              </>
+            ) : (
+              <>
+                Nuevo <em className="italic text-ink-2">presupuesto</em>
+              </>
+            )}
           </h1>
-          <p className="text-sm text-muted-foreground">
-            {tipo === "orden_trabajo"
-              ? "Crea una orden de trabajo con los productos y servicios requeridos."
-              : "Genera un presupuesto para enviar al cliente."}
-          </p>
+          <div className="mt-2.5 flex flex-wrap items-baseline gap-3 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-3">
+            <span>
+              Borrador · <span className="text-ink-1">{borradorCode}</span>
+            </span>
+            <span className="text-line-hi">·</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-line-hi px-2 py-0.5 text-ink-2">
+              <span className="size-[5px] rounded-full bg-warn shadow-[0_0_8px_var(--warn)]" />
+              Sin guardar
+            </span>
+            <span className="text-line-hi">·</span>
+            <span>Creada hoy {creadaHora}</span>
+          </div>
         </div>
         <TipoToggle value={tipo} onChange={setTipo} />
       </div>
 
-      {/* Header fields */}
-      <Card className="rounded-2xl border-border/70 shadow-sm">
-        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {/* Cliente */}
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="propuesta-cliente"
-              className="text-xs font-medium text-muted-foreground"
-            >
-              Cliente
-            </label>
-            <SearchableSelect
-              id="propuesta-cliente"
-              options={clienteItems}
-              value={clienteId}
-              onChange={setClienteId}
-              placeholder="Seleccionar cliente"
-            />
-          </div>
+      {/* Info strip — Cliente / Vendedor / Canal / Fecha */}
+      <div className="grid grid-cols-1 overflow-hidden rounded-[10px] border border-line bg-bg-1 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Cliente */}
+        <div className="border-b border-line px-4 py-3.5 sm:border-r sm:[&:nth-child(2n)]:border-r-0 lg:border-b-0 lg:[&:nth-child(2n)]:border-r lg:[&:nth-child(4n)]:border-r-0">
+          <label
+            htmlFor="propuesta-cliente"
+            className="mb-1.5 flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3"
+          >
+            <span>
+              Cliente <span className="text-lime">*</span>
+            </span>
+          </label>
+          <SearchableSelect
+            id="propuesta-cliente"
+            options={clienteItems}
+            value={clienteId}
+            onChange={setClienteId}
+            placeholder="Seleccionar cliente"
+          />
+        </div>
 
-          {/* Vendedor */}
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="propuesta-vendedor"
-              className="text-xs font-medium text-muted-foreground"
-            >
-              Vendedor
-            </label>
-            <Input
-              id="propuesta-vendedor"
-              value={MOCK_VENDEDOR.nombreCompleto}
-              disabled
-              className="w-full"
-            />
-          </div>
+        {/* Vendedor */}
+        <div className="border-b border-line px-4 py-3.5 sm:border-r sm:[&:nth-child(2n)]:border-r-0 lg:border-b-0 lg:[&:nth-child(2n)]:border-r lg:[&:nth-child(4n)]:border-r-0">
+          <label
+            htmlFor="propuesta-vendedor"
+            className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3"
+          >
+            Vendedor
+          </label>
+          <Input
+            id="propuesta-vendedor"
+            value={MOCK_VENDEDOR.nombreCompleto}
+            disabled
+            className="w-full"
+          />
+        </div>
 
-          {/* Canal de venta */}
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="propuesta-canal"
-              className="text-xs font-medium text-muted-foreground"
-            >
-              Canal de venta
-            </label>
-            <Select
-              items={canalItems}
-              value={canalVenta}
-              onValueChange={(v) => v && setCanalVenta(v)}
-            >
-              <SelectTrigger id="propuesta-canal" className="w-full">
-                <SelectValue placeholder="Seleccionar canal" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {canalItems.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
+        {/* Canal de venta */}
+        <div className="border-b border-line px-4 py-3.5 sm:border-r sm:[&:nth-child(2n)]:border-r-0 lg:border-b-0 lg:[&:nth-child(2n)]:border-r lg:[&:nth-child(4n)]:border-r-0">
+          <label
+            htmlFor="propuesta-canal"
+            className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3"
+          >
+            Canal de venta
+          </label>
+          <Select
+            items={canalItems}
+            value={canalVenta}
+            onValueChange={(v) => v && setCanalVenta(v)}
+          >
+            <SelectTrigger id="propuesta-canal" className="w-full">
+              <SelectValue placeholder="Seleccionar canal" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {canalItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
 
-          {/* Fecha estimada */}
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="propuesta-fecha"
-              className="text-xs font-medium text-muted-foreground"
-            >
-              Fecha estimada
-            </label>
-            <Input
-              id="propuesta-fecha"
-              type="date"
-              value={fechaEstimada}
-              onChange={(e) => setFechaEstimada(e.target.value)}
-              onClick={(e) =>
-                (e.currentTarget as HTMLInputElement).showPicker?.()
-              }
-              className="w-full cursor-pointer"
-            />
-          </div>
-        </CardContent>
-      </Card>
+        {/* Fecha estimada */}
+        <div className="px-4 py-3.5">
+          <label
+            htmlFor="propuesta-fecha"
+            className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3"
+          >
+            Fecha estimada
+          </label>
+          <Input
+            id="propuesta-fecha"
+            type="date"
+            value={fechaEstimada}
+            onChange={(e) => setFechaEstimada(e.target.value)}
+            onClick={(e) =>
+              (e.currentTarget as HTMLInputElement).showPicker?.()
+            }
+            className="w-full cursor-pointer"
+          />
+        </div>
+      </div>
 
       {/* Tabs + products */}
       <Tabs
@@ -1196,55 +1283,63 @@ export function PropuestaFicha({
         onValueChange={setActiveTab}
         className="flex flex-col gap-4"
       >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <TabsList variant="line">
             <TabsTrigger value="productos">
               <PackageIcon />
               Productos
+              <TabCounter
+                value={items.length}
+                active={activeTab === "productos"}
+              />
             </TabsTrigger>
             <TabsTrigger value="produccion">
               <FactoryIcon />
-              Produccion
+              Producción
+              <TabCounter
+                value={items.length}
+                active={activeTab === "produccion"}
+              />
             </TabsTrigger>
             <TabsTrigger value="pagos">
               <BanknoteIcon />
               Pagos
+              <TabCounter value={0} active={activeTab === "pagos"} />
             </TabsTrigger>
             <TabsTrigger value="archivos">
               <FolderIcon />
               Archivos
+              <TabCounter value={0} active={activeTab === "archivos"} />
             </TabsTrigger>
             <TabsTrigger value="costos">
               <CoinsIcon />
               Costos
+              <TabCounter
+                value={items.length === 0 ? "—" : items.length}
+                active={activeTab === "costos"}
+              />
             </TabsTrigger>
           </TabsList>
 
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => setSheetOpen(true)}
-          >
-            <PlusIcon />
-            Agregar producto
-          </Button>
+          <div className="flex gap-2 pb-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSheetOpen(true)}
+            >
+              Desde catálogo
+            </Button>
+            <Button size="sm" onClick={() => setSheetOpen(true)}>
+              <PlusIcon />
+              Agregar producto
+            </Button>
+          </div>
         </div>
 
         {/* Productos tab */}
         <TabsContent value="productos">
           {items.length === 0 ? (
-            <Empty className="border py-16">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <ClipboardListIcon />
-                </EmptyMedia>
-                <EmptyTitle>Sin productos</EmptyTitle>
-                <EmptyDescription>
-                  Agrega productos del catalogo para comenzar a armar la
-                  propuesta.
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
+            <PropuestaEmptyState onAddProduct={() => setSheetOpen(true)} />
           ) : (
             <Card className="overflow-hidden rounded-2xl border-border/70 shadow-sm">
               <CardContent className="p-0">
@@ -1438,40 +1533,140 @@ export function PropuestaFicha({
         </TabsContent>
       </Tabs>
 
-      {/* Resumen financiero */}
-      <Card className="rounded-2xl border-border/70 shadow-sm">
-        <CardHeader>
-          <CardTitle>Resumen financiero</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="ml-auto flex w-full max-w-xs flex-col gap-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span className="tabular-nums">
+      {/* Resumen financiero — editorial 2-col */}
+      <section className="mt-2 overflow-hidden rounded-[10px] border border-line bg-bg-1">
+        <header className="flex items-baseline justify-between border-b border-line px-6 py-4">
+          <h2 className="m-0 font-serif text-[26px] font-normal leading-tight tracking-[-0.01em] text-ink-0">
+            Resumen <em className="italic text-ink-2">financiero</em>
+          </h2>
+          <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">
+            Moneda · ARS · se actualiza en vivo
+          </div>
+        </header>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px]">
+          <div className="flex flex-col gap-3.5 border-b border-line px-7 py-6 text-sm leading-[1.65] text-ink-2 lg:border-b-0 lg:border-r">
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-dashed border-line-hi px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
+              {resumen.cantidadItems === 0
+                ? "Sin productos todavía"
+                : `${resumen.cantidadItems} ${resumen.cantidadItems === 1 ? "producto" : "productos"} cargados`}
+            </span>
+            <p className="m-0">
+              {resumen.cantidadItems === 0 ? (
+                <>
+                  Cuando agregues productos, vas a ver acá el{" "}
+                  <em className="font-serif text-[15px] italic text-ink-1">
+                    subtotal, impuestos y margen estimado
+                  </em>
+                  . Si editás precios de lista, el margen se recalcula.
+                </>
+              ) : (
+                <>
+                  Subtotal, impuestos y margen se actualizan{" "}
+                  <em className="font-serif text-[15px] italic text-ink-1">
+                    en vivo
+                  </em>{" "}
+                  con cada cambio de cantidades o precios de lista.
+                </>
+              )}
+            </p>
+            <div className="mt-auto flex gap-3.5 border-t border-dashed border-line pt-2.5">
+              <div className="flex-1">
+                <div className="mb-1 font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3">
+                  Costo est.
+                </div>
+                <div className="font-serif text-[22px] italic leading-none tracking-[-0.01em] text-ink-3">
+                  —
+                </div>
+              </div>
+              <div className="flex-1">
+                <div className="mb-1 font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3">
+                  Margen
+                </div>
+                <div className="font-serif text-[22px] italic leading-none tracking-[-0.01em] text-ink-3">
+                  —
+                </div>
+              </div>
+              <div className="flex-1">
+                <div className="mb-1 font-mono text-[9px] uppercase tracking-[0.14em] text-ink-3">
+                  Tiempo prod.
+                </div>
+                <div className="font-serif text-[22px] italic leading-none tracking-[-0.01em] text-ink-3">
+                  —
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 px-7 py-6">
+            <div className="flex items-baseline justify-between py-1.5 font-mono text-xs">
+              <span className="tracking-wider text-ink-3">Subtotal</span>
+              <span className="tabular-nums text-ink-1">
                 {formatCurrency(resumen.subtotal)}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Impuestos</span>
-              <span className="tabular-nums">
+            <div className="flex items-baseline justify-between py-1.5 font-mono text-xs">
+              <span className="tracking-wider text-ink-3">Descuentos</span>
+              <span className="tabular-nums text-ink-1">— 0,00</span>
+            </div>
+            <div className="flex items-baseline justify-between py-1.5 font-mono text-xs">
+              <span className="tracking-wider text-ink-3">Impuestos</span>
+              <span className="tabular-nums text-ink-1">
                 {formatCurrency(resumen.impuestos)}
               </span>
             </div>
-            <Separator className="my-1" />
-            <div className="flex justify-between text-base font-semibold">
-              <span>Total</span>
-              <span className="tabular-nums">
+            <div className="my-1 h-px bg-line" />
+            <div className="mt-1 flex items-baseline justify-between border-t border-line-hi pt-3">
+              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">
+                Total
+              </span>
+              <span className="font-serif text-[40px] italic leading-none tracking-[-0.02em] text-ink-0">
                 {formatCurrency(resumen.total)}
               </span>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <div className="mt-1 text-right font-mono text-[10px] uppercase tracking-[0.08em] text-ink-4">
               {resumen.cantidadItems}{" "}
-              {resumen.cantidadItems === 1 ? "producto" : "productos"} en esta
-              propuesta
-            </p>
+              {resumen.cantidadItems === 1 ? "producto" : "productos"} en esta propuesta
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
+
+      {/* Sticky savebar */}
+      <div className="sticky bottom-5 mt-7 flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-line-hi bg-[rgba(21,21,28,0.9)] px-5 py-3 shadow-[0_18px_40px_rgba(0,0,0,0.4)] backdrop-blur-[14px]">
+        <div className="inline-flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.06em] text-ink-2">
+          <span className="size-[7px] rounded-full bg-warn shadow-[0_0_10px_var(--warn)]" />
+          Borrador sin guardar · los cambios se pierden al salir
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => toast.info("Descartar borrador — próximamente")}
+          >
+            Descartar
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => toast.info("Guardar borrador — próximamente")}
+          >
+            Guardar como borrador
+          </Button>
+          <Button
+            size="sm"
+            onClick={() =>
+              toast.info(
+                tipo === "orden_trabajo"
+                  ? "Crear orden — próximamente"
+                  : "Crear presupuesto — próximamente",
+              )
+            }
+          >
+            {tipo === "orden_trabajo" ? "Crear orden" : "Crear presupuesto"}
+          </Button>
+        </div>
+      </div>
 
       {/* Sheet para agregar producto */}
       <AgregarProductoSheet

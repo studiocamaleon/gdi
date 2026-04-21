@@ -94,4 +94,17 @@ export class UpdateProcesoOperacionDto {
   @ValidateIf((_, v) => v !== null)
   @IsObject()
   condicionV2?: Record<string, unknown> | null;
+
+  /**
+   * Configuración del algoritmo de nesting que aplica a este paso. El shape
+   * varía según `familiaV2` (ver `nesting-runner.ts`):
+   *   - impresion_por_hoja  → { pliegos[], margenMm, separacionHMm, separacionVMm, permitirRotacion, criterio }
+   *   - impresion_por_area  → { printableWidthMm, marginLeftMm, marginStartMm, marginEndMm, separacionHorizontalMm, separacionVerticalMm, permitirRotacion, panelizado{} }
+   *   - impresion_por_pieza → { placaAnchoMm, placaAltoMm, margenMm, separacionHMm, separacionVMm, permitirRotacion }
+   * `null` limpia la config; ausente no toca el campo.
+   */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsObject()
+  configNestingV2?: Record<string, unknown> | null;
 }

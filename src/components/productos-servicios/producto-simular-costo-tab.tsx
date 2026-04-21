@@ -635,6 +635,12 @@ export function ProductoSimularCostoTab(props: ProductTabProps) {
               </Table>
             </div>
 
+            {/* SM.5 — Desglose de materias primas por paso, agrupado por fuente
+                (sustrato del nesting / consumibles de máquina / desgaste / auxiliares).
+                Solo mostramos pasos con materiales > 0. */}
+            <DesgloseMateriales pasos={cotizacion.pasos} />
+
+
             {/* Visualización del nesting — una card por paso `produce`. */}
             {(() => {
               const previews = cotizacion.pasos
@@ -659,7 +665,8 @@ export function ProductoSimularCostoTab(props: ProductTabProps) {
                         <NestingPreview
                           container={data!.container}
                           placements={data!.placements}
-                          maxHeightPx={450}
+                          variant="compact"
+                          maxHeightPx={400}
                         />
                       </CardContent>
                     </Card>
@@ -711,5 +718,186 @@ export function ProductoSimularCostoTab(props: ProductTabProps) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// ──────────────── SM.5 — Desglose de materias primas por paso ────────────────
+
+type MaterialItem = {
+  nombre: string;
+  cantidad: number;
+  unidad: string;
+  precioUnitario: number;
+  costo: number;
+  fuente: string;
+};
+
+const FUENTE_GROUPS = [
+  {
+    key: "sustrato",
+    title: "Sustrato del nesting",
+    desc: "Material declarado como sustrato del paso (ej. rollo de vinilo, pliego). El motor evaluó las variantes habilitadas y eligió la mejor.",
+    matchFuente: ["ProcesoOperacionMaterial.sustrato"],
+    matchHeuristic: (m: MaterialItem) =>
+      m.fuente === "ProcesoOperacionMaterial" &&
+      (m.nombre.toLowerCase().includes("vinilo") ||
+        m.nombre.toLowerCase().includes("papel") ||
+        m.nombre.toLowerCase().includes("placa") ||
+        m.nombre.toLowerCase().includes("rollo")),
+  },
+  {
+    key: "consumibles",
+    title: "Consumibles de máquina",
+    desc: "Tintas, toner, barniz y otros consumibles absorbidos automáticamente desde la máquina + perfil del paso.",
+    matchFuente: ["MaquinaConsumible"],
+  },
+  {
+    key: "desgaste",
+    title: "Desgaste / repuestos",
+    desc: "Componentes de desgaste prorrateados por uso (fusor, drum, cabezal, cuchilla, etc.). Costo derivado de vida útil.",
+    matchFuente: ["MaquinaDesgaste"],
+  },
+  {
+    key: "auxiliares",
+    title: "Auxiliares y manuales",
+    desc: "Materiales declarados manualmente que no son sustrato (adhesivo, bolsa, encolado) o cargos genéricos.",
+    matchFuente: ["ProcesoOperacionMaterial", "default", "config"],
+  },
+] as const;
+
+function groupMateriales(materiales: MaterialItem[]) {
+  const buckets: Record<string, MaterialItem[]> = {
+    sustrato: [],
+    consumibles: [],
+    desgaste: [],
+    auxiliares: [],
+  };
+  for (const m of materiales) {
+    const placed = (() => {
+      for (const g of FUENTE_GROUPS) {
+        if ((g.matchFuente as readonly string[]).includes(m.fuente)) {
+          // Para "sustrato" usamos heurística adicional dado que el backend
+          // hoy emite todos los POM como `ProcesoOperacionMaterial` sin marca.
+          if (g.key === "sustrato") {
+            const isSustrato = (g as { matchHeuristic?: (m: MaterialItem) => boolean })
+              .matchHeuristic?.(m);
+            if (!isSustrato) continue;
+          }
+          buckets[g.key].push(m);
+          return true;
+        }
+      }
+      return false;
+    })();
+    if (!placed) buckets.auxiliares.push(m);
+  }
+  return buckets;
+}
+
+function DesgloseMateriales({
+  pasos,
+}: {
+  pasos: Array<{ id: string; nombre: string; trazabilidad?: Record<string, unknown> }>;
+}) {
+  const pasosConMateriales = pasos.filter((paso) => {
+    const traza = (paso.trazabilidad ?? {}) as Record<string, unknown>;
+    const mats = traza.materiales;
+    return Array.isArray(mats) && mats.length > 0;
+  });
+  if (pasosConMateriales.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold">Desglose de materias primas por paso</h3>
+        <p className="text-xs text-muted-foreground">
+          Cada paso muestra sus materiales agrupados por origen: sustrato del
+          nesting, consumibles automáticos de la máquina, desgaste prorrateado y
+          auxiliares manuales.
+        </p>
+      </div>
+      <div className="space-y-3">
+        {pasosConMateriales.map((paso) => {
+          const traza = (paso.trazabilidad ?? {}) as Record<string, unknown>;
+          const mats = (traza.materiales as Array<Record<string, unknown>>).map(
+            (m) => ({
+              nombre: String(m.nombre ?? "—"),
+              cantidad: Number(m.cantidad ?? 0),
+              unidad: String(m.unidad ?? ""),
+              precioUnitario: Number(m.precioUnitario ?? 0),
+              costo: Number(m.costo ?? 0),
+              fuente: String(m.fuente ?? ""),
+            }),
+          );
+          const totalPaso = mats.reduce((acc, m) => acc + m.costo, 0);
+          const buckets = groupMateriales(mats);
+          return (
+            <Card key={paso.id}>
+              <CardHeader className="pb-2">
+                <div className="flex items-baseline justify-between gap-3">
+                  <CardTitle className="text-sm">{paso.nombre}</CardTitle>
+                  <span className="text-sm font-semibold">
+                    {formatCurrency(totalPaso)}
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3 pb-4">
+                {FUENTE_GROUPS.map((g) => {
+                  const items = buckets[g.key];
+                  if (items.length === 0) return null;
+                  const subtotal = items.reduce((acc, m) => acc + m.costo, 0);
+                  return (
+                    <div key={g.key} className="rounded-md border bg-muted/10 p-3">
+                      <div className="mb-2 flex items-baseline justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            {g.title}
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-muted-foreground">
+                            {g.desc}
+                          </div>
+                        </div>
+                        <span className="text-sm font-medium">
+                          {formatCurrency(subtotal)}
+                        </span>
+                      </div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs">Material</TableHead>
+                            <TableHead className="text-right text-xs">Cantidad</TableHead>
+                            <TableHead className="text-right text-xs">Precio unit.</TableHead>
+                            <TableHead className="text-right text-xs">Costo</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {items.map((m, idx) => (
+                            <TableRow key={`${m.nombre}-${idx}`}>
+                              <TableCell className="text-xs">{m.nombre}</TableCell>
+                              <TableCell className="text-right text-xs">
+                                {m.cantidad.toLocaleString("es-AR", {
+                                  maximumFractionDigits: 4,
+                                })}{" "}
+                                {m.unidad}
+                              </TableCell>
+                              <TableCell className="text-right text-xs">
+                                {formatCurrency(m.precioUnitario)}
+                              </TableCell>
+                              <TableCell className="text-right text-xs font-medium">
+                                {formatCurrency(m.costo)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
   );
 }

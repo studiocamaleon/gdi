@@ -46,6 +46,12 @@ import {
   type NestingResultUnion,
 } from '../engine/nesting-runner';
 import { calcularMaterialesDelPaso } from '../pasos/material-plantillas';
+import {
+  construirConsumiblesDelPerfil,
+  construirDesgasteDelPaso,
+  type MaquinaConsumibleRuntime,
+  type MaquinaDesgasteRuntime,
+} from '../pasos/maquina-consumibles';
 import { evaluarBool } from '../reglas-seleccion/evaluador';
 
 function roundMoney(n: number): number {
@@ -262,6 +268,10 @@ export class SuperMotorModule implements ProductMotorModule {
         id: op.id,
         familiaCodigo: op.familiaV2 ?? inferirFamiliaDesdeTipo(op.tipoOperacion, op.nombre),
         configNesting: (op.configNestingV2 as Record<string, unknown> | null) ?? null,
+        // SM.1.d — Plumb materiales declarados con sus variantes habilitadas.
+        // El runner los lee para detectar el sustrato del nesting y evaluar
+        // múltiples anchos de rollo / pliegos.
+        materialesConsumidos: extractMaterialesParaRunner(op),
       }))
       .filter((p) => FAMILIAS_PASO[p.familiaCodigo] != null);
     const nestingOutput =
@@ -433,7 +443,7 @@ export class SuperMotorModule implements ProductMotorModule {
           subProductos, // acumulador compartido: cada sub-cotización se agrega acá
         },
       );
-      const materialesConsumidos = materialesDeclarados.length > 0
+      const materialesDelPasoBase = materialesDeclarados.length > 0
         ? [...materialesStock, ...materialesSubProductos]
         : calcularMaterialesDelPaso(familiaCodigo, {
             cantidadPedida: cantidad,
@@ -454,6 +464,40 @@ export class SuperMotorModule implements ProductMotorModule {
             configProducto: runtime.configProducto ?? {},
             selecciones,
           });
+
+      // SM.5 — Auto-absorber consumibles + desgaste de la maquina+perfil del paso.
+      // Estos costos vienen del catálogo de maquinaria (ya no se duplican como POM
+      // manuales). Cada item lleva fuente=MaquinaConsumible|MaquinaDesgaste para
+      // que el frontend pueda separarlos visualmente en el desglose.
+      const opMaquina = (op as { maquina?: Record<string, unknown> | null }).maquina ?? null;
+      const opPerfil = (op as { perfilOperativo?: Record<string, unknown> | null })
+        .perfilOperativo ?? null;
+      const consumiblesCtx = {
+        cantidadPedida: cantidad,
+        layout: layoutAplicable,
+        perfil: opPerfil
+          ? {
+              id: String(opPerfil.id),
+              dobleFaz: Boolean(opPerfil.dobleFaz),
+              productivityUnit:
+                (opPerfil.productivityUnit as string | null) ?? null,
+            }
+          : null,
+      };
+      const consumiblesAuto = construirConsumiblesDelPerfil(
+        opMaquina?.consumibles as MaquinaConsumibleRuntime[] | undefined,
+        consumiblesCtx,
+      );
+      const desgasteAuto = construirDesgasteDelPaso(
+        opMaquina?.componentesDesgaste as MaquinaDesgasteRuntime[] | undefined,
+        consumiblesCtx,
+      );
+
+      const materialesConsumidos = [
+        ...materialesDelPasoBase,
+        ...consumiblesAuto,
+        ...desgasteAuto,
+      ];
       const costoMateriasPrimas = roundMoney(
         materialesConsumidos.reduce((acc, m) => acc + m.costo, 0),
       );
@@ -513,7 +557,7 @@ export class SuperMotorModule implements ProductMotorModule {
           })),
           // SM.2: layout del nesting aplicable al paso (propio o heredado).
           nesting: layoutAplicable
-            ? summarizeLayout(layoutAplicable, Boolean(nestingHeredado))
+            ? summarizeLayout(layoutAplicable, Boolean(nestingHeredado), materialMaquina)
             : null,
           // SM.4: materiales consumidos por la plantilla de la familia.
           materiales: materialesConsumidos,
@@ -746,11 +790,52 @@ export class SuperMotorModule implements ProductMotorModule {
     });
     if (!opImpresion?.maquina?.parametrosTecnicosJson) return undefined;
     const p = opImpresion.maquina.parametrosTecnicosJson as Record<string, unknown>;
+
+    // Las plantillas de máquina (maquinaria-templates.ts) guardan TODOS los
+    // campos dimensionales en CENTÍMETROS — convertimos a mm con `* 10`.
+    // Hay dos convenciones de naming según el tipo de máquina (digital plana:
+    // margenSuperior/Inferior/Izquierdo/Derecho · gran formato:
+    // margenInicio/Final/LateralIzquierdo/LateralDerechoNoImprimible).
+    // Ambas variantes se guardan en cm.
+    const cmToMm = (v: unknown): number | undefined => {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? n * 10 : undefined;
+    };
+
+    // Ancho imprimible máximo (cm → mm). Probamos en orden por todas las
+    // convenciones de naming conocidas.
+    const anchoMaxMm =
+      cmToMm(p.anchoImprimibleMaximo) ??
+      cmToMm(p.anchoBoca) ??
+      cmToMm(p.anchoCama) ??
+      cmToMm(p.anchoMaxHoja);
+
+    const marginLeftMm =
+      cmToMm(p.margenLateralIzquierdoNoImprimible) ??
+      cmToMm(p.margenIzquierdo) ??
+      0;
+    const marginRightMm =
+      cmToMm(p.margenLateralDerechoNoImprimible) ??
+      cmToMm(p.margenDerecho) ??
+      0;
+    const marginStartMm =
+      cmToMm(p.margenInicioNoImprimible) ?? cmToMm(p.margenSuperior) ?? 0;
+    const marginEndMm =
+      cmToMm(p.margenFinalNoImprimible) ?? cmToMm(p.margenInferior) ?? 0;
+
+    // El ancho imprimible efectivo descuenta los márgenes laterales.
+    const printableWidthMm =
+      anchoMaxMm != null
+        ? Math.max(0, anchoMaxMm - marginLeftMm - marginRightMm)
+        : undefined;
+
     return {
-      maquinaPrintableWidthMm: Number(p.printableWidthMm ?? p.anchoMaximo ?? 0) || undefined,
-      maquinaMarginLeftMm: Number(p.margenIzquierdo ?? 0) || undefined,
-      maquinaMarginStartMm: Number(p.margenSuperior ?? 0) || undefined,
-      maquinaMarginEndMm: Number(p.margenInferior ?? 0) || undefined,
+      maquinaAnchoTotalMm: anchoMaxMm,
+      maquinaPrintableWidthMm: printableWidthMm || undefined,
+      maquinaMarginLeftMm: marginLeftMm || undefined,
+      maquinaMarginRightMm: marginRightMm || undefined,
+      maquinaMarginStartMm: marginStartMm || undefined,
+      maquinaMarginEndMm: marginEndMm || undefined,
     };
   }
 }
@@ -950,7 +1035,60 @@ function inferirFamiliaDesdeTipo(tipoOperacion: string, nombre: string): string 
 }
 
 /** Sumario compacto del layout para trazabilidad del paso. */
-function summarizeLayout(layout: NestingResultUnion, heredado: boolean) {
+/**
+ * SM.1.d — Extrae el subset mínimo de `materialesConsumidos` que el
+ * nesting-runner necesita: solo los que pueden ser sustrato (esSustratoNesting=true)
+ * + sus variantes habilitadas con atributos (ancho/largo del rollo).
+ * Devuelve undefined cuando el paso no tiene materiales relevantes —
+ * el runner cae al comportamiento de hoy (single-corrida con maquinaWidth).
+ */
+function extractMaterialesParaRunner(
+  op: Record<string, unknown>,
+): import('../engine/nesting-runner').PasoMaterialRuntime[] | undefined {
+  const raw = (op as { materialesConsumidos?: unknown }).materialesConsumidos;
+  if (!Array.isArray(raw)) return undefined;
+  const result: import('../engine/nesting-runner').PasoMaterialRuntime[] = [];
+  for (const m of raw) {
+    if (!m || typeof m !== 'object') continue;
+    const mat = m as Record<string, unknown>;
+    if (!mat.esSustratoNesting) continue;
+    const variantesRaw = Array.isArray(mat.variantesHabilitadas)
+      ? (mat.variantesHabilitadas as Array<Record<string, unknown>>)
+      : [];
+    const variantes = variantesRaw
+      .filter((v) => v && typeof v === 'object' && (v as { activo?: unknown }).activo !== false)
+      .map((v) => {
+        const mp = (v as { materiaPrimaVariante?: Record<string, unknown> | null })
+          .materiaPrimaVariante ?? null;
+        return {
+          materiaPrimaVarianteId: String(
+            mp?.id ?? (v as { materiaPrimaVarianteId?: unknown }).materiaPrimaVarianteId ?? '',
+          ),
+          sku: String(mp?.sku ?? ''),
+          nombreVariante: (mp?.nombreVariante as string | null) ?? null,
+          atributosVariante:
+            (mp?.atributosVarianteJson as Record<string, unknown> | null) ?? null,
+          precioReferencia:
+            mp?.precioReferencia != null ? Number(mp.precioReferencia) : null,
+        };
+      })
+      .filter((v) => v.materiaPrimaVarianteId.length > 0);
+    if (variantes.length === 0) continue;
+    result.push({
+      id: String(mat.id),
+      nombre: String(mat.nombre ?? ''),
+      esSustratoNesting: true,
+      variantesHabilitadas: variantes,
+    });
+  }
+  return result.length > 0 ? result : undefined;
+}
+
+function summarizeLayout(
+  layout: NestingResultUnion,
+  heredado: boolean,
+  materialMaquina?: MaterialMaquinaContext,
+) {
   const base = { algoritmo: layout.algoritmo, heredado };
   if (layout.algoritmo === 'nesting-hoja') {
     return {
@@ -965,13 +1103,71 @@ function summarizeLayout(layout: NestingResultUnion, heredado: boolean) {
     };
   }
   if (layout.algoritmo === 'nesting-rollo') {
+    // SM.1.d — Si la evaluación multi-material está presente, el ancho del
+    // rollo viene del material ELEGIDO (no de la máquina). Eso permite al
+    // frontend dibujar el rollo correcto y mostrar las alternativas.
+    const elegido = layout.evaluacion?.materialElegido;
+    const rolloAnchoFromEleccion = elegido?.rolloAnchoMm ?? null;
+    const rolloAnchoTotal =
+      layout.rolloAnchoTotalMm ??
+      rolloAnchoFromEleccion ??
+      materialMaquina?.maquinaAnchoTotalMm ??
+      materialMaquina?.maquinaPrintableWidthMm ??
+      null;
+    // Calculamos printable efectivo desde el rollo y los márgenes aplicados
+    // por el algoritmo (no desde maquinaPrintableWidthMm que puede no
+    // coincidir cuando hay multi-variant).
+    const marginLeft = layout.marginLeftMm ?? 0;
+    const marginRight = layout.marginRightMm ?? 0;
+    const printableEfectivo =
+      rolloAnchoTotal != null
+        ? Math.max(0, rolloAnchoTotal - marginLeft - marginRight)
+        : (materialMaquina?.maquinaPrintableWidthMm ?? null);
+    // Aprovechamiento = areaUtil / areaConsumida (printable × consumedLength).
+    // Si la evaluación multi-material lo pre-calculó (con criterio aplicado),
+    // usamos ese; si no, lo computamos para single-corrida.
+    const areaConsumidaM2 =
+      printableEfectivo != null && layout.result.consumedLengthMm > 0
+        ? (printableEfectivo * layout.result.consumedLengthMm) / 1_000_000
+        : 0;
+    const aprovechamientoPct =
+      elegido?.aprovechamientoPct ??
+      (areaConsumidaM2 > 0
+        ? Math.round((layout.result.usefulAreaM2 / areaConsumidaM2) * 10000) / 100
+        : 0);
     return {
       ...base,
+      // Self-contained: incluimos las dims del rollo para que el frontend no
+      // tenga que cruzar con materialElegido (que no se serializa siempre).
+      rolloAnchoMm: rolloAnchoTotal,
+      printableWidthMm: printableEfectivo,
+      // Márgenes efectivos aplicados al algoritmo. El frontend los pinta
+      // como zonas no-imprimibles (hatch) sobre el rollo.
+      marginLeftMm: layout.marginLeftMm ?? 0,
+      marginRightMm: layout.marginRightMm ?? 0,
+      marginStartMm: layout.marginStartMm ?? 0,
+      marginEndMm: layout.marginEndMm ?? 0,
       consumedLengthMm: layout.result.consumedLengthMm,
+      // Alias en español para compat con frontends que esperan este nombre.
+      largoConsumidoMm: layout.result.consumedLengthMm,
       usefulAreaM2: layout.result.usefulAreaM2,
+      // Alias en español para frontend (extract lo lee como areaUtilizadaM2).
+      areaUtilizadaM2: layout.result.usefulAreaM2,
+      // Aprovechamiento + área consumida — necesarios para los KPIs
+      // "Aprovechamiento" y "Merma" del tab Imposición.
+      aprovechamientoPct,
+      porcentajeAprovechamiento: aprovechamientoPct,
+      areaConsumidaM2,
       panelCount: layout.result.panelCount,
       orientacion: layout.result.orientacion,
       placements: layout.result.placements,
+      // SM.1.d — Evaluación multi-material (presente solo si el paso tiene
+      // un POM con esSustratoNesting=true). El frontend usa esto para
+      // mostrar el panel "Materiales evaluados" en el tab Imposición.
+      materialElegido: elegido ?? null,
+      criterioAplicado: layout.evaluacion?.criterio ?? null,
+      materialesEvaluados: layout.evaluacion?.materialesEvaluados ?? null,
+      materialesDescartados: layout.evaluacion?.materialesDescartados ?? null,
     };
   }
   return {

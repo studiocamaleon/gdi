@@ -241,6 +241,28 @@ export const MATERIAL_FORMULAS = [
 ] as const;
 export type MaterialFormula = (typeof MATERIAL_FORMULAS)[number];
 
+/**
+ * SM.1.d — Variante habilitada del material sustrato del nesting. Cada fila
+ * representa un ancho de rollo / pliego candidato que el motor evalúa al
+ * correr el algoritmo (nesting-rollo, nesting-hoja, etc.).
+ */
+export type ProcesoOperacionMaterialVariante = {
+  id: string;
+  materiaPrimaVarianteId: string;
+  orden: number;
+  activo: boolean;
+  materiaPrimaVariante: {
+    id: string;
+    sku: string;
+    nombreVariante: string | null;
+    materiaPrimaId: string;
+    precioReferencia: number | null;
+    /** atributosVarianteJson — para vinilos en rollo: { ancho: m, largo: m } */
+    atributosVariante: Record<string, unknown> | null;
+    activo: boolean;
+  } | null;
+};
+
 export type ProcesoOperacionMaterial = {
   id: string;
   procesoOperacionId: string;
@@ -255,6 +277,11 @@ export type ProcesoOperacionMaterial = {
   unidad: string;
   precioManual: number | null;
   aplicaMultiCaras: boolean;
+  /**
+   * SM.1.d — Marca este material como sustrato del nesting del paso. Cuando
+   * es true, el motor itera `variantesHabilitadas` y elige por criterio.
+   */
+  esSustratoNesting: boolean;
   orden: number;
   activo: boolean;
   materiaPrimaVariante: {
@@ -275,8 +302,16 @@ export type ProcesoOperacionMaterial = {
     anchoMm: number;
     altoMm: number;
   } | null;
+  /** SM.1.d — Variantes habilitadas (array vacío si esSustratoNesting=false). */
+  variantesHabilitadas: ProcesoOperacionMaterialVariante[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type ProcesoOperacionMaterialVariantePayload = {
+  materiaPrimaVarianteId: string;
+  orden?: number;
+  activo?: boolean;
 };
 
 export type ProcesoOperacionMaterialPayload = {
@@ -289,6 +324,10 @@ export type ProcesoOperacionMaterialPayload = {
   unidad: string;
   precioManual?: number | null;
   aplicaMultiCaras?: boolean;
+  /** SM.1.d — Si true, requiere `variantesHabilitadas` con al menos 1 fila. */
+  esSustratoNesting?: boolean;
+  /** SM.1.d — Solo se persiste cuando `esSustratoNesting=true`. */
+  variantesHabilitadas?: ProcesoOperacionMaterialVariantePayload[];
   orden?: number;
   activo?: boolean;
 };
@@ -346,6 +385,8 @@ export type UpdateProcesoOperacionPayload = {
   productividadBase?: number;
   // null limpia la condición; ausente no toca el campo.
   condicionV2?: Record<string, unknown> | null;
+  // null limpia la config de nesting; ausente no toca el campo.
+  configNestingV2?: Record<string, unknown> | null;
 };
 
 export async function updateProcesoOperacion(
