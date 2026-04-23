@@ -92,11 +92,24 @@ export type ProductividadEvaluationInput = {
   reglaVelocidadJson: Prisma.JsonValue | null;
   reglaMermaJson: Prisma.JsonValue | null;
   runMin: Prisma.Decimal | null;
+  /**
+   * Tiempo total fijo en minutos. Solo se usa en `modoProductividad = TIEMPO_FIJO`.
+   * Cuando está seteado y el modo es TIEMPO_FIJO, el motor retorna directamente
+   * `runMin = tiempoFijoMin` (no divide ni convierte unidades).
+   */
+  tiempoFijoMin: Prisma.Decimal | null;
   unidadTiempo: UnidadProceso;
   mermaRunPct: Prisma.Decimal | null;
   mermaSetup: Prisma.Decimal | null;
   cantidadObjetivoSalida: number;
   contexto: JsonObject;
+  /**
+   * Productividad declarada por el perfil operativo de la máquina (cuando
+   * `modoProductividad = PRODUCTIVIDAD_MAQUINA`). El motor la usa como
+   * `productividadAplicada` directa. Si el modo no es PRODUCTIVIDAD_MAQUINA,
+   * este campo se ignora.
+   */
+  perfilProductivityValue?: Prisma.Decimal | number | null;
 };
 
 export type ProductividadEvaluationResult = {
@@ -649,12 +662,61 @@ export function evaluateProductividad(
 
   let productividadAplicada: number | null = null;
 
+  // TIEMPO_FIJO — el paso siempre toma `tiempoFijoMin` minutos totales,
+  // independientemente de cantidad/productividad/unidad. Short-circuit:
+  // se devuelve runMin = 0 (el caller ya suma `tiempoFijoMin` aparte
+  // como parte del totalMin del paso, ver super-motor.ts y procesos.service.ts).
+  // Este modo lo usa la biblioteca cuando el usuario elige
+  // "Tiempo fijo total (min)" en lugar de "Productividad variable".
+  if (input.modoProductividad === ModoProductividadProceso.TIEMPO_FIJO) {
+    const tiempoFijo = decimalToNumberOrNull(input.tiempoFijoMin) ?? 0;
+    const cantidadRunTf =
+      input.cantidadObjetivoSalida * (1 + mermaRunPctAplicada / 100) +
+      mermaSetupAplicada;
+    if (tiempoFijo <= 0) {
+      warnings.push(
+        'Modo tiempo fijo sin valor en `tiempoFijoMin`. El paso aporta 0 min al runMin.',
+      );
+    }
+    return {
+      // Devolvemos 0 para no duplicar — el caller sumará tiempoFijoMin aparte.
+      runMin: 0,
+      productividadAplicada: null,
+      cantidadRun: Number(Math.max(cantidadRunTf, 0).toFixed(2)),
+      mermaRunPctAplicada: Number(mermaRunPctAplicada.toFixed(2)),
+      mermaSetupAplicada: Number(mermaSetupAplicada.toFixed(2)),
+      warnings,
+    };
+  }
+
   if (input.modoProductividad === ModoProductividadProceso.FIJA) {
     if (productividadBase > 0) {
       productividadAplicada = productividadBase;
     } else {
       warnings.push(
         'Modo fija sin Productividad base valida. Se usa run manual como fallback.',
+      );
+    }
+  } else if (
+    input.modoProductividad === ModoProductividadProceso.PRODUCTIVIDAD_MAQUINA
+  ) {
+    // La velocidad la define el perfil operativo elegido al cotizar.
+    const perfilValue =
+      input.perfilProductivityValue == null
+        ? 0
+        : Number(input.perfilProductivityValue);
+    if (perfilValue > 0) {
+      productividadAplicada = perfilValue;
+    } else if (productividadBase > 0) {
+      // Fallback razonable: si el perfil no declara velocidad pero el paso
+      // tiene productividadBase (caso edge), usar la del paso.
+      productividadAplicada = productividadBase;
+      warnings.push(
+        'Modo productividad de máquina sin valor en el perfil. Se usa productividadBase del paso como fallback.',
+      );
+    } else {
+      warnings.push(
+        'Modo productividad de máquina pero el perfil no declara velocidad. Se asume 0.',
       );
     }
   } else if (input.modoProductividad === ModoProductividadProceso.FORMULA) {
@@ -697,8 +759,14 @@ export function evaluateProductividad(
     const cantidadNormalizada = Math.max(cantidadRun, 0);
     const tiempoEnUnidadBase = cantidadNormalizada / productividadAplicada;
 
+    // Fase D.2 — conversión multi-unidad a minutos:
+    //  - HORA   → tiempo × 60
+    //  - SEGUNDO→ tiempo / 60
+    //  - resto (MINUTO + unidades genéricas) → tiempo literal en minutos
     if (input.unidadTiempo === UnidadProceso.HORA) {
       runMin = tiempoEnUnidadBase * 60;
+    } else if (input.unidadTiempo === UnidadProceso.SEGUNDO) {
+      runMin = tiempoEnUnidadBase / 60;
     } else {
       runMin = tiempoEnUnidadBase;
     }

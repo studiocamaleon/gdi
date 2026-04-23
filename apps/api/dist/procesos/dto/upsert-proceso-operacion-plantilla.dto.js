@@ -32,8 +32,15 @@ class UpsertProcesoOperacionPlantillaDto {
     reglaMerma;
     baseCalculoProductividad;
     observaciones;
-    niveles;
     estacionId;
+    familiaV2;
+    unidadProductivaV2;
+    activacionV2;
+    condicionV2;
+    leeDelTrabajoV2;
+    leeDePasosV2;
+    produceV2;
+    configNestingV2;
     activo;
 }
 exports.UpsertProcesoOperacionPlantillaDto = UpsertProcesoOperacionPlantillaDto;
@@ -133,15 +140,54 @@ __decorate([
 ], UpsertProcesoOperacionPlantillaDto.prototype, "observaciones", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.ValidateNested)({ each: true }),
-    (0, class_transformer_1.Type)(() => upsert_proceso_dto_1.ProcesoOperacionNivelDto),
-    __metadata("design:type", Array)
-], UpsertProcesoOperacionPlantillaDto.prototype, "niveles", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsUUID)(),
     __metadata("design:type", String)
 ], UpsertProcesoOperacionPlantillaDto.prototype, "estacionId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MaxLength)(80),
+    __metadata("design:type", String)
+], UpsertProcesoOperacionPlantillaDto.prototype, "familiaV2", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MaxLength)(40),
+    __metadata("design:type", String)
+], UpsertProcesoOperacionPlantillaDto.prototype, "unidadProductivaV2", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsIn)(['OBLIGATORIO', 'OPCIONAL', 'CONDICIONAL']),
+    __metadata("design:type", String)
+], UpsertProcesoOperacionPlantillaDto.prototype, "activacionV2", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsObject)(),
+    __metadata("design:type", Object)
+], UpsertProcesoOperacionPlantillaDto.prototype, "condicionV2", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.IsString)({ each: true }),
+    __metadata("design:type", Array)
+], UpsertProcesoOperacionPlantillaDto.prototype, "leeDelTrabajoV2", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.IsString)({ each: true }),
+    __metadata("design:type", Array)
+], UpsertProcesoOperacionPlantillaDto.prototype, "leeDePasosV2", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.IsString)({ each: true }),
+    __metadata("design:type", Array)
+], UpsertProcesoOperacionPlantillaDto.prototype, "produceV2", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsObject)(),
+    __metadata("design:type", Object)
+], UpsertProcesoOperacionPlantillaDto.prototype, "configNestingV2", void 0);
 __decorate([
     (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)

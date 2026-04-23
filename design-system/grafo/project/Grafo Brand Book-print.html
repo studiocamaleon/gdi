@@ -1,0 +1,1586 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Grafo — Brand Book</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0B0B0F;
+    --bg-1:      #101015;
+    --bg-2:      #15151C;
+    --bg-3:      #1C1C24;
+    --line:      #24242D;
+    --line-hi:   #33333F;
+    --ink-0:     #F4F4F0;
+    --ink-1:     #D9D9D2;
+    --ink-2:     #9C9CA3;
+    --ink-3:     #6A6A72;
+    --ink-4:     #3E3E47;
+    --lime:      #E8FF5C;
+    --lime-dim:  #B8CC49;
+    --lime-ink:  #0B0B0F;
+    --ok:        #6FE39A;
+    --warn:      #F5C86B;
+    --err:       #F26D6D;
+    --info:      #7BB3FF;
+    --radius:    2px;
+    --radius-md: 6px;
+    --radius-lg: 14px;
+    --serif:     "Instrument Serif", "Times New Roman", serif;
+    --sans:      "Geist", ui-sans-serif, system-ui, sans-serif;
+    --mono:      "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--ink-1);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "ss01", "cv11";
+  }
+  a { color: inherit; }
+  ::selection { background: var(--lime); color: var(--lime-ink); }
+
+  /* ============ PRINT =================================== */
+  @page {
+    size: A4;
+    margin: 14mm 12mm;
+  }
+  @media print {
+    html, body {
+      background: var(--bg) !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+      font-size: 11pt;
+    }
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .grid-bg { display: none !important; }
+    .wrap { max-width: 100% !important; padding: 0 !important; }
+    section {
+      padding: 0 !important;
+      border-bottom: 0 !important;
+      break-before: page;
+      break-inside: auto;
+    }
+    section:first-of-type { break-before: auto; }
+    header.hero {
+      min-height: auto !important;
+      padding: 20mm 0 12mm !important;
+      border-bottom: 0 !important;
+      break-after: page;
+    }
+    .hero h1 {
+      font-size: 130pt !important;
+      margin-bottom: 18pt !important;
+    }
+    .hero-meta { margin-top: 40pt !important; }
+    .shead {
+      margin-bottom: 28pt !important;
+      break-after: avoid;
+    }
+    .shead h2 { font-size: 38pt !important; line-height: 1.03 !important; }
+    .shead .lede { font-size: 11pt !important; }
+
+    /* Avoid splitting visual blocks across pages */
+    .manifesto,
+    .pillars,
+    .voice,
+    .logo-variants,
+    .logo-detail,
+    .construction,
+    .variants-grid,
+    .motion-demo,
+    .motion-principles,
+    .color-hero,
+    .swatch-row,
+    .state-row,
+    .color-rationale,
+    .type-hero,
+    .type-spec,
+    .tag-list,
+    .favi-strip,
+    .mock,
+    .email,
+    .slide-wrap,
+    .li-card,
+    .sig,
+    .card-grid,
+    .merch-grid,
+    .avoid-grid,
+    footer {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .scale-table tr { break-inside: avoid; }
+
+    /* Allow larger sections that can't fit on one page to flow */
+    .avoid-grid,
+    .favi-strip { break-inside: auto; }
+    .av, .favi, .sw, .sr, .ch, .mp, .cr, .vg, .tg, .pillars > div {
+      break-inside: avoid;
+    }
+
+    /* Section spacing */
+    #concepto, #logo, #color, #tipo, #voz, #aplica, #evitar {
+      padding-top: 8mm !important;
+    }
+
+    /* Motion demo: just show static final state */
+    .flow-edge { animation: none !important; stroke-dasharray: 0 !important; }
+    .topbar .dot { animation: none !important; }
+
+    /* Shrink the giant hero H1 so it fits on A4 */
+    .hero h1 { line-height: 0.9 !important; }
+
+    /* Compact hero meta */
+    .hero-meta { grid-template-columns: repeat(4, 1fr) !important; }
+
+    /* Prevent hero main from eating too much space */
+    .hero-main { margin-top: 30pt !important; }
+
+    /* TOC in hero */
+    .toc a { padding: 12pt !important; }
+    .toc a .t { font-size: 16pt !important; }
+
+    /* Login/email/slide mocks: size down */
+    .login { min-height: auto !important; }
+    .login .left { padding: 24pt !important; }
+    .login .right { padding: 24pt !important; }
+    .login h3 { font-size: 28pt !important; margin: 18pt 0 8pt !important; }
+    .email .body { padding: 28pt 36pt !important; }
+    .email h4 { font-size: 24pt !important; }
+    .slide-wrap { aspect-ratio: auto !important; height: 150mm !important; }
+    .slide-main h2 { font-size: 44pt !important; }
+
+    /* Type hero smaller */
+    .type-hero { padding: 20pt 0 !important; }
+    .type-hero .big { font-size: 80pt !important; }
+
+    /* Taglist */
+    .tg .t { font-size: 22pt !important; }
+
+    /* Manifesto */
+    .manifesto { font-size: 22pt !important; }
+
+    /* Links unchanged */
+    a { text-decoration: none !important; color: inherit !important; }
+
+    /* Footer */
+    footer { padding: 30pt 0 !important; break-before: page; }
+    footer .big { font-size: 36pt !important; }
+
+    /* Hide the play/reset buttons in motion demo */
+    .motion-demo .controls { display: none !important; }
+    .motion-demo { padding: 24pt !important; min-height: auto !important; }
+
+    /* Force all node colors in motion demo to final state */
+    #n1, #n2 { fill: #D9D9D2 !important; }
+    #n3 { fill: #E8FF5C !important; }
+  }
+
+  /* Grid background --------------------------------------------------- */
+  .grid-bg {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(ellipse at 50% 20%, black 0%, transparent 75%);
+    opacity: 0.35;
+  }
+
+  /* Layout ------------------------------------------------------------ */
+  .wrap {
+    position: relative; z-index: 1;
+    max-width: 1200px; margin: 0 auto; padding: 0 48px;
+  }
+  @media (max-width: 720px){ .wrap { padding: 0 24px; } }
+
+  section { padding: 120px 0; border-bottom: 1px solid var(--line); }
+  section:last-child { border-bottom: 0; }
+
+  /* Section header ---------------------------------------------------- */
+  .shead {
+    display: grid; grid-template-columns: 140px 1fr; gap: 32px;
+    margin-bottom: 64px; align-items: baseline;
+  }
+  .shead .num {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
+    color: var(--ink-3); text-transform: uppercase;
+    border-top: 1px solid var(--line-hi);
+    padding-top: 10px;
+  }
+  .shead .num em { color: var(--lime); font-style: normal; }
+  .shead h2 {
+    font-family: var(--serif); font-weight: 400;
+    font-size: clamp(36px, 5vw, 64px);
+    line-height: 1.02; letter-spacing: -0.01em;
+    color: var(--ink-0); margin: 0;
+  }
+  .shead h2 em { font-style: italic; color: var(--ink-2); }
+  .shead .lede {
+    grid-column: 2; margin-top: 20px; max-width: 620px;
+    color: var(--ink-2); font-size: 17px; line-height: 1.6;
+  }
+  @media (max-width: 720px){
+    .shead { grid-template-columns: 1fr; gap: 12px; }
+    .shead .lede { grid-column: 1; }
+  }
+
+  /* Tiny helpers ------------------------------------------------------ */
+  .mono { font-family: var(--mono); }
+  .serif { font-family: var(--serif); }
+  .muted { color: var(--ink-3); }
+  .ink0 { color: var(--ink-0); }
+  .lime { color: var(--lime); }
+  .kbd {
+    font-family: var(--mono); font-size: 11px;
+    padding: 2px 6px; border: 1px solid var(--line-hi);
+    border-radius: 3px; color: var(--ink-2);
+  }
+  .hr { height: 1px; background: var(--line); margin: 40px 0; }
+  .label {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+    color: var(--ink-3); text-transform: uppercase;
+  }
+
+  /* ============ 00 HERO ============================================== */
+  .hero {
+    min-height: 100vh; padding: 80px 0 120px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar {
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
+    color: var(--ink-3); text-transform: uppercase;
+  }
+  .topbar .dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--lime); box-shadow: 0 0 12px var(--lime);
+    margin-right: 8px; vertical-align: middle;
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  .hero-main { display: grid; grid-template-columns: 1.2fr 1fr; gap: 60px; align-items: end; margin-top: auto; }
+  @media (max-width: 900px){ .hero-main { grid-template-columns: 1fr; } }
+  .hero h1 {
+    font-family: var(--serif); font-weight: 400;
+    font-size: clamp(72px, 13vw, 200px);
+    line-height: 0.88; letter-spacing: -0.035em;
+    margin: 0 0 32px; color: var(--ink-0);
+  }
+  .hero h1 em { font-style: italic; color: var(--ink-2); }
+  .hero h1 .node {
+    display: inline-block; width: 0.18em; height: 0.18em;
+    background: var(--lime); border-radius: 50%;
+    vertical-align: baseline; margin-left: 0.04em;
+    transform: translateY(-0.05em);
+    box-shadow: 0 0 24px var(--lime);
+  }
+  .hero .kicker {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em;
+    color: var(--ink-3); text-transform: uppercase; margin-bottom: 32px;
+  }
+  .hero .lede {
+    font-family: var(--serif); font-size: 24px; line-height: 1.35;
+    color: var(--ink-2); font-style: italic; max-width: 440px;
+  }
+  .hero-meta {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px;
+    margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--line);
+    font-family: var(--mono); font-size: 11px;
+  }
+  .hero-meta .k { color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 6px; }
+  .hero-meta .v { color: var(--ink-0); }
+
+  /* ============ TOC =================================================== */
+  .toc { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; background: var(--line); }
+  .toc a {
+    background: var(--bg); padding: 24px; text-decoration: none;
+    display: flex; justify-content: space-between; align-items: baseline;
+    transition: background .15s;
+  }
+  .toc a:hover { background: var(--bg-2); }
+  .toc a .n { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.08em; }
+  .toc a .t { font-family: var(--serif); font-size: 22px; color: var(--ink-0); font-style: italic; }
+  @media (max-width: 720px){ .toc { grid-template-columns: 1fr; } }
+
+  /* ============ 01 CONCEPT ============================================ */
+  .manifesto {
+    font-family: var(--serif); font-size: clamp(28px, 3.6vw, 44px);
+    line-height: 1.25; color: var(--ink-0); max-width: 920px;
+    letter-spacing: -0.01em;
+  }
+  .manifesto em { font-style: italic; color: var(--ink-2); }
+  .manifesto .hl { color: var(--lime); font-style: normal; }
+  .manifesto p + p { margin-top: 1.1em; }
+
+  .pillars { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); margin-top: 80px; border: 1px solid var(--line); }
+  .pillars > div { background: var(--bg); padding: 28px; min-height: 180px; }
+  .pillars .n { font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.14em; text-transform: uppercase; }
+  .pillars h4 { font-family: var(--serif); font-weight: 400; font-style: italic; font-size: 26px; margin: 12px 0 10px; color: var(--ink-0); }
+  .pillars p { margin: 0; color: var(--ink-2); font-size: 14px; line-height: 1.55; }
+  @media (max-width: 900px){ .pillars { grid-template-columns: repeat(2, 1fr); } }
+
+  .voice { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 80px; }
+  @media (max-width: 720px){ .voice { grid-template-columns: 1fr; } }
+  .voice > div { border: 1px solid var(--line); padding: 28px; border-radius: var(--radius-md); }
+  .voice h5 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; color: var(--ink-3); text-transform: uppercase; margin: 0 0 16px; }
+  .voice ul { margin: 0; padding: 0; list-style: none; }
+  .voice li { padding: 10px 0; border-bottom: 1px solid var(--line); display: flex; gap: 14px; align-items: baseline; font-size: 15px; }
+  .voice li:last-child { border-bottom: 0; }
+  .voice .yes { color: var(--ink-0); }
+  .voice .no  { color: var(--ink-3); text-decoration: line-through; }
+  .voice .mk  { font-family: var(--mono); font-size: 11px; color: var(--lime); width: 14px; }
+  .voice .mk.x { color: var(--ink-4); }
+
+  /* ============ 02 LOGO ============================================== */
+  .logo-variants { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; background: var(--line); border: 1px solid var(--line); margin-top: 0; }
+  @media (max-width: 900px){ .logo-variants { grid-template-columns: 1fr; } }
+  .lv {
+    background: var(--bg-1); padding: 48px;
+    display: flex; flex-direction: column; gap: 32px;
+  }
+  .lv .tag { display: flex; justify-content: space-between; align-items: baseline; }
+  .lv .tag .name { font-family: var(--serif); font-style: italic; font-size: 22px; color: var(--ink-0); }
+  .lv .tag .code { font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.14em; text-transform: uppercase; }
+  .lv-frame {
+    background: var(--bg); border: 1px solid var(--line);
+    height: 240px; display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+  }
+  .lv-frame::before, .lv-frame::after {
+    content: ""; position: absolute; background: var(--line);
+  }
+  .lv-frame::before { left: 0; right: 0; top: 50%; height: 1px; }
+  .lv-frame::after { top: 0; bottom: 0; left: 50%; width: 1px; }
+  .lv p { margin: 0; color: var(--ink-2); font-size: 14px; line-height: 1.6; }
+
+  /* Logo A – triángulo de nodos */
+  .logo-a {
+    display: inline-flex; align-items: center; gap: 14px;
+    font-family: var(--sans); font-weight: 500; font-size: 42px;
+    color: var(--ink-0); letter-spacing: -0.02em;
+    position: relative; z-index: 2;
+  }
+  .logo-a .wm { position: relative; width: 44px; height: 44px; }
+  .logo-a svg { width: 100%; height: 100%; overflow: visible; }
+  .wordmark-g { position: relative; }
+  .wordmark-g::after {
+    content: ""; position: absolute; right: -12px; top: 50%;
+    width: 7px; height: 7px; background: var(--lime); border-radius: 50%;
+    transform: translateY(-40%);
+    box-shadow: 0 0 18px var(--lime);
+  }
+
+  /* Logo B – blueprint squares */
+  .logo-b {
+    display: inline-flex; align-items: center; gap: 14px;
+    font-family: var(--mono); font-weight: 500; font-size: 34px;
+    color: var(--ink-0); letter-spacing: -0.02em;
+  }
+  .logo-b .wm { width: 44px; height: 44px; }
+  .logo-b svg { width: 100%; height: 100%; }
+
+  .logo-detail { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; margin-top: 60px; }
+  @media (max-width: 900px){ .logo-detail { grid-template-columns: 1fr; } }
+  .logo-detail h4 { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 28px; color: var(--ink-0); margin: 0 0 14px; }
+  .logo-detail p { color: var(--ink-2); font-size: 15px; line-height: 1.65; margin: 0 0 14px; }
+
+  .construction {
+    margin-top: 80px; padding: 48px; border: 1px solid var(--line); background: var(--bg-1);
+    display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center;
+  }
+  @media (max-width: 900px){ .construction { grid-template-columns: 1fr; } }
+  .construction h4 { margin: 0 0 10px; font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 28px; color: var(--ink-0); }
+  .construction p  { margin: 0 0 12px; color: var(--ink-2); font-size: 14px; }
+  .construction .ctrl { font-family: var(--mono); font-size: 11px; color: var(--ink-3); display: flex; gap: 12px; margin-bottom: 8px; }
+
+  .variants-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); margin-top: 80px; }
+  @media (max-width: 900px){ .variants-grid { grid-template-columns: repeat(2, 1fr); } }
+  .vg { background: var(--bg-1); padding: 32px; min-height: 180px; display: flex; flex-direction: column; justify-content: space-between; gap: 20px; }
+  .vg .label { margin-bottom: 0; }
+  .vg .demo { display: flex; align-items: center; justify-content: center; flex: 1; min-height: 90px; }
+  .vg .note { font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.08em; }
+
+  /* ============ 03 COLOR ============================================== */
+  .color-hero {
+    display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1px;
+    background: var(--line); border: 1px solid var(--line); height: 360px; margin-bottom: 0;
+  }
+  @media (max-width: 900px){ .color-hero { grid-template-columns: 1fr; height: auto; } }
+  .ch { position: relative; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; min-height: 180px; }
+  .ch .hex { font-family: var(--mono); font-size: 12px; letter-spacing: 0.04em; }
+  .ch .nm  { font-family: var(--serif); font-style: italic; font-size: 28px; margin: 0; }
+  .ch .role { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; opacity: .7; }
+
+  .swatch-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-top: 0; }
+  @media (max-width: 900px){ .swatch-row { grid-template-columns: repeat(3, 1fr); } }
+  .sw { padding: 20px; min-height: 130px; display: flex; flex-direction: column; justify-content: space-between; }
+  .sw .nm { font-family: var(--mono); font-size: 11px; }
+  .sw .hex { font-family: var(--mono); font-size: 10px; opacity: .65; }
+
+  .state-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); margin-top: 60px; }
+  @media (max-width: 720px){ .state-row { grid-template-columns: repeat(2, 1fr); } }
+  .sr { padding: 20px; min-height: 120px; display: flex; flex-direction: column; justify-content: space-between; background: var(--bg-1); }
+  .sr .dot { width: 14px; height: 14px; border-radius: 50%; }
+  .sr .nm  { font-family: var(--mono); font-size: 11px; color: var(--ink-1); }
+  .sr .hex { font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
+  .sr .use { color: var(--ink-2); font-size: 12px; line-height: 1.5; }
+
+  .color-rationale { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 60px; }
+  @media (max-width: 900px){ .color-rationale { grid-template-columns: 1fr; } }
+  .cr { border: 1px solid var(--line); padding: 24px; border-radius: var(--radius-md); }
+  .cr h5 { margin: 0 0 10px; font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 22px; color: var(--ink-0); }
+  .cr p  { margin: 0; font-size: 14px; color: var(--ink-2); line-height: 1.6; }
+
+  /* ============ 04 TYPE =============================================== */
+  .type-hero { padding: 60px 0; }
+  .type-hero .big {
+    font-family: var(--serif); font-size: clamp(80px, 14vw, 220px);
+    line-height: 0.86; letter-spacing: -0.035em;
+    color: var(--ink-0); margin: 0;
+  }
+  .type-hero .big em { font-style: italic; color: var(--ink-2); }
+
+  .type-spec { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); margin-top: 60px; }
+  @media (max-width: 900px){ .type-spec { grid-template-columns: 1fr; } }
+  .ts { background: var(--bg-1); padding: 32px; min-height: 340px; }
+  .ts .role { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 24px; }
+  .ts .fam  { font-size: 64px; line-height: 1; color: var(--ink-0); margin-bottom: 24px; }
+  .ts.serif .fam { font-family: var(--serif); font-style: italic; }
+  .ts.sans .fam  { font-family: var(--sans); font-weight: 500; letter-spacing: -0.02em; }
+  .ts.mono .fam  { font-family: var(--mono); font-weight: 500; letter-spacing: -0.04em; font-size: 48px; }
+  .ts .name { font-family: var(--serif); font-style: italic; font-size: 24px; color: var(--ink-0); margin-bottom: 16px; }
+  .ts .use  { color: var(--ink-2); font-size: 13px; line-height: 1.6; margin-bottom: 20px; }
+  .ts .weights { font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.08em; }
+
+  .scale-table { width: 100%; border-collapse: collapse; margin-top: 60px; }
+  .scale-table th, .scale-table td { text-align: left; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .scale-table th { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; color: var(--ink-3); text-transform: uppercase; font-weight: 400; }
+  .scale-table td .demo { color: var(--ink-0); }
+  .scale-table td.meta { font-family: var(--mono); font-size: 11px; color: var(--ink-2); white-space: nowrap; }
+
+  /* ============ 05 TAGLINES =========================================== */
+  .tag-list { display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .tg { background: var(--bg-1); padding: 28px 32px; display: grid; grid-template-columns: 32px 1fr auto; gap: 24px; align-items: baseline; transition: background .15s; }
+  .tg:hover { background: var(--bg-2); }
+  .tg .n { font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.14em; }
+  .tg .t { font-family: var(--serif); font-style: italic; font-size: clamp(26px, 3.6vw, 42px); line-height: 1.1; color: var(--ink-0); letter-spacing: -0.01em; }
+  .tg .note { font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.08em; text-transform: uppercase; }
+  .tg.star .t::after { content: "★"; color: var(--lime); font-style: normal; margin-left: 14px; font-size: 0.5em; vertical-align: middle; }
+
+  /* ============ 06 APPLICATIONS ======================================= */
+  .app-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 16px; display: flex; justify-content: space-between; }
+  .app-label .r { color: var(--ink-4); }
+
+  /* Favicon strip */
+  .favi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  @media (max-width: 720px){ .favi-strip { grid-template-columns: repeat(3, 1fr); } }
+  .favi { background: var(--bg-1); aspect-ratio: 1; display: flex; align-items: center; justify-content: center; position: relative; }
+  .favi .size { position: absolute; bottom: 8px; left: 10px; font-family: var(--mono); font-size: 9px; color: var(--ink-4); letter-spacing: 0.08em; }
+  .favi .mark16 { width: 16px; height: 16px; background: var(--lime); border-radius: 2px; position: relative; }
+  .favi .mark16::after { content:""; position:absolute; inset: 3px; background: var(--lime-ink); border-radius: 50%; }
+  .favi .mark32 { width: 32px; height: 32px; border-radius: 6px; background: var(--lime-ink); border: 1px solid var(--lime); display: flex; align-items: center; justify-content: center; }
+  .favi .mark64 { width: 64px; height: 64px; border-radius: 12px; background: var(--lime-ink); border: 1px solid var(--line-hi); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+  .favi .mark64::before { content:""; position: absolute; inset: 0; background: radial-gradient(circle at 30% 20%, rgba(232,255,92,0.08), transparent 60%); }
+  .favi .mark96 { width: 96px; height: 96px; border-radius: 20px; background: linear-gradient(180deg, #15151C, #0B0B0F); display: flex; align-items: center; justify-content: center; border: 1px solid var(--line-hi); position: relative; overflow: hidden; }
+  .favi .mark-full { width: 140px; height: 140px; border-radius: 28px; background: var(--lime); display: flex; align-items: center; justify-content: center; }
+
+  /* Login mockup */
+  .mock { border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; background: var(--bg); }
+  .mock .chrome { background: #07070A; padding: 10px 14px; display: flex; gap: 8px; align-items: center; border-bottom: 1px solid var(--line); }
+  .mock .chrome .tl { display: flex; gap: 6px; }
+  .mock .chrome .tl span { width: 10px; height: 10px; border-radius: 50%; background: var(--ink-4); }
+  .mock .chrome .url { flex: 1; text-align: center; font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+
+  .login {
+    display: grid; grid-template-columns: 1fr 1fr; min-height: 560px;
+  }
+  @media (max-width: 900px){ .login { grid-template-columns: 1fr; } }
+  .login .left {
+    padding: 56px; display: flex; flex-direction: column; justify-content: space-between;
+    background: var(--bg);
+  }
+  .login .topmark { display: flex; align-items: center; gap: 10px; }
+  .login .topmark .dot { width: 26px; height: 26px; background: var(--lime); border-radius: 5px; position: relative; }
+  .login .topmark .dot::after { content:""; position: absolute; inset: 6px; background: var(--lime-ink); border-radius: 50%; }
+  .login .topmark .nm { font-family: var(--sans); font-weight: 500; font-size: 18px; color: var(--ink-0); letter-spacing: -0.02em; }
+  .login h3 { font-family: var(--serif); font-weight: 400; font-size: 46px; line-height: 1.05; color: var(--ink-0); margin: 40px 0 12px; letter-spacing: -0.015em; }
+  .login h3 em { font-style: italic; color: var(--ink-2); }
+  .login .sub { color: var(--ink-2); margin: 0 0 28px; max-width: 380px; }
+  .field { margin-bottom: 14px; }
+  .field label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; color: var(--ink-3); text-transform: uppercase; display: block; margin-bottom: 8px; }
+  .field input {
+    width: 100%; padding: 12px 14px; background: var(--bg-1);
+    border: 1px solid var(--line-hi); border-radius: var(--radius-md);
+    color: var(--ink-0); font-family: var(--sans); font-size: 14px;
+    outline: none;
+  }
+  .field input:focus { border-color: var(--lime); box-shadow: 0 0 0 3px rgba(232,255,92,0.12); }
+  .btn-primary {
+    width: 100%; padding: 13px 16px; border: 0; border-radius: var(--radius-md);
+    background: var(--lime); color: var(--lime-ink);
+    font-family: var(--sans); font-weight: 500; font-size: 14px; letter-spacing: -0.01em;
+    cursor: pointer; margin-top: 8px;
+  }
+  .btn-primary:hover { background: #d9f04e; }
+  .btn-ghost {
+    width: 100%; padding: 12px 16px; background: transparent;
+    border: 1px solid var(--line-hi); border-radius: var(--radius-md);
+    color: var(--ink-1); font-family: var(--sans); font-size: 14px;
+    cursor: pointer; margin-top: 10px;
+  }
+  .login .footer { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10px; color: var(--ink-4); letter-spacing: 0.1em; text-transform: uppercase; }
+  .login .right {
+    background: var(--bg-1); padding: 48px; position: relative;
+    border-left: 1px solid var(--line); display: flex; flex-direction: column; justify-content: center; gap: 32px;
+    overflow: hidden;
+  }
+  .login .right::before {
+    content:""; position: absolute; inset: 0;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 32px 32px; opacity: 0.4;
+    mask-image: radial-gradient(ellipse at 60% 50%, black 0%, transparent 75%);
+  }
+  .login .right .quote { position: relative; font-family: var(--serif); font-style: italic; font-size: 26px; line-height: 1.3; color: var(--ink-0); max-width: 360px; }
+  .login .right .attr { position: relative; font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.08em; }
+  .login .right .attr .sep { color: var(--ink-4); margin: 0 8px; }
+
+  /* graph illustration (svg) */
+  .graph-illus { position: relative; width: 100%; max-width: 380px; margin-top: 10px; }
+
+  /* Email mockup */
+  .email {
+    background: #F6F5F1; color: #111; border-radius: var(--radius-lg); overflow: hidden;
+    font-family: var(--sans);
+  }
+  .email .top { padding: 14px 20px; border-bottom: 1px solid #E6E4DD; display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: #6A6A72; }
+  .email .body { padding: 48px 60px; max-width: 600px; margin: 0 auto; }
+  .email .wmk { display: flex; align-items: center; gap: 10px; margin-bottom: 40px; }
+  .email .wmk .dot { width: 22px; height: 22px; background: #0B0B0F; border-radius: 5px; position: relative; }
+  .email .wmk .dot::after { content:""; position:absolute; inset:5px; background: var(--lime); border-radius: 50%; }
+  .email .wmk .nm { font-family: var(--sans); font-weight: 500; font-size: 16px; color: #0B0B0F; letter-spacing: -0.02em; }
+  .email h4 { font-family: var(--serif); font-weight: 400; font-size: 38px; line-height: 1.1; color: #0B0B0F; margin: 0 0 18px; letter-spacing: -0.015em; }
+  .email h4 em { font-style: italic; color: #555; }
+  .email p { color: #333; margin: 0 0 18px; font-size: 15px; line-height: 1.65; }
+  .email .card { border: 1px solid #E6E4DD; border-radius: 8px; padding: 20px; background: #FDFCF7; margin: 24px 0; }
+  .email .card .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #E6E4DD; font-family: var(--mono); font-size: 12px; }
+  .email .card .row:last-child { border-bottom: 0; }
+  .email .card .row .k { color: #6A6A72; }
+  .email .card .row .v { color: #0B0B0F; }
+  .email .cta {
+    display: inline-block; padding: 12px 20px; background: #0B0B0F; color: var(--lime);
+    border-radius: 6px; text-decoration: none; font-weight: 500; font-size: 14px; margin-top: 10px;
+  }
+  .email .foot { padding: 32px 60px; border-top: 1px solid #E6E4DD; font-family: var(--mono); font-size: 11px; color: #6A6A72; display: flex; justify-content: space-between; }
+
+  /* Slide mockup */
+  .slide-wrap { aspect-ratio: 16/9; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-lg); position: relative; overflow: hidden; }
+  .slide-wrap::before {
+    content:""; position: absolute; inset: 0;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 48px 48px; opacity: 0.3;
+    mask-image: radial-gradient(ellipse at 70% 30%, black 0%, transparent 70%);
+  }
+  .slide-inner { position: relative; padding: 56px 64px; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
+  .slide-top { display: flex; justify-content: space-between; align-items: center; }
+  .slide-top .mk { display: flex; align-items: center; gap: 10px; }
+  .slide-top .mk .dot { width: 22px; height: 22px; background: var(--lime); border-radius: 5px; position: relative; }
+  .slide-top .mk .dot::after { content:""; position:absolute; inset:5px; background: var(--lime-ink); border-radius: 50%; }
+  .slide-top .mk .nm { font-family: var(--sans); font-weight: 500; font-size: 15px; color: var(--ink-0); letter-spacing: -0.02em; }
+  .slide-top .meta { font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.14em; text-transform: uppercase; }
+  .slide-main h2 {
+    font-family: var(--serif); font-weight: 400;
+    font-size: clamp(32px, 5.5vw, 78px); line-height: 1.02;
+    color: var(--ink-0); letter-spacing: -0.02em; margin: 0;
+  }
+  .slide-main h2 em { font-style: italic; color: var(--ink-2); }
+  .slide-main h2 .hl { color: var(--lime); font-style: normal; }
+  .slide-main .sub { font-family: var(--serif); font-style: italic; font-size: 22px; color: var(--ink-2); max-width: 520px; margin-top: 18px; }
+  .slide-bottom { display: flex; justify-content: space-between; align-items: flex-end; }
+  .slide-bottom .num { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.14em; }
+  .slide-bottom .stats { display: flex; gap: 40px; font-family: var(--mono); font-size: 11px; color: var(--ink-2); }
+  .slide-bottom .stats .v { color: var(--ink-0); font-size: 24px; font-family: var(--serif); font-style: italic; display: block; margin-bottom: 2px; }
+
+  /* LinkedIn post */
+  .li-card { border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--bg-1); overflow: hidden; max-width: 580px; margin: 0 auto; }
+  .li-head { padding: 16px 20px 0; display: flex; gap: 12px; align-items: center; }
+  .li-head .av { width: 44px; height: 44px; background: var(--lime); border-radius: 6px; flex-shrink: 0; position: relative; }
+  .li-head .av::after { content:""; position:absolute; inset: 8px; background: var(--lime-ink); border-radius: 50%; }
+  .li-head .who { font-size: 14px; color: var(--ink-0); font-weight: 500; }
+  .li-head .meta { font-size: 12px; color: var(--ink-3); font-family: var(--mono); }
+  .li-body { padding: 14px 20px; color: var(--ink-1); font-size: 14px; line-height: 1.55; }
+  .li-body em { font-style: italic; color: var(--ink-0); }
+  .li-image {
+    margin: 8px 0 0; aspect-ratio: 1.91/1; background: var(--bg); position: relative; overflow: hidden;
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  }
+  .li-image::before { content:""; position:absolute; inset:0; background-image:linear-gradient(var(--line) 1px, transparent 1px),linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size: 32px 32px; opacity: 0.4; }
+  .li-image .hero-copy { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 32px 40px; }
+  .li-image h3 { font-family: var(--serif); font-weight: 400; font-size: 32px; line-height: 1.05; color: var(--ink-0); margin: 0; letter-spacing: -0.015em; }
+  .li-image h3 em { font-style: italic; color: var(--ink-2); }
+  .li-image .lime-dot { display: inline-block; width: 10px; height: 10px; background: var(--lime); border-radius: 50%; vertical-align: middle; margin-left: 2px; box-shadow: 0 0 14px var(--lime); }
+  .li-image .bmk { position: absolute; bottom: 24px; left: 40px; display: flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 13px; color: var(--ink-2); font-weight: 500; }
+  .li-image .bmk .d { width: 16px; height: 16px; background: var(--lime); border-radius: 3px; position: relative; }
+  .li-image .bmk .d::after { content:""; position:absolute; inset:4px; background: var(--lime-ink); border-radius: 50%; }
+  .li-actions { padding: 10px 20px; display: flex; gap: 24px; font-size: 12px; color: var(--ink-3); border-top: 1px solid var(--line); font-family: var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+
+  /* Email signature */
+  .sig {
+    font-family: var(--sans); font-size: 13px; color: var(--ink-1);
+    padding: 24px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: center;
+  }
+  .sig .sigmk { width: 48px; height: 48px; background: var(--lime); border-radius: 8px; position: relative; }
+  .sig .sigmk::after { content:""; position: absolute; inset: 11px; background: var(--lime-ink); border-radius: 50%; }
+  .sig .name { font-weight: 500; color: var(--ink-0); font-size: 15px; letter-spacing: -0.01em; }
+  .sig .role { color: var(--ink-3); font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 2px; }
+  .sig .meta { margin-top: 10px; font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.04em; }
+  .sig .meta a { color: var(--lime); text-decoration: none; }
+
+  /* Business card */
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 16px; }
+  @media (max-width: 720px){ .card-grid { grid-template-columns: 1fr; } }
+  .bcard { aspect-ratio: 1.58/1; border-radius: 8px; padding: 24px; position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; }
+  .bcard.front { background: var(--bg-1); border: 1px solid var(--line-hi); }
+  .bcard.back  { background: var(--lime); color: var(--lime-ink); }
+  .bcard .logo-mini { display: flex; align-items: center; gap: 8px; }
+  .bcard .logo-mini .d { width: 18px; height: 18px; background: var(--lime); border-radius: 4px; position: relative; }
+  .bcard .logo-mini .d::after { content:""; position: absolute; inset: 4px; background: var(--lime-ink); border-radius: 50%; }
+  .bcard .logo-mini .nm { font-family: var(--sans); font-weight: 500; font-size: 14px; letter-spacing: -0.02em; }
+  .bcard.back .logo-mini .d { background: var(--lime-ink); }
+  .bcard.back .logo-mini .d::after { background: var(--lime); }
+  .bcard .who { font-family: var(--serif); font-style: italic; font-size: 22px; letter-spacing: -0.01em; color: var(--ink-0); }
+  .bcard.back .who { color: var(--lime-ink); }
+  .bcard .info { font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em; line-height: 1.65; color: var(--ink-3); }
+  .bcard.back .info { color: var(--lime-ink); opacity: 0.8; }
+  .bcard.back .big {
+    position: absolute; right: -20px; bottom: -30px;
+    font-family: var(--serif); font-style: italic; font-size: 160px;
+    color: rgba(11,11,15,0.14); line-height: 0.9;
+  }
+
+  /* Merch */
+  .merch-grid { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px){ .merch-grid { grid-template-columns: 1fr; } }
+  .merch { border: 1px solid var(--line); border-radius: var(--radius-lg); aspect-ratio: 1/1.05; position: relative; overflow: hidden; }
+
+  /* tshirt */
+  .tee { background: var(--bg-1); display: flex; align-items: center; justify-content: center; }
+  .tee svg { width: 80%; height: 80%; }
+  .tee .pr { position: absolute; bottom: 12px; left: 16px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; color: var(--ink-4); text-transform: uppercase; }
+  /* sticker */
+  .sticker { background: var(--bg); display: flex; align-items: center; justify-content: center; }
+  .sticker .s { width: 70%; aspect-ratio: 1; background: var(--lime); border-radius: 50%; position: relative; display: flex; align-items: center; justify-content: center; box-shadow: 0 20px 60px rgba(232,255,92,0.18); }
+  .sticker .s .inner { font-family: var(--serif); font-style: italic; font-size: 40px; color: var(--lime-ink); text-align: center; line-height: 0.95; letter-spacing: -0.01em; }
+  .sticker .s .circ-text { position: absolute; inset: 8px; border: 1px dashed var(--lime-ink); border-radius: 50%; opacity: 0.3; }
+  /* notebook */
+  .book { background: var(--bg-2); display: flex; align-items: center; justify-content: center; padding: 32px; }
+  .book .nb {
+    width: 70%; aspect-ratio: 0.72;
+    background: var(--bg); border: 1px solid var(--line-hi); border-radius: 4px;
+    position: relative;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+    display: flex; flex-direction: column; justify-content: space-between; padding: 28px 18px;
+  }
+  .book .nb::before { content:""; position: absolute; left: 8px; top: 10%; bottom: 10%; width: 3px; background: var(--lime); border-radius: 2px; }
+  .book .nb .mk { display: flex; align-items: center; gap: 8px; }
+  .book .nb .mk .d { width: 14px; height: 14px; background: var(--lime); border-radius: 3px; position: relative; }
+  .book .nb .mk .d::after { content:""; position:absolute; inset: 3px; background: var(--lime-ink); border-radius: 50%; }
+  .book .nb .mk .nm { font-family: var(--sans); font-weight: 500; font-size: 12px; color: var(--ink-0); letter-spacing: -0.02em; }
+  .book .nb .quote { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--ink-2); line-height: 1.3; }
+  .book .nb .foot { font-family: var(--mono); font-size: 8px; color: var(--ink-4); letter-spacing: 0.14em; text-transform: uppercase; }
+
+  /* ============ 07 AVOID ============================================== */
+  .avoid-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  @media (max-width: 900px){ .avoid-grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 600px){ .avoid-grid { grid-template-columns: 1fr; } }
+  .av {
+    background: var(--bg-1); padding: 28px; min-height: 260px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    position: relative;
+  }
+  .av .vis { height: 120px; position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+  .av .vis::after {
+    content: ""; position: absolute; inset: 0;
+    background: repeating-linear-gradient(45deg, transparent 0 7px, rgba(242,109,109,0.14) 7px 8px);
+  }
+  .av .vis .x {
+    position: absolute; top: 6px; right: 8px; width: 18px; height: 18px;
+    border: 1px solid var(--err); color: var(--err); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 11px;
+  }
+  .av h5 { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 22px; color: var(--ink-0); margin: 16px 0 8px; }
+  .av p { margin: 0; font-size: 13px; color: var(--ink-2); line-height: 1.55; }
+
+  /* Footer ------------------------------------------------------------ */
+  footer {
+    padding: 80px 0 100px; border-top: 1px solid var(--line);
+    display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: end;
+  }
+  @media (max-width: 720px){ footer { grid-template-columns: 1fr; } }
+  footer .big { font-family: var(--serif); font-style: italic; font-size: clamp(36px, 5vw, 60px); color: var(--ink-0); line-height: 1.05; margin: 0; }
+  footer .meta { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.08em; line-height: 1.8; }
+  footer .meta .row { display: flex; justify-content: space-between; border-bottom: 1px solid var(--line); padding: 10px 0; }
+
+  /* Motion ------------------------------------------------------------ */
+  .motion-demo {
+    margin-top: 80px; border: 1px solid var(--line); border-radius: var(--radius-md);
+    background: var(--bg-1); padding: 48px; position: relative; overflow: hidden;
+    min-height: 320px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 24px;
+  }
+  .motion-demo .caption { font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.14em; text-transform: uppercase; }
+  .motion-demo svg { width: 320px; height: 160px; }
+  .motion-demo .controls { display: flex; gap: 10px; }
+  .motion-demo button {
+    background: transparent; border: 1px solid var(--line-hi); color: var(--ink-2);
+    padding: 8px 14px; border-radius: var(--radius-md); font-family: var(--mono);
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
+  }
+  .motion-demo button:hover { border-color: var(--lime); color: var(--lime); }
+  .flow-edge {
+    stroke-dasharray: 4 4; animation: flow 2.4s linear infinite;
+  }
+  @keyframes flow { to { stroke-dashoffset: -16; } }
+  .flow-node { transition: fill 0.3s, r 0.3s; }
+  .flow-node.active { fill: var(--lime); }
+
+  .motion-principles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  @media (max-width: 900px){ .motion-principles { grid-template-columns: 1fr; } }
+  .mp { background: var(--bg-1); padding: 28px; min-height: 180px; }
+  .mp .n { font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.14em; text-transform: uppercase; }
+  .mp h5 { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 22px; color: var(--ink-0); margin: 10px 0 8px; }
+  .mp p { margin: 0; font-size: 14px; color: var(--ink-2); line-height: 1.55; }
+  .mp .tech { margin-top: 14px; font-family: var(--mono); font-size: 10px; color: var(--ink-4); letter-spacing: 0.08em; }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+
+<!-- =================================================================
+     00 HERO
+================================================================== -->
+<header class="hero wrap" data-screen-label="00 Cover">
+  <div class="topbar">
+    <div><span class="dot"></span>Grafo — Brand Book v1.0</div>
+    <div>Abril 2026 · 01 / 07</div>
+  </div>
+
+  <div class="hero-main">
+    <div>
+      <div class="kicker">MIS · ERP · Producción digital</div>
+      <h1>Grafo<span class="node"></span></h1>
+      <div class="lede">Tu taller es un grafo de procesos. Nosotros lo orquestamos.</div>
+    </div>
+    <div>
+      <div class="label" style="margin-bottom:12px">Índice</div>
+      <div class="toc">
+        <a href="#concepto"><span class="n">01</span><span class="t">Concepto</span></a>
+        <a href="#logo"><span class="n">02</span><span class="t">Logo</span></a>
+        <a href="#color"><span class="n">03</span><span class="t">Color</span></a>
+        <a href="#tipo"><span class="n">04</span><span class="t">Tipografía</span></a>
+        <a href="#voz"><span class="n">05</span><span class="t">Claim</span></a>
+        <a href="#aplica"><span class="n">06</span><span class="t">Aplicaciones</span></a>
+        <a href="#evitar"><span class="n">07</span><span class="t">A evitar</span></a>
+      </div>
+    </div>
+  </div>
+
+  <div class="hero-meta">
+    <div><span class="k">Categoría</span><span class="v">MIS/ERP SaaS</span></div>
+    <div><span class="k">Mercado</span><span class="v">LATAM · Cono Sur</span></div>
+    <div><span class="k">Tier</span><span class="v">USD 350–450 / mes</span></div>
+    <div><span class="k">Posición</span><span class="v">Herramienta de ingeniería</span></div>
+  </div>
+</header>
+
+
+<!-- =================================================================
+     01 CONCEPTO
+================================================================== -->
+<section id="concepto" class="wrap" data-screen-label="01 Concepto">
+  <div class="shead">
+    <div class="num">01 <em>—</em> Concepto</div>
+    <h2>Una marca que piensa como <em>ingeniería</em>, se escribe como <em>editorial</em>.</h2>
+    <div class="lede">Grafo no es otro software administrativo con tintas chorreando. Es una herramienta de precisión para gente que mueve trabajo por nodos: diseño, RIP, impresión, corte, laminado, entrega. El sistema modela eso como lo que es: un grafo dirigido. La marca modela esa misma idea, con palabras.</div>
+  </div>
+
+  <div class="manifesto">
+    <p>Un taller no es un embudo. <em>Es una red.</em></p>
+    <p>Cada orden es un nodo. Cada etapa, una arista. Cuando la red fluye, el taller gana. Cuando se traba, se pierde plata en un punto que nadie puede nombrar.</p>
+    <p><span class="hl">Grafo le da nombre a cada nodo.</span> Ruta, tiempo, costo, estado. Lo que era tácito se vuelve operable.</p>
+  </div>
+
+  <div class="pillars">
+    <div><div class="n">01 · Promesa</div><h4>Ver el taller</h4><p>Visibilidad total del flujo operativo. Ningún nodo opaco. Ninguna orden fantasma.</p></div>
+    <div><div class="n">02 · Personalidad</div><h4>Preciso, no tieso</h4><p>Rigor de ingeniero con oficio de tallerista. Habla corto, factura exacto.</p></div>
+    <div><div class="n">03 · Tono</div><h4>Seguro sin alarde</h4><p>No explica de más. No vende humo. Una sola lectura, sin dobles sentidos.</p></div>
+    <div><div class="n">04 · Postura</div><h4>Contra el legacy</h4><p>Aburrido es una elección. Nosotros elegimos lo contrario sin caer en lo trendy.</p></div>
+  </div>
+
+  <div class="voice">
+    <div>
+      <h5>Tono de voz — Sí</h5>
+      <ul>
+        <li><span class="mk">✓</span><span class="yes">"Cotización lista en 4 minutos."</span></li>
+        <li><span class="mk">✓</span><span class="yes">"Mover la orden #2410 a laminado."</span></li>
+        <li><span class="mk">✓</span><span class="yes">"Costo por pliego: $142. Margen: 38%."</span></li>
+        <li><span class="mk">✓</span><span class="yes">"Tu taller es un grafo. Hacelo correr."</span></li>
+        <li><span class="mk">✓</span><span class="yes">Voseo rioplatense, directo y técnico.</span></li>
+      </ul>
+    </div>
+    <div>
+      <h5>Tono de voz — No</h5>
+      <ul>
+        <li><span class="mk x">✕</span><span class="no">"Potenciá tu negocio con nuestra suite integral 🚀"</span></li>
+        <li><span class="mk x">✕</span><span class="no">"Revoluciona la gestión de tu imprenta"</span></li>
+        <li><span class="mk x">✕</span><span class="no">Emojis, exclamaciones, superlativos vacíos.</span></li>
+        <li><span class="mk x">✕</span><span class="no">Jerga de consultora ("sinergia", "holístico").</span></li>
+        <li><span class="mk x">✕</span><span class="no">"Nosotros, como empresa,..." — primera persona plural corporativa.</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+
+<!-- =================================================================
+     02 LOGO
+================================================================== -->
+<section id="logo" class="wrap" data-screen-label="02 Logo">
+  <div class="shead">
+    <div class="num">02 <em>—</em> Sistema de logo</div>
+    <h2>Dos propuestas. Un mismo <em>principio</em>: nodo más letra.</h2>
+    <div class="lede">La identidad se construye sobre una idea simple y atemporal: la palabra Grafo termina en un punto. Ese punto es un nodo. Todo lo demás se deriva de ahí — el isotipo, el favicon, las aplicaciones.</div>
+  </div>
+
+  <!-- PROPUESTA A -->
+  <div class="logo-variants">
+    <div class="lv">
+      <div class="tag"><div class="name">Propuesta A — Tríada</div><div class="code">/ recomendada</div></div>
+      <div class="lv-frame">
+        <div class="logo-a">
+          <div class="wm">
+            <svg viewBox="0 0 44 44">
+              <line x1="10" y1="12" x2="34" y2="12" stroke="#D9D9D2" stroke-width="1.3"/>
+              <line x1="10" y1="12" x2="22" y2="34" stroke="#D9D9D2" stroke-width="1.3"/>
+              <line x1="34" y1="12" x2="22" y2="34" stroke="#D9D9D2" stroke-width="1.3"/>
+              <circle cx="10" cy="12" r="3.5" fill="#F4F4F0"/>
+              <circle cx="34" cy="12" r="3.5" fill="#F4F4F0"/>
+              <circle cx="22" cy="34" r="3.5" fill="#E8FF5C"/>
+            </svg>
+          </div>
+          <span class="wordmark-g">grafo</span>
+        </div>
+      </div>
+      <p>Tres nodos en triángulo isósceles: <em>diseño → producción → entrega</em>. El nodo inferior (destino, entrega) se tiñe de lime. Metáfora directa y reconocible del grafo dirigido. Funciona desde favicon hasta gigantografía.</p>
+    </div>
+
+    <!-- PROPUESTA B -->
+    <div class="lv">
+      <div class="tag"><div class="name">Propuesta B — Blueprint</div><div class="code">/ alternativa</div></div>
+      <div class="lv-frame">
+        <div class="logo-b">
+          <div class="wm">
+            <svg viewBox="0 0 44 44">
+              <line x1="13" y1="13" x2="31" y2="13" stroke="#D9D9D2" stroke-width="1.3"/>
+              <line x1="22" y1="13" x2="22" y2="31" stroke="#D9D9D2" stroke-width="1.3"/>
+              <rect x="9"  y="9"  width="8" height="8" fill="#F4F4F0"/>
+              <rect x="27" y="9"  width="8" height="8" fill="#F4F4F0"/>
+              <rect x="18" y="27" width="8" height="8" fill="#E8FF5C"/>
+            </svg>
+          </div>
+          <span>grafo</span>
+        </div>
+      </div>
+      <p>Misma estructura tríada pero con nodos cuadrados y wordmark en mono. Guiño directo a planos técnicos, dielines, RIPs. Más "ingenieril", menos humanista. Buena para contextos técnicos (docs, changelog, API).</p>
+    </div>
+  </div>
+
+  <!-- Detalle A -->
+  <div class="logo-detail">
+    <div>
+      <h4>Isotipo — la tríada</h4>
+      <p>Tres nodos forman un triángulo isósceles de proporción áurea aproximada (altura/base ≈ 1.2). Los dos superiores representan fuentes/entrada, el inferior representa destino/salida. Las aristas son líneas de peso 1.3, sin flechas — el movimiento lo da la asimetría del color.</p>
+      <p>El punto <em>lime</em> siempre está en el nodo destino. Es el ancla de color de toda la marca. Si tenés que elegir un solo detalle para mantener, es éste.</p>
+    </div>
+    <div>
+      <h4>Wordmark — tipografía y punto</h4>
+      <p>"grafo" en Geist Medium, caja baja, tracking -0.02em. Caja baja es intencional: humildad y familiaridad. La "o" final lleva, a la derecha y separado, un punto lime de Ø igual al 35% de la x-height. Ese punto <em>es</em> un nodo — no una decoración.</p>
+      <p>Relación mínima entre isotipo y wordmark: altura del isotipo = altura de la x-height × 2.2. Espacio entre ambos = 1× x-height.</p>
+    </div>
+  </div>
+
+  <!-- Construcción / reducciones -->
+  <div class="variants-grid">
+    <div class="vg">
+      <div class="label">Marca principal</div>
+      <div class="demo">
+        <div class="logo-a" style="font-size:26px">
+          <div class="wm" style="width:28px;height:28px">
+            <svg viewBox="0 0 44 44">
+              <line x1="10" y1="12" x2="34" y2="12" stroke="#9C9CA3" stroke-width="1.4"/>
+              <line x1="10" y1="12" x2="22" y2="34" stroke="#9C9CA3" stroke-width="1.4"/>
+              <line x1="34" y1="12" x2="22" y2="34" stroke="#9C9CA3" stroke-width="1.4"/>
+              <circle cx="10" cy="12" r="3.5" fill="#F4F4F0"/>
+              <circle cx="34" cy="12" r="3.5" fill="#F4F4F0"/>
+              <circle cx="22" cy="34" r="3.5" fill="#E8FF5C"/>
+            </svg>
+          </div>
+          <span class="wordmark-g">grafo</span>
+        </div>
+      </div>
+      <div class="note">≥ 120 px · horizontal</div>
+    </div>
+    <div class="vg">
+      <div class="label">Isotipo</div>
+      <div class="demo">
+        <div style="width:56px;height:56px">
+          <svg viewBox="0 0 44 44" style="width:100%;height:100%">
+            <line x1="10" y1="12" x2="34" y2="12" stroke="#9C9CA3" stroke-width="1.4"/>
+            <line x1="10" y1="12" x2="22" y2="34" stroke="#9C9CA3" stroke-width="1.4"/>
+            <line x1="34" y1="12" x2="22" y2="34" stroke="#9C9CA3" stroke-width="1.4"/>
+            <circle cx="10" cy="12" r="3.5" fill="#F4F4F0"/>
+            <circle cx="34" cy="12" r="3.5" fill="#F4F4F0"/>
+            <circle cx="22" cy="34" r="3.5" fill="#E8FF5C"/>
+          </svg>
+        </div>
+      </div>
+      <div class="note">≥ 24 px · avatar, social</div>
+    </div>
+    <div class="vg">
+      <div class="label">Favicon — glifo</div>
+      <div class="demo">
+        <div style="width:44px;height:44px;background:var(--lime-ink);border-radius:8px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line-hi)">
+          <div style="width:7px;height:7px;background:var(--lime);border-radius:50%;box-shadow:0 0 10px var(--lime)"></div>
+        </div>
+      </div>
+      <div class="note">16 / 32 / 64 px</div>
+    </div>
+    <div class="vg">
+      <div class="label">Favicon — inverso</div>
+      <div class="demo">
+        <div style="width:44px;height:44px;background:var(--lime);border-radius:8px;display:flex;align-items:center;justify-content:center">
+          <div style="width:7px;height:7px;background:var(--lime-ink);border-radius:50%"></div>
+        </div>
+      </div>
+      <div class="note">light mode, iOS</div>
+    </div>
+  </div>
+
+  <!-- Motion -->
+  <h3 class="serif" style="font-style:italic;font-weight:400;font-size:36px;color:var(--ink-0);margin:100px 0 8px;letter-spacing:-0.01em">Motion — cómo se mueve</h3>
+  <p class="muted" style="max-width:620px">La animación del grafo no es decoración. <em>Es la marca trabajando.</em> Cuando el sistema piensa, los nodos se iluminan en secuencia y las aristas fluyen. Cuando termina, todos los nodos quedan lime (estado "completado").</p>
+
+  <div class="motion-principles">
+    <div class="mp">
+      <div class="n">01 · Temporalidad</div>
+      <h5>Lenta, precisa</h5>
+      <p>400–600ms por nodo. Nada instantáneo, nada teatral. La animación es un loading, no un celebration.</p>
+      <div class="tech">cubic-bezier(0.22, 1, 0.36, 1)</div>
+    </div>
+    <div class="mp">
+      <div class="n">02 · Dirección</div>
+      <h5>Siempre hacia adelante</h5>
+      <p>El flujo va de los nodos superiores al inferior. Nunca al revés. Las aristas se animan con dash-offset continuo.</p>
+      <div class="tech">stroke-dasharray: 4 4 · 2.4s linear</div>
+    </div>
+    <div class="mp">
+      <div class="n">03 · Jerarquía</div>
+      <h5>Lime = terminado</h5>
+      <p>Solo el color lime indica completitud. Gris claro = pendiente. Nunca naranja, nunca rojo, nunca azul para animar progreso.</p>
+      <div class="tech">#E8FF5C (lime) solo para final state</div>
+    </div>
+  </div>
+
+  <div class="motion-demo">
+    <div class="caption">Loop de marca — ejemplo interactivo</div>
+    <svg viewBox="0 0 320 160" id="motion-svg">
+      <line x1="80"  y1="40" x2="240" y2="40"  stroke="#33333F" stroke-width="1.5"/>
+      <line x1="80"  y1="40" x2="160" y2="124" stroke="#33333F" stroke-width="1.5" class="flow-edge"/>
+      <line x1="240" y1="40" x2="160" y2="124" stroke="#33333F" stroke-width="1.5" class="flow-edge" style="animation-delay:-1.2s"/>
+      <circle id="n1" cx="80"  cy="40"  r="8" fill="#33333F" class="flow-node"/>
+      <circle id="n2" cx="240" cy="40"  r="8" fill="#33333F" class="flow-node"/>
+      <circle id="n3" cx="160" cy="124" r="8" fill="#33333F" class="flow-node"/>
+    </svg>
+    <div class="controls">
+      <button id="play">▸ Play loop</button>
+      <button id="reset">Reset</button>
+    </div>
+  </div>
+</section>
+
+
+<!-- =================================================================
+     03 COLOR
+================================================================== -->
+<section id="color" class="wrap" data-screen-label="03 Color">
+  <div class="shead">
+    <div class="num">03 <em>—</em> Color</div>
+    <h2>Oscuro por defecto. <em>Un acento</em>, usado poco, que hace todo.</h2>
+    <div class="lede">La paleta es binaria con intención: un fondo negro tibio y un lime eléctrico. Los grises están escalonados en 7 pasos para construir jerarquía sin recurrir a más hues. Los colores de estado son sobrios — se dejan ver solo cuando hace falta.</div>
+  </div>
+
+  <div class="color-hero">
+    <div class="ch" style="background:#0B0B0F;color:#F4F4F0">
+      <div class="role">Primario — fondo</div>
+      <div>
+        <h3 class="nm">Vanta</h3>
+        <div class="hex">#0B0B0F · oklch(0.11 0.004 270)</div>
+      </div>
+    </div>
+    <div class="ch" style="background:#E8FF5C;color:#0B0B0F">
+      <div class="role">Acento — firma</div>
+      <div>
+        <h3 class="nm">Lime</h3>
+        <div class="hex">#E8FF5C</div>
+      </div>
+    </div>
+    <div class="ch" style="background:#F4F4F0;color:#0B0B0F">
+      <div class="role">Tinta — texto</div>
+      <div>
+        <h3 class="nm">Bone</h3>
+        <div class="hex">#F4F4F0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="swatch-row">
+    <div class="sw" style="background:#0B0B0F;color:#9C9CA3"><div class="nm">bg / 900</div><div class="hex">#0B0B0F</div></div>
+    <div class="sw" style="background:#101015;color:#9C9CA3"><div class="nm">bg / 800</div><div class="hex">#101015</div></div>
+    <div class="sw" style="background:#15151C;color:#9C9CA3"><div class="nm">bg / 700</div><div class="hex">#15151C</div></div>
+    <div class="sw" style="background:#1C1C24;color:#9C9CA3"><div class="nm">bg / 600</div><div class="hex">#1C1C24</div></div>
+    <div class="sw" style="background:#24242D;color:#9C9CA3"><div class="nm">line / 500</div><div class="hex">#24242D</div></div>
+    <div class="sw" style="background:#33333F;color:#9C9CA3"><div class="nm">line / 400</div><div class="hex">#33333F</div></div>
+  </div>
+  <div class="swatch-row" style="border-top:0">
+    <div class="sw" style="background:#3E3E47;color:#F4F4F0"><div class="nm">ink / 400</div><div class="hex">#3E3E47</div></div>
+    <div class="sw" style="background:#6A6A72;color:#F4F4F0"><div class="nm">ink / 500</div><div class="hex">#6A6A72</div></div>
+    <div class="sw" style="background:#9C9CA3;color:#0B0B0F"><div class="nm">ink / 600</div><div class="hex">#9C9CA3</div></div>
+    <div class="sw" style="background:#D9D9D2;color:#0B0B0F"><div class="nm">ink / 700</div><div class="hex">#D9D9D2</div></div>
+    <div class="sw" style="background:#F4F4F0;color:#0B0B0F"><div class="nm">ink / 900</div><div class="hex">#F4F4F0</div></div>
+    <div class="sw" style="background:#E8FF5C;color:#0B0B0F"><div class="nm">accent</div><div class="hex">#E8FF5C</div></div>
+  </div>
+
+  <div class="label" style="margin-top:80px;margin-bottom:12px">Colores de estado — UI</div>
+  <div class="state-row">
+    <div class="sr"><div class="dot" style="background:#6FE39A"></div><div><div class="nm">Éxito</div><div class="hex">#6FE39A</div></div><div class="use">Orden completada, pago confirmado, exportación OK.</div></div>
+    <div class="sr"><div class="dot" style="background:#F5C86B"></div><div><div class="nm">Advertencia</div><div class="hex">#F5C86B</div></div><div class="use">Stock bajo, orden por vencer, job pausado.</div></div>
+    <div class="sr"><div class="dot" style="background:#F26D6D"></div><div><div class="nm">Error</div><div class="hex">#F26D6D</div></div><div class="use">Falla de producción, archivo inválido, integración caída.</div></div>
+    <div class="sr"><div class="dot" style="background:#7BB3FF"></div><div><div class="nm">Info</div><div class="hex">#7BB3FF</div></div><div class="use">Cambios neutros, hints, tooltips técnicos.</div></div>
+  </div>
+
+  <div class="color-rationale">
+    <div class="cr">
+      <h5>Por qué lime, no azul</h5>
+      <p>Todos los competidores (Holdprint, Smartier, TwistPrint, Logic Print) usan azul corporate. Lime es eléctrico sin ser infantil, se separa instantáneamente del ruido del mercado y referencia el color de seguridad industrial de los talleres reales — chalecos, tape, señalética. Familiar y rupturista al mismo tiempo.</p>
+    </div>
+    <div class="cr">
+      <h5>Por qué oscuro por defecto</h5>
+      <p>Los usuarios viven con el sistema abierto 8 horas al día. Oscuro reduce fatiga visual, cita el mundo de los dashboards de ingeniería (Linear, Vercel, Figma) y aleja a Grafo del look de ERP contable. Hay modo claro para documentos impresos (cotizaciones, facturas), pero la app vive en la noche.</p>
+    </div>
+    <div class="cr">
+      <h5>Cuánto acento usar</h5>
+      <p>Regla del 3%: el lime nunca debe ocupar más del 3% del área visible en cualquier pantalla. Se reserva para CTAs primarios, estados "completado", el punto del wordmark y acentos editoriales. Usado demás, se pierde la fuerza; usado bien, es la firma.</p>
+    </div>
+  </div>
+</section>
+
+
+<!-- =================================================================
+     04 TYPE
+================================================================== -->
+<section id="tipo" class="wrap" data-screen-label="04 Tipografía">
+  <div class="shead">
+    <div class="num">04 <em>—</em> Tipografía</div>
+    <h2>Tres familias, tres <em>voces</em>, una misma conversación.</h2>
+    <div class="lede">Serif editorial para lo que queremos que suene como un editorial de The New York Times. Neo-grotesk para interfaz y producto. Mono para datos, código y todo lo que sea precisión bruta. Las tres son gratuitas, open source y con excelente renderizado web.</div>
+  </div>
+
+  <div class="type-hero">
+    <div class="big">Grafo <em>orquesta</em> tu taller.</div>
+  </div>
+
+  <div class="type-spec">
+    <div class="ts serif">
+      <div class="role">Display · Editorial</div>
+      <div class="fam">Aa</div>
+      <div class="name">Instrument Serif</div>
+      <div class="use">Titulares largos, manifiestos, grandes números, citas en slides. Se usa en italic y regular, nunca en bold (no existe). Aporta el tono "humano y argumentado" que separa a Grafo de cualquier ERP.</div>
+      <div class="weights">Regular · Italic — Google Fonts</div>
+    </div>
+    <div class="ts sans">
+      <div class="role">Interfaz · Producto</div>
+      <div class="fam">Aa</div>
+      <div class="name">Geist</div>
+      <div class="use">UI completa del producto, navegación, formularios, CTAs, copy web. Diseñada por Vercel para interfaces densas, excelente a 13–15px. Reemplazo directo de Inter sin el cansancio visual de Inter.</div>
+      <div class="weights">300 · 400 · 500 · 600 · 700</div>
+    </div>
+    <div class="ts mono">
+      <div class="role">Datos · Técnica</div>
+      <div class="fam">Aa</div>
+      <div class="name">JetBrains Mono</div>
+      <div class="use">Códigos de orden (#2410-AZ), hex de color, medidas (1420×2030mm), timestamps, API keys, etiquetas, numeración de slides. Ligaduras desactivadas en producto. Le da a Grafo su textura de herramienta técnica.</div>
+      <div class="weights">400 · 500 · 600</div>
+    </div>
+  </div>
+
+  <table class="scale-table">
+    <thead><tr><th>Rol</th><th>Demo</th><th>Familia · tamaño · peso</th></tr></thead>
+    <tbody>
+      <tr><td class="meta">Display XL</td><td><span class="demo serif" style="font-size:56px;font-style:italic">Un taller es una red.</span></td><td class="meta">Instrument Serif · 56–200 / 0.9 / 400 italic</td></tr>
+      <tr><td class="meta">Heading</td><td><span class="demo serif" style="font-size:32px">Cotizar una orden</span></td><td class="meta">Instrument Serif · 32–48 / 1.05 / 400</td></tr>
+      <tr><td class="meta">Subheading</td><td><span class="demo sans" style="font-size:20px;font-weight:500;letter-spacing:-0.015em">Resumen de producción</span></td><td class="meta">Geist · 18–22 / 1.3 / 500</td></tr>
+      <tr><td class="meta">Body</td><td><span class="demo sans" style="font-size:15px">El sistema detecta 3 órdenes en espera de laminado.</span></td><td class="meta">Geist · 14–16 / 1.55 / 400</td></tr>
+      <tr><td class="meta">Caption</td><td><span class="demo sans" style="font-size:12px;color:var(--ink-2)">hace 4 minutos · Matías G.</span></td><td class="meta">Geist · 12–13 / 1.45 / 400</td></tr>
+      <tr><td class="meta">Label</td><td><span class="demo mono" style="font-size:11px;letter-spacing:0.14em;color:var(--ink-3);text-transform:uppercase">Orden · estado</span></td><td class="meta">JetBrains Mono · 10–12 / 1.4 / 500 · tracking 0.14em uppercase</td></tr>
+      <tr><td class="meta">Data</td><td><span class="demo mono" style="font-size:15px">#2410-AZ · 1420×2030mm · $142/plg</span></td><td class="meta">JetBrains Mono · 13–15 / 1.45 / 500</td></tr>
+    </tbody>
+  </table>
+</section>
+
+
+<!-- =================================================================
+     05 TAGLINES
+================================================================== -->
+<section id="voz" class="wrap" data-screen-label="05 Claim">
+  <div class="shead">
+    <div class="num">05 <em>—</em> Claim</div>
+    <h2>Cinco opciones. <em>Una</em> favorita.</h2>
+    <div class="lede">Todas funcionan en español rioplatense y neutro latinoamericano. Todas pasan el test de pronunciación en voz alta, el test de caber en un meta-title de 60 caracteres y el test de sobrevivir 5 años sin envejecer.</div>
+  </div>
+
+  <div class="tag-list">
+    <div class="tg star">
+      <div class="n">01</div>
+      <div class="t">Tu taller es un grafo. Hacelo correr.</div>
+      <div class="note">Recomendada</div>
+    </div>
+    <div class="tg">
+      <div class="n">02</div>
+      <div class="t">Cada orden, un nodo. Cada taller, en flujo.</div>
+      <div class="note">Editorial / pitch</div>
+    </div>
+    <div class="tg">
+      <div class="n">03</div>
+      <div class="t">El software operativo de la impresión digital.</div>
+      <div class="note">Posicional / SEO</div>
+    </div>
+    <div class="tg">
+      <div class="n">04</div>
+      <div class="t">De la cotización al envío, sin nodos ciegos.</div>
+      <div class="note">Funcional / ventas</div>
+    </div>
+    <div class="tg">
+      <div class="n">05</div>
+      <div class="t">Imprimí mejor. Entregá antes. Facturá lo que corresponde.</div>
+      <div class="note">Beneficios / landing</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- =================================================================
+     06 APPLICATIONS
+================================================================== -->
+<section id="aplica" class="wrap" data-screen-label="06 Aplicaciones">
+  <div class="shead">
+    <div class="num">06 <em>—</em> Aplicaciones</div>
+    <h2>La marca, <em>puesta a trabajar</em>.</h2>
+    <div class="lede">Cada aplicación respeta las mismas reglas: fondo oscuro, lime al 3%, serif para el titular, mono para el dato. La coherencia es la ley; no hay excepciones "por el canal".</div>
+  </div>
+
+  <!-- FAVICON -->
+  <div class="app-label"><span>A · Favicon y avatar de app</span><span class="r">16 / 32 / 64 / 96 / 180 px</span></div>
+  <div class="favi-strip">
+    <div class="favi"><div class="mark16"></div><div class="size">16 × 16</div></div>
+    <div class="favi"><div class="mark32"><div style="width:10px;height:10px;background:var(--lime);border-radius:50%;box-shadow:0 0 8px var(--lime)"></div></div><div class="size">32 × 32</div></div>
+    <div class="favi"><div class="mark64"><div style="width:16px;height:16px;background:var(--lime);border-radius:50%;box-shadow:0 0 14px var(--lime);position:relative;z-index:2"></div></div><div class="size">64 × 64</div></div>
+    <div class="favi">
+      <div class="mark96">
+        <svg viewBox="0 0 44 44" style="width:70%;height:70%;position:relative;z-index:2">
+          <line x1="10" y1="14" x2="34" y2="14" stroke="#6A6A72" stroke-width="1.5"/>
+          <line x1="10" y1="14" x2="22" y2="34" stroke="#6A6A72" stroke-width="1.5"/>
+          <line x1="34" y1="14" x2="22" y2="34" stroke="#6A6A72" stroke-width="1.5"/>
+          <circle cx="10" cy="14" r="3.5" fill="#F4F4F0"/>
+          <circle cx="34" cy="14" r="3.5" fill="#F4F4F0"/>
+          <circle cx="22" cy="34" r="3.5" fill="#E8FF5C"/>
+        </svg>
+      </div>
+      <div class="size">96 × 96</div>
+    </div>
+    <div class="favi">
+      <div class="mark-full">
+        <div style="width:14px;height:14px;background:var(--lime-ink);border-radius:50%"></div>
+      </div>
+      <div class="size">180 · iOS</div>
+    </div>
+  </div>
+
+  <!-- LOGIN -->
+  <div class="app-label" style="margin-top:80px"><span>B · Pantalla de login</span><span class="r">app.grafo.so · desktop 1440</span></div>
+  <div class="mock">
+    <div class="chrome"><div class="tl"><span></span><span></span><span></span></div><div class="url">app.grafo.so/login</div><div style="width:40px"></div></div>
+    <div class="login">
+      <div class="left">
+        <div>
+          <div class="topmark">
+            <div class="dot"></div>
+            <div class="nm">grafo</div>
+          </div>
+          <h3>Bienvenido de <em>vuelta</em>.</h3>
+          <p class="sub">Ingresá para seguir orquestando tu taller.</p>
+          <div class="field"><label>Email</label><input type="email" value="matias@taller-norte.com.ar" readonly></div>
+          <div class="field"><label>Contraseña</label><input type="password" value="•••••••••••" readonly></div>
+          <button class="btn-primary">Entrar al taller →</button>
+          <button class="btn-ghost">Entrar con Google</button>
+        </div>
+        <div class="footer"><span>v 2026.04 · estable</span><span>¿Olvidaste tu clave?</span></div>
+      </div>
+      <div class="right">
+        <svg class="graph-illus" viewBox="0 0 320 220">
+          <line x1="40"  y1="50"  x2="160" y2="50"  stroke="#33333F" stroke-width="1.2"/>
+          <line x1="160" y1="50"  x2="280" y2="50"  stroke="#33333F" stroke-width="1.2"/>
+          <line x1="160" y1="50"  x2="100" y2="130" stroke="#33333F" stroke-width="1.2"/>
+          <line x1="160" y1="50"  x2="220" y2="130" stroke="#33333F" stroke-width="1.2"/>
+          <line x1="100" y1="130" x2="160" y2="190" stroke="#33333F" stroke-width="1.2"/>
+          <line x1="220" y1="130" x2="160" y2="190" stroke="#33333F" stroke-width="1.2"/>
+          <circle cx="40"  cy="50"  r="5" fill="#6A6A72"/>
+          <circle cx="160" cy="50"  r="5" fill="#9C9CA3"/>
+          <circle cx="280" cy="50"  r="5" fill="#6A6A72"/>
+          <circle cx="100" cy="130" r="5" fill="#9C9CA3"/>
+          <circle cx="220" cy="130" r="5" fill="#9C9CA3"/>
+          <circle cx="160" cy="190" r="7" fill="#E8FF5C"/>
+          <text x="40" y="40" font-family="JetBrains Mono" font-size="9" fill="#6A6A72">diseño</text>
+          <text x="160" y="40" font-family="JetBrains Mono" font-size="9" fill="#9C9CA3" text-anchor="middle">RIP</text>
+          <text x="280" y="40" font-family="JetBrains Mono" font-size="9" fill="#6A6A72" text-anchor="end">stock</text>
+          <text x="100" y="150" font-family="JetBrains Mono" font-size="9" fill="#9C9CA3" text-anchor="middle">impresión</text>
+          <text x="220" y="150" font-family="JetBrains Mono" font-size="9" fill="#9C9CA3" text-anchor="middle">corte</text>
+          <text x="160" y="210" font-family="JetBrains Mono" font-size="9" fill="#E8FF5C" text-anchor="middle">entrega</text>
+        </svg>
+        <div class="quote">"En dos meses dejamos de perder órdenes. Eso ya pagó el año."</div>
+        <div class="attr">Matías G.<span class="sep">·</span>Taller Norte, CABA<span class="sep">·</span>18 empleados</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EMAIL -->
+  <div class="app-label" style="margin-top:80px"><span>C · Email transaccional</span><span class="r">asunto: tu cotización #2410 está lista</span></div>
+  <div class="email">
+    <div class="top"><span>de: grafo &lt;notifica@grafo.so&gt;</span><span>19 abr 2026 · 14:32</span></div>
+    <div class="body">
+      <div class="wmk"><div class="dot"></div><div class="nm">grafo</div></div>
+      <h4>Tu cotización <em>#2410</em> está lista para enviar al cliente.</h4>
+      <p>Generamos la cotización a partir de los archivos que subió tu equipo esta mañana. Revisá el detalle y, si está todo OK, la mandás al cliente desde el botón de abajo.</p>
+      <div class="card">
+        <div class="row"><span class="k">Cliente</span><span class="v">Editorial Paloma S.A.</span></div>
+        <div class="row"><span class="k">Producto</span><span class="v">Banners UV · 1420×2030mm · x24</span></div>
+        <div class="row"><span class="k">Costo mat.</span><span class="v">AR$ 318.400</span></div>
+        <div class="row"><span class="k">Precio final</span><span class="v">AR$ 744.600</span></div>
+        <div class="row"><span class="k">Margen</span><span class="v">42.7%</span></div>
+      </div>
+      <a href="#" class="cta">Revisar y enviar →</a>
+      <p style="margin-top:32px;font-size:13px;color:#6A6A72">Este email se generó automáticamente cuando tu equipo cerró el nodo <em>Diseño → Cotización</em> en el sistema.</p>
+    </div>
+    <div class="foot"><span>grafo · app.grafo.so</span><span>preferencias · dejar de recibir</span></div>
+  </div>
+
+  <!-- SLIDE -->
+  <div class="app-label" style="margin-top:80px"><span>D · Slide de presentación de ventas</span><span class="r">1920 × 1080 · 16:9</span></div>
+  <div class="slide-wrap">
+    <div class="slide-inner">
+      <div class="slide-top">
+        <div class="mk"><div class="dot"></div><div class="nm">grafo</div></div>
+        <div class="meta">Pitch · Serie Semilla · 2026</div>
+      </div>
+      <div class="slide-main">
+        <h2>El taller de impresión digital <em>es una red</em>.<br>Nosotros somos <span class="hl">los rieles</span>.</h2>
+        <div class="sub">Un MIS diseñado para los 4.200 talleres digitales del Cono Sur que todavía cotizan en Excel.</div>
+      </div>
+      <div class="slide-bottom">
+        <div class="stats">
+          <div><span class="v">4.200</span>talleres · mercado TAM</div>
+          <div><span class="v">USD 350–450</span>ticket mensual</div>
+          <div><span class="v">38%</span>margen objetivo año 2</div>
+        </div>
+        <div class="num">03 / 24</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LINKEDIN -->
+  <div class="app-label" style="margin-top:80px"><span>E · Post de LinkedIn</span><span class="r">imagen 1.91:1 · copy 180 chars</span></div>
+  <div class="li-card">
+    <div class="li-head">
+      <div class="av"></div>
+      <div>
+        <div class="who">Grafo</div>
+        <div class="meta">1.204 seguidores · hace 3h · 🌐</div>
+      </div>
+    </div>
+    <div class="li-body">
+      Si gestionás un taller de impresión digital, probablemente tu bottleneck no es la impresora. Es el flujo. <em>Te contamos cómo los nodos ciegos matan la rentabilidad</em> — y qué hacer al respecto.
+    </div>
+    <div class="li-image">
+      <div class="hero-copy">
+        <h3>3 nodos ciegos<br>que <em>cuestan</em> plata<span class="lime-dot"></span></h3>
+      </div>
+      <div class="bmk"><div class="d"></div><div>grafo · blog</div></div>
+    </div>
+    <div class="li-actions"><span>▲ 148</span><span>💬 23</span><span>↻ 12</span></div>
+  </div>
+
+  <!-- FIRMA -->
+  <div class="app-label" style="margin-top:80px"><span>F · Firma de email</span><span class="r">outlook / gmail · 580px max</span></div>
+  <div class="sig">
+    <div class="sigmk"></div>
+    <div>
+      <div class="name">Julián Méndez</div>
+      <div class="role">Co-founder · CPO</div>
+      <div class="meta">grafo · <a href="mailto:julian@grafo.so">julian@grafo.so</a> · <a href="#">app.grafo.so</a></div>
+    </div>
+  </div>
+
+  <!-- TARJETA -->
+  <div class="app-label" style="margin-top:80px"><span>G · Tarjeta personal</span><span class="r">85 × 55 mm · 300dpi · mate</span></div>
+  <div class="card-grid">
+    <div class="bcard front">
+      <div class="logo-mini"><div class="d"></div><div class="nm" style="color:var(--ink-0)">grafo</div></div>
+      <div>
+        <div class="who">Julián Méndez</div>
+        <div class="info">Co-founder · CPO<br>julian@grafo.so<br>+54 9 11 5123 8890</div>
+      </div>
+    </div>
+    <div class="bcard back">
+      <div class="logo-mini"><div class="d"></div><div class="nm">grafo</div></div>
+      <div style="position:relative;z-index:2">
+        <div class="who">Tu taller es un grafo.<br>Hacelo correr.</div>
+      </div>
+      <div class="info" style="position:relative;z-index:2">app.grafo.so</div>
+      <div class="big">•</div>
+    </div>
+  </div>
+
+  <!-- MERCH -->
+  <div class="app-label" style="margin-top:80px"><span>H · Merch — remera, sticker, notebook</span><span class="r">prints para eventos, onboarding, early-adopters</span></div>
+  <div class="merch-grid">
+    <div class="merch tee">
+      <svg viewBox="0 0 200 200" fill="none">
+        <!-- tshirt silhouette -->
+        <path d="M50 40 L70 28 Q100 34 130 28 L150 40 L170 50 L160 80 L140 72 L140 180 L60 180 L60 72 L40 80 L30 50 Z" fill="#15151C" stroke="#33333F" stroke-width="1"/>
+        <path d="M78 30 Q100 42 122 30" stroke="#33333F" stroke-width="1" fill="none"/>
+        <!-- big grafo print -->
+        <text x="100" y="105" font-family="Instrument Serif" font-style="italic" font-size="26" fill="#F4F4F0" text-anchor="middle">un taller</text>
+        <text x="100" y="132" font-family="Instrument Serif" font-style="italic" font-size="26" fill="#9C9CA3" text-anchor="middle">es una red</text>
+        <circle cx="138" cy="128" r="4" fill="#E8FF5C"/>
+      </svg>
+      <div class="pr">merch · remera negra</div>
+    </div>
+    <div class="merch sticker">
+      <div class="s">
+        <div class="circ-text"></div>
+        <div class="inner">hacelo<br>correr</div>
+      </div>
+    </div>
+    <div class="merch book">
+      <div class="nb">
+        <div class="mk"><div class="d"></div><div class="nm">grafo</div></div>
+        <div class="quote">"Un nodo con nombre<br>es un nodo<br>que se puede arreglar."</div>
+        <div class="foot">cuaderno de bitácora · 2026</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- =================================================================
+     07 AVOID
+================================================================== -->
+<section id="evitar" class="wrap" data-screen-label="07 A evitar">
+  <div class="shead">
+    <div class="num">07 <em>—</em> A evitar</div>
+    <h2>Los <em>clichés</em> del rubro gráfico. No los tocamos.</h2>
+    <div class="lede">La mayoría de las marcas de software gráfico se parecen entre sí porque repiten los mismos tropos. Acá, la lista de cosas que NO vamos a hacer — ni en un mal día, ni en una feria, ni a pedido de un inversor.</div>
+  </div>
+
+  <div class="avoid-grid">
+    <div class="av">
+      <div class="vis">
+        <div class="x">✕</div>
+        <div style="display:flex;gap:4px"><div style="width:18px;height:60px;background:#00AEEF"></div><div style="width:18px;height:60px;background:#EC008C"></div><div style="width:18px;height:60px;background:#FFF200"></div><div style="width:18px;height:60px;background:#000"></div></div>
+      </div>
+      <h5>CMYK barras</h5>
+      <p>El cian-magenta-amarillo-negro es el logo genérico de todo lo "impreso". Si usamos esos colores juntos, somos uno más. Lime en su lugar.</p>
+    </div>
+    <div class="av">
+      <div class="vis">
+        <div class="x">✕</div>
+        <div style="width:80px;height:80px;background:radial-gradient(circle at 30% 30%, #FF6B9D, #FFD166, #06D6A0, #118AB2, #073B4C);border-radius:50%"></div>
+      </div>
+      <h5>Gradientes arcoíris</h5>
+      <p>Todas las empresas creativas de 2018–2022 ya los usaron. Son slop de la era Stripe-clone. Color plano, nodos puntuales, grano sutil si hace falta.</p>
+    </div>
+    <div class="av">
+      <div class="vis">
+        <div class="x">✕</div>
+        <svg viewBox="0 0 80 80" style="width:60px;height:60px"><rect x="12" y="22" width="56" height="36" fill="#33333F" stroke="#6A6A72" stroke-width="1.5"/><rect x="18" y="14" width="44" height="10" fill="#6A6A72"/><rect x="24" y="30" width="32" height="22" fill="#0B0B0F"/><circle cx="58" cy="50" r="2" fill="#E8FF5C"/></svg>
+      </div>
+      <h5>Impresoras ilustradas</h5>
+      <p>Nadie necesita un icono de impresora para entender que esto es para imprentas. Es literal y abarata. La metáfora de grafo es más honesta.</p>
+    </div>
+    <div class="av">
+      <div class="vis">
+        <div class="x">✕</div>
+        <div style="width:50px;height:70px;background:linear-gradient(180deg, #F26D6D 0%, #F26D6D 40%, transparent 40%);clip-path:polygon(30% 0, 70% 0, 90% 40%, 80% 100%, 20% 100%, 10% 40%)"></div>
+      </div>
+      <h5>Tinta chorreando</h5>
+      <p>Metáfora de 2005. Sugiere desperdicio, mancha, error — justo lo contrario de lo que vendemos. Si hay una gota, es un nodo.</p>
+    </div>
+    <div class="av">
+      <div class="vis">
+        <div class="x">✕</div>
+        <div style="font-family:'Brush Script MT', cursive;font-size:42px;color:#F4F4F0;transform:rotate(-6deg)">Grafo</div>
+      </div>
+      <h5>Tipografías script / caligráficas</h5>
+      <p>"Artesanal" no es lo nuestro. Grafo es infraestructura, no boutique. Nada de scripts, brush, handwriting, ni "firmas" imitadas.</p>
+    </div>
+    <div class="av">
+      <div class="vis">
+        <div class="x">✕</div>
+        <div style="font-size:32px;letter-spacing:4px">🚀 📊 ⚡️ 🎯</div>
+      </div>
+      <h5>Emojis en marketing</h5>
+      <p>Cohetes, gráficos, rayos. Infantilizan el producto. Si necesitás un emoji para transmitir la idea, la idea no está bien escrita todavía.</p>
+    </div>
+    <div class="av">
+      <div class="vis">
+        <div class="x">✕</div>
+        <div style="font-family:var(--serif);font-style:italic;font-size:18px;color:#F4F4F0;text-align:center;line-height:1.2">Revolucioná<br>tu imprenta 🚀</div>
+      </div>
+      <h5>Verbos grandilocuentes</h5>
+      <p>"Revolucioná", "potenciá", "transformá", "disrumpí". El taller no quiere una revolución. Quiere que la orden #2410 salga el viernes.</p>
+    </div>
+    <div class="av">
+      <div class="vis">
+        <div class="x">✕</div>
+        <svg viewBox="0 0 80 80" style="width:60px;height:60px"><circle cx="40" cy="40" r="22" fill="none" stroke="#9C9CA3" stroke-width="2"/><circle cx="40" cy="40" r="12" fill="none" stroke="#9C9CA3" stroke-width="2"/><line x1="40" y1="18" x2="40" y2="62" stroke="#9C9CA3" stroke-width="2"/><line x1="18" y1="40" x2="62" y2="40" stroke="#9C9CA3" stroke-width="2"/></svg>
+      </div>
+      <h5>Globos, redes sociales, "conectividad"</h5>
+      <p>Un planeta con líneas alrededor no es nuestro símbolo. Nuestro símbolo tiene tres nodos y suficiente.</p>
+    </div>
+    <div class="av">
+      <div class="vis">
+        <div class="x">✕</div>
+        <div style="display:flex;gap:2px"><div style="width:8px;height:50px;background:#1a73e8"></div><div style="width:8px;height:40px;background:#34a853"></div><div style="width:8px;height:55px;background:#fbbc04"></div><div style="width:8px;height:35px;background:#ea4335"></div></div>
+      </div>
+      <h5>Stock de dashboards y "data viz"</h5>
+      <p>Gráficos de barras genéricos de página institucional de SaaS. Cuando mostremos datos, son datos reales del taller — no placeholders de Material Design.</p>
+    </div>
+  </div>
+</section>
+
+
+<!-- =================================================================
+     FOOTER
+================================================================== -->
+<footer class="wrap" data-screen-label="Footer">
+  <p class="big">Tu taller es un grafo<span style="color:var(--lime)">.</span><br>Hacelo correr.</p>
+  <div class="meta">
+    <div class="row"><span>Brand Book</span><span>v 1.0 — Abril 2026</span></div>
+    <div class="row"><span>Preparado por</span><span>Grafo · Diseño de marca</span></div>
+    <div class="row"><span>Contacto</span><span>hola@grafo.so</span></div>
+    <div class="row"><span>Próxima revisión</span><span>Abril 2027</span></div>
+  </div>
+</footer>
+
+<script>
+  // Motion demo loop
+  (function(){
+    const nodes = ['n1','n2','n3'].map(id => document.getElementById(id));
+    const play = document.getElementById('play');
+    const reset = document.getElementById('reset');
+    let running = false;
+    let timers = [];
+
+    function stop() {
+      timers.forEach(clearTimeout);
+      timers = [];
+      running = false;
+    }
+    function resetAll() {
+      stop();
+      nodes.forEach(n => { n.setAttribute('fill', '#33333F'); n.setAttribute('r', '8'); });
+    }
+    function loop() {
+      if (running) return;
+      running = true;
+      resetAll();
+      const seq = [0, 1, 2];
+      seq.forEach((i, idx) => {
+        timers.push(setTimeout(() => {
+          nodes[i].setAttribute('fill', i === 2 ? '#E8FF5C' : '#D9D9D2');
+          nodes[i].setAttribute('r', '10');
+          setTimeout(() => nodes[i].setAttribute('r', '8'), 200);
+        }, idx * 600 + 200));
+      });
+      timers.push(setTimeout(() => {
+        running = false;
+        loop();
+      }, seq.length * 600 + 1400));
+    }
+
+    play.addEventListener('click', loop);
+    reset.addEventListener('click', resetAll);
+
+    // Auto-start on visibility
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting && !running) loop(); else if (!e.isIntersecting) stop(); });
+    }, { threshold: 0.3 });
+    io.observe(document.querySelector('.motion-demo'));
+  })();
+
+  // Auto-print once fonts + DOM ready
+  (function(){
+    function triggerPrint() {
+      setTimeout(function(){ window.print(); }, 500);
+    }
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(triggerPrint);
+    } else {
+      window.addEventListener('load', triggerPrint);
+    }
+  })();
+
+  // Smooth scroll for TOC
+  document.querySelectorAll('.toc a, a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+      const href = a.getAttribute('href');
+      if (!href || !href.startsWith('#')) return;
+      const el = document.querySelector(href);
+      if (!el) return;
+      e.preventDefault();
+      window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 20, behavior: 'smooth' });
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,9 +1,8 @@
 import { Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
-import { AssignProductoVariantesRutaMasivaDto, AssignProductoAdicionalDto, AssignProductoMotorDto, AssignVarianteRutaDto, DimensionOpcionProductivaDto, CarasProductoVarianteDto, ReglaCostoAdicionalEfectoDto, MetodoCostoProductoAdicionalDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, TipoProductoAdicionalEfectoDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, TipoConsumoAdicionalMaterialDto, TipoProductoAdicionalDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, UpsertProductoAdicionalDto, UpsertProductoChecklistDto, PreviewGranFormatoCostosDto, PreviewImposicionProductoVarianteDto, MetodoCalculoPrecioProductoDto, ReglaCostoChecklistDto, TipoChecklistPreguntaDto, TipoChecklistAccionReglaDto, GranFormatoImposicionCriterioOptimizacionDto, GranFormatoPanelizadoInterpretacionAnchoMaximoDto, GranFormatoPanelizadoModoDto, GranFormatoPanelizadoDireccionDto, GranFormatoPanelizadoDistribucionDto, UpdateProductoPrecioDto, UpdateProductoPrecioEspecialClientesDto, UpdateGranFormatoConfigDto, UpdateGranFormatoChecklistDto, UpdateRigidPrintedChecklistDto, UpdateGranFormatoRutaBaseDto, UpdateProductoRutaPolicyDto, EstadoProductoServicioDto, TipoImpresionProductoVarianteDto, TipoProductoServicioDto, ValorOpcionProductivaDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, CreateGranFormatoVarianteDto, UpdateGranFormatoVarianteDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoComisionDto, UpsertProductoImpuestoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
+import { AssignProductoVariantesRutaMasivaDto, AssignProductoAdicionalDto, AssignProductoMotorDto, AssignVarianteRutaDto, DimensionOpcionProductivaDto, CarasProductoVarianteDto, ReglaCostoAdicionalEfectoDto, MetodoCostoProductoAdicionalDto, CotizarProductoVarianteDto, CreateProductoVarianteDto, TipoProductoAdicionalEfectoDto, SetVarianteAdicionalRestrictionDto, UpsertProductoAdicionalEfectoDto, TipoConsumoAdicionalMaterialDto, TipoProductoAdicionalDto, UpsertProductoAdicionalServicioPricingDto, UpsertVarianteOpcionesProductivasDto, UpsertProductoAdicionalDto, UpsertProductoChecklistDto, PreviewImposicionProductoVarianteDto, MetodoCalculoPrecioProductoDto, ReglaCostoChecklistDto, TipoChecklistPreguntaDto, TipoChecklistAccionReglaDto, GranFormatoImposicionCriterioOptimizacionDto, GranFormatoPanelizadoInterpretacionAnchoMaximoDto, GranFormatoPanelizadoModoDto, GranFormatoPanelizadoDireccionDto, GranFormatoPanelizadoDistribucionDto, UpdateProductoPrecioDto, UpdateProductoPrecioEspecialClientesDto, UpdateGranFormatoConfigDto, UpdateGranFormatoChecklistDto, UpdateRigidPrintedChecklistDto, UpdateGranFormatoRutaBaseDto, UpdateProductoRutaPolicyDto, EstadoProductoServicioDto, TipoImpresionProductoVarianteDto, TipoProductoServicioDto, ValorOpcionProductivaDto, UpsertProductoMotorConfigDto, UpsertVarianteMotorOverrideDto, CreateGranFormatoVarianteDto, UpdateGranFormatoVarianteDto, UpdateProductoVarianteDto, UpsertFamiliaProductoDto, UpsertProductoComisionDto, UpsertProductoImpuestoDto, UpsertProductoServicioDto, UpsertSubfamiliaProductoDto } from './dto/productos-servicios.dto';
 import type { ProductMotorDefinition } from './motors/product-motor.contract';
-import * as TalonarioCalc from './motors/talonario.calculations';
 type ServicioPricingNivel = {
     id: string;
     nombre: string;
@@ -61,42 +60,6 @@ type RouteEffectInsertionConfig = {
     modo: RouteEffectInsertionMode;
     pasoPlantillaId: string | null;
 };
-type ChecklistProductoMutacionDetalle = {
-    tipo: 'agregar_demasia_por_lado';
-    ejes: 'ancho' | 'alto' | 'ambos';
-    valorMmPorLado: number;
-};
-type ChecklistTerminacionDetalle = {
-    tipoTerminacion: 'perforacion' | 'puntas_redondeadas';
-    parametros: {
-        diametroMm?: number;
-        posicion?: {
-            referenciaBorde: 'superior' | 'inferior' | 'izquierdo' | 'derecho';
-            distanciaBordeMm: number;
-            centradoEnEje: boolean;
-        };
-        radioMm?: number;
-        esquinas?: {
-            superiorIzquierda: boolean;
-            superiorDerecha: boolean;
-            inferiorIzquierda: boolean;
-            inferiorDerecha: boolean;
-        };
-    };
-};
-type GranFormatoChecklistMutationTrace = {
-    tipo: ChecklistProductoMutacionDetalle['tipo'];
-    ejes: ChecklistProductoMutacionDetalle['ejes'];
-    valorMmPorLado: number;
-    deltaAnchoMm: number;
-    deltaAltoMm: number;
-    preguntaId: string;
-    pregunta: string;
-    respuestaId: string;
-    respuesta: string;
-    reglaId: string;
-};
-type GranFormatoNestingOrientation = 'normal' | 'rotada' | 'mixta';
 export declare class ProductosServiciosService {
     private readonly prisma;
     private static readonly CODIGO_PREFIX;
@@ -166,84 +129,6 @@ export declare class ProductosServiciosService {
         activo: boolean;
         updatedAt: string | null;
     }>;
-    quoteRigidPrintedVariant(auth: CurrentAuth, varianteId: string, payload: CotizarProductoVarianteDto): Promise<{
-        createdAt: string;
-        varianteId: string;
-        productoServicioId: string;
-        productoNombre: string;
-        varianteNombre: string;
-        motorCodigo: string;
-        motorVersion: number;
-        periodo: string;
-        cantidad: number;
-        bloques: {
-            procesos: {
-                orden: number;
-                codigo: string;
-                nombre: string;
-                centroCostoId: string | null;
-                centroCostoNombre: string;
-                setupMin: number;
-                runMin: number;
-                totalMin: number;
-                tarifaHora: number;
-                costo: number;
-            }[];
-            materiales: {
-                materiaPrimaVarianteId: string;
-                nombre: string;
-                unidad: string;
-                cantidad: number;
-                costoUnitario: number;
-                costoTotal: number;
-            }[];
-        };
-        subtotales: {
-            procesos: number;
-            material: number;
-            toner: number;
-            desgaste: number;
-            consumiblesTerminacion: number;
-            adicionalesMateriales: number;
-            adicionalesCostEffects: number;
-        };
-        total: number;
-        unitario: number;
-        trazabilidad: {
-            config: {
-                [x: string]: unknown;
-            };
-            configVersionBase: number | null;
-            configVersionOverride: number | null;
-            tipoImpresion: string;
-            caras: string;
-            multiplicadorCaras: number;
-            estrategiaCosteo: "m2_exacto" | "largo_consumido" | "segmentos_placa";
-            costeoDetalle: {
-                precioPlaca: number;
-                precioM2: number;
-                placasCompletas: number;
-                costoPlacasCompletas: number;
-                ultimaPlaca: {
-                    ocupacionPct: number;
-                    segmentoAplicado: number | null;
-                    costo: number;
-                } | null;
-            };
-            resumenTecnico: {
-                anchoMm: number;
-                altoMm: number;
-                placaAnchoMm: number;
-                placaAltoMm: number;
-                piezasPorPlaca: number;
-                placasNecesarias: number;
-                aprovechamientoPct: number;
-                rotada: boolean;
-                sobrantes: number;
-            };
-        };
-        snapshotId: string;
-    }>;
     getRigidPrintedChecklist(auth: CurrentAuth, productoId: string): Promise<{
         productoId: string;
         aplicaATodosLosTiposImpresion: boolean;
@@ -307,7 +192,7 @@ export declare class ProductosServiciosService {
                         materiaPrimaVarianteId: string | null;
                         materiaPrimaNombre: any;
                         materiaPrimaSku: any;
-                        tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
+                        tipoConsumo: "por_m2" | "por_unidad" | "por_pliego" | null;
                         factorConsumo: number | null;
                         mermaPct: number | null;
                         detalle: Record<string, unknown> | {
@@ -383,7 +268,7 @@ export declare class ProductosServiciosService {
                             materiaPrimaVarianteId: string | null;
                             materiaPrimaNombre: any;
                             materiaPrimaSku: any;
-                            tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
+                            tipoConsumo: "por_m2" | "por_unidad" | "por_pliego" | null;
                             factorConsumo: number | null;
                             mermaPct: number | null;
                             detalle: Record<string, unknown> | {
@@ -463,7 +348,7 @@ export declare class ProductosServiciosService {
                         materiaPrimaVarianteId: string | null;
                         materiaPrimaNombre: any;
                         materiaPrimaSku: any;
-                        tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
+                        tipoConsumo: "por_m2" | "por_unidad" | "por_pliego" | null;
                         factorConsumo: number | null;
                         mermaPct: number | null;
                         detalle: Record<string, unknown> | {
@@ -539,7 +424,7 @@ export declare class ProductosServiciosService {
                             materiaPrimaVarianteId: string | null;
                             materiaPrimaNombre: any;
                             materiaPrimaSku: any;
-                            tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
+                            tipoConsumo: "por_m2" | "por_unidad" | "por_pliego" | null;
                             factorConsumo: number | null;
                             mermaPct: number | null;
                             detalle: Record<string, unknown> | {
@@ -587,7 +472,7 @@ export declare class ProductosServiciosService {
             panelMaxWidth: number | null;
             panelDistribution: "equilibrada" | "libre" | null;
             panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "automatico" | "manual" | null;
+            panelMode: "manual" | "automatico" | null;
             pieces: {
                 id: string;
                 w: number;
@@ -616,131 +501,6 @@ export declare class ProductosServiciosService {
         consumedAreaM2: number;
         wastePct: number;
         variantNombre: any;
-    }>;
-    cotizarRigidPrintedByProducto(auth: CurrentAuth, productoId: string, payload: CotizarProductoVarianteDto): Promise<{
-        createdAt: string;
-        productoServicioId: string;
-        productoNombre: string;
-        varianteId: string | null;
-        varianteNombre: string;
-        motorCodigo: string;
-        motorVersion: number;
-        periodo: string;
-        cantidad: number;
-        cantidadPiezas: number;
-        bloques: {
-            procesos: {
-                orden: number;
-                codigo: string;
-                nombre: string;
-                centroCostoId: string | null;
-                centroCostoNombre: string;
-                setupMin: number;
-                runMin: number;
-                totalMin: number;
-                tarifaHora: number;
-                costo: number;
-            }[];
-            materiales: {
-                tipo: string;
-                nombre: string;
-                origen: string;
-                unidad: string;
-                cantidad: number;
-                costoUnitario: number;
-                costo: number;
-                variantChips?: Array<{
-                    label: string;
-                    value: string;
-                }>;
-            }[];
-        };
-        subtotales: {
-            procesos: number;
-            material: number;
-            flexible: number;
-            tinta: number;
-            toner: number;
-            desgaste: number;
-            consumiblesTerminacion: number;
-            adicionalesMateriales: number;
-            adicionalesCostEffects: number;
-        };
-        total: number;
-        unitario: number;
-        trazabilidad: {
-            config: Record<string, unknown>;
-            tipoImpresion: string;
-            caras: string;
-            multiplicadorCaras: number;
-            estrategiaCosteo: "m2_exacto" | "largo_consumido" | "segmentos_placa";
-            costeoDetalle: {
-                precioPlaca: number;
-                precioM2: number;
-                placasCompletas: number;
-                costoPlacasCompletas: number;
-                ultimaPlaca: {
-                    ocupacionPct: number;
-                    segmentoAplicado: number | null;
-                    costo: number;
-                } | null;
-            };
-            resumenTecnico: {
-                anchoMm: number;
-                altoMm: number;
-                placaAnchoMm: number;
-                placaAltoMm: number;
-                piezasPorPlaca: number;
-                placasNecesarias: number;
-                aprovechamientoPct: number;
-                rotada: boolean;
-                sobrantes: number;
-            };
-            medidasDetalle: {
-                anchoMm: number;
-                altoMm: number;
-                cantidad: number;
-                m2: number;
-            }[];
-            flexibleNestingPreview: {
-                rollWidth: number;
-                rollLength: number;
-                marginLeft: number;
-                marginRight: number;
-                marginStart: number;
-                marginEnd: number;
-                panelizado: boolean;
-                panelAxis: "vertical" | "horizontal" | null;
-                panelCount: number;
-                panelOverlap: number | null;
-                panelMaxWidth: number | null;
-                panelDistribution: "equilibrada" | "libre" | null;
-                panelWidthInterpretation: "total" | "util" | null;
-                panelMode: "automatico" | "manual" | null;
-                pieces: {
-                    id: string;
-                    w: number;
-                    h: number;
-                    originalW: number;
-                    originalH: number;
-                    usefulW: number;
-                    usefulH: number;
-                    cx: number;
-                    cy: number;
-                    color: string;
-                    label: string;
-                    textColor: string;
-                    rotated: boolean;
-                    panelIndex: number | null;
-                    panelCount: number | null;
-                    panelAxis: "vertical" | "horizontal" | null;
-                    sourcePieceId: string | null;
-                    overlapStart: number;
-                    overlapEnd: number;
-                }[];
-            } | null;
-        };
-        snapshotId: string;
     }>;
     getTalonarioProductMotorConfig(auth: CurrentAuth, productoId: string): Promise<{
         productoId: string;
@@ -777,93 +537,6 @@ export declare class ProductosServiciosService {
         versionConfig: number;
         activo: boolean;
         updatedAt: string;
-    }>;
-    quoteTalonarioVariant(auth: CurrentAuth, varianteId: string, payload: CotizarProductoVarianteDto): Promise<{
-        status: "disponible";
-        varianteId: string;
-        varianteNombre: string;
-        motorCodigo: string;
-        motorVersion: number;
-        periodo: string;
-        cantidad: number;
-        tipoCopia: TalonarioCalc.TipoCopiaValor;
-        capas: number;
-        numerosXTalonario: number;
-        piezasPorPliego: number;
-        pliegos: number;
-        pliegosXCapa: number;
-        pliegosTotales: number;
-        warnings: string[];
-        bloques: {
-            procesos: Record<string, unknown>[];
-            materiales: (Record<string, unknown> | {
-                tipo: string;
-                nombre: string;
-                cantidad: number;
-                costoUnitario: number;
-                costo: number;
-            })[];
-        };
-        subtotales: {
-            procesos: number;
-            papel: number;
-            materialesExtra: number;
-            toner: number;
-            desgaste: number;
-            consumiblesTerminacion: number;
-            adicionalesMateriales: number;
-            adicionalesCostEffects: number;
-        };
-        total: number;
-        unitario: number;
-        trazabilidad: {
-            imposicion: TalonarioCalc.TalonarioImposicionResult;
-            grouping: TalonarioCalc.TalonarioGroupingResult;
-            guillotinado: TalonarioCalc.GuillotinadoResult;
-            paperCosts: TalonarioCalc.PaperLayerCost[];
-            extraMaterials: TalonarioCalc.ExtraMaterialCost[];
-            config: {
-                [x: string]: unknown;
-            };
-            configVersionBase: number | null;
-            configVersionOverride: number | null;
-        };
-    }>;
-    previewTalonarioVariant(auth: CurrentAuth, varianteId: string, payload: PreviewImposicionProductoVarianteDto): Promise<{
-        varianteId: string;
-        varianteNombre: string;
-        pliegoImpresion: {
-            codigo: string;
-            nombre: string;
-            anchoMm: number;
-            altoMm: number;
-        };
-        sustrato: {
-            anchoMm: number;
-            altoMm: number;
-        };
-        machineMargins: {
-            leftMm: number;
-            rightMm: number;
-            topMm: number;
-            bottomMm: number;
-        };
-        imposicion: TalonarioCalc.TalonarioImposicionResult;
-        conversionPapel: {
-            esDerivado: boolean;
-            pliegosPorSustrato: number;
-            orientacion: string;
-        };
-        config: {
-            [x: string]: unknown;
-        };
-        talonario: {
-            encuadernacion: TalonarioCalc.EncuadernacionConfig;
-            puntillado: TalonarioCalc.PuntilladoConfig;
-            teteBeche: boolean;
-            puntilladoLineMm: number | null;
-            puntilladoBorde: string | null;
-        };
     }>;
     findAdicionalesCatalogo(auth: CurrentAuth): Promise<{
         id: string;
@@ -1276,6 +949,7 @@ export declare class ProductosServiciosService {
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
         unidadComercial: string;
+        modoMedidas: "ESTANDAR" | "LIBRE";
         precio: ProductoPrecioConfig | null;
         precioEspecialClientes: ProductoPrecioEspecialClienteConfig[];
         dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
@@ -1320,6 +994,7 @@ export declare class ProductosServiciosService {
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
         unidadComercial: string;
+        modoMedidas: "ESTANDAR" | "LIBRE";
         precio: ProductoPrecioConfig | null;
         precioEspecialClientes: ProductoPrecioEspecialClienteConfig[];
         dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
@@ -1364,6 +1039,7 @@ export declare class ProductosServiciosService {
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
         unidadComercial: string;
+        modoMedidas: "ESTANDAR" | "LIBRE";
         precio: ProductoPrecioConfig | null;
         precioEspecialClientes: ProductoPrecioEspecialClienteConfig[];
         dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
@@ -1408,6 +1084,7 @@ export declare class ProductosServiciosService {
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
         unidadComercial: string;
+        modoMedidas: "ESTANDAR" | "LIBRE";
         precio: ProductoPrecioConfig | null;
         precioEspecialClientes: ProductoPrecioEspecialClienteConfig[];
         dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
@@ -1452,6 +1129,7 @@ export declare class ProductosServiciosService {
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
         unidadComercial: string;
+        modoMedidas: "ESTANDAR" | "LIBRE";
         precio: ProductoPrecioConfig | null;
         precioEspecialClientes: ProductoPrecioEspecialClienteConfig[];
         dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
@@ -1496,6 +1174,7 @@ export declare class ProductosServiciosService {
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
         unidadComercial: string;
+        modoMedidas: "ESTANDAR" | "LIBRE";
         precio: ProductoPrecioConfig | null;
         precioEspecialClientes: ProductoPrecioEspecialClienteConfig[];
         dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
@@ -1540,13 +1219,22 @@ export declare class ProductosServiciosService {
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
         unidadComercial: string;
+        modoMedidas: "ESTANDAR" | "LIBRE";
         precio: ProductoPrecioConfig | null;
         precioEspecialClientes: ProductoPrecioEspecialClienteConfig[];
         dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
         createdAt: string;
         updatedAt: string;
     }>;
-    getProductoMotorConfig(auth: CurrentAuth, productoId: string): Promise<unknown>;
+    getProductoMotorConfig(auth: CurrentAuth, productoId: string): Promise<{
+        productoId: string;
+        motorCodigo: string;
+        motorVersion: number;
+        parametros: string | number | boolean | Prisma.JsonObject | Prisma.JsonArray;
+        versionConfig: number;
+        activo: boolean;
+        updatedAt: string | null;
+    }>;
     getDigitalProductMotorConfig(auth: CurrentAuth, productoId: string): Promise<{
         productoId: string;
         motorCodigo: string;
@@ -1574,6 +1262,2231 @@ export declare class ProductosServiciosService {
         versionConfig: number;
         activo: boolean;
         updatedAt: string | null;
+    }>;
+    findVarianteCompletaOrThrowPublic(auth: CurrentAuth, varianteId: string): Promise<{
+        productoServicio: {
+            adicionalesAsignados: ({
+                productoAdicional: {
+                    centroCosto: {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        nombre: string;
+                        tenantId: string;
+                        descripcion: string | null;
+                        plantaId: string;
+                        codigo: string;
+                        areaCostoId: string;
+                        tipoCentro: import("@prisma/client").$Enums.TipoCentroCosto;
+                        categoriaGrafica: import("@prisma/client").$Enums.CategoriaGraficaCentroCosto;
+                        imputacionPreferida: import("@prisma/client").$Enums.ImputacionPreferidaCentroCosto;
+                        unidadBaseFutura: import("@prisma/client").$Enums.UnidadBaseCentroCosto;
+                        responsableEmpleadoId: string | null;
+                    } | null;
+                } & {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    nombre: string;
+                    tenantId: string;
+                    descripcion: string | null;
+                    tipo: import("@prisma/client").$Enums.TipoProductoAdicional;
+                    codigo: string;
+                    centroCostoId: string | null;
+                    metodoCosto: import("@prisma/client").$Enums.MetodoCostoProductoAdicional;
+                    metadataJson: Prisma.JsonValue | null;
+                };
+            } & {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                tenantId: string;
+                productoServicioId: string;
+                productoAdicionalId: string;
+            })[];
+        } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            activo: boolean;
+            nombre: string;
+            tenantId: string;
+            descripcion: string | null;
+            tipo: import("@prisma/client").$Enums.TipoProductoServicio;
+            codigo: string;
+            estado: import("@prisma/client").$Enums.EstadoProductoServicio;
+            detalleJson: Prisma.JsonValue | null;
+            motorCodigo: string;
+            motorVersion: number;
+            usarRutaComunVariantes: boolean;
+            modoMedidas: import("@prisma/client").$Enums.ModoMedidasProducto;
+            procesoDefinicionDefaultId: string | null;
+            familiaProductoId: string;
+            subfamiliaProductoId: string | null;
+            unidadComercial: string;
+        };
+        papelVariante: ({
+            materiaPrima: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                nombre: string;
+                tenantId: string;
+                descripcion: string | null;
+                codigo: string;
+                unidadStock: import("@prisma/client").$Enums.UnidadMateriaPrima;
+                unidadCompra: import("@prisma/client").$Enums.UnidadMateriaPrima;
+                familia: import("@prisma/client").$Enums.FamiliaMateriaPrima;
+                subfamilia: import("@prisma/client").$Enums.SubfamiliaMateriaPrima;
+                tipoTecnico: string;
+                templateId: string;
+                esConsumible: boolean;
+                esRepuesto: boolean;
+                atributosTecnicosJson: Prisma.JsonValue;
+            };
+        } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            activo: boolean;
+            tenantId: string;
+            materiaPrimaId: string;
+            sku: string;
+            nombreVariante: string | null;
+            atributosVarianteJson: Prisma.JsonValue;
+            unidadStock: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+            unidadCompra: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+            precioReferencia: Prisma.Decimal | null;
+            moneda: string | null;
+            proveedorReferenciaId: string | null;
+        }) | null;
+        adicionalesRestricciones: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            tenantId: string;
+            permitido: boolean;
+            productoVarianteId: string;
+            productoAdicionalId: string;
+        }[];
+        opcionesProductivasSet: ({
+            valores: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                tenantId: string;
+                valor: import("@prisma/client").$Enums.ValorOpcionProductiva;
+                orden: number;
+                dimension: import("@prisma/client").$Enums.DimensionOpcionProductiva;
+                opcionSetId: string;
+            }[];
+        } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            tenantId: string;
+            productoVarianteId: string;
+        }) | null;
+    } & {
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        activo: boolean;
+        nombre: string;
+        tenantId: string;
+        productoServicioId: string;
+        anchoMm: Prisma.Decimal;
+        altoMm: Prisma.Decimal;
+        papelVarianteId: string | null;
+        tipoImpresion: import("@prisma/client").$Enums.TipoImpresionProductoVariante;
+        caras: import("@prisma/client").$Enums.CarasProductoVariante;
+        procesoDefinicionId: string | null;
+    }>;
+    private ensureV2ConfigFromV1;
+    loadGranFormatoV2Runtime(auth: CurrentAuth, productoId: string): Promise<{
+        producto: {
+            familiaProducto: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                nombre: string;
+                tenantId: string;
+                codigo: string;
+            };
+            subfamiliaProducto: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                nombre: string;
+                tenantId: string;
+                codigo: string;
+                familiaProductoId: string;
+                unidadComercial: string | null;
+            } | null;
+            procesoDefinicionDefault: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                nombre: string;
+                tenantId: string;
+                descripcion: string | null;
+                codigo: string;
+                estadoConfiguracion: import("@prisma/client").$Enums.EstadoConfiguracionProceso;
+                observaciones: string | null;
+                plantillaMaquinaria: import("@prisma/client").$Enums.PlantillaMaquinaria | null;
+                currentVersion: number;
+            } | null;
+        } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            activo: boolean;
+            nombre: string;
+            tenantId: string;
+            descripcion: string | null;
+            tipo: import("@prisma/client").$Enums.TipoProductoServicio;
+            codigo: string;
+            estado: import("@prisma/client").$Enums.EstadoProductoServicio;
+            detalleJson: Prisma.JsonValue | null;
+            motorCodigo: string;
+            motorVersion: number;
+            usarRutaComunVariantes: boolean;
+            modoMedidas: import("@prisma/client").$Enums.ModoMedidasProducto;
+            procesoDefinicionDefaultId: string | null;
+            familiaProductoId: string;
+            subfamiliaProductoId: string | null;
+            unidadComercial: string;
+        };
+        config: Record<string, unknown>;
+        materiales: ({
+            materiaPrima: {
+                id: string;
+                nombre: string;
+                subfamilia: import("@prisma/client").$Enums.SubfamiliaMateriaPrima;
+            };
+        } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            activo: boolean;
+            tenantId: string;
+            materiaPrimaId: string;
+            sku: string;
+            nombreVariante: string | null;
+            atributosVarianteJson: Prisma.JsonValue;
+            unidadStock: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+            unidadCompra: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+            precioReferencia: Prisma.Decimal | null;
+            moneda: string | null;
+            proveedorReferenciaId: string | null;
+        })[];
+    }>;
+    loadVinylCutV2Runtime(auth: CurrentAuth, productoId: string, colorFiltro?: string | null): Promise<{
+        producto: {
+            familiaProducto: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                nombre: string;
+                tenantId: string;
+                codigo: string;
+            };
+            subfamiliaProducto: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                nombre: string;
+                tenantId: string;
+                codigo: string;
+                familiaProductoId: string;
+                unidadComercial: string | null;
+            } | null;
+            procesoDefinicionDefault: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                nombre: string;
+                tenantId: string;
+                descripcion: string | null;
+                codigo: string;
+                estadoConfiguracion: import("@prisma/client").$Enums.EstadoConfiguracionProceso;
+                observaciones: string | null;
+                plantillaMaquinaria: import("@prisma/client").$Enums.PlantillaMaquinaria | null;
+                currentVersion: number;
+            } | null;
+        } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            activo: boolean;
+            nombre: string;
+            tenantId: string;
+            descripcion: string | null;
+            tipo: import("@prisma/client").$Enums.TipoProductoServicio;
+            codigo: string;
+            estado: import("@prisma/client").$Enums.EstadoProductoServicio;
+            detalleJson: Prisma.JsonValue | null;
+            motorCodigo: string;
+            motorVersion: number;
+            usarRutaComunVariantes: boolean;
+            modoMedidas: import("@prisma/client").$Enums.ModoMedidasProducto;
+            procesoDefinicionDefaultId: string | null;
+            familiaProductoId: string;
+            subfamiliaProductoId: string | null;
+            unidadComercial: string;
+        };
+        config: Record<string, unknown>;
+        materiales: ({
+            materiaPrima: {
+                id: string;
+                nombre: string;
+                subfamilia: import("@prisma/client").$Enums.SubfamiliaMateriaPrima;
+            };
+        } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            activo: boolean;
+            tenantId: string;
+            materiaPrimaId: string;
+            sku: string;
+            nombreVariante: string | null;
+            atributosVarianteJson: Prisma.JsonValue;
+            unidadStock: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+            unidadCompra: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+            precioReferencia: Prisma.Decimal | null;
+            moneda: string | null;
+            proveedorReferenciaId: string | null;
+        })[];
+        plotters: ({
+            perfilesOperativos: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                nombre: string;
+                tenantId: string;
+                maquinaId: string;
+                detalleJson: Prisma.JsonValue | null;
+                tipoPerfil: import("@prisma/client").$Enums.TipoPerfilOperativoMaquina;
+                anchoAplicable: Prisma.Decimal | null;
+                altoAplicable: Prisma.Decimal | null;
+                operationMode: string | null;
+                printMode: import("@prisma/client").$Enums.TipoImpresionProductoVariante | null;
+                printSides: import("@prisma/client").$Enums.CarasProductoVariante | null;
+                productivityValue: Prisma.Decimal | null;
+                productivityUnit: import("@prisma/client").$Enums.UnidadProduccionMaquina | null;
+                setupMin: Prisma.Decimal | null;
+                cleanupMin: Prisma.Decimal | null;
+                feedReloadMin: Prisma.Decimal | null;
+                sheetThicknessMm: Prisma.Decimal | null;
+                maxBatchHeightMm: Prisma.Decimal | null;
+                materialPreset: string | null;
+                cantidadPasadas: number | null;
+                dobleFaz: boolean;
+            }[];
+        } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            activo: boolean;
+            nombre: string;
+            tenantId: string;
+            plantaId: string;
+            codigo: string;
+            estado: import("@prisma/client").$Enums.EstadoMaquina;
+            plantilla: import("@prisma/client").$Enums.PlantillaMaquinaria;
+            plantillaVersion: number;
+            fabricante: string | null;
+            modelo: string | null;
+            numeroSerie: string | null;
+            centroCostoPrincipalId: string | null;
+            estadoConfiguracion: import("@prisma/client").$Enums.EstadoConfiguracionMaquina;
+            geometriaTrabajo: import("@prisma/client").$Enums.GeometriaTrabajoMaquina;
+            unidadProduccionPrincipal: import("@prisma/client").$Enums.UnidadProduccionMaquina;
+            anchoUtil: Prisma.Decimal | null;
+            largoUtil: Prisma.Decimal | null;
+            altoUtil: Prisma.Decimal | null;
+            espesorMaximo: Prisma.Decimal | null;
+            pesoMaximo: Prisma.Decimal | null;
+            fechaAlta: Date | null;
+            observaciones: string | null;
+            parametrosTecnicosJson: Prisma.JsonValue | null;
+            capacidadesAvanzadasJson: Prisma.JsonValue | null;
+        })[];
+    }>;
+    getRutaCompletaPorProducto(auth: CurrentAuth, productoId: string): Promise<{
+        varianteId: string | null;
+        productoServicioId: string;
+        procesoDefinicionId: string;
+        procesoNombre: string;
+        operaciones: {
+            id: string;
+            orden: number;
+            codigo: string;
+            nombre: string;
+            tipoOperacion: string;
+            familiaV2: string | null;
+            unidadProductivaV2: string | null;
+            activacionV2: string | null;
+            condicionV2: Record<string, unknown> | null;
+            esOpcional: boolean;
+            activo: boolean;
+            setupMin: number | null;
+            cleanupMin: number | null;
+            tiempoFijoMin: number | null;
+            productividadBase: number | null;
+            modoProductividad: string;
+            unidadTiempo: string;
+            plantillaOrigen: {
+                id: string;
+                nombre: string;
+                tipoOperacion: string | null;
+                familiaV2: string | null;
+                unidadProductivaV2: string | null;
+                modoProductividad: string | null;
+                centroCosto: {
+                    id: string;
+                    nombre: string;
+                } | null;
+                maquina: {
+                    id: string;
+                    nombre: string;
+                    plantilla: string | null;
+                } | null;
+                perfilOperativo: {
+                    id: string;
+                    nombre: string;
+                } | null;
+                setupMin: number | null;
+                cleanupMin: number | null;
+                tiempoFijoMin: number | null;
+                productividadBase: number | null;
+                unidadTiempo: string | null;
+            } | null;
+            centroCosto: {
+                id: string;
+                nombre: string;
+            } | null;
+            maquina: {
+                id: string;
+                nombre: string;
+                plantilla: string | null;
+                consumibles: {
+                    id: string;
+                    perfilOperativoId: string | null;
+                    perfilOperativoNombre: string | null;
+                    nombre: string;
+                    tipo: string;
+                    unidad: string;
+                    consumoBase: number | null;
+                    rendimientoEstimado: number | null;
+                    detalle: Record<string, unknown> | null;
+                    materiaPrimaVariante: {
+                        id: string;
+                        sku: string;
+                        nombreVariante: string | null;
+                        precioReferencia: number | null;
+                        atributosVariante: Record<string, unknown> | null;
+                    } | null;
+                }[];
+                componentesDesgaste: {
+                    id: string;
+                    nombre: string;
+                    tipo: string;
+                    unidadDesgaste: string;
+                    vidaUtilEstimada: number | null;
+                    materiaPrimaVariante: {
+                        id: string;
+                        sku: string;
+                        nombreVariante: string | null;
+                        precioReferencia: number | null;
+                    } | null;
+                }[];
+            } | null;
+            perfilOperativo: {
+                id: string;
+                nombre: string;
+                productivityValue: number | null;
+                setupMin: number | null;
+            } | null;
+            configNestingV2: unknown;
+            materialesConsumidos: {
+                id: string;
+                nombre: string;
+                formula: string;
+                cantidadPorUnidad: number;
+                unidad: string;
+                precioManual: number | null;
+                aplicaMultiCaras: boolean;
+                esSustratoNesting: boolean;
+                orden: number;
+                materiaPrimaVariante: {
+                    id: string;
+                    sku: string;
+                    precioReferencia: number | null;
+                } | null;
+                productoComponente: {
+                    id: string;
+                    codigo: string;
+                    nombre: string;
+                    modoMedidas: string;
+                } | null;
+                varianteComponente: {
+                    id: string;
+                    nombre: string;
+                    anchoMm: number;
+                    altoMm: number;
+                } | null;
+                variantesHabilitadas: {
+                    id: string;
+                    materiaPrimaVarianteId: string;
+                    orden: number;
+                    activo: boolean;
+                    materiaPrimaVariante: {
+                        id: string;
+                        sku: string;
+                        nombreVariante: string | null;
+                        materiaPrimaId: string;
+                        precioReferencia: number | null;
+                        atributosVariante: Record<string, unknown> | null;
+                        activo: boolean;
+                    } | null;
+                }[];
+            }[];
+            alternativas: {
+                id: string;
+                label: string;
+                esDefault: boolean;
+                orden: number;
+                maquina: {
+                    id: string;
+                    nombre: string;
+                    plantilla: string | null;
+                } | null;
+                perfilOperativo: {
+                    id: string;
+                    nombre: string;
+                } | null;
+            }[];
+        }[];
+    } | {
+        varianteId: null;
+        productoServicioId: string;
+        procesoDefinicionId: null;
+        procesoNombre: null;
+        operaciones: never[];
+    }>;
+    getRutaCompletaPorVariante(auth: CurrentAuth, varianteId: string): Promise<{
+        varianteId: string | null;
+        productoServicioId: string;
+        procesoDefinicionId: string;
+        procesoNombre: string;
+        operaciones: {
+            id: string;
+            orden: number;
+            codigo: string;
+            nombre: string;
+            tipoOperacion: string;
+            familiaV2: string | null;
+            unidadProductivaV2: string | null;
+            activacionV2: string | null;
+            condicionV2: Record<string, unknown> | null;
+            esOpcional: boolean;
+            activo: boolean;
+            setupMin: number | null;
+            cleanupMin: number | null;
+            tiempoFijoMin: number | null;
+            productividadBase: number | null;
+            modoProductividad: string;
+            unidadTiempo: string;
+            plantillaOrigen: {
+                id: string;
+                nombre: string;
+                tipoOperacion: string | null;
+                familiaV2: string | null;
+                unidadProductivaV2: string | null;
+                modoProductividad: string | null;
+                centroCosto: {
+                    id: string;
+                    nombre: string;
+                } | null;
+                maquina: {
+                    id: string;
+                    nombre: string;
+                    plantilla: string | null;
+                } | null;
+                perfilOperativo: {
+                    id: string;
+                    nombre: string;
+                } | null;
+                setupMin: number | null;
+                cleanupMin: number | null;
+                tiempoFijoMin: number | null;
+                productividadBase: number | null;
+                unidadTiempo: string | null;
+            } | null;
+            centroCosto: {
+                id: string;
+                nombre: string;
+            } | null;
+            maquina: {
+                id: string;
+                nombre: string;
+                plantilla: string | null;
+                consumibles: {
+                    id: string;
+                    perfilOperativoId: string | null;
+                    perfilOperativoNombre: string | null;
+                    nombre: string;
+                    tipo: string;
+                    unidad: string;
+                    consumoBase: number | null;
+                    rendimientoEstimado: number | null;
+                    detalle: Record<string, unknown> | null;
+                    materiaPrimaVariante: {
+                        id: string;
+                        sku: string;
+                        nombreVariante: string | null;
+                        precioReferencia: number | null;
+                        atributosVariante: Record<string, unknown> | null;
+                    } | null;
+                }[];
+                componentesDesgaste: {
+                    id: string;
+                    nombre: string;
+                    tipo: string;
+                    unidadDesgaste: string;
+                    vidaUtilEstimada: number | null;
+                    materiaPrimaVariante: {
+                        id: string;
+                        sku: string;
+                        nombreVariante: string | null;
+                        precioReferencia: number | null;
+                    } | null;
+                }[];
+            } | null;
+            perfilOperativo: {
+                id: string;
+                nombre: string;
+                productivityValue: number | null;
+                setupMin: number | null;
+            } | null;
+            configNestingV2: unknown;
+            materialesConsumidos: {
+                id: string;
+                nombre: string;
+                formula: string;
+                cantidadPorUnidad: number;
+                unidad: string;
+                precioManual: number | null;
+                aplicaMultiCaras: boolean;
+                esSustratoNesting: boolean;
+                orden: number;
+                materiaPrimaVariante: {
+                    id: string;
+                    sku: string;
+                    precioReferencia: number | null;
+                } | null;
+                productoComponente: {
+                    id: string;
+                    codigo: string;
+                    nombre: string;
+                    modoMedidas: string;
+                } | null;
+                varianteComponente: {
+                    id: string;
+                    nombre: string;
+                    anchoMm: number;
+                    altoMm: number;
+                } | null;
+                variantesHabilitadas: {
+                    id: string;
+                    materiaPrimaVarianteId: string;
+                    orden: number;
+                    activo: boolean;
+                    materiaPrimaVariante: {
+                        id: string;
+                        sku: string;
+                        nombreVariante: string | null;
+                        materiaPrimaId: string;
+                        precioReferencia: number | null;
+                        atributosVariante: Record<string, unknown> | null;
+                        activo: boolean;
+                    } | null;
+                }[];
+            }[];
+            alternativas: {
+                id: string;
+                label: string;
+                esDefault: boolean;
+                orden: number;
+                maquina: {
+                    id: string;
+                    nombre: string;
+                    plantilla: string | null;
+                } | null;
+                perfilOperativo: {
+                    id: string;
+                    nombre: string;
+                } | null;
+            }[];
+        }[];
+    } | {
+        varianteId: string;
+        productoServicioId: string;
+        procesoDefinicionId: null;
+        procesoNombre: null;
+        operaciones: never[];
+    }>;
+    private mapRutaCompletaResponse;
+    findDefaultVarianteDeProducto(auth: CurrentAuth, productoId: string): Promise<string | null>;
+    loadSuperMotorRuntime(auth: CurrentAuth, varianteId: string, periodo: string): Promise<{
+        variante: {
+            productoServicio: {
+                adicionalesAsignados: ({
+                    productoAdicional: {
+                        centroCosto: {
+                            id: string;
+                            createdAt: Date;
+                            updatedAt: Date;
+                            activo: boolean;
+                            nombre: string;
+                            tenantId: string;
+                            descripcion: string | null;
+                            plantaId: string;
+                            codigo: string;
+                            areaCostoId: string;
+                            tipoCentro: import("@prisma/client").$Enums.TipoCentroCosto;
+                            categoriaGrafica: import("@prisma/client").$Enums.CategoriaGraficaCentroCosto;
+                            imputacionPreferida: import("@prisma/client").$Enums.ImputacionPreferidaCentroCosto;
+                            unidadBaseFutura: import("@prisma/client").$Enums.UnidadBaseCentroCosto;
+                            responsableEmpleadoId: string | null;
+                        } | null;
+                    } & {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        nombre: string;
+                        tenantId: string;
+                        descripcion: string | null;
+                        tipo: import("@prisma/client").$Enums.TipoProductoAdicional;
+                        codigo: string;
+                        centroCostoId: string | null;
+                        metodoCosto: import("@prisma/client").$Enums.MetodoCostoProductoAdicional;
+                        metadataJson: Prisma.JsonValue | null;
+                    };
+                } & {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    tenantId: string;
+                    productoServicioId: string;
+                    productoAdicionalId: string;
+                })[];
+            } & {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                nombre: string;
+                tenantId: string;
+                descripcion: string | null;
+                tipo: import("@prisma/client").$Enums.TipoProductoServicio;
+                codigo: string;
+                estado: import("@prisma/client").$Enums.EstadoProductoServicio;
+                detalleJson: Prisma.JsonValue | null;
+                motorCodigo: string;
+                motorVersion: number;
+                usarRutaComunVariantes: boolean;
+                modoMedidas: import("@prisma/client").$Enums.ModoMedidasProducto;
+                procesoDefinicionDefaultId: string | null;
+                familiaProductoId: string;
+                subfamiliaProductoId: string | null;
+                unidadComercial: string;
+            };
+            papelVariante: ({
+                materiaPrima: {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    nombre: string;
+                    tenantId: string;
+                    descripcion: string | null;
+                    codigo: string;
+                    unidadStock: import("@prisma/client").$Enums.UnidadMateriaPrima;
+                    unidadCompra: import("@prisma/client").$Enums.UnidadMateriaPrima;
+                    familia: import("@prisma/client").$Enums.FamiliaMateriaPrima;
+                    subfamilia: import("@prisma/client").$Enums.SubfamiliaMateriaPrima;
+                    tipoTecnico: string;
+                    templateId: string;
+                    esConsumible: boolean;
+                    esRepuesto: boolean;
+                    atributosTecnicosJson: Prisma.JsonValue;
+                };
+            } & {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                tenantId: string;
+                materiaPrimaId: string;
+                sku: string;
+                nombreVariante: string | null;
+                atributosVarianteJson: Prisma.JsonValue;
+                unidadStock: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                unidadCompra: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                precioReferencia: Prisma.Decimal | null;
+                moneda: string | null;
+                proveedorReferenciaId: string | null;
+            }) | null;
+            adicionalesRestricciones: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                tenantId: string;
+                permitido: boolean;
+                productoVarianteId: string;
+                productoAdicionalId: string;
+            }[];
+            opcionesProductivasSet: ({
+                valores: {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    tenantId: string;
+                    valor: import("@prisma/client").$Enums.ValorOpcionProductiva;
+                    orden: number;
+                    dimension: import("@prisma/client").$Enums.DimensionOpcionProductiva;
+                    opcionSetId: string;
+                }[];
+            } & {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                tenantId: string;
+                productoVarianteId: string;
+            }) | null;
+        } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            activo: boolean;
+            nombre: string;
+            tenantId: string;
+            productoServicioId: string;
+            anchoMm: Prisma.Decimal;
+            altoMm: Prisma.Decimal;
+            papelVarianteId: string | null;
+            tipoImpresion: import("@prisma/client").$Enums.TipoImpresionProductoVariante;
+            caras: import("@prisma/client").$Enums.CarasProductoVariante;
+            procesoDefinicionId: string | null;
+        };
+        producto: {
+            adicionalesAsignados: ({
+                productoAdicional: {
+                    centroCosto: {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        nombre: string;
+                        tenantId: string;
+                        descripcion: string | null;
+                        plantaId: string;
+                        codigo: string;
+                        areaCostoId: string;
+                        tipoCentro: import("@prisma/client").$Enums.TipoCentroCosto;
+                        categoriaGrafica: import("@prisma/client").$Enums.CategoriaGraficaCentroCosto;
+                        imputacionPreferida: import("@prisma/client").$Enums.ImputacionPreferidaCentroCosto;
+                        unidadBaseFutura: import("@prisma/client").$Enums.UnidadBaseCentroCosto;
+                        responsableEmpleadoId: string | null;
+                    } | null;
+                } & {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    nombre: string;
+                    tenantId: string;
+                    descripcion: string | null;
+                    tipo: import("@prisma/client").$Enums.TipoProductoAdicional;
+                    codigo: string;
+                    centroCostoId: string | null;
+                    metodoCosto: import("@prisma/client").$Enums.MetodoCostoProductoAdicional;
+                    metadataJson: Prisma.JsonValue | null;
+                };
+            } & {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                tenantId: string;
+                productoServicioId: string;
+                productoAdicionalId: string;
+            })[];
+        } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            activo: boolean;
+            nombre: string;
+            tenantId: string;
+            descripcion: string | null;
+            tipo: import("@prisma/client").$Enums.TipoProductoServicio;
+            codigo: string;
+            estado: import("@prisma/client").$Enums.EstadoProductoServicio;
+            detalleJson: Prisma.JsonValue | null;
+            motorCodigo: string;
+            motorVersion: number;
+            usarRutaComunVariantes: boolean;
+            modoMedidas: import("@prisma/client").$Enums.ModoMedidasProducto;
+            procesoDefinicionDefaultId: string | null;
+            familiaProductoId: string;
+            subfamiliaProductoId: string | null;
+            unidadComercial: string;
+        };
+        proceso: ({
+            operaciones: ({
+                centroCosto: {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    nombre: string;
+                    tenantId: string;
+                    descripcion: string | null;
+                    plantaId: string;
+                    codigo: string;
+                    areaCostoId: string;
+                    tipoCentro: import("@prisma/client").$Enums.TipoCentroCosto;
+                    categoriaGrafica: import("@prisma/client").$Enums.CategoriaGraficaCentroCosto;
+                    imputacionPreferida: import("@prisma/client").$Enums.ImputacionPreferidaCentroCosto;
+                    unidadBaseFutura: import("@prisma/client").$Enums.UnidadBaseCentroCosto;
+                    responsableEmpleadoId: string | null;
+                };
+                maquina: ({
+                    consumibles: ({
+                        materiaPrimaVariante: {
+                            id: string;
+                            createdAt: Date;
+                            updatedAt: Date;
+                            activo: boolean;
+                            tenantId: string;
+                            materiaPrimaId: string;
+                            sku: string;
+                            nombreVariante: string | null;
+                            atributosVarianteJson: Prisma.JsonValue;
+                            unidadStock: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                            unidadCompra: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                            precioReferencia: Prisma.Decimal | null;
+                            moneda: string | null;
+                            proveedorReferenciaId: string | null;
+                        };
+                        perfilOperativo: {
+                            id: string;
+                            nombre: string;
+                        } | null;
+                    } & {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        nombre: string;
+                        tenantId: string;
+                        tipo: import("@prisma/client").$Enums.TipoConsumibleMaquina;
+                        unidad: import("@prisma/client").$Enums.UnidadConsumoMaquina;
+                        maquinaId: string;
+                        detalleJson: Prisma.JsonValue | null;
+                        observaciones: string | null;
+                        materiaPrimaVarianteId: string;
+                        rendimientoEstimado: Prisma.Decimal | null;
+                        consumoBase: Prisma.Decimal | null;
+                        perfilOperativoId: string | null;
+                    })[];
+                    componentesDesgaste: ({
+                        materiaPrimaVariante: {
+                            id: string;
+                            createdAt: Date;
+                            updatedAt: Date;
+                            activo: boolean;
+                            tenantId: string;
+                            materiaPrimaId: string;
+                            sku: string;
+                            nombreVariante: string | null;
+                            atributosVarianteJson: Prisma.JsonValue;
+                            unidadStock: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                            unidadCompra: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                            precioReferencia: Prisma.Decimal | null;
+                            moneda: string | null;
+                            proveedorReferenciaId: string | null;
+                        };
+                    } & {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        nombre: string;
+                        tenantId: string;
+                        tipo: import("@prisma/client").$Enums.TipoComponenteDesgasteMaquina;
+                        maquinaId: string;
+                        detalleJson: Prisma.JsonValue | null;
+                        observaciones: string | null;
+                        materiaPrimaVarianteId: string;
+                        vidaUtilEstimada: Prisma.Decimal | null;
+                        unidadDesgaste: import("@prisma/client").$Enums.UnidadDesgasteMaquina;
+                        modoProrrateo: string | null;
+                    })[];
+                } & {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    nombre: string;
+                    tenantId: string;
+                    plantaId: string;
+                    codigo: string;
+                    estado: import("@prisma/client").$Enums.EstadoMaquina;
+                    plantilla: import("@prisma/client").$Enums.PlantillaMaquinaria;
+                    plantillaVersion: number;
+                    fabricante: string | null;
+                    modelo: string | null;
+                    numeroSerie: string | null;
+                    centroCostoPrincipalId: string | null;
+                    estadoConfiguracion: import("@prisma/client").$Enums.EstadoConfiguracionMaquina;
+                    geometriaTrabajo: import("@prisma/client").$Enums.GeometriaTrabajoMaquina;
+                    unidadProduccionPrincipal: import("@prisma/client").$Enums.UnidadProduccionMaquina;
+                    anchoUtil: Prisma.Decimal | null;
+                    largoUtil: Prisma.Decimal | null;
+                    altoUtil: Prisma.Decimal | null;
+                    espesorMaximo: Prisma.Decimal | null;
+                    pesoMaximo: Prisma.Decimal | null;
+                    fechaAlta: Date | null;
+                    observaciones: string | null;
+                    parametrosTecnicosJson: Prisma.JsonValue | null;
+                    capacidadesAvanzadasJson: Prisma.JsonValue | null;
+                }) | null;
+                perfilOperativo: {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    nombre: string;
+                    tenantId: string;
+                    maquinaId: string;
+                    detalleJson: Prisma.JsonValue | null;
+                    tipoPerfil: import("@prisma/client").$Enums.TipoPerfilOperativoMaquina;
+                    anchoAplicable: Prisma.Decimal | null;
+                    altoAplicable: Prisma.Decimal | null;
+                    operationMode: string | null;
+                    printMode: import("@prisma/client").$Enums.TipoImpresionProductoVariante | null;
+                    printSides: import("@prisma/client").$Enums.CarasProductoVariante | null;
+                    productivityValue: Prisma.Decimal | null;
+                    productivityUnit: import("@prisma/client").$Enums.UnidadProduccionMaquina | null;
+                    setupMin: Prisma.Decimal | null;
+                    cleanupMin: Prisma.Decimal | null;
+                    feedReloadMin: Prisma.Decimal | null;
+                    sheetThicknessMm: Prisma.Decimal | null;
+                    maxBatchHeightMm: Prisma.Decimal | null;
+                    materialPreset: string | null;
+                    cantidadPasadas: number | null;
+                    dobleFaz: boolean;
+                } | null;
+                plantillaOrigen: ({
+                    centroCosto: {
+                        id: string;
+                        nombre: string;
+                    } | null;
+                    maquina: {
+                        id: string;
+                        nombre: string;
+                        plantilla: import("@prisma/client").$Enums.PlantillaMaquinaria;
+                    } | null;
+                    perfilOperativo: {
+                        id: string;
+                        nombre: string;
+                    } | null;
+                } & {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    nombre: string;
+                    tenantId: string;
+                    maquinaId: string | null;
+                    centroCostoId: string | null;
+                    detalleJson: Prisma.JsonValue | null;
+                    observaciones: string | null;
+                    setupMin: Prisma.Decimal | null;
+                    cleanupMin: Prisma.Decimal | null;
+                    perfilOperativoId: string | null;
+                    tipoOperacion: import("@prisma/client").$Enums.TipoOperacionProceso;
+                    estacionId: string | null;
+                    tiempoFijoMin: Prisma.Decimal | null;
+                    modoProductividad: import("@prisma/client").$Enums.ModoProductividadProceso;
+                    productividadBase: Prisma.Decimal | null;
+                    unidadEntrada: import("@prisma/client").$Enums.UnidadProceso;
+                    unidadSalida: import("@prisma/client").$Enums.UnidadProceso;
+                    unidadTiempo: import("@prisma/client").$Enums.UnidadProceso;
+                    mermaRunPct: Prisma.Decimal | null;
+                    familiaV2: string | null;
+                    unidadProductivaV2: string | null;
+                    activacionV2: import("@prisma/client").$Enums.ActivacionPasoV2 | null;
+                    condicionV2: Prisma.JsonValue | null;
+                    leeDelTrabajoV2: Prisma.JsonValue | null;
+                    leeDePasosV2: Prisma.JsonValue | null;
+                    produceV2: Prisma.JsonValue | null;
+                    configNestingV2: Prisma.JsonValue | null;
+                    reglaVelocidadJson: Prisma.JsonValue | null;
+                    reglaMermaJson: Prisma.JsonValue | null;
+                }) | null;
+                requiresProductoAdicional: {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    nombre: string;
+                    tenantId: string;
+                    descripcion: string | null;
+                    tipo: import("@prisma/client").$Enums.TipoProductoAdicional;
+                    codigo: string;
+                    centroCostoId: string | null;
+                    metodoCosto: import("@prisma/client").$Enums.MetodoCostoProductoAdicional;
+                    metadataJson: Prisma.JsonValue | null;
+                } | null;
+                materialesConsumidos: ({
+                    materiaPrimaVariante: {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        tenantId: string;
+                        materiaPrimaId: string;
+                        sku: string;
+                        nombreVariante: string | null;
+                        atributosVarianteJson: Prisma.JsonValue;
+                        unidadStock: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                        unidadCompra: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                        precioReferencia: Prisma.Decimal | null;
+                        moneda: string | null;
+                        proveedorReferenciaId: string | null;
+                    } | null;
+                    variantesHabilitadas: ({
+                        materiaPrimaVariante: {
+                            id: string;
+                            createdAt: Date;
+                            updatedAt: Date;
+                            activo: boolean;
+                            tenantId: string;
+                            materiaPrimaId: string;
+                            sku: string;
+                            nombreVariante: string | null;
+                            atributosVarianteJson: Prisma.JsonValue;
+                            unidadStock: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                            unidadCompra: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                            precioReferencia: Prisma.Decimal | null;
+                            moneda: string | null;
+                            proveedorReferenciaId: string | null;
+                        };
+                    } & {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        tenantId: string;
+                        materiaPrimaVarianteId: string;
+                        orden: number;
+                        procesoOperacionMaterialId: string;
+                    })[];
+                    productoComponente: {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        nombre: string;
+                        tenantId: string;
+                        descripcion: string | null;
+                        tipo: import("@prisma/client").$Enums.TipoProductoServicio;
+                        codigo: string;
+                        estado: import("@prisma/client").$Enums.EstadoProductoServicio;
+                        detalleJson: Prisma.JsonValue | null;
+                        motorCodigo: string;
+                        motorVersion: number;
+                        usarRutaComunVariantes: boolean;
+                        modoMedidas: import("@prisma/client").$Enums.ModoMedidasProducto;
+                        procesoDefinicionDefaultId: string | null;
+                        familiaProductoId: string;
+                        subfamiliaProductoId: string | null;
+                        unidadComercial: string;
+                    } | null;
+                    varianteComponente: {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        nombre: string;
+                        tenantId: string;
+                        productoServicioId: string;
+                        anchoMm: Prisma.Decimal;
+                        altoMm: Prisma.Decimal;
+                        papelVarianteId: string | null;
+                        tipoImpresion: import("@prisma/client").$Enums.TipoImpresionProductoVariante;
+                        caras: import("@prisma/client").$Enums.CarasProductoVariante;
+                        procesoDefinicionId: string | null;
+                    } | null;
+                } & {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    nombre: string;
+                    tenantId: string;
+                    unidad: string;
+                    materiaPrimaVarianteId: string | null;
+                    formula: string;
+                    orden: number;
+                    productoComponenteId: string | null;
+                    varianteComponenteId: string | null;
+                    cantidadPorUnidad: Prisma.Decimal;
+                    precioManual: Prisma.Decimal | null;
+                    aplicaMultiCaras: boolean;
+                    esSustratoNesting: boolean;
+                    procesoOperacionId: string;
+                })[];
+                alternativas: ({
+                    maquina: {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        nombre: string;
+                        tenantId: string;
+                        plantaId: string;
+                        codigo: string;
+                        estado: import("@prisma/client").$Enums.EstadoMaquina;
+                        plantilla: import("@prisma/client").$Enums.PlantillaMaquinaria;
+                        plantillaVersion: number;
+                        fabricante: string | null;
+                        modelo: string | null;
+                        numeroSerie: string | null;
+                        centroCostoPrincipalId: string | null;
+                        estadoConfiguracion: import("@prisma/client").$Enums.EstadoConfiguracionMaquina;
+                        geometriaTrabajo: import("@prisma/client").$Enums.GeometriaTrabajoMaquina;
+                        unidadProduccionPrincipal: import("@prisma/client").$Enums.UnidadProduccionMaquina;
+                        anchoUtil: Prisma.Decimal | null;
+                        largoUtil: Prisma.Decimal | null;
+                        altoUtil: Prisma.Decimal | null;
+                        espesorMaximo: Prisma.Decimal | null;
+                        pesoMaximo: Prisma.Decimal | null;
+                        fechaAlta: Date | null;
+                        observaciones: string | null;
+                        parametrosTecnicosJson: Prisma.JsonValue | null;
+                        capacidadesAvanzadasJson: Prisma.JsonValue | null;
+                    } | null;
+                    perfilOperativo: {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        nombre: string;
+                        tenantId: string;
+                        maquinaId: string;
+                        detalleJson: Prisma.JsonValue | null;
+                        tipoPerfil: import("@prisma/client").$Enums.TipoPerfilOperativoMaquina;
+                        anchoAplicable: Prisma.Decimal | null;
+                        altoAplicable: Prisma.Decimal | null;
+                        operationMode: string | null;
+                        printMode: import("@prisma/client").$Enums.TipoImpresionProductoVariante | null;
+                        printSides: import("@prisma/client").$Enums.CarasProductoVariante | null;
+                        productivityValue: Prisma.Decimal | null;
+                        productivityUnit: import("@prisma/client").$Enums.UnidadProduccionMaquina | null;
+                        setupMin: Prisma.Decimal | null;
+                        cleanupMin: Prisma.Decimal | null;
+                        feedReloadMin: Prisma.Decimal | null;
+                        sheetThicknessMm: Prisma.Decimal | null;
+                        maxBatchHeightMm: Prisma.Decimal | null;
+                        materialPreset: string | null;
+                        cantidadPasadas: number | null;
+                        dobleFaz: boolean;
+                    } | null;
+                } & {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    tenantId: string;
+                    maquinaId: string | null;
+                    setupMin: Prisma.Decimal | null;
+                    cleanupMin: Prisma.Decimal | null;
+                    perfilOperativoId: string | null;
+                    orden: number;
+                    tiempoFijoMin: Prisma.Decimal | null;
+                    productividadBase: Prisma.Decimal | null;
+                    configNestingV2: Prisma.JsonValue | null;
+                    label: string;
+                    esDefault: boolean;
+                    procesoOperacionId: string;
+                })[];
+            } & {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                nombre: string;
+                tenantId: string;
+                rol: import("@prisma/client").$Enums.RolProcesoOperacion | null;
+                codigo: string;
+                maquinaId: string | null;
+                centroCostoId: string;
+                detalleJson: Prisma.JsonValue | null;
+                setupMin: Prisma.Decimal | null;
+                cleanupMin: Prisma.Decimal | null;
+                perfilOperativoId: string | null;
+                tipoOperacion: import("@prisma/client").$Enums.TipoOperacionProceso;
+                plantillaOrigenId: string | null;
+                orden: number;
+                runMin: Prisma.Decimal | null;
+                tiempoFijoMin: Prisma.Decimal | null;
+                multiplicadorDobleFaz: Prisma.Decimal | null;
+                modoProductividad: import("@prisma/client").$Enums.ModoProductividadProceso;
+                productividadBase: Prisma.Decimal | null;
+                unidadEntrada: import("@prisma/client").$Enums.UnidadProceso;
+                unidadSalida: import("@prisma/client").$Enums.UnidadProceso;
+                unidadTiempo: import("@prisma/client").$Enums.UnidadProceso;
+                mermaSetup: Prisma.Decimal | null;
+                mermaRunPct: Prisma.Decimal | null;
+                esOpcional: boolean;
+                familiaV2: string | null;
+                unidadProductivaV2: string | null;
+                activacionV2: import("@prisma/client").$Enums.ActivacionPasoV2 | null;
+                condicionV2: Prisma.JsonValue | null;
+                leeDelTrabajoV2: Prisma.JsonValue | null;
+                leeDePasosV2: Prisma.JsonValue | null;
+                produceV2: Prisma.JsonValue | null;
+                configNestingV2: Prisma.JsonValue | null;
+                procesoDefinicionId: string;
+                reglaVelocidadJson: Prisma.JsonValue | null;
+                reglaMermaJson: Prisma.JsonValue | null;
+                requiresProductoAdicionalId: string | null;
+            })[];
+        } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            activo: boolean;
+            nombre: string;
+            tenantId: string;
+            descripcion: string | null;
+            codigo: string;
+            estadoConfiguracion: import("@prisma/client").$Enums.EstadoConfiguracionProceso;
+            observaciones: string | null;
+            plantillaMaquinaria: import("@prisma/client").$Enums.PlantillaMaquinaria | null;
+            currentVersion: number;
+        }) | null;
+        tarifaByCentro: Map<string, number>;
+        configProducto: Record<string, unknown>;
+    }>;
+    loadTalonarioV2Runtime(auth: CurrentAuth, varianteId: string): Promise<{
+        variante: {
+            productoServicio: {
+                adicionalesAsignados: ({
+                    productoAdicional: {
+                        centroCosto: {
+                            id: string;
+                            createdAt: Date;
+                            updatedAt: Date;
+                            activo: boolean;
+                            nombre: string;
+                            tenantId: string;
+                            descripcion: string | null;
+                            plantaId: string;
+                            codigo: string;
+                            areaCostoId: string;
+                            tipoCentro: import("@prisma/client").$Enums.TipoCentroCosto;
+                            categoriaGrafica: import("@prisma/client").$Enums.CategoriaGraficaCentroCosto;
+                            imputacionPreferida: import("@prisma/client").$Enums.ImputacionPreferidaCentroCosto;
+                            unidadBaseFutura: import("@prisma/client").$Enums.UnidadBaseCentroCosto;
+                            responsableEmpleadoId: string | null;
+                        } | null;
+                    } & {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        nombre: string;
+                        tenantId: string;
+                        descripcion: string | null;
+                        tipo: import("@prisma/client").$Enums.TipoProductoAdicional;
+                        codigo: string;
+                        centroCostoId: string | null;
+                        metodoCosto: import("@prisma/client").$Enums.MetodoCostoProductoAdicional;
+                        metadataJson: Prisma.JsonValue | null;
+                    };
+                } & {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    tenantId: string;
+                    productoServicioId: string;
+                    productoAdicionalId: string;
+                })[];
+            } & {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                nombre: string;
+                tenantId: string;
+                descripcion: string | null;
+                tipo: import("@prisma/client").$Enums.TipoProductoServicio;
+                codigo: string;
+                estado: import("@prisma/client").$Enums.EstadoProductoServicio;
+                detalleJson: Prisma.JsonValue | null;
+                motorCodigo: string;
+                motorVersion: number;
+                usarRutaComunVariantes: boolean;
+                modoMedidas: import("@prisma/client").$Enums.ModoMedidasProducto;
+                procesoDefinicionDefaultId: string | null;
+                familiaProductoId: string;
+                subfamiliaProductoId: string | null;
+                unidadComercial: string;
+            };
+            papelVariante: ({
+                materiaPrima: {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    nombre: string;
+                    tenantId: string;
+                    descripcion: string | null;
+                    codigo: string;
+                    unidadStock: import("@prisma/client").$Enums.UnidadMateriaPrima;
+                    unidadCompra: import("@prisma/client").$Enums.UnidadMateriaPrima;
+                    familia: import("@prisma/client").$Enums.FamiliaMateriaPrima;
+                    subfamilia: import("@prisma/client").$Enums.SubfamiliaMateriaPrima;
+                    tipoTecnico: string;
+                    templateId: string;
+                    esConsumible: boolean;
+                    esRepuesto: boolean;
+                    atributosTecnicosJson: Prisma.JsonValue;
+                };
+            } & {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                tenantId: string;
+                materiaPrimaId: string;
+                sku: string;
+                nombreVariante: string | null;
+                atributosVarianteJson: Prisma.JsonValue;
+                unidadStock: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                unidadCompra: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                precioReferencia: Prisma.Decimal | null;
+                moneda: string | null;
+                proveedorReferenciaId: string | null;
+            }) | null;
+            adicionalesRestricciones: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                tenantId: string;
+                permitido: boolean;
+                productoVarianteId: string;
+                productoAdicionalId: string;
+            }[];
+            opcionesProductivasSet: ({
+                valores: {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    tenantId: string;
+                    valor: import("@prisma/client").$Enums.ValorOpcionProductiva;
+                    orden: number;
+                    dimension: import("@prisma/client").$Enums.DimensionOpcionProductiva;
+                    opcionSetId: string;
+                }[];
+            } & {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                tenantId: string;
+                productoVarianteId: string;
+            }) | null;
+        } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            activo: boolean;
+            nombre: string;
+            tenantId: string;
+            productoServicioId: string;
+            anchoMm: Prisma.Decimal;
+            altoMm: Prisma.Decimal;
+            papelVarianteId: string | null;
+            tipoImpresion: import("@prisma/client").$Enums.TipoImpresionProductoVariante;
+            caras: import("@prisma/client").$Enums.CarasProductoVariante;
+            procesoDefinicionId: string | null;
+        };
+        config: Record<string, unknown>;
+    }>;
+    loadRigidPrintedV2Runtime(auth: CurrentAuth, productoId: string): Promise<{
+        producto: {
+            familiaProducto: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                nombre: string;
+                tenantId: string;
+                codigo: string;
+            };
+            subfamiliaProducto: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                nombre: string;
+                tenantId: string;
+                codigo: string;
+                familiaProductoId: string;
+                unidadComercial: string | null;
+            } | null;
+            procesoDefinicionDefault: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                nombre: string;
+                tenantId: string;
+                descripcion: string | null;
+                codigo: string;
+                estadoConfiguracion: import("@prisma/client").$Enums.EstadoConfiguracionProceso;
+                observaciones: string | null;
+                plantillaMaquinaria: import("@prisma/client").$Enums.PlantillaMaquinaria | null;
+                currentVersion: number;
+            } | null;
+        } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            activo: boolean;
+            nombre: string;
+            tenantId: string;
+            descripcion: string | null;
+            tipo: import("@prisma/client").$Enums.TipoProductoServicio;
+            codigo: string;
+            estado: import("@prisma/client").$Enums.EstadoProductoServicio;
+            detalleJson: Prisma.JsonValue | null;
+            motorCodigo: string;
+            motorVersion: number;
+            usarRutaComunVariantes: boolean;
+            modoMedidas: import("@prisma/client").$Enums.ModoMedidasProducto;
+            procesoDefinicionDefaultId: string | null;
+            familiaProductoId: string;
+            subfamiliaProductoId: string | null;
+            unidadComercial: string;
+        };
+        config: Record<string, unknown>;
+        placas: ({
+            materiaPrima: {
+                id: string;
+                nombre: string;
+                subfamilia: import("@prisma/client").$Enums.SubfamiliaMateriaPrima;
+            };
+        } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            activo: boolean;
+            tenantId: string;
+            materiaPrimaId: string;
+            sku: string;
+            nombreVariante: string | null;
+            atributosVarianteJson: Prisma.JsonValue;
+            unidadStock: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+            unidadCompra: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+            precioReferencia: Prisma.Decimal | null;
+            moneda: string | null;
+            proveedorReferenciaId: string | null;
+        })[];
+    }>;
+    loadDigitalV2Runtime(auth: CurrentAuth, varianteId: string, periodo: string): Promise<{
+        variante: {
+            productoServicio: {
+                adicionalesAsignados: ({
+                    productoAdicional: {
+                        centroCosto: {
+                            id: string;
+                            createdAt: Date;
+                            updatedAt: Date;
+                            activo: boolean;
+                            nombre: string;
+                            tenantId: string;
+                            descripcion: string | null;
+                            plantaId: string;
+                            codigo: string;
+                            areaCostoId: string;
+                            tipoCentro: import("@prisma/client").$Enums.TipoCentroCosto;
+                            categoriaGrafica: import("@prisma/client").$Enums.CategoriaGraficaCentroCosto;
+                            imputacionPreferida: import("@prisma/client").$Enums.ImputacionPreferidaCentroCosto;
+                            unidadBaseFutura: import("@prisma/client").$Enums.UnidadBaseCentroCosto;
+                            responsableEmpleadoId: string | null;
+                        } | null;
+                    } & {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        nombre: string;
+                        tenantId: string;
+                        descripcion: string | null;
+                        tipo: import("@prisma/client").$Enums.TipoProductoAdicional;
+                        codigo: string;
+                        centroCostoId: string | null;
+                        metodoCosto: import("@prisma/client").$Enums.MetodoCostoProductoAdicional;
+                        metadataJson: Prisma.JsonValue | null;
+                    };
+                } & {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    tenantId: string;
+                    productoServicioId: string;
+                    productoAdicionalId: string;
+                })[];
+            } & {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                nombre: string;
+                tenantId: string;
+                descripcion: string | null;
+                tipo: import("@prisma/client").$Enums.TipoProductoServicio;
+                codigo: string;
+                estado: import("@prisma/client").$Enums.EstadoProductoServicio;
+                detalleJson: Prisma.JsonValue | null;
+                motorCodigo: string;
+                motorVersion: number;
+                usarRutaComunVariantes: boolean;
+                modoMedidas: import("@prisma/client").$Enums.ModoMedidasProducto;
+                procesoDefinicionDefaultId: string | null;
+                familiaProductoId: string;
+                subfamiliaProductoId: string | null;
+                unidadComercial: string;
+            };
+            papelVariante: ({
+                materiaPrima: {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    nombre: string;
+                    tenantId: string;
+                    descripcion: string | null;
+                    codigo: string;
+                    unidadStock: import("@prisma/client").$Enums.UnidadMateriaPrima;
+                    unidadCompra: import("@prisma/client").$Enums.UnidadMateriaPrima;
+                    familia: import("@prisma/client").$Enums.FamiliaMateriaPrima;
+                    subfamilia: import("@prisma/client").$Enums.SubfamiliaMateriaPrima;
+                    tipoTecnico: string;
+                    templateId: string;
+                    esConsumible: boolean;
+                    esRepuesto: boolean;
+                    atributosTecnicosJson: Prisma.JsonValue;
+                };
+            } & {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                tenantId: string;
+                materiaPrimaId: string;
+                sku: string;
+                nombreVariante: string | null;
+                atributosVarianteJson: Prisma.JsonValue;
+                unidadStock: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                unidadCompra: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                precioReferencia: Prisma.Decimal | null;
+                moneda: string | null;
+                proveedorReferenciaId: string | null;
+            }) | null;
+            adicionalesRestricciones: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                tenantId: string;
+                permitido: boolean;
+                productoVarianteId: string;
+                productoAdicionalId: string;
+            }[];
+            opcionesProductivasSet: ({
+                valores: {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    tenantId: string;
+                    valor: import("@prisma/client").$Enums.ValorOpcionProductiva;
+                    orden: number;
+                    dimension: import("@prisma/client").$Enums.DimensionOpcionProductiva;
+                    opcionSetId: string;
+                }[];
+            } & {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                tenantId: string;
+                productoVarianteId: string;
+            }) | null;
+        } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            activo: boolean;
+            nombre: string;
+            tenantId: string;
+            productoServicioId: string;
+            anchoMm: Prisma.Decimal;
+            altoMm: Prisma.Decimal;
+            papelVarianteId: string | null;
+            tipoImpresion: import("@prisma/client").$Enums.TipoImpresionProductoVariante;
+            caras: import("@prisma/client").$Enums.CarasProductoVariante;
+            procesoDefinicionId: string | null;
+        };
+        config: Record<string, unknown>;
+        proceso: ({
+            operaciones: ({
+                centroCosto: {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    nombre: string;
+                    tenantId: string;
+                    descripcion: string | null;
+                    plantaId: string;
+                    codigo: string;
+                    areaCostoId: string;
+                    tipoCentro: import("@prisma/client").$Enums.TipoCentroCosto;
+                    categoriaGrafica: import("@prisma/client").$Enums.CategoriaGraficaCentroCosto;
+                    imputacionPreferida: import("@prisma/client").$Enums.ImputacionPreferidaCentroCosto;
+                    unidadBaseFutura: import("@prisma/client").$Enums.UnidadBaseCentroCosto;
+                    responsableEmpleadoId: string | null;
+                };
+                maquina: ({
+                    consumibles: ({
+                        materiaPrimaVariante: {
+                            id: string;
+                            createdAt: Date;
+                            updatedAt: Date;
+                            activo: boolean;
+                            tenantId: string;
+                            materiaPrimaId: string;
+                            sku: string;
+                            nombreVariante: string | null;
+                            atributosVarianteJson: Prisma.JsonValue;
+                            unidadStock: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                            unidadCompra: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                            precioReferencia: Prisma.Decimal | null;
+                            moneda: string | null;
+                            proveedorReferenciaId: string | null;
+                        };
+                        perfilOperativo: {
+                            id: string;
+                            nombre: string;
+                        } | null;
+                    } & {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        nombre: string;
+                        tenantId: string;
+                        tipo: import("@prisma/client").$Enums.TipoConsumibleMaquina;
+                        unidad: import("@prisma/client").$Enums.UnidadConsumoMaquina;
+                        maquinaId: string;
+                        detalleJson: Prisma.JsonValue | null;
+                        observaciones: string | null;
+                        materiaPrimaVarianteId: string;
+                        rendimientoEstimado: Prisma.Decimal | null;
+                        consumoBase: Prisma.Decimal | null;
+                        perfilOperativoId: string | null;
+                    })[];
+                    componentesDesgaste: ({
+                        materiaPrimaVariante: {
+                            id: string;
+                            createdAt: Date;
+                            updatedAt: Date;
+                            activo: boolean;
+                            tenantId: string;
+                            materiaPrimaId: string;
+                            sku: string;
+                            nombreVariante: string | null;
+                            atributosVarianteJson: Prisma.JsonValue;
+                            unidadStock: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                            unidadCompra: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                            precioReferencia: Prisma.Decimal | null;
+                            moneda: string | null;
+                            proveedorReferenciaId: string | null;
+                        };
+                    } & {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        nombre: string;
+                        tenantId: string;
+                        tipo: import("@prisma/client").$Enums.TipoComponenteDesgasteMaquina;
+                        maquinaId: string;
+                        detalleJson: Prisma.JsonValue | null;
+                        observaciones: string | null;
+                        materiaPrimaVarianteId: string;
+                        vidaUtilEstimada: Prisma.Decimal | null;
+                        unidadDesgaste: import("@prisma/client").$Enums.UnidadDesgasteMaquina;
+                        modoProrrateo: string | null;
+                    })[];
+                } & {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    nombre: string;
+                    tenantId: string;
+                    plantaId: string;
+                    codigo: string;
+                    estado: import("@prisma/client").$Enums.EstadoMaquina;
+                    plantilla: import("@prisma/client").$Enums.PlantillaMaquinaria;
+                    plantillaVersion: number;
+                    fabricante: string | null;
+                    modelo: string | null;
+                    numeroSerie: string | null;
+                    centroCostoPrincipalId: string | null;
+                    estadoConfiguracion: import("@prisma/client").$Enums.EstadoConfiguracionMaquina;
+                    geometriaTrabajo: import("@prisma/client").$Enums.GeometriaTrabajoMaquina;
+                    unidadProduccionPrincipal: import("@prisma/client").$Enums.UnidadProduccionMaquina;
+                    anchoUtil: Prisma.Decimal | null;
+                    largoUtil: Prisma.Decimal | null;
+                    altoUtil: Prisma.Decimal | null;
+                    espesorMaximo: Prisma.Decimal | null;
+                    pesoMaximo: Prisma.Decimal | null;
+                    fechaAlta: Date | null;
+                    observaciones: string | null;
+                    parametrosTecnicosJson: Prisma.JsonValue | null;
+                    capacidadesAvanzadasJson: Prisma.JsonValue | null;
+                }) | null;
+                perfilOperativo: {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    nombre: string;
+                    tenantId: string;
+                    maquinaId: string;
+                    detalleJson: Prisma.JsonValue | null;
+                    tipoPerfil: import("@prisma/client").$Enums.TipoPerfilOperativoMaquina;
+                    anchoAplicable: Prisma.Decimal | null;
+                    altoAplicable: Prisma.Decimal | null;
+                    operationMode: string | null;
+                    printMode: import("@prisma/client").$Enums.TipoImpresionProductoVariante | null;
+                    printSides: import("@prisma/client").$Enums.CarasProductoVariante | null;
+                    productivityValue: Prisma.Decimal | null;
+                    productivityUnit: import("@prisma/client").$Enums.UnidadProduccionMaquina | null;
+                    setupMin: Prisma.Decimal | null;
+                    cleanupMin: Prisma.Decimal | null;
+                    feedReloadMin: Prisma.Decimal | null;
+                    sheetThicknessMm: Prisma.Decimal | null;
+                    maxBatchHeightMm: Prisma.Decimal | null;
+                    materialPreset: string | null;
+                    cantidadPasadas: number | null;
+                    dobleFaz: boolean;
+                } | null;
+                plantillaOrigen: ({
+                    centroCosto: {
+                        id: string;
+                        nombre: string;
+                    } | null;
+                    maquina: {
+                        id: string;
+                        nombre: string;
+                        plantilla: import("@prisma/client").$Enums.PlantillaMaquinaria;
+                    } | null;
+                    perfilOperativo: {
+                        id: string;
+                        nombre: string;
+                    } | null;
+                } & {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    nombre: string;
+                    tenantId: string;
+                    maquinaId: string | null;
+                    centroCostoId: string | null;
+                    detalleJson: Prisma.JsonValue | null;
+                    observaciones: string | null;
+                    setupMin: Prisma.Decimal | null;
+                    cleanupMin: Prisma.Decimal | null;
+                    perfilOperativoId: string | null;
+                    tipoOperacion: import("@prisma/client").$Enums.TipoOperacionProceso;
+                    estacionId: string | null;
+                    tiempoFijoMin: Prisma.Decimal | null;
+                    modoProductividad: import("@prisma/client").$Enums.ModoProductividadProceso;
+                    productividadBase: Prisma.Decimal | null;
+                    unidadEntrada: import("@prisma/client").$Enums.UnidadProceso;
+                    unidadSalida: import("@prisma/client").$Enums.UnidadProceso;
+                    unidadTiempo: import("@prisma/client").$Enums.UnidadProceso;
+                    mermaRunPct: Prisma.Decimal | null;
+                    familiaV2: string | null;
+                    unidadProductivaV2: string | null;
+                    activacionV2: import("@prisma/client").$Enums.ActivacionPasoV2 | null;
+                    condicionV2: Prisma.JsonValue | null;
+                    leeDelTrabajoV2: Prisma.JsonValue | null;
+                    leeDePasosV2: Prisma.JsonValue | null;
+                    produceV2: Prisma.JsonValue | null;
+                    configNestingV2: Prisma.JsonValue | null;
+                    reglaVelocidadJson: Prisma.JsonValue | null;
+                    reglaMermaJson: Prisma.JsonValue | null;
+                }) | null;
+                requiresProductoAdicional: {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    nombre: string;
+                    tenantId: string;
+                    descripcion: string | null;
+                    tipo: import("@prisma/client").$Enums.TipoProductoAdicional;
+                    codigo: string;
+                    centroCostoId: string | null;
+                    metodoCosto: import("@prisma/client").$Enums.MetodoCostoProductoAdicional;
+                    metadataJson: Prisma.JsonValue | null;
+                } | null;
+                materialesConsumidos: ({
+                    materiaPrimaVariante: {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        tenantId: string;
+                        materiaPrimaId: string;
+                        sku: string;
+                        nombreVariante: string | null;
+                        atributosVarianteJson: Prisma.JsonValue;
+                        unidadStock: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                        unidadCompra: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                        precioReferencia: Prisma.Decimal | null;
+                        moneda: string | null;
+                        proveedorReferenciaId: string | null;
+                    } | null;
+                    variantesHabilitadas: ({
+                        materiaPrimaVariante: {
+                            id: string;
+                            createdAt: Date;
+                            updatedAt: Date;
+                            activo: boolean;
+                            tenantId: string;
+                            materiaPrimaId: string;
+                            sku: string;
+                            nombreVariante: string | null;
+                            atributosVarianteJson: Prisma.JsonValue;
+                            unidadStock: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                            unidadCompra: import("@prisma/client").$Enums.UnidadMateriaPrima | null;
+                            precioReferencia: Prisma.Decimal | null;
+                            moneda: string | null;
+                            proveedorReferenciaId: string | null;
+                        };
+                    } & {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        tenantId: string;
+                        materiaPrimaVarianteId: string;
+                        orden: number;
+                        procesoOperacionMaterialId: string;
+                    })[];
+                    productoComponente: {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        nombre: string;
+                        tenantId: string;
+                        descripcion: string | null;
+                        tipo: import("@prisma/client").$Enums.TipoProductoServicio;
+                        codigo: string;
+                        estado: import("@prisma/client").$Enums.EstadoProductoServicio;
+                        detalleJson: Prisma.JsonValue | null;
+                        motorCodigo: string;
+                        motorVersion: number;
+                        usarRutaComunVariantes: boolean;
+                        modoMedidas: import("@prisma/client").$Enums.ModoMedidasProducto;
+                        procesoDefinicionDefaultId: string | null;
+                        familiaProductoId: string;
+                        subfamiliaProductoId: string | null;
+                        unidadComercial: string;
+                    } | null;
+                    varianteComponente: {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        nombre: string;
+                        tenantId: string;
+                        productoServicioId: string;
+                        anchoMm: Prisma.Decimal;
+                        altoMm: Prisma.Decimal;
+                        papelVarianteId: string | null;
+                        tipoImpresion: import("@prisma/client").$Enums.TipoImpresionProductoVariante;
+                        caras: import("@prisma/client").$Enums.CarasProductoVariante;
+                        procesoDefinicionId: string | null;
+                    } | null;
+                } & {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    nombre: string;
+                    tenantId: string;
+                    unidad: string;
+                    materiaPrimaVarianteId: string | null;
+                    formula: string;
+                    orden: number;
+                    productoComponenteId: string | null;
+                    varianteComponenteId: string | null;
+                    cantidadPorUnidad: Prisma.Decimal;
+                    precioManual: Prisma.Decimal | null;
+                    aplicaMultiCaras: boolean;
+                    esSustratoNesting: boolean;
+                    procesoOperacionId: string;
+                })[];
+                alternativas: ({
+                    maquina: {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        nombre: string;
+                        tenantId: string;
+                        plantaId: string;
+                        codigo: string;
+                        estado: import("@prisma/client").$Enums.EstadoMaquina;
+                        plantilla: import("@prisma/client").$Enums.PlantillaMaquinaria;
+                        plantillaVersion: number;
+                        fabricante: string | null;
+                        modelo: string | null;
+                        numeroSerie: string | null;
+                        centroCostoPrincipalId: string | null;
+                        estadoConfiguracion: import("@prisma/client").$Enums.EstadoConfiguracionMaquina;
+                        geometriaTrabajo: import("@prisma/client").$Enums.GeometriaTrabajoMaquina;
+                        unidadProduccionPrincipal: import("@prisma/client").$Enums.UnidadProduccionMaquina;
+                        anchoUtil: Prisma.Decimal | null;
+                        largoUtil: Prisma.Decimal | null;
+                        altoUtil: Prisma.Decimal | null;
+                        espesorMaximo: Prisma.Decimal | null;
+                        pesoMaximo: Prisma.Decimal | null;
+                        fechaAlta: Date | null;
+                        observaciones: string | null;
+                        parametrosTecnicosJson: Prisma.JsonValue | null;
+                        capacidadesAvanzadasJson: Prisma.JsonValue | null;
+                    } | null;
+                    perfilOperativo: {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        activo: boolean;
+                        nombre: string;
+                        tenantId: string;
+                        maquinaId: string;
+                        detalleJson: Prisma.JsonValue | null;
+                        tipoPerfil: import("@prisma/client").$Enums.TipoPerfilOperativoMaquina;
+                        anchoAplicable: Prisma.Decimal | null;
+                        altoAplicable: Prisma.Decimal | null;
+                        operationMode: string | null;
+                        printMode: import("@prisma/client").$Enums.TipoImpresionProductoVariante | null;
+                        printSides: import("@prisma/client").$Enums.CarasProductoVariante | null;
+                        productivityValue: Prisma.Decimal | null;
+                        productivityUnit: import("@prisma/client").$Enums.UnidadProduccionMaquina | null;
+                        setupMin: Prisma.Decimal | null;
+                        cleanupMin: Prisma.Decimal | null;
+                        feedReloadMin: Prisma.Decimal | null;
+                        sheetThicknessMm: Prisma.Decimal | null;
+                        maxBatchHeightMm: Prisma.Decimal | null;
+                        materialPreset: string | null;
+                        cantidadPasadas: number | null;
+                        dobleFaz: boolean;
+                    } | null;
+                } & {
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    activo: boolean;
+                    tenantId: string;
+                    maquinaId: string | null;
+                    setupMin: Prisma.Decimal | null;
+                    cleanupMin: Prisma.Decimal | null;
+                    perfilOperativoId: string | null;
+                    orden: number;
+                    tiempoFijoMin: Prisma.Decimal | null;
+                    productividadBase: Prisma.Decimal | null;
+                    configNestingV2: Prisma.JsonValue | null;
+                    label: string;
+                    esDefault: boolean;
+                    procesoOperacionId: string;
+                })[];
+            } & {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                nombre: string;
+                tenantId: string;
+                rol: import("@prisma/client").$Enums.RolProcesoOperacion | null;
+                codigo: string;
+                maquinaId: string | null;
+                centroCostoId: string;
+                detalleJson: Prisma.JsonValue | null;
+                setupMin: Prisma.Decimal | null;
+                cleanupMin: Prisma.Decimal | null;
+                perfilOperativoId: string | null;
+                tipoOperacion: import("@prisma/client").$Enums.TipoOperacionProceso;
+                plantillaOrigenId: string | null;
+                orden: number;
+                runMin: Prisma.Decimal | null;
+                tiempoFijoMin: Prisma.Decimal | null;
+                multiplicadorDobleFaz: Prisma.Decimal | null;
+                modoProductividad: import("@prisma/client").$Enums.ModoProductividadProceso;
+                productividadBase: Prisma.Decimal | null;
+                unidadEntrada: import("@prisma/client").$Enums.UnidadProceso;
+                unidadSalida: import("@prisma/client").$Enums.UnidadProceso;
+                unidadTiempo: import("@prisma/client").$Enums.UnidadProceso;
+                mermaSetup: Prisma.Decimal | null;
+                mermaRunPct: Prisma.Decimal | null;
+                esOpcional: boolean;
+                familiaV2: string | null;
+                unidadProductivaV2: string | null;
+                activacionV2: import("@prisma/client").$Enums.ActivacionPasoV2 | null;
+                condicionV2: Prisma.JsonValue | null;
+                leeDelTrabajoV2: Prisma.JsonValue | null;
+                leeDePasosV2: Prisma.JsonValue | null;
+                produceV2: Prisma.JsonValue | null;
+                configNestingV2: Prisma.JsonValue | null;
+                procesoDefinicionId: string;
+                reglaVelocidadJson: Prisma.JsonValue | null;
+                reglaMermaJson: Prisma.JsonValue | null;
+                requiresProductoAdicionalId: string | null;
+            })[];
+        } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            activo: boolean;
+            nombre: string;
+            tenantId: string;
+            descripcion: string | null;
+            codigo: string;
+            estadoConfiguracion: import("@prisma/client").$Enums.EstadoConfiguracionProceso;
+            observaciones: string | null;
+            plantillaMaquinaria: import("@prisma/client").$Enums.PlantillaMaquinaria | null;
+            currentVersion: number;
+        }) | null;
+        tarifaByCentro: Map<string, number>;
+        configuracionesImpresion: Record<string, unknown>[];
+        maquinaById: Map<string, {
+            centroCostoPrincipal: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                activo: boolean;
+                nombre: string;
+                tenantId: string;
+                descripcion: string | null;
+                plantaId: string;
+                codigo: string;
+                areaCostoId: string;
+                tipoCentro: import("@prisma/client").$Enums.TipoCentroCosto;
+                categoriaGrafica: import("@prisma/client").$Enums.CategoriaGraficaCentroCosto;
+                imputacionPreferida: import("@prisma/client").$Enums.ImputacionPreferidaCentroCosto;
+                unidadBaseFutura: import("@prisma/client").$Enums.UnidadBaseCentroCosto;
+                responsableEmpleadoId: string | null;
+            } | null;
+        } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            activo: boolean;
+            nombre: string;
+            tenantId: string;
+            plantaId: string;
+            codigo: string;
+            estado: import("@prisma/client").$Enums.EstadoMaquina;
+            plantilla: import("@prisma/client").$Enums.PlantillaMaquinaria;
+            plantillaVersion: number;
+            fabricante: string | null;
+            modelo: string | null;
+            numeroSerie: string | null;
+            centroCostoPrincipalId: string | null;
+            estadoConfiguracion: import("@prisma/client").$Enums.EstadoConfiguracionMaquina;
+            geometriaTrabajo: import("@prisma/client").$Enums.GeometriaTrabajoMaquina;
+            unidadProduccionPrincipal: import("@prisma/client").$Enums.UnidadProduccionMaquina;
+            anchoUtil: Prisma.Decimal | null;
+            largoUtil: Prisma.Decimal | null;
+            altoUtil: Prisma.Decimal | null;
+            espesorMaximo: Prisma.Decimal | null;
+            pesoMaximo: Prisma.Decimal | null;
+            fechaAlta: Date | null;
+            observaciones: string | null;
+            parametrosTecnicosJson: Prisma.JsonValue | null;
+            capacidadesAvanzadasJson: Prisma.JsonValue | null;
+        }>;
+        perfilById: Map<string, {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            activo: boolean;
+            nombre: string;
+            tenantId: string;
+            maquinaId: string;
+            detalleJson: Prisma.JsonValue | null;
+            tipoPerfil: import("@prisma/client").$Enums.TipoPerfilOperativoMaquina;
+            anchoAplicable: Prisma.Decimal | null;
+            altoAplicable: Prisma.Decimal | null;
+            operationMode: string | null;
+            printMode: import("@prisma/client").$Enums.TipoImpresionProductoVariante | null;
+            printSides: import("@prisma/client").$Enums.CarasProductoVariante | null;
+            productivityValue: Prisma.Decimal | null;
+            productivityUnit: import("@prisma/client").$Enums.UnidadProduccionMaquina | null;
+            setupMin: Prisma.Decimal | null;
+            cleanupMin: Prisma.Decimal | null;
+            feedReloadMin: Prisma.Decimal | null;
+            sheetThicknessMm: Prisma.Decimal | null;
+            maxBatchHeightMm: Prisma.Decimal | null;
+            materialPreset: string | null;
+            cantidadPasadas: number | null;
+            dobleFaz: boolean;
+        }>;
     }>;
     upsertWideFormatProductMotorConfig(auth: CurrentAuth, productoId: string, payload: UpsertProductoMotorConfigDto): Promise<{
         productoId: string;
@@ -1773,7 +3686,7 @@ export declare class ProductosServiciosService {
                         materiaPrimaVarianteId: string | null;
                         materiaPrimaNombre: any;
                         materiaPrimaSku: any;
-                        tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
+                        tipoConsumo: "por_m2" | "por_unidad" | "por_pliego" | null;
                         factorConsumo: number | null;
                         mermaPct: number | null;
                         detalle: Record<string, unknown> | {
@@ -1849,7 +3762,7 @@ export declare class ProductosServiciosService {
                             materiaPrimaVarianteId: string | null;
                             materiaPrimaNombre: any;
                             materiaPrimaSku: any;
-                            tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
+                            tipoConsumo: "por_m2" | "por_unidad" | "por_pliego" | null;
                             factorConsumo: number | null;
                             mermaPct: number | null;
                             detalle: Record<string, unknown> | {
@@ -1929,7 +3842,7 @@ export declare class ProductosServiciosService {
                         materiaPrimaVarianteId: string | null;
                         materiaPrimaNombre: any;
                         materiaPrimaSku: any;
-                        tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
+                        tipoConsumo: "por_m2" | "por_unidad" | "por_pliego" | null;
                         factorConsumo: number | null;
                         mermaPct: number | null;
                         detalle: Record<string, unknown> | {
@@ -2005,7 +3918,7 @@ export declare class ProductosServiciosService {
                             materiaPrimaVarianteId: string | null;
                             materiaPrimaNombre: any;
                             materiaPrimaSku: any;
-                            tipoConsumo: "por_unidad" | "por_pliego" | "por_m2" | null;
+                            tipoConsumo: "por_m2" | "por_unidad" | "por_pliego" | null;
                             factorConsumo: number | null;
                             mermaPct: number | null;
                             detalle: Record<string, unknown> | {
@@ -2021,183 +3934,6 @@ export declare class ProductosServiciosService {
             };
         } | null)[];
         updatedAt: string;
-    }>;
-    previewGranFormatoCostos(auth: CurrentAuth, productoId: string, payload: PreviewGranFormatoCostosDto): Promise<{
-        candidatos: {
-            variantId: any;
-            rollWidthMm: number;
-            printableWidthMm: number;
-            marginLeftMm: number;
-            marginRightMm: number;
-            marginStartMm: number;
-            marginEndMm: number;
-            orientacion: GranFormatoNestingOrientation;
-            panelizado: boolean;
-            panelAxis: "vertical" | "horizontal" | null;
-            panelCount: number;
-            panelOverlapMm: number | null;
-            panelMaxWidthMm: number | null;
-            panelDistribution: "equilibrada" | "libre" | null;
-            panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "automatico" | "manual" | null;
-            piecesPerRow: number;
-            rows: number;
-            consumedLengthMm: number;
-            usefulAreaM2: number;
-            consumedAreaM2: number;
-            wasteAreaM2: number;
-            wastePct: number;
-            substrateCost: number;
-            inkCost: number;
-            timeCost: number;
-            totalCost: number;
-            placements: {
-                id: string;
-                widthMm: number;
-                heightMm: number;
-                usefulWidthMm: number;
-                usefulHeightMm: number;
-                overlapStartMm: number;
-                overlapEndMm: number;
-                centerXMm: number;
-                centerYMm: number;
-                label: string;
-                rotated: boolean;
-                originalWidthMm: number;
-                originalHeightMm: number;
-                panelIndex: number | null;
-                panelCount: number | null;
-                panelAxis: "vertical" | "horizontal" | null;
-                sourcePieceId: string | null;
-            }[];
-        }[] | undefined;
-        productoId: string;
-        cantidadTotal: number;
-        periodo: string;
-        tecnologia: string;
-        simulacionHibrida: boolean;
-        medidasOriginales: {
-            anchoMm: number;
-            altoMm: number;
-            cantidad: number;
-        }[];
-        medidasEfectivas: {
-            anchoMm: number;
-            altoMm: number;
-            cantidad: number;
-        }[];
-        mutacionesAplicadas: GranFormatoChecklistMutationTrace[];
-        traceChecklist: {
-            preguntaId: string;
-            pregunta: string;
-            respuestaId: string;
-            respuesta: string;
-        }[];
-        maquinaId: any;
-        maquinaNombre: any;
-        perfilId: any;
-        perfilNombre: any;
-        warnings: string[];
-        resumenTecnico: Record<string, unknown>;
-        gruposTrabajo: Record<string, unknown>[] | undefined;
-        corridasTrabajo: Record<string, unknown>[] | undefined;
-        materiasPrimas: Record<string, unknown>[];
-        centrosCosto: Record<string, unknown>[];
-        totales: {
-            materiales: number;
-            centrosCosto: number;
-            tecnico: number;
-        };
-        nestingPreview: Record<string, unknown> | null;
-    } | {
-        candidatos: {
-            variantId: any;
-            rollWidthMm: number;
-            printableWidthMm: number;
-            marginLeftMm: number;
-            marginRightMm: number;
-            marginStartMm: number;
-            marginEndMm: number;
-            orientacion: GranFormatoNestingOrientation;
-            panelizado: boolean;
-            panelAxis: "vertical" | "horizontal" | null;
-            panelCount: number;
-            panelOverlapMm: number | null;
-            panelMaxWidthMm: number | null;
-            panelDistribution: "equilibrada" | "libre" | null;
-            panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "automatico" | "manual" | null;
-            piecesPerRow: number;
-            rows: number;
-            consumedLengthMm: number;
-            usefulAreaM2: number;
-            consumedAreaM2: number;
-            wasteAreaM2: number;
-            wastePct: number;
-            substrateCost: number;
-            inkCost: number;
-            timeCost: number;
-            totalCost: number;
-            placements: {
-                id: string;
-                widthMm: number;
-                heightMm: number;
-                usefulWidthMm: number;
-                usefulHeightMm: number;
-                overlapStartMm: number;
-                overlapEndMm: number;
-                centerXMm: number;
-                centerYMm: number;
-                label: string;
-                rotated: boolean;
-                originalWidthMm: number;
-                originalHeightMm: number;
-                panelIndex: number | null;
-                panelCount: number | null;
-                panelAxis: "vertical" | "horizontal" | null;
-                sourcePieceId: string | null;
-            }[];
-        }[] | undefined;
-        snapshotId: string;
-        createdAt: string;
-        productoId: string;
-        cantidadTotal: number;
-        periodo: string;
-        tecnologia: string;
-        simulacionHibrida: boolean;
-        medidasOriginales: {
-            anchoMm: number;
-            altoMm: number;
-            cantidad: number;
-        }[];
-        medidasEfectivas: {
-            anchoMm: number;
-            altoMm: number;
-            cantidad: number;
-        }[];
-        mutacionesAplicadas: GranFormatoChecklistMutationTrace[];
-        traceChecklist: {
-            preguntaId: string;
-            pregunta: string;
-            respuestaId: string;
-            respuesta: string;
-        }[];
-        maquinaId: any;
-        maquinaNombre: any;
-        perfilId: any;
-        perfilNombre: any;
-        warnings: string[];
-        resumenTecnico: Record<string, unknown>;
-        gruposTrabajo: Record<string, unknown>[] | undefined;
-        corridasTrabajo: Record<string, unknown>[] | undefined;
-        materiasPrimas: Record<string, unknown>[];
-        centrosCosto: Record<string, unknown>[];
-        totales: {
-            materiales: number;
-            centrosCosto: number;
-            tecnico: number;
-        };
-        nestingPreview: Record<string, unknown> | null;
     }>;
     findGranFormatoVariantes(auth: CurrentAuth, productoId: string): Promise<{
         id: string;
@@ -2325,6 +4061,7 @@ export declare class ProductosServiciosService {
         subfamiliaProductoId: string | null;
         subfamiliaProductoNombre: string;
         unidadComercial: string;
+        modoMedidas: "ESTANDAR" | "LIBRE";
         precio: ProductoPrecioConfig | null;
         precioEspecialClientes: ProductoPrecioEspecialClienteConfig[];
         dimensionesBaseConsumidas: DimensionOpcionProductivaDto[];
@@ -2884,262 +4621,11 @@ export declare class ProductosServiciosService {
         activo: boolean;
         updatedAt: string;
     }>;
-    cotizarVariante(auth: CurrentAuth, varianteId: string, payload: CotizarProductoVarianteDto): Promise<unknown>;
-    quoteDigitalVariant(auth: CurrentAuth, varianteId: string, payload: CotizarProductoVarianteDto): Promise<{
-        createdAt: string;
-        varianteId: string;
-        productoServicioId: string;
-        productoNombre: string;
-        varianteNombre: string;
-        motorCodigo: string;
-        motorVersion: number;
-        periodo: string;
-        cantidad: number;
-        piezasPorPliego: number;
-        pliegos: number;
-        warnings: string[];
-        bloques: {
-            procesos: {
-                orden: number;
-                codigo: string;
-                nombre: string;
-                centroCostoId: string;
-                centroCostoNombre: string;
-                origen: string;
-                addonId: string | null;
-                setupMin: number;
-                runMin: number;
-                cleanupMin: number;
-                tiempoFijoMin: number;
-                totalMin: number;
-                tarifaHora: number;
-                costo: number;
-                detalleTecnico: Record<string, unknown> | null;
-            }[];
-            materiales: Record<string, unknown>[];
-        };
-        subtotales: {
-            procesos: number;
-            papel: number;
-            toner: number;
-            desgaste: number;
-            consumiblesTerminacion: number;
-            adicionalesMateriales: number;
-            adicionalesCostEffects: number;
-        };
-        total: number;
-        unitario: number;
-        trazabilidad: {
-            imposicion: {
-                tipoCorte: string;
-                piezasPorPliego: number;
-                orientacion: string;
-                anchoImprimibleMm: number;
-                altoImprimibleMm: number;
-                anchoDisponibleMm: number;
-                altoDisponibleMm: number;
-                normal: number;
-                rotada: number;
-                demasiaCorteMm: number;
-                lineaCorteMm: number;
-                piezaAnchoMm: number;
-                piezaAltoMm: number;
-                piezaAnchoEfectivoMm: number;
-                piezaAltoEfectivoMm: number;
-                cols: number;
-                rows: number;
-                sheetAnchoMm: number;
-                sheetAltoMm: number;
-                machineMargins: {
-                    leftMm: number;
-                    rightMm: number;
-                    topMm: number;
-                    bottomMm: number;
-                };
-            };
-            conversionPapel: {
-                esDerivado: boolean;
-                pliegosPorSustrato: number;
-                orientacion: string;
-            };
-            matchingBaseAplicado: {
-                pasoPlantillaId: any;
-                pasoPlantillaNombre: any;
-                perfilOperativoId: any;
-                perfilOperativoNombre: any;
-                tipoImpresion: TipoImpresionProductoVarianteDto | null;
-                caras: CarasProductoVarianteDto | null;
-            }[];
-            checklistAplicado: Record<string, unknown>[];
-            checklistRespuestasSeleccionadas: import("./dto/productos-servicios.dto").CotizarChecklistRespuestaDto[];
-            atributosTecnicosConfigurados: {
-                dimension: DimensionOpcionProductivaDto;
-                valor: ValorOpcionProductivaDto;
-            }[];
-            opcionProductivaEfectiva: {
-                dimension: DimensionOpcionProductivaDto;
-                valores: ValorOpcionProductivaDto[];
-            }[];
-            efectosAplicados: {
-                id: any;
-                addonId: any;
-                addonNombre: string;
-                tipo: TipoProductoAdicionalEfectoDto;
-                nombre: any;
-            }[];
-            routeEffectsAplicados: {
-                id: any;
-                addonId: any;
-                nombre: any;
-                pasos: any;
-                insertion: RouteEffectInsertionConfig;
-            }[];
-            costEffectsAplicados: {
-                id: any;
-                addonId: any;
-                nombre: any;
-                regla: ReglaCostoAdicionalEfectoDto | null;
-            }[];
-            materialEffectsAplicados: {
-                id: any;
-                addonId: any;
-                nombre: any;
-                material: any;
-            }[];
-            costosPorEfecto: Record<string, unknown>[];
-            pasosCondicionalesActivos: {
-                pasoCodigo: string;
-                addonId: string | null;
-            }[];
-            config: {
-                [x: string]: unknown;
-            };
-            terminacionesConfiguradas: ChecklistTerminacionDetalle[] | undefined;
-            configVersionBase: number | null;
-            configVersionOverride: number | null;
-        };
-        snapshotId: string;
-    }>;
-    quoteVinylCutVariant(auth: CurrentAuth, varianteId: string, payload: CotizarProductoVarianteDto): Promise<{
-        createdAt: string;
-        varianteId: string;
-        productoServicioId: string;
-        productoNombre: string;
-        varianteNombre: string;
-        motorCodigo: string;
-        motorVersion: number;
-        periodo: string;
-        cantidad: number;
-        piezasPorPliego: any;
-        pliegos: number;
-        warnings: string[];
-        bloques: {
-            procesos: {
-                orden: any;
-                codigo: any;
-                nombre: any;
-                centroCostoId: any;
-                centroCostoNombre: any;
-                origen: any;
-                addonId: null;
-                detalleTecnico: any;
-                setupMin: number;
-                runMin: number;
-                cleanupMin: number;
-                tiempoFijoMin: number;
-                totalMin: number;
-                tarifaHora: number;
-                costo: number;
-            }[];
-            materiales: any[] | never[];
-        };
-        subtotales: {
-            procesos: number;
-            papel: number;
-            toner: number;
-            desgaste: number;
-            consumiblesTerminacion: number;
-            adicionalesMateriales: number;
-            adicionalesCostEffects: number;
-        };
-        total: number;
-        unitario: number;
-        trazabilidad: {
-            config: {
-                [x: string]: unknown;
-            };
-            configVersionBase: number | null;
-            configVersionOverride: number | null;
-            resumenTecnico: Record<string, unknown>;
-            nestingPreview: {} | null;
-            coloresResumen: {
-                colorId: any;
-                colorLabel: any;
-                materialVarianteId: any;
-                nestingPreview: {} | null;
-                resumenTecnico: Record<string, unknown> | null;
-                totales: Record<string, unknown> | null;
-                materiasPrimas: unknown;
-            }[];
-        };
-        snapshotId: string;
-    }>;
+    cotizarVarianteV2(auth: CurrentAuth, varianteId: string, payload: CotizarProductoVarianteDto, _options?: {
+        forceMode?: 'V1' | 'V2' | 'SHADOW';
+        forceMotor?: 'universal';
+    }): Promise<unknown>;
     previewVarianteImposicion(auth: CurrentAuth, varianteId: string, payload: PreviewImposicionProductoVarianteDto): Promise<unknown>;
-    previewDigitalVariant(auth: CurrentAuth, varianteId: string, payload: PreviewImposicionProductoVarianteDto): Promise<{
-        varianteId: string;
-        varianteNombre: string;
-        pliegoImpresion: {
-            codigo: string;
-            nombre: string;
-            anchoMm: number;
-            altoMm: number;
-        };
-        sustrato: {
-            anchoMm: number;
-            altoMm: number;
-        };
-        machineMargins: {
-            leftMm: number;
-            rightMm: number;
-            topMm: number;
-            bottomMm: number;
-        };
-        imposicion: {
-            tipoCorte: string;
-            piezasPorPliego: number;
-            orientacion: string;
-            anchoImprimibleMm: number;
-            altoImprimibleMm: number;
-            anchoDisponibleMm: number;
-            altoDisponibleMm: number;
-            normal: number;
-            rotada: number;
-            demasiaCorteMm: number;
-            lineaCorteMm: number;
-            piezaAnchoMm: number;
-            piezaAltoMm: number;
-            piezaAnchoEfectivoMm: number;
-            piezaAltoEfectivoMm: number;
-            cols: number;
-            rows: number;
-            sheetAnchoMm: number;
-            sheetAltoMm: number;
-            machineMargins: {
-                leftMm: number;
-                rightMm: number;
-                topMm: number;
-                bottomMm: number;
-            };
-        };
-        conversionPapel: {
-            esDerivado: boolean;
-            pliegosPorSustrato: number;
-            orientacion: string;
-        };
-        config: {
-            [x: string]: unknown;
-        };
-    }>;
     getVarianteCotizaciones(auth: CurrentAuth, varianteId: string): Promise<{
         id: string;
         cantidad: number;
@@ -3152,80 +4638,6 @@ export declare class ProductosServiciosService {
         unitario: number;
         createdAt: string;
     }[]>;
-    previewVinylCutVariant(auth: CurrentAuth, varianteId: string, payload: PreviewImposicionProductoVarianteDto): Promise<{
-        config: Record<string, unknown>;
-        periodo: string;
-        colorResults: Array<Record<string, unknown>>;
-        items: Array<Record<string, unknown>>;
-        rejected: Array<Record<string, unknown>>;
-        warnings: string[];
-        aggregated: {
-            totalMateriales: number;
-            totalCentrosCosto: number;
-            totalTecnico: number;
-            centrosCosto: never[];
-            materiasPrimas: never[];
-        };
-    } | {
-        config: Record<string, unknown>;
-        periodo: string;
-        colorResults: {
-            colorId: string;
-            colorLabel: string;
-            materialVarianteId: string | null;
-            colorFiltro: string | null;
-            items: Array<Record<string, unknown>>;
-            winner: Record<string, unknown> | null;
-            warnings: string[];
-        }[];
-        items: Record<string, unknown>[];
-        rejected: Record<string, unknown>[];
-        warnings: string[];
-        aggregated: {
-            totalMateriales: number;
-            totalCentrosCosto: number;
-            totalTecnico: number;
-            centrosCosto: Record<string, unknown>[];
-            materiasPrimas: any[];
-        };
-    }>;
-    previewVinylCutByProducto(auth: CurrentAuth, productoId: string, payload: PreviewImposicionProductoVarianteDto): Promise<{
-        config: Record<string, unknown>;
-        periodo: string;
-        colorResults: Array<Record<string, unknown>>;
-        items: Array<Record<string, unknown>>;
-        rejected: Array<Record<string, unknown>>;
-        warnings: string[];
-        aggregated: {
-            totalMateriales: number;
-            totalCentrosCosto: number;
-            totalTecnico: number;
-            centrosCosto: never[];
-            materiasPrimas: never[];
-        };
-    } | {
-        config: Record<string, unknown>;
-        periodo: string;
-        colorResults: {
-            colorId: string;
-            colorLabel: string;
-            materialVarianteId: string | null;
-            colorFiltro: string | null;
-            items: Array<Record<string, unknown>>;
-            winner: Record<string, unknown> | null;
-            warnings: string[];
-        }[];
-        items: Record<string, unknown>[];
-        rejected: Record<string, unknown>[];
-        warnings: string[];
-        aggregated: {
-            totalMateriales: number;
-            totalCentrosCosto: number;
-            totalTecnico: number;
-            centrosCosto: Record<string, unknown>[];
-            materiasPrimas: any[];
-        };
-    }>;
     private getVarianteCotizacionesBase;
     getProductoCotizaciones(auth: CurrentAuth, productoId: string): Promise<{
         id: string;

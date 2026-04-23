@@ -1,5 +1,6 @@
 import { apiRequest } from '@/lib/api';
 import {
+  FamiliaPasoCatalogo,
   Proceso,
   ProcesoOperacionPlantilla,
   ProcesoOperacionPlantillaPayload,
@@ -114,6 +115,16 @@ export async function getProcesoOperacionPlantillas() {
   return apiRequest<ProcesoOperacionPlantilla[]>('/procesos/biblioteca-operaciones');
 }
 
+/**
+ * Catálogo declarativo de familias de paso del modelo universal.
+ * El frontend lo usa para renderizar selectores y secciones informativas
+ * (algoritmo de nesting, dimensión productiva, outputs disponibles) en
+ * la biblioteca de pasos.
+ */
+export async function getFamiliasPaso() {
+  return apiRequest<FamiliaPasoCatalogo[]>('/procesos/familias');
+}
+
 export async function createProcesoOperacionPlantilla(
   payload: ProcesoOperacionPlantillaPayload,
 ) {
@@ -165,7 +176,8 @@ export type ProcesoOperacionAlternativa = {
   esDefault: boolean;
   orden: number;
   activo: boolean;
-  maquinaId: string;
+  // Fase D.1 — máquina opcional (alternativas en pasos manuales).
+  maquinaId: string | null;
   perfilOperativoId: string | null;
   maquina: { id: string; nombre: string; plantilla: string | null } | null;
   perfilOperativo: { id: string; nombre: string } | null;
@@ -180,7 +192,9 @@ export type ProcesoOperacionAlternativa = {
 };
 
 export type ProcesoOperacionAlternativaPayload = {
-  maquinaId: string;
+  // Fase D.1 — opcional: pasos manuales pueden tener alternativas que solo
+  // varíen productividad/tiempo (ej: "Diseño básico" vs "Diseño express").
+  maquinaId?: string | null;
   perfilOperativoId?: string | null;
   label: string;
   esDefault?: boolean;
@@ -370,6 +384,9 @@ export async function deleteProcesoOperacionMaterial(
 }
 
 // P1.5 — Update parcial de un paso (ProcesoOperacion) y reorden.
+// Fase C — los campos de tiempo/productividad aceptan `null` para
+// "limpiar override y heredar de la plantilla origen". `plantillaOrigenId`
+// asocia (o desasocia con null) el paso a una plantilla.
 export type UpdateProcesoOperacionPayload = {
   nombre?: string;
   esOpcional?: boolean;
@@ -379,10 +396,13 @@ export type UpdateProcesoOperacionPayload = {
   centroCostoId?: string;
   maquinaId?: string | null;
   perfilOperativoId?: string | null;
-  setupMin?: number;
-  cleanupMin?: number;
-  tiempoFijoMin?: number;
-  productividadBase?: number;
+  plantillaOrigenId?: string | null;
+  setupMin?: number | null;
+  cleanupMin?: number | null;
+  tiempoFijoMin?: number | null;
+  productividadBase?: number | null;
+  // Fase D.2 — unidad de tiempo de la productividad (motor convierte a min).
+  unidadTiempo?: 'HORA' | 'MINUTO' | 'SEGUNDO';
   // null limpia la condición; ausente no toca el campo.
   condicionV2?: Record<string, unknown> | null;
   // null limpia la config de nesting; ausente no toca el campo.

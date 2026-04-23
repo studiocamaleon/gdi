@@ -62,29 +62,56 @@ export class UpdateProcesoOperacionDto {
   @Transform(({ value }) => (value === '' ? null : value))
   perfilOperativoId?: string | null;
 
+  /**
+   * Fase C — herencia plantilla→paso. Cuando se setea, los campos
+   * `productividadBase`, `setupMin`, `cleanupMin`, `tiempoFijoMin` que
+   * estén en `null` heredan automáticamente el valor declarado en la
+   * plantilla. `null` desasocia el paso de la plantilla. `undefined`
+   * no toca el vínculo actual.
+   */
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsUUID('4')
+  @Transform(({ value }) => (value === '' ? null : value))
+  plantillaOrigenId?: string | null;
+
+  // Fase C — los campos numéricos aceptan `null` para indicar "limpiar
+  // override y heredar de la plantilla origen" (cuando exista).
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  setupMin?: number;
+  setupMin?: number | null;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  cleanupMin?: number;
+  cleanupMin?: number | null;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  tiempoFijoMin?: number;
+  tiempoFijoMin?: number | null;
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  productividadBase?: number;
+  productividadBase?: number | null;
+
+  /**
+   * Fase D.2 — Unidad de tiempo de la productividad. El motor convierte a
+   * minutos internamente: HORA → ×60, SEGUNDO → /60, MINUTO → literal.
+   */
+  @IsOptional()
+  @IsIn(['HORA', 'MINUTO', 'SEGUNDO'])
+  unidadTiempo?: 'HORA' | 'MINUTO' | 'SEGUNDO';
 
   /**
    * Expresión JsonLogic para la activación CONDICIONAL. `null` limpia la

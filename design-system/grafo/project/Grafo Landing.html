@@ -1,0 +1,1017 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Grafo — El software operativo de la impresión digital</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Grafo es el MIS para talleres de impresión digital. Cotizá en minutos, orquestá la producción, no pierdas órdenes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0B0B0F; --bg-1:#101015; --bg-2:#15151C; --bg-3:#1C1C24;
+    --line:#24242D; --line-hi:#33333F;
+    --ink-0:#F4F4F0; --ink-1:#D9D9D2; --ink-2:#9C9CA3; --ink-3:#6A6A72; --ink-4:#3E3E47;
+    --lime:#E8FF5C; --lime-ink:#0B0B0F;
+    --ok:#6FE39A; --warn:#F5C86B; --err:#F26D6D; --info:#7BB3FF;
+    --serif:"Instrument Serif","Times New Roman",serif;
+    --sans:"Geist",ui-sans-serif,system-ui,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink-1);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  ::selection{background:var(--lime);color:var(--lime-ink)}
+
+  .grid-bg{position:fixed;inset:0;pointer-events:none;z-index:0;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:64px 64px;mask-image:radial-gradient(ellipse at 50% 0%,black 0%,transparent 70%);opacity:.3}
+
+  .wrap{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:0 40px}
+  @media (max-width:720px){.wrap{padding:0 20px}}
+
+  /* NAV */
+  nav.top{position:sticky;top:0;z-index:50;background:rgba(11,11,15,0.82);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+  nav.top .inner{display:flex;justify-content:space-between;align-items:center;padding:14px 40px;max-width:1240px;margin:0 auto}
+  @media (max-width:720px){nav.top .inner{padding:14px 20px}}
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand .mk{width:22px;height:22px;background:var(--lime);border-radius:5px;position:relative}
+  .brand .mk::after{content:"";position:absolute;inset:5px;background:var(--lime-ink);border-radius:50%}
+  .brand .nm{font-weight:500;font-size:16px;color:var(--ink-0);letter-spacing:-0.02em}
+  nav.top .links{display:flex;gap:28px;font-size:13px;color:var(--ink-2)}
+  nav.top .links a:hover{color:var(--ink-0)}
+  @media (max-width:820px){nav.top .links{display:none}}
+  nav.top .cta{display:flex;gap:10px;align-items:center}
+  nav.top .cta .login{color:var(--ink-2);font-size:13px}
+  nav.top .cta .login:hover{color:var(--ink-0)}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border-radius:6px;font-family:var(--sans);font-weight:500;font-size:13px;letter-spacing:-0.01em;cursor:pointer;border:0;transition:transform .12s}
+  .btn:hover{transform:translateY(-1px)}
+  .btn-primary{background:var(--lime);color:var(--lime-ink)}
+  .btn-primary:hover{background:#d9f04e}
+  .btn-ghost{background:transparent;border:1px solid var(--line-hi);color:var(--ink-1)}
+  .btn-lg{padding:14px 22px;font-size:15px;border-radius:8px}
+  .btn .arrow{font-family:var(--mono);font-size:12px}
+
+  /* HERO */
+  .hero{padding:90px 0 120px;border-bottom:1px solid var(--line);position:relative}
+  .hero .kicker{display:inline-flex;align-items:center;gap:10px;padding:6px 12px;border:1px solid var(--line-hi);border-radius:100px;font-family:var(--mono);font-size:11px;color:var(--ink-2);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:28px}
+  .hero .kicker .dot{width:6px;height:6px;background:var(--lime);border-radius:50%;box-shadow:0 0 10px var(--lime);animation:pulse 2.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .hero-split{display:grid;grid-template-columns:1.15fr 1fr;gap:56px;align-items:center}
+  @media (max-width:1000px){.hero-split{grid-template-columns:1fr;gap:48px}}
+  .hero h1{font-family:var(--serif);font-weight:400;font-size:clamp(56px,7.5vw,108px);line-height:0.96;letter-spacing:-0.025em;color:var(--ink-0);margin:0 0 28px}
+  .hero h1 em{font-style:italic;color:var(--ink-2)}
+  .hero h1 .hl{color:var(--lime);font-style:normal}
+  .hero .sub{font-family:var(--serif);font-style:italic;font-size:22px;color:var(--ink-2);line-height:1.4;max-width:480px;margin:0 0 36px}
+  .hero .actions{display:flex;gap:12px;align-items:center;margin-bottom:32px;flex-wrap:wrap}
+  .hero .micro{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:0.06em;text-transform:uppercase;display:flex;gap:16px;flex-wrap:wrap}
+  .hero .micro span::before{content:"✓ ";color:var(--lime)}
+
+  /* Hero visual variants */
+  .hero-visual{position:relative;min-height:440px;display:flex;align-items:center;justify-content:center}
+  .hero-variant{display:none}
+  .hero-variant.active{display:block;width:100%}
+
+  /* Variant A: grafo animado */
+  .graph-viz{position:relative;padding:32px;border:1px solid var(--line);background:var(--bg-1);border-radius:12px;overflow:hidden}
+  .graph-viz::before{content:"";position:absolute;inset:0;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:28px 28px;opacity:0.3}
+  .graph-viz .caption{position:relative;font-family:var(--mono);font-size:10px;letter-spacing:0.14em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px;display:flex;justify-content:space-between}
+  .graph-viz .caption .live{color:var(--lime);display:flex;align-items:center;gap:6px}
+  .graph-viz .caption .live::before{content:"";width:6px;height:6px;background:var(--lime);border-radius:50%;box-shadow:0 0 8px var(--lime);animation:pulse 2s infinite}
+  .graph-svg{width:100%;height:380px;position:relative}
+  .graph-svg svg{width:100%;height:100%;overflow:visible}
+  .g-edge{stroke:var(--line-hi);stroke-width:1.2;fill:none}
+  .g-edge.flow{stroke-dasharray:4 4;animation:flow 2.4s linear infinite}
+  @keyframes flow{to{stroke-dashoffset:-16}}
+  .g-node{fill:var(--ink-3);stroke:var(--bg-1);stroke-width:2;transition:fill .4s,r .3s}
+  .g-node.done{fill:var(--lime)}
+  .g-node.active{fill:var(--ink-0)}
+  .g-label{font-family:var(--mono);font-size:9px;fill:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase}
+  .g-label.active{fill:var(--ink-0)}
+  .g-label.done{fill:var(--lime)}
+  .g-order{font-family:var(--mono);font-size:8px;fill:var(--ink-4)}
+
+  /* Variant B: dashboard */
+  .dash{background:var(--bg-1);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-family:var(--sans)}
+  .dash .bar{padding:10px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+  .dash .bar .dots{display:flex;gap:5px}
+  .dash .bar .dots span{width:8px;height:8px;background:var(--ink-4);border-radius:50%}
+  .dash .bar .path{flex:1;text-align:center;letter-spacing:0.04em}
+  .dash-grid{display:grid;grid-template-columns:180px 1fr;min-height:380px}
+  .dash-side{background:var(--bg-2);border-right:1px solid var(--line);padding:16px 12px}
+  .dash-side .sec{font-family:var(--mono);font-size:9px;color:var(--ink-3);letter-spacing:0.14em;text-transform:uppercase;margin:18px 8px 8px}
+  .dash-side .sec:first-child{margin-top:4px}
+  .dash-side .it{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:5px;font-size:12px;color:var(--ink-2)}
+  .dash-side .it.on{background:var(--bg-3);color:var(--ink-0)}
+  .dash-side .it .ic{width:12px;height:12px;border:1px solid currentColor;border-radius:2px}
+  .dash-side .it.on .ic{background:var(--lime);border-color:var(--lime)}
+  .dash-side .it .n{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--ink-4)}
+  .dash-main{padding:18px 20px}
+  .dash-main .h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:18px}
+  .dash-main .h h3{font-family:var(--serif);font-weight:400;font-size:24px;color:var(--ink-0);margin:0;letter-spacing:-0.01em}
+  .dash-main .h h3 em{font-style:italic;color:var(--ink-2)}
+  .dash-main .h .tag{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:0.08em}
+  .dash-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-bottom:14px}
+  .dash-kpis .kpi{background:var(--bg-1);padding:14px}
+  .dash-kpis .kpi .k{font-family:var(--mono);font-size:9px;color:var(--ink-3);letter-spacing:0.12em;text-transform:uppercase}
+  .dash-kpis .kpi .v{font-family:var(--serif);font-size:28px;color:var(--ink-0);margin-top:4px;letter-spacing:-0.01em}
+  .dash-kpis .kpi .d{font-family:var(--mono);font-size:9px;color:var(--lime);margin-top:2px}
+  .dash-kpis .kpi .d.down{color:var(--err)}
+  .dash-orders{border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .dash-orders .row{display:grid;grid-template-columns:60px 1fr 90px 60px 70px;gap:10px;padding:9px 12px;align-items:center;border-bottom:1px solid var(--line);font-size:12px}
+  .dash-orders .row:last-child{border-bottom:0}
+  .dash-orders .row.hd{background:var(--bg-2);font-family:var(--mono);font-size:9px;color:var(--ink-3);letter-spacing:0.1em;text-transform:uppercase}
+  .dash-orders .row .o{font-family:var(--mono);color:var(--ink-1)}
+  .dash-orders .row .c{color:var(--ink-1)}
+  .dash-orders .row .s{font-family:var(--mono);font-size:10px}
+  .dash-orders .row .s.done{color:var(--lime)}
+  .dash-orders .row .s.prod{color:var(--warn)}
+  .dash-orders .row .s.queue{color:var(--ink-3)}
+  .dash-orders .row .p{font-family:var(--mono);font-size:10px;color:var(--ink-2);text-align:right}
+
+  /* Variant C: editorial text only */
+  .edit-wrap{text-align:center;padding:20px 0}
+  .edit-wrap .huge{font-family:var(--serif);font-weight:400;font-style:italic;font-size:clamp(80px,14vw,180px);line-height:0.88;letter-spacing:-0.035em;color:var(--ink-0);margin:0}
+  .edit-wrap .huge .line2{display:block;color:var(--ink-2)}
+  .edit-wrap .huge .dot{color:var(--lime);font-style:normal}
+
+  /* Visual switcher */
+  .visual-switcher{position:absolute;top:16px;right:0;display:flex;gap:4px;padding:4px;background:var(--bg-2);border:1px solid var(--line);border-radius:100px;font-family:var(--mono);font-size:10px}
+  .visual-switcher button{background:transparent;border:0;padding:6px 12px;border-radius:100px;color:var(--ink-3);cursor:pointer;letter-spacing:0.08em;text-transform:uppercase;font-family:inherit;font-size:inherit}
+  .visual-switcher button.active{background:var(--bg);color:var(--lime);border:1px solid var(--line-hi)}
+  @media (max-width:1000px){.visual-switcher{position:static;margin-bottom:20px}}
+
+  /* Trust bar */
+  .trust{padding:32px 0;border-bottom:1px solid var(--line)}
+  .trust .lbl{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:0.14em;text-transform:uppercase;text-align:center;margin-bottom:18px}
+  .trust .bar{display:flex;justify-content:center;align-items:center;gap:48px;flex-wrap:wrap;opacity:0.55}
+  .trust .bar .item{font-family:var(--serif);font-style:italic;font-size:20px;color:var(--ink-1);letter-spacing:-0.01em}
+  .trust .bar .item .mono{font-family:var(--mono);font-style:normal;font-size:12px;color:var(--ink-3);margin-left:6px}
+
+  /* Section common */
+  section{padding:120px 0;border-bottom:1px solid var(--line);position:relative}
+  .shead{display:grid;grid-template-columns:200px 1fr;gap:40px;margin-bottom:60px;align-items:baseline}
+  .shead .num{font-family:var(--mono);font-size:11px;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;border-top:1px solid var(--line-hi);padding-top:10px}
+  .shead .num em{color:var(--lime);font-style:normal}
+  .shead h2{font-family:var(--serif);font-weight:400;font-size:clamp(36px,5vw,64px);line-height:1.02;letter-spacing:-0.015em;color:var(--ink-0);margin:0;max-width:800px}
+  .shead h2 em{font-style:italic;color:var(--ink-2)}
+  .shead h2 .hl{color:var(--lime);font-style:normal}
+  .shead .lede{grid-column:2;margin-top:20px;max-width:640px;color:var(--ink-2);font-size:17px;line-height:1.55}
+  @media (max-width:820px){.shead{grid-template-columns:1fr;gap:12px}.shead .lede{grid-column:1}}
+
+  /* PROBLEMA */
+  .problem-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  @media (max-width:820px){.problem-grid{grid-template-columns:1fr}}
+  .problem-grid > div{background:var(--bg-1);padding:40px}
+  .problem-grid .h{display:flex;align-items:baseline;gap:12px;margin-bottom:20px}
+  .problem-grid .h .n{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:0.14em;text-transform:uppercase}
+  .problem-grid .h .w{font-family:var(--serif);font-style:italic;font-size:28px;color:var(--ink-0);letter-spacing:-0.01em}
+  .problem-grid p{margin:0 0 16px;color:var(--ink-2);line-height:1.65}
+  .problem-grid p:last-child{margin-bottom:0}
+  .problem-grid .quote{font-family:var(--serif);font-style:italic;font-size:17px;color:var(--ink-1);padding-left:16px;border-left:2px solid var(--lime);margin-top:24px}
+
+  .problem-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-top:40px;border-radius:8px;overflow:hidden}
+  @media (max-width:720px){.problem-stats{grid-template-columns:1fr}}
+  .problem-stats .st{background:var(--bg-1);padding:32px}
+  .problem-stats .st .v{font-family:var(--serif);font-size:64px;color:var(--ink-0);line-height:1;letter-spacing:-0.02em;font-style:italic}
+  .problem-stats .st .v .s{font-family:var(--mono);font-size:20px;color:var(--ink-2);font-style:normal;margin-left:4px}
+  .problem-stats .st .k{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:0.14em;text-transform:uppercase;margin-top:12px}
+  .problem-stats .st p{color:var(--ink-2);font-size:14px;margin:8px 0 0;line-height:1.5}
+
+  /* CÓMO FUNCIONA */
+  .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  @media (max-width:900px){.steps{grid-template-columns:1fr 1fr}}
+  @media (max-width:500px){.steps{grid-template-columns:1fr}}
+  .step{background:var(--bg-1);padding:28px;position:relative}
+  .step .n{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:0.14em;text-transform:uppercase;margin-bottom:18px;display:flex;justify-content:space-between}
+  .step .n em{color:var(--lime);font-style:normal}
+  .step .ic{height:80px;display:flex;align-items:center;justify-content:center;margin-bottom:16px}
+  .step h4{font-family:var(--serif);font-style:italic;font-weight:400;font-size:26px;color:var(--ink-0);margin:0 0 10px;letter-spacing:-0.01em}
+  .step p{margin:0;color:var(--ink-2);font-size:14px;line-height:1.6}
+
+  /* FEATURES */
+  .feat-intro{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-bottom:80px;align-items:end}
+  @media (max-width:820px){.feat-intro{grid-template-columns:1fr}}
+  .feat-block{margin-top:100px}
+  .feat-block:first-of-type{margin-top:0}
+  .feat-block .inner{display:grid;grid-template-columns:1fr 1.3fr;gap:60px;align-items:center}
+  .feat-block:nth-of-type(even) .inner{grid-template-columns:1.3fr 1fr}
+  .feat-block:nth-of-type(even) .inner .copy{order:2}
+  .feat-block:nth-of-type(even) .inner .mock{order:1}
+  @media (max-width:900px){.feat-block .inner,.feat-block:nth-of-type(even) .inner{grid-template-columns:1fr;gap:40px}.feat-block:nth-of-type(even) .inner .copy{order:1}.feat-block:nth-of-type(even) .inner .mock{order:2}}
+  .feat-block .copy .tag{font-family:var(--mono);font-size:10px;color:var(--lime);letter-spacing:0.14em;text-transform:uppercase;margin-bottom:14px}
+  .feat-block .copy h3{font-family:var(--serif);font-weight:400;font-size:44px;line-height:1.05;color:var(--ink-0);margin:0 0 18px;letter-spacing:-0.015em}
+  .feat-block .copy h3 em{font-style:italic;color:var(--ink-2)}
+  .feat-block .copy h3 .hl{color:var(--lime);font-style:normal}
+  .feat-block .copy p{color:var(--ink-2);font-size:16px;line-height:1.65;margin:0 0 16px;max-width:440px}
+  .feat-block .copy ul{list-style:none;padding:0;margin:24px 0 0}
+  .feat-block .copy li{padding:10px 0;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink-1);display:flex;gap:12px}
+  .feat-block .copy li:last-child{border-bottom:0}
+  .feat-block .copy li::before{content:"→";color:var(--lime);font-family:var(--mono)}
+
+  .mock{background:var(--bg-1);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-family:var(--sans)}
+  .mock .chrome{padding:8px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:10px;color:var(--ink-3)}
+  .mock .chrome .dots{display:flex;gap:5px}
+  .mock .chrome .dots span{width:8px;height:8px;background:var(--ink-4);border-radius:50%}
+  .mock .chrome .path{flex:1;text-align:center}
+
+  /* Cotizador mock */
+  .quoter{padding:24px 26px}
+  .quoter .h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:18px}
+  .quoter .h h4{font-family:var(--serif);font-weight:400;font-size:22px;margin:0;color:var(--ink-0)}
+  .quoter .h h4 em{font-style:italic;color:var(--ink-2)}
+  .quoter .h .tag{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:0.08em}
+  .quoter .fields{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+  .qf{background:var(--bg-2);border:1px solid var(--line);border-radius:5px;padding:8px 12px}
+  .qf .l{font-family:var(--mono);font-size:9px;color:var(--ink-3);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px}
+  .qf .v{font-size:13px;color:var(--ink-0)}
+  .qf.hl{border-color:var(--lime)}
+  .qf.hl .l{color:var(--lime)}
+  .quoter .sum{background:var(--bg-2);border:1px solid var(--line);border-radius:6px;padding:16px;margin-top:12px}
+  .quoter .sum .row{display:flex;justify-content:space-between;padding:5px 0;font-family:var(--mono);font-size:11px;border-bottom:1px dashed var(--line)}
+  .quoter .sum .row:last-child{border-bottom:0;padding-top:10px;margin-top:6px;border-top:1px solid var(--line-hi)}
+  .quoter .sum .k{color:var(--ink-3)}
+  .quoter .sum .v{color:var(--ink-0)}
+  .quoter .sum .row.total .v{color:var(--lime);font-size:14px}
+  .quoter .actions{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
+
+  /* Board mock (kanban) */
+  .board{padding:16px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;min-height:380px}
+  .col{background:var(--bg-2);border:1px solid var(--line);border-radius:6px;padding:10px 8px}
+  .col .hd{font-family:var(--mono);font-size:9px;color:var(--ink-3);letter-spacing:0.14em;text-transform:uppercase;padding:4px 6px 10px;display:flex;justify-content:space-between;border-bottom:1px solid var(--line);margin-bottom:8px}
+  .col .hd .n{color:var(--ink-1)}
+  .card{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:9px;margin-bottom:6px;font-size:11px;transition:transform .2s}
+  .card:hover{transform:translateY(-1px);border-color:var(--line-hi)}
+  .card .o{font-family:var(--mono);font-size:9px;color:var(--ink-3);letter-spacing:0.06em;margin-bottom:4px}
+  .card .t{color:var(--ink-1);line-height:1.3;font-size:11px}
+  .card .f{display:flex;justify-content:space-between;margin-top:8px;font-family:var(--mono);font-size:9px;color:var(--ink-3)}
+  .card .f .due.soon{color:var(--warn)}
+  .card .f .due.late{color:var(--err)}
+  .card .bar{height:2px;background:var(--line);margin-top:6px;border-radius:1px;overflow:hidden}
+  .card .bar i{display:block;height:100%;background:var(--lime)}
+  .card.done{opacity:0.6}
+  .card.done .t{text-decoration:line-through}
+
+  /* Reports mock */
+  .reports{padding:24px 28px}
+  .reports .h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:18px}
+  .reports .h h4{font-family:var(--serif);font-weight:400;font-size:22px;margin:0;color:var(--ink-0)}
+  .reports .h h4 em{font-style:italic;color:var(--ink-2)}
+  .reports .h .rng{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:0.08em}
+  .chart{height:180px;display:flex;align-items:flex-end;gap:6px;padding:14px 0;border-bottom:1px solid var(--line);position:relative}
+  .chart .bar{flex:1;background:var(--line-hi);border-radius:2px 2px 0 0;position:relative;min-height:10%}
+  .chart .bar.hi{background:var(--lime)}
+  .chart .bar.m{background:var(--ink-4)}
+  .chart::after{content:"";position:absolute;left:0;right:0;bottom:32%;border-top:1px dashed var(--line);pointer-events:none}
+  .chart .tag{position:absolute;top:-4px;right:0;font-family:var(--mono);font-size:9px;color:var(--lime);letter-spacing:0.08em}
+  .rp-legend{display:flex;justify-content:space-between;padding:12px 0;font-family:var(--mono);font-size:9px;color:var(--ink-3);letter-spacing:0.08em}
+  .rp-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+  .rp-st{background:var(--bg-2);border:1px solid var(--line);border-radius:5px;padding:12px}
+  .rp-st .k{font-family:var(--mono);font-size:9px;color:var(--ink-3);letter-spacing:0.12em;text-transform:uppercase}
+  .rp-st .v{font-family:var(--serif);font-style:italic;font-size:22px;color:var(--ink-0);margin-top:3px}
+  .rp-st .d{font-family:var(--mono);font-size:9px;color:var(--lime);margin-top:2px}
+
+  /* Dashboard mock (for feature 1) — reuse .dash from hero */
+
+  /* FEATURES GRID (small) */
+  .fsmall{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-top:80px;border-radius:8px;overflow:hidden}
+  @media (max-width:820px){.fsmall{grid-template-columns:1fr 1fr}}
+  @media (max-width:520px){.fsmall{grid-template-columns:1fr}}
+  .fs{background:var(--bg-1);padding:24px;min-height:180px}
+  .fs .ic{width:28px;height:28px;border:1px solid var(--line-hi);border-radius:5px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:14px;color:var(--lime);margin-bottom:14px}
+  .fs h5{font-family:var(--serif);font-style:italic;font-weight:400;font-size:20px;color:var(--ink-0);margin:0 0 6px}
+  .fs p{margin:0;color:var(--ink-2);font-size:13px;line-height:1.55}
+
+  /* PRICING */
+  .pricing-head{text-align:center;margin-bottom:60px}
+  .price-toggle{display:inline-flex;padding:4px;background:var(--bg-2);border:1px solid var(--line);border-radius:100px;font-family:var(--mono);font-size:11px;margin-top:20px}
+  .price-toggle button{background:transparent;border:0;padding:8px 16px;border-radius:100px;color:var(--ink-3);cursor:pointer;letter-spacing:0.08em;text-transform:uppercase;font-family:inherit;font-size:inherit}
+  .price-toggle button.active{background:var(--bg);color:var(--lime);border:1px solid var(--line-hi)}
+  .price-toggle .save{color:var(--lime);margin-left:6px;font-size:9px}
+  .plans{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media (max-width:900px){.plans{grid-template-columns:1fr}}
+  .plan{border:1px solid var(--line);border-radius:12px;padding:32px;background:var(--bg-1);display:flex;flex-direction:column;position:relative}
+  .plan.featured{border-color:var(--lime);background:linear-gradient(180deg,rgba(232,255,92,0.06),var(--bg-1) 40%)}
+  .plan.featured::before{content:"Más elegido";position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:var(--lime);color:var(--lime-ink);font-family:var(--mono);font-size:10px;letter-spacing:0.12em;text-transform:uppercase;padding:4px 10px;border-radius:100px}
+  .plan .nm{font-family:var(--serif);font-style:italic;font-size:28px;color:var(--ink-0);margin-bottom:4px;letter-spacing:-0.01em}
+  .plan .desc{font-size:13px;color:var(--ink-3);margin-bottom:24px;min-height:38px}
+  .plan .pr{display:flex;align-items:baseline;gap:6px;margin-bottom:8px}
+  .plan .pr .c{font-family:var(--mono);font-size:14px;color:var(--ink-3)}
+  .plan .pr .n{font-family:var(--serif);font-size:64px;color:var(--ink-0);line-height:1;letter-spacing:-0.02em}
+  .plan .pr .u{font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+  .plan .bill{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:0.08em;margin-bottom:28px}
+  .plan .cta{width:100%;text-align:center;padding:12px;border-radius:7px;font-weight:500;font-size:14px;margin-bottom:24px;cursor:pointer;border:1px solid var(--line-hi);background:transparent;color:var(--ink-0);font-family:var(--sans)}
+  .plan.featured .cta{background:var(--lime);color:var(--lime-ink);border-color:var(--lime)}
+  .plan .feat-title{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:0.14em;text-transform:uppercase;margin-bottom:12px}
+  .plan ul{list-style:none;padding:0;margin:0 0 0;display:flex;flex-direction:column;gap:9px}
+  .plan li{font-size:13px;color:var(--ink-1);display:flex;gap:10px;align-items:baseline}
+  .plan li::before{content:"✓";color:var(--lime);font-family:var(--mono);font-size:11px}
+  .plan li.off{color:var(--ink-4)}
+  .plan li.off::before{content:"—";color:var(--ink-4)}
+
+  .pricing-foot{margin-top:40px;text-align:center;font-size:13px;color:var(--ink-3)}
+  .pricing-foot a{color:var(--lime)}
+
+  /* FAQ-lite / CTA */
+  .closing{padding:140px 0;text-align:center;border-bottom:1px solid var(--line);position:relative;overflow:hidden}
+  .closing::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%,rgba(232,255,92,0.06),transparent 60%)}
+  .closing h2{position:relative;font-family:var(--serif);font-weight:400;font-size:clamp(48px,8vw,96px);line-height:1;letter-spacing:-0.025em;color:var(--ink-0);margin:0 0 20px}
+  .closing h2 em{font-style:italic;color:var(--ink-2)}
+  .closing h2 .hl{color:var(--lime);font-style:normal}
+  .closing .sub{position:relative;font-family:var(--serif);font-style:italic;font-size:22px;color:var(--ink-2);max-width:520px;margin:0 auto 36px}
+  .closing .actions{position:relative;display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
+  .closing .micro{position:relative;margin-top:28px;font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase}
+
+  /* FOOTER */
+  footer{padding:80px 0 40px;position:relative;z-index:1}
+  .foot-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:40px;margin-bottom:60px}
+  @media (max-width:820px){.foot-grid{grid-template-columns:1fr 1fr;gap:32px}}
+  @media (max-width:520px){.foot-grid{grid-template-columns:1fr}}
+  footer .col h6{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:0.14em;text-transform:uppercase;margin:0 0 16px}
+  footer .col ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px}
+  footer .col a{color:var(--ink-1);font-size:14px}
+  footer .col a:hover{color:var(--lime)}
+  footer .tag{font-family:var(--serif);font-style:italic;font-size:22px;color:var(--ink-1);max-width:280px;line-height:1.3;margin:18px 0 0}
+  .foot-bottom{display:flex;justify-content:space-between;align-items:center;padding-top:30px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:0.04em;flex-wrap:wrap;gap:16px}
+  .foot-bottom .lang{display:flex;gap:14px}
+
+  /* Tweaks panel */
+  .tweaks{position:fixed;bottom:20px;right:20px;z-index:100;background:var(--bg-2);border:1px solid var(--line-hi);border-radius:10px;padding:16px;min-width:260px;display:none;box-shadow:0 20px 60px rgba(0,0,0,0.5);backdrop-filter:blur(20px)}
+  .tweaks.on{display:block}
+  .tweaks h6{font-family:var(--mono);font-size:10px;color:var(--lime);letter-spacing:0.14em;text-transform:uppercase;margin:0 0 12px;display:flex;justify-content:space-between}
+  .tweaks .tw-row{margin-bottom:14px}
+  .tweaks .tw-row:last-child{margin-bottom:0}
+  .tweaks .tw-row .lbl{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px}
+  .tweaks .tw-choice{display:flex;gap:4px;padding:3px;background:var(--bg);border:1px solid var(--line);border-radius:6px}
+  .tweaks .tw-choice button{flex:1;background:transparent;border:0;padding:7px 8px;border-radius:4px;color:var(--ink-3);cursor:pointer;font-family:var(--mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase}
+  .tweaks .tw-choice button.active{background:var(--bg-3);color:var(--lime)}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+
+<!-- NAV -->
+<nav class="top">
+  <div class="inner">
+    <a class="brand" href="#">
+      <div class="mk"></div>
+      <div class="nm">grafo</div>
+    </a>
+    <div class="links">
+      <a href="#producto">Producto</a>
+      <a href="#como">Cómo funciona</a>
+      <a href="#pricing">Precios</a>
+      <a href="#">Clientes</a>
+      <a href="#">Blog</a>
+    </div>
+    <div class="cta">
+      <a href="#" class="login">Ingresar</a>
+      <a href="#pricing" class="btn btn-primary">Probar 14 días <span class="arrow">→</span></a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="wrap">
+    <div class="hero-split">
+      <div>
+        <div class="kicker"><span class="dot"></span>MIS para talleres de impresión digital</div>
+        <h1>Tu taller es una <em>red</em><span class="hl">.</span><br>Hacela <em>correr</em>.</h1>
+        <p class="sub">Grafo cotiza en minutos, orquesta la producción y te muestra dónde se está perdiendo plata. Para los 4.200 talleres digitales del Cono Sur que todavía cotizan en Excel.</p>
+        <div class="actions">
+          <a href="#pricing" class="btn btn-primary btn-lg">Probar 14 días gratis <span class="arrow">→</span></a>
+          <a href="#como" class="btn btn-ghost btn-lg">Ver cómo funciona</a>
+        </div>
+        <div class="micro">
+          <span>Sin tarjeta</span>
+          <span>Setup en 1 hora</span>
+          <span>Soporte en español</span>
+        </div>
+      </div>
+
+      <div class="hero-visual">
+        <div class="visual-switcher" id="vsw">
+          <button data-v="graph" class="active">Grafo</button>
+          <button data-v="dash">Dashboard</button>
+          <button data-v="edit">Editorial</button>
+        </div>
+
+        <!-- Variant A: Grafo -->
+        <div class="hero-variant active" data-v="graph">
+          <div class="graph-viz">
+            <div class="caption">
+              <span>orden #2410 · editorial paloma</span>
+              <span class="live">en producción</span>
+            </div>
+            <div class="graph-svg">
+              <svg viewBox="0 0 520 360" preserveAspectRatio="xMidYMid meet">
+                <!-- edges -->
+                <line class="g-edge" x1="80"  y1="60"  x2="200" y2="60"/>
+                <line class="g-edge" x1="200" y1="60"  x2="320" y2="60"/>
+                <line class="g-edge" x1="320" y1="60"  x2="200" y2="180"/>
+                <line class="g-edge flow" x1="200" y1="60"  x2="200" y2="180"/>
+                <line class="g-edge flow" x1="200" y1="180" x2="120" y2="260"/>
+                <line class="g-edge flow" x1="200" y1="180" x2="280" y2="260"/>
+                <line class="g-edge" x1="120" y1="260" x2="260" y2="320" style="animation-delay:-1s"/>
+                <line class="g-edge" x1="280" y1="260" x2="260" y2="320"/>
+                <line class="g-edge" x1="440" y1="60"  x2="320" y2="60"/>
+
+                <!-- nodes -->
+                <g id="nd1"><circle class="g-node done" cx="80"  cy="60"  r="8"/><text class="g-label done" x="70" y="44">diseño</text><text class="g-order" x="70" y="82">OK · 09:14</text></g>
+                <g id="nd2"><circle class="g-node done" cx="200" cy="60"  r="8"/><text class="g-label done" x="190" y="44">RIP</text><text class="g-order" x="190" y="82">OK · 09:28</text></g>
+                <g id="nd3"><circle class="g-node done" cx="320" cy="60"  r="8"/><text class="g-label done" x="310" y="44">stock</text><text class="g-order" x="310" y="82">OK · 09:30</text></g>
+                <g id="nd4"><circle class="g-node done" cx="440" cy="60"  r="8"/><text class="g-label done" x="430" y="44">máquina</text><text class="g-order" x="430" y="82">OK · 09:42</text></g>
+                <g id="nd5"><circle class="g-node active" cx="200" cy="180" r="10"/><text class="g-label active" x="188" y="164">impresión</text><text class="g-order" x="188" y="204">12:07 — corriendo</text></g>
+                <g id="nd6"><circle class="g-node" cx="120" cy="260" r="8"/><text class="g-label" x="110" y="244">laminado</text><text class="g-order" x="110" y="282">pendiente</text></g>
+                <g id="nd7"><circle class="g-node" cx="280" cy="260" r="8"/><text class="g-label" x="270" y="244">corte</text><text class="g-order" x="270" y="282">pendiente</text></g>
+                <g id="nd8"><circle class="g-node" cx="260" cy="320" r="10"/><text class="g-label" x="248" y="348">entrega</text></g>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Variant B: Dashboard -->
+        <div class="hero-variant" data-v="dash">
+          <div class="dash">
+            <div class="bar">
+              <div class="dots"><span></span><span></span><span></span></div>
+              <div class="path">app.grafo.so — dashboard</div>
+              <div style="width:40px"></div>
+            </div>
+            <div class="dash-grid">
+              <aside class="dash-side">
+                <div class="sec">Operación</div>
+                <div class="it on"><div class="ic"></div><span>Dashboard</span><span class="n">7</span></div>
+                <div class="it"><div class="ic"></div><span>Órdenes</span><span class="n">124</span></div>
+                <div class="it"><div class="ic"></div><span>Cotizador</span></div>
+                <div class="it"><div class="ic"></div><span>Máquinas</span></div>
+                <div class="sec">Comercial</div>
+                <div class="it"><div class="ic"></div><span>Clientes</span></div>
+                <div class="it"><div class="ic"></div><span>Facturación</span></div>
+                <div class="sec">Datos</div>
+                <div class="it"><div class="ic"></div><span>Reportes</span></div>
+              </aside>
+              <div class="dash-main">
+                <div class="h">
+                  <h3>Buenos días, <em>Matías</em>.</h3>
+                  <div class="tag">Jueves 16 abr · 09:42</div>
+                </div>
+                <div class="dash-kpis">
+                  <div class="kpi"><div class="k">Órdenes activas</div><div class="v">47</div><div class="d">+6 vs ayer</div></div>
+                  <div class="kpi"><div class="k">Por vencer (48h)</div><div class="v">12</div><div class="d down">3 críticas</div></div>
+                  <div class="kpi"><div class="k">Margen prom.</div><div class="v">38%</div><div class="d">+2.1 pts</div></div>
+                  <div class="kpi"><div class="k">Facturado mes</div><div class="v">$4.2M</div><div class="d">87% de meta</div></div>
+                </div>
+                <div class="dash-orders">
+                  <div class="row hd"><div>ORDEN</div><div>CLIENTE</div><div>ETAPA</div><div>ESTADO</div><div>MARGEN</div></div>
+                  <div class="row"><div class="o">#2410</div><div class="c">Editorial Paloma</div><div class="s prod">Impresión</div><div class="s prod">●</div><div class="p">42.7%</div></div>
+                  <div class="row"><div class="o">#2409</div><div class="c">Estudio Norte</div><div class="s done">Completada</div><div class="s done">✓</div><div class="p">35.1%</div></div>
+                  <div class="row"><div class="o">#2408</div><div class="c">Juana Colombo</div><div class="s queue">En cola</div><div class="s queue">○</div><div class="p">31.0%</div></div>
+                  <div class="row"><div class="o">#2407</div><div class="c">Bodega Alta</div><div class="s prod">Laminado</div><div class="s prod">●</div><div class="p">44.2%</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Variant C: Editorial -->
+        <div class="hero-variant" data-v="edit">
+          <div class="edit-wrap">
+            <div class="huge">Un taller<span class="line2">es una <em>red</em><span class="dot">.</span></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- TRUST BAR -->
+<div class="trust">
+  <div class="wrap">
+    <div class="lbl">Construido con oficio para talleres que imprimen de verdad</div>
+    <div class="bar">
+      <div class="item">Banners · Cartelería <span class="mono">UV</span></div>
+      <div class="item">Impresión <span class="mono">textil</span></div>
+      <div class="item">Packaging <span class="mono">digital</span></div>
+      <div class="item">Sublimación · <span class="mono">Láser</span></div>
+      <div class="item">Rotulación <span class="mono">vehicular</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- PROBLEMA -->
+<section id="problema">
+  <div class="wrap">
+    <div class="shead">
+      <div class="num">01 <em>—</em> El problema</div>
+      <h2>Tu taller no pierde plata por <em>precio</em>. La pierde en los <em>nodos ciegos</em>.</h2>
+      <div class="lede">Cotizar en Excel, mover órdenes en WhatsApp, facturar de memoria. Entre tanta herramienta suelta, siempre hay una orden que se pierde, un margen que se evapora, un cliente que no entiende por qué se atrasó.</div>
+    </div>
+
+    <div class="problem-grid">
+      <div>
+        <div class="h"><span class="n">A</span><span class="w">Hoy</span></div>
+        <p>Cotización en Excel que nadie versiona. Órdenes pegadas en la pared. Seguimiento por WhatsApp. Cuando un cliente pregunta por el #2410, abrís tres pestañas, un grupo de chat y una carpeta de Drive para responderle.</p>
+        <p>A fin de mes, el margen "sintió" lo que se perdió — pero nadie puede señalar dónde.</p>
+        <div class="quote">"Facturamos 4 palos, deberíamos haber facturado 5. No sabemos qué pasó en el medio."</div>
+      </div>
+      <div>
+        <div class="h"><span class="n">B</span><span class="w">Con Grafo</span></div>
+        <p>Cada orden es un nodo. Cada etapa, un estado. El sistema sabe qué máquina está libre, qué orden está por vencer, qué cotización se aprobó y cuál no. Vos ves el taller completo, no solo la parte que te toca.</p>
+        <p>Si se pierde plata, el sistema te dice exactamente dónde. Si una orden se va a atrasar, lo sabés antes que el cliente.</p>
+        <div class="quote">"La primera vez que abrimos Grafo un lunes, encontramos tres órdenes que estaban perdidas hace una semana."</div>
+      </div>
+    </div>
+
+    <div class="problem-stats">
+      <div class="st">
+        <div class="v">9<span class="s">%</span></div>
+        <div class="k">Margen perdido promedio</div>
+        <p>En reprocesos, material mal cotizado y tiempos muertos de máquina que nadie mide.</p>
+      </div>
+      <div class="st">
+        <div class="v">4.2<span class="s">h</span></div>
+        <div class="k">Por día en coordinación</div>
+        <p>WhatsApp, llamadas, "¿cómo va la #2410?". Tiempo que no factura, ni produce.</p>
+      </div>
+      <div class="st">
+        <div class="v">1 de 12<span class="s"></span></div>
+        <div class="k">Órdenes con problemas</div>
+        <p>Cliente insatisfecho, reimpresión, descuento. Todo evitable si el nodo tiene nombre.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- CÓMO FUNCIONA -->
+<section id="como">
+  <div class="wrap">
+    <div class="shead">
+      <div class="num">02 <em>—</em> Cómo funciona</div>
+      <h2>Cuatro pasos. <em>Una</em> instalación. Listo para el lunes.</h2>
+      <div class="lede">Grafo se integra con lo que ya usás (Adobe, impresoras, software contable) y te lleva de "Excel y WhatsApp" a "un solo lugar" en menos de una semana. Onboarding incluido en todos los planes.</div>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="n"><span>Paso 01</span><em>Día 1</em></div>
+        <div class="ic">
+          <svg viewBox="0 0 80 56" width="80" height="56"><rect x="12" y="12" width="56" height="32" fill="none" stroke="#33333F"/><line x1="22" y1="22" x2="48" y2="22" stroke="#9C9CA3"/><line x1="22" y1="30" x2="58" y2="30" stroke="#9C9CA3"/><line x1="22" y1="38" x2="40" y2="38" stroke="#9C9CA3"/><rect x="50" y="35" width="16" height="6" fill="#E8FF5C"/></svg>
+        </div>
+        <h4>Cargás el catálogo</h4>
+        <p>Tus productos, materiales, máquinas y tarifas. Importamos desde tu Excel actual en una sola corrida, con tu equipo en vivo.</p>
+      </div>
+      <div class="step">
+        <div class="n"><span>Paso 02</span><em>Día 2</em></div>
+        <div class="ic">
+          <svg viewBox="0 0 80 56" width="80" height="56"><circle cx="20" cy="28" r="5" fill="#9C9CA3"/><circle cx="60" cy="16" r="5" fill="#9C9CA3"/><circle cx="60" cy="40" r="5" fill="#E8FF5C"/><line x1="20" y1="28" x2="60" y2="16" stroke="#33333F"/><line x1="20" y1="28" x2="60" y2="40" stroke="#33333F"/></svg>
+        </div>
+        <h4>Mapeamos el flujo</h4>
+        <p>Diseñamos juntos el grafo de tu taller — diseño, RIP, impresión, laminado, corte, entrega. Cada taller es distinto; cada grafo, único.</p>
+      </div>
+      <div class="step">
+        <div class="n"><span>Paso 03</span><em>Día 3–5</em></div>
+        <div class="ic">
+          <svg viewBox="0 0 80 56" width="80" height="56"><rect x="10" y="18" width="60" height="24" rx="3" fill="#15151C" stroke="#33333F"/><rect x="14" y="22" width="20" height="3" fill="#9C9CA3"/><rect x="14" y="28" width="40" height="3" fill="#9C9CA3"/><rect x="14" y="34" width="28" height="3" fill="#E8FF5C"/></svg>
+        </div>
+        <h4>Entrenamos al equipo</h4>
+        <p>Sesiones de 45 minutos por rol (ventas, producción, administración). En una semana, el equipo usa Grafo sin mirar tutoriales.</p>
+      </div>
+      <div class="step">
+        <div class="n"><span>Paso 04</span><em>Lunes</em></div>
+        <div class="ic">
+          <svg viewBox="0 0 80 56" width="80" height="56"><path d="M20 28 L36 40 L60 16" fill="none" stroke="#E8FF5C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <h4>Empezás a operar</h4>
+        <p>Primera cotización con Grafo antes del mediodía. En dos semanas, el taller entero ya factura, produce y mide desde un solo lugar.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- FEATURES -->
+<section id="producto">
+  <div class="wrap">
+    <div class="shead">
+      <div class="num">03 <em>—</em> El producto</div>
+      <h2>Un MIS completo. <em>Hecho</em> para impresión digital.</h2>
+      <div class="lede">No es un CRM adaptado. No es un ERP contable con plugins. Grafo fue diseñado desde cero para los procesos reales de un taller digital — con cotizaciones por pliego, tiempos de máquina, merma real y facturación AFIP/SRI/SII.</div>
+    </div>
+
+    <!-- Feature 1: Dashboard -->
+    <div class="feat-block">
+      <div class="inner">
+        <div class="copy">
+          <div class="tag">01 · Dashboard operativo</div>
+          <h3>Tu taller entero, <em>en una</em> pantalla.</h3>
+          <p>Órdenes activas, por vencer, facturación del mes, margen promedio. Los números que importan, sin tener que abrir cinco reportes para armarlos.</p>
+          <ul>
+            <li>KPIs del día, semana y mes en tiempo real</li>
+            <li>Órdenes críticas marcadas antes de que lleguen a serlo</li>
+            <li>Vista por rol: dueño, jefe de producción, ventas</li>
+          </ul>
+        </div>
+        <div class="mock">
+          <div class="chrome"><div class="dots"><span></span><span></span><span></span></div><div class="path">app.grafo.so/dashboard</div></div>
+          <div class="dash-grid">
+            <aside class="dash-side">
+              <div class="sec">Operación</div>
+              <div class="it on"><div class="ic"></div><span>Dashboard</span></div>
+              <div class="it"><div class="ic"></div><span>Órdenes</span><span class="n">124</span></div>
+              <div class="it"><div class="ic"></div><span>Cotizador</span></div>
+              <div class="sec">Datos</div>
+              <div class="it"><div class="ic"></div><span>Reportes</span></div>
+            </aside>
+            <div class="dash-main">
+              <div class="h">
+                <h3>Dashboard — <em>Abril</em></h3>
+                <div class="tag">09:42</div>
+              </div>
+              <div class="dash-kpis">
+                <div class="kpi"><div class="k">Activas</div><div class="v">47</div><div class="d">+6</div></div>
+                <div class="kpi"><div class="k">Vencen 48h</div><div class="v">12</div><div class="d down">3 críticas</div></div>
+                <div class="kpi"><div class="k">Margen</div><div class="v">38%</div><div class="d">+2.1</div></div>
+                <div class="kpi"><div class="k">Facturado</div><div class="v">4.2M</div><div class="d">87%</div></div>
+              </div>
+              <div class="dash-orders">
+                <div class="row hd"><div>ORDEN</div><div>CLIENTE</div><div>ETAPA</div><div>EST</div><div>MG</div></div>
+                <div class="row"><div class="o">#2410</div><div class="c">Ed. Paloma</div><div class="s prod">Impresión</div><div class="s prod">●</div><div class="p">42%</div></div>
+                <div class="row"><div class="o">#2409</div><div class="c">Est. Norte</div><div class="s done">Lista</div><div class="s done">✓</div><div class="p">35%</div></div>
+                <div class="row"><div class="o">#2408</div><div class="c">J. Colombo</div><div class="s queue">En cola</div><div class="s queue">○</div><div class="p">31%</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature 2: Cotizador -->
+    <div class="feat-block">
+      <div class="inner">
+        <div class="copy">
+          <div class="tag">02 · Cotizador técnico</div>
+          <h3>De la consulta <em>a la cotización</em>, en 4 minutos.</h3>
+          <p>Cargás el producto, el formato, los materiales y la cantidad. El sistema calcula merma, tiempos de máquina, costos reales y te tira el precio final con margen configurable — listo para enviar.</p>
+          <ul>
+            <li>Cálculo por pliego, por metro, por unidad o mixto</li>
+            <li>Merma real por material y máquina</li>
+            <li>Versiones de cotización y aprobación del cliente por link</li>
+          </ul>
+        </div>
+        <div class="mock">
+          <div class="chrome"><div class="dots"><span></span><span></span><span></span></div><div class="path">app.grafo.so/cotizador/nueva</div></div>
+          <div class="quoter">
+            <div class="h">
+              <h4>Nueva <em>cotización</em></h4>
+              <div class="tag">Borrador · #COT-0488</div>
+            </div>
+            <div class="fields">
+              <div class="qf"><div class="l">Cliente</div><div class="v">Editorial Paloma S.A.</div></div>
+              <div class="qf"><div class="l">Producto</div><div class="v">Banner UV rígido</div></div>
+              <div class="qf"><div class="l">Formato</div><div class="v">1420 × 2030 mm</div></div>
+              <div class="qf"><div class="l">Material</div><div class="v">PVC 5mm · blanco</div></div>
+              <div class="qf"><div class="l">Cantidad</div><div class="v">24 un.</div></div>
+              <div class="qf hl"><div class="l">Máquina sugerida</div><div class="v">UV Flatbed — 1</div></div>
+            </div>
+            <div class="sum">
+              <div class="row"><span class="k">Material (c/merma 7%)</span><span class="v">AR$ 218.400</span></div>
+              <div class="row"><span class="k">Máquina · 3.2h</span><span class="v">AR$ 64.000</span></div>
+              <div class="row"><span class="k">Laminado + corte</span><span class="v">AR$ 36.000</span></div>
+              <div class="row"><span class="k">Margen (40%)</span><span class="v">AR$ 212.200</span></div>
+              <div class="row total"><span class="k">Precio final</span><span class="v">AR$ 744.600</span></div>
+            </div>
+            <div class="actions">
+              <button class="btn btn-ghost" style="font-size:11px;padding:7px 12px">Guardar borrador</button>
+              <button class="btn btn-primary" style="font-size:11px;padding:7px 12px">Enviar al cliente →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature 3: Board de órdenes -->
+    <div class="feat-block">
+      <div class="inner">
+        <div class="copy">
+          <div class="tag">03 · Board de órdenes</div>
+          <h3>El taller entero, <em>en un tablero</em>.</h3>
+          <p>Cada orden avanza por etapas reales: diseño → RIP → impresión → laminado → corte → entrega. Cada tarjeta muestra vencimiento, asignado y progreso. Arrastrás, se actualiza. El cliente recibe un mail automático.</p>
+          <ul>
+            <li>Kanban configurable por etapa de tu flujo</li>
+            <li>Semáforos por urgencia (verde / amarillo / rojo)</li>
+            <li>Asignación por equipo, máquina o turno</li>
+          </ul>
+        </div>
+        <div class="mock">
+          <div class="chrome"><div class="dots"><span></span><span></span><span></span></div><div class="path">app.grafo.so/ordenes</div></div>
+          <div class="board">
+            <div class="col">
+              <div class="hd"><span>Diseño</span><span class="n">3</span></div>
+              <div class="card"><div class="o">#2414</div><div class="t">Cartelería EXPO Córdoba</div><div class="f"><span>MG</span><span class="due">3 días</span></div></div>
+              <div class="card"><div class="o">#2413</div><div class="t">Packaging chocolates</div><div class="f"><span>LN</span><span class="due">5 días</span></div></div>
+              <div class="card"><div class="o">#2412</div><div class="t">Vidrieras tienda</div><div class="f"><span>MG</span><span class="due">mañana</span></div></div>
+            </div>
+            <div class="col">
+              <div class="hd"><span>RIP · Imp</span><span class="n">4</span></div>
+              <div class="card"><div class="o">#2410</div><div class="t">Banners rígidos UV x24</div><div class="bar"><i style="width:65%"></i></div><div class="f"><span>UV-1</span><span class="due soon">hoy 17h</span></div></div>
+              <div class="card"><div class="o">#2411</div><div class="t">Vinilos piso · 6 pzs</div><div class="bar"><i style="width:20%"></i></div><div class="f"><span>LX-2</span><span class="due">2 días</span></div></div>
+              <div class="card"><div class="o">#2407</div><div class="t">Etiquetas vino x500</div><div class="bar"><i style="width:90%"></i></div><div class="f"><span>LX-1</span><span class="due soon">hoy</span></div></div>
+              <div class="card"><div class="o">#2405</div><div class="t">Gigantografía evento</div><div class="bar"><i style="width:40%"></i></div><div class="f"><span>UV-2</span><span class="due late">atraso 1d</span></div></div>
+            </div>
+            <div class="col">
+              <div class="hd"><span>Terminación</span><span class="n">2</span></div>
+              <div class="card"><div class="o">#2403</div><div class="t">Laminado mate — 12 pzs</div><div class="f"><span>LAM</span><span class="due">mañana</span></div></div>
+              <div class="card"><div class="o">#2402</div><div class="t">Corte vehicular</div><div class="f"><span>CNC</span><span class="due soon">hoy 15h</span></div></div>
+            </div>
+            <div class="col">
+              <div class="hd"><span>Entrega</span><span class="n">3</span></div>
+              <div class="card done"><div class="o">#2399</div><div class="t">Lonas textiles x8</div><div class="f"><span>✓</span><span>ayer</span></div></div>
+              <div class="card"><div class="o">#2401</div><div class="t">Stickers circular x2k</div><div class="f"><span>ENV</span><span class="due">hoy</span></div></div>
+              <div class="card done"><div class="o">#2400</div><div class="t">Banner wind 3m</div><div class="f"><span>✓</span><span>ayer</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature 4: Reportes -->
+    <div class="feat-block">
+      <div class="inner">
+        <div class="copy">
+          <div class="tag">04 · Reportes de margen</div>
+          <h3>La plata que <em>ganás</em>. Y la que <em>dejás</em>.</h3>
+          <p>Margen por producto, por cliente, por máquina, por vendedor. Grafo cruza costo real (no presupuestado) con lo facturado y te muestra qué órdenes son plata y cuáles son trabajo regalado.</p>
+          <ul>
+            <li>Costo real por orden, incluyendo reprocesos y merma</li>
+            <li>Ranking de clientes por rentabilidad</li>
+            <li>Exportá a Excel, CSV o directo a tu contable</li>
+          </ul>
+        </div>
+        <div class="mock">
+          <div class="chrome"><div class="dots"><span></span><span></span><span></span></div><div class="path">app.grafo.so/reportes</div></div>
+          <div class="reports">
+            <div class="h"><h4>Margen <em>por mes</em></h4><div class="rng">Oct 25 — Abr 26 · AR$</div></div>
+            <div class="chart">
+              <span class="tag">meta 35%</span>
+              <div class="bar m" style="height:45%"></div>
+              <div class="bar m" style="height:60%"></div>
+              <div class="bar m" style="height:55%"></div>
+              <div class="bar m" style="height:50%"></div>
+              <div class="bar m" style="height:72%"></div>
+              <div class="bar hi" style="height:88%"></div>
+              <div class="bar hi" style="height:82%"></div>
+            </div>
+            <div class="rp-legend"><span>OCT</span><span>NOV</span><span>DIC</span><span>ENE</span><span>FEB</span><span>MAR</span><span>ABR</span></div>
+            <div class="rp-stats">
+              <div class="rp-st"><div class="k">Margen mes</div><div class="v">38.4%</div><div class="d">+3.2 pts vs meta</div></div>
+              <div class="rp-st"><div class="k">Mejor cliente</div><div class="v">Paloma</div><div class="d">42.7% prom.</div></div>
+              <div class="rp-st"><div class="k">Máquina top</div><div class="v">UV-1</div><div class="d">44.1% prom.</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grid features pequeños -->
+    <div class="fsmall">
+      <div class="fs"><div class="ic">§</div><h5>Facturación AFIP/SRI/SII</h5><p>Electrónica nativa. No más copy/paste al sistema del contador.</p></div>
+      <div class="fs"><div class="ic">↔</div><h5>Integración Adobe</h5><p>Los diseños viajan del Illustrator al RIP sin pasar por 4 carpetas.</p></div>
+      <div class="fs"><div class="ic">◇</div><h5>Portal del cliente</h5><p>Tus clientes aprueban cotizaciones y siguen sus órdenes en tiempo real.</p></div>
+      <div class="fs"><div class="ic">△</div><h5>Control de merma</h5><p>Por material, máquina y operador. Identificá pérdidas sin abrir Excel.</p></div>
+      <div class="fs"><div class="ic">◷</div><h5>Tiempos de máquina</h5><p>Medís capacidad real vs ocupada. Sabés cuándo podés tomar más trabajo.</p></div>
+      <div class="fs"><div class="ic">⊙</div><h5>Multi-taller</h5><p>Gestioná dos o más unidades operativas desde la misma cuenta.</p></div>
+    </div>
+  </div>
+</section>
+
+
+<!-- PRICING -->
+<section id="pricing">
+  <div class="wrap">
+    <div class="shead">
+      <div class="num">04 <em>—</em> Pricing</div>
+      <h2>Precio plano. <em>Sin</em> sorpresas a fin de mes.</h2>
+      <div class="lede">Tres planes pensados para el tamaño real de los talleres del Cono Sur. Sin cargos por usuario extra, sin "premium" escondido, sin contrato anual obligatorio. Cancelás cuando quieras.</div>
+    </div>
+
+    <div class="pricing-head">
+      <div class="price-toggle" id="billing-toggle">
+        <button class="active" data-b="monthly">Mensual</button>
+        <button data-b="yearly">Anual <span class="save">· ahorrás 2 meses</span></button>
+      </div>
+    </div>
+
+    <div class="plans">
+      <div class="plan">
+        <div class="nm">Taller</div>
+        <div class="desc">Para talleres chicos de hasta 5 personas que recién arrancan a ordenarse.</div>
+        <div class="pr"><span class="c">USD</span><span class="n" data-m="350" data-y="292">350</span><span class="u">/ mes</span></div>
+        <div class="bill" data-b-text>Facturado mensualmente</div>
+        <button class="cta">Empezar 14 días gratis</button>
+        <div class="feat-title">Incluye</div>
+        <ul>
+          <li>Hasta 5 usuarios</li>
+          <li>Hasta 200 órdenes/mes</li>
+          <li>Cotizador + board + facturación</li>
+          <li>2 máquinas conectadas</li>
+          <li>Soporte por email</li>
+          <li class="off">Portal del cliente</li>
+          <li class="off">API + integraciones</li>
+        </ul>
+      </div>
+
+      <div class="plan featured">
+        <div class="nm">Producción</div>
+        <div class="desc">El estándar. Para talleres de 5–15 personas que ya facturan y necesitan control.</div>
+        <div class="pr"><span class="c">USD</span><span class="n" data-m="450" data-y="375">450</span><span class="u">/ mes</span></div>
+        <div class="bill" data-b-text>Facturado mensualmente</div>
+        <button class="cta">Empezar 14 días gratis</button>
+        <div class="feat-title">Todo lo anterior más</div>
+        <ul>
+          <li>Hasta 15 usuarios</li>
+          <li>Órdenes ilimitadas</li>
+          <li>Reportes avanzados + exportables</li>
+          <li>Máquinas ilimitadas</li>
+          <li>Portal del cliente + aprobaciones</li>
+          <li>Integración Adobe + RIP</li>
+          <li>Soporte prioritario (WhatsApp)</li>
+        </ul>
+      </div>
+
+      <div class="plan">
+        <div class="nm">Multi-planta</div>
+        <div class="desc">Para operaciones con más de un taller, franquicias o volumen alto.</div>
+        <div class="pr"><span class="c">USD</span><span class="n" data-m="890" data-y="742">890</span><span class="u">/ mes</span></div>
+        <div class="bill" data-b-text>Facturado mensualmente</div>
+        <button class="cta">Hablar con ventas</button>
+        <div class="feat-title">Todo lo anterior más</div>
+        <ul>
+          <li>Usuarios ilimitados</li>
+          <li>Multi-taller consolidado</li>
+          <li>API pública + webhooks</li>
+          <li>SSO (Google, Microsoft)</li>
+          <li>Dashboards ejecutivos</li>
+          <li>Onboarding dedicado</li>
+          <li>SLA 99.9% + CSM</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="pricing-foot">
+      Todos los planes incluyen 14 días de prueba sin tarjeta. Precios en USD — facturamos en AR$, CLP, UYU según país. <a href="#">Ver preguntas frecuentes de pricing →</a>
+    </div>
+  </div>
+</section>
+
+
+<!-- CLOSING CTA -->
+<section class="closing">
+  <div class="wrap">
+    <h2>Tu taller es un grafo<span class="hl">.</span><br><em>Hacelo correr.</em></h2>
+    <p class="sub">14 días gratis. Sin tarjeta. Setup en una hora con tu equipo en vivo.</p>
+    <div class="actions">
+      <a href="#" class="btn btn-primary btn-lg">Empezar ahora <span class="arrow">→</span></a>
+      <a href="#" class="btn btn-ghost btn-lg">Agendar demo 20'</a>
+    </div>
+    <div class="micro">Hablamos español · Soporte LATAM · Sin contrato anual</div>
+  </div>
+</section>
+
+
+<!-- FOOTER -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="col">
+        <div class="brand"><div class="mk"></div><div class="nm">grafo</div></div>
+        <p class="tag">El software operativo de la impresión digital.</p>
+      </div>
+      <div class="col">
+        <h6>Producto</h6>
+        <ul>
+          <li><a href="#">Cotizador</a></li>
+          <li><a href="#">Board de órdenes</a></li>
+          <li><a href="#">Reportes</a></li>
+          <li><a href="#">Facturación</a></li>
+          <li><a href="#">Integraciones</a></li>
+        </ul>
+      </div>
+      <div class="col">
+        <h6>Recursos</h6>
+        <ul>
+          <li><a href="#">Centro de ayuda</a></li>
+          <li><a href="#">Blog</a></li>
+          <li><a href="#">Changelog</a></li>
+          <li><a href="#">Estado del servicio</a></li>
+          <li><a href="#">Comunidad</a></li>
+        </ul>
+      </div>
+      <div class="col">
+        <h6>Empresa</h6>
+        <ul>
+          <li><a href="#">Nosotros</a></li>
+          <li><a href="#">Contacto</a></li>
+          <li><a href="#">Prensa</a></li>
+          <li><a href="#">Términos</a></li>
+          <li><a href="#">Privacidad</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <div>© 2026 Grafo S.A. · Hecho en Buenos Aires, CABA</div>
+      <div class="lang"><span>ES</span><span style="opacity:0.4">EN</span><span style="opacity:0.4">PT</span></div>
+    </div>
+  </div>
+</footer>
+
+<!-- TWEAKS -->
+<div class="tweaks" id="tweaks">
+  <h6>Tweaks <span style="color:var(--ink-3)">·</span></h6>
+  <div class="tw-row">
+    <div class="lbl">Hero visual</div>
+    <div class="tw-choice" id="tw-hero">
+      <button data-v="graph" class="active">Grafo</button>
+      <button data-v="dash">Dashboard</button>
+      <button data-v="edit">Editorial</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // EDITMODE defaults
+  const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+    "heroVisual": "edit"
+  }/*EDITMODE-END*/;
+
+  // Hero visual switcher (in-page controls + tweaks panel)
+  function setHero(v) {
+    document.querySelectorAll('.hero-variant').forEach(el => {
+      el.classList.toggle('active', el.dataset.v === v);
+    });
+    document.querySelectorAll('#vsw button').forEach(b => b.classList.toggle('active', b.dataset.v === v));
+    document.querySelectorAll('#tw-hero button').forEach(b => b.classList.toggle('active', b.dataset.v === v));
+  }
+  document.querySelectorAll('#vsw button').forEach(b => b.addEventListener('click', () => {
+    setHero(b.dataset.v);
+    window.parent.postMessage({type:'__edit_mode_set_keys', edits:{heroVisual: b.dataset.v}}, '*');
+  }));
+  document.querySelectorAll('#tw-hero button').forEach(b => b.addEventListener('click', () => {
+    setHero(b.dataset.v);
+    window.parent.postMessage({type:'__edit_mode_set_keys', edits:{heroVisual: b.dataset.v}}, '*');
+  }));
+  // Apply default
+  setHero(TWEAK_DEFAULTS.heroVisual);
+
+  // Pricing toggle
+  (function(){
+    const toggle = document.getElementById('billing-toggle');
+    toggle.addEventListener('click', e => {
+      const btn = e.target.closest('button'); if (!btn) return;
+      toggle.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+      const b = btn.dataset.b;
+      document.querySelectorAll('[data-m][data-y]').forEach(el => {
+        el.textContent = b === 'yearly' ? el.dataset.y : el.dataset.m;
+      });
+      document.querySelectorAll('[data-b-text]').forEach(el => {
+        el.textContent = b === 'yearly' ? 'Facturado anualmente — ahorrás 16%' : 'Facturado mensualmente';
+      });
+    });
+  })();
+
+  // Edit mode
+  (function(){
+    window.addEventListener('message', e => {
+      if (!e.data || typeof e.data !== 'object') return;
+      if (e.data.type === '__activate_edit_mode') document.getElementById('tweaks').classList.add('on');
+      if (e.data.type === '__deactivate_edit_mode') document.getElementById('tweaks').classList.remove('on');
+    });
+    window.parent.postMessage({type:'__edit_mode_available'}, '*');
+  })();
+
+  // Graph viz: subtle looping animation — occasionally advance a node
+  (function(){
+    const n5 = document.querySelector('#nd5 circle');
+    let t = 0;
+    setInterval(() => {
+      if (!n5) return;
+      t++;
+      n5.setAttribute('r', t % 2 ? 11 : 10);
+    }, 800);
+  })();
+
+  // Smooth scroll
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+      const href = a.getAttribute('href');
+      if (href.length < 2) return;
+      const el = document.querySelector(href);
+      if (!el) return;
+      e.preventDefault();
+      window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 60, behavior: 'smooth' });
+    });
+  });
+</script>
+</body>
+</html>

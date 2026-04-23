@@ -15,6 +15,10 @@ export declare enum UnidadComercialProductoDto {
     m2 = "m2",
     metro_lineal = "metro_lineal"
 }
+export declare enum ModoMedidasProductoDto {
+    ESTANDAR = "ESTANDAR",
+    LIBRE = "LIBRE"
+}
 export declare enum GranFormatoImposicionCriterioOptimizacionDto {
     menor_costo_total = "menor_costo_total",
     menor_desperdicio = "menor_desperdicio",
@@ -271,6 +275,7 @@ export declare class UpsertProductoServicioDto {
     familiaProductoId: string;
     subfamiliaProductoId?: string;
     unidadComercial: UnidadComercialProductoDto;
+    modoMedidas?: ModoMedidasProductoDto;
     estado: EstadoProductoServicioDto;
     activo: boolean;
 }
@@ -522,7 +527,13 @@ export declare class CotizarProductoVarianteDto {
     periodo?: string;
     checklistRespuestas?: CotizarChecklistRespuestaDto[];
     seleccionesBase?: CotizarSeleccionBaseDto[];
+    opcionalesSeleccionados?: string[];
+    opcionesSeleccionadas?: CotizarOpcionSeleccionadaDto[];
     parametros?: Record<string, unknown>;
+}
+export declare class CotizarOpcionSeleccionadaDto {
+    pasoId: string;
+    alternativaId: string;
 }
 export declare class PreviewImposicionProductoVarianteDto {
     parametros?: Record<string, unknown>;

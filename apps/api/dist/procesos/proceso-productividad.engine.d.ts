@@ -10,11 +10,13 @@ export type ProductividadEvaluationInput = {
     reglaVelocidadJson: Prisma.JsonValue | null;
     reglaMermaJson: Prisma.JsonValue | null;
     runMin: Prisma.Decimal | null;
+    tiempoFijoMin: Prisma.Decimal | null;
     unidadTiempo: UnidadProceso;
     mermaRunPct: Prisma.Decimal | null;
     mermaSetup: Prisma.Decimal | null;
     cantidadObjetivoSalida: number;
     contexto: JsonObject;
+    perfilProductivityValue?: Prisma.Decimal | number | null;
 };
 export type ProductividadEvaluationResult = {
     runMin: number;

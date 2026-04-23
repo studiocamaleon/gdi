@@ -313,7 +313,7 @@ export class SuperMotorModule implements ProductMotorModule {
         alternativaIdSel
           ? alternativas.find((a) => a.id === alternativaIdSel) ?? null
           : alternativas.find((a) => a.esDefault) ?? null;
-      const op = alternativaElegida
+      const opAfterAlternativa = alternativaElegida
         ? {
             ...opOriginal,
             maquinaId: alternativaElegida.maquinaId,
@@ -342,6 +342,89 @@ export class SuperMotorModule implements ProductMotorModule {
                 : opOriginal.configNestingV2,
           }
         : opOriginal;
+
+      // Fase C — herencia plantilla→paso. Si después de aplicar la
+      // alternativa hay campos null, fallback a la plantilla origen del
+      // paso. Esto permite definir productividad/setup/cleanup/tiempoFijo
+      // UNA vez en la biblioteca de plantillas y heredarlos en cada paso
+      // instanciado, sin reconfigurar.
+      const plantillaOrigen =
+        ((opOriginal as { plantillaOrigen?: {
+          nombre?: string;
+          productividadBase?: unknown;
+          setupMin?: unknown;
+          cleanupMin?: unknown;
+          tiempoFijoMin?: unknown;
+          unidadTiempo?: typeof opOriginal.unidadTiempo;
+          unidadEntrada?: typeof opOriginal.unidadEntrada;
+          unidadSalida?: typeof opOriginal.unidadSalida;
+          // R6 — identidad del paso vive en plantilla. El motor también
+          // hereda centroCostoId/maquinaId/perfilOperativoId/familiaV2/
+          // unidadProductivaV2 para que la "instancia" sea solo override.
+          centroCostoId?: string | null;
+          maquinaId?: string | null;
+          perfilOperativoId?: string | null;
+          familiaV2?: string | null;
+          unidadProductivaV2?: string | null;
+          centroCosto?: { id: string; nombre: string } | null;
+          maquina?: typeof opOriginal.maquina;
+          perfilOperativo?: typeof opOriginal.perfilOperativo;
+        } }).plantillaOrigen) ?? null;
+      const op = plantillaOrigen
+        ? {
+            ...opAfterAlternativa,
+            productividadBase:
+              opAfterAlternativa.productividadBase ??
+              (plantillaOrigen.productividadBase as typeof opOriginal.productividadBase ?? null),
+            setupMin:
+              opAfterAlternativa.setupMin ??
+              (plantillaOrigen.setupMin as typeof opOriginal.setupMin ?? null),
+            cleanupMin:
+              opAfterAlternativa.cleanupMin ??
+              (plantillaOrigen.cleanupMin as typeof opOriginal.cleanupMin ?? null),
+            tiempoFijoMin:
+              opAfterAlternativa.tiempoFijoMin ??
+              (plantillaOrigen.tiempoFijoMin as typeof opOriginal.tiempoFijoMin ?? null),
+            unidadTiempo:
+              opAfterAlternativa.unidadTiempo === 'NINGUNA' && plantillaOrigen.unidadTiempo
+                ? plantillaOrigen.unidadTiempo
+                : opAfterAlternativa.unidadTiempo,
+            // R6 — identidad heredada: centro de costo y familia. Si la
+            // alternativa o la operación local no los tienen, los toma de
+            // la plantilla. Esto evita el bug de "sin centro de costo →
+            // cotiza $0" cuando la plantilla sí lo declaró.
+            centroCostoId:
+              opAfterAlternativa.centroCostoId ??
+              plantillaOrigen.centroCostoId ??
+              opAfterAlternativa.centroCostoId,
+            centroCosto:
+              opAfterAlternativa.centroCosto ??
+              (plantillaOrigen.centroCosto as typeof opOriginal.centroCosto ?? null),
+            maquinaId:
+              opAfterAlternativa.maquinaId ??
+              plantillaOrigen.maquinaId ??
+              null,
+            maquina:
+              opAfterAlternativa.maquina ??
+              (plantillaOrigen.maquina as typeof opOriginal.maquina ?? null),
+            perfilOperativoId:
+              opAfterAlternativa.perfilOperativoId ??
+              plantillaOrigen.perfilOperativoId ??
+              null,
+            perfilOperativo:
+              opAfterAlternativa.perfilOperativo ??
+              (plantillaOrigen.perfilOperativo as typeof opOriginal.perfilOperativo ?? null),
+            familiaV2:
+              opAfterAlternativa.familiaV2 ??
+              plantillaOrigen.familiaV2 ??
+              null,
+            unidadProductivaV2:
+              ((opAfterAlternativa as { unidadProductivaV2?: string | null })
+                .unidadProductivaV2 ?? null) ??
+              plantillaOrigen.unidadProductivaV2 ??
+              null,
+          }
+        : opAfterAlternativa;
       const tarifaHora =
         op.centroCostoId && tarifaByCentro.get(op.centroCostoId) != null
           ? tarifaByCentro.get(op.centroCostoId)!
@@ -383,11 +466,20 @@ export class SuperMotorModule implements ProductMotorModule {
         reglaVelocidadJson: op.reglaVelocidadJson,
         reglaMermaJson: op.reglaMermaJson,
         runMin: op.runMin,
+        // Modo TIEMPO_FIJO usa este valor como runMin total directo.
+        // En FIJA/FORMULA queda como dato del paso (no entra al cálculo
+        // de runMin pero sí se suma como tiempo fijo del paso aparte).
+        tiempoFijoMin: op.tiempoFijoMin,
         unidadTiempo: op.unidadTiempo,
         mermaRunPct: op.mermaRunPct,
         mermaSetup: op.mermaSetup,
         cantidadObjetivoSalida,
         contexto: { cantidad, varianteId },
+        // Modo PRODUCTIVIDAD_MAQUINA — la velocidad sale del perfil
+        // operativo elegido al cotizar (heredado de plantilla o ruta).
+        perfilProductivityValue:
+          (op.perfilOperativo as { productivityValue?: unknown } | null)
+            ?.productivityValue as number | null | undefined,
       });
       if (productividad.warnings.length > 0) {
         warnings.push(

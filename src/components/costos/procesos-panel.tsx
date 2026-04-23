@@ -25,6 +25,7 @@ import { getEstaciones } from "@/lib/estaciones-api";
 import type { Estacion } from "@/lib/estaciones";
 import { getMaquinas } from "@/lib/maquinaria-api";
 import {
+  formatPerfilProductividad,
   getUnidadProduccionMaquinaLabel,
   type Maquina,
   type PlantillaMaquinaria,
@@ -42,6 +43,7 @@ import {
   createProcesoOperacionPlantilla,
   createProceso,
   evaluarProcesoCosto,
+  getFamiliasPaso,
   getProcesoOperacionPlantillas,
   getProcesos,
   toggleProcesoOperacionPlantilla,
@@ -50,6 +52,7 @@ import {
   toggleProceso,
   updateProceso,
 } from "@/lib/procesos-api";
+import type { FamiliaPasoCatalogo } from "@/lib/procesos";
 import {
   baseCalculoProductividadItems,
   estadoConfiguracionProcesoItems,
@@ -129,7 +132,14 @@ type FormState = {
   operaciones: LocalOperacion[];
 };
 
-type ProductividadModoUi = "manual" | "variable";
+/**
+ * Modo de productividad en la UI de biblioteca. Mapea al enum del backend:
+ *   - "manual" → DTO `tiempo_fijo` (motor: TIEMPO_FIJO).
+ *   - "variable" → DTO `fija` (motor: FIJA, productividad numérica propia).
+ *   - "maquina" → DTO `productividad_maquina` (motor: PRODUCTIVIDAD_MAQUINA,
+ *     velocidad heredada del perfil de máquina elegido al cotizar).
+ */
+type ProductividadModoUi = "manual" | "variable" | "maquina";
 type ModoProductividadNivelUi = "fija" | "variable_manual" | "variable_perfil";
 
 type BibliotecaFormState = {
@@ -276,8 +286,13 @@ function buildOperacionFromBiblioteca(
   const setupMin = template.setupMin ?? resolvedProfile.setupMin;
   const cleanupMin = template.cleanupMin ?? resolvedProfile.cleanupMin;
   const productividadBase = template.productividadBase ?? resolvedProfile.productivityValue;
+  // El modo se infiere del enum cuando viene seteado (TIEMPO_FIJO →
+  // "manual"); fallback a la heurística previa por compat con datos
+  // viejos (cuando había tiempoFijoMin pero modoProductividad = FIJA).
   const productividadModoUi: ProductividadModoUi =
-    template.tiempoFijoMin && template.tiempoFijoMin > 0
+    template.modoProductividad === "tiempo_fijo"
+      ? "manual"
+      : template.tiempoFijoMin && template.tiempoFijoMin > 0
         ? "manual"
         : "variable";
 
@@ -438,7 +453,9 @@ function getProductividadUnidadLabel(
 }
 
 function getProductividadModoUiLabel(value: ProductividadModoUi) {
-  return value === "manual" ? "Fija (tiempo total)" : "Variable (valor + unidad)";
+  if (value === "manual") return "Tiempo fijo total (min)";
+  if (value === "maquina") return "Productividad de máquina (sale del perfil)";
+  return "Productividad propia (valor + unidad)";
 }
 
 function isBaseCalculoCompatible(
@@ -882,6 +899,13 @@ export function ProcesosPanel({
   const [allCentrosCosto, setAllCentrosCosto] = React.useState(centrosCosto);
   const [allMaquinas, setAllMaquinas] = React.useState(maquinas);
   const [allEstaciones, setAllEstaciones] = React.useState(estaciones);
+  // Catálogo declarativo de familias de paso del modelo universal.
+  // Se carga vía `getFamiliasPaso()` en el reload inicial. La UI lo usa
+  // para mostrar la dimensión productiva, el algoritmo de nesting y los
+  // outputs disponibles cuando el usuario edita una plantilla.
+  const [familiasCatalogo, setFamiliasCatalogo] = React.useState<
+    FamiliaPasoCatalogo[]
+  >([]);
   const [selectedPlantillas, setSelectedPlantillas] = React.useState<Set<string>>(
     new Set(),
   );
@@ -1085,6 +1109,23 @@ export function ProcesosPanel({
     }
   }, [operationTemplateItems, selectedOperacionTemplateId]);
 
+  // R7 — Cargar el catálogo de familias del modelo universal al montar.
+  // No depende del refresh manual: queremos que la sección informativa
+  // del formulario "Crear paso" funcione desde el primer render.
+  React.useEffect(() => {
+    let cancelled = false;
+    getFamiliasPaso()
+      .then((next) => {
+        if (!cancelled) setFamiliasCatalogo(next);
+      })
+      .catch((err) => {
+        console.error("No se pudo cargar el catálogo de familias", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   React.useEffect(() => {
     if (
       bibliotecaForm.perfilOperativoId &&
@@ -1200,18 +1241,27 @@ export function ProcesosPanel({
   const reloadAll = React.useCallback(() => {
     startRefreshing(async () => {
       try {
-        const [nextProcesos, nextCentros, nextMaquinas, nextBiblioteca, nextEstaciones] = await Promise.all([
+        const [
+          nextProcesos,
+          nextCentros,
+          nextMaquinas,
+          nextBiblioteca,
+          nextEstaciones,
+          nextFamilias,
+        ] = await Promise.all([
           getProcesos(),
           getCentrosCosto(),
           getMaquinas(),
           getProcesoOperacionPlantillas(),
           getEstaciones(),
+          getFamiliasPaso(),
         ]);
         setProcesos(nextProcesos);
         setAllCentrosCosto(nextCentros);
         setAllMaquinas(nextMaquinas);
         setBibliotecaOperaciones(nextBiblioteca);
         setAllEstaciones(nextEstaciones);
+        setFamiliasCatalogo(nextFamilias);
       } catch (error) {
         toast.error(
           error instanceof Error ? error.message : "No se pudo refrescar rutas de produccion.",
@@ -1249,7 +1299,9 @@ export function ProcesosPanel({
             : null;
           const mermaBuilder = parseMermaRuleToBuilder(operacion.reglaMerma ?? undefined);
           const productividadModoUi: ProductividadModoUi =
-            operacion.tiempoFijoMin && operacion.tiempoFijoMin > 0
+            operacion.modoProductividad === "tiempo_fijo"
+              ? "manual"
+              : operacion.tiempoFijoMin && operacion.tiempoFijoMin > 0
                 ? "manual"
                 : "variable";
 
@@ -1537,22 +1589,27 @@ export function ProcesosPanel({
       const productivityMode = source.productividadModoUi ?? "variable";
       if (!operacion.perfilOperativoId) {
         if (productivityMode === "manual") {
-          operacion.modoProductividad = "fija";
+          // Modo "Tiempo fijo (min)" → enum DTO `tiempo_fijo`. El motor
+          // short-circuita y suma `tiempoFijoMin` directamente al totalMin.
+          operacion.modoProductividad = "tiempo_fijo";
           operacion.productividadBase = undefined;
           operacion.reglaVelocidad = undefined;
           if (!operacion.tiempoFijoMin || operacion.tiempoFijoMin <= 0) {
             toast.error(
-              `La operacion ${index + 1} en modo manual requiere Tiempo total (min) mayor a 0.`,
+              `La operacion ${index + 1} en modo "Tiempo fijo" requiere Tiempo total (min) mayor a 0.`,
             );
             return null;
           }
         } else {
-          operacion.modoProductividad = "variable";
+          // Modo "Productividad variable" → enum DTO `fija` (productividad
+          // numérica constante). El nombre legacy "variable" en frontend
+          // se mantiene en el draft pero se mapea a `fija` para el backend.
+          operacion.modoProductividad = "fija";
           operacion.tiempoFijoMin = undefined;
           operacion.reglaVelocidad = undefined;
           if (!operacion.productividadBase || operacion.productividadBase <= 0) {
             toast.error(
-              `La operacion ${index + 1} en modo variable requiere un valor de productividad mayor a 0.`,
+              `La operacion ${index + 1} en modo "Productividad" requiere un valor mayor a 0.`,
             );
             return null;
           }
@@ -1790,9 +1847,13 @@ export function ProcesosPanel({
   const openEditBibliotecaSheet = React.useCallback(
     (item: ProcesoOperacionPlantilla) => {
       const productividadModoUi: ProductividadModoUi =
-        item.tiempoFijoMin && item.tiempoFijoMin > 0
-            ? "manual"
-            : "variable";
+        item.modoProductividad === "tiempo_fijo"
+          ? "manual"
+          : item.modoProductividad === "productividad_maquina"
+            ? "maquina"
+            : item.tiempoFijoMin && item.tiempoFijoMin > 0
+              ? "manual"
+              : "variable";
       const formData: BibliotecaFormState = {
         nombre: item.nombre,
         tipoOperacion: item.tipoOperacion,
@@ -1896,27 +1957,36 @@ export function ProcesosPanel({
       // P4.1 — validación de niveles eliminada (las variantes de paso se
       // configuran ahora como ProcesoOperacionAlternativa con overrides).
 
-      let modoProductividad: ProcesoOperacionPayload["modoProductividad"] = "variable";
+      let modoProductividad: ProcesoOperacionPayload["modoProductividad"] = "fija";
       let productividadBase = bibliotecaForm.productividadBase;
       let tiempoFijoMin = bibliotecaForm.tiempoFijoMin;
 
-      if (bibliotecaUsaProductividadPerfil) {
-        modoProductividad = "variable";
-      } else if (bibliotecaForm.productividadModoUi === "manual") {
-        modoProductividad = "fija";
+      if (bibliotecaForm.productividadModoUi === "manual") {
+        // Tiempo fijo total → DTO tiempo_fijo. Motor short-circuita.
+        modoProductividad = "tiempo_fijo";
         productividadBase = undefined;
         if (!tiempoFijoMin || tiempoFijoMin <= 0) {
-          toast.error("Para modo manual debes definir Tiempo total (min) mayor a 0.");
+          toast.error('Para modo "Tiempo fijo" debes definir minutos mayor a 0.');
+          return null;
+        }
+      } else if (bibliotecaForm.productividadModoUi === "maquina") {
+        // Productividad de máquina → DTO productividad_maquina. La velocidad
+        // la determina el perfil operativo elegido al cotizar.
+        modoProductividad = "productividad_maquina";
+        productividadBase = undefined;
+        tiempoFijoMin = undefined;
+        if (!bibliotecaForm.maquinaId) {
+          toast.error(
+            'Para modo "Productividad de máquina" debes asignar una máquina.',
+          );
           return null;
         }
       } else {
-        modoProductividad = "variable";
+        // Productividad propia → DTO fija (productividad numérica declarada).
+        modoProductividad = "fija";
         tiempoFijoMin = undefined;
-        if (
-          (!bibliotecaForm.perfilOperativoId || !bibliotecaForm.maquinaId) &&
-          (!productividadBase || productividadBase <= 0)
-        ) {
-          toast.error("Para modo variable debes definir un valor de productividad mayor a 0.");
+        if (!productividadBase || productividadBase <= 0) {
+          toast.error('Para modo "Productividad propia" debes definir un valor mayor a 0.');
           return null;
         }
       }
@@ -3027,8 +3097,15 @@ export function ProcesosPanel({
                                 </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="manual">Fija (tiempo total)</SelectItem>
-                                <SelectItem value="variable">Variable (valor + unidad)</SelectItem>
+                                <SelectItem value="manual">
+                                  Tiempo fijo total (min)
+                                </SelectItem>
+                                <SelectItem value="variable">
+                                  Productividad variable (valor + unidad)
+                                </SelectItem>
+                                <SelectItem value="formula" disabled>
+                                  Fórmula avanzada (próximamente)
+                                </SelectItem>
                               </SelectContent>
                             </Select>
                           </Field>
@@ -3489,19 +3566,39 @@ export function ProcesosPanel({
                         const nextMaquina = nextMaquinaId
                           ? allMaquinas.find((item) => item.id === nextMaquinaId)
                           : null;
-                        setBibliotecaForm((prev) => ({
-                          ...prev,
-                          maquinaId: nextMaquinaId,
-                          perfilOperativoId: "",
-                          centroCostoId:
-                            nextMaquinaId && nextMaquina?.centroCostoPrincipalId
-                              ? nextMaquina.centroCostoPrincipalId
-                              : prev.centroCostoId,
-                          setupMin:
-                            nextMaquinaId && nextMaquinaId !== prev.maquinaId
-                              ? undefined
-                              : prev.setupMin,
-                        }));
+                        setBibliotecaForm((prev) => {
+                          // R7 — Auto-set del modo productividad según
+                          // presencia de máquina:
+                          //  - Si hay máquina asignada (nueva o cambiada) →
+                          //    forzar "Productividad de máquina" (la velocidad
+                          //    sale del perfil al cotizar). El usuario puede
+                          //    cambiarlo manualmente después si necesita otro
+                          //    modo (caso raro).
+                          //  - Si se quita la máquina y el modo era "maquina"
+                          //    → cambiar a "variable" (productividad propia)
+                          //    porque "maquina" ya no aplica sin máquina.
+                          const wasMaquina = prev.productividadModoUi === "maquina";
+                          const nextProductividadModoUi: ProductividadModoUi =
+                            nextMaquinaId
+                              ? "maquina"
+                              : wasMaquina
+                                ? "variable"
+                                : prev.productividadModoUi;
+                          return {
+                            ...prev,
+                            maquinaId: nextMaquinaId,
+                            perfilOperativoId: "",
+                            centroCostoId:
+                              nextMaquinaId && nextMaquina?.centroCostoPrincipalId
+                                ? nextMaquina.centroCostoPrincipalId
+                                : prev.centroCostoId,
+                            setupMin:
+                              nextMaquinaId && nextMaquinaId !== prev.maquinaId
+                                ? undefined
+                                : prev.setupMin,
+                            productividadModoUi: nextProductividadModoUi,
+                          };
+                        });
                       }}
                     >
                       <SelectTrigger>
@@ -3522,119 +3619,79 @@ export function ProcesosPanel({
                     </Select>
                   </Field>
 
-                  <>
-                  <Field data-disabled={!bibliotecaMaquinaSeleccionada}>
-                    <FieldLabel>Perfil operativo (opcional)</FieldLabel>
-                    <Select
-                      value={bibliotecaForm.perfilOperativoId || EMPTY_SELECT_VALUE}
-                      onValueChange={(value) => {
-                        const nextPerfilId =
-                          value && value !== EMPTY_SELECT_VALUE ? value : "";
-                        const perfil = nextPerfilId
-                          ? bibliotecaMaquinaSeleccionada?.perfilesOperativos.find(
-                              (item) => item.id === nextPerfilId,
-                            ) ?? null
-                          : null;
-                        const resolvedProfile = resolveMachineProfile(
-                          perfil,
-                          bibliotecaMaquinaSeleccionada,
-                        );
-                        const mappedUnit = resolvedProfile.processUnitMapping;
-                        if (nextPerfilId && resolvedProfile.setupMin === undefined) {
-                          toast.warning(
-                            `El perfil ${perfil?.nombre ?? ""} no tiene setup configurado.`,
-                          );
-                        }
-                        setBibliotecaForm((prev) => ({
-                          ...prev,
-                          perfilOperativoId: nextPerfilId,
-                          setupMin: nextPerfilId ? resolvedProfile.setupMin : prev.setupMin,
-                          cleanupMin: nextPerfilId ? resolvedProfile.cleanupMin : prev.cleanupMin,
-                          productividadBase: nextPerfilId
-                            ? (resolvedProfile.productivityValue ?? prev.productividadBase)
-                            : prev.productividadBase,
-                          unidadSalida:
-                            nextPerfilId && mappedUnit ? mappedUnit.unidadSalida : prev.unidadSalida,
-                          unidadTiempo:
-                            nextPerfilId && mappedUnit ? mappedUnit.unidadTiempo : prev.unidadTiempo,
-                          productividadModoUi: nextPerfilId ? "variable" : prev.productividadModoUi,
-                          modoProductividad: nextPerfilId ? "variable" : prev.modoProductividad,
-                        }));
-                      }}
-                      disabled={!bibliotecaMaquinaSeleccionada}
-                    >
-                      <SelectTrigger>
-                        <SelectValue>
-                          {bibliotecaForm.perfilOperativoId
-                            ? bibliotecaMaquinaSeleccionada?.perfilesOperativos.find(
-                                (item) => item.id === bibliotecaForm.perfilOperativoId,
-                              )?.nombre ?? "Perfil no disponible"
-                            : "Sin perfil"}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={EMPTY_SELECT_VALUE}>Sin perfil</SelectItem>
-                        {bibliotecaMaquinaSeleccionada?.perfilesOperativos.map((perfil) => (
-                          <SelectItem key={perfil.id} value={perfil.id}>
-                            {perfil.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-
-                  {bibliotecaUsaProductividadPerfil &&
-                  bibliotecaPerfilResuelto.extraResolvedFields.length > 0 ? (
-                    <div className="md:col-span-2 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
-                      <p className="font-medium text-foreground">Datos absorbidos del perfil</p>
-                      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-                        {bibliotecaPerfilResuelto.extraResolvedFields.map((field) => (
-                          <span key={`biblioteca-${field.label}`}>
-                            {field.label}: <span className="font-medium">{field.value}</span>
-                          </span>
-                        ))}
+                  {/* R7 — Perfil operativo eliminado del Crear Paso.
+                      La biblioteca declara solo la máquina; al cotizar, el
+                      producto/cotización elige entre los perfiles
+                      disponibles. Acá mostramos los perfiles como tabla
+                      read-only para que el usuario sepa qué velocidades
+                      ofrece la máquina. */}
+                  {bibliotecaMaquinaSeleccionada &&
+                  bibliotecaMaquinaSeleccionada.perfilesOperativos.length > 0 ? (
+                    <div className="md:col-span-2 rounded-md border border-dashed px-3 py-2.5">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                        Perfiles disponibles en {bibliotecaMaquinaSeleccionada.nombre}
+                      </p>
+                      <div className="mt-2 grid gap-1.5">
+                        {bibliotecaMaquinaSeleccionada.perfilesOperativos.map(
+                          (perfil) => (
+                            <div
+                              key={perfil.id}
+                              className="flex items-baseline justify-between gap-3 border-b border-dashed last:border-0 pb-1 last:pb-0"
+                            >
+                              <span className="text-[13px]">{perfil.nombre}</span>
+                              <span className="font-mono text-[11px] text-muted-foreground">
+                                {formatPerfilProductividad(
+                                  perfil.productivityValue,
+                                  perfil.productivityUnit,
+                                )}
+                              </span>
+                            </div>
+                          ),
+                        )}
                       </div>
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        El perfil concreto se elige al asignar este paso a una
+                        ruta o al cotizar.
+                      </p>
                     </div>
                   ) : null}
 
-                  <Field>
-                    <FieldLabel className="inline-flex items-center gap-1">
-                      Setup (min)
-                      {renderTooltipIcon(
-                        "Tiempo de preparacion del paso. Si eliges perfil operativo, se autocompleta desde ese perfil de maquina.",
-                      )}
-                    </FieldLabel>
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.0001"
-                      value={bibliotecaForm.setupMin ?? ""}
-                      onChange={(event) =>
-                        setBibliotecaForm((prev) => ({
-                          ...prev,
-                          setupMin: toOptionalNumber(event.target.value),
-                        }))
-                      }
-                    />
-                    {renderProfileAutofillHint(bibliotecaUsaProductividadPerfil)}
-                  </Field>
+                  {/* R7 — Setup: cuando el modo es "Productividad de
+                      máquina", el setup también sale del perfil al cotizar
+                      (cada perfil tiene su propio setup). En los otros
+                      modos sí lo pedimos explícitamente. */}
+                  {bibliotecaForm.productividadModoUi === "maquina" ? (
+                    <div className="rounded border border-dashed bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+                      <strong className="text-foreground">Setup heredado del perfil.</strong>{" "}
+                      Cada perfil de la máquina declara su propio tiempo de
+                      preparación. El motor lo lee al cotizar.
+                    </div>
+                  ) : (
+                    <Field>
+                      <FieldLabel className="inline-flex items-center gap-1">
+                        Setup (min)
+                        {renderTooltipIcon(
+                          "Tiempo de preparación del paso, antes de empezar la corrida.",
+                        )}
+                      </FieldLabel>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.0001"
+                        value={bibliotecaForm.setupMin ?? ""}
+                        onChange={(event) =>
+                          setBibliotecaForm((prev) => ({
+                            ...prev,
+                            setupMin: toOptionalNumber(event.target.value),
+                          }))
+                        }
+                      />
+                    </Field>
+                  )}
 
-                  <Field>
-                    <FieldLabel>Cleanup (min)</FieldLabel>
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.0001"
-                      value={bibliotecaForm.cleanupMin ?? ""}
-                      onChange={(event) =>
-                        setBibliotecaForm((prev) => ({
-                          ...prev,
-                          cleanupMin: toOptionalNumber(event.target.value),
-                        }))
-                      }
-                    />
-                    {renderProfileAutofillHint(bibliotecaUsaProductividadPerfil)}
-                  </Field>
+                  {/* R7 — Cleanup eliminado por consenso. Si vuelve a
+                      aparecer un caso real de "limpieza posterior obligatoria",
+                      se puede absorber dentro del setup. */}
 
                   <Field>
                     <FieldLabel className="inline-flex items-center gap-1">
@@ -3667,13 +3724,41 @@ export function ProcesosPanel({
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="manual">Fija (tiempo total)</SelectItem>
-                        <SelectItem value="variable">Variable (valor + unidad)</SelectItem>
+                        <SelectItem value="manual">
+                          Tiempo fijo total (min)
+                        </SelectItem>
+                        <SelectItem value="variable">
+                          Productividad propia (valor + unidad)
+                        </SelectItem>
+                        <SelectItem
+                          value="maquina"
+                          disabled={!bibliotecaMaquinaSeleccionada}
+                        >
+                          Productividad de máquina
+                          {!bibliotecaMaquinaSeleccionada
+                            ? " (requiere máquina)"
+                            : ""}
+                        </SelectItem>
+                        <SelectItem value="formula" disabled>
+                          Fórmula avanzada (próximamente)
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </Field>
 
-                  {bibliotecaForm.productividadModoUi === "manual" ? (
+                  {bibliotecaForm.productividadModoUi === "maquina" ? (
+                    <div className="md:col-span-2 rounded border border-dashed bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+                      <strong className="text-foreground">
+                        Modo "Productividad de máquina":
+                      </strong>{" "}
+                      la velocidad la determina el perfil operativo de la
+                      máquina elegido al cotizar. La biblioteca no fija un
+                      valor — solo declara que el paso usa esta máquina.
+                      {bibliotecaMaquinaSeleccionada
+                        ? null
+                        : " ⚠ Asigná una máquina arriba para usar este modo."}
+                    </div>
+                  ) : bibliotecaForm.productividadModoUi === "manual" ? (
                     <Field>
                       <FieldLabel>Tiempo total (min)</FieldLabel>
                       <Input
@@ -3832,7 +3917,6 @@ export function ProcesosPanel({
                       }
                     />
                   </Field>
-                  </>
 
                   <Field>
                     <FieldLabel>Activa</FieldLabel>
@@ -3881,75 +3965,98 @@ export function ProcesosPanel({
                     </FieldDescription>
                   </Field>
 
-                  <Field>
-                    <FieldLabel>Unidad productiva</FieldLabel>
-                    <Select
-                      value={bibliotecaForm.unidadProductivaV2 || EMPTY_SELECT_VALUE}
-                      onValueChange={(value) =>
-                        setBibliotecaForm((prev) => ({
-                          ...prev,
-                          unidadProductivaV2:
-                            value === EMPTY_SELECT_VALUE ? "" : value ?? "",
-                        }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue>
-                          {bibliotecaForm.unidadProductivaV2 || "— derivar de la familia —"}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={EMPTY_SELECT_VALUE}>
-                          — derivar de la familia —
-                        </SelectItem>
-                        <SelectItem value="hojas">hojas</SelectItem>
-                        <SelectItem value="pliegos">pliegos</SelectItem>
-                        <SelectItem value="placas">placas</SelectItem>
-                        <SelectItem value="piezas">piezas</SelectItem>
-                        <SelectItem value="m2">m²</SelectItem>
-                        <SelectItem value="metros_lineales">metros lineales</SelectItem>
-                        <SelectItem value="letras">letras</SelectItem>
-                        <SelectItem value="modulos">módulos</SelectItem>
-                        <SelectItem value="unidades">unidades</SelectItem>
-                        <SelectItem value="corridas">corridas</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FieldDescription>
-                      Sobre qué cantidad opera el paso. Si dejás "derivar de la familia",
-                      el super motor la infiere de familiaV2.
-                    </FieldDescription>
-                  </Field>
+                  {/* R7 — "Unidad productiva" eliminada del Crear Paso.
+                      Ahora se deriva automáticamente de la familia
+                      (cada familia declara su dimensión productiva canónica
+                      y un label de display). Ver sección informativa al
+                      final del formulario. */}
 
-                  <Field>
-                    <FieldLabel>Activación</FieldLabel>
-                    <Select
-                      value={bibliotecaForm.activacionV2 || EMPTY_SELECT_VALUE}
-                      onValueChange={(value) =>
-                        setBibliotecaForm((prev) => ({
-                          ...prev,
-                          activacionV2:
-                            value === EMPTY_SELECT_VALUE
-                              ? ""
-                              : (value as BibliotecaFormState["activacionV2"]),
-                        }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue>
-                          {bibliotecaForm.activacionV2 === "OBLIGATORIO" && "Obligatorio"}
-                          {bibliotecaForm.activacionV2 === "OPCIONAL" && "Opcional"}
-                          {bibliotecaForm.activacionV2 === "CONDICIONAL" && "Condicional"}
-                          {!bibliotecaForm.activacionV2 && "— sin configurar —"}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={EMPTY_SELECT_VALUE}>— sin configurar —</SelectItem>
-                        <SelectItem value="OBLIGATORIO">Obligatorio</SelectItem>
-                        <SelectItem value="OPCIONAL">Opcional</SelectItem>
-                        <SelectItem value="CONDICIONAL">Condicional</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </Field>
+                  {/* R7 — "Activación" eliminada del Crear Paso. La
+                      activación (obligatorio/opcional/condicional) es del
+                      producto, no de la plantilla. Cada producto que use
+                      este paso decide si es opcional para su ruta. */}
+
+                  {/* ─────────────────────────────────────────────────────
+                       Sección 4 (R7): Configuración productiva derivada de
+                       la familia. Read-only, informativa. Le dice al usuario
+                       qué algoritmo de nesting usará el motor, qué dimensión
+                       productiva opera el paso, y qué outputs estarán
+                       disponibles para que pasos siguientes los consuman.
+                       ───────────────────────────────────────────────────── */}
+                  {(() => {
+                    const familia = familiasCatalogo.find(
+                      (f) => f.codigo === bibliotecaForm.familiaV2,
+                    );
+                    if (!familia) return null;
+                    return (
+                      <div className="md:col-span-2 rounded-md border bg-muted/30 px-3 py-3">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                          Configuración productiva (derivada de la familia)
+                        </p>
+                        <div className="mt-2 grid gap-2 text-[12px] sm:grid-cols-2">
+                          <div className="flex items-baseline justify-between gap-3 border-b border-dashed pb-1">
+                            <span className="text-muted-foreground">
+                              ¿Produce nesting?
+                            </span>
+                            <span className="font-mono">
+                              {familia.modoNesting === "produce"
+                                ? "sí"
+                                : familia.modoNesting === "consume"
+                                  ? "consume el del paso anterior"
+                                  : "no"}
+                            </span>
+                          </div>
+                          {familia.nestingAlgoritmo ? (
+                            <div className="flex items-baseline justify-between gap-3 border-b border-dashed pb-1">
+                              <span className="text-muted-foreground">
+                                Algoritmo de nesting
+                              </span>
+                              <span className="font-mono">{familia.nestingAlgoritmo}</span>
+                            </div>
+                          ) : null}
+                          <div className="flex items-baseline justify-between gap-3 border-b border-dashed pb-1">
+                            <span className="text-muted-foreground">
+                              Dimensión productiva
+                            </span>
+                            <span className="font-mono">
+                              {familia.dimensionProductivaCanonica === "tiempo_fijo"
+                                ? "tiempo fijo (sin cantidad)"
+                                : familia.dimensionProductivaCanonica}
+                              {familia.dimensionDisplay
+                                ? ` (display: ${familia.dimensionDisplay})`
+                                : ""}
+                            </span>
+                          </div>
+                          <div className="flex items-baseline justify-between gap-3 border-b border-dashed pb-1">
+                            <span className="text-muted-foreground">Categoría</span>
+                            <span className="font-mono">{familia.categoria}</span>
+                          </div>
+                        </div>
+                        {familia.outputsCanonicos.length > 0 ? (
+                          <div className="mt-3">
+                            <p className="text-[11px] text-muted-foreground">
+                              Outputs disponibles para otros pasos:
+                            </p>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {familia.outputsCanonicos.map((output) => (
+                                <span
+                                  key={output}
+                                  className="rounded-sm border bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                                >
+                                  {output}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                        {familia.ejemplos.length > 0 ? (
+                          <p className="mt-2 text-[11px] text-muted-foreground">
+                            Ejemplos: {familia.ejemplos.join(" · ")}
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
 
                   <Field className="md:col-span-2">
                     <FieldLabel>Observaciones</FieldLabel>

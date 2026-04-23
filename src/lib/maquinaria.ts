@@ -484,6 +484,65 @@ export function getUnidadProduccionMaquinaLabel(value: UnidadProduccionMaquina) 
   return unidadProduccionMaquinaItems.find((item) => item.value === value)?.label ?? value;
 }
 
+/**
+ * Formato compacto de velocidad de un perfil operativo, ideal para mostrar
+ * en tablas/listas (ej. "60 pag/min", "10 m²/h", "30 cortes/min").
+ *
+ * Cubre las 15 unidades del enum `UnidadProduccionMaquina`. Las que ya son
+ * compuestas (PPM, M2_H, PIEZAS_H, M_MIN, CORTES_MIN, GOLPES_MIN, PLIEGOS_MIN)
+ * se renderizan con su numerador + "/min" o "/h" naturales. Las que son
+ * unidades simples sin tiempo (HOJA, COPIA, M2, PIEZA, etc.) se renderizan
+ * solo con su sustantivo.
+ */
+export function formatPerfilProductividad(
+  value: number | null | undefined,
+  unit: UnidadProduccionMaquina | "" | null | undefined,
+): string {
+  if (value == null || !Number.isFinite(value)) {
+    return "sin velocidad";
+  }
+  if (!unit) {
+    return `${value}`;
+  }
+  switch (unit) {
+    // Unidades compuestas (ya tienen tiempo en su nombre).
+    case "ppm":
+      return `${value} pag/min`;
+    case "m2_h":
+      return `${value} m²/h`;
+    case "piezas_h":
+      return `${value} piezas/h`;
+    case "m_min":
+      return `${value} m/min`;
+    case "cortes_min":
+      return `${value} cortes/min`;
+    case "golpes_min":
+      return `${value} golpes/min`;
+    case "pliegos_min":
+      return `${value} pliegos/min`;
+    // Unidades simples (sin tiempo) — se renderizan como sustantivo.
+    case "hora":
+      return `${value} h`;
+    case "hoja":
+      return `${value} hojas`;
+    case "copia":
+      return `${value} copias`;
+    case "a4_equiv":
+      return `${value} A4-equiv`;
+    case "m2":
+      return `${value} m²`;
+    case "metro_lineal":
+      return `${value} m`;
+    case "pieza":
+      return `${value} piezas`;
+    case "ciclo":
+      return `${value} ciclos`;
+    default:
+      // Unidad desconocida — fallback al label completo del catálogo.
+      return `${value} ${getUnidadProduccionMaquinaLabel(unit as UnidadProduccionMaquina)}`;
+  }
+}
+
 export type MaquinaPerfilOperativo = {
   id: string;
   nombre: string;

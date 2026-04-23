@@ -21,6 +21,7 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PaginationDto, paginatedResponse } from '../common/dto/pagination.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { FAMILIAS_PASO } from '../productos-servicios/pasos/familias';
 import {
   BaseCalculoProductividadDto,
   EstadoConfiguracionProcesoDto,
@@ -91,6 +92,17 @@ const MATERIAL_INCLUDE = {
 
 const MATERIAL_INCLUDE_PAYLOAD = { include: MATERIAL_INCLUDE } satisfies Prisma.ProcesoOperacionMaterialDefaultArgs;
 
+// Fase C — Herencia plantilla→paso. Cada vez que cargamos operaciones para
+// el motor o la respuesta del front, traemos también la plantilla origen
+// para resolver los valores heredados (productividadBase, setupMin,
+// cleanupMin, tiempoFijoMin, unidadTiempo) cuando el paso los tiene en null.
+const OPERACION_INCLUDE = {
+  centroCosto: true,
+  maquina: true,
+  perfilOperativo: true,
+  plantillaOrigen: true,
+} satisfies Prisma.ProcesoOperacionInclude;
+
 type ProcesoCompleto = Prisma.ProcesoDefinicionGetPayload<{
   include: {
     operaciones: {
@@ -98,6 +110,7 @@ type ProcesoCompleto = Prisma.ProcesoDefinicionGetPayload<{
         centroCosto: true;
         maquina: true;
         perfilOperativo: true;
+        plantillaOrigen: true;
       };
       orderBy: {
         orden: 'asc';
@@ -148,6 +161,32 @@ type ReferenceContext = {
 
 const DEFAULT_PERIOD_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
 
+/**
+ * Mapeo del DTO de modo productividad al enum interno del schema.
+ *
+ *   - DTO `tiempo_fijo` → `TIEMPO_FIJO` (motor short-circuita y devuelve runMin = 0).
+ *   - DTO `fija` / `variable` (alias) → `FIJA` (productividad numérica).
+ *     `variable` existe por compat con el frontend legacy donde "Variable
+ *     (valor + unidad)" significaba "productividad numérica".
+ *   - DTO `formula` → `FORMULA` (postergado).
+ *   - undefined → `FIJA` (default seguro).
+ */
+function mapModoProductividadDto(
+  dto: ModoProductividadProcesoDto | undefined,
+): ModoProductividadProceso {
+  if (dto === ModoProductividadProcesoDto.tiempo_fijo) {
+    return ModoProductividadProceso.TIEMPO_FIJO;
+  }
+  if (dto === ModoProductividadProcesoDto.productividad_maquina) {
+    return ModoProductividadProceso.PRODUCTIVIDAD_MAQUINA;
+  }
+  if (dto === ModoProductividadProcesoDto.formula) {
+    return ModoProductividadProceso.FORMULA;
+  }
+  // 'fija' o 'variable' o undefined → productividad numérica (FIJA).
+  return ModoProductividadProceso.FIJA;
+}
+
 @Injectable()
 export class ProcesosService {
   private static readonly CODIGO_PREFIX = 'PRO';
@@ -167,6 +206,7 @@ export class ProcesosService {
               centroCosto: true,
               maquina: true,
               perfilOperativo: true,
+              plantillaOrigen: true,
             },
             orderBy: { orden: 'asc' },
           },
@@ -183,6 +223,27 @@ export class ProcesosService {
       total,
       pagination,
     );
+  }
+
+  /**
+   * Catálogo declarativo de familias de paso. No hay datos de BD, solo
+   * metadata estática del modelo universal. El frontend lo consume para
+   * renderizar selectores y secciones informativas en biblioteca.
+   */
+  findAllFamilias() {
+    return Object.values(FAMILIAS_PASO).map((f) => ({
+      codigo: f.codigo,
+      nombre: f.nombre,
+      descripcion: f.descripcion,
+      categoria: f.categoria,
+      ejemplos: f.ejemplos,
+      modoNesting: f.modoNesting,
+      nestingAlgoritmo: f.nestingAlgoritmo,
+      dimensionProductivaCanonica: f.dimensionProductivaCanonica,
+      dimensionDisplay: f.dimensionDisplay,
+      outputsCanonicos: f.outputsCanonicos as string[],
+      requiereCentroCosto: f.requiereCentroCosto,
+    }));
   }
 
   async findAllBibliotecaOperaciones(auth: CurrentAuth) {
@@ -380,13 +441,20 @@ export class ProcesosService {
     const operationSnapshots = proceso.operaciones.map((operacion) => {
       const derived = this.deriveOperationDefaultsFromPersisted(operacion);
       const setupMin = this.decimalToNumber(derived.setupMin);
-      const cleanupMin = this.decimalToNumber(operacion.cleanupMin);
-      const tiempoFijoMin = this.decimalToNumber(operacion.tiempoFijoMin);
+      const cleanupMin = this.decimalToNumber(derived.cleanupMin);
+      const tiempoFijoMin = this.decimalToNumber(derived.tiempoFijoMin);
       const tarifa = tarifaByCentroId.get(operacion.centroCostoId);
       const tarifaNumero = tarifa ? Number(tarifa) : null;
+      // El short-circuit previo "usar tiempo fijo manual" se mantiene por
+      // compatibilidad con datos que aún no migraron a TIEMPO_FIJO. El
+      // motor (Fase modos) ahora también short-circuita en TIEMPO_FIJO,
+      // así que cualquiera de las dos condiciones bypasea la productividad.
       const usarTiempoFijoManual =
-        operacion.modoProductividad === ModoProductividadProceso.FIJA &&
-        tiempoFijoMin > 0;
+        (operacion.modoProductividad === ModoProductividadProceso.TIEMPO_FIJO ||
+          operacion.modoProductividad === ModoProductividadProceso.FIJA) &&
+        tiempoFijoMin > 0 &&
+        (derived.productividadBase == null ||
+          this.decimalToNumber(derived.productividadBase) <= 0);
       let runMin = this.decimalToNumber(operacion.runMin);
       const productividadWarnings: string[] = [];
       let productividadAplicada: number | null = null;
@@ -395,16 +463,20 @@ export class ProcesosService {
       let mermaRunPctAplicada = this.decimalToNumber(operacion.mermaRunPct);
       if (!usarTiempoFijoManual) {
         const productividad = evaluateProductividad({
-          modoProductividad: ModoProductividadProceso.FIJA,
+          modoProductividad:
+            operacion.modoProductividad ?? ModoProductividadProceso.FIJA,
           productividadBase: derived.productividadBase,
           reglaVelocidadJson: null,
           reglaMermaJson: operacion.reglaMermaJson,
           runMin: operacion.runMin,
+          tiempoFijoMin: operacion.tiempoFijoMin,
           unidadTiempo: derived.unidadTiempo,
           mermaRunPct: operacion.mermaRunPct,
           mermaSetup: operacion.mermaSetup,
           cantidadObjetivoSalida: cantidadObjetivo,
           contexto,
+          perfilProductivityValue:
+            operacion.perfilOperativo?.productivityValue ?? null,
         });
         runMin = productividad.runMin;
         productividadAplicada = productividad.productividadAplicada;
@@ -566,6 +638,7 @@ export class ProcesosService {
                 centroCosto: true,
                 maquina: true,
                 perfilOperativo: true,
+                plantillaOrigen: true,
               },
               orderBy: {
                 orden: 'asc',
@@ -606,6 +679,7 @@ export class ProcesosService {
             centroCosto: true,
             maquina: true,
             perfilOperativo: true,
+            plantillaOrigen: true,
           },
           orderBy: {
             orden: 'asc',
@@ -644,6 +718,7 @@ export class ProcesosService {
               centroCosto: true,
               maquina: true,
               perfilOperativo: true,
+              plantillaOrigen: true,
             },
             orderBy: {
               orden: 'asc',
@@ -998,19 +1073,13 @@ export class ProcesosService {
   private resolveModoProductividadFromPayload(
     payload: ProcesoOperacionItemDto,
   ): ModoProductividadProceso {
-    if (payload.modoProductividad === ModoProductividadProcesoDto.fija) {
-      return ModoProductividadProceso.FIJA;
-    }
-    return ModoProductividadProceso.FORMULA;
+    return mapModoProductividadDto(payload.modoProductividad);
   }
 
   private resolveModoProductividadFromBibliotecaPayload(
     payload: UpsertProcesoOperacionPlantillaDto,
   ): ModoProductividadProceso {
-    if (payload.modoProductividad === ModoProductividadProcesoDto.fija) {
-      return ModoProductividadProceso.FIJA;
-    }
-    return ModoProductividadProceso.FORMULA;
+    return mapModoProductividadDto(payload.modoProductividad);
   }
 
   private deriveOperationDefaultsFromPayload(
@@ -1111,8 +1180,15 @@ export class ProcesosService {
       ? (machineUnit?.unidadTiempo ?? operacion.unidadTiempo)
       : operacion.unidadTiempo;
 
+    // Fase C — cadena de herencia: paso → plantilla origen → perfil operativo.
+    // Cada campo (productividadBase, setupMin, cleanupMin, tiempoFijoMin)
+    // toma el primer valor no-null de la cadena. Esto permite que el usuario
+    // configure la productividad UNA VEZ en la biblioteca de plantillas y
+    // que cada paso instanciado en una ruta la herede sin reconfigurar.
+    const plantilla = operacion.plantillaOrigen ?? null;
     const productividadBase =
       operacion.productividadBase ??
+      plantilla?.productividadBase ??
       operacion.perfilOperativo?.productivityValue ??
       (operacion.maquina?.plantilla === PlantillaMaquinaria.LAMINADORA_BOPP_ROLLO &&
       velocidadTrabajoMmSegPerfil !== null
@@ -1122,11 +1198,22 @@ export class ProcesosService {
     const fallbackSetup = this.getSetupFromPerfilPersisted(
       operacion.perfilOperativo,
     );
-    const setupMin = operacion.setupMin ?? fallbackSetup ?? null;
-    const cleanupMin = operacion.cleanupMin ?? operacion.perfilOperativo?.cleanupMin ?? null;
+    const setupMin =
+      operacion.setupMin ?? plantilla?.setupMin ?? fallbackSetup ?? null;
+    const cleanupMin =
+      operacion.cleanupMin ??
+      plantilla?.cleanupMin ??
+      operacion.perfilOperativo?.cleanupMin ??
+      null;
+    const tiempoFijoMin =
+      operacion.tiempoFijoMin ?? plantilla?.tiempoFijoMin ?? null;
 
     const absorptionWarnings: string[] = [];
-    if (
+    if (operacion.productividadBase === null && plantilla?.productividadBase) {
+      absorptionWarnings.push(
+        `Se uso productividad heredada de la plantilla "${plantilla.nombre}".`,
+      );
+    } else if (
       !operacion.productividadBase &&
       (operacion.perfilOperativo?.productivityValue ||
         (operacion.maquina?.plantilla === PlantillaMaquinaria.LAMINADORA_BOPP_ROLLO &&
@@ -1137,7 +1224,11 @@ export class ProcesosService {
         `Se uso productividad del perfil operativo ${operacion.perfilOperativo?.nombre ?? 'sin nombre'}.`,
       );
     }
-    if (
+    if (operacion.setupMin === null && plantilla?.setupMin !== null && plantilla?.setupMin !== undefined) {
+      absorptionWarnings.push(
+        `Se uso setup heredado de la plantilla "${plantilla.nombre}".`,
+      );
+    } else if (
       operacion.setupMin === null &&
       fallbackSetup !== null &&
       operacion.perfilOperativo
@@ -1146,13 +1237,26 @@ export class ProcesosService {
         `Se uso setup del perfil operativo ${operacion.perfilOperativo.nombre}.`,
       );
     }
-    if (
+    if (operacion.cleanupMin === null && plantilla?.cleanupMin !== null && plantilla?.cleanupMin !== undefined) {
+      absorptionWarnings.push(
+        `Se uso cleanup heredado de la plantilla "${plantilla.nombre}".`,
+      );
+    } else if (
       operacion.cleanupMin === null &&
       cleanupMin !== null &&
       operacion.perfilOperativo
     ) {
       absorptionWarnings.push(
         `Se uso cleanup del perfil operativo ${operacion.perfilOperativo.nombre}.`,
+      );
+    }
+    if (
+      operacion.tiempoFijoMin === null &&
+      plantilla?.tiempoFijoMin !== null &&
+      plantilla?.tiempoFijoMin !== undefined
+    ) {
+      absorptionWarnings.push(
+        `Se uso tiempo fijo heredado de la plantilla "${plantilla.nombre}".`,
       );
     }
     if (shouldAbsorbUnits && operacion.perfilOperativo?.productivityUnit) {
@@ -1174,6 +1278,7 @@ export class ProcesosService {
       productividadBase,
       setupMin,
       cleanupMin,
+      tiempoFijoMin,
       warnings: absorptionWarnings,
     };
   }
@@ -1798,6 +1903,7 @@ export class ProcesosService {
             centroCosto: true,
             maquina: true,
             perfilOperativo: true,
+            plantillaOrigen: true,
           },
           orderBy: {
             orden: 'asc',
@@ -2249,10 +2355,17 @@ export class ProcesosService {
   private toApiModoProductividad(
     value: ModoProductividadProceso,
   ): ModoProductividadProcesoDto {
-    if (value === ModoProductividadProceso.FIJA) {
-      return ModoProductividadProcesoDto.fija;
+    if (value === ModoProductividadProceso.TIEMPO_FIJO) {
+      return ModoProductividadProcesoDto.tiempo_fijo;
     }
-    return ModoProductividadProcesoDto.variable;
+    if (value === ModoProductividadProceso.PRODUCTIVIDAD_MAQUINA) {
+      return ModoProductividadProcesoDto.productividad_maquina;
+    }
+    if (value === ModoProductividadProceso.FORMULA) {
+      return ModoProductividadProcesoDto.formula;
+    }
+    // FIJA → 'fija' (productividad numérica declarada en el paso).
+    return ModoProductividadProcesoDto.fija;
   }
 
   private parseFiniteNumber(value: unknown) {
@@ -2297,7 +2410,7 @@ export class ProcesosService {
       data: {
         tenantId: auth.tenantId,
         procesoOperacionId: operacionId,
-        maquinaId: payload.maquinaId,
+        maquinaId: payload.maquinaId ?? null,
         perfilOperativoId: payload.perfilOperativoId ?? null,
         label: payload.label.trim(),
         esDefault: Boolean(payload.esDefault),
@@ -2339,7 +2452,7 @@ export class ProcesosService {
     const updated = await this.prisma.procesoOperacionAlternativa.update({
       where: { id: alternativaId },
       data: {
-        maquinaId: payload.maquinaId,
+        maquinaId: payload.maquinaId ?? null,
         perfilOperativoId: payload.perfilOperativoId ?? null,
         label: payload.label.trim(),
         esDefault: Boolean(payload.esDefault),
@@ -2410,15 +2523,22 @@ export class ProcesosService {
     auth: CurrentAuth,
     payload: UpsertProcesoOperacionAlternativaDto,
   ) {
-    const maquina = await this.prisma.maquina.findFirst({
-      where: { id: payload.maquinaId, tenantId: auth.tenantId },
-      select: { id: true },
-    });
-    if (!maquina) {
-      throw new BadRequestException('La máquina indicada no existe.');
+    // Fase D.1 — máquina opcional (alternativas en pasos manuales).
+    if (payload.maquinaId) {
+      const maquina = await this.prisma.maquina.findFirst({
+        where: { id: payload.maquinaId, tenantId: auth.tenantId },
+        select: { id: true },
+      });
+      if (!maquina) {
+        throw new BadRequestException('La máquina indicada no existe.');
+      }
+    } else if (payload.perfilOperativoId) {
+      throw new BadRequestException(
+        'No se puede asignar un perfil operativo a una alternativa sin máquina.',
+      );
     }
 
-    if (payload.perfilOperativoId) {
+    if (payload.perfilOperativoId && payload.maquinaId) {
       const perfil = await this.prisma.maquinaPerfilOperativo.findFirst({
         where: {
           id: payload.perfilOperativoId,
@@ -2903,14 +3023,36 @@ export class ProcesosService {
         ? { connect: { id: payload.perfilOperativoId } }
         : { disconnect: true };
     }
+    // Fase C — vínculo a la plantilla origen para activar la herencia.
+    if (payload.plantillaOrigenId !== undefined) {
+      if (payload.plantillaOrigenId) {
+        const plantilla = await this.prisma.procesoOperacionPlantilla.findFirst({
+          where: { id: payload.plantillaOrigenId, tenantId: auth.tenantId },
+          select: { id: true },
+        });
+        if (!plantilla) {
+          throw new BadRequestException('La plantilla origen indicada no existe.');
+        }
+        data.plantillaOrigen = { connect: { id: payload.plantillaOrigenId } };
+      } else {
+        data.plantillaOrigen = { disconnect: true };
+      }
+    }
+    // Fase C — los Decimals aceptan null para limpiar el override (heredar
+    // de la plantilla cuando exista) o un número para fijar valor local.
     if (payload.setupMin !== undefined)
-      data.setupMin = new Prisma.Decimal(payload.setupMin);
+      data.setupMin = payload.setupMin === null ? null : new Prisma.Decimal(payload.setupMin);
     if (payload.cleanupMin !== undefined)
-      data.cleanupMin = new Prisma.Decimal(payload.cleanupMin);
+      data.cleanupMin = payload.cleanupMin === null ? null : new Prisma.Decimal(payload.cleanupMin);
     if (payload.tiempoFijoMin !== undefined)
-      data.tiempoFijoMin = new Prisma.Decimal(payload.tiempoFijoMin);
+      data.tiempoFijoMin = payload.tiempoFijoMin === null ? null : new Prisma.Decimal(payload.tiempoFijoMin);
     if (payload.productividadBase !== undefined)
-      data.productividadBase = new Prisma.Decimal(payload.productividadBase);
+      data.productividadBase =
+        payload.productividadBase === null ? null : new Prisma.Decimal(payload.productividadBase);
+    // Fase D.2 — unidad de tiempo de la productividad.
+    if (payload.unidadTiempo !== undefined) {
+      data.unidadTiempo = payload.unidadTiempo as UnidadProceso;
+    }
     if (payload.condicionV2 !== undefined) {
       data.condicionV2 =
         payload.condicionV2 === null

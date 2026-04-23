@@ -302,7 +302,19 @@ enum DominioReglaSeleccion {
 }
 
 enum ModoProductividadProceso {
+  // Tiempo total fijo en minutos (ignora productividadBase). Usar
+  // `tiempoFijoMin` directamente como `runMin` en el motor.
+  TIEMPO_FIJO
+  // Productividad numérica constante declarada en el paso (valor + unidad
+  // compuesta de salida/tiempo, ej: 60 pag/min, 3 m²/h). El motor calcula
+  // `runMin = cantidadObjetivo / productividadBase` con conversión a min.
   FIJA
+  // La velocidad la define el perfil operativo de la máquina elegido al
+  // cotizar (la biblioteca solo declara que el paso usa una máquina, no
+  // fija un valor). El motor lee `op.perfilOperativo.productivityValue`.
+  PRODUCTIVIDAD_MAQUINA
+  // Productividad evaluada por una expresión (`reglaVelocidadJson`).
+  // Postergado — sin editor visual hoy. Se mantiene para datos históricos.
   FORMULA
 }
 
@@ -310,6 +322,9 @@ enum UnidadProceso {
   NINGUNA
   HORA
   MINUTO
+  // Fase D.2 — soporte para productividades en segundos (routers, plotters
+  // de corte, etc. que se especifican en mm/seg o pasada/seg).
+  SEGUNDO
   HOJA
   COPIA
   A4_EQUIV
@@ -1251,6 +1266,13 @@ model ProcesoOperacionPlantilla {
   estacionId         String?                  @db.Uuid
   estacion           Estacion?                @relation(fields: [estacionId], references: [id], onDelete: SetNull)
 
+  // ── Fase C — Herencia plantilla→paso ──────────────────────────────
+  // Pasos derivados de esta plantilla. Cuando un paso usa los valores
+  // por defecto (campos null en ProcesoOperacion), el motor toma el
+  // valor desde la plantilla origen vía esta relación.
+  pasosDerivados     ProcesoOperacion[]       @relation("ProcesoOperacionDesdePlantilla")
+  // ──────────────────────────────────────────────────────────────────
+
   @@index([tenantId, activo])
   @@index([tenantId, tipoOperacion])
   @@index([tenantId, centroCostoId])
@@ -1305,6 +1327,14 @@ model ProcesoOperacion {
   rol                         RolProcesoOperacion?
   esOpcional                  Boolean                    @default(false)
   requiresProductoAdicionalId String?                    @db.Uuid
+  // ── Fase C — Herencia plantilla→paso ─────────────────────────────
+  // FK opcional a la plantilla desde la que se instanció este paso.
+  // Cuando está seteado y los campos locales (productividadBase,
+  // setupMin, cleanupMin, tiempoFijoMin, unidadTiempo, etc.) están
+  // en null, el motor usa el valor declarado en la plantilla.
+  // Null = paso sin plantilla origen (valores locales obligatorios
+  // o se usan defaults del perfil operativo, como hasta Fase B).
+  plantillaOrigenId           String?                    @db.Uuid
   // ── Extensiones modelo universal (A.3) ─────────────────────────────
   // Todas nullable para mantener compatibilidad con motores v1.
   // Los motores v2 de Etapa B/C las consumirán cuando las rutas las declaren.
@@ -1332,6 +1362,7 @@ model ProcesoOperacion {
   centroCosto                 CentroCosto                @relation(fields: [centroCostoId], references: [id], onDelete: Cascade)
   maquina                     Maquina?                   @relation("ProcesoOperacionMaquina", fields: [maquinaId], references: [id], onDelete: SetNull)
   perfilOperativo             MaquinaPerfilOperativo?    @relation("ProcesoOperacionPerfil", fields: [perfilOperativoId], references: [id], onDelete: SetNull)
+  plantillaOrigen             ProcesoOperacionPlantilla? @relation("ProcesoOperacionDesdePlantilla", fields: [plantillaOrigenId], references: [id], onDelete: SetNull)
   requiresProductoAdicional   ProductoAdicionalCatalogo? @relation("ProductoAdicionalCondicionOperacion", fields: [requiresProductoAdicionalId], references: [id], onDelete: SetNull)
   productoChecklistReglasPaso ProductoChecklistRegla[]   @relation("ProductoChecklistReglaOperacion")
   materialesConsumidos        ProcesoOperacionMaterial[] @relation("ProcesoOperacionMaterialOperacion")
@@ -1343,6 +1374,7 @@ model ProcesoOperacion {
   @@index([tenantId, centroCostoId])
   @@index([tenantId, maquinaId])
   @@index([tenantId, perfilOperativoId])
+  @@index([tenantId, plantillaOrigenId])
   @@index([tenantId, requiresProductoAdicionalId])
 }
 
@@ -1450,9 +1482,15 @@ model ProcesoOperacionAlternativa {
   id                     String                    @id @default(uuid()) @db.Uuid
   tenantId               String                    @db.Uuid
   procesoOperacionId     String                    @db.Uuid
-  maquinaId              String                    @db.Uuid
+  /// Fase D.1 — `maquinaId` ahora es opcional. Pasos manuales (diseño,
+  /// embalaje, gestión externa, etc.) que no usan máquina pueden tener
+  /// alternativas que solo varían productividad/tiempo (ej. "diseño básico
+  /// 2 h vs diseño express 1 h"). Cuando es null, la alternativa se aplica
+  /// como un override puro de tiempo/productividad sobre el paso.
+  maquinaId              String?                   @db.Uuid
   perfilOperativoId      String?                   @db.Uuid
-  /// Etiqueta legible para la UI (ej. "Látex CMYK", "UV CMYK+Blanco").
+  /// Etiqueta legible para la UI (ej. "Látex CMYK", "UV CMYK+Blanco",
+  /// "Diseño básico", "Diseño express").
   label                  String
   /// Si true, se pre-selecciona en la UI de cotización.
   esDefault              Boolean                   @default(false)
@@ -1471,7 +1509,7 @@ model ProcesoOperacionAlternativa {
   updatedAt              DateTime                  @updatedAt
   tenant                 Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   procesoOperacion       ProcesoOperacion          @relation("ProcesoOperacionAlternativaOperacion", fields: [procesoOperacionId], references: [id], onDelete: Cascade)
-  maquina                Maquina                   @relation("ProcesoOperacionAlternativaMaquina", fields: [maquinaId], references: [id], onDelete: Restrict)
+  maquina                Maquina?                  @relation("ProcesoOperacionAlternativaMaquina", fields: [maquinaId], references: [id], onDelete: Restrict)
   perfilOperativo        MaquinaPerfilOperativo?   @relation("ProcesoOperacionAlternativaPerfil", fields: [perfilOperativoId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, procesoOperacionId, activo])

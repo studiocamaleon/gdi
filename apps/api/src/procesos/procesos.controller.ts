@@ -39,6 +39,18 @@ export class ProcesosController {
     return this.procesosService.findAllBibliotecaOperaciones(auth);
   }
 
+  /**
+   * Catálogo de familias de paso (declarativo, sin DB).
+   * Cada familia define su naturaleza productiva (dimensión canónica,
+   * algoritmo de nesting, outputs disponibles, ejemplos). El frontend
+   * lo consume para renderizar selectores y secciones informativas en
+   * la biblioteca de pasos.
+   */
+  @Get('familias')
+  findAllFamilias() {
+    return this.procesosService.findAllFamilias();
+  }
+
   @Post('biblioteca-operaciones')
   createBiblioteca(
     @CurrentSession() auth: CurrentAuth,

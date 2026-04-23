@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsInt,
@@ -10,11 +10,21 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 export class UpsertProcesoOperacionAlternativaDto {
+  /**
+   * Fase D.1 — Opcional. Pasos manuales (diseño, embalaje, gestión externa)
+   * pueden tener alternativas que solo varíen productividad/tiempo sin
+   * involucrar máquina. Cuando es null, la alternativa es un override
+   * puro de tiempo/productividad.
+   */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsUUID('4')
-  maquinaId!: string;
+  @Transform(({ value }) => (value === '' ? null : value))
+  maquinaId?: string | null;
 
   @IsOptional()
   @IsUUID('4')

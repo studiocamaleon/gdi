@@ -36,18 +36,17 @@ export declare enum TipoOperacionProcesoDto {
     servicio = "servicio"
 }
 export declare enum ModoProductividadProcesoDto {
+    tiempo_fijo = "tiempo_fijo",
     fija = "fija",
-    variable = "variable"
-}
-export declare enum ModoProductividadNivelDto {
-    fija = "fija",
-    variable_manual = "variable_manual",
-    variable_perfil = "variable_perfil"
+    variable = "variable",
+    productividad_maquina = "productividad_maquina",
+    formula = "formula"
 }
 export declare enum UnidadProcesoDto {
     ninguna = "ninguna",
     hora = "hora",
     minuto = "minuto",
+    segundo = "segundo",
     hoja = "hoja",
     copia = "copia",
     a4_equiv = "a4_equiv",
@@ -60,6 +59,9 @@ export declare enum UnidadProcesoDto {
     kg = "kg",
     litro = "litro",
     lote = "lote"
+}
+export declare enum RolProcesoOperacionDto {
+    impresion = "impresion"
 }
 export declare enum BaseCalculoProductividadDto {
     cantidad = "cantidad",
@@ -74,6 +76,7 @@ export declare class ProcesoOperacionItemDto {
     centroCostoId?: string;
     maquinaId?: string;
     perfilOperativoId?: string;
+    plantillaOrigenId?: string;
     orden?: number;
     setupMin?: number;
     runMin?: number;
@@ -91,25 +94,9 @@ export declare class ProcesoOperacionItemDto {
     reglaMerma?: Record<string, unknown>;
     detalle?: Record<string, unknown>;
     baseCalculoProductividad?: BaseCalculoProductividadDto;
-    niveles?: ProcesoOperacionNivelDto[];
+    rol?: RolProcesoOperacionDto;
+    esOpcional?: boolean;
     activo: boolean;
-}
-export declare class ProcesoOperacionNivelDto {
-    id?: string;
-    nombre: string;
-    orden?: number;
-    activo?: boolean;
-    modoProductividadNivel: ModoProductividadNivelDto;
-    tiempoFijoMin?: number;
-    multiplicadorDobleFaz?: number;
-    productividadBase?: number;
-    unidadSalida?: UnidadProcesoDto;
-    unidadTiempo?: UnidadProcesoDto;
-    maquinaId?: string;
-    perfilOperativoId?: string;
-    setupMin?: number;
-    cleanupMin?: number;
-    detalle?: Record<string, unknown>;
 }
 export declare class UpsertProcesoDto {
     codigo?: string;

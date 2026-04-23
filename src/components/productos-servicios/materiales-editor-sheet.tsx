@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/table";
 import type { MateriaPrima, MateriaPrimaVariante } from "@/lib/materias-primas";
 import { getMateriasPrimas } from "@/lib/materias-primas-api";
+import { getLongitudMm } from "@/lib/units";
 import {
   createProcesoOperacionMaterial,
   deleteProcesoOperacionMaterial,
@@ -144,36 +145,41 @@ function formatPrecio(n: number | null | undefined): string {
 }
 
 /**
- * SM.1.d — Build user-friendly chips of variante atributos para mostrarlos en
- * el multi-select de variantes habilitadas. Reconoce shapes comunes:
- *   - Rollo: { ancho: 1.06, largo: 50 } (en metros) → "1060 mm × 50 m"
- *   - Pliego: { anchoMm: 700, altoMm: 1000 } → "700 × 1000 mm"
- *   - Otros atributos texto → "key: value"
+ * SM.1.d + Fase B — Build user-friendly chips de los atributos de variante
+ * para mostrarlos en el multi-select de variantes habilitadas. Usa el
+ * helper `getLongitudMm` para entender la unidad declarada en el sufijo
+ * de la clave (anchoMm / anchoCm / anchoM / ancho-legacy-en-m), evitando
+ * la ambigüedad de "número desnudo".
+ *
+ * Mostrado en cm cuando es chico (<2 m) y en m cuando es grande (rollo).
  */
 function describeVarianteAtributos(
   attrs: Record<string, unknown> | null | undefined,
 ): string[] {
   if (!attrs) return [];
   const chips: string[] = [];
-  // Rollo (ancho/largo en metros)
-  if (typeof attrs.ancho === "number" || typeof attrs.largo === "number") {
-    const anchoM = Number(attrs.ancho);
-    const largoM = Number(attrs.largo);
-    if (Number.isFinite(anchoM) && anchoM > 0) {
-      chips.push(`${Math.round(anchoM * 1000)} mm`);
-    }
-    if (Number.isFinite(largoM) && largoM > 0) {
-      chips.push(`× ${largoM} m`);
-    }
+
+  const anchoMm = getLongitudMm(attrs, "ancho");
+  const altoMm = getLongitudMm(attrs, "alto");
+  const largoMm = getLongitudMm(attrs, "largo");
+
+  // Helper para elegir cm vs m según magnitud (cm bajo 2 m, m sobre).
+  const fmtMm = (mm: number): string =>
+    mm >= 2000
+      ? `${(mm / 1000).toFixed(2).replace(/\.00$/, "")} m`
+      : `${(mm / 10).toFixed(1).replace(/\.0$/, "")} cm`;
+
+  if (anchoMm != null && altoMm != null) {
+    chips.push(`${fmtMm(anchoMm)} × ${fmtMm(altoMm)}`);
+  } else if (anchoMm != null && largoMm != null) {
+    // Caso típico de rollo: ancho (chico) × largo (grande).
+    chips.push(`${fmtMm(anchoMm)} × ${fmtMm(largoMm)}`);
+  } else {
+    if (anchoMm != null) chips.push(fmtMm(anchoMm));
+    if (altoMm != null) chips.push(`× ${fmtMm(altoMm)}`);
+    if (largoMm != null) chips.push(`× ${fmtMm(largoMm)}`);
   }
-  // Pliego/placa (anchoMm/altoMm)
-  if (typeof attrs.anchoMm === "number" || typeof attrs.altoMm === "number") {
-    const a = Number(attrs.anchoMm);
-    const h = Number(attrs.altoMm);
-    if (Number.isFinite(a) && a > 0 && Number.isFinite(h) && h > 0) {
-      chips.push(`${a} × ${h} mm`);
-    }
-  }
+
   // Otros atributos que aporten contexto (gramaje, color, acabado, etc.)
   for (const key of [
     "gramaje",

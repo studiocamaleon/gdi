@@ -142,7 +142,8 @@ export function AlternativasEditorSheet({
   function startEdit(alt: ProcesoOperacionAlternativa) {
     setDraft({
       id: alt.id,
-      maquinaId: alt.maquinaId,
+      // Fase D.1 — alternativas sin máquina: el draft usa string vacío.
+      maquinaId: alt.maquinaId ?? "",
       perfilOperativoId: alt.perfilOperativoId ?? NONE,
       label: alt.label,
       esDefault: alt.esDefault,
@@ -166,10 +167,8 @@ export function AlternativasEditorSheet({
   }
 
   async function save() {
-    if (!draft.maquinaId) {
-      toast.error("Seleccioná una máquina.");
-      return;
-    }
+    // Fase D.1 — máquina opcional. Para alternativas de pasos manuales,
+    // basta con un override de productividad/tiempo sin equipo asociado.
     if (draft.label.trim().length === 0) {
       toast.error("El label es obligatorio.");
       return;
@@ -215,8 +214,12 @@ export function AlternativasEditorSheet({
     }
 
     const payload = {
-      maquinaId: draft.maquinaId,
-      perfilOperativoId: draft.perfilOperativoId === NONE ? null : draft.perfilOperativoId,
+      // Fase D.1 — máquina opcional: vacío significa "alternativa manual".
+      maquinaId: draft.maquinaId || null,
+      perfilOperativoId:
+        !draft.maquinaId || draft.perfilOperativoId === NONE
+          ? null
+          : draft.perfilOperativoId,
       label: draft.label.trim(),
       esDefault: draft.esDefault,
       orden: draft.orden,
@@ -352,23 +355,27 @@ export function AlternativasEditorSheet({
                   </div>
 
                   <div className="grid gap-2">
-                    <Label>Máquina</Label>
+                    <Label>Máquina (opcional)</Label>
                     <Select
-                      value={draft.maquinaId}
+                      value={draft.maquinaId === "" ? NONE : draft.maquinaId}
                       onValueChange={(v) =>
                         setDraft((d) => ({
                           ...d,
-                          maquinaId: v ?? "",
+                          maquinaId: !v || v === NONE ? "" : v,
                           perfilOperativoId: NONE,
                         }))
                       }
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Seleccioná una máquina">
-                          {maquinaElegida?.nombre ?? "Seleccioná una máquina"}
+                        <SelectValue placeholder="Sin máquina (alternativa manual)">
+                          {maquinaElegida?.nombre ??
+                            "Sin máquina (alternativa manual)"}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value={NONE}>
+                          — Sin máquina (alternativa manual) —
+                        </SelectItem>
                         {maquinas.map((m) => (
                           <SelectItem key={m.id} value={m.id}>
                             {m.nombre}
@@ -376,6 +383,13 @@ export function AlternativasEditorSheet({
                         ))}
                       </SelectContent>
                     </Select>
+                    {!draft.maquinaId && (
+                      <p className="text-xs text-muted-foreground">
+                        Fase D.1 — alternativa sin equipo: solo overridea
+                        productividad/tiempo (útil para diseño, embalaje,
+                        gestión externa, etc.).
+                      </p>
+                    )}
                   </div>
 
                   <div className="grid gap-2">

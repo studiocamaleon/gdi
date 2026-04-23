@@ -39,8 +39,11 @@ export type EffectiveOperacionSummary = {
 };
 
 const MODO_LABELS: Record<ModoProductividadProceso, string> = {
-  fija: 'Fijo',
-  variable: 'Variable',
+  tiempo_fijo: 'Tiempo fijo',
+  fija: 'Productividad propia',
+  productividad_maquina: 'Productividad de máquina',
+  variable: 'Productividad propia', // alias legacy de fija
+  formula: 'Fórmula',
 };
 
 function formatModo(modo: ModoProductividadProceso): string {

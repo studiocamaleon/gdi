@@ -544,6 +544,27 @@ function ejecutarNestingAlgoritmo(
         console.warn(`${tag} sin medidas — devuelve null.`);
         return null;
       }
+      // Fase A — pliego de impresión opcional. Cuando viene seteado, el
+      // motor hace nesting de las piezas sobre ese formato útil y luego
+      // calcula cuántos sustratos comprados son necesarios. El costeo del
+      // material se deriva del sustrato (no del pliego de impresión).
+      const pliegoImpresionRaw = config.pliegoImpresion as
+        | NestingHojaPliego
+        | null
+        | undefined;
+      const pliegoImpresion =
+        pliegoImpresionRaw &&
+        Number.isFinite(Number(pliegoImpresionRaw.anchoMm)) &&
+        Number.isFinite(Number(pliegoImpresionRaw.altoMm)) &&
+        Number(pliegoImpresionRaw.anchoMm) > 0 &&
+        Number(pliegoImpresionRaw.altoMm) > 0
+          ? {
+              codigo: String(pliegoImpresionRaw.codigo ?? 'CUSTOM'),
+              nombre: String(pliegoImpresionRaw.nombre ?? 'Custom'),
+              anchoMm: Number(pliegoImpresionRaw.anchoMm),
+              altoMm: Number(pliegoImpresionRaw.altoMm),
+            }
+          : null;
       const result = nestOnSheet({
         piezaAnchoMm: m.anchoMm,
         piezaAltoMm: m.altoMm,
@@ -554,6 +575,7 @@ function ejecutarNestingAlgoritmo(
         margenMm: Number(config.margenMm ?? 0),
         permitirRotacion: Boolean(config.permitirRotacion ?? true),
         criterio: ((config.criterio ?? 'menor_cantidad_pliegos') as NestingHojaCriterio),
+        pliegoImpresion,
       });
       if (!result) {
         const pliegosCfg = (config.pliegos as NestingHojaPliego[] | undefined) ?? [];

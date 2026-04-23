@@ -17,9 +17,72 @@ const client_1 = require("@prisma/client");
 const library_1 = require("@prisma/client/runtime/library");
 const pagination_dto_1 = require("../common/dto/pagination.dto");
 const prisma_service_1 = require("../prisma/prisma.service");
+const familias_1 = require("../productos-servicios/pasos/familias");
 const upsert_proceso_dto_1 = require("./dto/upsert-proceso.dto");
 const proceso_productividad_engine_1 = require("./proceso-productividad.engine");
+const MATERIAL_INCLUDE = {
+    materiaPrimaVariante: {
+        select: {
+            id: true,
+            sku: true,
+            nombreVariante: true,
+            precioReferencia: true,
+        },
+    },
+    productoComponente: {
+        select: {
+            id: true,
+            codigo: true,
+            nombre: true,
+            modoMedidas: true,
+        },
+    },
+    varianteComponente: {
+        select: {
+            id: true,
+            nombre: true,
+            anchoMm: true,
+            altoMm: true,
+        },
+    },
+    variantesHabilitadas: {
+        where: { activo: true },
+        orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+        include: {
+            materiaPrimaVariante: {
+                select: {
+                    id: true,
+                    sku: true,
+                    nombreVariante: true,
+                    precioReferencia: true,
+                    atributosVarianteJson: true,
+                    activo: true,
+                    materiaPrimaId: true,
+                },
+            },
+        },
+    },
+};
+const MATERIAL_INCLUDE_PAYLOAD = { include: MATERIAL_INCLUDE };
+const OPERACION_INCLUDE = {
+    centroCosto: true,
+    maquina: true,
+    perfilOperativo: true,
+    plantillaOrigen: true,
+};
 const DEFAULT_PERIOD_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
+function mapModoProductividadDto(dto) {
+    if (dto === upsert_proceso_dto_1.ModoProductividadProcesoDto.tiempo_fijo) {
+        return client_1.ModoProductividadProceso.TIEMPO_FIJO;
+    }
+    if (dto === upsert_proceso_dto_1.ModoProductividadProcesoDto.productividad_maquina) {
+        return client_1.ModoProductividadProceso.PRODUCTIVIDAD_MAQUINA;
+    }
+    if (dto === upsert_proceso_dto_1.ModoProductividadProcesoDto.formula) {
+        return client_1.ModoProductividadProceso.FORMULA;
+    }
+    return client_1.ModoProductividadProceso.FIJA;
+}
 let ProcesosService = class ProcesosService {
     static { ProcesosService_1 = this; }
     prisma;
@@ -39,6 +102,7 @@ let ProcesosService = class ProcesosService {
                             centroCosto: true,
                             maquina: true,
                             perfilOperativo: true,
+                            plantillaOrigen: true,
                         },
                         orderBy: { orden: 'asc' },
                     },
@@ -50,6 +114,21 @@ let ProcesosService = class ProcesosService {
             this.prisma.procesoDefinicion.count({ where }),
         ]);
         return (0, pagination_dto_1.paginatedResponse)(procesos.map((proceso) => this.toProcesoResponse(proceso)), total, pagination);
+    }
+    findAllFamilias() {
+        return Object.values(familias_1.FAMILIAS_PASO).map((f) => ({
+            codigo: f.codigo,
+            nombre: f.nombre,
+            descripcion: f.descripcion,
+            categoria: f.categoria,
+            ejemplos: f.ejemplos,
+            modoNesting: f.modoNesting,
+            nestingAlgoritmo: f.nestingAlgoritmo,
+            dimensionProductivaCanonica: f.dimensionProductivaCanonica,
+            dimensionDisplay: f.dimensionDisplay,
+            outputsCanonicos: f.outputsCanonicos,
+            requiereCentroCosto: f.requiereCentroCosto,
+        }));
     }
     async findAllBibliotecaOperaciones(auth) {
         try {
@@ -76,7 +155,6 @@ let ProcesosService = class ProcesosService {
     }
     async createBibliotecaOperacion(auth, payload) {
         this.validateBibliotecaOperacionPayload(payload);
-        await this.validateBibliotecaOperacionNivelReferences(auth, payload.niveles ?? []);
         const refs = await this.resolveBibliotecaOperacionReferences(auth, payload);
         let created;
         try {
@@ -94,7 +172,6 @@ let ProcesosService = class ProcesosService {
     async updateBibliotecaOperacion(auth, id, payload) {
         await this.findBibliotecaOperacionOrThrow(auth, id);
         this.validateBibliotecaOperacionPayload(payload);
-        await this.validateBibliotecaOperacionNivelReferences(auth, payload.niveles ?? []);
         const refs = await this.resolveBibliotecaOperacionReferences(auth, payload);
         let updated;
         try {
@@ -205,12 +282,15 @@ let ProcesosService = class ProcesosService {
         const operationSnapshots = proceso.operaciones.map((operacion) => {
             const derived = this.deriveOperationDefaultsFromPersisted(operacion);
             const setupMin = this.decimalToNumber(derived.setupMin);
-            const cleanupMin = this.decimalToNumber(operacion.cleanupMin);
-            const tiempoFijoMin = this.decimalToNumber(operacion.tiempoFijoMin);
+            const cleanupMin = this.decimalToNumber(derived.cleanupMin);
+            const tiempoFijoMin = this.decimalToNumber(derived.tiempoFijoMin);
             const tarifa = tarifaByCentroId.get(operacion.centroCostoId);
             const tarifaNumero = tarifa ? Number(tarifa) : null;
-            const usarTiempoFijoManual = operacion.modoProductividad === client_1.ModoProductividadProceso.FIJA &&
-                tiempoFijoMin > 0;
+            const usarTiempoFijoManual = (operacion.modoProductividad === client_1.ModoProductividadProceso.TIEMPO_FIJO ||
+                operacion.modoProductividad === client_1.ModoProductividadProceso.FIJA) &&
+                tiempoFijoMin > 0 &&
+                (derived.productividadBase == null ||
+                    this.decimalToNumber(derived.productividadBase) <= 0);
             let runMin = this.decimalToNumber(operacion.runMin);
             const productividadWarnings = [];
             let productividadAplicada = null;
@@ -219,16 +299,18 @@ let ProcesosService = class ProcesosService {
             let mermaRunPctAplicada = this.decimalToNumber(operacion.mermaRunPct);
             if (!usarTiempoFijoManual) {
                 const productividad = (0, proceso_productividad_engine_1.evaluateProductividad)({
-                    modoProductividad: client_1.ModoProductividadProceso.FIJA,
+                    modoProductividad: operacion.modoProductividad ?? client_1.ModoProductividadProceso.FIJA,
                     productividadBase: derived.productividadBase,
                     reglaVelocidadJson: null,
                     reglaMermaJson: operacion.reglaMermaJson,
                     runMin: operacion.runMin,
+                    tiempoFijoMin: operacion.tiempoFijoMin,
                     unidadTiempo: derived.unidadTiempo,
                     mermaRunPct: operacion.mermaRunPct,
                     mermaSetup: operacion.mermaSetup,
                     cantidadObjetivoSalida: cantidadObjetivo,
                     contexto,
+                    perfilProductivityValue: operacion.perfilOperativo?.productivityValue ?? null,
                 });
                 runMin = productividad.runMin;
                 productividadAplicada = productividad.productividadAplicada;
@@ -339,6 +421,7 @@ let ProcesosService = class ProcesosService {
                                 centroCosto: true,
                                 maquina: true,
                                 perfilOperativo: true,
+                                plantillaOrigen: true,
                             },
                             orderBy: {
                                 orden: 'asc',
@@ -375,6 +458,7 @@ let ProcesosService = class ProcesosService {
                         centroCosto: true,
                         maquina: true,
                         perfilOperativo: true,
+                        plantillaOrigen: true,
                     },
                     orderBy: {
                         orden: 'asc',
@@ -398,6 +482,7 @@ let ProcesosService = class ProcesosService {
                             centroCosto: true,
                             maquina: true,
                             perfilOperativo: true,
+                            plantillaOrigen: true,
                         },
                         orderBy: {
                             orden: 'asc',
@@ -468,7 +553,9 @@ let ProcesosService = class ProcesosService {
             mermaRunPct: this.toDecimal(payload.mermaRunPct),
             reglaVelocidadJson: undefined,
             reglaMermaJson: this.toNullableJson(payload.reglaMerma),
-            detalleJson: this.buildOperacionDetalleJson(payload.detalle, payload.niveles, payload.baseCalculoProductividad),
+            detalleJson: this.buildOperacionDetalleJson(payload.detalle, payload.baseCalculoProductividad),
+            rol: payload.rol ? this.toPrismaRol(payload.rol) : null,
+            esOpcional: payload.esOpcional ?? false,
             activo: payload.activo,
         };
     }
@@ -492,14 +579,23 @@ let ProcesosService = class ProcesosService {
             mermaRunPct: this.toDecimal(payload.mermaRunPct),
             reglaVelocidadJson: undefined,
             reglaMermaJson: this.toNullableJson(payload.reglaMerma),
-            detalleJson: this.buildOperacionDetalleJson(undefined, payload.niveles, payload.baseCalculoProductividad),
+            detalleJson: this.buildOperacionDetalleJson(undefined, payload.baseCalculoProductividad),
             observaciones: payload.observaciones?.trim() || null,
+            familiaV2: payload.familiaV2?.trim() || null,
+            unidadProductivaV2: payload.unidadProductivaV2?.trim() || null,
+            activacionV2: payload.activacionV2 ?? null,
+            condicionV2: payload.condicionV2 != null ? payload.condicionV2 : client_1.Prisma.JsonNull,
+            leeDelTrabajoV2: payload.leeDelTrabajoV2 != null ? payload.leeDelTrabajoV2 : client_1.Prisma.JsonNull,
+            leeDePasosV2: payload.leeDePasosV2 != null ? payload.leeDePasosV2 : client_1.Prisma.JsonNull,
+            produceV2: payload.produceV2 != null ? payload.produceV2 : client_1.Prisma.JsonNull,
+            configNestingV2: payload.configNestingV2 != null ? payload.configNestingV2 : client_1.Prisma.JsonNull,
             activo: payload.activo,
         };
     }
     toPrismaTipoOperacion(value) {
         switch (value) {
             case upsert_proceso_dto_1.TipoOperacionProcesoDto.preprensa:
+            case upsert_proceso_dto_1.TipoOperacionProcesoDto.servicio:
                 return client_1.TipoOperacionProceso.PREPRENSA;
             case upsert_proceso_dto_1.TipoOperacionProcesoDto.prensa:
                 return client_1.TipoOperacionProceso.IMPRESION;
@@ -510,199 +606,55 @@ let ProcesosService = class ProcesosService {
                 return client_1.TipoOperacionProceso.LOGISTICA;
             case upsert_proceso_dto_1.TipoOperacionProcesoDto.entrega_despacho:
                 return client_1.TipoOperacionProceso.EMPAQUE;
-            case upsert_proceso_dto_1.TipoOperacionProcesoDto.servicio:
-                return client_1.TipoOperacionProceso.OTRO;
             default:
-                return client_1.TipoOperacionProceso.OTRO;
+                return client_1.TipoOperacionProceso.PREPRENSA;
         }
     }
     fromPrismaTipoOperacion(value) {
         switch (value) {
             case client_1.TipoOperacionProceso.PREPRENSA:
-            case client_1.TipoOperacionProceso.PREFLIGHT:
-            case client_1.TipoOperacionProceso.OTRO:
                 return upsert_proceso_dto_1.TipoOperacionProcesoDto.preprensa;
             case client_1.TipoOperacionProceso.IMPRESION:
                 return upsert_proceso_dto_1.TipoOperacionProcesoDto.prensa;
+            case client_1.TipoOperacionProceso.TERMINACION:
+                return upsert_proceso_dto_1.TipoOperacionProcesoDto.postprensa;
             case client_1.TipoOperacionProceso.LOGISTICA:
                 return upsert_proceso_dto_1.TipoOperacionProcesoDto.instalacion;
             case client_1.TipoOperacionProceso.EMPAQUE:
                 return upsert_proceso_dto_1.TipoOperacionProcesoDto.entrega_despacho;
-            case client_1.TipoOperacionProceso.LAMINADO:
-            case client_1.TipoOperacionProceso.CORTE:
-            case client_1.TipoOperacionProceso.MECANIZADO:
-            case client_1.TipoOperacionProceso.GRABADO:
-            case client_1.TipoOperacionProceso.CURADO:
-            case client_1.TipoOperacionProceso.TRANSFERENCIA:
-            case client_1.TipoOperacionProceso.TERMINACION:
-            case client_1.TipoOperacionProceso.CONTROL_CALIDAD:
-            case client_1.TipoOperacionProceso.TERCERIZADO:
             default:
-                return upsert_proceso_dto_1.TipoOperacionProcesoDto.postprensa;
+                return upsert_proceso_dto_1.TipoOperacionProcesoDto.preprensa;
         }
     }
-    buildOperacionDetalleJson(detalle, niveles = [], baseCalculoProductividad) {
+    toPrismaRol(value) {
+        switch (value) {
+            case upsert_proceso_dto_1.RolProcesoOperacionDto.impresion:
+                return client_1.RolProcesoOperacion.IMPRESION;
+            default:
+                return client_1.RolProcesoOperacion.IMPRESION;
+        }
+    }
+    fromPrismaRol(value) {
+        switch (value) {
+            case client_1.RolProcesoOperacion.IMPRESION:
+                return upsert_proceso_dto_1.RolProcesoOperacionDto.impresion;
+            default:
+                return upsert_proceso_dto_1.RolProcesoOperacionDto.impresion;
+        }
+    }
+    buildOperacionDetalleJson(detalle, baseCalculoProductividad) {
         const base = detalle && typeof detalle === 'object' && !Array.isArray(detalle) ? { ...detalle } : {};
         if (baseCalculoProductividad) {
             base.baseCalculoProductividad = baseCalculoProductividad;
         }
-        const nivelesSanitizados = niveles
-            .filter((nivel) => nivel.nombre?.trim())
-            .map((nivel, index) => {
-            const modoProductividadNivel = nivel.modoProductividadNivel === 'variable_manual' ||
-                nivel.modoProductividadNivel === 'variable_perfil'
-                ? nivel.modoProductividadNivel
-                : 'fija';
-            const sanitized = {
-                id: nivel.id?.trim() || (0, node_crypto_1.randomUUID)(),
-                nombre: nivel.nombre.trim(),
-                orden: nivel.orden ?? index + 1,
-                activo: nivel.activo ?? true,
-                modoProductividadNivel,
-                tiempoFijoMin: nivel.tiempoFijoMin === undefined || nivel.tiempoFijoMin === null
-                    ? null
-                    : Number(nivel.tiempoFijoMin),
-                productividadBase: nivel.productividadBase === undefined || nivel.productividadBase === null
-                    ? null
-                    : Number(nivel.productividadBase),
-                unidadSalida: nivel.unidadSalida?.trim() || null,
-                unidadTiempo: nivel.unidadTiempo?.trim() || null,
-                maquinaId: nivel.maquinaId?.trim() || null,
-                perfilOperativoId: nivel.perfilOperativoId?.trim() || null,
-                setupMin: nivel.setupMin === undefined || nivel.setupMin === null
-                    ? null
-                    : Number(nivel.setupMin),
-                cleanupMin: nivel.cleanupMin === undefined || nivel.cleanupMin === null
-                    ? null
-                    : Number(nivel.cleanupMin),
-                resumen: this.buildNivelResumen({
-                    nombre: nivel.nombre.trim(),
-                    modoProductividadNivel,
-                    tiempoFijoMin: nivel.tiempoFijoMin === undefined || nivel.tiempoFijoMin === null
-                        ? null
-                        : Number(nivel.tiempoFijoMin),
-                    productividadBase: nivel.productividadBase === undefined || nivel.productividadBase === null
-                        ? null
-                        : Number(nivel.productividadBase),
-                    unidadSalida: nivel.unidadSalida?.trim() || null,
-                    unidadTiempo: nivel.unidadTiempo?.trim() || null,
-                    perfilOperativoNombre: '',
-                }),
-                detalle: nivel.detalle && typeof nivel.detalle === 'object' && !Array.isArray(nivel.detalle)
-                    ? nivel.detalle
-                    : null,
-            };
-            return sanitized;
-        });
-        return this.toNullableJson({
-            ...base,
-            niveles: nivelesSanitizados,
-        });
+        return this.toNullableJson(base);
     }
     getOperacionDetalle(detalleJson) {
         if (!detalleJson || typeof detalleJson !== 'object' || Array.isArray(detalleJson)) {
             return null;
         }
         const detalle = { ...detalleJson };
-        delete detalle.niveles;
         return Object.keys(detalle).length > 0 ? detalle : null;
-    }
-    getOperacionNiveles(detalleJson) {
-        if (!detalleJson || typeof detalleJson !== 'object' || Array.isArray(detalleJson)) {
-            return [];
-        }
-        const raw = detalleJson.niveles;
-        if (!Array.isArray(raw)) {
-            return [];
-        }
-        return raw
-            .map((item, index) => {
-            if (!item || typeof item !== 'object' || Array.isArray(item)) {
-                return null;
-            }
-            const nivel = item;
-            const nombre = String(nivel.nombre ?? '').trim();
-            if (!nombre) {
-                return null;
-            }
-            return {
-                id: String(nivel.id ?? (0, node_crypto_1.randomUUID)()),
-                nombre,
-                orden: Number(nivel.orden ?? index + 1),
-                activo: nivel.activo !== false,
-                modoProductividadNivel: nivel.modoProductividadNivel === 'variable_manual' ||
-                    nivel.modoProductividadNivel === 'variable_perfil'
-                    ? nivel.modoProductividadNivel
-                    : 'fija',
-                tiempoFijoMin: typeof nivel.tiempoFijoMin === 'number'
-                    ? nivel.tiempoFijoMin
-                    : nivel.tiempoFijoMin == null
-                        ? null
-                        : Number(nivel.tiempoFijoMin),
-                productividadBase: typeof nivel.productividadBase === 'number'
-                    ? nivel.productividadBase
-                    : nivel.productividadBase == null
-                        ? null
-                        : Number(nivel.productividadBase),
-                unidadSalida: typeof nivel.unidadSalida === 'string' && nivel.unidadSalida.trim().length
-                    ? nivel.unidadSalida.trim()
-                    : null,
-                unidadTiempo: typeof nivel.unidadTiempo === 'string' && nivel.unidadTiempo.trim().length
-                    ? nivel.unidadTiempo.trim()
-                    : null,
-                maquinaId: typeof nivel.maquinaId === 'string' && nivel.maquinaId.trim().length
-                    ? nivel.maquinaId.trim()
-                    : null,
-                maquinaNombre: typeof nivel.maquinaNombre === 'string' && nivel.maquinaNombre.trim().length
-                    ? nivel.maquinaNombre.trim()
-                    : '',
-                perfilOperativoId: typeof nivel.perfilOperativoId === 'string' && nivel.perfilOperativoId.trim().length
-                    ? nivel.perfilOperativoId.trim()
-                    : null,
-                perfilOperativoNombre: typeof nivel.perfilOperativoNombre === 'string' && nivel.perfilOperativoNombre.trim().length
-                    ? nivel.perfilOperativoNombre.trim()
-                    : '',
-                setupMin: typeof nivel.setupMin === 'number'
-                    ? nivel.setupMin
-                    : nivel.setupMin == null
-                        ? null
-                        : Number(nivel.setupMin),
-                cleanupMin: typeof nivel.cleanupMin === 'number'
-                    ? nivel.cleanupMin
-                    : nivel.cleanupMin == null
-                        ? null
-                        : Number(nivel.cleanupMin),
-                resumen: typeof nivel.resumen === 'string' && nivel.resumen.trim().length
-                    ? nivel.resumen.trim()
-                    : this.buildNivelResumen({
-                        nombre,
-                        modoProductividadNivel: nivel.modoProductividadNivel === 'variable_manual' ||
-                            nivel.modoProductividadNivel === 'variable_perfil'
-                            ? nivel.modoProductividadNivel
-                            : 'fija',
-                        tiempoFijoMin: typeof nivel.tiempoFijoMin === 'number'
-                            ? nivel.tiempoFijoMin
-                            : nivel.tiempoFijoMin == null
-                                ? null
-                                : Number(nivel.tiempoFijoMin),
-                        productividadBase: typeof nivel.productividadBase === 'number'
-                            ? nivel.productividadBase
-                            : nivel.productividadBase == null
-                                ? null
-                                : Number(nivel.productividadBase),
-                        unidadSalida: typeof nivel.unidadSalida === 'string' ? nivel.unidadSalida : null,
-                        unidadTiempo: typeof nivel.unidadTiempo === 'string' ? nivel.unidadTiempo : null,
-                        perfilOperativoNombre: typeof nivel.perfilOperativoNombre === 'string'
-                            ? nivel.perfilOperativoNombre
-                            : '',
-                    }),
-                detalle: nivel.detalle && typeof nivel.detalle === 'object' && !Array.isArray(nivel.detalle)
-                    ? nivel.detalle
-                    : null,
-            };
-        })
-            .filter((item) => Boolean(item))
-            .sort((a, b) => a.orden - b.orden);
     }
     validateBibliotecaOperacionPayload(payload) {
         if (!payload.nombre?.trim()) {
@@ -736,7 +688,6 @@ let ProcesosService = class ProcesosService {
             baseCalculoProductividad: payload.baseCalculoProductividad,
             unidadSalida: payload.unidadSalida ?? upsert_proceso_dto_1.UnidadProcesoDto.ninguna,
         });
-        this.validateOperacionNivelesPayload(payload.niveles ?? [], payload.nombre.trim());
     }
     validateBaseCalculoProductividad(input) {
         const baseCalculoProductividad = input.baseCalculoProductividad;
@@ -755,16 +706,10 @@ let ProcesosService = class ProcesosService {
         }
     }
     resolveModoProductividadFromPayload(payload) {
-        if (payload.modoProductividad === upsert_proceso_dto_1.ModoProductividadProcesoDto.fija) {
-            return client_1.ModoProductividadProceso.FIJA;
-        }
-        return client_1.ModoProductividadProceso.FORMULA;
+        return mapModoProductividadDto(payload.modoProductividad);
     }
     resolveModoProductividadFromBibliotecaPayload(payload) {
-        if (payload.modoProductividad === upsert_proceso_dto_1.ModoProductividadProcesoDto.fija) {
-            return client_1.ModoProductividadProceso.FIJA;
-        }
-        return client_1.ModoProductividadProceso.FORMULA;
+        return mapModoProductividadDto(payload.modoProductividad);
     }
     deriveOperationDefaultsFromPayload(payload, references) {
         const maquina = payload.maquinaId
@@ -832,7 +777,9 @@ let ProcesosService = class ProcesosService {
         const unidadTiempo = shouldAbsorbUnits
             ? (machineUnit?.unidadTiempo ?? operacion.unidadTiempo)
             : operacion.unidadTiempo;
+        const plantilla = operacion.plantillaOrigen ?? null;
         const productividadBase = operacion.productividadBase ??
+            plantilla?.productividadBase ??
             operacion.perfilOperativo?.productivityValue ??
             (operacion.maquina?.plantilla === client_1.PlantillaMaquinaria.LAMINADORA_BOPP_ROLLO &&
                 velocidadTrabajoMmSegPerfil !== null
@@ -840,25 +787,43 @@ let ProcesosService = class ProcesosService {
                 : null) ??
             null;
         const fallbackSetup = this.getSetupFromPerfilPersisted(operacion.perfilOperativo);
-        const setupMin = operacion.setupMin ?? fallbackSetup ?? null;
-        const cleanupMin = operacion.cleanupMin ?? operacion.perfilOperativo?.cleanupMin ?? null;
+        const setupMin = operacion.setupMin ?? plantilla?.setupMin ?? fallbackSetup ?? null;
+        const cleanupMin = operacion.cleanupMin ??
+            plantilla?.cleanupMin ??
+            operacion.perfilOperativo?.cleanupMin ??
+            null;
+        const tiempoFijoMin = operacion.tiempoFijoMin ?? plantilla?.tiempoFijoMin ?? null;
         const absorptionWarnings = [];
-        if (!operacion.productividadBase &&
+        if (operacion.productividadBase === null && plantilla?.productividadBase) {
+            absorptionWarnings.push(`Se uso productividad heredada de la plantilla "${plantilla.nombre}".`);
+        }
+        else if (!operacion.productividadBase &&
             (operacion.perfilOperativo?.productivityValue ||
                 (operacion.maquina?.plantilla === client_1.PlantillaMaquinaria.LAMINADORA_BOPP_ROLLO &&
                     velocidadTrabajoMmSegPerfil !== null &&
                     velocidadTrabajoMmSegPerfil > 0))) {
             absorptionWarnings.push(`Se uso productividad del perfil operativo ${operacion.perfilOperativo?.nombre ?? 'sin nombre'}.`);
         }
-        if (operacion.setupMin === null &&
+        if (operacion.setupMin === null && plantilla?.setupMin !== null && plantilla?.setupMin !== undefined) {
+            absorptionWarnings.push(`Se uso setup heredado de la plantilla "${plantilla.nombre}".`);
+        }
+        else if (operacion.setupMin === null &&
             fallbackSetup !== null &&
             operacion.perfilOperativo) {
             absorptionWarnings.push(`Se uso setup del perfil operativo ${operacion.perfilOperativo.nombre}.`);
         }
-        if (operacion.cleanupMin === null &&
+        if (operacion.cleanupMin === null && plantilla?.cleanupMin !== null && plantilla?.cleanupMin !== undefined) {
+            absorptionWarnings.push(`Se uso cleanup heredado de la plantilla "${plantilla.nombre}".`);
+        }
+        else if (operacion.cleanupMin === null &&
             cleanupMin !== null &&
             operacion.perfilOperativo) {
             absorptionWarnings.push(`Se uso cleanup del perfil operativo ${operacion.perfilOperativo.nombre}.`);
+        }
+        if (operacion.tiempoFijoMin === null &&
+            plantilla?.tiempoFijoMin !== null &&
+            plantilla?.tiempoFijoMin !== undefined) {
+            absorptionWarnings.push(`Se uso tiempo fijo heredado de la plantilla "${plantilla.nombre}".`);
         }
         if (shouldAbsorbUnits && operacion.perfilOperativo?.productivityUnit) {
             absorptionWarnings.push(`Se usaron unidades del perfil operativo ${operacion.perfilOperativo.nombre}.`);
@@ -873,6 +838,7 @@ let ProcesosService = class ProcesosService {
             productividadBase,
             setupMin,
             cleanupMin,
+            tiempoFijoMin,
             warnings: absorptionWarnings,
         };
     }
@@ -1045,7 +1011,6 @@ let ProcesosService = class ProcesosService {
             operationOrders.add(orden);
         }
         for (const operacion of operaciones) {
-            this.validateOperacionNivelesBusinessRules(operacion.nombre.trim(), operacion.niveles ?? [], references);
             if (!operacion.perfilOperativoId) {
                 continue;
             }
@@ -1103,16 +1068,10 @@ let ProcesosService = class ProcesosService {
             .map((operacion) => operacion.centroCostoId)
             .filter((value) => Boolean(value))));
         const machineIds = Array.from(new Set(operaciones
-            .flatMap((operacion) => [
-            operacion.maquinaId,
-            ...(operacion.niveles ?? []).map((nivel) => nivel.maquinaId),
-        ])
+            .map((operacion) => operacion.maquinaId)
             .filter((value) => Boolean(value))));
         const perfilIds = Array.from(new Set(operaciones
-            .flatMap((operacion) => [
-            operacion.perfilOperativoId,
-            ...(operacion.niveles ?? []).map((nivel) => nivel.perfilOperativoId),
-        ])
+            .map((operacion) => operacion.perfilOperativoId)
             .filter((value) => Boolean(value))));
         const [centros, maquinas, perfiles] = await Promise.all([
             centerIds.length
@@ -1301,128 +1260,6 @@ let ProcesosService = class ProcesosService {
             estacionId,
         };
     }
-    validateOperacionNivelesPayload(niveles, operationName) {
-        for (const nivel of niveles) {
-            const nombre = nivel.nombre?.trim();
-            if (!nombre) {
-                throw new common_1.BadRequestException(`Todos los niveles de ${operationName} requieren nombre.`);
-            }
-            const modo = nivel.modoProductividadNivel === 'variable_manual' ||
-                nivel.modoProductividadNivel === 'variable_perfil'
-                ? nivel.modoProductividadNivel
-                : 'fija';
-            if (nivel.setupMin !== undefined && nivel.setupMin < 0) {
-                throw new common_1.BadRequestException(`El setup del nivel ${nombre} no puede ser negativo.`);
-            }
-            if (nivel.cleanupMin !== undefined && nivel.cleanupMin < 0) {
-                throw new common_1.BadRequestException(`El cleanup del nivel ${nombre} no puede ser negativo.`);
-            }
-            if (modo === 'fija') {
-                if (nivel.tiempoFijoMin === undefined || Number(nivel.tiempoFijoMin) <= 0) {
-                    throw new common_1.BadRequestException(`El nivel ${nombre} debe definir Tiempo total (min).`);
-                }
-                if (nivel.maquinaId || nivel.perfilOperativoId) {
-                    throw new common_1.BadRequestException(`El nivel ${nombre} en modo fija no puede usar máquina ni perfil.`);
-                }
-            }
-            if (modo === 'variable_manual') {
-                if (nivel.productividadBase === undefined || Number(nivel.productividadBase) <= 0) {
-                    throw new common_1.BadRequestException(`El nivel ${nombre} debe definir Valor productividad.`);
-                }
-                if (!nivel.unidadSalida || !nivel.unidadTiempo) {
-                    throw new common_1.BadRequestException(`El nivel ${nombre} debe definir Unidad de productividad.`);
-                }
-                if (nivel.maquinaId || nivel.perfilOperativoId) {
-                    throw new common_1.BadRequestException(`El nivel ${nombre} en modo variable manual no puede usar máquina ni perfil.`);
-                }
-            }
-            if (modo === 'variable_perfil') {
-                if (!nivel.maquinaId || !nivel.perfilOperativoId) {
-                    throw new common_1.BadRequestException(`El nivel ${nombre} debe definir máquina y perfil operativo.`);
-                }
-            }
-        }
-    }
-    validateOperacionNivelesBusinessRules(operationName, niveles, references) {
-        for (const nivel of niveles) {
-            const modo = nivel.modoProductividadNivel === 'variable_manual' ||
-                nivel.modoProductividadNivel === 'variable_perfil'
-                ? nivel.modoProductividadNivel
-                : 'fija';
-            if (modo !== 'variable_perfil') {
-                continue;
-            }
-            const nivelNombre = nivel.nombre?.trim() || 'sin nombre';
-            const maquina = nivel.maquinaId ? references.maquinasById.get(nivel.maquinaId) : null;
-            if (!maquina) {
-                throw new common_1.BadRequestException(`La máquina del nivel ${nivelNombre} (${operationName}) no existe.`);
-            }
-            const perfil = nivel.perfilOperativoId
-                ? references.perfilesById.get(nivel.perfilOperativoId)
-                : null;
-            if (!perfil) {
-                throw new common_1.BadRequestException(`El perfil operativo del nivel ${nivelNombre} (${operationName}) no existe.`);
-            }
-            if (perfil.maquinaId !== maquina.id) {
-                throw new common_1.BadRequestException(`El perfil operativo del nivel ${nivelNombre} (${operationName}) no pertenece a la máquina seleccionada.`);
-            }
-        }
-    }
-    async validateBibliotecaOperacionNivelReferences(auth, niveles) {
-        const machineIds = Array.from(new Set(niveles
-            .filter((nivel) => nivel.modoProductividadNivel === 'variable_perfil')
-            .map((nivel) => nivel.maquinaId)
-            .filter((value) => Boolean(value))));
-        const perfilIds = Array.from(new Set(niveles
-            .filter((nivel) => nivel.modoProductividadNivel === 'variable_perfil')
-            .map((nivel) => nivel.perfilOperativoId)
-            .filter((value) => Boolean(value))));
-        if (!machineIds.length && !perfilIds.length) {
-            return;
-        }
-        const [maquinas, perfiles] = await Promise.all([
-            machineIds.length
-                ? this.prisma.maquina.findMany({
-                    where: { tenantId: auth.tenantId, id: { in: machineIds } },
-                    select: { id: true },
-                })
-                : Promise.resolve([]),
-            perfilIds.length
-                ? this.prisma.maquinaPerfilOperativo.findMany({
-                    where: { tenantId: auth.tenantId, id: { in: perfilIds } },
-                    select: { id: true, maquinaId: true },
-                })
-                : Promise.resolve([]),
-        ]);
-        const machineSet = new Set(maquinas.map((item) => item.id));
-        const perfilesMap = new Map(perfiles.map((item) => [item.id, item.maquinaId]));
-        for (const nivel of niveles) {
-            if (nivel.modoProductividadNivel !== 'variable_perfil') {
-                continue;
-            }
-            const nivelNombre = nivel.nombre?.trim() || 'sin nombre';
-            if (!nivel.maquinaId || !machineSet.has(nivel.maquinaId)) {
-                throw new common_1.BadRequestException(`La máquina del nivel ${nivelNombre} no existe para este tenant.`);
-            }
-            const perfilMaquinaId = nivel.perfilOperativoId ? perfilesMap.get(nivel.perfilOperativoId) : null;
-            if (!perfilMaquinaId) {
-                throw new common_1.BadRequestException(`El perfil operativo del nivel ${nivelNombre} no existe para este tenant.`);
-            }
-            if (perfilMaquinaId !== nivel.maquinaId) {
-                throw new common_1.BadRequestException(`El perfil operativo del nivel ${nivelNombre} no pertenece a la máquina seleccionada.`);
-            }
-        }
-    }
-    buildNivelResumen(input) {
-        if (input.modoProductividadNivel === 'fija') {
-            return `${input.nombre} · Fija · ${input.tiempoFijoMin ?? 0} min`;
-        }
-        if (input.modoProductividadNivel === 'variable_manual') {
-            const unidad = [input.unidadSalida, input.unidadTiempo].filter(Boolean).join('/');
-            return `${input.nombre} · Variable manual · ${input.productividadBase ?? 0} ${unidad}`.trim();
-        }
-        return `${input.nombre} · Variable por perfil${input.perfilOperativoNombre ? ` · ${input.perfilOperativoNombre}` : ''}`;
-    }
     async findProcesoOrThrow(auth, id) {
         const proceso = await this.prisma.procesoDefinicion.findFirst({
             where: {
@@ -1435,6 +1272,7 @@ let ProcesosService = class ProcesosService {
                         centroCosto: true,
                         maquina: true,
                         perfilOperativo: true,
+                        plantillaOrigen: true,
                     },
                     orderBy: {
                         orden: 'asc',
@@ -1509,7 +1347,8 @@ let ProcesosService = class ProcesosService {
                 detalle: this.getOperacionDetalle(operacion.detalleJson),
                 baseCalculoProductividad: this.getOperacionDetalle(operacion.detalleJson)?.baseCalculoProductividad ??
                     null,
-                niveles: this.getOperacionNiveles(operacion.detalleJson),
+                rol: operacion.rol ? this.fromPrismaRol(operacion.rol) : null,
+                esOpcional: operacion.esOpcional,
                 activo: operacion.activo,
                 warnings: this.getOperationWarnings(operacion),
             })),
@@ -1527,6 +1366,7 @@ let ProcesosService = class ProcesosService {
             centroCostoNombre: item.centroCosto?.nombre ?? '',
             maquinaId: item.maquinaId ?? null,
             maquinaNombre: item.maquina?.nombre ?? '',
+            maquinaPlantilla: item.maquina?.plantilla ?? null,
             perfilOperativoId: item.perfilOperativoId ?? null,
             perfilOperativoNombre: item.perfilOperativo?.nombre ?? '',
             setupMin: this.decimalToNumberOrNull(item.setupMin),
@@ -1543,9 +1383,16 @@ let ProcesosService = class ProcesosService {
             detalle: this.getOperacionDetalle(detalleJson),
             baseCalculoProductividad: this.getOperacionDetalle(detalleJson)?.baseCalculoProductividad ?? null,
             observaciones: item.observaciones ?? '',
-            niveles: this.getOperacionNiveles(detalleJson),
             estacionId: item.estacionId ?? null,
             estacionNombre: item.estacion?.nombre ?? '',
+            familiaV2: item.familiaV2 ?? null,
+            unidadProductivaV2: item.unidadProductivaV2 ?? null,
+            activacionV2: item.activacionV2 ?? null,
+            condicionV2: item.condicionV2 ?? null,
+            leeDelTrabajoV2: item.leeDelTrabajoV2 ?? null,
+            leeDePasosV2: item.leeDePasosV2 ?? null,
+            produceV2: item.produceV2 ?? null,
+            configNestingV2: item.configNestingV2 ?? null,
             activo: item.activo,
             createdAt: item.createdAt.toISOString(),
             updatedAt: item.updatedAt.toISOString(),
@@ -1756,10 +1603,16 @@ let ProcesosService = class ProcesosService {
         return value.toLowerCase();
     }
     toApiModoProductividad(value) {
-        if (value === client_1.ModoProductividadProceso.FIJA) {
-            return upsert_proceso_dto_1.ModoProductividadProcesoDto.fija;
+        if (value === client_1.ModoProductividadProceso.TIEMPO_FIJO) {
+            return upsert_proceso_dto_1.ModoProductividadProcesoDto.tiempo_fijo;
         }
-        return upsert_proceso_dto_1.ModoProductividadProcesoDto.variable;
+        if (value === client_1.ModoProductividadProceso.PRODUCTIVIDAD_MAQUINA) {
+            return upsert_proceso_dto_1.ModoProductividadProcesoDto.productividad_maquina;
+        }
+        if (value === client_1.ModoProductividadProceso.FORMULA) {
+            return upsert_proceso_dto_1.ModoProductividadProcesoDto.formula;
+        }
+        return upsert_proceso_dto_1.ModoProductividadProcesoDto.fija;
     }
     parseFiniteNumber(value) {
         if (typeof value === 'number' && Number.isFinite(value)) {
@@ -1770,6 +1623,593 @@ let ProcesosService = class ProcesosService {
             return Number.isFinite(parsed) ? parsed : null;
         }
         return null;
+    }
+    async listAlternativas(auth, operacionId) {
+        await this.findOperacionOrThrow(auth, operacionId);
+        const alternativas = await this.prisma.procesoOperacionAlternativa.findMany({
+            where: { tenantId: auth.tenantId, procesoOperacionId: operacionId },
+            include: { maquina: true, perfilOperativo: true },
+            orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+        });
+        return alternativas.map((a) => this.toAlternativaResponse(a));
+    }
+    async createAlternativa(auth, operacionId, payload) {
+        await this.findOperacionOrThrow(auth, operacionId);
+        await this.validateAlternativaReferences(auth, payload);
+        if (payload.esDefault) {
+            await this.clearEsDefault(auth.tenantId, operacionId);
+        }
+        const created = await this.prisma.procesoOperacionAlternativa.create({
+            data: {
+                tenantId: auth.tenantId,
+                procesoOperacionId: operacionId,
+                maquinaId: payload.maquinaId ?? null,
+                perfilOperativoId: payload.perfilOperativoId ?? null,
+                label: payload.label.trim(),
+                esDefault: Boolean(payload.esDefault),
+                orden: typeof payload.orden === 'number' ? payload.orden : 0,
+                activo: payload.activo ?? true,
+                setupMin: payload.setupMin != null ? new client_1.Prisma.Decimal(payload.setupMin) : null,
+                cleanupMin: payload.cleanupMin != null ? new client_1.Prisma.Decimal(payload.cleanupMin) : null,
+                tiempoFijoMin: payload.tiempoFijoMin != null ? new client_1.Prisma.Decimal(payload.tiempoFijoMin) : null,
+                productividadBase: payload.productividadBase != null
+                    ? new client_1.Prisma.Decimal(payload.productividadBase)
+                    : null,
+                configNestingV2: payload.configNestingV2 != null
+                    ? payload.configNestingV2
+                    : client_1.Prisma.JsonNull,
+            },
+            include: { maquina: true, perfilOperativo: true },
+        });
+        return this.toAlternativaResponse(created);
+    }
+    async updateAlternativa(auth, operacionId, alternativaId, payload) {
+        await this.findAlternativaOrThrow(auth, operacionId, alternativaId);
+        await this.validateAlternativaReferences(auth, payload);
+        if (payload.esDefault) {
+            await this.clearEsDefault(auth.tenantId, operacionId, alternativaId);
+        }
+        const updated = await this.prisma.procesoOperacionAlternativa.update({
+            where: { id: alternativaId },
+            data: {
+                maquinaId: payload.maquinaId ?? null,
+                perfilOperativoId: payload.perfilOperativoId ?? null,
+                label: payload.label.trim(),
+                esDefault: Boolean(payload.esDefault),
+                orden: typeof payload.orden === 'number' ? payload.orden : 0,
+                activo: payload.activo ?? true,
+                setupMin: payload.setupMin != null ? new client_1.Prisma.Decimal(payload.setupMin) : null,
+                cleanupMin: payload.cleanupMin != null ? new client_1.Prisma.Decimal(payload.cleanupMin) : null,
+                tiempoFijoMin: payload.tiempoFijoMin != null ? new client_1.Prisma.Decimal(payload.tiempoFijoMin) : null,
+                productividadBase: payload.productividadBase != null
+                    ? new client_1.Prisma.Decimal(payload.productividadBase)
+                    : null,
+                configNestingV2: payload.configNestingV2 != null
+                    ? payload.configNestingV2
+                    : client_1.Prisma.JsonNull,
+            },
+            include: { maquina: true, perfilOperativo: true },
+        });
+        return this.toAlternativaResponse(updated);
+    }
+    async deleteAlternativa(auth, operacionId, alternativaId) {
+        await this.findAlternativaOrThrow(auth, operacionId, alternativaId);
+        await this.prisma.procesoOperacionAlternativa.delete({
+            where: { id: alternativaId },
+        });
+        return { ok: true };
+    }
+    async findOperacionOrThrow(auth, operacionId) {
+        const op = await this.prisma.procesoOperacion.findFirst({
+            where: { id: operacionId, tenantId: auth.tenantId },
+            select: { id: true },
+        });
+        if (!op) {
+            throw new common_1.NotFoundException('La operación del proceso no existe.');
+        }
+        return op;
+    }
+    async findAlternativaOrThrow(auth, operacionId, alternativaId) {
+        const alt = await this.prisma.procesoOperacionAlternativa.findFirst({
+            where: {
+                id: alternativaId,
+                tenantId: auth.tenantId,
+                procesoOperacionId: operacionId,
+            },
+        });
+        if (!alt) {
+            throw new common_1.NotFoundException('La alternativa no existe para esta operación.');
+        }
+        return alt;
+    }
+    async validateAlternativaReferences(auth, payload) {
+        if (payload.maquinaId) {
+            const maquina = await this.prisma.maquina.findFirst({
+                where: { id: payload.maquinaId, tenantId: auth.tenantId },
+                select: { id: true },
+            });
+            if (!maquina) {
+                throw new common_1.BadRequestException('La máquina indicada no existe.');
+            }
+        }
+        else if (payload.perfilOperativoId) {
+            throw new common_1.BadRequestException('No se puede asignar un perfil operativo a una alternativa sin máquina.');
+        }
+        if (payload.perfilOperativoId && payload.maquinaId) {
+            const perfil = await this.prisma.maquinaPerfilOperativo.findFirst({
+                where: {
+                    id: payload.perfilOperativoId,
+                    tenantId: auth.tenantId,
+                    maquinaId: payload.maquinaId,
+                },
+                select: { id: true },
+            });
+            if (!perfil) {
+                throw new common_1.BadRequestException('El perfil operativo no existe o no pertenece a la máquina indicada.');
+            }
+        }
+    }
+    async clearEsDefault(tenantId, operacionId, excludeId) {
+        await this.prisma.procesoOperacionAlternativa.updateMany({
+            where: {
+                tenantId,
+                procesoOperacionId: operacionId,
+                esDefault: true,
+                ...(excludeId ? { NOT: { id: excludeId } } : {}),
+            },
+            data: { esDefault: false },
+        });
+    }
+    toAlternativaResponse(a) {
+        return {
+            id: a.id,
+            procesoOperacionId: a.procesoOperacionId,
+            label: a.label,
+            esDefault: a.esDefault,
+            orden: a.orden,
+            activo: a.activo,
+            maquinaId: a.maquinaId,
+            perfilOperativoId: a.perfilOperativoId,
+            maquina: a.maquina
+                ? { id: a.maquina.id, nombre: a.maquina.nombre, plantilla: a.maquina.plantilla }
+                : null,
+            perfilOperativo: a.perfilOperativo
+                ? { id: a.perfilOperativo.id, nombre: a.perfilOperativo.nombre }
+                : null,
+            setupMin: a.setupMin != null ? Number(a.setupMin) : null,
+            cleanupMin: a.cleanupMin != null ? Number(a.cleanupMin) : null,
+            tiempoFijoMin: a.tiempoFijoMin != null ? Number(a.tiempoFijoMin) : null,
+            productividadBase: a.productividadBase != null ? Number(a.productividadBase) : null,
+            configNestingV2: a.configNestingV2 ?? null,
+            createdAt: a.createdAt,
+            updatedAt: a.updatedAt,
+        };
+    }
+    async listMateriales(auth, operacionId) {
+        await this.findOperacionOrThrow(auth, operacionId);
+        const materiales = await this.prisma.procesoOperacionMaterial.findMany({
+            where: { tenantId: auth.tenantId, procesoOperacionId: operacionId },
+            include: MATERIAL_INCLUDE,
+            orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+        });
+        return materiales.map((m) => this.toMaterialResponse(m));
+    }
+    async createMaterial(auth, operacionId, payload) {
+        await this.findOperacionOrThrow(auth, operacionId);
+        await this.validateMaterialReferences(auth, payload);
+        await this.validateUniqueSustratoPorPaso(auth, operacionId, payload, null);
+        const created = await this.prisma.$transaction(async (tx) => {
+            const row = await tx.procesoOperacionMaterial.create({
+                data: {
+                    tenantId: auth.tenantId,
+                    procesoOperacionId: operacionId,
+                    materiaPrimaVarianteId: payload.materiaPrimaVarianteId ?? null,
+                    productoComponenteId: payload.productoComponenteId ?? null,
+                    varianteComponenteId: payload.varianteComponenteId ?? null,
+                    nombre: payload.nombre.trim(),
+                    formula: payload.formula,
+                    cantidadPorUnidad: new client_1.Prisma.Decimal(payload.cantidadPorUnidad),
+                    unidad: payload.unidad.trim(),
+                    precioManual: payload.precioManual != null
+                        ? new client_1.Prisma.Decimal(payload.precioManual)
+                        : null,
+                    aplicaMultiCaras: Boolean(payload.aplicaMultiCaras),
+                    esSustratoNesting: Boolean(payload.esSustratoNesting),
+                    orden: typeof payload.orden === 'number' ? payload.orden : 0,
+                    activo: payload.activo ?? true,
+                },
+            });
+            await this.syncVariantesHabilitadas(tx, auth, row.id, payload);
+            return tx.procesoOperacionMaterial.findUniqueOrThrow({
+                where: { id: row.id },
+                include: MATERIAL_INCLUDE,
+            });
+        });
+        return this.toMaterialResponse(created);
+    }
+    async updateMaterial(auth, operacionId, materialId, payload) {
+        await this.findMaterialOrThrow(auth, operacionId, materialId);
+        await this.validateMaterialReferences(auth, payload);
+        await this.validateUniqueSustratoPorPaso(auth, operacionId, payload, materialId);
+        const updated = await this.prisma.$transaction(async (tx) => {
+            await tx.procesoOperacionMaterial.update({
+                where: { id: materialId },
+                data: {
+                    materiaPrimaVarianteId: payload.materiaPrimaVarianteId ?? null,
+                    productoComponenteId: payload.productoComponenteId ?? null,
+                    varianteComponenteId: payload.varianteComponenteId ?? null,
+                    nombre: payload.nombre.trim(),
+                    formula: payload.formula,
+                    cantidadPorUnidad: new client_1.Prisma.Decimal(payload.cantidadPorUnidad),
+                    unidad: payload.unidad.trim(),
+                    precioManual: payload.precioManual != null
+                        ? new client_1.Prisma.Decimal(payload.precioManual)
+                        : null,
+                    aplicaMultiCaras: Boolean(payload.aplicaMultiCaras),
+                    esSustratoNesting: Boolean(payload.esSustratoNesting),
+                    orden: typeof payload.orden === 'number' ? payload.orden : 0,
+                    activo: payload.activo ?? true,
+                },
+            });
+            await this.syncVariantesHabilitadas(tx, auth, materialId, payload);
+            return tx.procesoOperacionMaterial.findUniqueOrThrow({
+                where: { id: materialId },
+                include: MATERIAL_INCLUDE,
+            });
+        });
+        return this.toMaterialResponse(updated);
+    }
+    async deleteMaterial(auth, operacionId, materialId) {
+        await this.findMaterialOrThrow(auth, operacionId, materialId);
+        await this.prisma.procesoOperacionMaterial.delete({ where: { id: materialId } });
+        return { ok: true };
+    }
+    async findMaterialOrThrow(auth, operacionId, materialId) {
+        const mat = await this.prisma.procesoOperacionMaterial.findFirst({
+            where: {
+                id: materialId,
+                tenantId: auth.tenantId,
+                procesoOperacionId: operacionId,
+            },
+        });
+        if (!mat) {
+            throw new common_1.NotFoundException('El material no existe para esta operación.');
+        }
+        return mat;
+    }
+    async validateMaterialReferences(auth, payload) {
+        if (payload.materiaPrimaVarianteId && payload.productoComponenteId) {
+            throw new common_1.BadRequestException('Un material no puede ser a la vez materia prima y sub-producto.');
+        }
+        if (!payload.productoComponenteId && payload.varianteComponenteId) {
+            throw new common_1.BadRequestException('La varianteComponente solo es válida si hay productoComponente.');
+        }
+        if (payload.materiaPrimaVarianteId) {
+            const mp = await this.prisma.materiaPrimaVariante.findFirst({
+                where: { id: payload.materiaPrimaVarianteId, tenantId: auth.tenantId },
+                select: { id: true },
+            });
+            if (!mp) {
+                throw new common_1.BadRequestException('La variante de materia prima no existe.');
+            }
+        }
+        if (payload.productoComponenteId) {
+            const comp = await this.prisma.productoServicio.findFirst({
+                where: { id: payload.productoComponenteId, tenantId: auth.tenantId },
+                select: { id: true },
+            });
+            if (!comp) {
+                throw new common_1.BadRequestException('El producto componente no existe.');
+            }
+            if (payload.varianteComponenteId) {
+                const v = await this.prisma.productoVariante.findFirst({
+                    where: {
+                        id: payload.varianteComponenteId,
+                        tenantId: auth.tenantId,
+                        productoServicioId: payload.productoComponenteId,
+                    },
+                    select: { id: true },
+                });
+                if (!v) {
+                    throw new common_1.BadRequestException('La variante del componente no existe o no pertenece al producto indicado.');
+                }
+            }
+        }
+        if (payload.esSustratoNesting) {
+            if (payload.productoComponenteId) {
+                throw new common_1.BadRequestException('Un sub-producto no puede declararse como sustrato del nesting.');
+            }
+            const variantes = payload.variantesHabilitadas ?? [];
+            if (variantes.length === 0) {
+                throw new common_1.BadRequestException('Un material declarado como sustrato del nesting requiere al menos una variante habilitada.');
+            }
+            const ids = variantes.map((v) => v.materiaPrimaVarianteId);
+            const rows = await this.prisma.materiaPrimaVariante.findMany({
+                where: { id: { in: ids }, tenantId: auth.tenantId },
+                select: { id: true, materiaPrimaId: true },
+            });
+            if (rows.length !== ids.length) {
+                throw new common_1.BadRequestException('Una o más variantes habilitadas no existen.');
+            }
+            const materiaPrimaIds = new Set(rows.map((r) => r.materiaPrimaId));
+            if (materiaPrimaIds.size > 1) {
+                throw new common_1.BadRequestException('Todas las variantes habilitadas deben pertenecer a la misma materia prima.');
+            }
+        }
+    }
+    async validateUniqueSustratoPorPaso(auth, procesoOperacionId, payload, currentMaterialId) {
+        if (!payload.esSustratoNesting)
+            return;
+        const otroSustrato = await this.prisma.procesoOperacionMaterial.findFirst({
+            where: {
+                tenantId: auth.tenantId,
+                procesoOperacionId,
+                esSustratoNesting: true,
+                ...(currentMaterialId ? { id: { not: currentMaterialId } } : {}),
+            },
+            select: { id: true, nombre: true },
+        });
+        if (otroSustrato) {
+            throw new common_1.BadRequestException(`Solo un material por paso puede ser sustrato del nesting. El paso ya tiene "${otroSustrato.nombre}" como sustrato.`);
+        }
+    }
+    async syncVariantesHabilitadas(tx, auth, procesoOperacionMaterialId, payload) {
+        await tx.procesoOperacionMaterialVariante.deleteMany({
+            where: { procesoOperacionMaterialId },
+        });
+        if (!payload.esSustratoNesting)
+            return;
+        const variantes = payload.variantesHabilitadas ?? [];
+        if (variantes.length === 0)
+            return;
+        await tx.procesoOperacionMaterialVariante.createMany({
+            data: variantes.map((v, idx) => ({
+                tenantId: auth.tenantId,
+                procesoOperacionMaterialId,
+                materiaPrimaVarianteId: v.materiaPrimaVarianteId,
+                orden: typeof v.orden === 'number' ? v.orden : idx,
+                activo: v.activo ?? true,
+            })),
+        });
+    }
+    toMaterialResponse(m) {
+        return {
+            id: m.id,
+            procesoOperacionId: m.procesoOperacionId,
+            materiaPrimaVarianteId: m.materiaPrimaVarianteId,
+            productoComponenteId: m.productoComponenteId,
+            varianteComponenteId: m.varianteComponenteId,
+            nombre: m.nombre,
+            formula: m.formula,
+            cantidadPorUnidad: Number(m.cantidadPorUnidad),
+            unidad: m.unidad,
+            precioManual: m.precioManual != null ? Number(m.precioManual) : null,
+            aplicaMultiCaras: m.aplicaMultiCaras,
+            esSustratoNesting: m.esSustratoNesting,
+            orden: m.orden,
+            activo: m.activo,
+            materiaPrimaVariante: m.materiaPrimaVariante
+                ? {
+                    id: m.materiaPrimaVariante.id,
+                    sku: m.materiaPrimaVariante.sku,
+                    nombreVariante: m.materiaPrimaVariante.nombreVariante,
+                    precioReferencia: m.materiaPrimaVariante.precioReferencia != null
+                        ? Number(m.materiaPrimaVariante.precioReferencia)
+                        : null,
+                }
+                : null,
+            productoComponente: m.productoComponente
+                ? {
+                    id: m.productoComponente.id,
+                    codigo: m.productoComponente.codigo,
+                    nombre: m.productoComponente.nombre,
+                    modoMedidas: m.productoComponente.modoMedidas,
+                }
+                : null,
+            varianteComponente: m.varianteComponente
+                ? {
+                    id: m.varianteComponente.id,
+                    nombre: m.varianteComponente.nombre,
+                    anchoMm: Number(m.varianteComponente.anchoMm),
+                    altoMm: Number(m.varianteComponente.altoMm),
+                }
+                : null,
+            variantesHabilitadas: m.variantesHabilitadas.map((v) => ({
+                id: v.id,
+                materiaPrimaVarianteId: v.materiaPrimaVarianteId,
+                orden: v.orden,
+                activo: v.activo,
+                materiaPrimaVariante: {
+                    id: v.materiaPrimaVariante.id,
+                    sku: v.materiaPrimaVariante.sku,
+                    nombreVariante: v.materiaPrimaVariante.nombreVariante,
+                    materiaPrimaId: v.materiaPrimaVariante.materiaPrimaId,
+                    precioReferencia: v.materiaPrimaVariante.precioReferencia != null
+                        ? Number(v.materiaPrimaVariante.precioReferencia)
+                        : null,
+                    atributosVariante: v.materiaPrimaVariante.atributosVarianteJson,
+                    activo: v.materiaPrimaVariante.activo,
+                },
+            })),
+            createdAt: m.createdAt,
+            updatedAt: m.updatedAt,
+        };
+    }
+    async updateOperacion(auth, operacionId, payload) {
+        const op = await this.prisma.procesoOperacion.findFirst({
+            where: { id: operacionId, tenantId: auth.tenantId },
+        });
+        if (!op) {
+            throw new common_1.NotFoundException('La operación del proceso no existe.');
+        }
+        if (payload.centroCostoId !== undefined) {
+            const cc = await this.prisma.centroCosto.findFirst({
+                where: { id: payload.centroCostoId, tenantId: auth.tenantId },
+                select: { id: true },
+            });
+            if (!cc) {
+                throw new common_1.BadRequestException('El centro de costo indicado no existe.');
+            }
+        }
+        if (payload.maquinaId) {
+            const maq = await this.prisma.maquina.findFirst({
+                where: { id: payload.maquinaId, tenantId: auth.tenantId },
+                select: { id: true },
+            });
+            if (!maq) {
+                throw new common_1.BadRequestException('La máquina indicada no existe.');
+            }
+        }
+        if (payload.perfilOperativoId) {
+            const maquinaId = payload.maquinaId !== undefined ? payload.maquinaId : op.maquinaId;
+            if (!maquinaId) {
+                throw new common_1.BadRequestException('No se puede asignar un perfil operativo a un paso sin máquina.');
+            }
+            const perfil = await this.prisma.maquinaPerfilOperativo.findFirst({
+                where: {
+                    id: payload.perfilOperativoId,
+                    tenantId: auth.tenantId,
+                    maquinaId,
+                },
+                select: { id: true },
+            });
+            if (!perfil) {
+                throw new common_1.BadRequestException('El perfil operativo no existe o no pertenece a la máquina indicada.');
+            }
+        }
+        const data = {};
+        if (payload.nombre !== undefined)
+            data.nombre = payload.nombre.trim();
+        if (payload.esOpcional !== undefined)
+            data.esOpcional = payload.esOpcional;
+        if (payload.activacionV2 !== undefined)
+            data.activacionV2 = payload.activacionV2;
+        if (payload.familiaV2 !== undefined)
+            data.familiaV2 = payload.familiaV2.trim() || null;
+        if (payload.unidadProductivaV2 !== undefined)
+            data.unidadProductivaV2 = payload.unidadProductivaV2.trim() || null;
+        if (payload.centroCostoId !== undefined)
+            data.centroCosto = { connect: { id: payload.centroCostoId } };
+        if (payload.maquinaId !== undefined) {
+            data.maquina = payload.maquinaId
+                ? { connect: { id: payload.maquinaId } }
+                : { disconnect: true };
+            if (!payload.maquinaId && payload.perfilOperativoId === undefined) {
+                data.perfilOperativo = { disconnect: true };
+            }
+        }
+        if (payload.perfilOperativoId !== undefined) {
+            data.perfilOperativo = payload.perfilOperativoId
+                ? { connect: { id: payload.perfilOperativoId } }
+                : { disconnect: true };
+        }
+        if (payload.plantillaOrigenId !== undefined) {
+            if (payload.plantillaOrigenId) {
+                const plantilla = await this.prisma.procesoOperacionPlantilla.findFirst({
+                    where: { id: payload.plantillaOrigenId, tenantId: auth.tenantId },
+                    select: { id: true },
+                });
+                if (!plantilla) {
+                    throw new common_1.BadRequestException('La plantilla origen indicada no existe.');
+                }
+                data.plantillaOrigen = { connect: { id: payload.plantillaOrigenId } };
+            }
+            else {
+                data.plantillaOrigen = { disconnect: true };
+            }
+        }
+        if (payload.setupMin !== undefined)
+            data.setupMin = payload.setupMin === null ? null : new client_1.Prisma.Decimal(payload.setupMin);
+        if (payload.cleanupMin !== undefined)
+            data.cleanupMin = payload.cleanupMin === null ? null : new client_1.Prisma.Decimal(payload.cleanupMin);
+        if (payload.tiempoFijoMin !== undefined)
+            data.tiempoFijoMin = payload.tiempoFijoMin === null ? null : new client_1.Prisma.Decimal(payload.tiempoFijoMin);
+        if (payload.productividadBase !== undefined)
+            data.productividadBase =
+                payload.productividadBase === null ? null : new client_1.Prisma.Decimal(payload.productividadBase);
+        if (payload.unidadTiempo !== undefined) {
+            data.unidadTiempo = payload.unidadTiempo;
+        }
+        if (payload.condicionV2 !== undefined) {
+            data.condicionV2 =
+                payload.condicionV2 === null
+                    ? client_1.Prisma.JsonNull
+                    : payload.condicionV2;
+        }
+        if (payload.configNestingV2 !== undefined) {
+            data.configNestingV2 =
+                payload.configNestingV2 === null
+                    ? client_1.Prisma.JsonNull
+                    : payload.configNestingV2;
+        }
+        const updated = await this.prisma.procesoOperacion.update({
+            where: { id: operacionId },
+            data,
+            include: { centroCosto: true, maquina: true, perfilOperativo: true },
+        });
+        return this.toOperacionSummaryResponse(updated);
+    }
+    async moveOperacion(auth, operacionId, direction) {
+        const op = await this.prisma.procesoOperacion.findFirst({
+            where: { id: operacionId, tenantId: auth.tenantId },
+        });
+        if (!op) {
+            throw new common_1.NotFoundException('La operación del proceso no existe.');
+        }
+        const neighborOrden = direction === 'up' ? op.orden - 1 : op.orden + 1;
+        const neighbor = await this.prisma.procesoOperacion.findFirst({
+            where: {
+                tenantId: auth.tenantId,
+                procesoDefinicionId: op.procesoDefinicionId,
+                orden: neighborOrden,
+            },
+        });
+        if (!neighbor) {
+            throw new common_1.BadRequestException(direction === 'up'
+                ? 'El paso ya está en la primera posición.'
+                : 'El paso ya está en la última posición.');
+        }
+        const temp = -1 * (Math.abs(op.orden) + Math.abs(neighbor.orden) + 1);
+        await this.prisma.$transaction([
+            this.prisma.procesoOperacion.update({
+                where: { id: op.id },
+                data: { orden: temp },
+            }),
+            this.prisma.procesoOperacion.update({
+                where: { id: neighbor.id },
+                data: { orden: op.orden },
+            }),
+            this.prisma.procesoOperacion.update({
+                where: { id: op.id },
+                data: { orden: neighbor.orden },
+            }),
+        ]);
+        return { ok: true, moved: { id: op.id, fromOrden: op.orden, toOrden: neighbor.orden } };
+    }
+    toOperacionSummaryResponse(op) {
+        return {
+            id: op.id,
+            orden: op.orden,
+            codigo: op.codigo,
+            nombre: op.nombre,
+            familiaV2: op.familiaV2,
+            unidadProductivaV2: op.unidadProductivaV2,
+            activacionV2: op.activacionV2,
+            esOpcional: op.esOpcional,
+            setupMin: op.setupMin != null ? Number(op.setupMin) : null,
+            cleanupMin: op.cleanupMin != null ? Number(op.cleanupMin) : null,
+            tiempoFijoMin: op.tiempoFijoMin != null ? Number(op.tiempoFijoMin) : null,
+            productividadBase: op.productividadBase != null ? Number(op.productividadBase) : null,
+            centroCosto: op.centroCosto
+                ? { id: op.centroCosto.id, nombre: op.centroCosto.nombre }
+                : null,
+            maquina: op.maquina
+                ? { id: op.maquina.id, nombre: op.maquina.nombre, plantilla: op.maquina.plantilla }
+                : null,
+            perfilOperativo: op.perfilOperativo
+                ? { id: op.perfilOperativo.id, nombre: op.perfilOperativo.nombre }
+                : null,
+        };
     }
 };
 exports.ProcesosService = ProcesosService;

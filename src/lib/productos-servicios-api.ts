@@ -67,8 +67,75 @@ export type RutaCompletaOperacion = {
   productividadBase: number | null;
   modoProductividad: string;
   unidadTiempo: string;
+  /**
+   * Fase C + R6 — Plantilla origen del paso, identidad completa.
+   *
+   * El editor de paso usa estos campos como **read-only** (la identidad
+   * vive en biblioteca, no en la instancia). Solo activación + tiempos +
+   * configuración de nesting + alternativas son editables del producto.
+   *
+   * Cuando los campos `productividadBase`, `setupMin`, `cleanupMin`,
+   * `tiempoFijoMin` del paso están en `null`, el motor usa estos valores
+   * como fallback. Idem para `centroCostoId`/`maquinaId`/`familiaV2`/
+   * `unidadProductivaV2` (Fase R6 — herencia extendida).
+   */
+  plantillaOrigen: {
+    id: string;
+    nombre: string;
+    tipoOperacion: string | null;
+    familiaV2: string | null;
+    unidadProductivaV2: string | null;
+    modoProductividad: string | null;
+    centroCosto: { id: string; nombre: string } | null;
+    maquina: { id: string; nombre: string; plantilla: string | null } | null;
+    perfilOperativo: { id: string; nombre: string } | null;
+    setupMin: number | null;
+    cleanupMin: number | null;
+    tiempoFijoMin: number | null;
+    productividadBase: number | null;
+    unidadTiempo: string | null;
+  } | null;
   centroCosto: { id: string; nombre: string } | null;
-  maquina: { id: string; nombre: string; plantilla: string | null } | null;
+  maquina: {
+    id: string;
+    nombre: string;
+    plantilla: string | null;
+    /** SM.5 — Consumibles configurados en la máquina. El motor los absorbe
+     * automáticamente filtrando por perfilOperativoId del paso (o null = todos). */
+    consumibles: Array<{
+      id: string;
+      perfilOperativoId: string | null;
+      perfilOperativoNombre: string | null;
+      nombre: string;
+      tipo: string;
+      unidad: string;
+      consumoBase: number | null;
+      rendimientoEstimado: number | null;
+      /** detalleJson — para toner/tinta incluye `color` (cyan/magenta/yellow/black/white/etc). */
+      detalle: Record<string, unknown> | null;
+      materiaPrimaVariante: {
+        id: string;
+        sku: string;
+        nombreVariante: string | null;
+        precioReferencia: number | null;
+        atributosVariante: Record<string, unknown> | null;
+      } | null;
+    }>;
+    /** SM.5 — Componentes de desgaste prorrateados por uso. */
+    componentesDesgaste: Array<{
+      id: string;
+      nombre: string;
+      tipo: string;
+      unidadDesgaste: string;
+      vidaUtilEstimada: number | null;
+      materiaPrimaVariante: {
+        id: string;
+        sku: string;
+        nombreVariante: string | null;
+        precioReferencia: number | null;
+      } | null;
+    }>;
+  } | null;
   perfilOperativo: {
     id: string;
     nombre: string;

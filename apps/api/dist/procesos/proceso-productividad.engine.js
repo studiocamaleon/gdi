@@ -322,19 +322,6 @@ function evaluateFormulaRule(rule, args) {
     const raw = evaluateFormulaExpr(rule.expresion, env);
     return applyBounds(raw, rule.bounds);
 }
-function evaluateVelocidadTablaRule(rule, args) {
-    const matched = rule.filas.find((row) => matchesTablaRow(row, rule.ejes, args.contexto));
-    if (matched) {
-        return toFiniteNumber(matched.productividad);
-    }
-    if (rule.fallback?.type === 'const') {
-        return rule.fallback.value;
-    }
-    if (!rule.fallback || rule.fallback.type === 'productividad_base') {
-        return args.productividadBase;
-    }
-    return null;
-}
 function evaluateMermaTablaRule(rule, args) {
     const matched = rule.filas.find((row) => matchesTablaRow(row, rule.ejes, args.contexto));
     if (!matched) {
@@ -373,14 +360,6 @@ function validateProductividadRulesByMode(args) {
             errors.push({
                 field: 'reglaVelocidad',
                 message: 'Modo formula requiere una Regla de velocidad valida con tipo formula_v1.',
-            });
-        }
-    }
-    if (args.modoProductividad === client_1.ModoProductividadProceso.TABLA) {
-        if (args.reglaVelocidadJson && !parseTablaRule(args.reglaVelocidadJson)) {
-            errors.push({
-                field: 'reglaVelocidad',
-                message: 'Modo tabla requiere una Regla de velocidad valida con tipo tabla_v1.',
             });
         }
     }
@@ -436,12 +415,43 @@ function evaluateProductividad(input) {
         mermaSetupAplicada = 0;
     }
     let productividadAplicada = null;
+    if (input.modoProductividad === client_1.ModoProductividadProceso.TIEMPO_FIJO) {
+        const tiempoFijo = decimalToNumberOrNull(input.tiempoFijoMin) ?? 0;
+        const cantidadRunTf = input.cantidadObjetivoSalida * (1 + mermaRunPctAplicada / 100) +
+            mermaSetupAplicada;
+        if (tiempoFijo <= 0) {
+            warnings.push('Modo tiempo fijo sin valor en `tiempoFijoMin`. El paso aporta 0 min al runMin.');
+        }
+        return {
+            runMin: 0,
+            productividadAplicada: null,
+            cantidadRun: Number(Math.max(cantidadRunTf, 0).toFixed(2)),
+            mermaRunPctAplicada: Number(mermaRunPctAplicada.toFixed(2)),
+            mermaSetupAplicada: Number(mermaSetupAplicada.toFixed(2)),
+            warnings,
+        };
+    }
     if (input.modoProductividad === client_1.ModoProductividadProceso.FIJA) {
         if (productividadBase > 0) {
             productividadAplicada = productividadBase;
         }
         else {
             warnings.push('Modo fija sin Productividad base valida. Se usa run manual como fallback.');
+        }
+    }
+    else if (input.modoProductividad === client_1.ModoProductividadProceso.PRODUCTIVIDAD_MAQUINA) {
+        const perfilValue = input.perfilProductivityValue == null
+            ? 0
+            : Number(input.perfilProductivityValue);
+        if (perfilValue > 0) {
+            productividadAplicada = perfilValue;
+        }
+        else if (productividadBase > 0) {
+            productividadAplicada = productividadBase;
+            warnings.push('Modo productividad de máquina sin valor en el perfil. Se usa productividadBase del paso como fallback.');
+        }
+        else {
+            warnings.push('Modo productividad de máquina pero el perfil no declara velocidad. Se asume 0.');
         }
     }
     else if (input.modoProductividad === client_1.ModoProductividadProceso.FORMULA) {
@@ -465,27 +475,6 @@ function evaluateProductividad(input) {
             warnings.push('Regla de velocidad formula invalida. Se usa run manual como fallback.');
         }
     }
-    else {
-        const rule = parseTablaRule(input.reglaVelocidadJson);
-        if (rule) {
-            productividadAplicada = evaluateVelocidadTablaRule(rule, {
-                productividadBase,
-                contexto: input.contexto,
-            });
-            if (productividadAplicada === null) {
-                warnings.push('La tabla de velocidad no encontro coincidencia ni fallback valido. Se usa run manual.');
-            }
-        }
-        else if (productividadBase > 0) {
-            productividadAplicada = productividadBase;
-            if (input.reglaVelocidadJson) {
-                warnings.push('Regla de velocidad tabla invalida. Se usa productividad base como fallback.');
-            }
-        }
-        else {
-            warnings.push('Regla de velocidad tabla invalida. Se usa run manual como fallback.');
-        }
-    }
     const cantidadRun = input.cantidadObjetivoSalida * (1 + mermaRunPctAplicada / 100) +
         mermaSetupAplicada;
     if (cantidadRun < 0) {
@@ -497,6 +486,9 @@ function evaluateProductividad(input) {
         const tiempoEnUnidadBase = cantidadNormalizada / productividadAplicada;
         if (input.unidadTiempo === client_1.UnidadProceso.HORA) {
             runMin = tiempoEnUnidadBase * 60;
+        }
+        else if (input.unidadTiempo === client_1.UnidadProceso.SEGUNDO) {
+            runMin = tiempoEnUnidadBase / 60;
         }
         else {
             runMin = tiempoEnUnidadBase;

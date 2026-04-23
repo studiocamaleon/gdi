@@ -27,7 +27,66 @@ export type TipoOperacionProceso =
 
 export type RolProcesoOperacion = 'impresion';
 
-export type ModoProductividadProceso = 'fija' | 'variable';
+/**
+ * Modo de productividad de un paso/plantilla.
+ *
+ *   - `tiempo_fijo`: tiempo total fijo en minutos (`tiempoFijoMin`).
+ *     El motor short-circuita: runMin = 0 y se suma tiempoFijoMin como
+ *     parte del totalMin.
+ *   - `fija`: productividad numérica constante declarada en el paso
+ *     (`productividadBase` + `unidadSalida` + `unidadTiempo`).
+ *   - `productividad_maquina`: la velocidad la define el perfil operativo
+ *     de la máquina elegido al cotizar. La biblioteca solo declara que el
+ *     paso usa una máquina; el valor sale de `perfil.productivityValue`.
+ *   - `variable`: alias legacy de `fija`. Algunos endpoints lo devuelven
+ *     todavía. Tratado igual que `fija` en frontend.
+ *   - `formula`: productividad por expresión avanzada (postergado).
+ */
+export type ModoProductividadProceso =
+  | 'tiempo_fijo'
+  | 'fija'
+  | 'productividad_maquina'
+  | 'variable'
+  | 'formula';
+
+/**
+ * Dimensión productiva canónica que declara una familia de paso.
+ * Determina qué unidad se ofrece al usuario al elegir "Productividad propia"
+ * en biblioteca.
+ */
+export type DimensionProductivaCanonica =
+  | 'unidades'
+  | 'm2'
+  | 'metro_lineal'
+  | 'tiempo_fijo';
+
+/**
+ * Familia de paso del modelo universal — declarativa, viene del backend
+ * (`GET /procesos/familias`). Mapping del catálogo `familias.ts`.
+ */
+export type FamiliaPasoCatalogo = {
+  codigo: string;
+  nombre: string;
+  descripcion: string;
+  categoria:
+    | 'produccion'
+    | 'corte_y_formado'
+    | 'terminaciones'
+    | 'estructural'
+    | 'servicios'
+    | 'operaciones_manuales';
+  ejemplos: string[];
+  modoNesting: 'produce' | 'consume' | 'none';
+  nestingAlgoritmo:
+    | 'nesting-hoja'
+    | 'nesting-rollo'
+    | 'nesting-placa-rigida'
+    | null;
+  dimensionProductivaCanonica: DimensionProductivaCanonica;
+  dimensionDisplay: string;
+  outputsCanonicos: string[];
+  requiereCentroCosto: boolean;
+};
 export type BaseCalculoProductividad =
   | 'cantidad'
   | 'area_total_m2'

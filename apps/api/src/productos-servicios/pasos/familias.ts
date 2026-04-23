@@ -51,6 +51,25 @@ export type NestingAlgoritmo =
   | 'nesting-rollo'
   | 'nesting-placa-rigida';
 
+/**
+ * Dimensión productiva canónica de un paso. Define la "naturaleza física" de
+ * la cantidad sobre la que opera el paso.
+ *
+ *   - `unidades`: cantidades discretas (hojas, pliegos, piezas, prendas,
+ *     cortes, ciclos, golpes, talonarios, módulos LED, etc.).
+ *   - `m2`: áreas (m² impresos, laminados, grabados, pintados, decorados).
+ *   - `metro_lineal`: longitudes (rollo consumido, perímetro cortado, metros
+ *     soldados, cable, costura).
+ *   - `tiempo_fijo`: el paso siempre toma un tiempo total fijo, no opera
+ *     sobre una cantidad cuantitativa (diseño, gestión externa, toma de
+ *     medidas, pre-prensa). Modo de productividad obligatorio: TIEMPO_FIJO.
+ */
+export type DimensionProductivaCanonica =
+  | 'unidades'
+  | 'm2'
+  | 'metro_lineal'
+  | 'tiempo_fijo';
+
 export type FamiliaPaso = {
   codigo: string;
   nombre: string;
@@ -76,6 +95,18 @@ export type FamiliaPaso = {
    */
   modoNesting: ModoNesting;
   nestingAlgoritmo: NestingAlgoritmo | null;
+  /**
+   * Dimensión productiva canónica con la que se mide la cantidad de entrada
+   * del paso. Determina qué unidad se ofrece en la UI cuando el usuario
+   * elige "Productividad propia" en biblioteca.
+   */
+  dimensionProductivaCanonica: DimensionProductivaCanonica;
+  /**
+   * Label de display amigable para la dimensión productiva en la UI
+   * (ej: "pliegos" para impresion_por_hoja, "cortes" para corte). Solo
+   * informativo — el motor usa la dimensión canónica.
+   */
+  dimensionDisplay: string;
 };
 
 const EMPTY_SCHEMA: FamiliaPlantillaConfig = { type: 'object', properties: {} };
@@ -100,6 +131,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Tarjetas personales láser', 'Folletos offset', 'Revistas grapadas'],
     modoNesting: 'produce',
     nestingAlgoritmo: 'nesting-hoja',
+    dimensionProductivaCanonica: 'unidades',
+    dimensionDisplay: 'pliegos',
   },
 
   impresion_por_area: {
@@ -119,6 +152,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Banners de lona', 'Vinilos adhesivos impresos', 'Back-lights', 'Gigantografías'],
     modoNesting: 'produce',
     nestingAlgoritmo: 'nesting-rollo',
+    dimensionProductivaCanonica: 'm2',
+    dimensionDisplay: 'm² impresos',
   },
 
   impresion_por_pieza: {
@@ -137,6 +172,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Cartel PVC impreso UV', 'Tazas DTF UV', 'Placas acrílico con logo'],
     modoNesting: 'produce',
     nestingAlgoritmo: 'nesting-placa-rigida',
+    dimensionProductivaCanonica: 'unidades',
+    dimensionDisplay: 'piezas',
   },
 
   aplicacion_transfer: {
@@ -154,6 +191,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Remeras personalizadas DTF', 'Buzos estampados'],
     modoNesting: 'none',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'unidades',
+    dimensionDisplay: 'prendas',
   },
 
   // ──────────────────────────── CORTE Y FORMADO ────────────────────────────
@@ -173,6 +212,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Guillotinado de tarjetas', 'Plotter de vinilo', 'Láser CO2 sobre papel'],
     modoNesting: 'consume',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'unidades',
+    dimensionDisplay: 'cortes',
   },
 
   corte_volumetrico: {
@@ -190,6 +231,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Letras corpóreas PVC', 'Muebles MDF a medida', 'Logos polifán'],
     modoNesting: 'consume',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'metro_lineal',
+    dimensionDisplay: 'metros cortados',
   },
 
   grabado: {
@@ -207,6 +250,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Grabado láser madera', 'Grabado en acrílico', 'Marcado metálico'],
     modoNesting: 'consume',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'm2',
+    dimensionDisplay: 'm² grabados',
   },
 
   plegado: {
@@ -221,6 +266,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Plegado tríptico', 'Plegado folletería'],
     modoNesting: 'none',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'unidades',
+    dimensionDisplay: 'pliegues',
   },
 
   perforado: {
@@ -235,6 +282,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Perforación para anillado', 'Tickets arrancables'],
     modoNesting: 'none',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'unidades',
+    dimensionDisplay: 'perforaciones',
   },
 
   troquelado: {
@@ -249,6 +298,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Cajas plegables', 'Tarjetas con esquinas redondeadas', 'Packaging rígido'],
     modoNesting: 'consume',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'unidades',
+    dimensionDisplay: 'golpes',
   },
 
   // ────────────────────────────── TERMINACIONES ──────────────────────────────
@@ -267,6 +318,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Laminado brillo tarjetas', 'Plastificado menús', 'UV anti-rayadura'],
     modoNesting: 'consume',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'm2',
+    dimensionDisplay: 'm² laminados',
   },
 
   acabado_decorativo: {
@@ -281,6 +334,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Foil dorado en invitaciones', 'Hot-stamping tarjetas premium', 'Relieve en tapas'],
     modoNesting: 'consume',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'm2',
+    dimensionDisplay: 'm² decorados',
   },
 
   pintura_superficial: {
@@ -295,6 +350,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Pintado estructura herrería', 'Barniz sobre MDF', 'Anti-corrosivo exterior'],
     modoNesting: 'none',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'm2',
+    dimensionDisplay: 'm² pintados',
   },
 
   encuadernado: {
@@ -314,6 +371,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Libros tapa dura cosidos', 'Talonarios abrochados', 'Cuadernos anillados'],
     modoNesting: 'none',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'unidades',
+    dimensionDisplay: 'cuadernos',
   },
 
   // ─────────────────────────── ESTRUCTURAL ───────────────────────────
@@ -329,6 +388,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Tótem de cartelería', 'Estructura de caja de luz', 'Pedestales'],
     modoNesting: 'none',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'metro_lineal',
+    dimensionDisplay: 'metros soldados',
   },
 
   ensamble_estructural: {
@@ -343,6 +404,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Armado caja de luz (estructura + acrílico + LED + letras)', 'Ensamble mobiliario'],
     modoNesting: 'none',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'unidades',
+    dimensionDisplay: 'piezas ensambladas',
   },
 
   instalacion_electrica: {
@@ -360,6 +423,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Letras corpóreas iluminadas', 'Caja de luz LED', 'Neón LED flexible'],
     modoNesting: 'none',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'unidades',
+    dimensionDisplay: 'módulos LED',
   },
 
   // ─────────────────────────── SERVICIOS ───────────────────────────
@@ -375,6 +440,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Preparación de archivo para offset', 'Prueba de color digital'],
     modoNesting: 'none',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'tiempo_fijo',
+    dimensionDisplay: 'horas pre-prensa',
   },
 
   diseno_grafico: {
@@ -389,6 +456,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Diseño logo', 'Adaptación a medida', 'Retoque de imagen'],
     modoNesting: 'none',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'tiempo_fijo',
+    dimensionDisplay: 'horas diseño',
   },
 
   toma_medidas: {
@@ -406,6 +475,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Medidas para wrap vehicular', 'Relevamiento cartelería en local', 'Toma de datos vidriera'],
     modoNesting: 'none',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'tiempo_fijo',
+    dimensionDisplay: 'visita',
   },
 
   colocacion_in_situ: {
@@ -423,6 +494,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Wrap vehicular', 'Colocación vinilo vidriera', 'Instalación cartel tótem'],
     modoNesting: 'none',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'm2',
+    dimensionDisplay: 'm² instalados',
   },
 
   // ───────────────────────── OPERACIONES MANUALES ─────────────────────────
@@ -441,6 +514,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Embolsado individual', 'Conteo final', 'Inserto promocional en sobres'],
     modoNesting: 'none',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'unidades',
+    dimensionDisplay: 'piezas',
   },
 
   insumo_externo_gestion: {
@@ -455,6 +530,8 @@ export const FAMILIAS_PASO: Record<string, FamiliaPaso> = {
     ejemplos: ['Compra de LEDs', 'Pedido de perfil metálico', 'Tercerización de troquelado'],
     modoNesting: 'none',
     nestingAlgoritmo: null,
+    dimensionProductivaCanonica: 'tiempo_fijo',
+    dimensionDisplay: 'gestión',
   },
 };
 

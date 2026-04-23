@@ -53,15 +53,31 @@ export enum TipoOperacionProcesoDto {
   servicio = 'servicio',
 }
 
+/**
+ * Modo de productividad declarado por la biblioteca de pasos.
+ *
+ *   - `tiempo_fijo`: tiempo total fijo en minutos (`tiempoFijoMin`).
+ *     El motor retorna runMin = 0 y el caller suma tiempoFijoMin como
+ *     parte del totalMin del paso. Mapea al enum `TIEMPO_FIJO`.
+ *   - `fija` / `variable` (alias por compat): productividad numérica
+ *     constante con unidad compuesta. Mapea al enum `FIJA`.
+ *   - `formula`: productividad por expresión avanzada (postergado, sin
+ *     editor visual). Mapea al enum `FORMULA`.
+ */
 export enum ModoProductividadProcesoDto {
+  tiempo_fijo = 'tiempo_fijo',
   fija = 'fija',
   variable = 'variable',
+  productividad_maquina = 'productividad_maquina',
+  formula = 'formula',
 }
 
 export enum UnidadProcesoDto {
   ninguna = 'ninguna',
   hora = 'hora',
   minuto = 'minuto',
+  // Fase D.2 — productividades en segundos (routers, plotters de corte).
+  segundo = 'segundo',
   hoja = 'hoja',
   copia = 'copia',
   a4_equiv = 'a4_equiv',
@@ -111,6 +127,13 @@ export class ProcesoOperacionItemDto {
   @IsOptional()
   @IsUUID()
   perfilOperativoId?: string;
+
+  // Fase C — herencia plantilla→paso. Cuando se setea, los campos
+  // null del paso (productividadBase, setupMin, cleanupMin,
+  // tiempoFijoMin) se resuelven leyendo de la plantilla en runtime.
+  @IsOptional()
+  @IsUUID()
+  plantillaOrigenId?: string;
 
   @IsOptional()
   @Type(() => Number)

@@ -19,6 +19,9 @@ const pagination_dto_1 = require("../common/dto/pagination.dto");
 const evaluar_proceso_costo_dto_1 = require("./dto/evaluar-proceso-costo.dto");
 const bulk_assign_estacion_plantillas_dto_1 = require("./dto/bulk-assign-estacion-plantillas.dto");
 const upsert_proceso_operacion_plantilla_dto_1 = require("./dto/upsert-proceso-operacion-plantilla.dto");
+const upsert_proceso_operacion_alternativa_dto_1 = require("./dto/upsert-proceso-operacion-alternativa.dto");
+const upsert_proceso_operacion_material_dto_1 = require("./dto/upsert-proceso-operacion-material.dto");
+const update_proceso_operacion_dto_1 = require("./dto/update-proceso-operacion.dto");
 const upsert_proceso_dto_1 = require("./dto/upsert-proceso.dto");
 const procesos_service_1 = require("./procesos.service");
 let ProcesosController = class ProcesosController {
@@ -31,6 +34,9 @@ let ProcesosController = class ProcesosController {
     }
     findAllBiblioteca(auth) {
         return this.procesosService.findAllBibliotecaOperaciones(auth);
+    }
+    findAllFamilias() {
+        return this.procesosService.findAllFamilias();
     }
     createBiblioteca(auth, payload) {
         return this.procesosService.createBibliotecaOperacion(auth, payload);
@@ -65,6 +71,39 @@ let ProcesosController = class ProcesosController {
     evaluarCosto(auth, id, payload) {
         return this.procesosService.evaluarCosto(auth, id, payload);
     }
+    listAlternativas(auth, operacionId) {
+        return this.procesosService.listAlternativas(auth, operacionId);
+    }
+    createAlternativa(auth, operacionId, payload) {
+        return this.procesosService.createAlternativa(auth, operacionId, payload);
+    }
+    updateAlternativa(auth, operacionId, alternativaId, payload) {
+        return this.procesosService.updateAlternativa(auth, operacionId, alternativaId, payload);
+    }
+    deleteAlternativa(auth, operacionId, alternativaId) {
+        return this.procesosService.deleteAlternativa(auth, operacionId, alternativaId);
+    }
+    listMateriales(auth, operacionId) {
+        return this.procesosService.listMateriales(auth, operacionId);
+    }
+    createMaterial(auth, operacionId, payload) {
+        return this.procesosService.createMaterial(auth, operacionId, payload);
+    }
+    updateMaterial(auth, operacionId, materialId, payload) {
+        return this.procesosService.updateMaterial(auth, operacionId, materialId, payload);
+    }
+    deleteMaterial(auth, operacionId, materialId) {
+        return this.procesosService.deleteMaterial(auth, operacionId, materialId);
+    }
+    updateOperacion(auth, operacionId, payload) {
+        return this.procesosService.updateOperacion(auth, operacionId, payload);
+    }
+    moveOperacion(auth, operacionId, direction) {
+        if (direction !== 'up' && direction !== 'down') {
+            throw new common_1.BadRequestException('direction debe ser "up" o "down".');
+        }
+        return this.procesosService.moveOperacion(auth, operacionId, direction);
+    }
 };
 exports.ProcesosController = ProcesosController;
 __decorate([
@@ -82,6 +121,12 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], ProcesosController.prototype, "findAllBiblioteca", null);
+__decorate([
+    (0, common_1.Get)('familias'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], ProcesosController.prototype, "findAllFamilias", null);
 __decorate([
     (0, common_1.Post)('biblioteca-operaciones'),
     __param(0, (0, current_auth_decorator_1.CurrentSession)()),
@@ -174,6 +219,96 @@ __decorate([
     __metadata("design:paramtypes", [Object, String, evaluar_proceso_costo_dto_1.EvaluarProcesoCostoDto]),
     __metadata("design:returntype", void 0)
 ], ProcesosController.prototype, "evaluarCosto", null);
+__decorate([
+    (0, common_1.Get)('operaciones/:operacionId/alternativas'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('operacionId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProcesosController.prototype, "listAlternativas", null);
+__decorate([
+    (0, common_1.Post)('operaciones/:operacionId/alternativas'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('operacionId')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, upsert_proceso_operacion_alternativa_dto_1.UpsertProcesoOperacionAlternativaDto]),
+    __metadata("design:returntype", void 0)
+], ProcesosController.prototype, "createAlternativa", null);
+__decorate([
+    (0, common_1.Put)('operaciones/:operacionId/alternativas/:alternativaId'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('operacionId')),
+    __param(2, (0, common_1.Param)('alternativaId')),
+    __param(3, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String, upsert_proceso_operacion_alternativa_dto_1.UpsertProcesoOperacionAlternativaDto]),
+    __metadata("design:returntype", void 0)
+], ProcesosController.prototype, "updateAlternativa", null);
+__decorate([
+    (0, common_1.Delete)('operaciones/:operacionId/alternativas/:alternativaId'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('operacionId')),
+    __param(2, (0, common_1.Param)('alternativaId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:returntype", void 0)
+], ProcesosController.prototype, "deleteAlternativa", null);
+__decorate([
+    (0, common_1.Get)('operaciones/:operacionId/materiales'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('operacionId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ProcesosController.prototype, "listMateriales", null);
+__decorate([
+    (0, common_1.Post)('operaciones/:operacionId/materiales'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('operacionId')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, upsert_proceso_operacion_material_dto_1.UpsertProcesoOperacionMaterialDto]),
+    __metadata("design:returntype", void 0)
+], ProcesosController.prototype, "createMaterial", null);
+__decorate([
+    (0, common_1.Put)('operaciones/:operacionId/materiales/:materialId'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('operacionId')),
+    __param(2, (0, common_1.Param)('materialId')),
+    __param(3, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String, upsert_proceso_operacion_material_dto_1.UpsertProcesoOperacionMaterialDto]),
+    __metadata("design:returntype", void 0)
+], ProcesosController.prototype, "updateMaterial", null);
+__decorate([
+    (0, common_1.Delete)('operaciones/:operacionId/materiales/:materialId'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('operacionId')),
+    __param(2, (0, common_1.Param)('materialId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:returntype", void 0)
+], ProcesosController.prototype, "deleteMaterial", null);
+__decorate([
+    (0, common_1.Patch)('operaciones/:operacionId'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('operacionId')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, update_proceso_operacion_dto_1.UpdateProcesoOperacionDto]),
+    __metadata("design:returntype", void 0)
+], ProcesosController.prototype, "updateOperacion", null);
+__decorate([
+    (0, common_1.Post)('operaciones/:operacionId/move'),
+    __param(0, (0, current_auth_decorator_1.CurrentSession)()),
+    __param(1, (0, common_1.Param)('operacionId')),
+    __param(2, (0, common_1.Query)('direction')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:returntype", void 0)
+], ProcesosController.prototype, "moveOperacion", null);
 exports.ProcesosController = ProcesosController = __decorate([
     (0, common_1.Controller)('procesos'),
     __metadata("design:paramtypes", [procesos_service_1.ProcesosService])

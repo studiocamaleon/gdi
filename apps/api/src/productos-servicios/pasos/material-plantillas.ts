@@ -68,9 +68,25 @@ export type MaterialPlantilla = (ctx: MaterialPlantillaContext) => MaterialConsu
  */
 const plantillaImpresionPorHoja: MaterialPlantilla = (ctx) => {
   const out: MaterialConsumido[] = [];
-  const pliegos =
-    ctx.layout?.algoritmo === 'nesting-hoja' ? ctx.layout.result.pliegosNecesarios : 0;
+  const layoutHoja =
+    ctx.layout?.algoritmo === 'nesting-hoja' ? ctx.layout.result : null;
+  const pliegos = layoutHoja?.pliegosNecesarios ?? 0;
   if (pliegos === 0) return out;
+
+  // Fase A — pliego de impresión: si el motor identificó un sustrato
+  // distinto al pliego usado para el nesting (porque el sustrato se
+  // subdivide en pliegos más pequeños para imprimir), el costeo del papel
+  // es por sustrato, no por pliego de impresión. El proveedor vende el
+  // sustrato comprado (p.ej. SRA3), no los pliegos chicos sueltos.
+  const usaPliegoImpresion =
+    layoutHoja?.sustratoElegido != null && layoutHoja?.sustratosNecesarios != null;
+  const cantidadPapel = usaPliegoImpresion
+    ? layoutHoja!.sustratosNecesarios!
+    : pliegos;
+  const formatoPapel = usaPliegoImpresion
+    ? layoutHoja!.sustratoElegido!
+    : layoutHoja!.pliegoElegido;
+  const unidadPapel = usaPliegoImpresion ? 'sustrato' : 'pliego';
 
   // Papel.
   const papelPrecio =
@@ -78,20 +94,24 @@ const plantillaImpresionPorHoja: MaterialPlantilla = (ctx) => {
       ? Number(ctx.variante.papelVariante!.precioReferencia)
       : Number(ctx.configProducto.papelPrecioPorPliego ?? 40);
   if (papelPrecio > 0) {
+    const fuente =
+      Number(ctx.variante.papelVariante?.precioReferencia ?? 0) > 0
+        ? 'papelVariante.precioReferencia'
+        : 'config.papelPrecioPorPliego';
     out.push({
-      nombre: `Papel ${ctx.variante.papelVariante?.sku ?? 'default'}`,
-      cantidad: pliegos,
-      unidad: 'pliego',
+      nombre: usaPliegoImpresion
+        ? `Papel ${ctx.variante.papelVariante?.sku ?? 'default'} (${formatoPapel.codigo} → ${layoutHoja!.pliegoElegido.codigo} ×${layoutHoja!.pliegosPorSustrato})`
+        : `Papel ${ctx.variante.papelVariante?.sku ?? 'default'}`,
+      cantidad: cantidadPapel,
+      unidad: unidadPapel,
       precioUnitario: papelPrecio,
-      costo: pliegos * papelPrecio,
-      fuente:
-        Number(ctx.variante.papelVariante?.precioReferencia ?? 0) > 0
-          ? 'papelVariante.precioReferencia'
-          : 'config.papelPrecioPorPliego',
+      costo: cantidadPapel * papelPrecio,
+      fuente,
     });
   }
 
-  // Clics (tóner/tinta digital).
+  // Clics (tóner/tinta digital). El conteo de clics SIEMPRE va por pliego
+  // de impresión (cada pliego pasa por la prensa una vez), no por sustrato.
   const caras = (ctx.selecciones.get('caras') ?? 'simple_faz').toLowerCase();
   const multCaras = caras === 'doble_faz' ? 2 : 1;
   const tipoImpresion = (

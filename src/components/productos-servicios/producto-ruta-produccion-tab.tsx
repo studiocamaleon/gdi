@@ -474,12 +474,22 @@ function StepRow({
           </div>
         </div>
 
-        {/* Familia + centro costo + nesting algoritmo */}
+        {/* Familia + centro costo + nesting algoritmo.
+            R5 — Si el paso no tiene centro de costo asignado, mostramos un
+            warning visible (banderilla ámbar) porque el motor cotiza ese
+            paso a $0 silenciosamente y eso es una mina muy fácil de pisar. */}
         <div className="font-mono text-[11px] tracking-[0.02em] text-ink-2">
           {op.familiaV2 ?? "—"}
-          {op.centroCosto && (
+          {op.centroCosto ? (
             <span className="mt-0.5 block text-[10px] text-ink-4">
               Centro · {op.centroCosto.nombre}
+            </span>
+          ) : (
+            <span
+              className="mt-0.5 inline-block rounded-[3px] border border-warn bg-warn/10 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-warn"
+              title="Sin centro de costo asignado: este paso cotizará $0."
+            >
+              ⚠ sin centro de costo
             </span>
           )}
           <span
@@ -617,43 +627,362 @@ function StepRow({
             </div>
           </div>
 
-          {/* Materiales */}
-          <div className="grid grid-cols-1 gap-6 py-4 lg:grid-cols-[180px_1fr]">
-            <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">
-              Materiales declarativos
-              <span className="mt-1.5 block text-[10px] normal-case tracking-normal text-ink-4">
-                {op.materialesConsumidos.length === 0
-                  ? "Se aplica la plantilla imperativa de la familia."
-                  : `${op.materialesConsumidos.length} ${op.materialesConsumidos.length === 1 ? "material" : "materiales"} declarado${op.materialesConsumidos.length === 1 ? "" : "s"}.`}
-              </span>
-            </div>
-            <div>
-              {op.materialesConsumidos.length === 0 ? (
-                <div className="flex flex-wrap items-center justify-between gap-4 rounded-[6px] border border-dashed border-line-hi bg-bg-1 px-4 py-3">
-                  <div className="text-[13px] text-ink-3">
-                    <em className="font-serif text-[15px] italic text-ink-2">
-                      Sin materiales declarativos.
-                    </em>{" "}
-                    Se aplica la plantilla imperativa de la familia.
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onManageMateriales}
-                  >
-                    Gestionar
-                  </Button>
+          {/* R3 — Bucket Materiales unificado: declarativos + consumibles
+              + desgaste, todos en una sola caja con sub-grupos. Todos
+              estos ítems van al bucket Materiales en la cotización; el
+              usuario los ve agrupados, no dispersos en 2 secciones. */}
+          {(() => {
+            const declaradosCount = op.materialesConsumidos.length;
+            const consumiblesCount = op.maquina?.consumibles.length ?? 0;
+            const desgasteCount = op.maquina?.componentesDesgaste.length ?? 0;
+            const total = declaradosCount + consumiblesCount + desgasteCount;
+            return (
+              <div className="grid grid-cols-1 gap-6 py-4 lg:grid-cols-[180px_1fr]">
+                <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">
+                  Materiales
+                  <span className="mt-1.5 block text-[10px] normal-case tracking-normal text-ink-4">
+                    {total === 0
+                      ? "Sin materiales detectados."
+                      : `${total} ítem${total === 1 ? "" : "s"} aportan al bucket Materiales.`}
+                  </span>
+                  <span className="mt-1 block text-[10px] normal-case tracking-normal text-ink-4">
+                    {declaradosCount} declarado{declaradosCount === 1 ? "" : "s"}
+                    {" · "}
+                    {consumiblesCount} consumible{consumiblesCount === 1 ? "" : "s"}
+                    {" · "}
+                    {desgasteCount} desgaste{desgasteCount === 1 ? "" : "s"}
+                  </span>
                 </div>
-              ) : (
-                <MaterialesMiniTable
-                  materiales={op.materialesConsumidos}
-                  onAdd={onManageMateriales}
-                />
-              )}
-            </div>
-          </div>
+                <div className="space-y-3">
+                  {/* Sub-grupo: declarados */}
+                  {declaradosCount === 0 ? (
+                    <div className="flex flex-wrap items-center justify-between gap-4 rounded-[6px] border border-dashed border-line-hi bg-bg-1 px-4 py-3">
+                      <div className="text-[13px] text-ink-3">
+                        <em className="font-serif text-[15px] italic text-ink-2">
+                          Sin materiales declarativos.
+                        </em>{" "}
+                        Se aplica la plantilla imperativa de la familia.
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={onManageMateriales}
+                      >
+                        Gestionar
+                      </Button>
+                    </div>
+                  ) : (
+                    <MaterialesMiniTable
+                      materiales={op.materialesConsumidos}
+                      onAdd={onManageMateriales}
+                    />
+                  )}
+
+                  {/* Sub-grupos: consumibles + desgaste de máquina (read-only).
+                      Sus acordeones internos siguen funcionando como antes;
+                      ahora viven dentro del bloque "Materiales" en lugar de
+                      tener su propia caja separada. */}
+                  {op.maquina &&
+                    (consumiblesCount > 0 || desgasteCount > 0) && (
+                      <ConsumiblesMaquinaSection
+                        maquina={op.maquina}
+                        perfilOperativoId={op.perfilOperativo?.id ?? null}
+                        perfilesDeAlternativas={op.alternativas
+                          .map((a) => a.perfilOperativo)
+                          .filter(
+                            (p): p is { id: string; nombre: string } =>
+                              p !== null,
+                          )}
+                      />
+                    )}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * SM.5 — Sección read-only que muestra los consumibles + desgaste configurados
+ * en la máquina del paso, filtrados por su perfil operativo. El motor los
+ * absorbe automáticamente al cotizar — no hace falta declararlos como POM.
+ */
+function ConsumiblesMaquinaSection({
+  maquina,
+  perfilOperativoId,
+  perfilesDeAlternativas,
+}: {
+  maquina: NonNullable<RutaCompletaOperacion["maquina"]>;
+  perfilOperativoId: string | null;
+  /** Perfiles disponibles vía Alternativas del paso. Cuando el paso no tiene
+   * perfil fijo, los consumibles se filtran a estos perfiles (los que el
+   * cliente puede llegar a elegir al cotizar). */
+  perfilesDeAlternativas: Array<{ id: string; nombre: string }>;
+}) {
+  const desgaste = maquina.componentesDesgaste;
+
+  // SM.5 — Estrategia de display:
+  //   1. Paso CON perfil fijo → filtra a ese perfil (+ los `null` = todos).
+  //   2. Paso SIN perfil fijo PERO CON alternativas → filtra a los perfiles
+  //      de las alternativas (los que el user puede elegir al cotizar).
+  //   3. Sin perfil ni alternativas → muestra todos los consumibles
+  //      agrupados por perfil (último recurso).
+  type Consumible = NonNullable<RutaCompletaOperacion["maquina"]>["consumibles"][number];
+  const perfilesAlternativaIds = new Set(perfilesDeAlternativas.map((p) => p.id));
+  const perfilesAlternativaNombres = new Map(
+    perfilesDeAlternativas.map((p) => [p.id, p.nombre]),
+  );
+  const usandoAlternativas = !perfilOperativoId && perfilesAlternativaIds.size > 0;
+
+  const grupos: Array<{ key: string; perfilLabel: string; items: Consumible[] }> = (() => {
+    if (perfilOperativoId) {
+      const aplicables = maquina.consumibles.filter(
+        (c) => c.perfilOperativoId === null || c.perfilOperativoId === perfilOperativoId,
+      );
+      return aplicables.length > 0
+        ? [
+            {
+              key: perfilOperativoId,
+              perfilLabel: "Aplicables a este paso",
+              items: aplicables,
+            },
+          ]
+        : [];
+    }
+    if (usandoAlternativas) {
+      // Filtra a los perfiles que las alternativas del paso ofrecen + los null.
+      const byPerfil = new Map<string, { nombre: string | null; items: Consumible[] }>();
+      for (const c of maquina.consumibles) {
+        if (
+          c.perfilOperativoId !== null &&
+          !perfilesAlternativaIds.has(c.perfilOperativoId)
+        )
+          continue;
+        const k = c.perfilOperativoId ?? "__all__";
+        if (!byPerfil.has(k)) {
+          byPerfil.set(k, {
+            nombre:
+              c.perfilOperativoNombre ??
+              (k !== "__all__"
+                ? perfilesAlternativaNombres.get(k) ?? null
+                : null),
+            items: [],
+          });
+        }
+        byPerfil.get(k)!.items.push(c);
+      }
+      const result: Array<{ key: string; perfilLabel: string; items: Consumible[] }> = [];
+      if (byPerfil.has("__all__")) {
+        result.push({
+          key: "__all__",
+          perfilLabel: "Todos los perfiles",
+          items: byPerfil.get("__all__")!.items,
+        });
+        byPerfil.delete("__all__");
+      }
+      for (const [perfilId, g] of byPerfil) {
+        result.push({
+          key: perfilId,
+          perfilLabel: g.nombre ?? `Perfil ${perfilId.slice(0, 8)}`,
+          items: g.items,
+        });
+      }
+      return result;
+    }
+    // Sin perfil fijo NI alternativas → agrupamos todos por perfilOperativoId
+    const byPerfil = new Map<string, { nombre: string | null; items: Consumible[] }>();
+    for (const c of maquina.consumibles) {
+      const k = c.perfilOperativoId ?? "__all__";
+      if (!byPerfil.has(k)) {
+        byPerfil.set(k, { nombre: c.perfilOperativoNombre ?? null, items: [] });
+      }
+      byPerfil.get(k)!.items.push(c);
+    }
+    const result: Array<{ key: string; perfilLabel: string; items: Consumible[] }> = [];
+    if (byPerfil.has("__all__")) {
+      result.push({
+        key: "__all__",
+        perfilLabel: "Todos los perfiles",
+        items: byPerfil.get("__all__")!.items,
+      });
+      byPerfil.delete("__all__");
+    }
+    for (const [perfilId, g] of byPerfil) {
+      result.push({
+        key: perfilId,
+        perfilLabel: g.nombre ?? `Perfil ${perfilId.slice(0, 8)}`,
+        items: g.items,
+      });
+    }
+    return result;
+  })();
+
+  const totalConsumibles = grupos.reduce((acc, g) => acc + g.items.length, 0);
+  if (totalConsumibles === 0 && desgaste.length === 0) return null;
+
+  const sinPerfilEnPaso = !perfilOperativoId;
+  // SM.5 — Default colapsado para evitar muralla de items.
+  const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(
+    () => new Set(),
+  );
+  const toggleGroup = (key: string) =>
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  return (
+    <div className="grid grid-cols-1 gap-6 border-t border-dashed border-line py-4 lg:grid-cols-[180px_1fr]">
+      <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">
+        Desde la máquina
+        <span className="mt-1.5 block text-[10px] normal-case tracking-normal text-ink-4">
+          Consumibles + desgaste cargados en {maquina.nombre}. Se absorben
+          automáticamente al cotizar — para editarlos andá a Costos →
+          Maquinaria.
+        </span>
+        {sinPerfilEnPaso && totalConsumibles > 0 && (
+          <span className="mt-2 block text-[10px] normal-case tracking-normal text-warn">
+            {usandoAlternativas
+              ? perfilesDeAlternativas.length === 1
+                ? `El perfil ${perfilesDeAlternativas[0].nombre} es la única alternativa — sus consumibles son los que se absorberán al cotizar.`
+                : `El perfil se elige al cotizar entre ${perfilesDeAlternativas.length} alternativas — los consumibles dependen de cuál elija el cliente.`
+              : "Este paso no tiene perfil fijo — el perfil se elige al cotizar y determina qué consumibles aplican."}
+          </span>
+        )}
+      </div>
+      <div className="space-y-3">
+        {grupos.length > 0 && (
+          <div className="overflow-hidden rounded-[6px] border border-line bg-bg-1">
+            <div className="border-b border-line bg-bg px-3.5 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">
+              Consumibles ({totalConsumibles})
+            </div>
+            <div className="divide-y divide-line text-[13px]">
+              {grupos.map((g) => {
+                const isExpanded = expandedGroups.has(g.key);
+                // Si solo hay 1 grupo y el paso tiene perfil fijo, no
+                // mostramos el header colapsable (no aporta info).
+                const showHeader =
+                  sinPerfilEnPaso || grupos.length > 1;
+                return (
+                  <div key={g.key}>
+                    {showHeader && (
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(g.key)}
+                        className="flex w-full items-center justify-between border-b border-line bg-bg-2 px-3.5 py-1.5 text-left transition-colors hover:bg-bg-3"
+                      >
+                        <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-ink-2">
+                          {g.perfilLabel}{" "}
+                          <span className="text-ink-4">({g.items.length})</span>
+                        </span>
+                        <span className="font-mono text-[10px] text-ink-3">
+                          {isExpanded ? "▾" : "▸"}
+                        </span>
+                      </button>
+                    )}
+                    {(isExpanded || !showHeader) &&
+                      g.items.map((c) => {
+                        const color = readColorFromConsumible(c);
+                        const tonerLabel = colorToLabel(color);
+                        return (
+                          <div
+                            key={c.id}
+                            className="grid grid-cols-[1fr_auto_auto] items-baseline gap-3 px-3.5 py-2"
+                          >
+                            <div>
+                              <div className="flex items-center gap-2">
+                                {color && (
+                                  <span
+                                    className="inline-block size-2.5 rounded-sm border border-line-hi"
+                                    style={{ backgroundColor: colorToHex(color) }}
+                                    aria-label={tonerLabel ?? color}
+                                  />
+                                )}
+                                <span className="text-ink-0">
+                                  {tonerLabel ? `${c.nombre} · ${tonerLabel}` : c.nombre}
+                                </span>
+                              </div>
+                              <div className="font-mono text-[10px] tracking-[0.04em] text-ink-3">
+                                {c.tipo.toLowerCase()}
+                                {!sinPerfilEnPaso &&
+                                  (c.perfilOperativoId
+                                    ? " · solo este perfil"
+                                    : " · todos los perfiles")}
+                              </div>
+                            </div>
+                            <div className="font-mono text-[11px] text-ink-1">
+                              {c.consumoBase != null
+                                ? `${c.consumoBase} ${c.unidad.toLowerCase()}`
+                                : "—"}
+                            </div>
+                            <div className="font-mono text-[11px] text-ink-2">
+                              {c.materiaPrimaVariante?.precioReferencia != null
+                                ? `$ ${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(c.materiaPrimaVariante.precioReferencia)}`
+                                : "—"}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {desgaste.length > 0 && (() => {
+          const desgasteKey = "__desgaste__";
+          const isDesgasteExpanded = expandedGroups.has(desgasteKey);
+          return (
+            <div className="overflow-hidden rounded-[6px] border border-line bg-bg-1">
+              <button
+                type="button"
+                onClick={() => toggleGroup(desgasteKey)}
+                className="flex w-full items-center justify-between border-b border-line bg-bg px-3.5 py-2 text-left transition-colors hover:bg-bg-2"
+              >
+                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">
+                  Desgaste / repuestos{" "}
+                  <span className="text-ink-4">({desgaste.length})</span>
+                </span>
+                <span className="font-mono text-[10px] text-ink-3">
+                  {isDesgasteExpanded ? "▾" : "▸"}
+                </span>
+              </button>
+              {isDesgasteExpanded && (
+                <div className="divide-y divide-line text-[13px]">
+                  {desgaste.map((d) => (
+                    <div
+                      key={d.id}
+                      className="grid grid-cols-[1fr_auto_auto] items-baseline gap-3 px-3.5 py-2"
+                    >
+                      <div>
+                        <div className="text-ink-0">{d.nombre}</div>
+                        <div className="font-mono text-[10px] tracking-[0.04em] text-ink-3">
+                          {d.tipo.toLowerCase()}
+                        </div>
+                      </div>
+                      <div className="font-mono text-[11px] text-ink-1">
+                        {d.vidaUtilEstimada != null
+                          ? `${d.vidaUtilEstimada.toLocaleString("es-AR")} ${d.unidadDesgaste.toLowerCase()}`
+                          : "—"}
+                      </div>
+                      <div className="font-mono text-[11px] text-ink-2">
+                        {d.materiaPrimaVariante?.precioReferencia != null
+                          ? `$ ${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(d.materiaPrimaVariante.precioReferencia)}`
+                          : "—"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </div>
     </div>
   );
 }
@@ -776,4 +1105,73 @@ function MaterialesMiniTable({
       </div>
     </div>
   );
+}
+
+// ──────────────── Helpers de color de toner/tinta ────────────────
+
+/**
+ * Lee el color del consumible desde sus distintas convenciones de almacenamiento:
+ *   - detalle.color (más común para toners CMYK)
+ *   - detalle.canal
+ *   - materiaPrimaVariante.atributosVariante.color
+ * Retorna el string crudo en lowercase, o null si no hay color reconocible.
+ */
+function readColorFromConsumible(c: {
+  detalle: Record<string, unknown> | null;
+  materiaPrimaVariante: { atributosVariante: Record<string, unknown> | null } | null;
+}): string | null {
+  const d = c.detalle ?? {};
+  const a = c.materiaPrimaVariante?.atributosVariante ?? {};
+  const raw =
+    (d.color as string | undefined) ??
+    (d.canal as string | undefined) ??
+    (a.color as string | undefined) ??
+    null;
+  if (!raw) return null;
+  return String(raw).trim().toLowerCase();
+}
+
+const COLOR_LABELS: Record<string, string> = {
+  cyan: "Cyan",
+  c: "Cyan",
+  magenta: "Magenta",
+  m: "Magenta",
+  yellow: "Yellow",
+  y: "Yellow",
+  black: "Black",
+  k: "Black",
+  negro: "Negro",
+  blanco: "Blanco",
+  white: "White",
+  barniz: "Barniz",
+  varnish: "Barniz",
+  oro: "Oro",
+  plata: "Plata",
+};
+
+const COLOR_HEX: Record<string, string> = {
+  cyan: "#00bcd4",
+  c: "#00bcd4",
+  magenta: "#e91e63",
+  m: "#e91e63",
+  yellow: "#ffeb3b",
+  y: "#ffeb3b",
+  black: "#0a0a0a",
+  k: "#0a0a0a",
+  negro: "#0a0a0a",
+  blanco: "#f4f4f0",
+  white: "#f4f4f0",
+  barniz: "#7BB3FF",
+  varnish: "#7BB3FF",
+  oro: "#d4af37",
+  plata: "#c0c0c0",
+};
+
+function colorToLabel(color: string | null): string | null {
+  if (!color) return null;
+  return COLOR_LABELS[color] ?? color.charAt(0).toUpperCase() + color.slice(1);
+}
+
+function colorToHex(color: string): string {
+  return COLOR_HEX[color] ?? "#999999";
 }

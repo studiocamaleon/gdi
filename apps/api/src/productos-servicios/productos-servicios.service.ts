@@ -42,6 +42,7 @@ import {
   unitsAreCompatible,
   type UnitCode,
 } from '../inventario/unidades-canonicas';
+import { getLongitudMm } from '../common/units';
 import { convertFlexibleRollUnitPrice } from '../inventario/unidades-derivadas';
 import { PrismaService } from '../prisma/prisma.service';
 import { evaluateProductividad } from '../procesos/proceso-productividad.engine';
@@ -2296,7 +2297,13 @@ export class ProductosServiciosService {
       procesoNombre: proceso.nombre,
       operaciones: proceso.operaciones.map((op) => {
         const centro = op.centroCosto as { id: string; nombre: string } | null;
-        const maquina = op.maquina as { id: string; nombre: string; plantilla: string | null } | null;
+        const maquina = op.maquina as {
+          id: string;
+          nombre: string;
+          plantilla: string | null;
+          consumibles?: Array<Record<string, unknown>>;
+          componentesDesgaste?: Array<Record<string, unknown>>;
+        } | null;
         const perfil = op.perfilOperativo as {
           id: string;
           nombre: string;
@@ -2329,9 +2336,142 @@ export class ProductosServiciosService {
             op.productividadBase != null ? Number(op.productividadBase) : null,
           modoProductividad: String(op.modoProductividad),
           unidadTiempo: String(op.unidadTiempo),
+          // Fase C — plantilla origen del paso. La UI muestra los valores
+          // heredados como placeholder y permite override (escribir en el
+          // campo correspondiente lo guarda como local; vaciarlo lo vuelve
+          // a heredar de la plantilla).
+          plantillaOrigen: (() => {
+            const pl = (op as { plantillaOrigen?: Record<string, unknown> | null })
+              .plantillaOrigen;
+            if (!pl) return null;
+            const plCentro = pl.centroCosto as
+              | { id: string; nombre: string }
+              | null
+              | undefined;
+            const plMaquina = pl.maquina as
+              | { id: string; nombre: string; plantilla: string | null }
+              | null
+              | undefined;
+            const plPerfil = pl.perfilOperativo as
+              | { id: string; nombre: string }
+              | null
+              | undefined;
+            return {
+              id: String(pl.id),
+              nombre: String(pl.nombre ?? ''),
+              tipoOperacion:
+                pl.tipoOperacion != null ? String(pl.tipoOperacion) : null,
+              familiaV2: (pl.familiaV2 as string | null) ?? null,
+              unidadProductivaV2:
+                (pl.unidadProductivaV2 as string | null) ?? null,
+              modoProductividad:
+                pl.modoProductividad != null
+                  ? String(pl.modoProductividad)
+                  : null,
+              centroCosto: plCentro
+                ? { id: plCentro.id, nombre: plCentro.nombre }
+                : null,
+              maquina: plMaquina
+                ? {
+                    id: plMaquina.id,
+                    nombre: plMaquina.nombre,
+                    plantilla: plMaquina.plantilla,
+                  }
+                : null,
+              perfilOperativo: plPerfil
+                ? { id: plPerfil.id, nombre: plPerfil.nombre }
+                : null,
+              setupMin: pl.setupMin != null ? Number(pl.setupMin) : null,
+              cleanupMin: pl.cleanupMin != null ? Number(pl.cleanupMin) : null,
+              tiempoFijoMin:
+                pl.tiempoFijoMin != null ? Number(pl.tiempoFijoMin) : null,
+              productividadBase:
+                pl.productividadBase != null ? Number(pl.productividadBase) : null,
+              unidadTiempo: pl.unidadTiempo != null ? String(pl.unidadTiempo) : null,
+            };
+          })(),
           centroCosto: centro ? { id: centro.id, nombre: centro.nombre } : null,
           maquina: maquina
-            ? { id: maquina.id, nombre: maquina.nombre, plantilla: maquina.plantilla }
+            ? {
+                id: maquina.id,
+                nombre: maquina.nombre,
+                plantilla: maquina.plantilla,
+                // SM.5 — Consumibles + desgaste de la máquina, surfaceados
+                // para que la Ruta tab los muestre como sección read-only.
+                // El motor los usa al cotizar (filtrando por perfilOperativoId).
+                consumibles: Array.isArray(maquina.consumibles)
+                  ? maquina.consumibles.map((c) => {
+                      const r = c as Record<string, unknown>;
+                      const mp = r.materiaPrimaVariante as Record<string, unknown> | null;
+                      const perfil = r.perfilOperativo as
+                        | { id: string; nombre: string }
+                        | null;
+                      return {
+                        id: String(r.id),
+                        perfilOperativoId: (r.perfilOperativoId as string | null) ?? null,
+                        perfilOperativoNombre: perfil?.nombre ?? null,
+                        nombre: String(r.nombre ?? ''),
+                        tipo: String(r.tipo ?? ''),
+                        unidad: String(r.unidad ?? ''),
+                        consumoBase:
+                          r.consumoBase != null ? Number(r.consumoBase) : null,
+                        rendimientoEstimado:
+                          r.rendimientoEstimado != null
+                            ? Number(r.rendimientoEstimado)
+                            : null,
+                        // detalleJson: incluye color del toner, flags por
+                        // canal, etc. El frontend lo usa para mostrar chips.
+                        detalle:
+                          (r.detalleJson as Record<string, unknown> | null) ??
+                          null,
+                        materiaPrimaVariante: mp
+                          ? {
+                              id: String(mp.id),
+                              sku: String(mp.sku ?? ''),
+                              nombreVariante:
+                                (mp.nombreVariante as string | null) ?? null,
+                              precioReferencia:
+                                mp.precioReferencia != null
+                                  ? Number(mp.precioReferencia)
+                                  : null,
+                              atributosVariante:
+                                (mp.atributosVarianteJson as
+                                  | Record<string, unknown>
+                                  | null) ?? null,
+                            }
+                          : null,
+                      };
+                    })
+                  : [],
+                componentesDesgaste: Array.isArray(maquina.componentesDesgaste)
+                  ? maquina.componentesDesgaste.map((c) => {
+                      const r = c as Record<string, unknown>;
+                      const mp = r.materiaPrimaVariante as Record<string, unknown> | null;
+                      return {
+                        id: String(r.id),
+                        nombre: String(r.nombre ?? ''),
+                        tipo: String(r.tipo ?? ''),
+                        unidadDesgaste: String(r.unidadDesgaste ?? ''),
+                        vidaUtilEstimada:
+                          r.vidaUtilEstimada != null
+                            ? Number(r.vidaUtilEstimada)
+                            : null,
+                        materiaPrimaVariante: mp
+                          ? {
+                              id: String(mp.id),
+                              sku: String(mp.sku ?? ''),
+                              nombreVariante:
+                                (mp.nombreVariante as string | null) ?? null,
+                              precioReferencia:
+                                mp.precioReferencia != null
+                                  ? Number(mp.precioReferencia)
+                                  : null,
+                            }
+                          : null,
+                      };
+                    })
+                  : [],
+              }
             : null,
           perfilOperativo: perfil
             ? {
@@ -8192,7 +8332,10 @@ export class ProductosServiciosService {
               include: {
                 consumibles: {
                   where: { activo: true },
-                  include: { materiaPrimaVariante: true },
+                  include: {
+                    materiaPrimaVariante: true,
+                    perfilOperativo: { select: { id: true, nombre: true } },
+                  },
                 },
                 componentesDesgaste: {
                   where: { activo: true },
@@ -8201,6 +8344,21 @@ export class ProductosServiciosService {
               },
             },
             perfilOperativo: true,
+            // Fase C + R6 — plantilla origen con sus relaciones. El motor
+            // usa los Decimals como fallback cuando los del paso están en
+            // null. La UI muestra TODA la identidad (nombre, familia,
+            // unidad productiva, centro de costo, máquina, perfil) como
+            // read-only desde acá: no se edita en la instancia, vive en
+            // la biblioteca.
+            plantillaOrigen: {
+              include: {
+                centroCosto: { select: { id: true, nombre: true } },
+                maquina: {
+                  select: { id: true, nombre: true, plantilla: true },
+                },
+                perfilOperativo: { select: { id: true, nombre: true } },
+              },
+            },
             requiresProductoAdicional: true,
             // SM.D: materiales declarativos por paso. Incluye producto
             // componente + variante cuando el material es un sub-producto.
@@ -8240,16 +8398,17 @@ export class ProductosServiciosService {
     if (!atributos || typeof atributos !== 'object') {
       throw new BadRequestException('El papel asignado no tiene dimensiones configuradas.');
     }
+    // Fase B — usa el helper centralizado que entiende sufijos
+    // (anchoMm/anchoCm/anchoM/ancho-legacy-en-m). Antes existía una
+    // heurística por magnitud (`normalizeToMm`) que rompía con valores
+    // ≤100 mm como A6 (105 mm pasaba a 1050).
     const obj = atributos as Record<string, unknown>;
-    const anchoRaw = Number(obj.ancho);
-    const altoRaw = Number(obj.alto);
-    if (!Number.isFinite(anchoRaw) || !Number.isFinite(altoRaw) || anchoRaw <= 0 || altoRaw <= 0) {
+    const anchoMm = getLongitudMm(obj, 'ancho');
+    const altoMm = getLongitudMm(obj, 'alto');
+    if (anchoMm == null || altoMm == null) {
       throw new BadRequestException('El papel asignado no tiene ancho/alto validos.');
     }
-    return {
-      anchoMm: this.normalizeToMm(anchoRaw),
-      altoMm: this.normalizeToMm(altoRaw),
-    };
+    return { anchoMm, altoMm };
   }
 
   private convertPrecioToStockUnit(precioRaw: number, unidadCompra: string, unidadStock: string): number {
@@ -8282,12 +8441,24 @@ export class ProductosServiciosService {
     if (!machineOp?.maquina?.parametrosTecnicosJson || typeof machineOp.maquina.parametrosTecnicosJson !== 'object') {
       return { leftMm: 0, rightMm: 0, topMm: 0, bottomMm: 0 };
     }
+    // Fase B — los `parametrosTecnicosJson` de máquina están en CENTÍMETROS
+    // por convención (ver `maquinaria-templates.ts`, todos con `unit: "cm"`).
+    // Antes se usaba `normalizeToMm` con heurística por magnitud que rompía
+    // con valores chicos legítimos en mm. Ahora usamos el helper que respeta
+    // el sufijo de la clave; si no hay sufijo (clave legacy), preservamos
+    // la convención: los nombres `margenIzquierdo/Derecho/...` están en cm.
     const p = machineOp.maquina.parametrosTecnicosJson as Record<string, unknown>;
+    const cmRaw = (key: string): number => {
+      const sufijoMm = getLongitudMm(p, key);
+      if (sufijoMm != null) return sufijoMm;
+      const v = Number(p[key] ?? 0);
+      return Number.isFinite(v) && v >= 0 ? v * 10 : 0; // legacy = cm
+    };
     return {
-      leftMm: this.normalizeToMm(Number(p.margenIzquierdo ?? 0)),
-      rightMm: this.normalizeToMm(Number(p.margenDerecho ?? 0)),
-      topMm: this.normalizeToMm(Number(p.margenSuperior ?? 0)),
-      bottomMm: this.normalizeToMm(Number(p.margenInferior ?? 0)),
+      leftMm: cmRaw('margenIzquierdo'),
+      rightMm: cmRaw('margenDerecho'),
+      topMm: cmRaw('margenSuperior'),
+      bottomMm: cmRaw('margenInferior'),
     };
   }
 
@@ -11997,6 +12168,7 @@ export class ProductosServiciosService {
                 reglaVelocidadJson: op.reglaVelocidadJson ?? null,
                 reglaMermaJson: op.reglaMermaJson ?? null,
                 runMin: op.runMin,
+                tiempoFijoMin: op.tiempoFijoMin,
                 unidadTiempo: op.unidadTiempo,
                 mermaRunPct: op.mermaRunPct,
                 mermaSetup: op.mermaSetup,
@@ -12007,6 +12179,8 @@ export class ProductosServiciosService {
                   largoTotalMl: largoConsumidoMl,
                   perimetroTotalMl: colorPerimetroTotalMl,
                 },
+                perfilProductivityValue:
+                  profile?.productivityValue ?? null,
               });
               warnings.push(...productividad.warnings.map((item: string) => `Paso ${op.nombre}: ${item}`));
               const minutos = this.roundProductNumber(
