@@ -135,6 +135,7 @@ import {
   buildGranFormatoNestingOrientacion as buildGranFormatoNestingOrientacionV2,
   countGranFormatoRowsAndPiecesPerRow as countGranFormatoRowsAndPiecesPerRowV2,
 } from './nesting/algorithms/shelf-rollo';
+import { loadTarifasHorarias, calculateOperationCost } from './costing';
 
 const DEFAULT_PERIOD_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
 type ServicioPricingNivel = {
@@ -824,7 +825,8 @@ export class ProductosServiciosService {
           const multDobleFazOp = esDobleFaz0 ? Number(op.multiplicadorDobleFaz ?? 1) : 1;
           const totalRunMin = runMinBase * cantidad * multDobleFazOp;
           const totalMin = setupMin + totalRunMin + cleanupMin + tiempoFijoMin;
-          const costo = this.roundProductNumber((totalMin / 60) * tarifaHora);
+          // 2026-04-23 — Fase costing #1: extraído a costing/operation-cost.ts
+          const costo = this.roundProductNumber(calculateOperationCost(totalMin, tarifaHora));
 
           costoProcesos += costo;
           bloquesProcesos.push({
@@ -1393,7 +1395,8 @@ export class ProductosServiciosService {
             runMinCalc = prodResult.runMin;
           }
           const totalMin = setupMin + runMinCalc + Number(op.cleanupMin ?? 0) + Number(op.tiempoFijoMin ?? 0);
-          const costo = this.roundProductNumber((totalMin / 60) * tarifaHora);
+          // 2026-04-23 — Fase costing #1: extraído a costing/operation-cost.ts
+          const costo = this.roundProductNumber(calculateOperationCost(totalMin, tarifaHora));
           costoProcesos += costo;
           bloquesProcesos.push({
             orden: op.orden, codigo: op.codigo, nombre: op.nombre,
@@ -2057,16 +2060,12 @@ export class ProductosServiciosService {
 
     // Costos de proceso (ruta productiva)
     const centroIds = Array.from(new Set(proceso.operaciones.map((op) => op.centroCostoId)));
-    const tarifas = await this.prisma.centroCostoTarifaPeriodo.findMany({
-      where: {
-        tenantId: auth.tenantId,
-        periodo,
-        estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
-        centroCostoId: { in: centroIds },
-      },
-      select: { centroCostoId: true, tarifaCalculada: true },
+    // 2026-04-23 — Fase costing #1: extraído a costing/load-tarifas.ts
+    const tarifaByCentro = await loadTarifasHorarias(this.prisma, {
+      tenantId: auth.tenantId,
+      periodo,
+      centroCostoIds: centroIds,
     });
-    const tarifaByCentro = new Map(tarifas.map((t) => [t.centroCostoId, t.tarifaCalculada]));
 
     const totalPliegosImpresion = grouping.pliegosXCapa * tipoCopia.capas;
 
@@ -2175,7 +2174,8 @@ export class ProductosServiciosService {
         ? (cantidadObjetivo / productividadBase)
         : Number(resolvedOp?.runMin ?? operacion.runMin ?? 0);
       const totalMin = setupMin + runMin + cleanupMin;
-      const costo = (totalMin / 60) * tarifaHora;
+      // 2026-04-23 — Fase costing #1: extraído a costing/operation-cost.ts (sin redondeo, legacy redondea más adelante)
+      const costo = calculateOperationCost(totalMin, tarifaHora);
       costoProcesos += costo;
 
       // Calcular toner y desgaste para operaciones con máquina
@@ -4155,21 +4155,13 @@ export class ProductosServiciosService {
           .filter((value): value is string => Boolean(value)),
       ),
     );
-    const tarifas = centroIds.length
-      ? await this.prisma.centroCostoTarifaPeriodo.findMany({
-          where: {
-            tenantId: auth.tenantId,
-            periodo,
-            estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
-            centroCostoId: { in: centroIds },
-          },
-          select: {
-            centroCostoId: true,
-            tarifaCalculada: true,
-          },
-        })
-      : [];
-    const tarifaByCentro = new Map(tarifas.map((item) => [item.centroCostoId, item.tarifaCalculada]));
+    // 2026-04-23 — Fase costing #1: extraído a costing/load-tarifas.ts
+    // (el guard centroIds.length=0 lo maneja loadTarifasHorarias)
+    const tarifaByCentro = await loadTarifasHorarias(this.prisma, {
+      tenantId: auth.tenantId,
+      periodo,
+      centroCostoIds: centroIds,
+    });
     const totalPiezas = medidasEfectivas.reduce((acc, item) => acc + item.cantidad, 0);
     const perimetroTotalMl = this.roundProductNumber(
       medidasEfectivas.reduce(
@@ -6781,19 +6773,12 @@ export class ProductosServiciosService {
         ...centrosChecklistCosto,
       ]),
     );
-    const tarifas = await this.prisma.centroCostoTarifaPeriodo.findMany({
-      where: {
-        tenantId: auth.tenantId,
-        periodo,
-        estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
-        centroCostoId: { in: centroIds },
-      },
-      select: {
-        centroCostoId: true,
-        tarifaCalculada: true,
-      },
+    // 2026-04-23 — Fase costing #1: extraído a costing/load-tarifas.ts
+    const tarifaByCentro = await loadTarifasHorarias(this.prisma, {
+      tenantId: auth.tenantId,
+      periodo,
+      centroCostoIds: centroIds,
     });
-    const tarifaByCentro = new Map(tarifas.map((item) => [item.centroCostoId, item.tarifaCalculada]));
     for (const op of operacionesCotizadas) {
       if (!tarifaByCentro.has(op.centroCostoId)) {
         throw new BadRequestException(
@@ -7054,7 +7039,8 @@ export class ProductosServiciosService {
 
       const totalMin = setupMin + runMin + cleanupMin + tiempoFijoMin;
       const tarifa = tarifaByCentro.get(op.centroCostoId)!;
-      const costoPaso = this.roundProductNumber(Number(tarifa.mul(totalMin / 60)));
+      // 2026-04-23 — Fase costing #1: extraído a costing/operation-cost.ts
+      const costoPaso = this.roundProductNumber(calculateOperationCost(totalMin, tarifa));
       const esChecklist = checklistOperacionesActivadas.some((item) => item.operacion.id === op.id);
       const esRouteEffect = Boolean(this.asObject(op.detalleJson).routeEffectId);
       return {
@@ -7579,7 +7565,8 @@ export class ProductosServiciosService {
       if (totalMin <= 0) {
         continue;
       }
-      const costoNivel = this.roundProductNumber(Number(tarifa.mul(totalMin / 60)));
+      // 2026-04-23 — Fase costing #1: extraído a costing/operation-cost.ts
+      const costoNivel = this.roundProductNumber(calculateOperationCost(totalMin, tarifa));
       costoAdicionalesCostEffects += costoNivel;
       costosPorEfecto.push({
         origen: 'ConfiguradorVariante',
@@ -15570,18 +15557,12 @@ export class ProductosServiciosService {
     }
 
     const proceso = await this.findProcesoConOperacionesOrThrow(auth, procesoDefinicionId, this.prisma);
-    const tarifas = await this.prisma.centroCostoTarifaPeriodo.findMany({
-      where: {
-        tenantId: auth.tenantId,
-        periodo,
-        estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
-      },
-      select: {
-        centroCostoId: true,
-        tarifaCalculada: true,
-      },
+    // 2026-04-23 — Fase costing #1: extraído a costing/load-tarifas.ts
+    // (sin centroCostoIds → trae TODAS las tarifas publicadas del período)
+    const tarifaByCentro = await loadTarifasHorarias(this.prisma, {
+      tenantId: auth.tenantId,
+      periodo,
     });
-    const tarifaByCentro = new Map(tarifas.map((item) => [item.centroCostoId, item.tarifaCalculada]));
 
     // Process each color independently — each color = independent roll + nesting
     const colorResults: Array<{
