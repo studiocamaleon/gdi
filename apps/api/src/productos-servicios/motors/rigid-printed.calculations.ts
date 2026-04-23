@@ -4,10 +4,21 @@
  * Funciones puras (sin acceso a DB):
  * - Nesting grid rectangular en placa finita
  * - 3 estrategias de costeo del material rígido
+ *
+ * **2026-04-23 — Fase 1.1 de la abstracción de nesting**:
+ * `nestRectangularGrid` y `calcularCosteoMaterial` ahora delegan al
+ * módulo `apps/api/src/productos-servicios/nesting/`. Los shapes
+ * (NestingInput, NestingResult, CosteoInput, CosteoResult) se mantienen
+ * intactos para no romper consumidores. Ver
+ * `docs/nesting-abstraccion-diseno.md`.
  */
 
 import { MaxRectsPacker } from 'maxrects-packer';
 import type { EstrategiaCosteoMaterial } from './rigid-printed.types';
+import {
+  nestRectangularGridV2,
+  calcularCosteoMaterialV2,
+} from '../nesting/adapters/rigid-adapter';
 
 // ─── Nesting ─────────────────────────────────────────────────────
 
@@ -42,74 +53,12 @@ export type NestingResult = {
   areaTotalMm2: number;
 };
 
-function calcGrid(
-  piezaW: number, piezaH: number,
-  areaW: number, areaH: number,
-  sepH: number, sepV: number,
-) {
-  if (areaW < piezaW || areaH < piezaH) return { columnas: 0, filas: 0 };
-  return {
-    columnas: Math.max(0, Math.floor((areaW + sepH) / (piezaW + sepH))),
-    filas: Math.max(0, Math.floor((areaH + sepV) / (piezaH + sepV))),
-  };
-}
-
+/**
+ * Delega a `apps/api/src/productos-servicios/nesting/algorithms/grid-2d-single.ts`
+ * vía adapter `nesting/adapters/rigid-adapter.ts`. Mantiene shape legacy.
+ */
 export function nestRectangularGrid(input: NestingInput): NestingResult {
-  const { piezaAnchoMm, piezaAltoMm, placaAnchoMm, placaAltoMm, separacionHMm, separacionVMm, margenMm, permitirRotacion } = input;
-  const areaW = placaAnchoMm - 2 * margenMm;
-  const areaH = placaAltoMm - 2 * margenMm;
-
-  const orig = calcGrid(piezaAnchoMm, piezaAltoMm, areaW, areaH, separacionHMm, separacionVMm);
-  const origCount = orig.columnas * orig.filas;
-
-  let rot = { columnas: 0, filas: 0 };
-  let rotCount = 0;
-  if (permitirRotacion && piezaAnchoMm !== piezaAltoMm) {
-    rot = calcGrid(piezaAltoMm, piezaAnchoMm, areaW, areaH, separacionHMm, separacionVMm);
-    rotCount = rot.columnas * rot.filas;
-  }
-
-  const useRot = rotCount > origCount;
-  const best = useRot ? rot : orig;
-  const pW = useRot ? piezaAltoMm : piezaAnchoMm;
-  const pH = useRot ? piezaAnchoMm : piezaAltoMm;
-  const count = best.columnas * best.filas;
-
-  const posiciones: NestingPiecePosition[] = [];
-  for (let row = 0; row < best.filas; row++) {
-    for (let col = 0; col < best.columnas; col++) {
-      posiciones.push({
-        x: margenMm + col * (pW + separacionHMm),
-        y: margenMm + row * (pH + separacionVMm),
-        anchoMm: pW,
-        altoMm: pH,
-        rotada: useRot,
-      });
-    }
-  }
-
-  const areaTotalMm2 = placaAnchoMm * placaAltoMm;
-  const areaUtilMm2 = count * piezaAnchoMm * piezaAltoMm;
-  const aprovechamientoPct = areaTotalMm2 > 0
-    ? Math.round((areaUtilMm2 / areaTotalMm2) * 10000) / 100
-    : 0;
-
-  // Largo consumido: desde margen hasta la última fila + pieza
-  const largoConsumidoMm = best.filas > 0
-    ? margenMm + best.filas * pH + (best.filas - 1) * separacionVMm + margenMm
-    : 0;
-
-  return {
-    piezasPorPlaca: count,
-    columnas: best.columnas,
-    filas: best.filas,
-    rotada: useRot,
-    posiciones,
-    aprovechamientoPct,
-    largoConsumidoMm,
-    areaUtilMm2,
-    areaTotalMm2,
-  };
+  return nestRectangularGridV2(input);
 }
 
 export function calculatePlatesNeeded(totalPiezas: number, piezasPorPlaca: number) {
@@ -384,18 +333,16 @@ function costeoSegmentosPlaca(input: CosteoInput): CosteoResult {
 
 /**
  * Calcula el costo del material según la estrategia configurada.
+ *
+ * 2026-04-23: delega a `nesting/adapters/rigid-adapter.ts` →
+ * `nesting/costing/applyCostingStrategy`. Mantiene shape legacy
+ * (CosteoInput → CosteoResult). Las 3 funciones internas
+ * (costeoM2Exacto, costeoLargoConsumido, costeoSegmentosPlaca) se
+ * conservan momentáneamente para no romper imports externos pero
+ * NO se invocan más desde acá. Quedarán deprecadas en Fase 2.
  */
 export function calcularCosteoMaterial(input: CosteoInput): CosteoResult {
-  switch (input.estrategia) {
-    case 'm2_exacto':
-      return costeoM2Exacto(input);
-    case 'largo_consumido':
-      return costeoLargoConsumido(input);
-    case 'segmentos_placa':
-      return costeoSegmentosPlaca(input);
-    default:
-      return costeoSegmentosPlaca(input);
-  }
+  return calcularCosteoMaterialV2(input);
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────
