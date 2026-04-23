@@ -1,0 +1,58 @@
+import type { Prisma } from '@prisma/client';
+import { ModoProductividadProceso, UnidadProceso } from '@prisma/client';
+export type ModoProductividadNivel = 'fija' | 'variable_manual' | 'variable_perfil';
+export type ParsedNivel = {
+    id: string;
+    nombre: string;
+    orden: number;
+    activo: boolean;
+    modoProductividadNivel: ModoProductividadNivel;
+    tiempoFijoMin: number | null;
+    productividadBase: number | null;
+    unidadSalida: string | null;
+    unidadTiempo: string | null;
+    maquinaId: string | null;
+    maquinaNombre: string;
+    perfilOperativoId: string | null;
+    perfilOperativoNombre: string;
+    setupMin: number | null;
+    cleanupMin: number | null;
+};
+export declare function parseNivelesFromDetalleJson(detalleJson: Prisma.JsonValue | null | undefined): ParsedNivel[];
+export declare function getNivelesActivos(detalleJson: Prisma.JsonValue | null | undefined): ParsedNivel[];
+export declare function operacionTieneNiveles(op: {
+    detalleJson: Prisma.JsonValue | null;
+}): boolean;
+export type OperacionLike = {
+    id: string;
+    codigo?: string | null;
+    nombre?: string | null;
+    detalleJson: Prisma.JsonValue | null;
+    maquinaId: string | null;
+    perfilOperativoId: string | null;
+    modoProductividad: ModoProductividadProceso;
+    productividadBase: Prisma.Decimal | number | null;
+    tiempoFijoMin: Prisma.Decimal | number | null;
+    setupMin: Prisma.Decimal | number | null;
+    cleanupMin: Prisma.Decimal | number | null;
+    runMin: Prisma.Decimal | number | null;
+    unidadSalida: UnidadProceso;
+    unidadTiempo: UnidadProceso;
+};
+export type ResolvedOperacionValues = {
+    maquinaId: string | null;
+    perfilOperativoId: string | null;
+    modoProductividad: ModoProductividadProceso;
+    productividadBase: number | null;
+    tiempoFijoMin: number | null;
+    setupMin: number | null;
+    cleanupMin: number | null;
+    runMin: number | null;
+    unidadSalida: UnidadProceso;
+    unidadTiempo: UnidadProceso;
+    nivelId: string | null;
+    nivelNombre: string | null;
+};
+export declare function resolveOperacionForNivel(op: OperacionLike, nivelId?: string | null): ResolvedOperacionValues | null;
+export declare function todosLosNivelesCompletos(detalleJson: Prisma.JsonValue | null | undefined): boolean;
+export declare function getMaquinaIdsDeNiveles(detalleJson: Prisma.JsonValue | null | undefined): string[];

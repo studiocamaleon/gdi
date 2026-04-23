@@ -69,6 +69,8 @@ export declare class ProcesosController {
                     resumen: string;
                     detalle: Record<string, unknown> | null;
                 }[];
+                rol: import("./dto/upsert-proceso.dto").RolProcesoOperacionDto | null;
+                esOpcional: boolean;
                 activo: boolean;
                 warnings: string[];
             }[];
@@ -88,6 +90,7 @@ export declare class ProcesosController {
         centroCostoNombre: string;
         maquinaId: string | null;
         maquinaNombre: string;
+        maquinaPlantilla: import("@prisma/client").$Enums.PlantillaMaquinaria | null;
         perfilOperativoId: string | null;
         perfilOperativoNombre: string;
         setupMin: number | null;
@@ -139,6 +142,7 @@ export declare class ProcesosController {
         centroCostoNombre: string;
         maquinaId: string | null;
         maquinaNombre: string;
+        maquinaPlantilla: import("@prisma/client").$Enums.PlantillaMaquinaria | null;
         perfilOperativoId: string | null;
         perfilOperativoNombre: string;
         setupMin: number | null;
@@ -190,6 +194,7 @@ export declare class ProcesosController {
         centroCostoNombre: string;
         maquinaId: string | null;
         maquinaNombre: string;
+        maquinaPlantilla: import("@prisma/client").$Enums.PlantillaMaquinaria | null;
         perfilOperativoId: string | null;
         perfilOperativoNombre: string;
         setupMin: number | null;
@@ -241,6 +246,7 @@ export declare class ProcesosController {
         centroCostoNombre: string;
         maquinaId: string | null;
         maquinaNombre: string;
+        maquinaPlantilla: import("@prisma/client").$Enums.PlantillaMaquinaria | null;
         perfilOperativoId: string | null;
         perfilOperativoNombre: string;
         setupMin: number | null;
@@ -292,6 +298,7 @@ export declare class ProcesosController {
         centroCostoNombre: string;
         maquinaId: string | null;
         maquinaNombre: string;
+        maquinaPlantilla: import("@prisma/client").$Enums.PlantillaMaquinaria | null;
         perfilOperativoId: string | null;
         perfilOperativoNombre: string;
         setupMin: number | null;
@@ -395,6 +402,8 @@ export declare class ProcesosController {
                 resumen: string;
                 detalle: Record<string, unknown> | null;
             }[];
+            rol: import("./dto/upsert-proceso.dto").RolProcesoOperacionDto | null;
+            esOpcional: boolean;
             activo: boolean;
             warnings: string[];
         }[];
@@ -467,6 +476,8 @@ export declare class ProcesosController {
                 resumen: string;
                 detalle: Record<string, unknown> | null;
             }[];
+            rol: import("./dto/upsert-proceso.dto").RolProcesoOperacionDto | null;
+            esOpcional: boolean;
             activo: boolean;
             warnings: string[];
         }[];
@@ -533,6 +544,8 @@ export declare class ProcesosController {
                 resumen: string;
                 detalle: Record<string, unknown> | null;
             }[];
+            rol: import("./dto/upsert-proceso.dto").RolProcesoOperacionDto | null;
+            esOpcional: boolean;
             activo: boolean;
             warnings: string[];
         }[];
@@ -599,6 +612,8 @@ export declare class ProcesosController {
                 resumen: string;
                 detalle: Record<string, unknown> | null;
             }[];
+            rol: import("./dto/upsert-proceso.dto").RolProcesoOperacionDto | null;
+            esOpcional: boolean;
             activo: boolean;
             warnings: string[];
         }[];
@@ -636,6 +651,23 @@ export declare class ProcesosController {
             mermaSetupAplicada: number;
             mermaRunPctAplicada: number;
             modoProductividad: import("./dto/upsert-proceso.dto").ModoProductividadProcesoDto;
+            tieneNiveles: boolean;
+            nivelesCount: number;
+            nivelesSnapshots: {
+                nivelId: string;
+                nombre: string;
+                maquinaId: string | null;
+                maquinaNombre: string;
+                perfilOperativoId: string | null;
+                perfilOperativoNombre: string;
+                modoProductividadNivel: import("./utils/operacion-values").ModoProductividadNivel;
+                productividadBase: number | null;
+                tiempoFijoMin: number | null;
+                setupMin: number | null;
+                cleanupMin: number | null;
+                unidadSalida: string | null;
+                unidadTiempo: string | null;
+            }[];
             warnings: string[];
         }[];
         advertencias: string[];
@@ -672,6 +704,23 @@ export declare class ProcesosController {
             mermaSetupAplicada: number;
             mermaRunPctAplicada: number;
             modoProductividad: import("./dto/upsert-proceso.dto").ModoProductividadProcesoDto;
+            tieneNiveles: boolean;
+            nivelesCount: number;
+            nivelesSnapshots: {
+                nivelId: string;
+                nombre: string;
+                maquinaId: string | null;
+                maquinaNombre: string;
+                perfilOperativoId: string | null;
+                perfilOperativoNombre: string;
+                modoProductividadNivel: import("./utils/operacion-values").ModoProductividadNivel;
+                productividadBase: number | null;
+                tiempoFijoMin: number | null;
+                setupMin: number | null;
+                cleanupMin: number | null;
+                unidadSalida: string | null;
+                unidadTiempo: string | null;
+            }[];
             warnings: string[];
         }[];
         advertencias: string[];

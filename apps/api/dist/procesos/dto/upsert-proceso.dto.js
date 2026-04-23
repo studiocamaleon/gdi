@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UpsertProcesoDto = exports.ProcesoOperacionNivelDto = exports.ProcesoOperacionItemDto = exports.BaseCalculoProductividadDto = exports.UnidadProcesoDto = exports.ModoProductividadNivelDto = exports.ModoProductividadProcesoDto = exports.TipoOperacionProcesoDto = exports.EstadoConfiguracionProcesoDto = exports.PlantillaMaquinariaDto = void 0;
+exports.UpsertProcesoDto = exports.ProcesoOperacionNivelDto = exports.ProcesoOperacionItemDto = exports.BaseCalculoProductividadDto = exports.RolProcesoOperacionDto = exports.UnidadProcesoDto = exports.ModoProductividadNivelDto = exports.ModoProductividadProcesoDto = exports.TipoOperacionProcesoDto = exports.EstadoConfiguracionProcesoDto = exports.PlantillaMaquinariaDto = void 0;
 const class_transformer_1 = require("class-transformer");
 const class_validator_1 = require("class-validator");
 var PlantillaMaquinariaDto;
@@ -81,6 +81,10 @@ var UnidadProcesoDto;
     UnidadProcesoDto["litro"] = "litro";
     UnidadProcesoDto["lote"] = "lote";
 })(UnidadProcesoDto || (exports.UnidadProcesoDto = UnidadProcesoDto = {}));
+var RolProcesoOperacionDto;
+(function (RolProcesoOperacionDto) {
+    RolProcesoOperacionDto["impresion"] = "impresion";
+})(RolProcesoOperacionDto || (exports.RolProcesoOperacionDto = RolProcesoOperacionDto = {}));
 var BaseCalculoProductividadDto;
 (function (BaseCalculoProductividadDto) {
     BaseCalculoProductividadDto["cantidad"] = "cantidad";
@@ -112,6 +116,8 @@ class ProcesoOperacionItemDto {
     reglaMerma;
     detalle;
     baseCalculoProductividad;
+    rol;
+    esOpcional;
     niveles;
     activo;
 }
@@ -240,6 +246,16 @@ __decorate([
     (0, class_validator_1.IsEnum)(BaseCalculoProductividadDto),
     __metadata("design:type", String)
 ], ProcesoOperacionItemDto.prototype, "baseCalculoProductividad", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(RolProcesoOperacionDto),
+    __metadata("design:type", String)
+], ProcesoOperacionItemDto.prototype, "rol", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], ProcesoOperacionItemDto.prototype, "esOpcional", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsArray)(),

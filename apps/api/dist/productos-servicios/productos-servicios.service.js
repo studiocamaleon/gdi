@@ -52,6 +52,7 @@ const unidades_canonicas_1 = require("../inventario/unidades-canonicas");
 const unidades_derivadas_1 = require("../inventario/unidades-derivadas");
 const prisma_service_1 = require("../prisma/prisma.service");
 const proceso_productividad_engine_1 = require("../procesos/proceso-productividad.engine");
+const operacion_values_1 = require("../procesos/utils/operacion-values");
 const productos_servicios_dto_1 = require("./dto/productos-servicios.dto");
 const digital_sheet_motor_1 = require("./motors/digital-sheet.motor");
 const product_motor_registry_1 = require("./motors/product-motor.registry");
@@ -88,9 +89,10 @@ let ProductosServiciosService = class ProductosServiciosService {
             hasQuote: true,
         },
         schema: {
-            tipoCorte: 'sin_demasia',
+            tipoCorte: 'guillotina',
             demasiaCorteMm: 0,
             lineaCorteMm: 3,
+            pasoCorteId: null,
             tamanoPliegoImpresion: {
                 codigo: 'A4',
                 nombre: 'A4',
@@ -98,6 +100,12 @@ let ProductosServiciosService = class ProductosServiciosService {
                 altoMm: 297,
             },
             mermaAdicionalPct: 0,
+            troquelado: {
+                anchoUtilPlotterMm: 290,
+                altoUtilPlotterMm: 420,
+                separacionEntreContornosMm: 3,
+                sangriadoTroquelMm: 3,
+            },
         },
         exposedInCatalog: true,
     };
@@ -399,6 +407,22 @@ let ProductosServiciosService = class ProductosServiciosService {
                 },
             });
             if (procesoDef?.operaciones) {
+                const nivelesPorOpRigid = new Map();
+                for (const sel of payload.nivelesSeleccionados ?? []) {
+                    nivelesPorOpRigid.set(sel.operacionId, sel.nivelId);
+                }
+                for (const op of procesoDef.operaciones) {
+                    if (!(0, operacion_values_1.operacionTieneNiveles)(op))
+                        continue;
+                    const nivelId = nivelesPorOpRigid.get(op.id);
+                    if (!nivelId) {
+                        throw new common_1.BadRequestException(`El paso "${op.nombre}" tiene variantes. Seleccioná una variante para cotizar.`);
+                    }
+                    const niveles = (0, operacion_values_1.getNivelesActivos)(op.detalleJson);
+                    if (!niveles.some((n) => n.id === nivelId)) {
+                        throw new common_1.BadRequestException(`El nivel seleccionado para el paso "${op.nombre}" no existe o no está activo.`);
+                    }
+                }
                 for (const op of procesoDef.operaciones) {
                     if (!op.centroCosto)
                         continue;
@@ -408,11 +432,12 @@ let ProductosServiciosService = class ProductosServiciosService {
                             periodo, estado: 'PUBLICADA',
                         },
                     });
+                    const resolvedOpRigid = (0, operacion_values_1.resolveOperacionForNivel)(op, nivelesPorOpRigid.get(op.id));
                     const tarifaHora = Number(tarifa?.tarifaCalculada ?? 0);
-                    const setupMin = Number(op.setupMin ?? 0);
-                    const runMinBase = Number(op.runMin ?? 0);
-                    const cleanupMin = Number(op.cleanupMin ?? 0);
-                    const tiempoFijoMin = Number(op.tiempoFijoMin ?? 0);
+                    const setupMin = Number(resolvedOpRigid?.setupMin ?? op.setupMin ?? 0);
+                    const runMinBase = Number(resolvedOpRigid?.runMin ?? op.runMin ?? 0);
+                    const cleanupMin = Number(resolvedOpRigid?.cleanupMin ?? op.cleanupMin ?? 0);
+                    const tiempoFijoMin = Number(resolvedOpRigid?.tiempoFijoMin ?? op.tiempoFijoMin ?? 0);
                     const multDobleFazOp = esDobleFaz0 ? Number(op.multiplicadorDobleFaz ?? 1) : 1;
                     const totalRunMin = runMinBase * cantidad * multDobleFazOp;
                     const totalMin = setupMin + totalRunMin + cleanupMin + tiempoFijoMin;
@@ -800,6 +825,22 @@ let ProductosServiciosService = class ProductosServiciosService {
                 },
             });
             if (procesoDef?.operaciones) {
+                const nivelesPorOpGf = new Map();
+                for (const sel of payload.nivelesSeleccionados ?? []) {
+                    nivelesPorOpGf.set(sel.operacionId, sel.nivelId);
+                }
+                for (const op of procesoDef.operaciones) {
+                    if (!(0, operacion_values_1.operacionTieneNiveles)(op))
+                        continue;
+                    const nivelId = nivelesPorOpGf.get(op.id);
+                    if (!nivelId) {
+                        throw new common_1.BadRequestException(`El paso "${op.nombre}" tiene variantes. Seleccioná una variante para cotizar.`);
+                    }
+                    const niveles = (0, operacion_values_1.getNivelesActivos)(op.detalleJson);
+                    if (!niveles.some((n) => n.id === nivelId)) {
+                        throw new common_1.BadRequestException(`El nivel seleccionado para el paso "${op.nombre}" no existe o no está activo.`);
+                    }
+                }
                 for (const op of procesoDef.operaciones) {
                     if (!op.centroCosto)
                         continue;
@@ -809,8 +850,9 @@ let ProductosServiciosService = class ProductosServiciosService {
                             periodo, estado: 'PUBLICADA',
                         },
                     });
+                    const resolvedOpGf = (0, operacion_values_1.resolveOperacionForNivel)(op, nivelesPorOpGf.get(op.id));
                     const tarifaHora = Number(tarifa?.tarifaCalculada ?? 0);
-                    const setupMin = Number(op.setupMin ?? 0);
+                    const setupMin = Number(resolvedOpGf?.setupMin ?? op.setupMin ?? 0);
                     const multDobleFazOp = esDobleFaz ? Number(op.multiplicadorDobleFaz ?? 1) : 1;
                     const cantidadObjetivoSalida = this.resolveGranFormatoCantidadObjetivoSalida({
                         operacion: op,
@@ -1439,6 +1481,22 @@ let ProductosServiciosService = class ProductosServiciosService {
         const carasVariante = variante.caras ?? client_1.CarasProductoVariante.SIMPLE_FAZ;
         const carasFactor = carasVariante === client_1.CarasProductoVariante.DOBLE_FAZ ? 2 : 1;
         const cortesGuillotina = Math.max(0, (imposicion.cols - 1) + (imposicion.rows - 1)) * guillotinado.tandas;
+        const nivelesPorOperacionTalonario = new Map();
+        for (const sel of payload.nivelesSeleccionados ?? []) {
+            nivelesPorOperacionTalonario.set(sel.operacionId, sel.nivelId);
+        }
+        for (const op of proceso.operaciones) {
+            if (!(0, operacion_values_1.operacionTieneNiveles)(op))
+                continue;
+            const nivelId = nivelesPorOperacionTalonario.get(op.id);
+            if (!nivelId) {
+                throw new common_1.BadRequestException(`El paso "${op.nombre}" tiene variantes. Seleccioná una variante para cotizar.`);
+            }
+            const niveles = (0, operacion_values_1.getNivelesActivos)(op.detalleJson);
+            if (!niveles.some((n) => n.id === nivelId)) {
+                throw new common_1.BadRequestException(`El nivel seleccionado para el paso "${op.nombre}" no existe o no está activo.`);
+            }
+        }
         for (const operacion of proceso.operaciones) {
             const tarifa = tarifaByCentro.get(operacion.centroCostoId);
             if (tarifa === undefined) {
@@ -1451,18 +1509,19 @@ let ProductosServiciosService = class ProductosServiciosService {
             if (tipoOp === client_1.TipoOperacionProceso.IMPRESION || tipoOp === client_1.TipoOperacionProceso.PREPRENSA) {
                 cantidadObjetivo = totalPliegosImpresion;
             }
-            else if (tipoOp === client_1.TipoOperacionProceso.CORTE) {
+            else if (tipoOp === client_1.TipoOperacionProceso.TERMINACION) {
                 cantidadObjetivo = cortesGuillotina;
             }
             else {
                 cantidadObjetivo = cantidadTalonarios;
             }
-            const productividadBase = Number(operacion.productividadBase ?? 0);
-            const setupMin = Number(operacion.setupMin ?? 0);
-            const cleanupMin = Number(operacion.cleanupMin ?? 0);
+            const resolvedOp = (0, operacion_values_1.resolveOperacionForNivel)(operacion, nivelesPorOperacionTalonario.get(operacion.id));
+            const productividadBase = Number(resolvedOp?.productividadBase ?? operacion.productividadBase ?? 0);
+            const setupMin = Number(resolvedOp?.setupMin ?? operacion.setupMin ?? 0);
+            const cleanupMin = Number(resolvedOp?.cleanupMin ?? operacion.cleanupMin ?? 0);
             const runMin = productividadBase > 0
                 ? (cantidadObjetivo / productividadBase)
-                : Number(operacion.runMin ?? 0);
+                : Number(resolvedOp?.runMin ?? operacion.runMin ?? 0);
             const totalMin = setupMin + runMin + cleanupMin;
             const costo = (totalMin / 60) * tarifaHora;
             costoProcesos += costo;
@@ -3056,6 +3115,22 @@ let ProductosServiciosService = class ProductosServiciosService {
             .filter((item) => Boolean(item));
         const warnings = [];
         const operacionesCotizadas = this.buildOperacionesCotizadasOrdenadas(operacionesBase, [], checklistOps, warnings);
+        const nivelesPorOpGfCand = new Map();
+        for (const sel of payload.nivelesSeleccionados ?? []) {
+            nivelesPorOpGfCand.set(sel.operacionId, sel.nivelId);
+        }
+        for (const op of operacionesCotizadas) {
+            if (!(0, operacion_values_1.operacionTieneNiveles)(op))
+                continue;
+            const nivelId = nivelesPorOpGfCand.get(op.id);
+            if (!nivelId) {
+                throw new common_1.BadRequestException(`El paso "${op.nombre}" tiene variantes. Seleccioná una variante para cotizar.`);
+            }
+            const niveles = (0, operacion_values_1.getNivelesActivos)(op.detalleJson);
+            if (!niveles.some((n) => n.id === nivelId)) {
+                throw new common_1.BadRequestException(`El nivel seleccionado para el paso "${op.nombre}" no existe o no está activo.`);
+            }
+        }
         const centroIds = Array.from(new Set(operacionesCotizadas
             .map((item) => item.centroCostoId)
             .filter((value) => Boolean(value))));
@@ -3088,9 +3163,10 @@ let ProductosServiciosService = class ProductosServiciosService {
             const candidateWarnings = [];
             const largoConsumidoMl = this.roundProductNumber(candidate.consumedLengthMm / 1000);
             const centrosCosto = operacionesCotizadas.map((op, index) => {
-                const setupMin = Number(op.setupMin ?? 0);
-                const cleanupMin = Number(op.cleanupMin ?? 0);
-                const tiempoFijoMin = Number(op.tiempoFijoMin ?? 0);
+                const resolvedOpGfCand = (0, operacion_values_1.resolveOperacionForNivel)(op, nivelesPorOpGfCand.get(op.id));
+                const setupMin = Number(resolvedOpGfCand?.setupMin ?? op.setupMin ?? 0);
+                const cleanupMin = Number(resolvedOpGfCand?.cleanupMin ?? op.cleanupMin ?? 0);
+                const tiempoFijoMin = Number(resolvedOpGfCand?.tiempoFijoMin ?? op.tiempoFijoMin ?? 0);
                 const cantidadObjetivoSalida = this.resolveGranFormatoCantidadObjetivoSalida({
                     operacion: op,
                     totalPiezas: totalPiezasGrupo,
@@ -3098,10 +3174,16 @@ let ProductosServiciosService = class ProductosServiciosService {
                     largoConsumidoMl,
                     perimetroTotalMl: perimetroTotalMlGrupo,
                 });
-                const usaSoloTiempoFijo = (op.modoProductividad ?? client_1.ModoProductividadProceso.FIJA) === client_1.ModoProductividadProceso.FIJA &&
-                    Number(op.tiempoFijoMin ?? 0) > 0 &&
-                    Number(op.productividadBase ?? 0) <= 0 &&
-                    Number(op.runMin ?? 0) <= 0;
+                const efectivoModo = resolvedOpGfCand?.modoProductividad ??
+                    op.modoProductividad ??
+                    client_1.ModoProductividadProceso.FIJA;
+                const efectivoProductividad = resolvedOpGfCand?.productividadBase ?? op.productividadBase;
+                const efectivoRunMin = resolvedOpGfCand?.runMin ?? op.runMin;
+                const efectivoUnidadTiempo = resolvedOpGfCand?.unidadTiempo ?? op.unidadTiempo;
+                const usaSoloTiempoFijo = efectivoModo === client_1.ModoProductividadProceso.FIJA &&
+                    Number(tiempoFijoMin) > 0 &&
+                    Number(efectivoProductividad ?? 0) <= 0 &&
+                    Number(efectivoRunMin ?? 0) <= 0;
                 const productividad = usaSoloTiempoFijo
                     ? {
                         runMin: 0,
@@ -3112,12 +3194,12 @@ let ProductosServiciosService = class ProductosServiciosService {
                         warnings: [],
                     }
                     : (0, proceso_productividad_engine_1.evaluateProductividad)({
-                        modoProductividad: op.modoProductividad ?? client_1.ModoProductividadProceso.FIJA,
-                        productividadBase: op.productividadBase,
+                        modoProductividad: efectivoModo,
+                        productividadBase: efectivoProductividad,
                         reglaVelocidadJson: op.reglaVelocidadJson ?? null,
                         reglaMermaJson: op.reglaMermaJson ?? null,
-                        runMin: op.runMin,
-                        unidadTiempo: op.unidadTiempo,
+                        runMin: efectivoRunMin,
+                        unidadTiempo: efectivoUnidadTiempo,
                         mermaRunPct: op.mermaRunPct,
                         mermaSetup: op.mermaSetup,
                         cantidadObjetivoSalida,
@@ -4600,19 +4682,42 @@ let ProductosServiciosService = class ProductosServiciosService {
         const checklistReglasActivas = [];
         const opcionesProductivasPermitidas = this.resolveEffectiveOptionValues(variante);
         const dimensionesBaseConsumidas = this.getProductoDimensionesBaseConsumidas(variante.productoServicio.detalleJson);
-        const matchingBaseVarianteRaw = this.getProductoMatchingBaseByVariante(variante.productoServicio.detalleJson).find((item) => item.varianteId === variante.id)?.matching ?? [];
-        const pasosFijosVarianteRaw = this.getProductoPasosFijosByVariante(variante.productoServicio.detalleJson).find((item) => item.varianteId === variante.id)?.pasos ?? [];
+        const configAsRecord = (config ?? {});
+        const configuracionesImpresionRaw = Array.isArray(configAsRecord.configuracionesImpresion)
+            ? configAsRecord.configuracionesImpresion
+                .filter((item) => typeof item === 'object' && item !== null && item.maquinaId && item.perfilOperativoId)
+                .map((item) => ({
+                tipoImpresion: String(item.tipoImpresion ?? ''),
+                caras: String(item.caras ?? ''),
+                maquinaId: String(item.maquinaId ?? ''),
+                perfilOperativoId: String(item.perfilOperativoId ?? ''),
+            }))
+            : [];
+        const usaNuevoModeloConfigImpresion = configuracionesImpresionRaw.length > 0;
+        const matchingBaseVarianteRaw = usaNuevoModeloConfigImpresion
+            ? []
+            : this.getProductoMatchingBaseByVariante(variante.productoServicio.detalleJson).find((item) => item.varianteId === variante.id)?.matching ?? [];
+        const pasosFijosVarianteRaw = usaNuevoModeloConfigImpresion
+            ? []
+            : this.getProductoPasosFijosByVariante(variante.productoServicio.detalleJson).find((item) => item.varianteId === variante.id)?.pasos ?? [];
         const seleccionesBaseInput = new Map(Array.from(new Map((payload.seleccionesBase ?? []).map((item) => [item.dimension, item])).values()).map((item) => [this.toDimensionOpcionProductiva(item.dimension), this.toValorOpcionProductiva(item.valor)]));
         const atributosTecnicosSeleccionados = new Map();
         for (const dimension of dimensionesBaseConsumidas) {
-            const valoresMatching = Array.from(new Set(matchingBaseVarianteRaw
-                .map((item) => dimension === client_1.DimensionOpcionProductiva.TIPO_IMPRESION
-                ? item.tipoImpresion
-                : item.caras)
-                .filter((value) => Boolean(value))
-                .map((value) => dimension === client_1.DimensionOpcionProductiva.TIPO_IMPRESION
-                ? this.toValorFromTipoImpresion(this.toTipoImpresion(value))
-                : this.toValorFromCaras(this.toCaras(value)))));
+            const valoresMatching = usaNuevoModeloConfigImpresion
+                ? Array.from(new Set(configuracionesImpresionRaw
+                    .map((item) => dimension === client_1.DimensionOpcionProductiva.TIPO_IMPRESION ? item.tipoImpresion : item.caras)
+                    .filter((value) => Boolean(value))
+                    .map((value) => dimension === client_1.DimensionOpcionProductiva.TIPO_IMPRESION
+                    ? this.toValorFromTipoImpresion(this.toTipoImpresion(value))
+                    : this.toValorFromCaras(this.toCaras(value)))))
+                : Array.from(new Set(matchingBaseVarianteRaw
+                    .map((item) => dimension === client_1.DimensionOpcionProductiva.TIPO_IMPRESION
+                    ? item.tipoImpresion
+                    : item.caras)
+                    .filter((value) => Boolean(value))
+                    .map((value) => dimension === client_1.DimensionOpcionProductiva.TIPO_IMPRESION
+                    ? this.toValorFromTipoImpresion(this.toTipoImpresion(value))
+                    : this.toValorFromCaras(this.toCaras(value)))));
             const permitidosVariante = opcionesProductivasPermitidas.get(dimension);
             const allowedValues = valoresMatching.filter((value) => !permitidosVariante || permitidosVariante.has(value));
             if (!allowedValues.length) {
@@ -4644,7 +4749,7 @@ let ProductosServiciosService = class ProductosServiciosService {
                 return item.caras ? this.toValorFromCaras(this.toCaras(item.caras)) === selectedValue : false;
             });
         });
-        if (dimensionesBaseConsumidas.length > 0 && matchingSeleccionado.length === 0) {
+        if (!usaNuevoModeloConfigImpresion && dimensionesBaseConsumidas.length > 0 && matchingSeleccionado.length === 0) {
             throw new common_1.BadRequestException(`Ruta base: no existe un matching para la combinación seleccionada en ${variante.nombre}.`);
         }
         const matchingPlantillaIds = Array.from(new Set(matchingSeleccionado.map((item) => item.pasoPlantillaId)));
@@ -4827,9 +4932,160 @@ let ProductosServiciosService = class ProductosServiciosService {
         const checklistPasoSignatures = new Set(checklistReglasActivas
             .map((item) => this.buildChecklistPasoSignature(item.pasoPlantilla))
             .filter((value) => Boolean(value)));
-        const operacionesBaseCotizadas = proceso.operaciones
+        let configImpresionResuelta = null;
+        if (usaNuevoModeloConfigImpresion) {
+            const tipoSeleccionado = atributosTecnicosSeleccionados.get(client_1.DimensionOpcionProductiva.TIPO_IMPRESION);
+            const carasSeleccionado = atributosTecnicosSeleccionados.get(client_1.DimensionOpcionProductiva.CARAS);
+            const configMatch = configuracionesImpresionRaw.find((cfg) => {
+                const tipoOk = !tipoSeleccionado || this.toValorFromTipoImpresion(this.toTipoImpresion(cfg.tipoImpresion)) === tipoSeleccionado;
+                const carasOk = !carasSeleccionado || this.toValorFromCaras(this.toCaras(cfg.caras)) === carasSeleccionado;
+                return tipoOk && carasOk;
+            }) ?? configuracionesImpresionRaw[0];
+            if (configMatch) {
+                const [maquinaResult, perfilResult] = await Promise.all([
+                    this.prisma.maquina.findUnique({
+                        where: { id: configMatch.maquinaId },
+                        include: { centroCostoPrincipal: true },
+                    }),
+                    this.prisma.maquinaPerfilOperativo.findUnique({
+                        where: { id: configMatch.perfilOperativoId },
+                    }),
+                ]);
+                if (maquinaResult && perfilResult) {
+                    configImpresionResuelta = {
+                        maquinaId: configMatch.maquinaId,
+                        perfilOperativoId: configMatch.perfilOperativoId,
+                        maquina: maquinaResult,
+                        perfilOperativo: perfilResult,
+                    };
+                }
+            }
+        }
+        const opcionalesSeleccionadosSet = new Set(payload.opcionalesSeleccionados ?? []);
+        const nivelesPorOperacion = new Map();
+        for (const sel of payload.nivelesSeleccionados ?? []) {
+            nivelesPorOperacion.set(sel.operacionId, sel.nivelId);
+        }
+        const operacionesActivasAIncluir = proceso.operaciones
             .filter((op) => op.activo)
+            .filter((op) => {
+            if (!op.esOpcional)
+                return true;
+            return opcionalesSeleccionadosSet.has(op.id);
+        });
+        for (const op of operacionesActivasAIncluir) {
+            if (!(0, operacion_values_1.operacionTieneNiveles)(op))
+                continue;
+            const impresionResuelta = usaNuevoModeloConfigImpresion &&
+                op.rol === client_1.RolProcesoOperacion.IMPRESION &&
+                configImpresionResuelta;
+            if (impresionResuelta)
+                continue;
+            const nivelId = nivelesPorOperacion.get(op.id);
+            if (!nivelId) {
+                throw new common_1.BadRequestException(`El paso "${op.nombre}" tiene variantes. Seleccioná una variante para cotizar.`);
+            }
+            const niveles = (0, operacion_values_1.getNivelesActivos)(op.detalleJson);
+            if (!niveles.some((n) => n.id === nivelId)) {
+                throw new common_1.BadRequestException(`El nivel seleccionado para el paso "${op.nombre}" no existe o no está activo.`);
+            }
+        }
+        const maquinaIdsFromNiveles = new Set();
+        const perfilIdsFromNiveles = new Set();
+        for (const op of operacionesActivasAIncluir) {
+            const nivelId = nivelesPorOperacion.get(op.id);
+            if (!nivelId)
+                continue;
+            const niveles = (0, operacion_values_1.getNivelesActivos)(op.detalleJson);
+            const nivel = niveles.find((n) => n.id === nivelId);
+            if (!nivel)
+                continue;
+            if (nivel.maquinaId)
+                maquinaIdsFromNiveles.add(nivel.maquinaId);
+            if (nivel.perfilOperativoId)
+                perfilIdsFromNiveles.add(nivel.perfilOperativoId);
+        }
+        const maquinasExtra = maquinaIdsFromNiveles.size > 0
+            ? await this.prisma.maquina.findMany({
+                where: {
+                    tenantId: auth.tenantId,
+                    id: { in: Array.from(maquinaIdsFromNiveles) },
+                },
+            })
+            : [];
+        const maquinasExtraMap = new Map(maquinasExtra.map((m) => [m.id, m]));
+        const perfilesExtra = perfilIdsFromNiveles.size > 0
+            ? await this.prisma.maquinaPerfilOperativo.findMany({
+                where: {
+                    tenantId: auth.tenantId,
+                    id: { in: Array.from(perfilIdsFromNiveles) },
+                },
+            })
+            : [];
+        const perfilesExtraMap = new Map(perfilesExtra.map((p) => [p.id, p]));
+        const operacionesBaseCotizadas = operacionesActivasAIncluir
             .map((op) => {
+            if (usaNuevoModeloConfigImpresion && op.rol === client_1.RolProcesoOperacion.IMPRESION && configImpresionResuelta) {
+                return {
+                    ...op,
+                    maquinaId: configImpresionResuelta.maquinaId,
+                    maquina: configImpresionResuelta.maquina,
+                    perfilOperativoId: configImpresionResuelta.perfilOperativoId,
+                    perfilOperativo: configImpresionResuelta.perfilOperativo,
+                    setupMin: configImpresionResuelta.perfilOperativo.setupMin !== null
+                        ? configImpresionResuelta.perfilOperativo.setupMin
+                        : op.setupMin,
+                    cleanupMin: configImpresionResuelta.perfilOperativo.cleanupMin !== null
+                        ? configImpresionResuelta.perfilOperativo.cleanupMin
+                        : op.cleanupMin,
+                    productividadBase: configImpresionResuelta.perfilOperativo.productivityValue !== null
+                        ? configImpresionResuelta.perfilOperativo.productivityValue
+                        : op.productividadBase,
+                    detalleJson: {
+                        ...this.asObject(op.detalleJson),
+                        perfilOperativoId: configImpresionResuelta.perfilOperativoId,
+                        maquinaId: configImpresionResuelta.maquinaId,
+                        configImpresionVariante: true,
+                    },
+                };
+            }
+            if ((0, operacion_values_1.operacionTieneNiveles)(op)) {
+                const nivelId = nivelesPorOperacion.get(op.id);
+                const resolved = (0, operacion_values_1.resolveOperacionForNivel)(op, nivelId);
+                if (resolved && resolved.nivelId !== null) {
+                    const nuevaMaquina = resolved.maquinaId
+                        ? maquinasExtraMap.get(resolved.maquinaId) ?? op.maquina
+                        : op.maquina;
+                    const nuevoPerfil = resolved.perfilOperativoId
+                        ? perfilesExtraMap.get(resolved.perfilOperativoId) ?? op.perfilOperativo
+                        : op.perfilOperativo;
+                    return {
+                        ...op,
+                        maquinaId: resolved.maquinaId ?? op.maquinaId,
+                        maquina: nuevaMaquina,
+                        perfilOperativoId: resolved.perfilOperativoId ?? op.perfilOperativoId,
+                        perfilOperativo: nuevoPerfil,
+                        modoProductividad: resolved.modoProductividad,
+                        productividadBase: resolved.productividadBase !== null
+                            ? resolved.productividadBase
+                            : op.productividadBase,
+                        tiempoFijoMin: resolved.tiempoFijoMin !== null
+                            ? resolved.tiempoFijoMin
+                            : op.tiempoFijoMin,
+                        setupMin: resolved.setupMin !== null ? resolved.setupMin : op.setupMin,
+                        cleanupMin: resolved.cleanupMin !== null
+                            ? resolved.cleanupMin
+                            : op.cleanupMin,
+                        unidadSalida: resolved.unidadSalida,
+                        unidadTiempo: resolved.unidadTiempo,
+                        detalleJson: {
+                            ...this.asObject(op.detalleJson),
+                            nivelResueltoId: resolved.nivelId,
+                            nivelResueltoNombre: resolved.nivelNombre,
+                        },
+                    };
+                }
+            }
             const pasoPlantillaId = this.getPasoPlantillaIdFromDetalle(op.detalleJson) ??
                 this.resolvePasoPlantillaIdFromOperacionRuta(op, matchingPlantillas);
             const matchingSeleccion = pasoPlantillaId
@@ -4923,6 +5179,33 @@ let ProductosServiciosService = class ProductosServiciosService {
             })),
         }));
         const operacionesCotizadas = this.buildOperacionesCotizadasOrdenadas(operacionesBaseCotizadas, operacionesRouteEffect, checklistOperacionesActivadas, conflictosMatchingRutaWarnings);
+        const pasoCorteId = typeof config.pasoCorteId === 'string' && config.pasoCorteId ? config.pasoCorteId : null;
+        if (pasoCorteId) {
+            const pasoCorte = await this.prisma.procesoOperacionPlantilla.findFirst({
+                where: { tenantId: auth.tenantId, id: pasoCorteId, activo: true },
+                include: { centroCosto: true, maquina: true, perfilOperativo: true },
+            });
+            if (pasoCorte && pasoCorte.centroCosto) {
+                const maxOrden = operacionesCotizadas.reduce((max, op) => Math.max(max, op.orden), 0);
+                operacionesCotizadas.push({
+                    ...pasoCorte,
+                    id: `_paso_corte_${pasoCorte.id}`,
+                    orden: maxOrden + 1,
+                    codigo: pasoCorte.nombre,
+                    nombre: pasoCorte.nombre,
+                    centroCostoId: pasoCorte.centroCosto.id,
+                    centroCosto: pasoCorte.centroCosto,
+                    maquinaId: pasoCorte.maquinaId,
+                    maquina: pasoCorte.maquina,
+                    perfilOperativoId: pasoCorte.perfilOperativoId,
+                    perfilOperativo: pasoCorte.perfilOperativo,
+                    unidadEntrada: pasoCorte.unidadEntrada,
+                    unidadSalida: pasoCorte.unidadSalida,
+                    unidadTiempo: pasoCorte.unidadTiempo,
+                    detalleJson: pasoCorte.detalleJson ?? {},
+                });
+            }
+        }
         if (operacionesCotizadas.length === 0) {
             throw new common_1.BadRequestException('La ruta no tiene pasos activos para la selección actual.');
         }
@@ -5092,6 +5375,7 @@ let ProductosServiciosService = class ProductosServiciosService {
                     cols: imposicion.cols,
                     rows: imposicion.rows,
                     tipoCorte: imposicion.tipoCorte,
+                    demasiaCorteMm: imposicion.demasiaCorteMm,
                 },
                 pliegoAnchoMm: pliegoImpresion.anchoMm,
                 pliegoAltoMm: pliegoImpresion.altoMm,
@@ -6860,7 +7144,7 @@ let ProductosServiciosService = class ProductosServiciosService {
                     productoAdicionalRouteEffectId: route.id,
                     orden: paso.orden ?? index + 1,
                     nombre: paso.nombre.trim(),
-                    tipoOperacion: client_1.TipoOperacionProceso.OTRO,
+                    tipoOperacion: client_1.TipoOperacionProceso.PREPRENSA,
                     centroCostoId: paso.centroCostoId,
                     setupMin: paso.setupMin ?? null,
                     runMin: paso.runMin ?? null,
@@ -9121,9 +9405,10 @@ let ProductosServiciosService = class ProductosServiciosService {
     }
     getDefaultMotorConfig() {
         return {
-            tipoCorte: 'sin_demasia',
+            tipoCorte: 'guillotina',
             demasiaCorteMm: 0,
             lineaCorteMm: 3,
+            pasoCorteId: null,
             tamanoPliegoImpresion: {
                 codigo: 'A4',
                 nombre: 'A4',
@@ -9131,6 +9416,12 @@ let ProductosServiciosService = class ProductosServiciosService {
                 altoMm: 297,
             },
             mermaAdicionalPct: 0,
+            troquelado: {
+                anchoUtilPlotterMm: 290,
+                altoUtilPlotterMm: 420,
+                separacionEntreContornosMm: 3,
+                sangriadoTroquelMm: 3,
+            },
         };
     }
     getDefaultWideFormatMotorConfig() {
@@ -9172,10 +9463,11 @@ let ProductosServiciosService = class ProductosServiciosService {
                 anchoMm: 210,
                 altoMm: 297,
             },
-            tipoCorte: 'sin_demasia',
+            tipoCorte: 'guillotina',
             demasiaCorteMm: 0,
             lineaCorteMm: 3,
             mermaAdicionalPct: 0,
+            pasoCorteId: null,
             numerosXTalonarioDefault: 50,
             tipoCopiaDefiniciones: [
                 {
@@ -9437,15 +9729,42 @@ let ProductosServiciosService = class ProductosServiciosService {
         return this.resolveMachineMarginsMm(operacionesCotizadas);
     }
     calculateImposicion(input) {
-        const tipoCorte = String(input.config.tipoCorte ?? 'sin_demasia');
-        const demasiaRaw = Number(input.config.demasiaCorteMm ?? 0);
-        const demasiaCorteMm = tipoCorte === 'con_demasia' && Number.isFinite(demasiaRaw) ? Math.max(0, demasiaRaw) : 0;
-        const lineaCorteRaw = Number(input.config.lineaCorteMm ?? 3);
+        const rawTipoCorte = String(input.config.tipoCorte ?? 'sin_demasia');
+        const tipoCorte = rawTipoCorte === 'sin_corte' || rawTipoCorte === 'guillotina' || rawTipoCorte === 'corte_manual' || rawTipoCorte === 'troquelado'
+            ? rawTipoCorte
+            : 'guillotina';
+        const troquelado = (input.config.troquelado && typeof input.config.troquelado === 'object' && !Array.isArray(input.config.troquelado))
+            ? input.config.troquelado
+            : {};
+        const demasiaRaw = tipoCorte === 'troquelado'
+            ? Number(troquelado.sangriadoTroquelMm ?? 3)
+            : Number(input.config.demasiaCorteMm ?? 0);
+        const demasiaCorteMm = (tipoCorte !== 'sin_corte') && Number.isFinite(demasiaRaw) ? Math.max(0, demasiaRaw) : 0;
+        const lineaCorteRaw = tipoCorte === 'troquelado'
+            ? 0
+            : (tipoCorte === 'sin_corte' ? 0 : Number(input.config.lineaCorteMm ?? 3));
         const lineaCorteMm = Number.isFinite(lineaCorteRaw) ? Math.max(0, lineaCorteRaw) : 3;
-        const piezaAnchoEfectivoMm = input.varianteAnchoMm + 2 * demasiaCorteMm;
-        const piezaAltoEfectivoMm = input.varianteAltoMm + 2 * demasiaCorteMm;
-        const anchoImprimible = input.sheetAnchoMm - input.machineMargins.leftMm - input.machineMargins.rightMm;
-        const altoImprimible = input.sheetAltoMm - input.machineMargins.topMm - input.machineMargins.bottomMm;
+        const separacionEntrePiezasMm = tipoCorte === 'troquelado'
+            ? Math.max(0, Number(troquelado.separacionEntreContornosMm ?? 3))
+            : 0;
+        const piezaAnchoEfectivoMm = input.varianteAnchoMm + 2 * demasiaCorteMm + separacionEntrePiezasMm;
+        const piezaAltoEfectivoMm = input.varianteAltoMm + 2 * demasiaCorteMm + separacionEntrePiezasMm;
+        let marginLeftMm = input.machineMargins.leftMm;
+        let marginRightMm = input.machineMargins.rightMm;
+        let marginTopMm = input.machineMargins.topMm;
+        let marginBottomMm = input.machineMargins.bottomMm;
+        if (tipoCorte === 'troquelado') {
+            const anchoUtilPlotter = Math.min(input.sheetAnchoMm, Math.max(0, Number(troquelado.anchoUtilPlotterMm ?? input.sheetAnchoMm - 20)));
+            const altoUtilPlotter = Math.min(input.sheetAltoMm, Math.max(0, Number(troquelado.altoUtilPlotterMm ?? input.sheetAltoMm - 20)));
+            const plotterMarginH = Math.max(0, (input.sheetAnchoMm - anchoUtilPlotter) / 2);
+            const plotterMarginV = Math.max(0, (input.sheetAltoMm - altoUtilPlotter) / 2);
+            marginLeftMm = Math.max(marginLeftMm, plotterMarginH);
+            marginRightMm = Math.max(marginRightMm, plotterMarginH);
+            marginTopMm = Math.max(marginTopMm, plotterMarginV);
+            marginBottomMm = Math.max(marginBottomMm, plotterMarginV);
+        }
+        const anchoImprimible = input.sheetAnchoMm - marginLeftMm - marginRightMm;
+        const altoImprimible = input.sheetAltoMm - marginTopMm - marginBottomMm;
         const anchoDisponible = anchoImprimible - 2 * lineaCorteMm;
         const altoDisponible = altoImprimible - 2 * lineaCorteMm;
         const normalCols = Math.floor(anchoDisponible / piezaAnchoEfectivoMm);
@@ -9543,8 +9862,11 @@ let ProductosServiciosService = class ProductosServiciosService {
         if (cols <= 0 || rows <= 0) {
             return 0;
         }
-        const tipoCorte = String(input.tipoCorte ?? 'sin_demasia').trim().toLowerCase();
-        if (tipoCorte === 'con_demasia') {
+        const rawTipoCorte = String(input.tipoCorte ?? 'guillotina').trim().toLowerCase();
+        if (rawTipoCorte === 'sin_corte' || rawTipoCorte === 'troquelado') {
+            return 0;
+        }
+        if (rawTipoCorte === 'con_demasia' || (input.demasiaCorteMm ?? 0) > 0) {
             return cols * 2 + rows * 2;
         }
         return cols + rows + 2;
@@ -9591,6 +9913,7 @@ let ProductosServiciosService = class ProductosServiciosService {
                 cols: input.imposicion?.cols ?? 0,
                 rows: input.imposicion?.rows ?? 0,
                 tipoCorte: input.imposicion?.tipoCorte,
+                demasiaCorteMm: input.imposicion?.demasiaCorteMm,
             });
             if (cortesPorImposicion <= 0) {
                 throw new common_1.BadRequestException('No se pudo derivar la cantidad de cortes de guillotina desde la imposición.');

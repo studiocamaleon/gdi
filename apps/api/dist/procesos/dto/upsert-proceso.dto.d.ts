@@ -61,6 +61,9 @@ export declare enum UnidadProcesoDto {
     litro = "litro",
     lote = "lote"
 }
+export declare enum RolProcesoOperacionDto {
+    impresion = "impresion"
+}
 export declare enum BaseCalculoProductividadDto {
     cantidad = "cantidad",
     area_total_m2 = "area_total_m2",
@@ -91,6 +94,8 @@ export declare class ProcesoOperacionItemDto {
     reglaMerma?: Record<string, unknown>;
     detalle?: Record<string, unknown>;
     baseCalculoProductividad?: BaseCalculoProductividadDto;
+    rol?: RolProcesoOperacionDto;
+    esOpcional?: boolean;
     niveles?: ProcesoOperacionNivelDto[];
     activo: boolean;
 }

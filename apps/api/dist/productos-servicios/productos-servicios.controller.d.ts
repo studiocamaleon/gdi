@@ -1876,7 +1876,7 @@ export declare class ProductosServiciosController {
                 panelMaxWidth: number | null;
                 panelDistribution: "equilibrada" | "libre" | null;
                 panelWidthInterpretation: "total" | "util" | null;
-                panelMode: "automatico" | "manual" | null;
+                panelMode: "manual" | "automatico" | null;
                 pieces: {
                     id: string;
                     w: number;
@@ -1932,7 +1932,7 @@ export declare class ProductosServiciosController {
             panelMaxWidth: number | null;
             panelDistribution: "equilibrada" | "libre" | null;
             panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "automatico" | "manual" | null;
+            panelMode: "manual" | "automatico" | null;
             pieces: {
                 id: string;
                 w: number;
@@ -2283,7 +2283,7 @@ export declare class ProductosServiciosController {
             marginRightMm: number;
             marginStartMm: number;
             marginEndMm: number;
-            orientacion: "normal" | "rotada" | "mixta";
+            orientacion: "rotada" | "normal" | "mixta";
             panelizado: boolean;
             panelAxis: "vertical" | "horizontal" | null;
             panelCount: number;
@@ -2291,7 +2291,7 @@ export declare class ProductosServiciosController {
             panelMaxWidthMm: number | null;
             panelDistribution: "equilibrada" | "libre" | null;
             panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "automatico" | "manual" | null;
+            panelMode: "manual" | "automatico" | null;
             piecesPerRow: number;
             rows: number;
             consumedLengthMm: number;
@@ -2381,7 +2381,7 @@ export declare class ProductosServiciosController {
             marginRightMm: number;
             marginStartMm: number;
             marginEndMm: number;
-            orientacion: "normal" | "rotada" | "mixta";
+            orientacion: "rotada" | "normal" | "mixta";
             panelizado: boolean;
             panelAxis: "vertical" | "horizontal" | null;
             panelCount: number;
@@ -2389,7 +2389,7 @@ export declare class ProductosServiciosController {
             panelMaxWidthMm: number | null;
             panelDistribution: "equilibrada" | "libre" | null;
             panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "automatico" | "manual" | null;
+            panelMode: "manual" | "automatico" | null;
             piecesPerRow: number;
             rows: number;
             consumedLengthMm: number;

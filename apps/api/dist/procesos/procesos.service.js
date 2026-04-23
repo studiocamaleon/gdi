@@ -19,6 +19,7 @@ const pagination_dto_1 = require("../common/dto/pagination.dto");
 const prisma_service_1 = require("../prisma/prisma.service");
 const upsert_proceso_dto_1 = require("./dto/upsert-proceso.dto");
 const proceso_productividad_engine_1 = require("./proceso-productividad.engine");
+const operacion_values_1 = require("./utils/operacion-values");
 const DEFAULT_PERIOD_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
 let ProcesosService = class ProcesosService {
     static { ProcesosService_1 = this; }
@@ -257,6 +258,11 @@ let ProcesosService = class ProcesosService {
             if (unitWarning) {
                 warnings.push(unitWarning);
             }
+            const nivelesDelPaso = (0, operacion_values_1.getNivelesActivos)(operacion.detalleJson);
+            const tieneNivelesPaso = nivelesDelPaso.length > 0;
+            if (tieneNivelesPaso) {
+                warnings.push(`Este paso tiene ${nivelesDelPaso.length} variante${nivelesDelPaso.length > 1 ? 's' : ''}; la simulación usa los valores generales, cada variante puede cotizar distinto.`);
+            }
             return {
                 operacionId: operacion.id,
                 orden: operacion.orden,
@@ -279,6 +285,25 @@ let ProcesosService = class ProcesosService {
                 mermaSetupAplicada,
                 mermaRunPctAplicada,
                 modoProductividad: this.toApiModoProductividad(operacion.modoProductividad),
+                tieneNiveles: tieneNivelesPaso,
+                nivelesCount: nivelesDelPaso.length,
+                nivelesSnapshots: tieneNivelesPaso
+                    ? nivelesDelPaso.map((nivel) => ({
+                        nivelId: nivel.id,
+                        nombre: nivel.nombre,
+                        maquinaId: nivel.maquinaId,
+                        maquinaNombre: nivel.maquinaNombre,
+                        perfilOperativoId: nivel.perfilOperativoId,
+                        perfilOperativoNombre: nivel.perfilOperativoNombre,
+                        modoProductividadNivel: nivel.modoProductividadNivel,
+                        productividadBase: nivel.productividadBase,
+                        tiempoFijoMin: nivel.tiempoFijoMin,
+                        setupMin: nivel.setupMin,
+                        cleanupMin: nivel.cleanupMin,
+                        unidadSalida: nivel.unidadSalida,
+                        unidadTiempo: nivel.unidadTiempo,
+                    }))
+                    : [],
                 warnings: Array.from(new Set(warnings)),
             };
         });
@@ -469,6 +494,8 @@ let ProcesosService = class ProcesosService {
             reglaVelocidadJson: undefined,
             reglaMermaJson: this.toNullableJson(payload.reglaMerma),
             detalleJson: this.buildOperacionDetalleJson(payload.detalle, payload.niveles, payload.baseCalculoProductividad),
+            rol: payload.rol ? this.toPrismaRol(payload.rol) : null,
+            esOpcional: payload.esOpcional ?? false,
             activo: payload.activo,
         };
     }
@@ -500,6 +527,7 @@ let ProcesosService = class ProcesosService {
     toPrismaTipoOperacion(value) {
         switch (value) {
             case upsert_proceso_dto_1.TipoOperacionProcesoDto.preprensa:
+            case upsert_proceso_dto_1.TipoOperacionProcesoDto.servicio:
                 return client_1.TipoOperacionProceso.PREPRENSA;
             case upsert_proceso_dto_1.TipoOperacionProcesoDto.prensa:
                 return client_1.TipoOperacionProceso.IMPRESION;
@@ -510,35 +538,40 @@ let ProcesosService = class ProcesosService {
                 return client_1.TipoOperacionProceso.LOGISTICA;
             case upsert_proceso_dto_1.TipoOperacionProcesoDto.entrega_despacho:
                 return client_1.TipoOperacionProceso.EMPAQUE;
-            case upsert_proceso_dto_1.TipoOperacionProcesoDto.servicio:
-                return client_1.TipoOperacionProceso.OTRO;
             default:
-                return client_1.TipoOperacionProceso.OTRO;
+                return client_1.TipoOperacionProceso.PREPRENSA;
         }
     }
     fromPrismaTipoOperacion(value) {
         switch (value) {
             case client_1.TipoOperacionProceso.PREPRENSA:
-            case client_1.TipoOperacionProceso.PREFLIGHT:
-            case client_1.TipoOperacionProceso.OTRO:
                 return upsert_proceso_dto_1.TipoOperacionProcesoDto.preprensa;
             case client_1.TipoOperacionProceso.IMPRESION:
                 return upsert_proceso_dto_1.TipoOperacionProcesoDto.prensa;
+            case client_1.TipoOperacionProceso.TERMINACION:
+                return upsert_proceso_dto_1.TipoOperacionProcesoDto.postprensa;
             case client_1.TipoOperacionProceso.LOGISTICA:
                 return upsert_proceso_dto_1.TipoOperacionProcesoDto.instalacion;
             case client_1.TipoOperacionProceso.EMPAQUE:
                 return upsert_proceso_dto_1.TipoOperacionProcesoDto.entrega_despacho;
-            case client_1.TipoOperacionProceso.LAMINADO:
-            case client_1.TipoOperacionProceso.CORTE:
-            case client_1.TipoOperacionProceso.MECANIZADO:
-            case client_1.TipoOperacionProceso.GRABADO:
-            case client_1.TipoOperacionProceso.CURADO:
-            case client_1.TipoOperacionProceso.TRANSFERENCIA:
-            case client_1.TipoOperacionProceso.TERMINACION:
-            case client_1.TipoOperacionProceso.CONTROL_CALIDAD:
-            case client_1.TipoOperacionProceso.TERCERIZADO:
             default:
-                return upsert_proceso_dto_1.TipoOperacionProcesoDto.postprensa;
+                return upsert_proceso_dto_1.TipoOperacionProcesoDto.preprensa;
+        }
+    }
+    toPrismaRol(value) {
+        switch (value) {
+            case upsert_proceso_dto_1.RolProcesoOperacionDto.impresion:
+                return client_1.RolProcesoOperacion.IMPRESION;
+            default:
+                return client_1.RolProcesoOperacion.IMPRESION;
+        }
+    }
+    fromPrismaRol(value) {
+        switch (value) {
+            case client_1.RolProcesoOperacion.IMPRESION:
+                return upsert_proceso_dto_1.RolProcesoOperacionDto.impresion;
+            default:
+                return upsert_proceso_dto_1.RolProcesoOperacionDto.impresion;
         }
     }
     buildOperacionDetalleJson(detalle, niveles = [], baseCalculoProductividad) {
@@ -997,6 +1030,15 @@ let ProcesosService = class ProcesosService {
             if (operacion.centroCostoId) {
                 return true;
             }
+            const nivelesActivos = (operacion.niveles ?? []).filter((n) => n.activo !== false);
+            if (nivelesActivos.length > 0) {
+                return nivelesActivos.every((nivel) => {
+                    if (!nivel.maquinaId)
+                        return false;
+                    const maquina = references.maquinasById.get(nivel.maquinaId);
+                    return Boolean(maquina?.centroCostoPrincipalId);
+                });
+            }
             if (!operacion.maquinaId) {
                 return false;
             }
@@ -1007,6 +1049,15 @@ let ProcesosService = class ProcesosService {
             return upsert_proceso_dto_1.EstadoConfiguracionProcesoDto.incompleta;
         }
         const hasAllOperationsCostingSignals = payload.operaciones.every((operacion) => {
+            const nivelesActivos = (operacion.niveles ?? []).filter((n) => n.activo !== false);
+            if (nivelesActivos.length > 0) {
+                return nivelesActivos.every((nivel) => {
+                    if (nivel.modoProductividadNivel === 'fija') {
+                        return (nivel.tiempoFijoMin ?? 0) > 0;
+                    }
+                    return (nivel.productividadBase ?? 0) > 0;
+                });
+            }
             const derived = this.deriveOperationDefaultsFromPayload(operacion, references);
             return (derived.setupMin !== null ||
                 operacion.runMin !== undefined ||
@@ -1071,11 +1122,14 @@ let ProcesosService = class ProcesosService {
             }
             const modoProductividad = this.resolveModoProductividadFromPayload(operacion);
             const derived = this.deriveOperationDefaultsFromPayload(operacion, references);
-            if (modoProductividad === client_1.ModoProductividadProceso.FIJA &&
+            const tieneNiveles = (operacion.niveles?.length ?? 0) > 0;
+            if (!tieneNiveles &&
+                modoProductividad === client_1.ModoProductividadProceso.FIJA &&
                 (!operacion.tiempoFijoMin || operacion.tiempoFijoMin <= 0)) {
                 throw new common_1.BadRequestException(`La operacion ${operacion.nombre.trim()} en modo fija requiere Tiempo fijo (min) mayor a 0.`);
             }
-            if (modoProductividad === client_1.ModoProductividadProceso.FORMULA &&
+            if (!tieneNiveles &&
+                modoProductividad === client_1.ModoProductividadProceso.FORMULA &&
                 (!derived.productividadBase || Number(derived.productividadBase) <= 0)) {
                 throw new common_1.BadRequestException(`La operacion ${operacion.nombre.trim()} en modo variable requiere Productividad base mayor a 0 (manual o desde perfil).`);
             }
@@ -1510,6 +1564,8 @@ let ProcesosService = class ProcesosService {
                 baseCalculoProductividad: this.getOperacionDetalle(operacion.detalleJson)?.baseCalculoProductividad ??
                     null,
                 niveles: this.getOperacionNiveles(operacion.detalleJson),
+                rol: operacion.rol ? this.fromPrismaRol(operacion.rol) : null,
+                esOpcional: operacion.esOpcional,
                 activo: operacion.activo,
                 warnings: this.getOperationWarnings(operacion),
             })),
@@ -1527,6 +1583,7 @@ let ProcesosService = class ProcesosService {
             centroCostoNombre: item.centroCosto?.nombre ?? '',
             maquinaId: item.maquinaId ?? null,
             maquinaNombre: item.maquina?.nombre ?? '',
+            maquinaPlantilla: item.maquina?.plantilla ?? null,
             perfilOperativoId: item.perfilOperativoId ?? null,
             perfilOperativoNombre: item.perfilOperativo?.nombre ?? '',
             setupMin: this.decimalToNumberOrNull(item.setupMin),

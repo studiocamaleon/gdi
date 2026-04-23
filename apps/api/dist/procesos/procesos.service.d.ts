@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { PrismaService } from '../prisma/prisma.service';
-import { EstadoConfiguracionProcesoDto, ModoProductividadProcesoDto, type PlantillaMaquinariaDto, TipoOperacionProcesoDto, UnidadProcesoDto, UpsertProcesoDto } from './dto/upsert-proceso.dto';
+import { EstadoConfiguracionProcesoDto, ModoProductividadProcesoDto, type PlantillaMaquinariaDto, RolProcesoOperacionDto, TipoOperacionProcesoDto, UnidadProcesoDto, UpsertProcesoDto } from './dto/upsert-proceso.dto';
 import { UpsertProcesoOperacionPlantillaDto } from './dto/upsert-proceso-operacion-plantilla.dto';
 import { BulkAssignEstacionPlantillasDto } from './dto/bulk-assign-estacion-plantillas.dto';
 import { EvaluarProcesoCostoDto } from './dto/evaluar-proceso-costo.dto';
@@ -72,6 +72,8 @@ export declare class ProcesosService {
                     resumen: string;
                     detalle: Record<string, unknown> | null;
                 }[];
+                rol: RolProcesoOperacionDto | null;
+                esOpcional: boolean;
                 activo: boolean;
                 warnings: string[];
             }[];
@@ -91,6 +93,7 @@ export declare class ProcesosService {
         centroCostoNombre: string;
         maquinaId: string | null;
         maquinaNombre: string;
+        maquinaPlantilla: import("@prisma/client").$Enums.PlantillaMaquinaria | null;
         perfilOperativoId: string | null;
         perfilOperativoNombre: string;
         setupMin: number | null;
@@ -142,6 +145,7 @@ export declare class ProcesosService {
         centroCostoNombre: string;
         maquinaId: string | null;
         maquinaNombre: string;
+        maquinaPlantilla: import("@prisma/client").$Enums.PlantillaMaquinaria | null;
         perfilOperativoId: string | null;
         perfilOperativoNombre: string;
         setupMin: number | null;
@@ -193,6 +197,7 @@ export declare class ProcesosService {
         centroCostoNombre: string;
         maquinaId: string | null;
         maquinaNombre: string;
+        maquinaPlantilla: import("@prisma/client").$Enums.PlantillaMaquinaria | null;
         perfilOperativoId: string | null;
         perfilOperativoNombre: string;
         setupMin: number | null;
@@ -244,6 +249,7 @@ export declare class ProcesosService {
         centroCostoNombre: string;
         maquinaId: string | null;
         maquinaNombre: string;
+        maquinaPlantilla: import("@prisma/client").$Enums.PlantillaMaquinaria | null;
         perfilOperativoId: string | null;
         perfilOperativoNombre: string;
         setupMin: number | null;
@@ -295,6 +301,7 @@ export declare class ProcesosService {
         centroCostoNombre: string;
         maquinaId: string | null;
         maquinaNombre: string;
+        maquinaPlantilla: import("@prisma/client").$Enums.PlantillaMaquinaria | null;
         perfilOperativoId: string | null;
         perfilOperativoNombre: string;
         setupMin: number | null;
@@ -398,6 +405,8 @@ export declare class ProcesosService {
                 resumen: string;
                 detalle: Record<string, unknown> | null;
             }[];
+            rol: RolProcesoOperacionDto | null;
+            esOpcional: boolean;
             activo: boolean;
             warnings: string[];
         }[];
@@ -441,6 +450,23 @@ export declare class ProcesosService {
             mermaSetupAplicada: number;
             mermaRunPctAplicada: number;
             modoProductividad: ModoProductividadProcesoDto;
+            tieneNiveles: boolean;
+            nivelesCount: number;
+            nivelesSnapshots: {
+                nivelId: string;
+                nombre: string;
+                maquinaId: string | null;
+                maquinaNombre: string;
+                perfilOperativoId: string | null;
+                perfilOperativoNombre: string;
+                modoProductividadNivel: import("./utils/operacion-values").ModoProductividadNivel;
+                productividadBase: number | null;
+                tiempoFijoMin: number | null;
+                setupMin: number | null;
+                cleanupMin: number | null;
+                unidadSalida: string | null;
+                unidadTiempo: string | null;
+            }[];
             warnings: string[];
         }[];
         advertencias: string[];
@@ -477,6 +503,23 @@ export declare class ProcesosService {
             mermaSetupAplicada: number;
             mermaRunPctAplicada: number;
             modoProductividad: ModoProductividadProcesoDto;
+            tieneNiveles: boolean;
+            nivelesCount: number;
+            nivelesSnapshots: {
+                nivelId: string;
+                nombre: string;
+                maquinaId: string | null;
+                maquinaNombre: string;
+                perfilOperativoId: string | null;
+                perfilOperativoNombre: string;
+                modoProductividadNivel: import("./utils/operacion-values").ModoProductividadNivel;
+                productividadBase: number | null;
+                tiempoFijoMin: number | null;
+                setupMin: number | null;
+                cleanupMin: number | null;
+                unidadSalida: string | null;
+                unidadTiempo: string | null;
+            }[];
             warnings: string[];
         }[];
         advertencias: string[];
@@ -543,6 +586,8 @@ export declare class ProcesosService {
                 resumen: string;
                 detalle: Record<string, unknown> | null;
             }[];
+            rol: RolProcesoOperacionDto | null;
+            esOpcional: boolean;
             activo: boolean;
             warnings: string[];
         }[];
@@ -609,6 +654,8 @@ export declare class ProcesosService {
                 resumen: string;
                 detalle: Record<string, unknown> | null;
             }[];
+            rol: RolProcesoOperacionDto | null;
+            esOpcional: boolean;
             activo: boolean;
             warnings: string[];
         }[];
@@ -675,6 +722,8 @@ export declare class ProcesosService {
                 resumen: string;
                 detalle: Record<string, unknown> | null;
             }[];
+            rol: RolProcesoOperacionDto | null;
+            esOpcional: boolean;
             activo: boolean;
             warnings: string[];
         }[];
@@ -688,6 +737,8 @@ export declare class ProcesosService {
     private buildBibliotecaOperacionData;
     private toPrismaTipoOperacion;
     private fromPrismaTipoOperacion;
+    private toPrismaRol;
+    private fromPrismaRol;
     private buildOperacionDetalleJson;
     private getOperacionDetalle;
     private getOperacionNiveles;

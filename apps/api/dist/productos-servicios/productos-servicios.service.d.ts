@@ -587,7 +587,7 @@ export declare class ProductosServiciosService {
             panelMaxWidth: number | null;
             panelDistribution: "equilibrada" | "libre" | null;
             panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "automatico" | "manual" | null;
+            panelMode: "manual" | "automatico" | null;
             pieces: {
                 id: string;
                 w: number;
@@ -716,7 +716,7 @@ export declare class ProductosServiciosService {
                 panelMaxWidth: number | null;
                 panelDistribution: "equilibrada" | "libre" | null;
                 panelWidthInterpretation: "total" | "util" | null;
-                panelMode: "automatico" | "manual" | null;
+                panelMode: "manual" | "automatico" | null;
                 pieces: {
                     id: string;
                     w: number;
@@ -2039,7 +2039,7 @@ export declare class ProductosServiciosService {
             panelMaxWidthMm: number | null;
             panelDistribution: "equilibrada" | "libre" | null;
             panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "automatico" | "manual" | null;
+            panelMode: "manual" | "automatico" | null;
             piecesPerRow: number;
             rows: number;
             consumedLengthMm: number;
@@ -2126,7 +2126,7 @@ export declare class ProductosServiciosService {
             panelMaxWidthMm: number | null;
             panelDistribution: "equilibrada" | "libre" | null;
             panelWidthInterpretation: "total" | "util" | null;
-            panelMode: "automatico" | "manual" | null;
+            panelMode: "manual" | "automatico" | null;
             piecesPerRow: number;
             rows: number;
             consumedLengthMm: number;

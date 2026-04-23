@@ -506,6 +506,7 @@ export declare class PreviewGranFormatoCostosDto {
     incluirCandidatos?: boolean;
     medidas: PreviewGranFormatoCostoMedidaDto[];
     checklistRespuestas?: CotizarChecklistRespuestaDto[];
+    nivelesSeleccionados?: CotizarNivelSeleccionadoDto[];
     panelizado?: {
         activo?: boolean;
         modo?: GranFormatoPanelizadoModoDto | null;
@@ -522,7 +523,13 @@ export declare class CotizarProductoVarianteDto {
     periodo?: string;
     checklistRespuestas?: CotizarChecklistRespuestaDto[];
     seleccionesBase?: CotizarSeleccionBaseDto[];
+    opcionalesSeleccionados?: string[];
+    nivelesSeleccionados?: CotizarNivelSeleccionadoDto[];
     parametros?: Record<string, unknown>;
+}
+export declare class CotizarNivelSeleccionadoDto {
+    operacionId: string;
+    nivelId: string;
 }
 export declare class PreviewImposicionProductoVarianteDto {
     parametros?: Record<string, unknown>;
