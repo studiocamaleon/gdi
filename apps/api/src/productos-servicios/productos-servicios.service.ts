@@ -117,6 +117,11 @@ import { DEFAULT_RIGID_PRINTED_CONFIG } from './motors/rigid-printed.types';
 import { VinylCutMotorModule } from './motors/vinyl-cut.motor';
 import { WideFormatMotorModule } from './motors/wide-format.motor';
 import { calculateImposicionV2 } from './nesting/adapters/digital-adapter';
+import {
+  calculateSustratoToPliegoConversion as calculateSustratoToPliegoConversionV2,
+  approxEqualMm as approxEqualMmV2,
+} from './nesting/helpers/sustrato-to-pliego';
+import { calculateGuillotinaCutsFromImposicion as calculateGuillotinaCutsFromImposicionV2 } from './nesting/helpers/guillotina-cuts';
 
 const DEFAULT_PERIOD_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
 type ServicioPricingNivel = {
@@ -12533,65 +12538,32 @@ export class ProductosServiciosService {
     };
   }
 
+  /**
+   * 2026-04-23 — Fase 1.4: delega a
+   * `nesting/helpers/sustrato-to-pliego.ts`. Mantengo wrapper privado
+   * para compat con call-sites internos.
+   */
   private calculateSustratoToPliegoConversion(input: {
     sustrato: { anchoMm: number; altoMm: number };
     pliegoImpresion: { anchoMm: number; altoMm: number };
   }) {
-    const direct =
-      this.approxEqualMm(input.sustrato.anchoMm, input.pliegoImpresion.anchoMm) &&
-      this.approxEqualMm(input.sustrato.altoMm, input.pliegoImpresion.altoMm);
-    const rotatedDirect =
-      this.approxEqualMm(input.sustrato.anchoMm, input.pliegoImpresion.altoMm) &&
-      this.approxEqualMm(input.sustrato.altoMm, input.pliegoImpresion.anchoMm);
-    if (direct || rotatedDirect) {
-      return {
-        esDerivado: false,
-        pliegosPorSustrato: 1,
-        orientacion: direct ? 'normal' : 'rotada',
-      };
-    }
-
-    const normalCols = Math.floor(input.sustrato.anchoMm / input.pliegoImpresion.anchoMm);
-    const normalRows = Math.floor(input.sustrato.altoMm / input.pliegoImpresion.altoMm);
-    const normal = Math.max(0, normalCols) * Math.max(0, normalRows);
-
-    const rotCols = Math.floor(input.sustrato.anchoMm / input.pliegoImpresion.altoMm);
-    const rotRows = Math.floor(input.sustrato.altoMm / input.pliegoImpresion.anchoMm);
-    const rotada = Math.max(0, rotCols) * Math.max(0, rotRows);
-
-    const pliegosPorSustrato = Math.max(normal, rotada);
-    return {
-      esDerivado: true,
-      pliegosPorSustrato: Math.max(1, pliegosPorSustrato),
-      orientacion: rotada > normal ? 'rotada' : 'normal',
-    };
+    return calculateSustratoToPliegoConversionV2(input);
   }
 
   private approxEqualMm(a: number, b: number) {
-    return Math.abs(a - b) <= 0.01;
+    return approxEqualMmV2(a, b);
   }
 
+  /**
+   * 2026-04-23 — Fase 1.4: delega a `nesting/helpers/guillotina-cuts.ts`.
+   */
   private calculateGuillotinaCutsFromImposicion(input: {
     cols: number;
     rows: number;
     tipoCorte?: string;
     demasiaCorteMm?: number;
   }) {
-    const cols = Math.max(0, Math.floor(input.cols));
-    const rows = Math.max(0, Math.floor(input.rows));
-    if (cols <= 0 || rows <= 0) {
-      return 0;
-    }
-    const rawTipoCorte = String(input.tipoCorte ?? 'guillotina').trim().toLowerCase();
-    // Troquelado y sin_corte no usan guillotina
-    if (rawTipoCorte === 'sin_corte' || rawTipoCorte === 'troquelado') {
-      return 0;
-    }
-    // Con demasía: cada pieza tiene 2 cortes por eje (legacy con_demasia también aplica)
-    if (rawTipoCorte === 'con_demasia' || (input.demasiaCorteMm ?? 0) > 0) {
-      return cols * 2 + rows * 2;
-    }
-    return cols + rows + 2;
+    return calculateGuillotinaCutsFromImposicionV2(input);
   }
 
   private calculateTerminatingOperationTiming(input: {
