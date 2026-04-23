@@ -116,6 +116,7 @@ import { RigidPrintedMotorModule } from './motors/rigid-printed.motor';
 import { DEFAULT_RIGID_PRINTED_CONFIG } from './motors/rigid-printed.types';
 import { VinylCutMotorModule } from './motors/vinyl-cut.motor';
 import { WideFormatMotorModule } from './motors/wide-format.motor';
+import { calculateImposicionV2 } from './nesting/adapters/digital-adapter';
 
 const DEFAULT_PERIOD_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
 type ServicioPricingNivel = {
@@ -12481,6 +12482,14 @@ export class ProductosServiciosService {
     return this.resolveMachineMarginsMm(operacionesCotizadas);
   }
 
+  /**
+   * 2026-04-23 — Fase 1.1 (parte digital): delega a
+   * `nesting/adapters/digital-adapter.ts:calculateImposicionV2`. La
+   * lógica se conservó bit-exacta. Mantengo este wrapper privado para
+   * que los call-sites (quoteDigitalVariant, quoteTalonarioVariant,
+   * preview*, buildVinylCutSimulation) sigan funcionando sin cambios.
+   * Ver `docs/nesting-abstraccion-diseno.md`.
+   */
   private calculateImposicion(input: {
     varianteAnchoMm: number;
     varianteAltoMm: number;
@@ -12489,83 +12498,7 @@ export class ProductosServiciosService {
     machineMargins: { leftMm: number; rightMm: number; topMm: number; bottomMm: number };
     config: Record<string, unknown>;
   }) {
-    const rawTipoCorte = String(input.config.tipoCorte ?? 'sin_demasia');
-    // Compatibilidad: mapear legacy sin_demasia/con_demasia → guillotina
-    const tipoCorte = rawTipoCorte === 'sin_corte' || rawTipoCorte === 'guillotina' || rawTipoCorte === 'corte_manual' || rawTipoCorte === 'troquelado'
-      ? rawTipoCorte
-      : 'guillotina';
-    const troquelado = (input.config.troquelado && typeof input.config.troquelado === 'object' && !Array.isArray(input.config.troquelado))
-      ? input.config.troquelado as Record<string, unknown>
-      : {};
-    const demasiaRaw = tipoCorte === 'troquelado'
-      ? Number(troquelado.sangriadoTroquelMm ?? 3)
-      : Number(input.config.demasiaCorteMm ?? 0);
-    const demasiaCorteMm = (tipoCorte !== 'sin_corte') && Number.isFinite(demasiaRaw) ? Math.max(0, demasiaRaw) : 0;
-    const lineaCorteRaw = tipoCorte === 'troquelado'
-      ? 0 // margenRegistroExtra ya maneja el borde
-      : (tipoCorte === 'sin_corte' ? 0 : Number(input.config.lineaCorteMm ?? 3));
-    const lineaCorteMm = Number.isFinite(lineaCorteRaw) ? Math.max(0, lineaCorteRaw) : 3;
-    // Para troquelado, la separación entre contornos se suma al tamaño efectivo (gap entre piezas)
-    const separacionEntrePiezasMm = tipoCorte === 'troquelado'
-      ? Math.max(0, Number(troquelado.separacionEntreContornosMm ?? 3))
-      : 0;
-    const piezaAnchoEfectivoMm = input.varianteAnchoMm + 2 * demasiaCorteMm + separacionEntrePiezasMm;
-    const piezaAltoEfectivoMm = input.varianteAltoMm + 2 * demasiaCorteMm + separacionEntrePiezasMm;
-
-    // Para troquelado: margen final = MAYOR entre máquina y plotter (no se suman)
-    let marginLeftMm = input.machineMargins.leftMm;
-    let marginRightMm = input.machineMargins.rightMm;
-    let marginTopMm = input.machineMargins.topMm;
-    let marginBottomMm = input.machineMargins.bottomMm;
-    if (tipoCorte === 'troquelado') {
-      const anchoUtilPlotter = Math.min(input.sheetAnchoMm, Math.max(0, Number(troquelado.anchoUtilPlotterMm ?? input.sheetAnchoMm - 20)));
-      const altoUtilPlotter = Math.min(input.sheetAltoMm, Math.max(0, Number(troquelado.altoUtilPlotterMm ?? input.sheetAltoMm - 20)));
-      const plotterMarginH = Math.max(0, (input.sheetAnchoMm - anchoUtilPlotter) / 2);
-      const plotterMarginV = Math.max(0, (input.sheetAltoMm - altoUtilPlotter) / 2);
-      marginLeftMm = Math.max(marginLeftMm, plotterMarginH);
-      marginRightMm = Math.max(marginRightMm, plotterMarginH);
-      marginTopMm = Math.max(marginTopMm, plotterMarginV);
-      marginBottomMm = Math.max(marginBottomMm, plotterMarginV);
-    }
-    const anchoImprimible = input.sheetAnchoMm - marginLeftMm - marginRightMm;
-    const altoImprimible = input.sheetAltoMm - marginTopMm - marginBottomMm;
-    const anchoDisponible = anchoImprimible - 2 * lineaCorteMm;
-    const altoDisponible = altoImprimible - 2 * lineaCorteMm;
-
-    const normalCols = Math.floor(anchoDisponible / piezaAnchoEfectivoMm);
-    const normalRows = Math.floor(altoDisponible / piezaAltoEfectivoMm);
-    const normal = Math.max(0, normalCols) * Math.max(0, normalRows);
-
-    const rotCols = Math.floor(anchoDisponible / piezaAltoEfectivoMm);
-    const rotRows = Math.floor(altoDisponible / piezaAnchoEfectivoMm);
-    const rotada = Math.max(0, rotCols) * Math.max(0, rotRows);
-
-    const piezasPorPliego = Math.max(normal, rotada);
-    const orientacion = rotada > normal ? 'rotada' : 'normal';
-    const cols = orientacion === 'rotada' ? Math.max(0, rotCols) : Math.max(0, normalCols);
-    const rows = orientacion === 'rotada' ? Math.max(0, rotRows) : Math.max(0, normalRows);
-    return {
-      tipoCorte,
-      piezasPorPliego,
-      orientacion,
-      anchoImprimibleMm: Number(anchoImprimible.toFixed(2)),
-      altoImprimibleMm: Number(altoImprimible.toFixed(2)),
-      anchoDisponibleMm: Number(anchoDisponible.toFixed(2)),
-      altoDisponibleMm: Number(altoDisponible.toFixed(2)),
-      normal,
-      rotada,
-      demasiaCorteMm: Number(demasiaCorteMm.toFixed(2)),
-      lineaCorteMm: Number(lineaCorteMm.toFixed(2)),
-      piezaAnchoMm: input.varianteAnchoMm,
-      piezaAltoMm: input.varianteAltoMm,
-      piezaAnchoEfectivoMm: Number(piezaAnchoEfectivoMm.toFixed(2)),
-      piezaAltoEfectivoMm: Number(piezaAltoEfectivoMm.toFixed(2)),
-      cols,
-      rows,
-      sheetAnchoMm: input.sheetAnchoMm,
-      sheetAltoMm: input.sheetAltoMm,
-      machineMargins: input.machineMargins,
-    };
+    return calculateImposicionV2(input);
   }
 
   private resolvePliegoImpresion(
