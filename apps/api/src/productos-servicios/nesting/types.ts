@@ -82,6 +82,12 @@ export interface PanelizadoOptions {
 export interface Placement<T = unknown> {
   /** ID de la pieza original (referencia a Piece.id). */
   pieceId: string;
+  /**
+   * Índice del sustrato (bin) donde se acomoda esta pieza. 0 cuando hay
+   * un solo sustrato. Mayor a 0 cuando el algoritmo multi-bin abre más
+   * de un sustrato (ej. nestGrid2DMulti que requiere varias placas).
+   */
+  substrateIndex?: number;
   /** Esquina superior-izquierda en el sustrato. Origen (0,0) = top-left. */
   xMm: number;
   yMm: number;

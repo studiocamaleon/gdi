@@ -14,6 +14,7 @@
 
 import type { Piece, SheetSubstrate, NestingResult as UniversalNestingResult } from '../types';
 import { nestGrid2DSingle } from '../algorithms/grid-2d-single';
+import { nestGrid2DMulti } from '../algorithms/grid-2d-multi';
 import { applyCostingStrategy } from '../costing';
 import type { CostingInput, CostingStrategyKind } from '../costing/types';
 
@@ -222,4 +223,68 @@ export function calcularCosteoMaterialV2(input: LegacyCosteoInput): LegacyCosteo
   const universalInput = toUniversalCostingInput(input);
   const universalResult = applyCostingStrategy(universalInput);
   return fromUniversalCostingResult(universalResult);
+}
+
+// ─── Multi-medida (2D bin-packing con maxrects) ──────────────────
+
+interface LegacyMultiMedidaInput {
+  anchoMm: number;
+  altoMm: number;
+  cantidad: number;
+}
+
+interface LegacyMultiMedidaResult {
+  placas: number;
+  totalPiezas: number;
+  areaUtilMm2: number;
+  areaTotalMm2: number;
+  aprovechamientoPct: number;
+  placaLayouts: Array<{ areaUtilMm2: number; largoConsumidoMm: number }>;
+}
+
+export function nestMultiMedidaV2(
+  medidas: LegacyMultiMedidaInput[],
+  placaAnchoMm: number,
+  placaAltoMm: number,
+  sepH: number,
+  sepV: number,
+  margen: number,
+  permitirRotacion: boolean,
+  orientacionPlaca: 'usar_lado_corto' | 'usar_lado_largo' = 'usar_lado_corto',
+): LegacyMultiMedidaResult {
+  const pieces: Piece[] = medidas.map((m, i) => ({
+    id: `pieza-${i}`,
+    widthMm: m.anchoMm,
+    heightMm: m.altoMm,
+    quantity: m.cantidad,
+  }));
+  const substrate: SheetSubstrate = {
+    kind: 'sheet',
+    widthMm: placaAnchoMm,
+    heightMm: placaAltoMm,
+    margins: {
+      leftMm: margen,
+      rightMm: margen,
+      topMm: margen,
+      bottomMm: margen,
+    },
+  };
+  const result = nestGrid2DMulti(pieces, substrate, {
+    separationHMm: sepH,
+    separationVMm: sepV,
+    allowRotation: permitirRotacion,
+    orientacionPlaca,
+  });
+
+  return {
+    placas: result.substrates.length,
+    totalPiezas: result.placements.length,
+    areaUtilMm2: result.metrics.areaUtilMm2,
+    areaTotalMm2: result.metrics.areaTotalMm2,
+    aprovechamientoPct: result.metrics.aprovechamientoPct,
+    placaLayouts: result.perSubstrate.map((s) => ({
+      areaUtilMm2: s.areaUtilMm2,
+      largoConsumidoMm: s.consumedLengthMm,
+    })),
+  };
 }

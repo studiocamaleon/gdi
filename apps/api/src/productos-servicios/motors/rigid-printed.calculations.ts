@@ -13,11 +13,11 @@
  * `docs/nesting-abstraccion-diseno.md`.
  */
 
-import { MaxRectsPacker } from 'maxrects-packer';
 import type { EstrategiaCosteoMaterial } from './rigid-printed.types';
 import {
   nestRectangularGridV2,
   calcularCosteoMaterialV2,
+  nestMultiMedidaV2,
 } from '../nesting/adapters/rigid-adapter';
 
 // ─── Nesting ─────────────────────────────────────────────────────
@@ -80,6 +80,11 @@ export type MultiMedidaResult = {
   placaLayouts: Array<{ areaUtilMm2: number; largoConsumidoMm: number }>;
 };
 
+/**
+ * Delega a `nesting/algorithms/grid-2d-multi.ts` vía adapter
+ * `nesting/adapters/rigid-adapter.ts:nestMultiMedidaV2`.
+ * Mantiene shape legacy.
+ */
 export function nestMultiMedida(
   medidas: MultiMedidaInput[],
   placaAnchoMm: number,
@@ -90,65 +95,7 @@ export function nestMultiMedida(
   permitirRotacion: boolean,
   orientacionPlaca: 'usar_lado_corto' | 'usar_lado_largo' = 'usar_lado_corto',
 ): MultiMedidaResult {
-  type Pieza = { w: number; h: number };
-  const areaW = placaAnchoMm - 2 * margen;
-  const areaH = placaAltoMm - 2 * margen;
-
-  // Crear lista de piezas, ordenar por área descendente
-  const pendientes: Pieza[] = [];
-  for (const m of medidas) {
-    if (m.anchoMm <= 0 || m.altoMm <= 0 || m.cantidad <= 0) continue;
-    for (let i = 0; i < m.cantidad; i++) {
-      pendientes.push({ w: m.anchoMm, h: m.altoMm });
-    }
-  }
-  pendientes.sort((a, b) => (b.w * b.h) - (a.w * a.h));
-
-  if (pendientes.length === 0) {
-    return { placas: 0, totalPiezas: 0, areaUtilMm2: 0, areaTotalMm2: 0, aprovechamientoPct: 0, placaLayouts: [] };
-  }
-
-  // ── Bin-packing 2D con maxrects-packer ──────────────────────────
-  const packer = new MaxRectsPacker(areaW + sepH, areaH + sepV, 0, {
-    smart: false,  // tamaño fijo de placa
-    pot: false,
-    square: false,
-    allowRotation: permitirRotacion,
-  });
-
-  for (const p of pendientes) {
-    packer.add(p.w + sepH, p.h + sepV, { origW: p.w, origH: p.h });
-  }
-
-  const placaLayouts: MultiMedidaResult['placaLayouts'] = [];
-  let totalPiezas = 0;
-  let totalAreaUtil = 0;
-
-  for (const bin of packer.bins) {
-    let maxY = 0;
-    let areaUtil = 0;
-    for (const rect of bin.rects) {
-      const d = (rect as any).data as { origW: number; origH: number };
-      const rotada: boolean = (rect as any).rot ?? false;
-      const pieceH = rotada ? d.origW : d.origH;
-      const bottom = rect.y + pieceH + margen;
-      if (bottom > maxY) maxY = bottom;
-      areaUtil += d.origW * d.origH;
-    }
-    placaLayouts.push({ areaUtilMm2: areaUtil, largoConsumidoMm: maxY > 0 ? margen + maxY : 0 });
-    totalPiezas += bin.rects.length;
-    totalAreaUtil += areaUtil;
-  }
-
-  const areaTotalMm2 = placaAnchoMm * placaAltoMm * placaLayouts.length;
-  return {
-    placas: placaLayouts.length,
-    totalPiezas,
-    areaUtilMm2: totalAreaUtil,
-    areaTotalMm2,
-    aprovechamientoPct: areaTotalMm2 > 0 ? round2((totalAreaUtil / areaTotalMm2) * 100) : 0,
-    placaLayouts,
-  };
+  return nestMultiMedidaV2(medidas, placaAnchoMm, placaAltoMm, sepH, sepV, margen, permitirRotacion, orientacionPlaca);
 }
 
 // ─── Costeo del material rígido ──────────────────────────────────
