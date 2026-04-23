@@ -109,135 +109,19 @@ export type TalonarioImposicionResult = ImposicionBase & {
  * simétricamente (emblocado).
  */
 /**
- * El borde del puntillado se define en la orientación ORIGINAL de la pieza.
- * Si la imposición rota la pieza 90° CW para aprovechar mejor el pliego,
- * mapeamos el borde original al borde del render/pliego:
- *   superior  → derecho
- *   inferior  → izquierdo
- *   izquierdo → superior
- *   derecho   → inferior
+ * 2026-04-23 — Fase 1.3: delega a
+ * `nesting/helpers/talonario-imposicion-constraints.ts`. Mantiene
+ * signature pública para no romper imports externos.
  */
-const ROTATED_BORDE_MAP: Record<string, string> = {
-  superior: 'derecho',
-  inferior: 'izquierdo',
-  izquierdo: 'superior',
-  derecho: 'inferior',
-};
-
-export function applyTalonarioImposicionConstraints(
-  base: ImposicionBase,
-  config: TalonarioMotorConfig,
-): TalonarioImposicionResult {
-  const teteBeche = config.encuadernacion.tipo === 'emblocado';
-
-  const bordeOriginal = config.puntillado.borde ?? null;
-  const bordeRender =
-    base.orientacion === 'rotada' && bordeOriginal
-      ? (ROTATED_BORDE_MAP[bordeOriginal] ?? bordeOriginal)
-      : bordeOriginal;
-
-  return {
-    ...base,
-    teteBeche,
-    puntilladoLineMm: config.puntillado.habilitado
-      ? Number(config.puntillado.distanciaBordeMm ?? 0)
-      : null,
-    puntilladoBorde: config.puntillado.habilitado ? bordeRender : null,
-    encuadernacionTipo: config.encuadernacion.tipo,
-  };
-}
+export { applyTalonarioImposicionConstraints } from '../nesting/helpers/talonario-imposicion-constraints';
 
 // ─── Agrupamiento de talonarios ───────────────────────────────────
+// 2026-04-23 — Fase 1.3: extraído a nesting/helpers/talonario-grouping.ts.
+// Re-exportamos tipo y función para no romper imports externos.
 
-export type TalonarioGroupingResult = {
-  /** Cantidad de talonarios que efectivamente se producen */
-  talonariosEfectivos: number;
-  /** Cantidad original pedida */
-  talonariosPedidos: number;
-  /** Poses por pliego */
-  posesXPliego: number;
-  /** Talonarios por grupo de pliegos (= posesXPliego) */
-  talonariosPorGrupo: number;
-  /** Grupos completos */
-  gruposCompletos: number;
-  /** Talonarios residuales (no llenan un grupo completo) */
-  talonariosResiduo: number;
-  /** Pliegos necesarios POR CAPA (se multiplica × capas para total) */
-  pliegosXCapa: number;
-  /** Pliegos de desperdicio (poses vacías) */
-  pliegosDesperdicio: number;
-  /** Número de hojas/números por talonario */
-  numerosXTalonario: number;
-  /** Modo usado para talonarios incompletos */
-  modoIncompleto: string;
-};
-
-export function calculateTalonarioGrouping(input: {
-  cantidadTalonarios: number;
-  posesXPliego: number;
-  numerosXTalonario: number;
-  modoTalonarioIncompleto: 'aprovechar_pliego' | 'pose_completa';
-}): TalonarioGroupingResult {
-  const { cantidadTalonarios, posesXPliego, numerosXTalonario, modoTalonarioIncompleto } = input;
-
-  if (posesXPliego <= 0 || numerosXTalonario <= 0) {
-    return {
-      talonariosEfectivos: 0,
-      talonariosPedidos: cantidadTalonarios,
-      posesXPliego,
-      talonariosPorGrupo: posesXPliego,
-      gruposCompletos: 0,
-      talonariosResiduo: 0,
-      pliegosXCapa: 0,
-      pliegosDesperdicio: 0,
-      numerosXTalonario,
-      modoIncompleto: modoTalonarioIncompleto,
-    };
-  }
-
-  const talonariosPorGrupo = posesXPliego; // cada pose = 1 talonario
-  const gruposCompletos = Math.floor(cantidadTalonarios / talonariosPorGrupo);
-  const talonariosResiduo = cantidadTalonarios % talonariosPorGrupo;
-
-  let pliegosXCapa: number;
-  let pliegosDesperdicio: number;
-  let talonariosEfectivos: number;
-
-  if (talonariosResiduo === 0) {
-    // Sin residuo: perfecto
-    pliegosXCapa = gruposCompletos * numerosXTalonario;
-    pliegosDesperdicio = 0;
-    talonariosEfectivos = cantidadTalonarios;
-  } else if (modoTalonarioIncompleto === 'pose_completa') {
-    // Modo desperdicio: imprimir un grupo extra completo, poses vacías = desperdicio
-    const gruposTotales = gruposCompletos + 1;
-    pliegosXCapa = gruposTotales * numerosXTalonario;
-    const posesVacias = talonariosPorGrupo - talonariosResiduo;
-    pliegosDesperdicio = posesVacias * numerosXTalonario;
-    talonariosEfectivos = gruposTotales * talonariosPorGrupo;
-  } else {
-    // Modo aprovechar pliego: el residuo se imprime en pliegos
-    // donde solo se usan algunas poses.
-    // El grupo residual usa `talonariosResiduo` poses de `talonariosPorGrupo`.
-    pliegosXCapa = gruposCompletos * numerosXTalonario + numerosXTalonario;
-    const posesVacias = talonariosPorGrupo - talonariosResiduo;
-    pliegosDesperdicio = posesVacias * numerosXTalonario;
-    talonariosEfectivos = cantidadTalonarios;
-  }
-
-  return {
-    talonariosEfectivos,
-    talonariosPedidos: cantidadTalonarios,
-    posesXPliego,
-    talonariosPorGrupo,
-    gruposCompletos,
-    talonariosResiduo,
-    pliegosXCapa,
-    pliegosDesperdicio,
-    numerosXTalonario,
-    modoIncompleto: modoTalonarioIncompleto,
-  };
-}
+import type { TalonarioGroupingResult as TalonarioGroupingResultImported } from '../nesting/helpers/talonario-grouping';
+export { calculateTalonarioGrouping } from '../nesting/helpers/talonario-grouping';
+export type TalonarioGroupingResult = TalonarioGroupingResultImported;
 
 // ─── Cálculo de costos de papel multicapa ─────────────────────────
 
