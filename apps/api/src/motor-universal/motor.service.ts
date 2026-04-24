@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FAMILIAS } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
+import { evaluarRegla } from './evaluador-jsonlogic';
 import type {
   CotizarInput,
   CotizarOutput,
@@ -201,11 +202,22 @@ export class MotorUniversalService {
     }
 
     if (modo === 'CONDICIONAL') {
-      // TODO: implementar JsonLogic real (F.2.x)
-      // Por ahora, condicionales se asumen como NO activadas con razón clara.
+      // F.2.2: evaluar JsonLogic contra el JobContext
+      const evaluacion = evaluarRegla(
+        paso.condicionActivacionJson,
+        jobContext as unknown as Record<string, unknown>,
+      );
+      if (evaluacion.error) {
+        return {
+          activado: false,
+          razon: `Error evaluando regla CONDICIONAL: ${evaluacion.error}`,
+        };
+      }
       return {
-        activado: false,
-        razon: 'Pasos CONDICIONALES aún no implementados (JsonLogic pendiente F.2.x)',
+        activado: evaluacion.resultado,
+        razon: evaluacion.resultado
+          ? undefined
+          : 'Regla CONDICIONAL no se cumple en el contexto actual',
       };
     }
 

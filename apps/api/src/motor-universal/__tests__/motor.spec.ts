@@ -123,7 +123,7 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(result.cotizacion!.pasos.length).toBe(6);
   });
 
-  it('cotiza Talonario duplicado A4 (3 capas, ruta emblocada preferida)', async () => {
+  it('Talonario duplicado tipoCopia=2: capa 1 + capa 2 se activan, capa 3 NO (CONDICIONAL JsonLogic)', async () => {
     if (!tenantId) return;
     const talonario = await prisma.producto.findFirstOrThrow({
       where: { tenantId, codigo: 'TALON-DUPL-A4' },
@@ -140,15 +140,57 @@ describe('MotorUniversalService — smoke tests', () => {
     });
 
     expect(result.exitoso).toBe(true);
-    expect(result.cotizacion!.rutaNombre).toBe('Emblocado'); // preferida
+    expect(result.cotizacion!.rutaNombre).toBe('Emblocado');
     expect(result.cotizacion!.pasos.length).toBe(10);
 
-    // Capa 1 OBLIGATORIO se activa
+    const pasosImpresion = result.cotizacion!.pasos.filter(
+      (p) => p.familiaCodigo === 'impresion_por_hoja',
+    );
+    // Capa 1 OBLIGATORIO siempre se activa
+    expect(pasosImpresion[0].activado).toBe(true);
+    // Capa 2: regla `tipoCopia >= 2` → con tipoCopia=2, SE ACTIVA
+    expect(pasosImpresion[1].activado).toBe(true);
+    // Capa 3: regla `tipoCopia >= 3` → con tipoCopia=2, NO se activa
+    expect(pasosImpresion[2].activado).toBe(false);
+    expect(pasosImpresion[2].razonNoActivado).toContain('CONDICIONAL no se cumple');
+  });
+
+  it('Talonario triplicado tipoCopia=3: las 3 capas se activan', async () => {
+    if (!tenantId) return;
+    const talonario = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TALON-DUPL-A4' },
+    });
+
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: talonario.id,
+      jobContext: { cantidad: 100, tipoCopia: 3, numerosXTalonario: 50 },
+    });
+
     const pasosImpresion = result.cotizacion!.pasos.filter(
       (p) => p.familiaCodigo === 'impresion_por_hoja',
     );
     expect(pasosImpresion[0].activado).toBe(true);
-    // Capas 2 y 3 son CONDICIONAL (todavía no implementadas, devuelven activado=false)
+    expect(pasosImpresion[1].activado).toBe(true);
+    expect(pasosImpresion[2].activado).toBe(true);
+  });
+
+  it('Talonario simple tipoCopia=1: solo capa 1 se activa, capas 2 y 3 no', async () => {
+    if (!tenantId) return;
+    const talonario = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TALON-DUPL-A4' },
+    });
+
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: talonario.id,
+      jobContext: { cantidad: 100, tipoCopia: 1, numerosXTalonario: 100 },
+    });
+
+    const pasosImpresion = result.cotizacion!.pasos.filter(
+      (p) => p.familiaCodigo === 'impresion_por_hoja',
+    );
+    expect(pasosImpresion[0].activado).toBe(true);
     expect(pasosImpresion[1].activado).toBe(false);
     expect(pasosImpresion[2].activado).toBe(false);
   });
