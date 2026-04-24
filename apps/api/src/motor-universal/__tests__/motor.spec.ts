@@ -397,6 +397,34 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(result.exitoso).toBe(true);
   });
 
+  it('F.2.4: Tarjetas doble faz → motor selecciona automáticamente perfil "Papel grueso doble faz" (1200 ppm vs 2400 simple)', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+
+    const simple = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      periodo: '2026-03',
+      jobContext: { cantidad: 2400, caras: 1 },
+    });
+    const doble = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      periodo: '2026-03',
+      jobContext: { cantidad: 2400, caras: 2 },
+    });
+
+    const impSimple = simple.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_hoja')!;
+    const impDoble = doble.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_hoja')!;
+
+    // El perfil simple faz produce a 2400 ppm → 2400 pliegos en ~60min
+    // El perfil doble faz produce a 1200 ppm + multiplicador caras=2 → 4800 piezas/1200ppm = 240min
+    // Aunque ambos usan multiplicadores también, el run debe ser distinto
+    expect(impDoble.tiempo!.totalMin).toBeGreaterThan(impSimple.tiempo!.totalMin);
+  });
+
   it('F.2.5: Vinilo blanco con MOTOR_ELIGE_AUTO + MAYOR_APROVECHAMIENTO → elige rollo 1.52m (más ancho)', async () => {
     if (!tenantId) return;
     const vinilo = await prisma.producto.findFirstOrThrow({

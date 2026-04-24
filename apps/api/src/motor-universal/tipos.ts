@@ -231,6 +231,16 @@ export interface PasoCargado {
     setupMin: number | null;
     cleanupMin: number | null;
   };
+  /** Otros perfiles disponibles de la máquina M-1 (para selección automática). */
+  perfilesDisponibles?: Array<{
+    id: string;
+    nombre: string;
+    activo: boolean;
+    productivityValue: number | null;
+    setupMin: number | null;
+    cleanupMin: number | null;
+    detalleJson: unknown;
+  }>;
   slots: SlotCargado[];
 }
 

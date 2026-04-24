@@ -218,8 +218,14 @@ export class MotorUniversalService {
       }
     }
 
-    // d) TIEMPO (D.4) — versión simple MVP
-    const tiempo = this.calcularTiempo(paso, jobContext, errores, tarifasMap);
+    // c) RESOLVER PERFIL automáticamente si aplica (F.2.4 — D.2)
+    const perfilResuelto = this.resolverPerfil(paso, jobContext);
+
+    // d) TIEMPO (D.4) — usa el perfil resuelto si difiere del default
+    const pasoConPerfil: PasoCargado = perfilResuelto
+      ? { ...paso, perfil: perfilResuelto }
+      : paso;
+    const tiempo = this.calcularTiempo(pasoConPerfil, jobContext, errores, tarifasMap);
 
     // e) MATERIALES (D.5) — F.2.5: HARDCODED + COMERCIAL_ELIGE + MOTOR_ELIGE_AUTO
     const materiales = await this.calcularMateriales(paso, jobContext);
@@ -655,6 +661,54 @@ export class MotorUniversalService {
   }
 
   /**
+   * F.2.4 — Selección automática de perfil dentro de la máquina M-1.
+   *
+   * Si la máquina tiene varios perfiles (ej: Ricoh "Simple faz" + "Doble faz"),
+   * el motor elige el correcto según el JobContext.
+   *
+   * Heurísticas (MVP):
+   *  - Si la familia es `impresion_por_hoja` y jobContext.caras === 2:
+   *    buscar perfil con nombre que contenga "doble" o `detalleJson.dobleFaz === true`.
+   *  - Si la familia es `impresion_por_hoja` y jobContext.caras === 1:
+   *    buscar perfil con "simple" o `dobleFaz === false`.
+   *  - Si no hay match heurístico → mantener el perfil default del config.
+   *
+   * Devuelve el perfil resuelto (o null si no se cambió nada respecto al default).
+   */
+  private resolverPerfil(
+    paso: PasoCargado,
+    jobContext: JobContext,
+  ): NonNullable<PasoCargado['perfil']> | null {
+    if (!paso.perfilesDisponibles || paso.perfilesDisponibles.length <= 1) {
+      return null; // no hay alternativas, mantener default
+    }
+
+    // Heurística para impresión por hoja según caras
+    if (paso.familiaCodigo === 'impresion_por_hoja' && typeof jobContext.caras === 'number') {
+      const buscarDoble = jobContext.caras === 2;
+      const candidato = paso.perfilesDisponibles.find((p) => {
+        if (!p.activo) return false;
+        const detalle = (p.detalleJson ?? {}) as Record<string, unknown>;
+        const esDobleFaz = detalle.dobleFaz === true || /doble/i.test(p.nombre);
+        return buscarDoble ? esDobleFaz : !esDobleFaz;
+      });
+      if (candidato && candidato.id !== paso.perfilM1Id) {
+        return {
+          id: candidato.id,
+          nombre: candidato.nombre,
+          productivityValue: candidato.productivityValue,
+          productivityUnit: null,
+          setupMin: candidato.setupMin,
+          cleanupMin: candidato.cleanupMin,
+        };
+      }
+    }
+
+    // No hubo cambio
+    return null;
+  }
+
+  /**
    * F.2.7 — Calcula los cargos directos a nivel COTIZACIÓN.
    *
    * Itera los cargos pre-declarados en el producto, evalúa activación
@@ -819,7 +873,9 @@ export class MotorUniversalService {
             configPasos: {
               include: {
                 rutaPaso: true,
-                maquinaM1: true,
+                maquinaM1: {
+                  include: { perfilesOperativos: true },
+                },
                 perfilM1: true,
                 slotsMateriales: {
                   include: { materialVariante: true },
@@ -889,6 +945,15 @@ export class MotorUniversalService {
             cleanupMin: cp.perfilM1.cleanupMin ? Number(cp.perfilM1.cleanupMin) : null,
           }
         : undefined,
+      perfilesDisponibles: cp.maquinaM1?.perfilesOperativos.map((p) => ({
+        id: p.id,
+        nombre: p.nombre,
+        activo: p.activo,
+        productivityValue: p.productivityValue ? Number(p.productivityValue) : null,
+        setupMin: p.setupMin ? Number(p.setupMin) : null,
+        cleanupMin: p.cleanupMin ? Number(p.cleanupMin) : null,
+        detalleJson: p.detalleJson,
+      })),
       slots: cp.slotsMateriales.map((s) => ({
         id: s.id,
         slotCodigo: s.slotCodigo,
