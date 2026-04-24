@@ -16,11 +16,43 @@
  * imposición y es lógica geométrica (mapeo de bordes según rotación).
  */
 
-// Re-exportamos los tipos desde el archivo legacy para no duplicarlos.
-// Cuando se migre el resto a tipos universales, esto se cleanup.
-import type { ImposicionBase, TalonarioMotorConfig, TalonarioImposicionResult } from '../../motors/talonario.calculations';
+// Tipos del talonario (extraídos del antiguo motor `motors/talonario.calculations.ts`
+// que se eliminó en F.1.3). El motor universal por pasos los va a reusar.
 
-export type { ImposicionBase, TalonarioMotorConfig, TalonarioImposicionResult };
+export interface ImposicionBase {
+  /** Cantidad de poses cuando se imprimen en orientación normal. */
+  normal: number;
+  /** Cantidad de poses cuando se imprimen rotadas 90°. */
+  rotada: number;
+  /** Orientación elegida para esta imposición. */
+  orientacion: 'normal' | 'rotada';
+  /** Cantidad de poses por pliego en la orientación elegida. */
+  posesPorPliego: number;
+  /** Otros campos del cálculo de imposición (libre, depende del nesting). */
+  [key: string]: unknown;
+}
+
+export interface TalonarioMotorConfig {
+  encuadernacion: {
+    tipo: 'emblocado' | 'engrapado' | 'anillado' | string;
+  };
+  puntillado: {
+    habilitado: boolean;
+    borde?: 'superior' | 'inferior' | 'izquierdo' | 'derecho' | null;
+    distanciaBordeMm?: number | null;
+  };
+}
+
+export interface TalonarioImposicionResult extends ImposicionBase {
+  /** Si la imposición es tete-beche (poses enfrentadas) — solo aplica para emblocado. */
+  teteBeche: boolean;
+  /** Posición de la línea de puntillado en mm desde el borde, o null si no aplica. */
+  puntilladoLineMm: number | null;
+  /** Borde donde va el puntillado en el render del pliego, ajustado por rotación. */
+  puntilladoBorde: string | null;
+  /** Tipo de encuadernación. */
+  encuadernacionTipo: string;
+}
 
 /**
  * El borde del puntillado se define en la orientación ORIGINAL de la
