@@ -102,7 +102,7 @@ export class MotorUniversalService {
         break;
       }
 
-      const ejecucion = this.ejecutarPaso(paso, jobContext, errores, tarifasMap);
+      const ejecucion = await this.ejecutarPaso(paso, jobContext, errores, tarifasMap);
       pasosEjecutados.push(ejecucion);
 
       // Si este paso generó errores, marcar para no seguir
@@ -178,12 +178,12 @@ export class MotorUniversalService {
     return `${yyyy}-${mm}`;
   }
 
-  private ejecutarPaso(
+  private async ejecutarPaso(
     paso: PasoCargado,
     jobContext: JobContext,
     errores: ErrorMotor[],
     tarifasMap: Map<string, unknown>,
-  ): PasoEjecutado {
+  ): Promise<PasoEjecutado> {
     const familia = FAMILIAS[paso.familiaCodigo as FamiliaCodigo] as
       | (typeof FAMILIAS)[FamiliaCodigo]
       | undefined;
@@ -221,8 +221,8 @@ export class MotorUniversalService {
     // d) TIEMPO (D.4) — versión simple MVP
     const tiempo = this.calcularTiempo(paso, jobContext, errores, tarifasMap);
 
-    // e) MATERIALES (D.5) — solo HARDCODED por ahora
-    const materiales = this.calcularMateriales(paso, jobContext);
+    // e) MATERIALES (D.5) — F.2.5: HARDCODED + COMERCIAL_ELIGE + MOTOR_ELIGE_AUTO
+    const materiales = await this.calcularMateriales(paso, jobContext);
     const materialesCosto = materiales.reduce((acc, m) => acc + m.costoTotal, 0);
 
     return {
@@ -343,18 +343,18 @@ export class MotorUniversalService {
     };
   }
 
-  /** D.5 — Calcular materiales consumidos (solo HARDCODED en MVP). */
-  private calcularMateriales(paso: PasoCargado, jobContext: JobContext): MaterialEjecutado[] {
+  /** D.5 — Calcular materiales consumidos. F.2.5: soporta los 3 modos de selección. */
+  private async calcularMateriales(
+    paso: PasoCargado,
+    jobContext: JobContext,
+  ): Promise<MaterialEjecutado[]> {
     const ejecutados: MaterialEjecutado[] = [];
 
     for (const slot of paso.slots) {
-      if (slot.modoSeleccion !== 'HARDCODED') {
-        // TODO: F.2.x — implementar COMERCIAL_ELIGE y MOTOR_ELIGE_AUTO
-        continue;
-      }
-      if (!slot.materialVariante) continue;
+      const materialResuelto = await this.resolverMaterialSlot(slot, jobContext);
+      if (!materialResuelto) continue;
 
-      // Cantidad: depende de la fórmula (versión MVP: por_unidad_productiva)
+      // Cantidad: depende de la fórmula
       let cantidad = 0;
       if (slot.formula === 'por_unidad_productiva') {
         cantidad = Number(jobContext.cantidad ?? 0);
@@ -362,15 +362,17 @@ export class MotorUniversalService {
         cantidad = Number(jobContext.cantidad ?? 0);
       } else if (slot.formula === 'fijo') {
         cantidad = 1;
+      } else if (slot.formula === 'por_m2') {
+        cantidad = this.calcularM2DesdePiezas(jobContext);
+      } else if (slot.formula === 'por_metro_lineal') {
+        cantidad = this.calcularMetrosLinealesDesdePiezas(jobContext);
       }
-      // TODO: F.2.x — fórmulas por_m2, por_metro_lineal
 
-      // F.2.6 — multi-caras (legacy flag, se mantiene)
+      // F.2.6 — multi-caras (legacy flag)
       if (slot.aplicaMultiCaras && typeof jobContext.caras === 'number') {
         cantidad *= jobContext.caras;
       }
-      // F.2.6 — aplicar también los multiplicadores activos del paso al consumo
-      // (excepto 'caras' si ya se aplicó arriba)
+      // F.2.6 — multiplicadores activos
       if (paso.multiplicadoresActivos && paso.multiplicadoresActivos.length > 0) {
         for (const codigoMult of paso.multiplicadoresActivos) {
           if (codigoMult === 'caras' && slot.aplicaMultiCaras) continue;
@@ -381,23 +383,136 @@ export class MotorUniversalService {
         }
       }
 
-      const precioUnitario = Number(slot.materialVariante.precioReferencia ?? 0);
+      const precioUnitario = Number(materialResuelto.precioReferencia ?? 0);
       const costoTotal = cantidad * precioUnitario;
 
       ejecutados.push({
         slotCodigo: slot.slotCodigo,
-        materialVarianteId: slot.materialVariante.id,
-        materialNombre: slot.materialVariante.sku,
+        materialVarianteId: materialResuelto.id,
+        materialNombre: materialResuelto.sku,
         cantidad,
         unidad: 'unidad', // TODO: leer de la materia prima
         precioUnitario,
         costoTotal,
         estrategiaCosto: slot.estrategiaCosto,
-        modoSeleccion: 'HARDCODED',
+        modoSeleccion: slot.modoSeleccion as 'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO',
       });
     }
 
     return ejecutados;
+  }
+
+  /**
+   * F.2.5 — Resuelve qué material concreto usar según el modo de selección.
+   *
+   * Modos soportados:
+   *  - HARDCODED: usa slot.materialVariante directamente
+   *  - COMERCIAL_ELIGE: lee del JobContext la elección del comercial
+   *    (key: `slotMaterial_<configPasoId>_<slotCodigo>`); si no eligió,
+   *    usa el material default (primero con default=true)
+   *  - MOTOR_ELIGE_AUTO: aplica criterio del slot
+   *    (MENOR_COSTO / MAYOR_APROVECHAMIENTO / MENOR_CAPACIDAD_QUE_CUMPLA)
+   */
+  private async resolverMaterialSlot(
+    slot: PasoCargado['slots'][number],
+    jobContext: JobContext,
+  ): Promise<{ id: string; sku: string; precioReferencia: number | null } | null> {
+    if (slot.modoSeleccion === 'HARDCODED') {
+      return slot.materialVariante ?? null;
+    }
+
+    const candidatos = (slot.materialesCandidatosJson ?? []) as Array<{
+      variantId: string;
+      label?: string;
+      default?: boolean;
+    }>;
+    if (candidatos.length === 0) return null;
+
+    if (slot.modoSeleccion === 'COMERCIAL_ELIGE') {
+      // Buscar elección del comercial en el JobContext (formato genérico)
+      const slotKey = `slotMaterial_${slot.slotCodigo}`;
+      const eleccion = (jobContext as Record<string, unknown>)[slotKey] as string | undefined;
+      const elegido = candidatos.find((c) => c.variantId === eleccion);
+      const target = elegido ?? candidatos.find((c) => c.default) ?? candidatos[0];
+      return await this.cargarVariantePorId(target.variantId);
+    }
+
+    if (slot.modoSeleccion === 'MOTOR_ELIGE_AUTO') {
+      // Cargar todos los candidatos con su info
+      const variantes = await Promise.all(
+        candidatos.map((c) => this.cargarVariantePorId(c.variantId)),
+      );
+      const validos = variantes.filter((v): v is NonNullable<typeof v> => v != null);
+      if (validos.length === 0) return null;
+
+      const criterio = slot.criterioMotorAuto ?? 'MENOR_COSTO';
+
+      if (criterio === 'MENOR_COSTO') {
+        return validos.sort(
+          (a, b) => Number(a.precioReferencia ?? 0) - Number(b.precioReferencia ?? 0),
+        )[0];
+      }
+
+      if (criterio === 'MAYOR_APROVECHAMIENTO') {
+        // Heurística simple: para rollos, el más ancho que sea >= ancho de pieza
+        // tiende a aprovechar mejor. Devolver el de mayor anchoMm de variante.
+        return validos.sort((a, b) => {
+          const anchoA = Number((a as { anchoMm?: number }).anchoMm ?? 0);
+          const anchoB = Number((b as { anchoMm?: number }).anchoMm ?? 0);
+          return anchoB - anchoA;
+        })[0];
+      }
+
+      if (criterio === 'MENOR_CAPACIDAD_QUE_CUMPLA') {
+        // Necesita criterioInputCampo del JobContext y criterioMaterialCampo de cada variante
+        const inputValor = Number(
+          (jobContext as Record<string, unknown>)[slot.criterioInputCampo ?? ''] ?? 0,
+        );
+        const validosOrdenados = validos
+          .map((v) => ({
+            v,
+            cap: Number((v as Record<string, unknown>)[slot.criterioMaterialCampo ?? ''] ?? 0),
+          }))
+          .filter((x) => x.cap >= inputValor)
+          .sort((a, b) => a.cap - b.cap);
+        return validosOrdenados[0]?.v ?? null;
+      }
+    }
+
+    return null;
+  }
+
+  /** Carga una variante de materia prima por ID (helper para resolución de materiales). */
+  private async cargarVariantePorId(
+    variantId: string,
+  ): Promise<{ id: string; sku: string; precioReferencia: number | null; anchoMm?: number } | null> {
+    const v = await this.prisma.materiaPrimaVariante.findUnique({ where: { id: variantId } });
+    if (!v) return null;
+    const attrs = v.atributosVarianteJson as Record<string, unknown> | null;
+    return {
+      id: v.id,
+      sku: v.sku,
+      precioReferencia: v.precioReferencia ? Number(v.precioReferencia) : null,
+      anchoMm: typeof attrs?.anchoMm === 'number' ? attrs.anchoMm : undefined,
+    };
+  }
+
+  /** Calcula m² totales desde la lista de piezas del JobContext (para fórmula por_m2). */
+  private calcularM2DesdePiezas(jobContext: JobContext): number {
+    if (!jobContext.piezas || jobContext.piezas.length === 0) return 0;
+    return jobContext.piezas.reduce((acc, p) => {
+      const m2Pieza = (p.anchoMm * p.altoMm) / 1_000_000;
+      return acc + m2Pieza * p.cantidad;
+    }, 0);
+  }
+
+  /** Metros lineales desde la lista de piezas (para fórmula por_metro_lineal). */
+  private calcularMetrosLinealesDesdePiezas(jobContext: JobContext): number {
+    if (!jobContext.piezas || jobContext.piezas.length === 0) return 0;
+    return jobContext.piezas.reduce((acc, p) => {
+      const largoMtsPieza = p.altoMm / 1000;
+      return acc + largoMtsPieza * p.cantidad;
+    }, 0);
   }
 
   /**
@@ -778,6 +893,9 @@ export class MotorUniversalService {
         id: s.id,
         slotCodigo: s.slotCodigo,
         modoSeleccion: s.modoSeleccion,
+        criterioMotorAuto: s.criterioMotorAuto,
+        criterioInputCampo: s.criterioInputCampo,
+        criterioMaterialCampo: s.criterioMaterialCampo,
         materialVarianteId: s.materialVarianteId,
         materialesCandidatosJson: s.materialesCandidatosJson,
         estrategiaCosto: s.estrategiaCosto,

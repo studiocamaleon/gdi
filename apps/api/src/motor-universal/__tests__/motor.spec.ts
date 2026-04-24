@@ -397,6 +397,94 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(result.exitoso).toBe(true);
   });
 
+  it('F.2.5: Vinilo blanco con MOTOR_ELIGE_AUTO + MAYOR_APROVECHAMIENTO → elige rollo 1.52m (más ancho)', async () => {
+    if (!tenantId) return;
+    const vinilo = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'VINILO-BLANCO-IMP' },
+    });
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: vinilo.id,
+      jobContext: {
+        cantidad: 1,
+        piezas: [{ cantidad: 1, anchoMm: 1500, altoMm: 800 }],
+      },
+    });
+    expect(result.exitoso).toBe(true);
+    const impresion = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_area');
+    expect(impresion?.materiales?.length).toBe(1);
+    const mat = impresion!.materiales![0];
+    expect(mat.modoSeleccion).toBe('MOTOR_ELIGE_AUTO');
+    // El más ancho es 1.52m → SKU "VINILO-BLANCO-1520"
+    expect(mat.materialNombre).toBe('VINILO-BLANCO-1520');
+  });
+
+  it('F.2.5: Tarjetas con laminado COMERCIAL_ELIGE → comercial elige film mate (default)', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    const ruta = tarjetas.rutasAlternativas[0];
+    const laminado = ruta.configPasos.find((c) => c.rutaPaso.familiaCodigo === 'laminado');
+
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      jobContext: {
+        cantidad: 1000,
+        caras: 2,
+        opcionalesActivados: { [laminado!.id]: true },
+        // sin elección explícita → debería usar default = mate
+      } as never,
+    });
+    expect(result.exitoso).toBe(true);
+    const pasoLaminado = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'laminado');
+    expect(pasoLaminado?.activado).toBe(true);
+    expect(pasoLaminado?.materiales?.length).toBe(1);
+    const film = pasoLaminado!.materiales![0];
+    expect(film.modoSeleccion).toBe('COMERCIAL_ELIGE');
+    expect(film.materialNombre).toBe('BOPP-MATE-650'); // default
+  });
+
+  it('F.2.5: Tarjetas con laminado y comercial elige BRILLO explícito', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    const ruta = tarjetas.rutasAlternativas[0];
+    const laminado = ruta.configPasos.find((c) => c.rutaPaso.familiaCodigo === 'laminado');
+
+    // Buscar el variantId del film brillo
+    const filmBrillo = await prisma.materiaPrimaVariante.findFirstOrThrow({
+      where: { tenantId, sku: 'BOPP-BRILLO-650' },
+    });
+
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      jobContext: {
+        cantidad: 1000,
+        caras: 2,
+        opcionalesActivados: { [laminado!.id]: true },
+        slotMaterial_film: filmBrillo.id, // elección explícita por slot
+      } as never,
+    });
+    expect(result.exitoso).toBe(true);
+    const pasoLaminado = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'laminado');
+    const film = pasoLaminado!.materiales![0];
+    expect(film.materialNombre).toBe('BOPP-BRILLO-650');
+  });
+
   it('F.2.7: Vinilo SIN activar viático → cargosDirectosCotizacion vacío', async () => {
     if (!tenantId) return;
     const vinilo = await prisma.producto.findFirstOrThrow({

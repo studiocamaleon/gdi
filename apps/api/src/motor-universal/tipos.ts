@@ -238,6 +238,9 @@ export interface SlotCargado {
   id: string;
   slotCodigo: string;
   modoSeleccion: string;
+  criterioMotorAuto?: string | null;
+  criterioInputCampo?: string | null;
+  criterioMaterialCampo?: string | null;
   materialVarianteId: string | null;
   materialesCandidatosJson: unknown;
   estrategiaCosto: string;
