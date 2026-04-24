@@ -364,6 +364,39 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(result.cotizacion!.costos.tiempoTotal).toBe(0);
   });
 
+  it('F.2.8: cotización SIN cantidad explícita → ERROR validación REQUIRES_INPUT', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+    // cantidad explicit null → REQUIRES_INPUT debería fallar
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      jobContext: { cantidad: null as unknown as number },
+    });
+    expect(result.exitoso).toBe(false);
+    expect(result.errores.length).toBeGreaterThan(0);
+    const e = result.errores.find((er) => er.codigo === 'requires_cantidad');
+    expect(e).toBeDefined();
+    expect(e!.severidad).toBe('ERROR');
+    expect(e!.mensaje).toContain('cantidad');
+  });
+
+  it('F.2.8: validación COMPARE skipea cuando los datos no están completos (no falla)', async () => {
+    if (!tenantId) return;
+    // Tarjetas sin gramaje en jobContext → COMPARE de gramaje skipea silencioso
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      jobContext: { cantidad: 1000 }, // sin gramajeGr
+    });
+    expect(result.exitoso).toBe(true);
+  });
+
   it('F.2.7: Vinilo SIN activar viático → cargosDirectosCotizacion vacío', async () => {
     if (!tenantId) return;
     const vinilo = await prisma.producto.findFirstOrThrow({

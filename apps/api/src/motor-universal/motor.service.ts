@@ -71,8 +71,11 @@ export class MotorUniversalService {
       };
     }
 
-    // JobContext mutable (los pasos PRE pueden mutarlo)
-    const jobContext: JobContext = { ...input.jobContext };
+    // JobContext mutable (los pasos PRE pueden mutarlo) + defaults sensatos
+    const jobContext: JobContext = {
+      caras: 1, // simple faz por defecto (se sobrescribe con input)
+      ...input.jobContext,
+    };
 
     // 1b. Cargar tarifas horarias publicadas para el período (F.2.10)
     const periodo = input.periodo ?? this.getPeriodoActual();
@@ -197,6 +200,22 @@ export class MotorUniversalService {
         razonNoActivado: activacion.razon,
         costoTotal: 0,
       };
+    }
+
+    // a.1) F.2.8 — Ejecutar validaciones D.7 declaradas por la familia
+    if (familia) {
+      const erroresValidacion = this.ejecutarValidaciones(familia, paso, jobContext);
+      if (erroresValidacion.length > 0) {
+        errores.push(...erroresValidacion);
+        return {
+          rutaPasoId: paso.rutaPasoId,
+          rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo,
+          configPasoId: paso.configPasoId,
+          activado: true,
+          costoTotal: 0,
+        };
+      }
     }
 
     // d) TIEMPO (D.4) — versión simple MVP
@@ -379,6 +398,145 @@ export class MotorUniversalService {
     }
 
     return ejecutados;
+  }
+
+  /**
+   * F.2.8 — Ejecuta las validaciones declaradas por la familia (D.7 Tipo B + C).
+   *
+   * Cada familia puede declarar validaciones tipadas:
+   *  - REQUIRES_INPUT: chequea que un campo del JobContext exista y no sea null
+   *  - COMPARE: compara dos valores (jobContext vs maquina/material/etc.)
+   *  - IN_RANGE: chequea que un valor esté entre min y max
+   *  - ONE_OF: chequea que un valor pertenezca a una lista
+   *  - EXISTS_OUTPUT: chequea que un output canónico haya sido escrito por algún paso anterior
+   *
+   * Devuelve array de errores. Si hay al menos 1, el paso falla.
+   * Acumula TODOS los errores del mismo paso (multi-error híbrido).
+   */
+  private ejecutarValidaciones(
+    familia: (typeof FAMILIAS)[FamiliaCodigo],
+    paso: PasoCargado,
+    jobContext: JobContext,
+  ): ErrorMotor[] {
+    const errores: ErrorMotor[] = [];
+    if (!familia.validaciones || familia.validaciones.length === 0) {
+      return errores;
+    }
+
+    const ctx = jobContext as unknown as Record<string, unknown>;
+
+    for (const v of familia.validaciones) {
+      let cumple = true;
+      let contextoError: Record<string, unknown> = {};
+
+      if (v.tipo === 'REQUIRES_INPUT') {
+        const valor = ctx[v.campo];
+        cumple = valor !== undefined && valor !== null && valor !== '';
+        contextoError = { campo: v.campo, valor };
+      } else if (v.tipo === 'COMPARE') {
+        const a = Number(ctx[v.campoJobContext] ?? NaN);
+        let b: number = NaN;
+        if (v.fuenteB === 'JOBCONTEXT') {
+          b = Number(ctx[v.campoB] ?? NaN);
+        } else if (v.fuenteB === 'MAQUINA') {
+          const params = paso.maquina?.parametrosTecnicosJson as Record<string, unknown> | undefined;
+          b = Number(params?.[v.campoB] ?? NaN);
+        } else if (v.fuenteB === 'MATERIAL' && v.slotMaterial) {
+          const slot = paso.slots.find((s) => s.slotCodigo === v.slotMaterial);
+          const attrs = slot?.materialVariante?.atributosVarianteJson as
+            | Record<string, unknown>
+            | undefined;
+          b = Number(attrs?.[v.campoB] ?? NaN);
+        } else if (v.fuenteB === 'CONFIG_PASO') {
+          const params = paso.paramsPasoJson as Record<string, unknown> | undefined;
+          b = Number(params?.[v.campoB] ?? NaN);
+        }
+        // Si falta uno de los datos, NO se valida (skip silencioso).
+        // Validar requiere ambos lados definidos.
+        if (Number.isNaN(a) || Number.isNaN(b)) {
+          cumple = true;
+        } else {
+          switch (v.operador) {
+            case '<=':
+              cumple = a <= b;
+              break;
+            case '>=':
+              cumple = a >= b;
+              break;
+            case '==':
+              cumple = a === b;
+              break;
+            case '!=':
+              cumple = a !== b;
+              break;
+            case '<':
+              cumple = a < b;
+              break;
+            case '>':
+              cumple = a > b;
+              break;
+          }
+        }
+        contextoError = { jc: { [v.campoJobContext]: a }, valorB: b, operador: v.operador };
+      } else if (v.tipo === 'IN_RANGE') {
+        const valor = Number(ctx[v.campo] ?? NaN);
+        cumple =
+          !Number.isNaN(valor) &&
+          (v.min == null || valor >= v.min) &&
+          (v.max == null || valor <= v.max);
+        contextoError = { campo: v.campo, valor, min: v.min, max: v.max };
+      } else if (v.tipo === 'ONE_OF') {
+        const valor = String(ctx[v.campo] ?? '');
+        cumple = v.valoresPermitidos.includes(valor);
+        contextoError = { campo: v.campo, valor, valoresPermitidos: v.valoresPermitidos };
+      } else if (v.tipo === 'EXISTS_OUTPUT') {
+        // TODO F.2.x — chequear contra outputs acumulados de pasos anteriores
+        // Por ahora asumimos que existe (no validamos)
+        cumple = true;
+      }
+
+      if (!cumple) {
+        const mensaje = this.interpolarMensaje(v.mensaje, contextoError, paso, jobContext);
+        errores.push({
+          codigo: v.codigo,
+          severidad: 'ERROR',
+          mensaje,
+          rutaPasoId: paso.rutaPasoId,
+          rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo,
+          contexto: contextoError,
+        });
+      }
+    }
+    return errores;
+  }
+
+  /** Interpola placeholders {jc.campo}, {maq.campo}, etc. en mensajes de error. */
+  private interpolarMensaje(
+    template: string,
+    contexto: Record<string, unknown>,
+    paso: PasoCargado,
+    jobContext: JobContext,
+  ): string {
+    return template.replace(/\{(jc|maq|mat)\.(\w+)\}/g, (_match, fuente: string, campo: string) => {
+      if (fuente === 'jc') {
+        return String((jobContext as Record<string, unknown>)[campo] ?? '?');
+      }
+      if (fuente === 'maq') {
+        const params = paso.maquina?.parametrosTecnicosJson as Record<string, unknown> | undefined;
+        return String(params?.[campo] ?? '?');
+      }
+      if (fuente === 'mat') {
+        // Buscar en cualquier slot
+        for (const s of paso.slots) {
+          const attrs = s.materialVariante?.atributosVarianteJson as
+            | Record<string, unknown>
+            | undefined;
+          if (attrs && attrs[campo] !== undefined) return String(attrs[campo]);
+        }
+      }
+      return String(contexto[campo] ?? '?');
+    });
   }
 
   /**
