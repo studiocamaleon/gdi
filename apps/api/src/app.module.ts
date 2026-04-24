@@ -16,6 +16,7 @@ import { TenantsModule } from './tenants/tenants.module';
 import { InventarioModule } from './inventario/inventario.module';
 import { ProduccionModule } from './produccion/produccion.module';
 import { ProductosServiciosModule } from './productos-servicios/productos-servicios.module';
+import { MotorUniversalModule } from './motor-universal/motor.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { ProductosServiciosModule } from './productos-servicios/productos-servic
     InventarioModule,
     ProduccionModule,
     ProductosServiciosModule,
+    MotorUniversalModule,
   ],
   controllers: [AppController],
   providers: [
