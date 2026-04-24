@@ -113,16 +113,32 @@ export class MotorUniversalService {
       return { exitoso: false, errores };
     }
 
-    // 4. COMPONER RESULTADO
+    // 4. F.2.7 — Aplicar cargos directos a nivel COTIZACIÓN
+    const subtotalSinCargosCotizacion = pasosEjecutados.reduce(
+      (acc, p) => acc + p.costoTotal,
+      0,
+    );
+    const cargosDirectosCotizacion = this.aplicarCargosCotizacion(
+      producto.cargosDirectosCotizacion,
+      jobContext,
+      subtotalSinCargosCotizacion,
+    );
+
+    // 5. COMPONER RESULTADO
     const tiempoTotal = pasosEjecutados.reduce((acc, p) => acc + (p.tiempo?.costo ?? 0), 0);
     const materialesTotal = pasosEjecutados.reduce(
       (acc, p) => acc + (p.materiales?.reduce((m, mat) => m + mat.costoTotal, 0) ?? 0),
       0,
     );
-    const cargosDirectosTotal = pasosEjecutados.reduce(
+    const cargosDirectosPasoTotal = pasosEjecutados.reduce(
       (acc, p) => acc + (p.cargosDirectosPaso?.reduce((c, cd) => c + cd.monto, 0) ?? 0),
       0,
     );
+    const cargosDirectosCotizacionTotal = cargosDirectosCotizacion.reduce(
+      (acc, c) => acc + c.monto,
+      0,
+    );
+    const cargosDirectosTotal = cargosDirectosPasoTotal + cargosDirectosCotizacionTotal;
     const total = tiempoTotal + materialesTotal + cargosDirectosTotal;
     const cantidadEfectiva = (jobContext.cantidad ?? 1);
 
@@ -141,7 +157,7 @@ export class MotorUniversalService {
         unitario: cantidadEfectiva > 0 ? total / cantidadEfectiva : 0,
       },
       pasos: pasosEjecutados,
-      cargosDirectosCotizacion: [], // TODO: F.2.x
+      cargosDirectosCotizacion,
     };
 
     return { exitoso: true, errores: [], cotizacion };
@@ -363,6 +379,108 @@ export class MotorUniversalService {
     }
 
     return ejecutados;
+  }
+
+  /**
+   * F.2.7 — Calcula los cargos directos a nivel COTIZACIÓN.
+   *
+   * Itera los cargos pre-declarados en el producto, evalúa activación
+   * (OBLIGATORIO/OPCIONAL/CONDICIONAL) y calcula el monto según el modo:
+   *  - MONTO_FIJO_PLANO: lee del config (con override si aplica)
+   *  - PORCENTAJE_SOBRE_BASE: % × subtotal de la cotización
+   *  - POR_UNIDAD_INPUT: precioPorUnidad × valor del input declarado
+   */
+  private aplicarCargosCotizacion(
+    cargos: ProductoCargado['cargosDirectosCotizacion'],
+    jobContext: JobContext,
+    subtotalCotizacion: number,
+  ): CargoDirectoEjecutado[] {
+    const ejecutados: CargoDirectoEjecutado[] = [];
+    for (const cargo of cargos) {
+      // Activación
+      const activado = this.evaluarActivacionCargo(cargo, jobContext);
+      if (!activado) continue;
+
+      const config = (cargo.configOverrideJson ?? cargo.catalogo.configJson) as
+        | Record<string, unknown>
+        | null;
+      const monto = this.calcularMontoCargo(
+        cargo.catalogo.modoCalculo,
+        config,
+        jobContext,
+        subtotalCotizacion,
+      );
+
+      ejecutados.push({
+        cargoDirectoCatalogoId: cargo.cargoDirectoCatalogoId,
+        cargoCodigo: cargo.catalogo.codigo,
+        cargoNombre: cargo.catalogo.nombre,
+        modoCalculo: cargo.catalogo.modoCalculo as
+          | 'MONTO_FIJO_PLANO'
+          | 'PORCENTAJE_SOBRE_BASE'
+          | 'POR_UNIDAD_INPUT',
+        monto,
+        detalle: { config, baseCalculo: subtotalCotizacion },
+      });
+    }
+    return ejecutados;
+  }
+
+  private evaluarActivacionCargo(
+    cargo: { modoActivacion: string; condicionActivacionJson: unknown; id: string },
+    jobContext: JobContext,
+  ): boolean {
+    if (cargo.modoActivacion === 'OBLIGATORIO') return true;
+    if (cargo.modoActivacion === 'OPCIONAL') {
+      const opcionales = jobContext.opcionalesActivados ?? {};
+      return opcionales[cargo.id] === true;
+    }
+    if (cargo.modoActivacion === 'CONDICIONAL') {
+      const r = evaluarRegla(
+        cargo.condicionActivacionJson,
+        jobContext as unknown as Record<string, unknown>,
+      );
+      return r.resultado;
+    }
+    return false;
+  }
+
+  /**
+   * F.2.7 — Calcula el monto del cargo según su modoCalculo.
+   * Lee del configJson (puede haber override en la asociación producto/paso).
+   */
+  private calcularMontoCargo(
+    modoCalculo: string,
+    config: Record<string, unknown> | null,
+    jobContext: JobContext,
+    subtotalBase: number,
+  ): number {
+    if (!config) return 0;
+
+    if (modoCalculo === 'MONTO_FIJO_PLANO') {
+      // Si hay zonas (ej: viático), buscar la zona elegida en el JobContext
+      const zonas = config.zonas as Array<{ codigo: string; monto: number }> | undefined;
+      if (zonas && jobContext.zonaInstalacion) {
+        const zona = zonas.find((z) => z.codigo === jobContext.zonaInstalacion);
+        if (zona) return Number(zona.monto);
+      }
+      // Sino, usar el monto fijo
+      return Number(config.monto ?? 0);
+    }
+
+    if (modoCalculo === 'PORCENTAJE_SOBRE_BASE') {
+      const pct = Number(config.porcentaje ?? config.porcentajeDefault ?? 0);
+      return (subtotalBase * pct) / 100;
+    }
+
+    if (modoCalculo === 'POR_UNIDAD_INPUT') {
+      const precioPorUnidad = Number(config.precioPorUnidad ?? 0);
+      const inputCantidad = String(config.inputCantidad ?? '');
+      const valorInput = Number((jobContext as Record<string, unknown>)[inputCantidad] ?? 0);
+      return precioPorUnidad * valorInput;
+    }
+
+    return 0;
   }
 
   /**

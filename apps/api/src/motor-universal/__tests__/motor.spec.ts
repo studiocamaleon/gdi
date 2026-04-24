@@ -364,6 +364,72 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(result.cotizacion!.costos.tiempoTotal).toBe(0);
   });
 
+  it('F.2.7: Vinilo SIN activar viático → cargosDirectosCotizacion vacío', async () => {
+    if (!tenantId) return;
+    const vinilo = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'VINILO-BLANCO-IMP' },
+    });
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: vinilo.id,
+      jobContext: {
+        cantidad: 1,
+        piezas: [{ cantidad: 1, anchoMm: 1000, altoMm: 500 }],
+      },
+    });
+    expect(result.exitoso).toBe(true);
+    expect(result.cotizacion!.cargosDirectosCotizacion.length).toBe(0);
+    expect(result.cotizacion!.costos.cargosDirectosTotal).toBe(0);
+  });
+
+  it('F.2.7: Vinilo CON viático activado + zona CABA → cargo $3000 (MONTO_FIJO_PLANO con zonas)', async () => {
+    if (!tenantId) return;
+    const vinilo = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'VINILO-BLANCO-IMP' },
+      include: { cargosDirectosCotizacion: true },
+    });
+    const cargoViaticoId = vinilo.cargosDirectosCotizacion[0].id;
+
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: vinilo.id,
+      jobContext: {
+        cantidad: 1,
+        piezas: [{ cantidad: 1, anchoMm: 1000, altoMm: 500 }],
+        opcionalesActivados: { [cargoViaticoId]: true },
+        zonaInstalacion: 'CABA',
+      },
+    });
+    expect(result.exitoso).toBe(true);
+    expect(result.cotizacion!.cargosDirectosCotizacion.length).toBe(1);
+    const viatico = result.cotizacion!.cargosDirectosCotizacion[0];
+    expect(viatico.cargoCodigo).toBe('viatico');
+    expect(viatico.monto).toBe(3000);
+    expect(result.cotizacion!.costos.cargosDirectosTotal).toBe(3000);
+  });
+
+  it('F.2.7: Vinilo CON viático + zona FUERA_AMBA → cargo $12000', async () => {
+    if (!tenantId) return;
+    const vinilo = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'VINILO-BLANCO-IMP' },
+      include: { cargosDirectosCotizacion: true },
+    });
+    const cargoViaticoId = vinilo.cargosDirectosCotizacion[0].id;
+
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: vinilo.id,
+      jobContext: {
+        cantidad: 1,
+        piezas: [{ cantidad: 1, anchoMm: 1000, altoMm: 500 }],
+        opcionalesActivados: { [cargoViaticoId]: true },
+        zonaInstalacion: 'FUERA_AMBA',
+      },
+    });
+    const viatico = result.cotizacion!.cargosDirectosCotizacion[0];
+    expect(viatico.monto).toBe(12000);
+  });
+
   it('estructura de costos siempre presente, aunque sean 0', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({
