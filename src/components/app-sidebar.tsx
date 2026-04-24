@@ -62,8 +62,8 @@ import {
 
 const comercial = [
   {
-    title: "Crear propuesta",
-    href: "/comercial/crear-propuesta",
+    title: "Crear cotización",
+    href: "/comercial/cotizar",
     icon: FileTextIcon,
   },
 ];
@@ -99,12 +99,12 @@ const costos = [
   },
   {
     title: "Rutas de produccion",
-    href: "/costos/procesos",
+    href: "/productos-servicios/rutas",
     icon: WorkflowIcon,
   },
   {
     title: "Catalogo de productos",
-    href: "/costos/productos",
+    href: "/productos-servicios",
     icon: BoxesIcon,
   },
 ];
