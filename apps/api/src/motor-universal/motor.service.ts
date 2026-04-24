@@ -166,6 +166,99 @@ export class MotorUniversalService {
     return { exitoso: true, errores: [], cotizacion };
   }
 
+  /**
+   * F.2.11 — Cotiza y persiste el resultado como CotizacionItem con snapshot
+   * completo (sub-tema 07 §7).
+   *
+   * Crea (o agrega a) una Cotizacion + un CotizacionItem con:
+   *  - jobContextJson (input del comercial al cotizar)
+   *  - snapshotJson (ruta + producto + materiales + valores + cargos +
+   *    selección de ruta alternativa)
+   *  - costoUnitario, costoTotal, trazabilidadJson
+   *
+   * Si `cotizacionId` se pasa, agrega item a esa cotización; si no, crea
+   * una cotización nueva en estado borrador.
+   */
+  async cotizarYGuardar(
+    input: CotizarInput & { cotizacionId?: string },
+  ): Promise<{ result: CotizarOutput; cotizacionId?: string; cotizacionItemId?: string }> {
+    const result = await this.cotizar(input);
+    if (!result.exitoso || !result.cotizacion) {
+      return { result };
+    }
+
+    // 1. Encontrar o crear cotización
+    let cotizacionId = input.cotizacionId;
+    if (!cotizacionId) {
+      const nueva = await this.prisma.cotizacion.create({
+        data: {
+          tenantId: input.tenantId,
+          clienteId: input.clienteId ?? null,
+          estado: 'borrador',
+        },
+      });
+      cotizacionId = nueva.id;
+    }
+
+    // 2. Recuperar producto cargado para construir snapshot completo
+    const producto = await this.cargarProductoYRuta(
+      input.tenantId,
+      input.productoId,
+      input.rutaAlternativaId ?? null,
+    );
+
+    // 3. Crear CotizacionItem con snapshot
+    const item = await this.prisma.cotizacionItem.create({
+      data: {
+        tenantId: input.tenantId,
+        cotizacionId,
+        productoId: input.productoId,
+        rutaAlternativaId: result.cotizacion.rutaAlternativaId,
+        cantidad: result.cotizacion.cantidadEfectiva.toString(),
+        jobContextJson: input.jobContext as never,
+        snapshotJson: {
+          producto: {
+            id: producto.productoId,
+            codigo: producto.productoCodigo,
+            nombre: producto.productoNombre,
+            unidadComercial: producto.unidadComercial,
+            modoMedidas: producto.modoMedidas,
+          },
+          ruta: {
+            id: producto.rutaId,
+            codigo: producto.rutaCodigo,
+            nombre: producto.rutaNombre,
+            alternativa: producto.rutaAlternativaNombre,
+            pasos: producto.pasos.map((p) => ({
+              orden: p.rutaPasoOrden,
+              familia: p.familiaCodigo,
+              maquina: p.maquina?.codigo,
+              perfil: p.perfil?.nombre,
+              materialesEnSlots: p.slots.map((s) => ({
+                slot: s.slotCodigo,
+                modo: s.modoSeleccion,
+                materialSku: s.materialVariante?.sku,
+              })),
+            })),
+          },
+          ejecucion: {
+            cantidadEfectiva: result.cotizacion.cantidadEfectiva,
+            cantidadPedida: result.cotizacion.cantidadPedida,
+            costos: result.cotizacion.costos,
+          },
+        } as never,
+        costoUnitario: result.cotizacion.costos.unitario.toString(),
+        costoTotal: result.cotizacion.costos.total.toString(),
+        trazabilidadJson: {
+          pasos: result.cotizacion.pasos,
+          cargosDirectosCotizacion: result.cotizacion.cargosDirectosCotizacion,
+        } as never,
+      },
+    });
+
+    return { result, cotizacionId, cotizacionItemId: item.id };
+  }
+
   // ============================================================================
   // EJECUCIÓN DE UN PASO (sub-tareas a-i — versión MVP)
   // ============================================================================

@@ -622,6 +622,48 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(viatico.monto).toBe(12000);
   });
 
+  it('F.2.11: cotizarYGuardar persiste Cotizacion + CotizacionItem con snapshot completo', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+    const { result, cotizacionId, cotizacionItemId } = await motorService.cotizarYGuardar({
+      tenantId,
+      productoId: tarjetas.id,
+      periodo: '2026-03',
+      jobContext: { cantidad: 500, caras: 2 },
+    });
+
+    expect(result.exitoso).toBe(true);
+    expect(cotizacionId).toBeDefined();
+    expect(cotizacionItemId).toBeDefined();
+
+    // Verificar persistencia
+    const item = await prisma.cotizacionItem.findUniqueOrThrow({
+      where: { id: cotizacionItemId! },
+    });
+    expect(item.productoId).toBe(tarjetas.id);
+    expect(Number(item.cantidad)).toBe(500);
+    expect(Number(item.costoTotal)).toBeGreaterThan(0);
+
+    // Verificar snapshot
+    const snap = item.snapshotJson as Record<string, unknown>;
+    expect(snap).toHaveProperty('producto');
+    expect(snap).toHaveProperty('ruta');
+    expect(snap).toHaveProperty('ejecucion');
+    const producto = snap.producto as Record<string, unknown>;
+    expect(producto.codigo).toBe('TARJ-PREMIUM-300');
+
+    // Verificar trazabilidad
+    const traza = item.trazabilidadJson as Record<string, unknown>;
+    expect(traza).toHaveProperty('pasos');
+    expect((traza.pasos as unknown[]).length).toBe(7);
+
+    // Cleanup
+    await prisma.cotizacionItem.delete({ where: { id: cotizacionItemId! } });
+    await prisma.cotizacion.delete({ where: { id: cotizacionId! } });
+  });
+
   it('estructura de costos siempre presente, aunque sean 0', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({
