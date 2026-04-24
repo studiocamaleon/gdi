@@ -319,7 +319,8 @@ export class MotorUniversalService {
       // Productividad del perfil — necesita: cantidad y productividad
       const productividad = Number(paso.perfil?.productivityValue ?? 0);
       if (productividad > 0) {
-        let cantidadEfectiva = Number(jobContext.cantidad ?? 0);
+        // F.2.3 — Mecanismo de cantidad
+        let cantidadEfectiva = this.resolverCantidad(paso, jobContext);
         // F.2.6 — aplicar multiplicadores activos
         cantidadEfectiva = this.aplicarMultiplicadores(cantidadEfectiva, paso, jobContext);
         runMin = (cantidadEfectiva / productividad) * 60;
@@ -658,6 +659,59 @@ export class MotorUniversalService {
       }
       return String(contexto[campo] ?? '?');
     });
+  }
+
+  /**
+   * F.2.3 — Resuelve la CANTIDAD a producir según el mecanismo declarado.
+   *
+   * 4 mecanismos de D.3:
+   *  - DIRECT_FROM_JOBCONTEXT: lee directo `jobContext.cantidad` (default)
+   *  - HEREDAR_DEL_OUTPUT_CANONICO: lee output canónico de paso anterior
+   *    (config: { campoOutput: 'pliegos_calculados' })
+   *  - CALCULADO_POR_PASO: el paso ejecuta cálculo propio (típicamente
+   *    nesting). MVP: usa m² total de las piezas para impresion_por_area
+   *  - CONVERSION: aplica fórmula a otro valor
+   *    (config: { piezasPorCaja: 100 } → ceil(cantidad / piezasPorCaja))
+   */
+  private resolverCantidad(paso: PasoCargado, jobContext: JobContext): number {
+    const mecanismo = paso.mecanismoCantidad ?? 'DIRECT_FROM_JOBCONTEXT';
+
+    if (mecanismo === 'DIRECT_FROM_JOBCONTEXT') {
+      return Number(jobContext.cantidad ?? 0);
+    }
+
+    if (mecanismo === 'HEREDAR_DEL_OUTPUT_CANONICO') {
+      // MVP: leer del jobContext bajo el nombre del output (los pasos PRE
+      // que escriben al jobContext aún no están implementados).
+      // Por ahora, asumimos que `cantidad` directo cubre el caso simple.
+      return Number(jobContext.cantidad ?? 0);
+    }
+
+    if (mecanismo === 'CALCULADO_POR_PASO') {
+      // Para impresion_por_area: usar m² desde piezas
+      if (paso.familiaCodigo === 'impresion_por_area' || paso.familiaCodigo === 'plotter_corte') {
+        return this.calcularM2DesdePiezas(jobContext);
+      }
+      return Number(jobContext.cantidad ?? 0);
+    }
+
+    if (mecanismo === 'CONVERSION') {
+      const config = (paso.mecanismoCantidadConfigJson ?? {}) as Record<string, unknown>;
+      const cantidadBase = Number(jobContext.cantidad ?? 0);
+      // CONVERSION típica: cajas = ceil(piezas / piezasPorCaja)
+      const piezasPorCaja = Number(config.piezasPorCaja ?? 0);
+      if (piezasPorCaja > 0) {
+        return Math.ceil(cantidadBase / piezasPorCaja);
+      }
+      // CONVERSION alternativa: talonariosPorCaja
+      const talonariosPorCaja = Number(config.talonariosPorCaja ?? 0);
+      if (talonariosPorCaja > 0) {
+        return Math.ceil(cantidadBase / talonariosPorCaja);
+      }
+      return cantidadBase;
+    }
+
+    return Number(jobContext.cantidad ?? 0);
   }
 
   /**

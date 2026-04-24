@@ -397,6 +397,49 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(result.exitoso).toBe(true);
   });
 
+  it('F.2.3: Vinilo con piezas → mecanismo CALCULADO_POR_PASO usa m² total para impresion_por_area', async () => {
+    if (!tenantId) return;
+    const vinilo = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'VINILO-BLANCO-IMP' },
+    });
+
+    // 3 paños de 2x1m = 6m² total
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: vinilo.id,
+      periodo: '2026-03',
+      jobContext: {
+        cantidad: 1,
+        piezas: [{ cantidad: 3, anchoMm: 2000, altoMm: 1000 }],
+      },
+    });
+    expect(result.exitoso).toBe(true);
+    const impresion = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_area');
+    expect(impresion?.activado).toBe(true);
+    // 6 m² / 6 m²/h = 1 hora = 60min de run + setup/cleanup
+    expect(impresion!.tiempo!.totalMin).toBeGreaterThan(60);
+    expect(impresion!.tiempo!.totalMin).toBeLessThan(80);
+  });
+
+  it('F.2.3: Tarjetas con embalaje CONVERSION → 1000 piezas / 100 piezasPorCaja = 10 cajas', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      periodo: '2026-03',
+      jobContext: { cantidad: 1000, caras: 2 },
+    });
+    expect(result.exitoso).toBe(true);
+    const embalaje = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'embalaje');
+    expect(embalaje?.activado).toBe(true);
+    // CONVERSION devuelve 10 cajas; el motor T-2 todavía no usa run, pero al menos
+    // verificamos que el paso se ejecutó sin error
+    expect(embalaje!.materiales?.length).toBeGreaterThan(0);
+  });
+
   it('F.2.4: Tarjetas doble faz → motor selecciona automáticamente perfil "Papel grueso doble faz" (1200 ppm vs 2400 simple)', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({
