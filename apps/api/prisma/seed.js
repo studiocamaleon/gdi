@@ -462,7 +462,7 @@ async function main() {
         centroCostoId: centroImpresion.id,
         periodo: periodoDemo,
         tipoRecurso: TipoRecursoCentroCosto.MAQUINARIA,
-        nombreManual: "Heidelberg SM74",
+        nombreRecurso: "Heidelberg SM74",
         descripcion: "Máquina principal offset 4 colores",
         activo: true,
       },
