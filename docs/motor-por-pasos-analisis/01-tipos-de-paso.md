@@ -1,7 +1,7 @@
 # Inventario de tipos de paso (familias)
 
 > **Fase A** del análisis del motor por pasos.
-> **Sesiones**: 1 + 2 (2026-04-23). **Estado**: Fase A COMPLETA — 29 familias modeladas.
+> **Sesiones**: 1 + 2 (2026-04-23) + 3 (Fase E 2026-04-24). **Estado**: Fase A COMPLETA — 31 familias modeladas.
 > **Método**: análisis interactivo. NO escribir código.
 
 ## Propósito
@@ -102,7 +102,7 @@ Ejemplo: Plotter de corte de vinilo → comercial: metros lineales / productiva:
 | `aplicacion_transfer` — Aplicación de transfer (DTF, DTG) | M-1 | T-3 | piezas | OBLIGATORIO | textil + film transfer + tinta |
 | `grabado_laser` — Grabado láser | M-1 | T-3 | piezas o m² | OBLIGATORIO | acrílico, madera, metal, cuero (sin consumible típico) |
 
-### 3.3 Corte y formado (7)
+### 3.3 Corte y formado (8)
 
 | Familia | Máquina | Tiempo | Unidad | Activación | Notas |
 |---|---|---|---|---|---|
@@ -113,8 +113,9 @@ Ejemplo: Plotter de corte de vinilo → comercial: metros lineales / productiva:
 | `cnc` — CNC | M-1 | T-3 | piezas o m² | OBLIGATORIO | Para piezas planas (3D fuera de scope hoy) |
 | `plegado` — Plegado | M-1 o M-0 | T-3 o T-2 | pliegos plegados | OBLIGATORIO si producto pliega | Manual o con plegadora |
 | `perforado` — Perforado / puntillado | M-1 o M-0 | T-3 (perforaciones/min) | piezas + perforaciones | OBLIGATORIO si requiere | Unidad compuesta como guillotina |
+| `corte_manual` — Corte manual (trincheta / sierra) **[NUEVA — Fase E]** | M-0 | T-2 (piezas/h) | piezas | OBLIGATORIO si producto requiere corte manual | Para señalética PVC chica, MDF fino. Sin máquina industrial — herramientas auxiliares manuales. |
 
-### 3.4 Terminaciones (4)
+### 3.4 Terminaciones (5)
 
 | Familia | Máquina | Tiempo | Unidad | Activación | Materiales |
 |---|---|---|---|---|---|
@@ -122,6 +123,7 @@ Ejemplo: Plotter de corte de vinilo → comercial: metros lineales / productiva:
 | `barniz` — Barniz | M-1 | T-3 | pliegos o m² | OPCIONAL | Barniz UV / agua |
 | `acabado_decorativo` — Hotstamping, dorado, gofrado | M-1 | T-3 (golpes/min) | piezas | OPCIONAL | Film metálico (oro, plata, holograma); a veces matriz custom |
 | `pintura_superficial` — Pintura superficial | M-1 (cabina) o M-0 (manual) | T-3 o T-2 | piezas o m² | OPCIONAL | Pintura / laca |
+| `lijado_canteado` — Lijado / canteado de bordes **[NUEVA — Fase E]** | M-0 | T-2 (piezas/h o ml/h) | piezas o ml | OPCIONAL | Sin consumibles típicos (lija como insumo menor) |
 
 ### 3.5 Encuadernación / armado (4)
 
@@ -202,7 +204,11 @@ Sub-tipos típicos de `modificacion_post`:
 
 ## 4. Total
 
-**29 familias activas** distribuidas en 9 categorías.
+**31 familias activas** distribuidas en 9 categorías.
+
+**Agregadas en Fase E (validación con casos reales)**:
+- `corte_manual` (corte y formado) — para señalética PVC, MDF fino. Detectado validando producto Rígido impreso.
+- `lijado_canteado` (terminaciones) — para acabado de bordes en rígidos. Detectado en mismo producto.
 
 **Descartadas explícitamente** (Corporearte no las usa):
 - Bordado (categoría completa)
