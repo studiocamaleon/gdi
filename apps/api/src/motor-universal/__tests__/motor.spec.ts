@@ -664,6 +664,47 @@ describe('MotorUniversalService — smoke tests', () => {
     await prisma.cotizacion.delete({ where: { id: cotizacionId! } });
   });
 
+  it('F.2.12: Tarjetas (precioConfig por_margen 100%) → precio = costo × 2', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      periodo: '2026-03',
+      jobContext: { cantidad: 1000, caras: 2 },
+    });
+    expect(result.exitoso).toBe(true);
+    expect(result.cotizacion!.precio).toBeDefined();
+    expect(result.cotizacion!.precio!.metodoUsado).toBe('por_margen');
+    // costo unitario × 2 = precio unitario (margen 100% del seed)
+    const costoUnit = result.cotizacion!.costos.unitario;
+    const precioUnit = result.cotizacion!.precio!.precioUnitario;
+    expect(precioUnit).toBeCloseTo(costoUnit * 2, 2);
+  });
+
+  it('F.2.12: Vinilo (precioConfig margen_variable) → margen depende de cantidad', async () => {
+    if (!tenantId) return;
+    const vinilo = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'VINILO-BLANCO-IMP' },
+    });
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: vinilo.id,
+      periodo: '2026-03',
+      jobContext: {
+        cantidad: 1,
+        piezas: [{ cantidad: 1, anchoMm: 1000, altoMm: 500 }],
+      },
+    });
+    expect(result.exitoso).toBe(true);
+    expect(result.cotizacion!.precio).toBeDefined();
+    expect(result.cotizacion!.precio!.metodoUsado).toBe('margen_variable');
+    // cantidad=1 cae en primer tier (≤5) con margen 100%
+    expect(result.cotizacion!.precio!.margenAplicadoPct).toBe(100);
+  });
+
   it('estructura de costos siempre presente, aunque sean 0', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({

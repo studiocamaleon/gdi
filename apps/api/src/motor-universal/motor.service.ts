@@ -4,6 +4,7 @@ import { FAMILIAS } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 import { evaluarRegla } from './evaluador-jsonlogic';
 import { loadTarifasHorarias } from '../productos-servicios/costing/load-tarifas';
+import { calcularPrecio, type PrecioConfig } from './calculador-precio';
 import type {
   CotizarInput,
   CotizarOutput,
@@ -162,6 +163,15 @@ export class MotorUniversalService {
       pasos: pasosEjecutados,
       cargosDirectosCotizacion,
     };
+
+    // F.2.12 — Calcular precio a partir del costo + Tab Precio del producto
+    if (producto.precioConfigJson) {
+      cotizacion.precio = calcularPrecio(
+        cotizacion.costos.unitario,
+        cantidadEfectiva,
+        producto.precioConfigJson as PrecioConfig,
+      );
+    }
 
     return { exitoso: true, errores: [], cotizacion };
   }
@@ -1132,6 +1142,7 @@ export class MotorUniversalService {
       productoNombre: producto.nombre,
       unidadComercial: producto.unidadComercial,
       modoMedidas: producto.modoMedidas,
+      precioConfigJson: producto.precioConfigJson,
       rutaAlternativaId: rutaAlt.id,
       rutaAlternativaNombre: rutaAlt.nombre,
       rutaId: rutaAlt.ruta.id,

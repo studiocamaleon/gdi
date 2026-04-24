@@ -93,6 +93,15 @@ export interface CotizacionResultado {
     total: number;
     unitario: number;
   };
+  /** Precio calculado por el Tab Precio (F.2.12). */
+  precio?: {
+    metodoUsado: string;
+    precioUnitario: number;
+    precioTotal: number;
+    margenAplicadoPct?: number;
+    margenNegativo: boolean;
+    mensaje?: string;
+  };
   /** Trazabilidad por paso (orden topológico). */
   pasos: PasoEjecutado[];
   /** Cargos directos a nivel cotización (ej: viático, recargo urgencia). */
@@ -187,6 +196,7 @@ export interface ProductoCargado {
   productoNombre: string;
   unidadComercial: string;
   modoMedidas: string;
+  precioConfigJson?: unknown;
   rutaAlternativaId: string;
   rutaAlternativaNombre: string;
   rutaId: string;
