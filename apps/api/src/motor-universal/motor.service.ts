@@ -278,9 +278,10 @@ export class MotorUniversalService {
       // Productividad del perfil — necesita: cantidad y productividad
       const productividad = Number(paso.perfil?.productivityValue ?? 0);
       if (productividad > 0) {
-        // Asume que cantidad es la unidad productiva (simplificación MVP)
-        const cantidad = Number(jobContext.cantidad ?? 0);
-        runMin = (cantidad / productividad) * 60;
+        let cantidadEfectiva = Number(jobContext.cantidad ?? 0);
+        // F.2.6 — aplicar multiplicadores activos
+        cantidadEfectiva = this.aplicarMultiplicadores(cantidadEfectiva, paso, jobContext);
+        runMin = (cantidadEfectiva / productividad) * 60;
       }
     }
 
@@ -329,9 +330,20 @@ export class MotorUniversalService {
       }
       // TODO: F.2.x — fórmulas por_m2, por_metro_lineal
 
-      // Multi-caras
-      if (slot.aplicaMultiCaras && jobContext.caras === 2) {
-        cantidad *= 2;
+      // F.2.6 — multi-caras (legacy flag, se mantiene)
+      if (slot.aplicaMultiCaras && typeof jobContext.caras === 'number') {
+        cantidad *= jobContext.caras;
+      }
+      // F.2.6 — aplicar también los multiplicadores activos del paso al consumo
+      // (excepto 'caras' si ya se aplicó arriba)
+      if (paso.multiplicadoresActivos && paso.multiplicadoresActivos.length > 0) {
+        for (const codigoMult of paso.multiplicadoresActivos) {
+          if (codigoMult === 'caras' && slot.aplicaMultiCaras) continue;
+          const valor = (jobContext as Record<string, unknown>)[codigoMult];
+          if (typeof valor === 'number' && valor > 0) {
+            cantidad *= valor;
+          }
+        }
       }
 
       const precioUnitario = Number(slot.materialVariante.precioReferencia ?? 0);
@@ -351,6 +363,37 @@ export class MotorUniversalService {
     }
 
     return ejecutados;
+  }
+
+  /**
+   * F.2.6 — Aplica los multiplicadores activos del paso a la cantidad base.
+   *
+   * El paso del producto declara `multiplicadoresActivos: string[]` (ej: ['caras', 'tipoCopia']).
+   * Cada multiplicador lee su valor del JobContext y multiplica la cantidad.
+   *
+   * Multiplicadores soportados (MVP):
+   *  - 'caras': multiplica por jobContext.caras (1 simple, 2 doble faz)
+   *  - 'tipoCopia': multiplica por jobContext.tipoCopia (1, 2, 3)
+   *  - 'hojasPorLibro': multiplica por jobContext.hojasPorLibro (anillado)
+   *  - 'cantidadModificacionesPorPieza': multiplica por jobContext.cantidadModificacionesPorPieza
+   *  - cualquier otro string: lee dinámicamente del JobContext (truthy default 1)
+   */
+  private aplicarMultiplicadores(
+    cantidadBase: number,
+    paso: PasoCargado,
+    jobContext: JobContext,
+  ): number {
+    if (!paso.multiplicadoresActivos || paso.multiplicadoresActivos.length === 0) {
+      return cantidadBase;
+    }
+    let resultado = cantidadBase;
+    for (const codigoMult of paso.multiplicadoresActivos) {
+      const valor = (jobContext as Record<string, unknown>)[codigoMult];
+      if (typeof valor === 'number' && valor > 0) {
+        resultado *= valor;
+      }
+    }
+    return resultado;
   }
 
   /** Outputs canónicos del paso (placeholder MVP — no escribe nada al jobContext). */

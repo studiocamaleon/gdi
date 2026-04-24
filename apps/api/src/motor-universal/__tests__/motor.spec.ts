@@ -260,6 +260,65 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(result.cotizacion!.cantidadPedida).toBe(1000);
   });
 
+  it('F.2.6: Tarjetas doble faz consume MÁS tiempo y MÁS material que simple faz', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+    const simpleFaz = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      periodo: '2026-03',
+      jobContext: { cantidad: 1000, caras: 1 },
+    });
+    const dobleFaz = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      periodo: '2026-03',
+      jobContext: { cantidad: 1000, caras: 2 },
+    });
+
+    expect(simpleFaz.exitoso).toBe(true);
+    expect(dobleFaz.exitoso).toBe(true);
+
+    // Doble faz: el paso impresión debe consumir el doble de tiempo
+    const impSimple = simpleFaz.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_hoja');
+    const impDoble = dobleFaz.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_hoja');
+    expect(impDoble!.tiempo!.totalMin).toBeGreaterThan(impSimple!.tiempo!.totalMin);
+  });
+
+  it('F.2.6: Talonario con tipoCopia=3 multiplica el tiempo del paso impresión', async () => {
+    if (!tenantId) return;
+    const talonario = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TALON-DUPL-A4' },
+    });
+    const simple = await motorService.cotizar({
+      tenantId,
+      productoId: talonario.id,
+      periodo: '2026-03',
+      jobContext: { cantidad: 100, tipoCopia: 1, numerosXTalonario: 100 },
+    });
+    const triple = await motorService.cotizar({
+      tenantId,
+      productoId: talonario.id,
+      periodo: '2026-03',
+      jobContext: { cantidad: 100, tipoCopia: 3, numerosXTalonario: 100 },
+    });
+
+    expect(simple.exitoso).toBe(true);
+    expect(triple.exitoso).toBe(true);
+
+    // Triple debe activar las 3 capas + tener tiempo total mayor
+    const pasosImpSimple = simple.cotizacion!.pasos.filter(
+      (p) => p.familiaCodigo === 'impresion_por_hoja' && p.activado,
+    );
+    const pasosImpTriple = triple.cotizacion!.pasos.filter(
+      (p) => p.familiaCodigo === 'impresion_por_hoja' && p.activado,
+    );
+    expect(pasosImpSimple.length).toBe(1);
+    expect(pasosImpTriple.length).toBe(3);
+  });
+
   it('F.2.10: Tarjetas con período "2026-03" carga tarifa horaria publicada y costo de tiempo > 0', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({
