@@ -1,21 +1,23 @@
 import { Module } from '@nestjs/common';
+import { PrismaModule } from '../prisma/prisma.module';
+import { ProductosServiciosController } from './productos-servicios.controller';
+import { ProductosServiciosService } from './productos-servicios.service';
 
 /**
  * Módulo productos-servicios — modelo universal por pasos.
  *
- * Estado actual (Fase F.1.3): los 5 motores legacy (digital-sheet,
- * rigid-printed, talonario, vinyl-cut, wide-format) + el service monolítico
- * de 17k LOC + el controller fueron eliminados. El catálogo de familias
- * (`pasos/`), los algoritmos de nesting (`nesting/`) y los helpers de costing
- * (`costing/`) se preservan como infraestructura para el motor universal.
+ * F.3 — endpoints CRUD del catálogo (productos, rutas, cargos, familias).
+ * Por ahora read-only (GET). POST/PUT/DELETE en sub-fases siguientes.
  *
- * Próximo paso (F.2): implementar `MotorUniversalService` que consume el
- * schema nuevo (Ruta, Producto, ProductoConfigPaso, etc.) y devuelve
- * costo + trazabilidad. Después se agregará el controller con los endpoints
- * nuevos (`POST /productos-servicios/v2/cotizar`).
+ * Sub-módulos (preservados):
+ * - pasos/    → catálogo de 38 familias (hardcoded en TS)
+ * - nesting/  → algoritmos de nesting (extraídos en F.1)
+ * - costing/  → helpers de carga de tarifas (extraídos en F.1)
  */
 @Module({
-  controllers: [],
-  providers: [],
+  imports: [PrismaModule],
+  controllers: [ProductosServiciosController],
+  providers: [ProductosServiciosService],
+  exports: [ProductosServiciosService],
 })
 export class ProductosServiciosModule {}
