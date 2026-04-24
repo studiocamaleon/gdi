@@ -1,7 +1,7 @@
 # Resoluciones por paso (Fase D)
 
-> **Fase D** del análisis del motor por pasos. **Estado**: PARCIAL (D.1→D.5 cerrados, D.6-D.8 pendientes).
-> **Sesión**: 2026-04-23. **Método**: análisis interactivo.
+> **Fase D** del análisis del motor por pasos. **Estado**: D.1→D.7 ✅ + sub-tema rutas ✅. D.8 postergado para Fase E.
+> **Sesión**: 2026-04-23 / 2026-04-24. **Método**: análisis interactivo.
 
 ## Propósito
 
@@ -314,13 +314,273 @@ El mismo material puede usarse con distinta estrategia en distintos productos.
 
 ---
 
-## Pendientes de Fase D
+## D.6 — Cargos directos
 
-### Sub-temas pendientes
+### Definición
 
-- **D.6 — Cargos flat**: tercerización, viático, royalties, costo mínimo. (Poco material, probablemente corto.)
-- **D.7 — Validaciones e inputs del JobContext**: qué inputs necesita cada paso, cómo los valida, errores tipados.
-- **D.8 — Warnings**: qué casos generan warnings (no cortan pero avisan: nesting bajo aprovechamiento, merma alta, tirada baja para máquina, etc.).
+**Cargo directo** = monto que NO sale de las fórmulas estándar del motor (tiempo × tarifa, cantidad × precio_unitario_material).
+
+### Distinción importante: cargo directo ≠ adicional
+
+- **Adicional** (jerga de imprenta): cualquier cosa extra al producto base. Incluye pasos opcionales (laminado, hotstamping) que el motor costea con fórmulas estándar.
+- **Cargo directo**: lo que NO encaja en las fórmulas estándar. Algunos adicionales son cargos directos (envío, viático), otros NO (laminado es paso opcional).
+
+### Catálogo cerrado (5 tipos)
+
+| Tipo | Ubicación natural |
+|---|---|
+| Tercerización | Paso |
+| Viático | Paso (`toma_medidas`) o Cotización |
+| Combustible / flete | Paso (`envio`) o Cotización |
+| Plancha / matriz custom | Paso (slot) |
+| Recargo urgencia | Cotización |
+
+> **Royalties**: descartado del catálogo activo. Corporearte casi no trabaja con productos licenciados; si aparece, se trata como cargo de cotización ad-hoc o se factura aparte.
+
+### Ubicación: 2 niveles (híbrido)
+
+```
+┌─ Cargos de PASO ──────────────────────────────────────────────────┐
+│   Pertenecen a un paso específico de la ruta del producto.        │
+│   Ej: matriz custom de hotstamping, tercerización de corte láser  │
+│       de placa exótica, viático cuando toma_medidas es paso.       │
+└────────────────────────────────────────────────────────────────────┘
+
+┌─ Cargos de COTIZACIÓN ────────────────────────────────────────────┐
+│   Transversales a toda la cotización, no asociados a un paso.     │
+│   Ej: envío único compartido por 3 productos, recargo urgencia    │
+│       sobre toda la cotización, viático ad-hoc.                    │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+> **NO existe nivel intermedio "producto"**: el único caso candidato (royalty pegado al producto) no es frecuente en Corporearte. Si aparece, va como cargo de cotización con referencia al producto.
+
+### 3 modos de cálculo del monto
+
+```typescript
+modoCalculo:
+  | "MONTO_FIJO_PLANO"           // valor literal, no escala
+  | "PORCENTAJE_SOBRE_BASE"      // % sobre subtotal/venta/costo
+  | "POR_UNIDAD_INPUT"           // monto × valor del input declarado
+```
+
+**Configuración por modo**:
+
+```typescript
+// MONTO_FIJO_PLANO
+{ modoCalculo: "MONTO_FIJO_PLANO", monto: 8000 }   // $8.000 fijos
+
+// PORCENTAJE_SOBRE_BASE
+{
+  modoCalculo: "PORCENTAJE_SOBRE_BASE",
+  porcentaje: 30,               // 30%
+  baseDeCalculo: "SUBTOTAL"     // SUBTOTAL | VENTA | COSTO
+}
+
+// POR_UNIDAD_INPUT
+{
+  modoCalculo: "POR_UNIDAD_INPUT",
+  precioPorUnidad: 80,          // $80
+  inputCantidad: "distanciaKm"  // del JobContext de la cotización
+}
+```
+
+> **NO se soporta JsonLogic custom** para fórmulas. Si aparece un caso muy retorcido, se modela ad-hoc.
+
+### Modos de activación (3, iguales a los pasos)
+
+Los cargos directos comparten la semántica de D.1:
+
+- **OBLIGATORIO**: siempre se aplica.
+- **OPCIONAL**: el comercial decide al cotizar.
+- **CONDICIONAL**: regla JsonLogic contra el JobContext.
+
+Cada tipo del catálogo declara `modosActivacionSoportados` (qué modos son válidos). El modelador elige al declarar el cargo en el paso/producto.
+
+### Quién declara y quién agrega: HÍBRIDO
+
+**Modelador (al armar producto)**:
+- Declara cargos pre-asociados al paso o al producto.
+- Ej: "Tarjetas Hotstamping" lleva cargo OBLIGATORIO 'matriz custom $8.000' en el paso de hotstamping.
+
+**Comercial (al cotizar)**:
+- Activa los OPCIONALES pre-declarados.
+- **Puede agregar cargos AD-HOC** no pre-declarados, eligiendo del catálogo (5 tipos) + monto + descripción.
+- Ej: agrega 'viático $5.000 ad-hoc — entrega en Tigre' a nivel cotización aunque el producto no lo declaró.
+
+**Catálogo de cargos del tenant** (futuro): plantillas reusables ("Envío CABA = $2.500", "Matriz hotstamping standard = $8.000") que el modelador puede pre-llenar.
+
+### Pisos (costos mínimos): NO se modelan
+
+Decisión explícita: NO modelamos comportamiento de piso ("garantía mínimo $5.000 por cotización"). Razón: la semántica de "ajustar HACIA ARRIBA" si el cálculo natural cae bajo X es distinta a "sumar un cargo", y mete complejidad por casos poco frecuentes.
+
+**Workaround**: el comercial ve el subtotal y decide manualmente si subir el monto o aceptar.
+
+### Trazabilidad
+
+**Bucket nuevo `cargos_directos`** en el output del motor, paralelo a los buckets de tiempo y materiales.
+
+```typescript
+// Output del motor para un paso
+{
+  pasoId: "hotstamping",
+  tiempo: { setup: 5, run: 12, total: 17, costo: 850 },
+  materiales: [...],
+  cargos_directos: [
+    {
+      tipo: "MATRIZ_CUSTOM",
+      descripcion: "Matriz hotstamping foil dorado custom",
+      modoCalculo: "MONTO_FIJO_PLANO",
+      monto: 8000,
+      origen: "PRE_DECLARADO_MODELADOR"   // o "AD_HOC_COMERCIAL"
+    }
+  ],
+  costoTotalPaso: 850 + 8000  // tiempo + materiales + cargos directos
+}
+
+// Output del motor a nivel cotización
+{
+  productos: [...],
+  subtotal: 24500,
+  cargos_directos_cotizacion: [
+    {
+      tipo: "RECARGO_URGENCIA",
+      descripcion: "Entrega para mañana",
+      modoCalculo: "PORCENTAJE_SOBRE_BASE",
+      porcentaje: 30,
+      baseDeCalculo: "SUBTOTAL",
+      monto: 7350,
+      origen: "AD_HOC_COMERCIAL"
+    }
+  ],
+  total: 24500 + 7350
+}
+```
+
+Cada cargo guarda su `tipo` para reportes agrupados.
+
+---
+
+## D.7 — Validaciones (errores que cortan)
+
+### Alcance
+
+D.7 cubre las validaciones que el **motor** ejecuta y que **CORTAN** la cotización (errores). Las validaciones se reparten en 3 tipos:
+
+| Tipo | Descripción | Dónde se valida |
+|---|---|---|
+| **A** — Shape/format del input | "cantidad debe ser entero positivo", "fecha válida", "medidas no-negativas" | **FRONT (no es D.7)**. El motor confía en que llega válido. |
+| **B** — Compatibilidad runtime entre catálogo y JobContext | "gramaje 400gr no entra en Ricoh (max 350gr)", "200 hojas/libro no entran en ningún anillo" | **MOTOR en runtime**. Es el corazón de D.7. |
+| **C** — Conectividad y completitud del modelado | "slot requerido sin material", "paso N necesita output que ningún paso anterior escribe" | Idealmente al **guardar la ruta o el producto** (Journey 1). El motor mantiene chequeo defensivo en runtime. |
+
+### Origen: solo la FAMILIA declara validaciones
+
+**Decisión clave**: la única capa que declara reglas de validación es la **familia** del paso. Plantillas de máquina, materiales y cargos directos solo aportan **DATOS** que esas reglas consumen. Esto mantiene el modelo simple y centralizado.
+
+```typescript
+// Catálogo de familia
+{
+  codigo: "impresion_por_hoja",
+  validaciones: [
+    {
+      codigo: "jobcontext_tiene_cantidad",
+      tipo: "REQUIRES_INPUT",
+      campo: "cantidad",
+      mensaje: "Falta declarar cantidad"
+    },
+    {
+      codigo: "maquina_soporta_gramaje",
+      tipo: "COMPARE",
+      campoJobContext: "gramajeGr",
+      campoMaquina: "gramajeMaxGr",
+      operador: "<=",
+      mensaje: "Gramaje del papel ({jc.gramajeGr}gr) excede capacidad de la máquina ({maq.gramajeMaxGr}gr)"
+    }
+  ]
+}
+
+// Catálogo de plantilla de máquina (SOLO datos, sin lógica)
+{
+  codigo: "IMPRESORA_LASER",
+  paramsTecnicos: { gramajeMaxGr: 350, anchoMaxMm: 330 }
+}
+```
+
+### Tipos de validación soportados
+
+```typescript
+tipo:
+  | "REQUIRES_INPUT"     // verifica que un campo del JobContext exista y no sea null
+  | "COMPARE"            // compara dos valores (operadores: <=, >=, ==, !=, <, >)
+  | "IN_RANGE"           // verifica que un valor esté entre min y max
+  | "ONE_OF"             // verifica que un valor pertenezca a una lista
+  | "EXISTS_OUTPUT"      // (Tipo C) verifica que un output canónico haya sido escrito por algún paso anterior
+```
+
+> **No se soportan validaciones JsonLogic custom** en este nivel. Si aparece un caso muy retorcido, se discute si vale agregarlo a la familia o se modela aparte.
+
+### Manejo de múltiples errores: híbrido (juntar por paso, cortar entre pasos)
+
+El motor recorre el DAG paso por paso. Para cada paso:
+
+1. Ejecuta TODAS las validaciones declaradas por su familia.
+2. Acumula todos los errores detectados en ese paso.
+3. Si hay al menos un error, **NO avanza al siguiente paso** (sus inputs pueden ser inválidos).
+4. Devuelve la lista de errores del paso fallado + lista de pasos no ejecutados.
+
+**Pro**: el comercial ve todos los errores corregibles del paso fallado de una sola vez (ej: "máquina no soporta gramaje" + "máquina no soporta ancho" juntos). Sin "cascade" de errores ruidosos en pasos posteriores.
+
+### Forma del error tipado
+
+```typescript
+{
+  pasoId: "paso-imprimir",
+  pasoCodigo: "impresion_por_hoja",
+  validacionCodigo: "maquina_soporta_gramaje",
+  severidad: "ERROR",
+  mensaje: "Gramaje del papel (400gr) excede capacidad de la máquina (350gr)",
+  contexto: {
+    jobContext: { gramajeGr: 400 },
+    maquina: { id: "ricoh-pro-c5100-id", gramajeMaxGr: 350 }
+  },
+  sugerencia: "Cambiar a una máquina con mayor capacidad de gramaje o reducir el gramaje del papel"
+}
+```
+
+### Severidad
+
+D.7 = solo **ERROR** (corta cotización). Los WARNINGs (avisos no-bloqueantes) van en D.8 aparte. Conceptos limpios y separados.
+
+### Validaciones de Journey 1 (al guardar ruta o producto)
+
+Aunque el motor las chequea defensivamente, las validaciones de Tipo C se ejecutan idealmente **antes** de llegar al motor:
+
+- Al guardar una **ruta**: validar conectividad (cada paso lee outputs que algún paso anterior escribe).
+- Al guardar un **producto**: validar slots requeridos llenos, máquinas asignadas para pasos M-1, candidatas declaradas para pasos M-2.
+
+Esto evita que se persistan rutas/productos rotos que después al cotizar exploten.
+
+---
+
+## D.8 — Warnings (POSTERGADO para Fase E)
+
+**Decisión 2026-04-24**: el sub-tema D.8 (warnings no-bloqueantes) se posterga hasta tener casos reales (Fase E). Modelar warnings sin haber walked productos reales es especulativo: no sabemos qué warnings realmente le importan al comercial vs qué warnings agregan ruido.
+
+**Cuando se retome** (después de Fase E), las preguntas a responder serán:
+- ¿Quién los declara? (familia, plantilla, modelador en producto, configuración tenant)
+- ¿Thresholds fijos o configurables?
+- ¿Cómo aparecen en el output (lista paralela a errores / por paso / dos buckets)?
+- ¿El comercial puede dismissar warnings específicos? ¿Se persiste el dismiss?
+
+**Casos candidatos a validar en Fase E** (qué warnings aparecen naturalmente al walkear productos reales):
+- Aprovechamiento de nesting bajo
+- Merma alta vs configurada
+- Tirada baja/alta para la máquina elegida
+- Stock insuficiente del material
+- Datos viejos (precios snapshotted hace mucho)
+- Decisión sub-óptima (eligió alternativa NO PREFERIDA)
+- Total de cotización fuera del rango típico
+- Tarifa horaria del centro de costo en 0 o no definida
 
 ### Sub-tema paralelo (crítico)
 
@@ -339,7 +599,8 @@ Este sub-tema es la próxima sesión, antes de seguir con D.6-D.8.
 | D.3 Cantidad | ✅ |
 | D.4 Tiempo | ✅ |
 | D.5 Materiales | ✅ (con pendiente "materiales condicionales" → a resolver en sub-tema máquinas/perfiles) |
-| **Sub-tema: Máquinas y perfiles** | ⏳ próxima sesión |
-| D.6 Cargos flat | Pendiente |
-| D.7 Validaciones | Pendiente |
-| D.8 Warnings | Pendiente |
+| **Sub-tema: Máquinas y perfiles** | 🟡 9 plantillas modeladas, faltan estructural |
+| D.6 Cargos directos | ✅ |
+| D.7 Validaciones (errores) | ✅ |
+| D.8 Warnings | ⏸️ Postergado para Fase E |
+| **Sub-tema: Ruta de producción reusable** | ✅ (`07-ruta-de-produccion.md`) |

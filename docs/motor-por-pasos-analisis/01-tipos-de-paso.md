@@ -8,7 +8,7 @@
 
 Armar el **catálogo de familias de paso**: la "biblioteca" de tipos de paso que un modelador puede elegir al armar la ruta de cualquier producto.
 
-Cuando un modelador arma un producto, **elige familias del catálogo** para componer la ruta.
+Cuando un modelador arma una ruta de producción (entidad reusable, ver `07-ruta-de-produccion.md`), **elige familias del catálogo** para componer la lista ordenada de pasos. Después, los productos referencian esa ruta y configuran cada paso (materiales, máquinas, modos).
 
 ---
 

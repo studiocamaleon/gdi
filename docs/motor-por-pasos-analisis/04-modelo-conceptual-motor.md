@@ -3,6 +3,8 @@
 > **Fase C** del análisis del motor por pasos.
 > **Sesión**: 2026-04-23. **Estado**: COMPLETO.
 > **Método**: análisis interactivo. NO escribir código.
+>
+> ⚠️ **Nota 2026-04-24**: el sub-tema "Ruta de producción reusable" (`07-ruta-de-produccion.md`) afina el modelo de input del motor. Ahora el motor recibe `producto + rutaSeleccionada (de las alternativas) + pasosExtras + JobContext`. El DAG se construye desde la ruta seleccionada + pasos extras inline del producto.
 
 ## Propósito
 
