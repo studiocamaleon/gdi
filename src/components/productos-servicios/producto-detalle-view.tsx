@@ -1,0 +1,268 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import {
+  ArrowLeftIcon,
+  CheckCircle2Icon,
+  CircleIcon,
+  CogIcon,
+  GitBranchIcon,
+  PackageIcon,
+  RulerIcon,
+  TagIcon,
+  WrenchIcon,
+} from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { ProductoDetalle, RutaAlternativaDetalle } from "@/lib/productos-servicios";
+
+export function ProductoDetalleView({ producto }: { producto: ProductoDetalle }) {
+  const [rutaActiva, setRutaActiva] = React.useState<string>(
+    producto.rutasAlternativas.find((r) => r.esPreferida)?.id ?? producto.rutasAlternativas[0]?.id ?? "",
+  );
+
+  return (
+    <div className="flex flex-1 flex-col gap-6 p-6">
+      {/* Header */}
+      <div className="flex flex-col gap-2">
+        <Link
+          href="/productos-servicios"
+          className="text-muted-foreground hover:text-foreground inline-flex items-center text-sm"
+        >
+          <ArrowLeftIcon className="mr-1 size-4" />
+          Volver al catálogo
+        </Link>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">{producto.nombre}</h1>
+            <p className="text-muted-foreground font-mono text-xs">{producto.codigo}</p>
+            {producto.descripcion && (
+              <p className="text-muted-foreground mt-2 max-w-2xl text-sm">{producto.descripcion}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant={producto.activo ? "default" : "secondary"}>
+              {producto.activo ? "Activo" : "Inactivo"}
+            </Badge>
+          </div>
+        </div>
+      </div>
+
+      {/* Atributos comerciales */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription className="flex items-center gap-1 text-xs">
+              <TagIcon className="size-3" /> Unidad comercial
+            </CardDescription>
+            <CardTitle className="text-base">{producto.unidadComercial}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription className="flex items-center gap-1 text-xs">
+              <RulerIcon className="size-3" /> Modo de medidas
+            </CardDescription>
+            <CardTitle className="text-base">
+              {producto.modoMedidas}
+              {producto.modoMedidas === "FIJA" && producto.medidaDefaultAnchoMm && (
+                <span className="text-muted-foreground ml-2 text-sm font-normal">
+                  ({producto.medidaDefaultAnchoMm} × {producto.medidaDefaultAltoMm} mm)
+                </span>
+              )}
+            </CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription className="flex items-center gap-1 text-xs">
+              <GitBranchIcon className="size-3" /> Rutas alternativas
+            </CardDescription>
+            <CardTitle className="text-base">{producto.rutasAlternativas.length}</CardTitle>
+          </CardHeader>
+        </Card>
+      </div>
+
+      {/* Cargos directos a nivel cotización */}
+      {producto.cargosDirectosCotizacion.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Cargos directos (a nivel cotización)</CardTitle>
+            <CardDescription>Se aplican opcionalmente al cotizar este producto.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {producto.cargosDirectosCotizacion.map((c) => (
+                <Badge key={c.id} variant="outline">
+                  {c.cargoDirectoCatalogo.nombre}
+                  <span className="text-muted-foreground ml-1 text-xs">({c.modoActivacion})</span>
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tabs de rutas alternativas */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Configuración por ruta</CardTitle>
+          <CardDescription>
+            Cada ruta alternativa tiene su propia configuración de pasos. La ruta preferida es la
+            default al cotizar; el comercial puede elegir otra.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs value={rutaActiva} onValueChange={setRutaActiva}>
+            <TabsList>
+              {producto.rutasAlternativas.map((r) => (
+                <TabsTrigger key={r.id} value={r.id}>
+                  {r.nombre}
+                  {r.esPreferida && (
+                    <Badge variant="default" className="ml-2 px-1 py-0 text-[10px]">
+                      preferida
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            {producto.rutasAlternativas.map((r) => (
+              <TabsContent key={r.id} value={r.id} className="mt-4">
+                <RutaAlternativaContent ruta={r} />
+              </TabsContent>
+            ))}
+          </Tabs>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function RutaAlternativaContent({ ruta }: { ruta: RutaAlternativaDetalle }) {
+  const pasosOrdenados = ruta.ruta.pasos;
+  const configByPasoId = new Map(ruta.configPasos.map((c) => [c.rutaPasoId, c]));
+
+  return (
+    <div className="space-y-4">
+      <div className="text-muted-foreground text-sm">
+        <span className="font-medium">{ruta.ruta.nombre}</span>
+        <span className="mx-2">·</span>
+        <span className="font-mono text-xs">{ruta.ruta.codigo}</span>
+        <span className="mx-2">·</span>
+        <span>v{ruta.rutaVersion}</span>
+      </div>
+
+      <div className="space-y-2">
+        {pasosOrdenados.map((paso, idx) => {
+          const config = configByPasoId.get(paso.id);
+          return (
+            <Card key={paso.id}>
+              <CardContent className="pt-4">
+                <div className="flex items-start gap-3">
+                  <div className="bg-muted flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
+                    {idx + 1}
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium">{paso.familiaCodigo}</div>
+                        {config?.modoActivacion && (
+                          <div className="text-muted-foreground text-xs">
+                            <Badge
+                              variant={config.modoActivacion === "OBLIGATORIO" ? "default" : "outline"}
+                              className="mr-1 text-[10px]"
+                            >
+                              {config.modoActivacion}
+                            </Badge>
+                            {config.modoTiempo && (
+                              <span className="text-muted-foreground">tiempo: {config.modoTiempo}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {config?.maquinaM1 && (
+                        <div className="text-right text-xs">
+                          <div className="text-muted-foreground inline-flex items-center gap-1">
+                            <CogIcon className="size-3" />
+                            {config.maquinaM1.nombre}
+                          </div>
+                          {config.perfilM1 && (
+                            <div className="text-muted-foreground">{config.perfilM1.nombre}</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {config && config.slotsMateriales.length > 0 && (
+                      <div className="ml-0 grid grid-cols-1 gap-2 md:grid-cols-2">
+                        {config.slotsMateriales.map((slot) => (
+                          <div
+                            key={slot.id}
+                            className="bg-muted/50 flex items-center gap-2 rounded p-2 text-xs"
+                          >
+                            <PackageIcon className="text-muted-foreground size-3" />
+                            <div className="flex-1">
+                              <div className="font-medium">{slot.slotCodigo}</div>
+                              <div className="text-muted-foreground">
+                                {slot.modoSeleccion}
+                                {slot.materialVariante && (
+                                  <>
+                                    {" · "}
+                                    {slot.materialVariante.nombreVariante ?? slot.materialVariante.sku}
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {config && config.cargosDirectosPaso.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {config.cargosDirectosPaso.map((c) => (
+                          <Badge key={c.id} variant="outline" className="text-[10px]">
+                            <WrenchIcon className="mr-1 size-2.5" />
+                            {c.cargoDirectoCatalogo.nombre}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+
+                    {!config && (
+                      <div className="text-muted-foreground text-xs italic">
+                        <CircleIcon className="mr-1 inline size-3" />
+                        Sin configuración (paso de la ruta sin config en este producto)
+                      </div>
+                    )}
+
+                    {config?.multiplicadoresActivos && config.multiplicadoresActivos.length > 0 && (
+                      <div className="text-muted-foreground text-xs">
+                        Multiplicadores:{" "}
+                        {config.multiplicadoresActivos.map((m) => (
+                          <Badge key={m} variant="secondary" className="mr-1 text-[10px]">
+                            {m}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <CheckCircle2Icon
+                    className={
+                      config?.modoActivacion === "OBLIGATORIO"
+                        ? "text-green-500 size-5 shrink-0"
+                        : "text-muted-foreground size-5 shrink-0"
+                    }
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

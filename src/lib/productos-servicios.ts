@@ -51,10 +51,11 @@ export interface ProductoListItem {
   }>;
 }
 
-export interface ProductoDetalle extends ProductoListItem {
+export interface ProductoDetalle extends Omit<ProductoListItem, "rutasAlternativas"> {
   medidaDefaultAnchoMm: string | null;
   medidaDefaultAltoMm: string | null;
   precioConfigJson: unknown;
+  rutasAlternativas: RutaAlternativaDetalle[];
   pasosExtras: PasoExtra[];
   cargosDirectosCotizacion: CargoCotizacionDetalle[];
 }
