@@ -16,11 +16,38 @@ const {
 } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 
+const { seedCargosDirectosCatalogo } = require("./seed-modulos/cargos");
+const { seedMaquinas } = require("./seed-modulos/maquinas");
+const { seedMateriales } = require("./seed-modulos/materiales");
+const { seedRutasYProductos } = require("./seed-modulos/rutas-productos");
+
 const prisma = new PrismaClient();
 
 async function main() {
   const periodoDemo = "2026-03";
 
+  // Cleanup en orden (FKs primero) — entidades V2 incluidas
+  await prisma.cotizacionItem.deleteMany();
+  await prisma.cotizacion.deleteMany();
+  await prisma.productoPrecioEspecialClienteV2.deleteMany();
+  await prisma.productoCargoDirectoCotizacion.deleteMany();
+  await prisma.productoCargoDirectoPaso.deleteMany();
+  await prisma.cargoDirectoCatalogo.deleteMany();
+  await prisma.productoConfigPasoMaquinaCandidata.deleteMany();
+  await prisma.productoConfigPasoSlotMaterial.deleteMany();
+  await prisma.productoConfigPaso.deleteMany();
+  await prisma.productoPasoExtra.deleteMany();
+  await prisma.productoRutaAlternativa.deleteMany();
+  await prisma.producto.deleteMany();
+  await prisma.rutaVersion.deleteMany();
+  await prisma.rutaPaso.deleteMany();
+  await prisma.ruta.deleteMany();
+  await prisma.maquinaComponenteDesgaste.deleteMany();
+  await prisma.maquinaConsumible.deleteMany();
+  await prisma.maquinaPerfilOperativo.deleteMany();
+  await prisma.maquina.deleteMany();
+  await prisma.materiaPrimaVariante.deleteMany();
+  await prisma.materiaPrima.deleteMany();
   await prisma.authSession.deleteMany();
   await prisma.invitation.deleteMany();
   await prisma.centroCostoTarifaPeriodo.deleteMany();
@@ -569,10 +596,31 @@ async function main() {
     ],
   });
 
-  console.info("Seed completado.");
+  // ============================================================================
+  // MODELO UNIVERSAL V2 — Bloques nuevos de F.1.5
+  // ============================================================================
+
+  await seedCargosDirectosCatalogo(prisma, tenant.id);
+
+  const maquinasCreadas = await seedMaquinas(prisma, tenant.id, planta.id);
+
+  const materialesCreados = await seedMateriales(prisma, tenant.id);
+
+  await seedRutasYProductos(prisma, tenant.id, maquinasCreadas, materialesCreados);
+
+  console.info("");
+  console.info("✅ Seed COMPLETADO.");
+  console.info("");
   console.info("Tenant demo: Grafica Corporearte");
   console.info("Usuario admin: admin@gdi-demo.local");
   console.info("Clave admin: Admin123!");
+  console.info("");
+  console.info("Modelo Universal V2 cargado:");
+  console.info("  • 7 máquinas + perfiles operativos");
+  console.info("  • 9 materias primas + variantes");
+  console.info("  • 5 cargos directos catálogo");
+  console.info("  • 5 rutas de producción");
+  console.info("  • 4 productos validados (Tarjetas, Vinilo, Talonarios, Rígidos)");
 }
 
 main()
