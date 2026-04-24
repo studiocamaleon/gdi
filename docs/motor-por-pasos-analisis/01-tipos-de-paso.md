@@ -1,7 +1,7 @@
 # Inventario de tipos de paso (familias)
 
 > **Fase A** del análisis del motor por pasos.
-> **Sesiones**: 1 + 2 (2026-04-23) + 3 (Fase E 2026-04-24). **Estado**: Fase A COMPLETA — 31 familias modeladas.
+> **Sesiones**: 1 + 2 (2026-04-23) + 3 (Fase E 2026-04-24). **Estado**: Fase A COMPLETA — 38 familias modeladas.
 > **Método**: análisis interactivo. NO escribir código.
 
 ## Propósito
@@ -204,7 +204,9 @@ Sub-tipos típicos de `modificacion_post`:
 
 ## 4. Total
 
-**31 familias activas** distribuidas en 9 categorías.
+**38 familias activas** distribuidas en 9 categorías.
+
+> **Nota histórica**: el conteo previo "31 familias" era incorrecto (error de suma en el doc, el conteo real de la lista siempre fue 38). Confirmado al implementar `apps/api/src/productos-servicios/pasos/familias.ts` en F.1.1.
 
 **Agregadas en Fase E (validación con casos reales)**:
 - `corte_manual` (corte y formado) — para señalética PVC, MDF fino. Detectado validando producto Rígido impreso.
