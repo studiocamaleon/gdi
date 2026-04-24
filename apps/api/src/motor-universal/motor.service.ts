@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { FAMILIAS } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 import { evaluarRegla } from './evaluador-jsonlogic';
+import { loadTarifasHorarias } from '../productos-servicios/costing/load-tarifas';
 import type {
   CotizarInput,
   CotizarOutput,
@@ -73,6 +74,21 @@ export class MotorUniversalService {
     // JobContext mutable (los pasos PRE pueden mutarlo)
     const jobContext: JobContext = { ...input.jobContext };
 
+    // 1b. Cargar tarifas horarias publicadas para el período (F.2.10)
+    const periodo = input.periodo ?? this.getPeriodoActual();
+    const centroIds = Array.from(
+      new Set(
+        producto.pasos
+          .map((p) => p.maquina?.centroCostoPrincipalId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+    const tarifasMap = await loadTarifasHorarias(this.prisma as never, {
+      tenantId: input.tenantId,
+      periodo,
+      centroCostoIds: centroIds,
+    });
+
     // 2. ITERAR PASOS EN ORDEN TOPOLÓGICO (orden simple por ahora)
     const pasosEjecutados: PasoEjecutado[] = [];
     let huboErrorEnPasoAnterior = false;
@@ -83,7 +99,7 @@ export class MotorUniversalService {
         break;
       }
 
-      const ejecucion = this.ejecutarPaso(paso, jobContext, errores);
+      const ejecucion = this.ejecutarPaso(paso, jobContext, errores, tarifasMap);
       pasosEjecutados.push(ejecucion);
 
       // Si este paso generó errores, marcar para no seguir
@@ -135,10 +151,19 @@ export class MotorUniversalService {
   // EJECUCIÓN DE UN PASO (sub-tareas a-i — versión MVP)
   // ============================================================================
 
+  /** Devuelve el período actual en formato 'YYYY-MM'. */
+  private getPeriodoActual(): string {
+    const ahora = new Date();
+    const yyyy = ahora.getFullYear();
+    const mm = String(ahora.getMonth() + 1).padStart(2, '0');
+    return `${yyyy}-${mm}`;
+  }
+
   private ejecutarPaso(
     paso: PasoCargado,
     jobContext: JobContext,
     errores: ErrorMotor[],
+    tarifasMap: Map<string, unknown>,
   ): PasoEjecutado {
     const familia = FAMILIAS[paso.familiaCodigo as FamiliaCodigo] as
       | (typeof FAMILIAS)[FamiliaCodigo]
@@ -159,7 +184,7 @@ export class MotorUniversalService {
     }
 
     // d) TIEMPO (D.4) — versión simple MVP
-    const tiempo = this.calcularTiempo(paso, jobContext, errores);
+    const tiempo = this.calcularTiempo(paso, jobContext, errores, tarifasMap);
 
     // e) MATERIALES (D.5) — solo HARDCODED por ahora
     const materiales = this.calcularMateriales(paso, jobContext);
@@ -224,11 +249,12 @@ export class MotorUniversalService {
     return { activado: false, razon: `Modo de activación desconocido: ${modo}` };
   }
 
-  /** D.4 — Calcular tiempo del paso (versión MVP). */
+  /** D.4 — Calcular tiempo del paso (versión MVP + F.2.10 tarifas reales). */
   private calcularTiempo(
     paso: PasoCargado,
     jobContext: JobContext,
     _errores: ErrorMotor[],
+    tarifasMap: Map<string, unknown>,
   ): NonNullable<PasoEjecutado['tiempo']> {
     const modoTiempo = paso.modoTiempo ?? 'T-1';
 
@@ -260,9 +286,14 @@ export class MotorUniversalService {
 
     const totalMin = Math.ceil(setupMin + runMin + cleanupMin + tiempoFijoMin);
 
-    // Tarifa horaria (no implementada todavía — depende del centro de costo del perfil)
-    // Por ahora usamos un placeholder conservador.
-    const tarifaHora = 0; // TODO: F.2.x — leer del CentroCostoTarifaPeriodo
+    // F.2.10 — Tarifa horaria real del centro de costo de la máquina (período publicado)
+    let tarifaHora = 0;
+    if (paso.maquina?.centroCostoPrincipalId) {
+      const tarifaDecimal = tarifasMap.get(paso.maquina.centroCostoPrincipalId);
+      if (tarifaDecimal != null) {
+        tarifaHora = Number(tarifaDecimal);
+      }
+    }
     const costo = (totalMin / 60) * tarifaHora;
 
     return {
@@ -410,6 +441,7 @@ export class MotorUniversalService {
             codigo: cp.maquinaM1.codigo,
             nombre: cp.maquinaM1.nombre,
             plantilla: cp.maquinaM1.plantilla,
+            centroCostoPrincipalId: cp.maquinaM1.centroCostoPrincipalId,
             parametrosTecnicosJson: cp.maquinaM1.parametrosTecnicosJson as Record<string, unknown> | null,
           }
         : undefined,

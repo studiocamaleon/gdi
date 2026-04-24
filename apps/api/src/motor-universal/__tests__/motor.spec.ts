@@ -260,6 +260,51 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(result.cotizacion!.cantidadPedida).toBe(1000);
   });
 
+  it('F.2.10: Tarjetas con período "2026-03" carga tarifa horaria publicada y costo de tiempo > 0', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      periodo: '2026-03',
+      jobContext: { cantidad: 1000, caras: 2 },
+    });
+
+    expect(result.exitoso).toBe(true);
+
+    // Verificar que al menos un paso tiene tarifaHora > 0 (la del seed = 22727.27)
+    const pasoConTarifa = result.cotizacion!.pasos.find(
+      (p) => p.activado && (p.tiempo?.tarifaHora ?? 0) > 0,
+    );
+    expect(pasoConTarifa).toBeDefined();
+    expect(pasoConTarifa!.tiempo!.tarifaHora).toBeCloseTo(22727.27, 0);
+
+    // Costo de tiempo total debe ser > 0
+    expect(result.cotizacion!.costos.tiempoTotal).toBeGreaterThan(0);
+  });
+
+  it('F.2.10: Vinilo con período inexistente NO encuentra tarifa, costo de tiempo = 0', async () => {
+    if (!tenantId) return;
+    const vinilo = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'VINILO-BLANCO-IMP' },
+    });
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: vinilo.id,
+      periodo: '1999-01', // período sin tarifa publicada
+      jobContext: {
+        cantidad: 1,
+        piezas: [{ cantidad: 1, anchoMm: 1000, altoMm: 500 }],
+      },
+    });
+
+    expect(result.exitoso).toBe(true);
+    // Sin tarifa publicada, todos los pasos tienen tarifaHora=0 → costo de tiempo = 0
+    expect(result.cotizacion!.costos.tiempoTotal).toBe(0);
+  });
+
   it('estructura de costos siempre presente, aunque sean 0', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({

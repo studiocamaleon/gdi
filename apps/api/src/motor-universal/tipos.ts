@@ -219,6 +219,7 @@ export interface PasoCargado {
     codigo: string;
     nombre: string;
     plantilla: string;
+    centroCostoPrincipalId?: string | null;
     parametrosTecnicosJson?: Record<string, unknown> | null;
   };
   /** Detalles del perfil (cargados del JOIN). */

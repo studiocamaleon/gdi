@@ -23,6 +23,13 @@ const {
 } = require("@prisma/client");
 
 async function seedMaquinas(prisma, tenantId, plantaId) {
+  // Centro de costo principal único para todas las máquinas (tarifa publicada).
+  // En el modelo real cada máquina iría a su CC propio, pero para el seed inicial
+  // todas comparten "Offset 4 colores" que tiene tarifa calculada.
+  const ccImpresion = await prisma.centroCosto.findFirstOrThrow({
+    where: { tenantId, codigo: "IMP-001" },
+  });
+  const ccImpresionId = ccImpresion.id;
   // ============================================================================
   // 1. IMPRESORA_LASER (Ricoh PRO C5100) — Tarjetas, Talonarios
   // ============================================================================
@@ -30,6 +37,7 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
     data: {
       tenantId,
       plantaId,
+      centroCostoPrincipalId: ccImpresionId,
       codigo: "RICOH-PRO-C5100",
       nombre: "Ricoh PRO C5100",
       plantilla: "IMPRESORA_LASER",
@@ -101,6 +109,7 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
     data: {
       tenantId,
       plantaId,
+      centroCostoPrincipalId: ccImpresionId,
       codigo: "ROLAND-VG3-540",
       nombre: "Roland TrueVIS VG3-540",
       plantilla: "IMPRESORA_LATEX",
@@ -147,6 +156,7 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
     data: {
       tenantId,
       plantaId,
+      centroCostoPrincipalId: ccImpresionId,
       codigo: "MIMAKI-UJF-7151",
       nombre: "Mimaki UJF-7151plus",
       plantilla: "IMPRESORA_UV_FLATBED",
@@ -209,6 +219,7 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
     data: {
       tenantId,
       plantaId,
+      centroCostoPrincipalId: ccImpresionId,
       codigo: "POLAR-92",
       nombre: "Polar 92 ED",
       plantilla: "GUILLOTINA",
@@ -254,6 +265,7 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
     data: {
       tenantId,
       plantaId,
+      centroCostoPrincipalId: ccImpresionId,
       codigo: "SKYCUT-C24",
       nombre: "Skycut C24",
       plantilla: "PLOTTER_DE_CORTE",
@@ -295,6 +307,7 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
     data: {
       tenantId,
       plantaId,
+      centroCostoPrincipalId: ccImpresionId,
       codigo: "LAM-BOPP-001",
       nombre: "Laminadora BOPP rollo",
       plantilla: "LAMINADORA_BOPP_ROLLO",
@@ -334,6 +347,7 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
     data: {
       tenantId,
       plantaId,
+      centroCostoPrincipalId: ccImpresionId,
       codigo: "FELDER-F500",
       nombre: "Felder F500 CNC",
       plantilla: "ROUTER_CNC",
