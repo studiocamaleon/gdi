@@ -20,6 +20,10 @@ import {
 } from "@/lib/productos-servicios-api";
 import type { ProductoDetalle } from "@/lib/productos-servicios";
 import { unidadComercialProductoItems } from "@/lib/productos-servicios";
+import {
+  TabPrecioEditor,
+  type TabPrecioConfig,
+} from "@/components/productos-servicios/tab-precio-editor";
 
 type Modo = "crear" | "editar";
 
@@ -32,16 +36,6 @@ const MODOS_MEDIDAS = [
   { value: "FIJA", label: "Medidas fijas (default declarado)" },
   { value: "LIBRE", label: "Medidas libres (comercial las carga al cotizar)" },
   { value: "COMERCIAL_ELIGE", label: "Comercial elige (fija o libre al cotizar)" },
-];
-
-const METODOS_PRECIO = [
-  { value: "por_margen", label: "Por margen fijo" },
-  { value: "precio_fijo", label: "Precio fijo" },
-  { value: "margen_variable", label: "Margen variable por tramos" },
-  { value: "precio_fijo_para_margen_minimo", label: "Precio fijo con margen mínimo" },
-  { value: "fijado_por_cantidad", label: "Cantidades fijas con precio fijo" },
-  { value: "fijo_con_margen_variable", label: "Cantidades fijas con margen variable" },
-  { value: "variable_por_cantidad", label: "Rangos de cantidad con precio fijo" },
 ];
 
 export function ProductoFormView({ modo, productoExistente }: Props) {
@@ -64,38 +58,19 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
   );
   const [activo, setActivo] = React.useState(productoExistente?.activo ?? true);
 
-  // Tab Precio simplificado: método + 2 detalles típicos (margen o precio)
-  const precioConfigInicial = (productoExistente?.precioConfigJson ?? {
+  // Tab Precio: editor completo con tramos (F.3.8)
+  const precioConfigInicial: TabPrecioConfig = (productoExistente?.precioConfigJson as
+    | TabPrecioConfig
+    | null) ?? {
     metodoCalculo: "por_margen",
     detalle: { marginPct: 100, minimumMarginPct: 50 },
-  }) as { metodoCalculo: string; detalle: Record<string, unknown> };
-
-  const [metodoPrecio, setMetodoPrecio] = React.useState<string>(
-    precioConfigInicial.metodoCalculo ?? "por_margen",
-  );
-  const [marginPct, setMarginPct] = React.useState<number>(
-    Number(precioConfigInicial.detalle?.marginPct ?? 100),
-  );
-  const [precioFijo, setPrecioFijo] = React.useState<number>(
-    Number(precioConfigInicial.detalle?.price ?? 0),
-  );
+  };
+  const [precioConfig, setPrecioConfig] = React.useState<TabPrecioConfig>(precioConfigInicial);
 
   const handleGuardar = async () => {
     setGuardando(true);
     try {
-      const detallePrecio: Record<string, unknown> =
-        metodoPrecio === "por_margen"
-          ? { marginPct, minimumMarginPct: Math.max(0, marginPct - 50) }
-          : metodoPrecio === "precio_fijo"
-            ? { price: precioFijo, minimumPrice: 0 }
-            : metodoPrecio === "precio_fijo_para_margen_minimo"
-              ? { price: precioFijo, minimumPrice: 0, minimumMarginPct: marginPct }
-              : { tiers: [] };
-
-      const precioConfigJson = {
-        metodoCalculo: metodoPrecio,
-        detalle: detallePrecio,
-      };
+      const precioConfigJson = precioConfig as unknown as Record<string, unknown>;
 
       const payload = {
         nombre,
@@ -281,57 +256,8 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
               Cómo se calcula el precio de venta a partir del costo del motor.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="metodoPrecio">Método de cálculo</Label>
-              <Select value={metodoPrecio} onValueChange={(v) => setMetodoPrecio(v ?? "por_margen")}>
-                <SelectTrigger id="metodoPrecio">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {METODOS_PRECIO.map((it) => (
-                    <SelectItem key={it.value} value={it.value}>
-                      {it.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {(metodoPrecio === "por_margen" ||
-              metodoPrecio === "precio_fijo_para_margen_minimo") && (
-              <div className="space-y-2">
-                <Label htmlFor="margen">
-                  {metodoPrecio === "por_margen" ? "Margen (%)" : "Margen mínimo (%)"}
-                </Label>
-                <Input
-                  id="margen"
-                  type="number"
-                  value={marginPct}
-                  onChange={(e) => setMarginPct(Number(e.target.value))}
-                />
-              </div>
-            )}
-            {(metodoPrecio === "precio_fijo" ||
-              metodoPrecio === "precio_fijo_para_margen_minimo") && (
-              <div className="space-y-2">
-                <Label htmlFor="precio">Precio fijo</Label>
-                <Input
-                  id="precio"
-                  type="number"
-                  value={precioFijo}
-                  onChange={(e) => setPrecioFijo(Number(e.target.value))}
-                />
-              </div>
-            )}
-            {(metodoPrecio === "margen_variable" ||
-              metodoPrecio === "fijado_por_cantidad" ||
-              metodoPrecio === "fijo_con_margen_variable" ||
-              metodoPrecio === "variable_por_cantidad") && (
-              <p className="text-muted-foreground text-xs">
-                ⚠ Edición de tramos para este método pendiente. El producto se guarda con tramos
-                vacíos; podés editar el JSON en una sub-fase futura.
-              </p>
-            )}
+          <CardContent>
+            <TabPrecioEditor value={precioConfig} onChange={setPrecioConfig} />
           </CardContent>
         </Card>
       </div>
