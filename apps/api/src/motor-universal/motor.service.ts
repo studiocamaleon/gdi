@@ -16,6 +16,7 @@ import type {
   JobContext,
   MaterialEjecutado,
   CargoDirectoEjecutado,
+  CargoPasoCargado,
 } from './tipos';
 
 /**
@@ -29,19 +30,21 @@ import type {
  * - Acumular trazabilidad
  * - Devolver costo total + trazabilidad + errores
  *
- * NO cubre todavía (van en sub-fases F.2.x):
- * - JsonLogic CONDICIONAL real (devuelve activado=false con mensaje)
- * - Mecanismos cantidad complejos (HEREDAR_DEL_OUTPUT_CANONICO, CALCULADO_POR_PASO)
- * - Selección automática de perfil con regla
- * - COMERCIAL_ELIGE / MOTOR_ELIGE_AUTO de materiales
- * - Multiplicadores avanzados (caras, tipoCopia)
- * - Cargos directos a nivel paso/cotización
- * - Validaciones D.7 declaradas en familia
- * - Sub-productos / selectores
- * - Snapshot
- * - Tab Precio integration
+ * Sub-fases CUBIERTAS (auditoría 2026-04-25 + G-M3):
+ * - F.2.1 bucle a-i, F.2.2 JsonLogic CONDICIONAL, F.2.3 mecanismos cantidad
+ *   (DIRECT/CONVERSION OK; HEREDAR/CALCULADO parciales),
+ * - F.2.4 selección perfil heurística (doble/simple), F.2.5 materiales (3 modos
+ *   × 3 criterios), F.2.6 multiplicadores, F.2.7 cargos directos a nivel
+ *   COTIZACIÓN y a nivel PASO (G-M3), F.2.8 validaciones D.7 (4 de 5 tipos),
+ *   F.2.10 tarifas reales del centro de costo, F.2.11 snapshot CotizacionItem,
+ *   F.2.12 Tab Precio integration.
  *
- * Estos se agregan en próximos commits.
+ * Pendientes (ver `docs/motor-por-pasos-analisis/auditoria-gaps-2026-04-25.md`):
+ * - G-M1: nesting al motor (F.2.13 — `CALCULADO_POR_PASO` devuelve m² crudos).
+ * - G-M2: outputs canónicos al jobContext (placeholder — todos `null`).
+ * - G-M4: validación EXISTS_OUTPUT real (asume true).
+ * - G-M5: T-2 (productividad propia).
+ * - G-M6: sub-productos / SELECTOR (DAG).
  */
 @Injectable()
 export class MotorUniversalService {
@@ -334,6 +337,16 @@ export class MotorUniversalService {
     const materiales = await this.calcularMateriales(paso, jobContext);
     const materialesCosto = materiales.reduce((acc, m) => acc + m.costoTotal, 0);
 
+    // f) CARGOS DIRECTOS A NIVEL PASO (G-M3 / D.6)
+    //    Base de PORCENTAJE_SOBRE_BASE = subtotal del PASO (tiempo + materiales).
+    const subtotalPaso = tiempo.costo + materialesCosto;
+    const cargosDirectosPaso = this.aplicarCargosPaso(
+      paso.cargosDirectosPaso,
+      jobContext,
+      subtotalPaso,
+    );
+    const cargosPasoTotal = cargosDirectosPaso.reduce((acc, c) => acc + c.monto, 0);
+
     return {
       rutaPasoId: paso.rutaPasoId,
       rutaPasoOrden: paso.rutaPasoOrden,
@@ -342,10 +355,55 @@ export class MotorUniversalService {
       activado: true,
       tiempo,
       materiales,
-      cargosDirectosPaso: [], // TODO: F.2.x
-      costoTotal: tiempo.costo + materialesCosto,
+      cargosDirectosPaso,
+      costoTotal: subtotalPaso + cargosPasoTotal,
       outputsCanonicos: this.calcularOutputs(familia?.outputsCanonicos ?? [], paso, jobContext),
     };
+  }
+
+  /**
+   * G-M3 — Aplica los cargos directos a nivel PASO.
+   *
+   * Misma semántica que `aplicarCargosCotizacion`, pero el `subtotalBase` para
+   * PORCENTAJE_SOBRE_BASE es el costo del paso (tiempo + materiales), no de la
+   * cotización completa.
+   *
+   * Reutiliza los helpers `evaluarActivacionCargo` y `calcularMontoCargo`,
+   * que son genéricos por construcción.
+   */
+  private aplicarCargosPaso(
+    cargos: CargoPasoCargado[],
+    jobContext: JobContext,
+    subtotalPaso: number,
+  ): CargoDirectoEjecutado[] {
+    const ejecutados: CargoDirectoEjecutado[] = [];
+    for (const cargo of cargos) {
+      const activado = this.evaluarActivacionCargo(cargo, jobContext);
+      if (!activado) continue;
+
+      const config = (cargo.configOverrideJson ?? cargo.catalogo.configJson) as
+        | Record<string, unknown>
+        | null;
+      const monto = this.calcularMontoCargo(
+        cargo.catalogo.modoCalculo,
+        config,
+        jobContext,
+        subtotalPaso,
+      );
+
+      ejecutados.push({
+        cargoDirectoCatalogoId: cargo.cargoDirectoCatalogoId,
+        cargoCodigo: cargo.catalogo.codigo,
+        cargoNombre: cargo.catalogo.nombre,
+        modoCalculo: cargo.catalogo.modoCalculo as
+          | 'MONTO_FIJO_PLANO'
+          | 'PORCENTAJE_SOBRE_BASE'
+          | 'POR_UNIDAD_INPUT',
+        monto,
+        detalle: { config, baseCalculo: subtotalPaso, scope: 'PASO' },
+      });
+    }
+    return ejecutados;
   }
 
   /** D.1 — Decidir si el paso se activa. */
@@ -1040,6 +1098,10 @@ export class MotorUniversalService {
                 slotsMateriales: {
                   include: { materialVariante: true },
                 },
+                cargosDirectosPaso: {
+                  where: { activo: true },
+                  include: { cargoDirectoCatalogo: true },
+                },
               },
               orderBy: { rutaPaso: { orden: 'asc' } },
             },
@@ -1136,6 +1198,19 @@ export class MotorUniversalService {
               atributosVarianteJson: s.materialVariante.atributosVarianteJson as Record<string, unknown> | null,
             }
           : undefined,
+      })),
+      cargosDirectosPaso: cp.cargosDirectosPaso.map((c) => ({
+        id: c.id,
+        cargoDirectoCatalogoId: c.cargoDirectoCatalogoId,
+        modoActivacion: c.modoActivacion,
+        condicionActivacionJson: c.condicionActivacionJson,
+        configOverrideJson: c.configOverrideJson,
+        catalogo: {
+          codigo: c.cargoDirectoCatalogo.codigo,
+          nombre: c.cargoDirectoCatalogo.nombre,
+          modoCalculo: c.cargoDirectoCatalogo.modoCalculo,
+          configJson: c.cargoDirectoCatalogo.configJson,
+        },
       })),
     }));
 

@@ -252,6 +252,8 @@ export interface PasoCargado {
     detalleJson: unknown;
   }>;
   slots: SlotCargado[];
+  /** Cargos directos a nivel PASO declarados por el producto (G-M3). */
+  cargosDirectosPaso: CargoPasoCargado[];
 }
 
 export interface SlotCargado {
@@ -276,6 +278,25 @@ export interface SlotCargado {
 }
 
 export interface CargoCotizacionCargado {
+  id: string;
+  cargoDirectoCatalogoId: string;
+  modoActivacion: string;
+  condicionActivacionJson: unknown;
+  configOverrideJson: unknown;
+  catalogo: {
+    codigo: string;
+    nombre: string;
+    modoCalculo: string;
+    configJson: unknown;
+  };
+}
+
+/**
+ * Cargo directo asociado a un paso del producto (G-M3).
+ * Misma estructura que CargoCotizacionCargado: la diferencia es el scope
+ * (la base de PORCENTAJE_SOBRE_BASE es el subtotal del PASO, no de la cotización).
+ */
+export interface CargoPasoCargado {
   id: string;
   cargoDirectoCatalogoId: string;
   modoActivacion: string;

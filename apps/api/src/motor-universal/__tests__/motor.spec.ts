@@ -705,6 +705,189 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(result.cotizacion!.precio!.margenAplicadoPct).toBe(100);
   });
 
+  it('G-M3: cargo directo a nivel PASO (MONTO_FIJO_PLANO OBLIGATORIO) se aplica al paso', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    const cargoCatalogo = await prisma.cargoDirectoCatalogo.findFirstOrThrow({
+      where: { tenantId, codigo: 'tercerizacion' },
+    });
+    const ruta = tarjetas.rutasAlternativas[0];
+    const prePrensa = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'pre_prensa',
+    );
+    expect(prePrensa).toBeDefined();
+
+    // Asociar cargo de tercerización OBLIGATORIO con monto fijo 500 al paso pre_prensa
+    const cargoPaso = await prisma.productoCargoDirectoPaso.create({
+      data: {
+        tenantId,
+        productoConfigPasoId: prePrensa!.id,
+        cargoDirectoCatalogoId: cargoCatalogo.id,
+        modoActivacion: 'OBLIGATORIO',
+        configOverrideJson: { monto: 500 },
+        activo: true,
+      },
+    });
+
+    try {
+      const result = await motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-03',
+        jobContext: { cantidad: 1000, caras: 2 },
+      });
+
+      expect(result.exitoso).toBe(true);
+      const pasoPrePrensa = result.cotizacion!.pasos.find(
+        (p) => p.familiaCodigo === 'pre_prensa',
+      );
+      expect(pasoPrePrensa).toBeDefined();
+      expect(pasoPrePrensa!.activado).toBe(true);
+      expect(pasoPrePrensa!.cargosDirectosPaso?.length).toBe(1);
+      const cargo = pasoPrePrensa!.cargosDirectosPaso![0];
+      expect(cargo.cargoCodigo).toBe('tercerizacion');
+      expect(cargo.monto).toBe(500);
+      expect(cargo.modoCalculo).toBe('MONTO_FIJO_PLANO');
+
+      // El costoTotal del paso debe incluir los 500 además de tiempo + materiales
+      const subtotalEsperado =
+        (pasoPrePrensa!.tiempo?.costo ?? 0) +
+        (pasoPrePrensa!.materiales?.reduce((acc, m) => acc + m.costoTotal, 0) ?? 0);
+      expect(pasoPrePrensa!.costoTotal).toBeCloseTo(subtotalEsperado + 500, 2);
+
+      // El total agregado de la cotización también debe sumarlo
+      expect(result.cotizacion!.costos.cargosDirectosTotal).toBeGreaterThanOrEqual(500);
+    } finally {
+      await prisma.productoCargoDirectoPaso.delete({ where: { id: cargoPaso.id } });
+    }
+  });
+
+  it('G-M3: cargo PORCENTAJE_SOBRE_BASE a nivel PASO usa el subtotal DEL PASO como base', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    // Usar el cargo "recargo_urgencia" del seed (PORCENTAJE_SOBRE_BASE)
+    const cargoUrgencia = await prisma.cargoDirectoCatalogo.findFirstOrThrow({
+      where: { tenantId, codigo: 'recargo_urgencia' },
+    });
+    const ruta = tarjetas.rutasAlternativas[0];
+    const impresion = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'impresion_por_hoja',
+    );
+    expect(impresion).toBeDefined();
+
+    // Asociar 10% al paso impresión, OBLIGATORIO
+    const cargoPaso = await prisma.productoCargoDirectoPaso.create({
+      data: {
+        tenantId,
+        productoConfigPasoId: impresion!.id,
+        cargoDirectoCatalogoId: cargoUrgencia.id,
+        modoActivacion: 'OBLIGATORIO',
+        configOverrideJson: { porcentaje: 10 },
+        activo: true,
+      },
+    });
+
+    try {
+      const result = await motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-03',
+        jobContext: { cantidad: 1000, caras: 2 },
+      });
+
+      expect(result.exitoso).toBe(true);
+      const pasoImpresion = result.cotizacion!.pasos.find(
+        (p) => p.familiaCodigo === 'impresion_por_hoja',
+      );
+      expect(pasoImpresion).toBeDefined();
+      const subtotalPaso =
+        (pasoImpresion!.tiempo?.costo ?? 0) +
+        (pasoImpresion!.materiales?.reduce((acc, m) => acc + m.costoTotal, 0) ?? 0);
+      const cargo = pasoImpresion!.cargosDirectosPaso![0];
+      expect(cargo.monto).toBeCloseTo(subtotalPaso * 0.1, 2);
+      expect((cargo.detalle as { scope?: string })?.scope).toBe('PASO');
+    } finally {
+      await prisma.productoCargoDirectoPaso.delete({ where: { id: cargoPaso.id } });
+    }
+  });
+
+  it('G-M3: cargo OPCIONAL a nivel PASO no se aplica si el comercial no lo activa', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    const cargoCatalogo = await prisma.cargoDirectoCatalogo.findFirstOrThrow({
+      where: { tenantId, codigo: 'tercerizacion' },
+    });
+    const ruta = tarjetas.rutasAlternativas[0];
+    const prePrensa = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'pre_prensa',
+    );
+
+    const cargoPaso = await prisma.productoCargoDirectoPaso.create({
+      data: {
+        tenantId,
+        productoConfigPasoId: prePrensa!.id,
+        cargoDirectoCatalogoId: cargoCatalogo.id,
+        modoActivacion: 'OPCIONAL',
+        configOverrideJson: { monto: 1500 },
+        activo: true,
+      },
+    });
+
+    try {
+      // Sin opcionalesActivados → no se aplica
+      const result = await motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-03',
+        jobContext: { cantidad: 1000, caras: 2 },
+      });
+      const pasoPrePrensa = result.cotizacion!.pasos.find(
+        (p) => p.familiaCodigo === 'pre_prensa',
+      );
+      expect(pasoPrePrensa!.cargosDirectosPaso?.length).toBe(0);
+
+      // Con opcionalesActivados[cargoPaso.id] = true → SÍ se aplica
+      const resultActivado = await motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-03',
+        jobContext: {
+          cantidad: 1000,
+          caras: 2,
+          opcionalesActivados: { [cargoPaso.id]: true },
+        },
+      });
+      const pasoActivado = resultActivado.cotizacion!.pasos.find(
+        (p) => p.familiaCodigo === 'pre_prensa',
+      );
+      expect(pasoActivado!.cargosDirectosPaso?.length).toBe(1);
+      expect(pasoActivado!.cargosDirectosPaso![0].monto).toBe(1500);
+    } finally {
+      await prisma.productoCargoDirectoPaso.delete({ where: { id: cargoPaso.id } });
+    }
+  });
+
   it('estructura de costos siempre presente, aunque sean 0', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({
