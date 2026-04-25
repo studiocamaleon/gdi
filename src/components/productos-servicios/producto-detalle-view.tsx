@@ -10,6 +10,7 @@ import {
   GitBranchIcon,
   PackageIcon,
   PencilIcon,
+  ReceiptIcon,
   RulerIcon,
   TagIcon,
   WrenchIcon,
@@ -53,6 +54,12 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
               <Button variant="outline" size="sm">
                 <GitBranchIcon className="mr-2 size-3" />
                 Configurar rutas
+              </Button>
+            </Link>
+            <Link href={`/productos-servicios/${producto.id}/cargos`}>
+              <Button variant="outline" size="sm">
+                <ReceiptIcon className="mr-2 size-3" />
+                Cargos directos
               </Button>
             </Link>
             <Link href={`/productos-servicios/${producto.id}/editar`}>

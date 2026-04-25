@@ -250,6 +250,53 @@ export async function eliminarCargoDirecto(id: string) {
   return apiRequest(`/productos-servicios/cargos-directos/${id}`, { method: 'DELETE' });
 }
 
+// === Asociación cargos ↔ producto/paso (F.3.10) ===
+
+export interface AsociarCargoCotizacionPayload {
+  cargoDirectoCatalogoId: string;
+  modoActivacion: 'OBLIGATORIO' | 'OPCIONAL' | 'CONDICIONAL';
+  condicionActivacionJson?: Record<string, unknown>;
+  configOverrideJson?: Record<string, unknown>;
+}
+
+export async function asociarCargoCotizacion(
+  productoId: string,
+  payload: AsociarCargoCotizacionPayload,
+) {
+  return apiRequest(`/productos-servicios/productos/${productoId}/cargos-cotizacion`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export async function desasociarCargoCotizacion(asociacionId: string) {
+  return apiRequest(`/productos-servicios/productos/cargos-cotizacion/${asociacionId}`, {
+    method: 'DELETE',
+  });
+}
+
+export interface AsociarCargoPasoPayload {
+  cargoDirectoCatalogoId: string;
+  modoActivacion: 'OBLIGATORIO' | 'OPCIONAL' | 'CONDICIONAL';
+  condicionActivacionJson?: Record<string, unknown>;
+  configOverrideJson?: Record<string, unknown>;
+}
+
+export async function asociarCargoPaso(configPasoId: string, payload: AsociarCargoPasoPayload) {
+  return apiRequest(`/productos-servicios/productos/config-pasos/${configPasoId}/cargos`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export async function desasociarCargoPaso(asociacionId: string) {
+  return apiRequest(`/productos-servicios/productos/config-pasos/cargos/${asociacionId}`, {
+    method: 'DELETE',
+  });
+}
+
 export interface LookupsConfigPaso {
   maquinas: Array<{
     id: string;

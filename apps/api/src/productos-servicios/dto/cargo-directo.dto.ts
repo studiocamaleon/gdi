@@ -6,6 +6,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  IsUUID,
   Length,
   Matches,
 } from 'class-validator';
@@ -71,3 +72,40 @@ export class ActualizarCargoDirectoDto {
   @IsBoolean()
   activo?: boolean;
 }
+
+// ============================================================================
+// Asociación de cargos a producto/paso (F.3.10)
+// ============================================================================
+
+export class AsociarCargoCotizacionDto {
+  @IsUUID()
+  cargoDirectoCatalogoId!: string;
+
+  @IsString()
+  modoActivacion!: string; // OBLIGATORIO | OPCIONAL | CONDICIONAL
+
+  @IsOptional()
+  @IsObject()
+  condicionActivacionJson?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsObject()
+  configOverrideJson?: Record<string, unknown>;
+}
+
+export class AsociarCargoPasoDto {
+  @IsUUID()
+  cargoDirectoCatalogoId!: string;
+
+  @IsString()
+  modoActivacion!: string;
+
+  @IsOptional()
+  @IsObject()
+  condicionActivacionJson?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsObject()
+  configOverrideJson?: Record<string, unknown>;
+}
+

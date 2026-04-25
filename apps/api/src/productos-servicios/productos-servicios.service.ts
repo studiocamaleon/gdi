@@ -10,7 +10,12 @@ import type {
   CrearProductoRutaAlternativaDto,
   UpsertProductoConfigPasoDto,
 } from './dto/producto-ruta.dto';
-import type { ActualizarCargoDirectoDto, CrearCargoDirectoDto } from './dto/cargo-directo.dto';
+import type {
+  ActualizarCargoDirectoDto,
+  AsociarCargoCotizacionDto,
+  AsociarCargoPasoDto,
+  CrearCargoDirectoDto,
+} from './dto/cargo-directo.dto';
 
 /**
  * Service F.3 — CRUD del Modelo Universal V2.
@@ -646,5 +651,79 @@ export class ProductosServiciosService {
     }
 
     return this.prisma.cargoDirectoCatalogo.delete({ where: { id } });
+  }
+
+  // ============================================================================
+  // ASOCIACIÓN CARGOS ↔ PRODUCTO/PASO (F.3.10)
+  // ============================================================================
+
+  async asociarCargoCotizacion(
+    tenantId: string,
+    productoId: string,
+    dto: AsociarCargoCotizacionDto,
+  ) {
+    const [producto, cargo] = await Promise.all([
+      this.prisma.producto.findFirst({ where: { id: productoId, tenantId } }),
+      this.prisma.cargoDirectoCatalogo.findFirst({
+        where: { id: dto.cargoDirectoCatalogoId, tenantId },
+      }),
+    ]);
+    if (!producto) throw new NotFoundException(`Producto ${productoId} no encontrado`);
+    if (!cargo) throw new NotFoundException(`Cargo ${dto.cargoDirectoCatalogoId} no encontrado`);
+
+    return this.prisma.productoCargoDirectoCotizacion.create({
+      data: {
+        tenantId,
+        productoId,
+        cargoDirectoCatalogoId: dto.cargoDirectoCatalogoId,
+        modoActivacion: dto.modoActivacion,
+        condicionActivacionJson: (dto.condicionActivacionJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        configOverrideJson: (dto.configOverrideJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        activo: true,
+      },
+    });
+  }
+
+  async desasociarCargoCotizacion(tenantId: string, asociacionId: string) {
+    const existente = await this.prisma.productoCargoDirectoCotizacion.findFirst({
+      where: { id: asociacionId, tenantId },
+    });
+    if (!existente) throw new NotFoundException(`Asociación ${asociacionId} no encontrada`);
+    return this.prisma.productoCargoDirectoCotizacion.delete({ where: { id: asociacionId } });
+  }
+
+  async asociarCargoPaso(
+    tenantId: string,
+    configPasoId: string,
+    dto: AsociarCargoPasoDto,
+  ) {
+    const [configPaso, cargo] = await Promise.all([
+      this.prisma.productoConfigPaso.findFirst({ where: { id: configPasoId, tenantId } }),
+      this.prisma.cargoDirectoCatalogo.findFirst({
+        where: { id: dto.cargoDirectoCatalogoId, tenantId },
+      }),
+    ]);
+    if (!configPaso) throw new NotFoundException(`ConfigPaso ${configPasoId} no encontrado`);
+    if (!cargo) throw new NotFoundException(`Cargo ${dto.cargoDirectoCatalogoId} no encontrado`);
+
+    return this.prisma.productoCargoDirectoPaso.create({
+      data: {
+        tenantId,
+        productoConfigPasoId: configPasoId,
+        cargoDirectoCatalogoId: dto.cargoDirectoCatalogoId,
+        modoActivacion: dto.modoActivacion,
+        condicionActivacionJson: (dto.condicionActivacionJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        configOverrideJson: (dto.configOverrideJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        activo: true,
+      },
+    });
+  }
+
+  async desasociarCargoPaso(tenantId: string, asociacionId: string) {
+    const existente = await this.prisma.productoCargoDirectoPaso.findFirst({
+      where: { id: asociacionId, tenantId },
+    });
+    if (!existente) throw new NotFoundException(`Asociación ${asociacionId} no encontrada`);
+    return this.prisma.productoCargoDirectoPaso.delete({ where: { id: asociacionId } });
   }
 }

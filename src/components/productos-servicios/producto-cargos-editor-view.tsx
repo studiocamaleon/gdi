@@ -1,0 +1,253 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ArrowLeftIcon, PlusIcon, Trash2Icon, WrenchIcon } from "lucide-react";
+import { toast } from "sonner";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import {
+  asociarCargoCotizacion,
+  desasociarCargoCotizacion,
+} from "@/lib/productos-servicios-api";
+import type { CargoDirectoCatalogo, ProductoDetalle } from "@/lib/productos-servicios";
+
+interface Props {
+  producto: ProductoDetalle;
+  catalogoCargos: CargoDirectoCatalogo[];
+}
+
+const MODOS_ACTIVACION = ["OBLIGATORIO", "OPCIONAL", "CONDICIONAL"] as const;
+
+export function ProductoCargosEditorView({ producto, catalogoCargos }: Props) {
+  const router = useRouter();
+  const [openSheet, setOpenSheet] = React.useState(false);
+  const [guardando, setGuardando] = React.useState(false);
+
+  const [cargoSeleccionado, setCargoSeleccionado] = React.useState("");
+  const [modoActivacion, setModoActivacion] = React.useState("OPCIONAL");
+
+  const yaAsociados = new Set(
+    producto.cargosDirectosCotizacion.map((c) => c.cargoDirectoCatalogo.codigo),
+  );
+  const disponibles = catalogoCargos.filter(
+    (c) => c.activo && !yaAsociados.has(c.codigo),
+  );
+
+  const asociar = async () => {
+    if (!cargoSeleccionado) return;
+    setGuardando(true);
+    try {
+      await asociarCargoCotizacion(producto.id, {
+        cargoDirectoCatalogoId: cargoSeleccionado,
+        modoActivacion: modoActivacion as "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL",
+      });
+      toast.success("Cargo asociado al producto");
+      setOpenSheet(false);
+      setCargoSeleccionado("");
+      setModoActivacion("OPCIONAL");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const desasociar = async (asocId: string, nombre: string) => {
+    if (!confirm(`¿Quitar el cargo "${nombre}" del producto?`)) return;
+    try {
+      await desasociarCargoCotizacion(asocId);
+      toast.success("Cargo desasociado");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error");
+    }
+  };
+
+  return (
+    <div className="flex flex-1 flex-col gap-6 p-6">
+      <div className="flex flex-col gap-2">
+        <Link
+          href={`/productos-servicios/${producto.id}`}
+          className="text-muted-foreground hover:text-foreground inline-flex items-center text-sm"
+        >
+          <ArrowLeftIcon className="mr-1 size-4" />
+          Volver a {producto.nombre}
+        </Link>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Cargos directos del producto</h1>
+            <p className="text-muted-foreground text-sm">
+              Cargos a nivel cotización (ej: viático, recargo urgencia). Se ofrecen al
+              comercial al cotizar este producto.
+            </p>
+          </div>
+          <Sheet open={openSheet} onOpenChange={setOpenSheet}>
+            <SheetTrigger
+              render={(props) => (
+                <Button {...props} disabled={disponibles.length === 0}>
+                  <PlusIcon className="mr-2 size-4" />
+                  Asociar cargo
+                </Button>
+              )}
+            />
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle>Asociar cargo directo al producto</SheetTitle>
+                <SheetDescription>
+                  Elegí del catálogo del tenant un cargo a nivel cotización. Si no aparece el que
+                  necesitás, primero creá el cargo en{" "}
+                  <Link
+                    href="/productos-servicios/cargos-directos"
+                    className="text-primary underline"
+                  >
+                    /cargos-directos
+                  </Link>
+                  .
+                </SheetDescription>
+              </SheetHeader>
+              <div className="space-y-4 px-4">
+                <div className="space-y-2">
+                  <Label>Cargo del catálogo</Label>
+                  <Select
+                    value={cargoSeleccionado}
+                    onValueChange={(v) => setCargoSeleccionado(v ?? "")}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Elegí cargo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {disponibles.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.nombre} ({c.modoCalculo})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Modo de activación</Label>
+                  <Select
+                    value={modoActivacion}
+                    onValueChange={(v) => setModoActivacion(v ?? "OPCIONAL")}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MODOS_ACTIVACION.map((m) => (
+                        <SelectItem key={m} value={m}>
+                          {m}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-muted-foreground text-xs">
+                    OBLIGATORIO: siempre se aplica. OPCIONAL: comercial decide al cotizar.
+                    CONDICIONAL: regla automática (no editable desde UI todavía).
+                  </p>
+                </div>
+              </div>
+              <SheetFooter>
+                <Button variant="outline" onClick={() => setOpenSheet(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={asociar} disabled={guardando || !cargoSeleccionado}>
+                  {guardando ? "Asociando..." : "Asociar"}
+                </Button>
+              </SheetFooter>
+            </SheetContent>
+          </Sheet>
+        </div>
+      </div>
+
+      {producto.cargosDirectosCotizacion.length === 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Sin cargos asociados</CardTitle>
+            <CardDescription>
+              Este producto no tiene cargos directos a nivel cotización.
+              {disponibles.length === 0 && catalogoCargos.length === 0 && (
+                <>
+                  {" "}
+                  Primero{" "}
+                  <Link
+                    href="/productos-servicios/cargos-directos"
+                    className="text-primary underline"
+                  >
+                    creá cargos en el catálogo
+                  </Link>
+                  .
+                </>
+              )}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {producto.cargosDirectosCotizacion.map((cd) => (
+            <Card key={cd.id}>
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <WrenchIcon className="size-4" />
+                      {cd.cargoDirectoCatalogo.nombre}
+                    </CardTitle>
+                    <CardDescription className="font-mono text-xs">
+                      {cd.cargoDirectoCatalogo.codigo}
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      desasociar(cd.id, cd.cargoDirectoCatalogo.nombre)
+                    }
+                    className="h-7 w-7 p-0 text-red-600"
+                  >
+                    <Trash2Icon className="size-3" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex items-center gap-1">
+                  <Badge variant="outline" className="text-[10px]">
+                    {cd.cargoDirectoCatalogo.modoCalculo}
+                  </Badge>
+                  <Badge
+                    variant={cd.modoActivacion === "OBLIGATORIO" ? "default" : "secondary"}
+                    className="text-[10px]"
+                  >
+                    {cd.modoActivacion}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

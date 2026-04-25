@@ -22,6 +22,8 @@ import {
 } from './dto/producto-ruta.dto';
 import {
   ActualizarCargoDirectoDto,
+  AsociarCargoCotizacionDto,
+  AsociarCargoPasoDto,
   CrearCargoDirectoDto,
 } from './dto/cargo-directo.dto';
 
@@ -212,5 +214,51 @@ export class ProductosServiciosController {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
     await this.service.eliminarCargoDirecto(tenantId, id);
+  }
+
+  // === ASOCIACIÓN cargos ↔ producto/paso (F.3.10) ===
+
+  @Post('productos/:productoId/cargos-cotizacion')
+  async asociarCargoCotizacion(
+    @Req() req: RequestWithAuth,
+    @Param('productoId') productoId: string,
+    @Body() dto: AsociarCargoCotizacionDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.asociarCargoCotizacion(tenantId, productoId, dto);
+  }
+
+  @Delete('productos/cargos-cotizacion/:asociacionId')
+  @HttpCode(204)
+  async desasociarCargoCotizacion(
+    @Req() req: RequestWithAuth,
+    @Param('asociacionId') asociacionId: string,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    await this.service.desasociarCargoCotizacion(tenantId, asociacionId);
+  }
+
+  @Post('productos/config-pasos/:configPasoId/cargos')
+  async asociarCargoPaso(
+    @Req() req: RequestWithAuth,
+    @Param('configPasoId') configPasoId: string,
+    @Body() dto: AsociarCargoPasoDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.asociarCargoPaso(tenantId, configPasoId, dto);
+  }
+
+  @Delete('productos/config-pasos/cargos/:asociacionId')
+  @HttpCode(204)
+  async desasociarCargoPaso(
+    @Req() req: RequestWithAuth,
+    @Param('asociacionId') asociacionId: string,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    await this.service.desasociarCargoPaso(tenantId, asociacionId);
   }
 }
