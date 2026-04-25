@@ -277,6 +277,49 @@ function runGrid2DSingle(
   };
 }
 
+/**
+ * G-M2 — Look-ahead para `pre_prensa`.
+ *
+ * `pre_prensa` (M-0, T-1, sin slots de material) NO conoce el papel ni la
+ * máquina por sí solo, pero su rol semántico es PLANIFICAR la imposición y
+ * publicar `pliegos_calculados` para que el siguiente paso de impresión por
+ * hoja lo herede.
+ *
+ * Esta función busca el siguiente paso con familia `impresion_por_hoja`
+ * (en el subset `pasosSiguientes`), toma su material + máquina, y corre el
+ * dispatcher de grid-2d-single sintetizando un paso virtual. El resultado
+ * tiene exactamente el mismo shape que cualquier otro `NestingDispatchResult`,
+ * lo que permite reusar el viewer y la lógica de outputs canónicos.
+ */
+export async function runNestingForPrePrensa(
+  paso: PasoCargado,
+  jobContext: JobContext,
+  pasosSiguientes: PasoCargado[],
+  resolveMaterialFn: (slot: PasoCargado['slots'][number], jc: JobContext) => Promise<MaterialResueltoParaNesting | null>,
+): Promise<NestingDispatchResult | null> {
+  if (paso.familiaCodigo !== 'pre_prensa') return null;
+
+  const proximoImpresionPorHoja = pasosSiguientes.find(
+    (p) => p.familiaCodigo === 'impresion_por_hoja',
+  );
+  if (!proximoImpresionPorHoja) return null;
+
+  const slot = proximoImpresionPorHoja.slots[0] ?? null;
+  if (!slot) return null;
+  const material = await resolveMaterialFn(slot, jobContext);
+  if (!material) return null;
+
+  // Construir un paso sintético que el dispatcher trate como impresion_por_hoja
+  // (mismo material + máquina + paramsPaso del siguiente paso). El resultado se
+  // adjudica luego a pre_prensa para que escriba sus outputs canónicos.
+  const pasoSintetico: PasoCargado = {
+    ...proximoImpresionPorHoja,
+    paramsPasoJson: paso.paramsPasoJson, // mantener overrides locales de pre_prensa
+  };
+
+  return runNestingForPaso(pasoSintetico, jobContext, material);
+}
+
 // ────────────────────────────────────────────────────────────────────
 // Helpers
 // ────────────────────────────────────────────────────────────────────

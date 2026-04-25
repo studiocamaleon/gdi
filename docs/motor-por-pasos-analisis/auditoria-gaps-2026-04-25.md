@@ -9,6 +9,15 @@
 - **2026-04-25 (1)**: documento inicial.
 - **2026-04-25 (2)**: ✅ **G-M3 cerrado** (cargos directos a nivel PASO, commit en branch). 3 tests nuevos verde. Actualizado §6 y §8.
 - **2026-04-25 (3)**: nota agregada en §8: F.5 debe **eliminar Three.js** explícitamente (no opcional). G-M1 debe entregar **`<NestingViewer>` SVG único** reusable por todos los algoritmos (shelf-rollo, grid-2d-single/multi, talonario-grouping). Reemplaza cualquier vista de nesting basada en WebGL/Three.js que quede.
+- **2026-04-25 (6)**: ✅ **G-M2 cerrado** (outputs canónicos al jobContext) + **G-M4 cerrado** (EXISTS_OUTPUT real, derivado).
+  - Nuevo módulo `outputs-canonicos.ts`: función `calcularOutputsCanonicos(familia, ctx)` que llena los outputs declarados por cada familia (`pliegos_calculados`, `pliegos_impresos`, `m2_calculados`, `aprovechamiento_pct`, `tiempo_real_*`, `piezas_*`, `metros_lineales_*`, etc.) basándose en el resultado del paso (tiempo, materiales, nesting, cantidad efectiva).
+  - **Look-ahead pre_prensa**: `runNestingForPrePrensa` busca el siguiente paso `impresion_por_hoja`, toma su material + máquina, y corre `grid-2d-single` virtualmente para que `pre_prensa` (M-0, T-1, sin slot) pueda publicar `pliegos_calculados`, `poses_por_pliego`, `imposicion_calculada`, `cortes_calculados` aunque no tenga datos propios.
+  - **Propagación al jobContext**: el loop `cotizar` mergea cada `outputsCanonicos` al jobContext mutado (flat keys) y a `outputsAcumulados: Set<string>` para validaciones.
+  - **HEREDAR_DEL_OUTPUT_CANONICO real**: `resolverCantidad` lee del jobContext la key indicada en `mecanismoCantidadConfigJson.campoOutput` o el default por familia (mapeo: `impresion_por_hoja` → `pliegos_calculados`, `corte_*` / `laminado` / `barniz` / `plegado` / `engomado` / `encuadernado_*` → `pliegos_impresos`, `modificacion_post` → `piezas_cortadas`).
+  - **EXISTS_OUTPUT real**: `ejecutarValidaciones` chequea `outputsAcumulados.has(v.outputCanonico)`. Cierra G-M4 de paso (validación pasaba siempre antes).
+  - **Wiring medidaDefault**: cuando el comercial no pasa `piezas[]` ni `medidaCustomMm`, el motor usa `producto.medidaDefaultAnchoMm/AltoMm` para sintetizar `medidaCustomMm` localmente. Esto preserva el contrato comercial (modelador declara medidas FIJAS, comercial no las repite).
+  - End-to-end Tarjetas: 1000 tarjetas → `pre_prensa` corre grid-2d (90×50mm en pliego 220×340mm) → publica `pliegos_calculados` ≈ 28 → `impresion_por_hoja` HEREDA → calcula tiempo basado en pliegos reales → `corte_guillotina` valida `EXISTS_OUTPUT pliegos_calculados` → todo OK.
+  - 113/113 tests verde (3 nuevos G-M2 + regresión cero).
 - **2026-04-25 (5)**: ✅ **G-M1 cerrado** (nesting al motor + viewer SVG único).
   - Backend: nuevo `nesting-dispatcher.ts` que conecta `shelf-rollo` (gran formato) y `grid-2d-single` (digital) al motor cuando `mecanismoCantidad = CALCULADO_POR_PASO`. Devuelve cantidad real con desperdicio.
   - Vinilo (caso real): cotización de 3 paños 2×1m en rollo 1.37m pasa de 60min (m² crudos) a ~98min (8.26 m² reales con desperdicio del rollo). **Sub-cobro silencioso del nesting cerrado.**
@@ -228,18 +237,20 @@ Reordenado por **valor de negocio + dependencias técnicas**:
    - Vinilo end-to-end con desperdicio real (60min → ~98min para 3 paños 2×1m, **sub-cobro cerrado**).
    - Talonarios + multi-medida rígidos quedan para iteración futura cuando aparezca caso real (talonarios depende de G-M2).
 
-4. **G-M2 — Outputs canónicos reales**
-   - Implementar `calcularOutputs` por familia (los 13 outputs canónicos del catálogo).
-   - Propagar al `jobContext` mutado entre pasos (acumulador en `cotizar`).
-   - Habilitar G-M4 (`EXISTS_OUTPUT` real) y `HEREDAR_DEL_OUTPUT_CANONICO` real (G-M2 ramifica).
-   - Esfuerzo: 5–7 días (es el más invasivo).
+4. ~~**G-M2 — Outputs canónicos reales**~~ ✅ **CERRADO 2026-04-25**
+   - Módulo `outputs-canonicos.ts` con cálculo por familia (estructurados, numéricos, derivados de tiempo/materiales/cantidad).
+   - Look-ahead `pre_prensa` → siguiente `impresion_por_hoja` para sintetizar `pliegos_calculados`.
+   - Propagación flat keys al jobContext + Set acumulador para EXISTS_OUTPUT.
+   - HEREDAR_DEL_OUTPUT_CANONICO real con default por familia.
+   - **G-M4 cerrado de paso**: EXISTS_OUTPUT chequea contra outputsAcumulados.
 
 ### Sprint siguiente (2–3 semanas)
 
 4. **G-M5 — T-2 productividad propia** (1 día).
-5. **G-M8 — Selección automática de perfil con regla declarativa** por familia (2 días).
-6. **G-F2 — Cotizador permite override de máquina M-2** (2–3 días).
-7. **G-F1 — UI versionado opt-in con heurística** (3 días).
+5. ~~**G-M4 — EXISTS_OUTPUT real**~~ ✅ **CERRADO 2026-04-25** (derivado de G-M2).
+6. **G-M8 — Selección automática de perfil con regla declarativa** por familia (2 días).
+7. **G-F2 — Cotizador permite override de máquina M-2** (2–3 días).
+8. **G-F1 — UI versionado opt-in con heurística** (3 días).
 
 ### Backlog (cuando aparezca caso)
 

@@ -238,6 +238,15 @@ export interface ProductoCargado {
   productoNombre: string;
   unidadComercial: string;
   modoMedidas: string;
+  /**
+   * Medida default del producto (modoMedidas = FIJA o COMERCIAL_ELIGE). Cuando
+   * el comercial NO carga `piezas[]` ni `medidaCustomMm` en el JobContext, el
+   * dispatcher de nesting (pre_prensa look-ahead) usa estos valores como
+   * fallback. Si el producto no las declara, el dispatcher falla y el motor
+   * cae al comportamiento histórico.
+   */
+  medidaDefaultAnchoMm: number | null;
+  medidaDefaultAltoMm: number | null;
   precioConfigJson?: unknown;
   rutaAlternativaId: string;
   rutaAlternativaNombre: string;

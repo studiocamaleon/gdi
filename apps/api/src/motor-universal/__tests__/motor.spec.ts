@@ -784,6 +784,90 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(embalaje!.nestingResult).toBeUndefined();
   });
 
+  it('G-M2: pre_prensa publica `pliegos_calculados` y `poses_por_pliego` vía look-ahead a impresion_por_hoja', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      periodo: '2026-03',
+      jobContext: { cantidad: 1000, caras: 2 },
+      // sin piezas explícitas: motor usa medidaDefault (90×50) del producto
+    });
+    expect(result.exitoso).toBe(true);
+    const prePrensa = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'pre_prensa');
+    expect(prePrensa).toBeDefined();
+    expect(prePrensa!.activado).toBe(true);
+    // pre_prensa corrió grid-2d-single look-ahead y publicó los outputs.
+    const outs = prePrensa!.outputsCanonicos as Record<string, unknown>;
+    expect(outs.pliegos_calculados).toBeGreaterThan(0);
+    expect(outs.poses_por_pliego).toBeGreaterThan(0);
+    expect(outs.imposicion_calculada).toMatchObject({
+      algorithm: 'grid-2d-single',
+      piezasPorPliego: expect.any(Number),
+    });
+    expect(outs.cortes_calculados).toMatchObject({
+      cortesTotales: expect.any(Number),
+    });
+  });
+
+  it('G-M2: impresion_por_hoja HEREDA `pliegos_calculados` y calcula tiempo basado en pliegos reales', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      periodo: '2026-03',
+      jobContext: { cantidad: 1000, caras: 2 },
+    });
+    expect(result.exitoso).toBe(true);
+    const prePrensa = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'pre_prensa');
+    const impresion = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_hoja');
+    expect(prePrensa).toBeDefined();
+    expect(impresion).toBeDefined();
+
+    // El paso de impresión debe haberse ejecutado con la cantidad de pliegos
+    // calculada por pre_prensa (no con cantidad cruda 1000 piezas).
+    const pliegos = (prePrensa!.outputsCanonicos as Record<string, unknown>).pliegos_calculados as number;
+    expect(pliegos).toBeGreaterThan(0);
+    expect(pliegos).toBeLessThan(1000); // 1000 tarjetas no requieren 1000 pliegos
+
+    // pliegos_impresos publicado por impresion debe coincidir con la cantidad heredada.
+    const outsImp = impresion!.outputsCanonicos as Record<string, unknown>;
+    expect(outsImp.pliegos_impresos).toBe(pliegos);
+  });
+
+  it('G-M2/G-M4: EXISTS_OUTPUT real bloquea corte_guillotina si pre_prensa no publicó pliegos_calculados', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+    // Producto SIN medidaDefault y SIN piezas → pre_prensa no puede correr
+    // nesting → no publica pliegos_calculados → corte_guillotina falla EXISTS_OUTPUT.
+    // Lo simulamos pasando piezas con altura 0 (inválidas) para forzar el null.
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      jobContext: {
+        cantidad: 1000,
+        caras: 2,
+        piezas: [{ cantidad: 1, anchoMm: 0, altoMm: 0 }], // medidas inválidas
+        // Sobre-escribimos medidaCustomMm para que el motor NO use medidaDefault
+        medidaCustomMm: { anchoMm: 0, altoMm: 0 },
+      },
+    });
+    expect(result.exitoso).toBe(false);
+    const e = result.errores.find((er) => er.codigo === 'existe_pliegos');
+    expect(e).toBeDefined();
+    expect(e!.severidad).toBe('ERROR');
+    expect(e!.familiaCodigo).toBe('corte_guillotina');
+    expect((e!.contexto as { outputCanonico?: string }).outputCanonico).toBe('pliegos_calculados');
+  });
+
   it('G-M3: cargo directo a nivel PASO (MONTO_FIJO_PLANO OBLIGATORIO) se aplica al paso', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({

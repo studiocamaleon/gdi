@@ -19,7 +19,44 @@ import type {
   CargoPasoCargado,
   NestingEjecutado,
 } from './tipos';
-import { runNestingForPaso, type NestingDispatchResult } from './nesting-dispatcher';
+import {
+  runNestingForPaso,
+  runNestingForPrePrensa,
+  type NestingDispatchResult,
+} from './nesting-dispatcher';
+import { calcularOutputsCanonicos } from './outputs-canonicos';
+
+/**
+ * G-M2 — Mapeo familia → output canónico que hereda por default cuando
+ * `mecanismoCantidad = HEREDAR_DEL_OUTPUT_CANONICO` y no se especificó
+ * `campoOutput` en `mecanismoCantidadConfigJson`. Convención: cada familia
+ * espera el output natural del paso anterior.
+ */
+function defaultOutputParaHeredar(familiaCodigo: string): string | null {
+  switch (familiaCodigo) {
+    case 'impresion_por_hoja':
+      return 'pliegos_calculados';
+    case 'corte_guillotina':
+      return 'pliegos_impresos';
+    case 'laminado':
+      return 'pliegos_impresos';
+    case 'barniz':
+      return 'pliegos_impresos';
+    case 'plegado':
+      return 'pliegos_impresos';
+    case 'troquelado_digital':
+      return 'pliegos_impresos';
+    case 'engomado_emblocado':
+      return 'pliegos_impresos';
+    case 'encuadernado_engrapado':
+    case 'encuadernado_anillado':
+      return 'pliegos_impresos';
+    case 'modificacion_post':
+      return 'piezas_cortadas';
+    default:
+      return null;
+  }
+}
 
 /**
  * Motor Universal por Pasos.
@@ -32,21 +69,23 @@ import { runNestingForPaso, type NestingDispatchResult } from './nesting-dispatc
  * - Acumular trazabilidad
  * - Devolver costo total + trazabilidad + errores
  *
- * Sub-fases CUBIERTAS (auditoría 2026-04-25 + G-M3):
+ * Sub-fases CUBIERTAS (auditoría 2026-04-25 + G-M3 + G-M1 + G-M2):
  * - F.2.1 bucle a-i, F.2.2 JsonLogic CONDICIONAL, F.2.3 mecanismos cantidad
- *   (DIRECT/CONVERSION OK; HEREDAR/CALCULADO parciales),
+ *   (DIRECT, CONVERSION, HEREDAR_DEL_OUTPUT_CANONICO real (G-M2),
+ *   CALCULADO_POR_PASO con nesting real (G-M1)),
  * - F.2.4 selección perfil heurística (doble/simple), F.2.5 materiales (3 modos
  *   × 3 criterios), F.2.6 multiplicadores, F.2.7 cargos directos a nivel
- *   COTIZACIÓN y a nivel PASO (G-M3), F.2.8 validaciones D.7 (4 de 5 tipos),
- *   F.2.10 tarifas reales del centro de costo, F.2.11 snapshot CotizacionItem,
- *   F.2.12 Tab Precio integration.
+ *   COTIZACIÓN y a nivel PASO (G-M3), F.2.8 validaciones D.7 (5/5 tipos —
+ *   EXISTS_OUTPUT real con G-M2/G-M4), F.2.9 outputs canónicos al jobContext
+ *   con look-ahead pre_prensa (G-M2), F.2.10 tarifas reales del centro de
+ *   costo, F.2.11 snapshot CotizacionItem, F.2.12 Tab Precio integration,
+ *   F.2.13 nesting (shelf-rollo + grid-2d-single, G-M1).
  *
  * Pendientes (ver `docs/motor-por-pasos-analisis/auditoria-gaps-2026-04-25.md`):
- * - G-M1: nesting al motor (F.2.13 — `CALCULADO_POR_PASO` devuelve m² crudos).
- * - G-M2: outputs canónicos al jobContext (placeholder — todos `null`).
- * - G-M4: validación EXISTS_OUTPUT real (asume true).
  * - G-M5: T-2 (productividad propia).
  * - G-M6: sub-productos / SELECTOR (DAG).
+ * - G-M7/M8: nesting MAYOR_APROVECHAMIENTO real con cada candidato + perfil
+ *   con regla declarativa.
  */
 @Injectable()
 export class MotorUniversalService {
@@ -83,6 +122,24 @@ export class MotorUniversalService {
       ...input.jobContext,
     };
 
+    // G-M2 — Si el producto declara `medidaDefault` (modoMedidas FIJA o
+    // COMERCIAL_ELIGE) y el comercial NO cargó `piezas[]` ni `medidaCustomMm`,
+    // sintetizamos `medidaCustomMm` para que el dispatcher de nesting
+    // (pre_prensa look-ahead) tenga una pieza válida con la que correr el
+    // grid 2D. Esto preserva el contrato: cuando el modelador declara medidas
+    // fijas en el producto, el comercial no necesita repetirlas al cotizar.
+    if (
+      !jobContext.piezas &&
+      !jobContext.medidaCustomMm &&
+      producto.medidaDefaultAnchoMm &&
+      producto.medidaDefaultAltoMm
+    ) {
+      jobContext.medidaCustomMm = {
+        anchoMm: producto.medidaDefaultAnchoMm,
+        altoMm: producto.medidaDefaultAltoMm,
+      };
+    }
+
     // 1b. Cargar tarifas horarias publicadas para el período (F.2.10)
     const periodo = input.periodo ?? this.getPeriodoActual();
     const centroIds = Array.from(
@@ -100,20 +157,48 @@ export class MotorUniversalService {
 
     // 2. ITERAR PASOS EN ORDEN TOPOLÓGICO (orden simple por ahora)
     const pasosEjecutados: PasoEjecutado[] = [];
+    /**
+     * G-M2 — Outputs canónicos publicados por pasos anteriores. Cada paso
+     * puede leer de aquí (HEREDAR_DEL_OUTPUT_CANONICO) y escribir lo suyo.
+     * Se materializa también como flat keys en `jobContext` para que las
+     * validaciones COMPARE/REQUIRES_INPUT puedan referenciarlos.
+     */
+    const outputsAcumulados = new Set<string>();
     let huboErrorEnPasoAnterior = false;
 
-    for (const paso of producto.pasos) {
+    for (let i = 0; i < producto.pasos.length; i++) {
       if (huboErrorEnPasoAnterior) {
         // Si un paso falló, no avanzamos a los siguientes (D.7 multi-error híbrido)
         break;
       }
+      const paso = producto.pasos[i];
+      const pasosSiguientes = producto.pasos.slice(i + 1);
 
-      const ejecucion = await this.ejecutarPaso(paso, jobContext, errores, tarifasMap);
+      const ejecucion = await this.ejecutarPaso(
+        paso,
+        jobContext,
+        errores,
+        tarifasMap,
+        pasosSiguientes,
+        outputsAcumulados,
+      );
       pasosEjecutados.push(ejecucion);
 
       // Si este paso generó errores, marcar para no seguir
       if (errores.some((e) => e.rutaPasoId === paso.rutaPasoId && e.severidad === 'ERROR')) {
         huboErrorEnPasoAnterior = true;
+        continue;
+      }
+
+      // G-M2 — Mergear outputs canónicos al jobContext mutado para que los
+      // siguientes pasos puedan leerlos (HEREDAR_DEL_OUTPUT_CANONICO) o
+      // validar su existencia (EXISTS_OUTPUT).
+      if (ejecucion.outputsCanonicos) {
+        for (const [key, value] of Object.entries(ejecucion.outputsCanonicos)) {
+          if (value === null || value === undefined) continue;
+          (jobContext as Record<string, unknown>)[key] = value;
+          outputsAcumulados.add(key);
+        }
       }
     }
 
@@ -291,6 +376,8 @@ export class MotorUniversalService {
     jobContext: JobContext,
     errores: ErrorMotor[],
     tarifasMap: Map<string, unknown>,
+    pasosSiguientes: PasoCargado[] = [],
+    outputsAcumulados: Set<string> = new Set(),
   ): Promise<PasoEjecutado> {
     const familia = FAMILIAS[paso.familiaCodigo as FamiliaCodigo] as
       | (typeof FAMILIAS)[FamiliaCodigo]
@@ -312,7 +399,12 @@ export class MotorUniversalService {
 
     // a.1) F.2.8 — Ejecutar validaciones D.7 declaradas por la familia
     if (familia) {
-      const erroresValidacion = this.ejecutarValidaciones(familia, paso, jobContext);
+      const erroresValidacion = this.ejecutarValidaciones(
+        familia,
+        paso,
+        jobContext,
+        outputsAcumulados,
+      );
       if (erroresValidacion.length > 0) {
         errores.push(...erroresValidacion);
         return {
@@ -345,6 +437,21 @@ export class MotorUniversalService {
     let nestingDispatch: NestingDispatchResult | null = null;
     if (paso.mecanismoCantidad === 'CALCULADO_POR_PASO') {
       nestingDispatch = runNestingForPaso(paso, jobContext, materialPreliminar);
+    }
+
+    // d.1) G-M2 — Look-ahead pre_prensa: si el paso es pre_prensa, busca el
+    //      siguiente impresion_por_hoja, toma su material + máquina y corre
+    //      grid-2d-single con info sintetizada. El resultado se usa solo para
+    //      poblar outputs canónicos (`pliegos_calculados`, `poses_por_pliego`,
+    //      `imposicion_calculada`, `cortes_calculados`); el TIEMPO de pre_prensa
+    //      sigue siendo T-1 fijo.
+    if (!nestingDispatch && paso.familiaCodigo === 'pre_prensa') {
+      nestingDispatch = await runNestingForPrePrensa(
+        paso,
+        jobContext,
+        pasosSiguientes,
+        (slot, jc) => this.resolverMaterialSlot(slot, jc),
+      );
     }
 
     // e) TIEMPO (D.4) — usa el perfil resuelto si difiere del default; si hay
@@ -391,6 +498,25 @@ export class MotorUniversalService {
         }
       : undefined;
 
+    // h) G-M2 — Outputs canónicos: la familia declara qué publica al jobContext.
+    //    Cantidad efectiva del paso depende del mecanismo:
+    //      - DIRECT_FROM_JOBCONTEXT: jobContext.cantidad
+    //      - HEREDAR_DEL_OUTPUT_CANONICO: ya resuelto en calcularTiempo
+    //      - CALCULADO_POR_PASO: nestingDispatch.cantidadCalculada
+    //      - CONVERSION: piezas/unidades de empaque (ya calculado por resolverCantidad)
+    const cantidadEfectiva = nestingDispatch
+      ? nestingDispatch.cantidadCalculada
+      : this.resolverCantidad(paso, jobContext, null);
+
+    const outputsCanonicos = calcularOutputsCanonicos(familia, {
+      paso,
+      jobContext,
+      tiempo,
+      materiales,
+      nestingDispatch,
+      cantidadEfectiva,
+    });
+
     return {
       rutaPasoId: paso.rutaPasoId,
       rutaPasoOrden: paso.rutaPasoOrden,
@@ -401,7 +527,7 @@ export class MotorUniversalService {
       materiales,
       cargosDirectosPaso,
       costoTotal: subtotalPaso + cargosPasoTotal,
-      outputsCanonicos: this.calcularOutputs(familia?.outputsCanonicos ?? [], paso, jobContext),
+      outputsCanonicos,
       nestingResult,
     };
   }
@@ -777,6 +903,7 @@ export class MotorUniversalService {
     familia: (typeof FAMILIAS)[FamiliaCodigo],
     paso: PasoCargado,
     jobContext: JobContext,
+    outputsAcumulados: Set<string> = new Set(),
   ): ErrorMotor[] {
     const errores: ErrorMotor[] = [];
     if (!familia.validaciones || familia.validaciones.length === 0) {
@@ -850,9 +977,13 @@ export class MotorUniversalService {
         cumple = v.valoresPermitidos.includes(valor);
         contextoError = { campo: v.campo, valor, valoresPermitidos: v.valoresPermitidos };
       } else if (v.tipo === 'EXISTS_OUTPUT') {
-        // TODO F.2.x — chequear contra outputs acumulados de pasos anteriores
-        // Por ahora asumimos que existe (no validamos)
-        cumple = true;
+        // G-M2 / G-M4 — Chequear que el output canónico haya sido publicado
+        // por algún paso anterior (registrado en outputsAcumulados).
+        cumple = outputsAcumulados.has(v.outputCanonico);
+        contextoError = {
+          outputCanonico: v.outputCanonico,
+          outputsDisponibles: Array.from(outputsAcumulados),
+        };
       }
 
       if (!cumple) {
@@ -923,9 +1054,20 @@ export class MotorUniversalService {
     }
 
     if (mecanismo === 'HEREDAR_DEL_OUTPUT_CANONICO') {
-      // MVP: leer del jobContext bajo el nombre del output (los pasos PRE
-      // que escriben al jobContext aún no están implementados).
-      // Por ahora, asumimos que `cantidad` directo cubre el caso simple.
+      // G-M2: lee el output canónico publicado por un paso anterior. La key
+      // se determina por:
+      //  1) `mecanismoCantidadConfigJson.campoOutput` (override explícito).
+      //  2) Default por familia (mapeo abajo).
+      const config = (paso.mecanismoCantidadConfigJson ?? {}) as Record<string, unknown>;
+      const campoExplicito = typeof config.campoOutput === 'string' ? config.campoOutput : null;
+      const campo = campoExplicito ?? defaultOutputParaHeredar(paso.familiaCodigo);
+      if (campo) {
+        const v = (jobContext as Record<string, unknown>)[campo];
+        if (typeof v === 'number' && Number.isFinite(v) && v > 0) return v;
+      }
+      // Fallback histórico: si el output no fue publicado, cae a cantidad
+      // directa para no romper cotizaciones donde pre_prensa todavía no
+      // escribe outputs (G-M1 sin look-ahead).
       return Number(jobContext.cantidad ?? 0);
     }
 
@@ -1143,18 +1285,6 @@ export class MotorUniversalService {
     return resultado;
   }
 
-  /** Outputs canónicos del paso (placeholder MVP — no escribe nada al jobContext). */
-  private calcularOutputs(
-    canonicos: string[],
-    _paso: PasoCargado,
-    _jobContext: JobContext,
-  ): Record<string, unknown> {
-    const outputs: Record<string, unknown> = {};
-    for (const c of canonicos) {
-      outputs[c] = null; // TODO: F.2.x
-    }
-    return outputs;
-  }
 
   // ============================================================================
   // CARGA DE DATOS DEL DB
@@ -1304,6 +1434,12 @@ export class MotorUniversalService {
       productoNombre: producto.nombre,
       unidadComercial: producto.unidadComercial,
       modoMedidas: producto.modoMedidas,
+      medidaDefaultAnchoMm: producto.medidaDefaultAnchoMm
+        ? Number(producto.medidaDefaultAnchoMm)
+        : null,
+      medidaDefaultAltoMm: producto.medidaDefaultAltoMm
+        ? Number(producto.medidaDefaultAltoMm)
+        : null,
       precioConfigJson: producto.precioConfigJson,
       rutaAlternativaId: rutaAlt.id,
       rutaAlternativaNombre: rutaAlt.nombre,
