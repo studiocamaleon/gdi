@@ -9,6 +9,15 @@
 - **2026-04-25 (1)**: documento inicial.
 - **2026-04-25 (2)**: ✅ **G-M3 cerrado** (cargos directos a nivel PASO, commit en branch). 3 tests nuevos verde. Actualizado §6 y §8.
 - **2026-04-25 (3)**: nota agregada en §8: F.5 debe **eliminar Three.js** explícitamente (no opcional). G-M1 debe entregar **`<NestingViewer>` SVG único** reusable por todos los algoritmos (shelf-rollo, grid-2d-single/multi, talonario-grouping). Reemplaza cualquier vista de nesting basada en WebGL/Three.js que quede.
+- **2026-04-25 (4)**: ✅ **F.5 cerrado** (cleanup pre-v2). 5811 LOC eliminadas:
+  - `src/components/plotter-simulator.tsx` (huérfano, único consumidor de Three.js).
+  - `src/components/vinyl-cut-nesting-workspace.tsx` (276 LOC, viewer legacy reemplazado por el `<NestingViewer>` único de G-M1).
+  - `src/components/costos/procesos-panel.tsx` (4471 LOC del modelo viejo de Procesos).
+  - `src/lib/{procesos-api,procesos-templates,procesos,proceso-operacion-values}.ts` (1064 LOC del cliente del modelo viejo).
+  - Deps `three`, `@react-three/fiber`, `@react-three/drei` desinstaladas (52 paquetes).
+  - `apps/api/dist/` destrackeado de git (anti-patrón) + agregado a `.gitignore`.
+  - Test seed desfasado arreglado (`schema-crud.spec.ts`: 11 → 12 materias primas).
+  Verificación: 108/108 tests verde, typecheck verde (frontend + backend), `npm run build` verde. Tag `v2.0-modelo-universal-implementado` aplicado.
 
 ---
 
@@ -198,12 +207,12 @@ Reordenado por **valor de negocio + dependencias técnicas**:
    - Base de PORCENTAJE_SOBRE_BASE = subtotal del paso (tiempo + materiales).
    - 3 tests verde: MONTO_FIJO_PLANO OBLIGATORIO, PORCENTAJE 10% sobre subtotal del paso, OPCIONAL con/sin activación.
 
-2. **F.5 — Cleanup + tag v2.0** (siguiente)
-   - Eliminar `dist/`, `migrations.legacy/`, **Three.js** (no opcional).
-   - Renombrar endpoints legacy si quedan.
-   - Verificar 105/105 tests siguen verde.
-   - Tagear `v2.0-modelo-universal-implementado`.
-   - Esfuerzo: 2–3 días.
+2. ~~**F.5 — Cleanup + tag v2.0**~~ ✅ **CERRADO 2026-04-25**
+   - 5811 LOC legacy eliminadas (procesos-panel, plotter-simulator, vinyl-cut-nesting, lib procesos).
+   - Three.js + @react-three/* desinstalados (52 paquetes).
+   - `apps/api/dist/` destrackeado y agregado a `.gitignore`.
+   - 108/108 tests verde + typecheck + `npm run build` verde.
+   - Tag `v2.0-modelo-universal-implementado` aplicado.
 
 3. **G-M1 — Conectar nesting al motor (F.2.13)**
    - Modificar `resolverCantidad` rama `CALCULADO_POR_PASO` para invocar `nesting/algorithms/*` según familia.

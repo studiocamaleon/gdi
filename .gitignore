@@ -21,6 +21,9 @@
 # production
 /build
 
+# NestJS API build artifacts (never commit compiled output)
+/apps/api/dist/
+
 # misc
 .DS_Store
 *.pem
