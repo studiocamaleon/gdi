@@ -791,7 +791,10 @@ export class MotorUniversalService {
     }
 
     if (mecanismo === 'CALCULADO_POR_PASO') {
-      // Para impresion_por_area: usar m² desde piezas
+      // F.2.13 PENDIENTE: aquí debería invocarse el algoritmo de nesting correspondiente
+      // (shelf-rollo para impresion_por_area, grid-2d-single para impresion_por_hoja con
+      // pre_prensa, talonario-grouping para talonarios) y devolver pliegos/m² REAL con
+      // desperdicio. Por ahora MVP: para impresion_por_area suma m² cruda de las piezas.
       if (paso.familiaCodigo === 'impresion_por_area' || paso.familiaCodigo === 'plotter_corte') {
         return this.calcularM2DesdePiezas(jobContext);
       }

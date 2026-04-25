@@ -1,7 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { CalculatorIcon, CheckCircle2Icon, CircleIcon, XCircleIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  CalculatorIcon,
+  CheckCircle2Icon,
+  CircleIcon,
+  PlusIcon,
+  SaveIcon,
+  Trash2Icon,
+  XCircleIcon,
+} from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,14 +33,35 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cotizar, getProductoById, type CotizarResponse } from "@/lib/productos-servicios-api";
+import {
+  cotizar,
+  cotizarYGuardar,
+  getProductoById,
+  type CotizarResponse,
+} from "@/lib/productos-servicios-api";
 import type { ProductoDetalle, ProductoListItem } from "@/lib/productos-servicios";
 
 function formatARS(n: number): string {
   return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
 }
 
+interface PiezaInput {
+  uiKey: string;
+  cantidad: number;
+  anchoMm: number;
+  altoMm: number;
+}
+
+const ZONAS_VIATICO = [
+  { value: "CABA", label: "CABA ($3.000)" },
+  { value: "GBA_NORTE", label: "GBA Norte ($5.000)" },
+  { value: "GBA_OESTE", label: "GBA Oeste ($5.000)" },
+  { value: "GBA_SUR", label: "GBA Sur ($5.000)" },
+  { value: "FUERA_AMBA", label: "Fuera AMBA ($12.000)" },
+];
+
 export function CotizadorView({ productos }: { productos: ProductoListItem[] }) {
+  const router = useRouter();
   const [productoId, setProductoId] = React.useState<string>("");
   const [productoDetalle, setProductoDetalle] = React.useState<ProductoDetalle | null>(null);
   const [rutaAlternativaId, setRutaAlternativaId] = React.useState<string>("");
@@ -38,30 +69,89 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
   const [caras, setCaras] = React.useState<1 | 2>(1);
   const [tipoCopia, setTipoCopia] = React.useState<1 | 2 | 3>(1);
   const [opcionalesActivados, setOpcionalesActivados] = React.useState<Record<string, boolean>>({});
+  const [seleccionMaterial, setSeleccionMaterial] = React.useState<Record<string, string>>({});
+  const [zonaInstalacion, setZonaInstalacion] = React.useState<string>("CABA");
+  const [m2Instalados, setM2Instalados] = React.useState<number>(0);
+  const [piezas, setPiezas] = React.useState<PiezaInput[]>([]);
   const [cargando, setCargando] = React.useState(false);
+  const [guardando, setGuardando] = React.useState(false);
   const [resultado, setResultado] = React.useState<CotizarResponse | null>(null);
 
-  // Cargar detalle del producto cuando cambia
   React.useEffect(() => {
     if (!productoId) return;
     setProductoDetalle(null);
     setResultado(null);
     setOpcionalesActivados({});
+    setSeleccionMaterial({});
+    setPiezas([]);
     void getProductoById(productoId).then((d) => {
       setProductoDetalle(d);
       const preferida = d.rutasAlternativas.find((r) => r.esPreferida);
       setRutaAlternativaId(preferida?.id ?? d.rutasAlternativas[0]?.id ?? "");
+      // Si LIBRE, agregar 1 pieza inicial; si FIJA, dejar vacío (se usa cantidad)
+      if (d.modoMedidas === "LIBRE") {
+        setPiezas([
+          {
+            uiKey: `pz-${Date.now()}`,
+            cantidad: 1,
+            anchoMm: 1000,
+            altoMm: 500,
+          },
+        ]);
+      }
     });
   }, [productoId]);
 
   const productoSel = productos.find((p) => p.id === productoId);
   const rutaSel = productoDetalle?.rutasAlternativas.find((r) => r.id === rutaAlternativaId);
-  const pasosOpcionales = rutaSel?.configPasos.filter(
-    (cp) => cp.modoActivacion === "OPCIONAL",
-  ) ?? [];
-  const cargosOpcionales = productoDetalle?.cargosDirectosCotizacion.filter(
-    (c) => c.modoActivacion === "OPCIONAL",
-  ) ?? [];
+  const pasosOpcionales =
+    rutaSel?.configPasos.filter((cp) => cp.modoActivacion === "OPCIONAL") ?? [];
+  const cargosOpcionales =
+    productoDetalle?.cargosDirectosCotizacion.filter((c) => c.modoActivacion === "OPCIONAL") ?? [];
+
+  // Slots COMERCIAL_ELIGE: extraer de los configPasos de la ruta seleccionada
+  const slotsComercialElige =
+    rutaSel?.configPasos.flatMap((cp) =>
+      cp.slotsMateriales
+        .filter((s) => s.modoSeleccion === "COMERCIAL_ELIGE")
+        .map((s) => ({
+          configPasoId: cp.id,
+          familiaCodigo: cp.rutaPaso.familiaCodigo,
+          slotCodigo: s.slotCodigo,
+          candidatos: (s.materialesCandidatosJson as Array<{
+            variantId: string;
+            label?: string;
+            default?: boolean;
+          }>) ?? [],
+        })),
+    ) ?? [];
+
+  const necesitaInstalacion = productoDetalle?.cargosDirectosCotizacion.some(
+    (c) => c.cargoDirectoCatalogo.codigo === "viatico",
+  );
+
+  const construirJobContext = () => {
+    const ctx: Record<string, unknown> = {
+      cantidad,
+      caras,
+      tipoCopia,
+      opcionalesActivados,
+    };
+    if (productoDetalle?.modoMedidas === "LIBRE" && piezas.length > 0) {
+      ctx.piezas = piezas.map((p) => ({
+        cantidad: p.cantidad,
+        anchoMm: p.anchoMm,
+        altoMm: p.altoMm,
+      }));
+    }
+    if (m2Instalados > 0) ctx.m2_instalados = m2Instalados;
+    if (zonaInstalacion) ctx.zonaInstalacion = zonaInstalacion;
+    // Inyectar selección de material por slot (key: slotMaterial_<slotCodigo>)
+    for (const [slotCodigo, variantId] of Object.entries(seleccionMaterial)) {
+      ctx[`slotMaterial_${slotCodigo}`] = variantId;
+    }
+    return ctx;
+  };
 
   const ejecutarCotizacion = async () => {
     setCargando(true);
@@ -70,18 +160,60 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
       const res = await cotizar({
         productoId,
         rutaAlternativaId,
-        jobContext: {
-          cantidad,
-          caras,
-          tipoCopia,
-          opcionalesActivados,
-        },
+        jobContext: construirJobContext() as never,
         periodo: "2026-03",
       });
       setResultado(res);
+      if (!res.exitoso) {
+        toast.error(`Cotización falló: ${res.errores[0]?.mensaje}`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error");
     } finally {
       setCargando(false);
     }
+  };
+
+  const guardarCotizacion = async () => {
+    setGuardando(true);
+    try {
+      const res = await cotizarYGuardar({
+        productoId,
+        rutaAlternativaId,
+        jobContext: construirJobContext() as never,
+        periodo: "2026-03",
+      });
+      if (res.result.exitoso && res.cotizacionId) {
+        toast.success(`Cotización guardada (ID: ${res.cotizacionId.slice(0, 8)}...)`);
+        router.refresh();
+      } else {
+        toast.error("No se pudo guardar");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const agregarPieza = () => {
+    setPiezas((prev) => [
+      ...prev,
+      {
+        uiKey: `pz-${Date.now()}-${Math.random()}`,
+        cantidad: 1,
+        anchoMm: 1000,
+        altoMm: 500,
+      },
+    ]);
+  };
+
+  const updatePieza = (idx: number, patch: Partial<PiezaInput>) => {
+    setPiezas((prev) => prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)));
+  };
+
+  const removePieza = (idx: number) => {
+    setPiezas((prev) => prev.filter((_, i) => i !== idx));
   };
 
   return (
@@ -122,7 +254,10 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
             {productoDetalle && productoDetalle.rutasAlternativas.length > 1 && (
               <div className="space-y-2">
                 <Label htmlFor="ruta">Ruta alternativa</Label>
-                <Select value={rutaAlternativaId} onValueChange={(v) => setRutaAlternativaId(v ?? "")}>
+                <Select
+                  value={rutaAlternativaId}
+                  onValueChange={(v) => setRutaAlternativaId(v ?? "")}
+                >
                   <SelectTrigger id="ruta">
                     <SelectValue />
                   </SelectTrigger>
@@ -150,11 +285,8 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="caras">Caras (faz)</Label>
-                <Select
-                  value={String(caras)}
-                  onValueChange={(v) => setCaras(Number(v) as 1 | 2)}
-                >
+                <Label htmlFor="caras">Caras</Label>
+                <Select value={String(caras)} onValueChange={(v) => setCaras(Number(v) as 1 | 2)}>
                   <SelectTrigger id="caras">
                     <SelectValue />
                   </SelectTrigger>
@@ -176,16 +308,97 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1">Simple (1 hoja)</SelectItem>
-                      <SelectItem value="2">Duplicado (2 hojas)</SelectItem>
-                      <SelectItem value="3">Triplicado (3 hojas)</SelectItem>
+                      <SelectItem value="1">Simple</SelectItem>
+                      <SelectItem value="2">Duplicado</SelectItem>
+                      <SelectItem value="3">Triplicado</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               )}
             </div>
 
-            {/* Opcionales del paso */}
+            {/* PIEZAS multi-medida (solo si modoMedidas LIBRE) */}
+            {productoDetalle?.modoMedidas === "LIBRE" && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Piezas a producir (multi-medida)</Label>
+                  <Button onClick={agregarPieza} variant="outline" size="sm">
+                    <PlusIcon className="mr-1 size-3" />
+                    Agregar pieza
+                  </Button>
+                </div>
+                {piezas.map((p, idx) => (
+                  <div key={p.uiKey} className="bg-muted/30 flex items-center gap-2 rounded p-2">
+                    <Input
+                      type="number"
+                      value={p.cantidad}
+                      onChange={(e) => updatePieza(idx, { cantidad: Number(e.target.value) })}
+                      className="h-8 w-20 text-xs"
+                      placeholder="cant"
+                    />
+                    <span className="text-xs">×</span>
+                    <Input
+                      type="number"
+                      value={p.anchoMm}
+                      onChange={(e) => updatePieza(idx, { anchoMm: Number(e.target.value) })}
+                      className="h-8 w-20 text-xs"
+                      placeholder="ancho"
+                    />
+                    <span className="text-xs">×</span>
+                    <Input
+                      type="number"
+                      value={p.altoMm}
+                      onChange={(e) => updatePieza(idx, { altoMm: Number(e.target.value) })}
+                      className="h-8 w-20 text-xs"
+                      placeholder="alto"
+                    />
+                    <span className="text-muted-foreground text-xs">mm</span>
+                    <div className="flex-1" />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removePieza(idx)}
+                      className="h-7 w-7 p-0 text-red-600"
+                    >
+                      <Trash2Icon className="size-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Slots COMERCIAL_ELIGE */}
+            {slotsComercialElige.length > 0 && (
+              <div className="space-y-2">
+                <Label>Materiales a elegir</Label>
+                {slotsComercialElige.map((slot) => (
+                  <div key={`${slot.configPasoId}-${slot.slotCodigo}`} className="space-y-1">
+                    <div className="text-muted-foreground text-xs">
+                      {slot.familiaCodigo} → {slot.slotCodigo}
+                    </div>
+                    <Select
+                      value={seleccionMaterial[slot.slotCodigo] ?? ""}
+                      onValueChange={(v) =>
+                        setSeleccionMaterial((prev) => ({ ...prev, [slot.slotCodigo]: v ?? "" }))
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Default..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {slot.candidatos.map((c) => (
+                          <SelectItem key={c.variantId} value={c.variantId}>
+                            {c.label ?? c.variantId} {c.default && "(default)"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Pasos opcionales */}
             {pasosOpcionales.length > 0 && (
               <div className="space-y-2">
                 <Label>Pasos opcionales</Label>
@@ -199,7 +412,10 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
                         type="checkbox"
                         checked={!!opcionalesActivados[cp.id]}
                         onChange={(e) =>
-                          setOpcionalesActivados((prev) => ({ ...prev, [cp.id]: e.target.checked }))
+                          setOpcionalesActivados((prev) => ({
+                            ...prev,
+                            [cp.id]: e.target.checked,
+                          }))
                         }
                       />
                       <span>{cp.rutaPaso.familiaCodigo}</span>
@@ -218,12 +434,9 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
             {cargosOpcionales.length > 0 && (
               <div className="space-y-2">
                 <Label>Cargos directos opcionales</Label>
-                <div className="space-y-1.5">
-                  {cargosOpcionales.map((c) => (
-                    <label
-                      key={c.id}
-                      className="hover:bg-accent flex items-center gap-2 rounded p-2 text-sm"
-                    >
+                {cargosOpcionales.map((c) => (
+                  <div key={c.id} className="space-y-1">
+                    <label className="hover:bg-accent flex items-center gap-2 rounded p-2 text-sm">
                       <input
                         type="checkbox"
                         checked={!!opcionalesActivados[c.id]}
@@ -233,20 +446,67 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
                       />
                       <span>{c.cargoDirectoCatalogo.nombre}</span>
                     </label>
-                  ))}
-                </div>
+                    {/* Si el cargo activo es viático, mostrar selector de zona */}
+                    {c.cargoDirectoCatalogo.codigo === "viatico" &&
+                      opcionalesActivados[c.id] && (
+                        <div className="ml-6 space-y-1">
+                          <Label className="text-xs">Zona</Label>
+                          <Select
+                            value={zonaInstalacion}
+                            onValueChange={(v) => setZonaInstalacion(v ?? "CABA")}
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ZONAS_VIATICO.map((z) => (
+                                <SelectItem key={z.value} value={z.value}>
+                                  {z.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                  </div>
+                ))}
               </div>
             )}
 
-            <Button
-              onClick={ejecutarCotizacion}
-              disabled={!productoId || cargando}
-              className="w-full"
-              size="lg"
-            >
-              <CalculatorIcon className="mr-2 size-4" />
-              {cargando ? "Calculando..." : "Cotizar"}
-            </Button>
+            {/* Instalación m² (si necesita) */}
+            {necesitaInstalacion && (
+              <div className="space-y-2">
+                <Label htmlFor="m2instalados">m² instalados (si aplica)</Label>
+                <Input
+                  id="m2instalados"
+                  type="number"
+                  value={m2Instalados}
+                  onChange={(e) => setM2Instalados(Number(e.target.value))}
+                  placeholder="0"
+                />
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button
+                onClick={ejecutarCotizacion}
+                disabled={!productoId || cargando}
+                className="flex-1"
+                size="lg"
+              >
+                <CalculatorIcon className="mr-2 size-4" />
+                {cargando ? "Calculando..." : "Cotizar"}
+              </Button>
+              <Button
+                onClick={guardarCotizacion}
+                disabled={!productoId || guardando || !resultado?.exitoso}
+                variant="outline"
+                size="lg"
+              >
+                <SaveIcon className="mr-2 size-4" />
+                {guardando ? "..." : "Guardar"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -324,7 +584,6 @@ function ResultadoCotizacion({
         {c.precio && ` · Precio unitario: ${formatARS(c.precio.precioUnitario)}`}
       </div>
 
-      {/* Desglose */}
       <div className="space-y-1 text-sm">
         <div className="flex justify-between">
           <span>Tiempo total:</span>
@@ -340,7 +599,6 @@ function ResultadoCotizacion({
         </div>
       </div>
 
-      {/* Trazabilidad por paso */}
       <details className="text-sm">
         <summary className="hover:bg-accent cursor-pointer rounded p-2 font-medium">
           Trazabilidad por paso ({c.pasos.length})
@@ -384,10 +642,9 @@ function ResultadoCotizacion({
         </Table>
       </details>
 
-      {/* Cargos directos cotización */}
       {c.cargosDirectosCotizacion.length > 0 && (
         <div className="space-y-1 text-sm">
-          <div className="font-medium">Cargos directos a nivel cotización</div>
+          <div className="font-medium">Cargos directos cotización</div>
           {c.cargosDirectosCotizacion.map((cd, i) => (
             <div key={i} className="flex justify-between">
               <Badge variant="outline">{cd.cargoNombre}</Badge>

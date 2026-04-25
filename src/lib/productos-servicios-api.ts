@@ -422,3 +422,19 @@ export async function cotizar(req: CotizarRequest): Promise<CotizarResponse> {
     headers: { 'Content-Type': 'application/json' },
   });
 }
+
+export interface CotizarYGuardarResponse {
+  result: CotizarResponse;
+  cotizacionId?: string;
+  cotizacionItemId?: string;
+}
+
+export async function cotizarYGuardar(
+  req: CotizarRequest & { cotizacionId?: string },
+): Promise<CotizarYGuardarResponse> {
+  return apiRequest<CotizarYGuardarResponse>('/motor-universal/cotizar-y-guardar', {
+    method: 'POST',
+    body: JSON.stringify(req),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}

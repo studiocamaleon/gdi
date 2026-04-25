@@ -29,9 +29,36 @@ export class MotorUniversalController {
       tenantId,
       productoId: dto.productoId,
       rutaAlternativaId: dto.rutaAlternativaId ?? null,
-      jobContext: dto.jobContext as never, // DTO compatible con JobContext (interface tiene index signature)
+      jobContext: dto.jobContext as never,
       clienteId: dto.clienteId ?? null,
       periodo: dto.periodo ?? null,
+    });
+  }
+
+  /**
+   * POST /motor-universal/cotizar-y-guardar
+   *
+   * Cotiza y persiste como CotizacionItem (con snapshot completo).
+   * Si se pasa cotizacionId, agrega item a esa cotización; sino crea una nueva.
+   */
+  @Post('cotizar-y-guardar')
+  async cotizarYGuardar(
+    @Body() dto: CotizarDto & { cotizacionId?: string },
+    @Req() req: RequestWithAuth,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) {
+      throw new UnauthorizedException('Falta tenant en el contexto de autenticación');
+    }
+
+    return this.motor.cotizarYGuardar({
+      tenantId,
+      productoId: dto.productoId,
+      rutaAlternativaId: dto.rutaAlternativaId ?? null,
+      jobContext: dto.jobContext as never,
+      clienteId: dto.clienteId ?? null,
+      periodo: dto.periodo ?? null,
+      cotizacionId: dto.cotizacionId,
     });
   }
 }
