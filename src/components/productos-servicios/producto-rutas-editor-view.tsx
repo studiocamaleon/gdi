@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeftIcon, PlusIcon, StarIcon, Trash2Icon } from "lucide-react";
+import { ArrowLeftIcon, CogIcon, PlusIcon, StarIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -218,6 +218,12 @@ export function ProductoRutasEditorView({ producto, rutasDisponibles }: Props) {
                   Configurados: {ra.configPasos.length}/{ra.ruta.pasos.length}
                 </div>
                 <div className="flex items-center gap-2 pt-2">
+                  <Link href={`/productos-servicios/${producto.id}/rutas/${ra.id}`}>
+                    <Button variant="default" size="sm">
+                      <CogIcon className="mr-1 size-3" />
+                      Configurar pasos
+                    </Button>
+                  </Link>
                   {!ra.esPreferida && (
                     <Button
                       variant="outline"
@@ -225,7 +231,7 @@ export function ProductoRutasEditorView({ producto, rutasDisponibles }: Props) {
                       onClick={() => cambiarPreferida(ra.id)}
                     >
                       <StarIcon className="mr-1 size-3" />
-                      Marcar preferida
+                      Preferida
                     </Button>
                   )}
                   <Button

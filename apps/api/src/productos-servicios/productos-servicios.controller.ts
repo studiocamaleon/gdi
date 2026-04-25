@@ -167,6 +167,13 @@ export class ProductosServiciosController {
     return this.service.listarFamilias();
   }
 
+  @Get('lookups-config-paso')
+  async listarLookupsConfigPaso(@Req() req: RequestWithAuth) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.listarLookupsConfigPaso(tenantId);
+  }
+
   @Get('cargos-directos')
   async listarCargosDirectos(@Req() req: RequestWithAuth) {
     const tenantId = req.auth?.tenantId;

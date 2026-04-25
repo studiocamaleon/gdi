@@ -525,6 +525,56 @@ export class ProductosServiciosService {
   }
 
   // ============================================================================
+  // LOOKUPS para el editor de configuración por paso (F.3.7)
+  // ============================================================================
+
+  /** Devuelve máquinas + perfiles + materiales+variantes en un solo response. */
+  async listarLookupsConfigPaso(tenantId: string) {
+    const [maquinas, materiasPrimas] = await Promise.all([
+      this.prisma.maquina.findMany({
+        where: { tenantId, activo: true },
+        select: {
+          id: true,
+          codigo: true,
+          nombre: true,
+          plantilla: true,
+          perfilesOperativos: {
+            where: { activo: true },
+            select: {
+              id: true,
+              nombre: true,
+              productivityValue: true,
+              productivityUnit: true,
+            },
+          },
+        },
+        orderBy: { nombre: 'asc' },
+      }),
+      this.prisma.materiaPrima.findMany({
+        where: { tenantId, activo: true },
+        select: {
+          id: true,
+          codigo: true,
+          nombre: true,
+          familia: true,
+          subfamilia: true,
+          variantes: {
+            where: { activo: true },
+            select: {
+              id: true,
+              sku: true,
+              nombreVariante: true,
+              precioReferencia: true,
+            },
+          },
+        },
+        orderBy: { nombre: 'asc' },
+      }),
+    ]);
+    return { maquinas, materiasPrimas };
+  }
+
+  // ============================================================================
   // CARGOS DIRECTOS CATÁLOGO
   // ============================================================================
 

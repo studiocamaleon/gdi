@@ -211,6 +211,38 @@ export async function getCargosDirectosCatalogo(): Promise<CargoDirectoCatalogo[
   return apiRequest<CargoDirectoCatalogo[]>('/productos-servicios/cargos-directos');
 }
 
+export interface LookupsConfigPaso {
+  maquinas: Array<{
+    id: string;
+    codigo: string;
+    nombre: string;
+    plantilla: string;
+    perfilesOperativos: Array<{
+      id: string;
+      nombre: string;
+      productivityValue: string | null;
+      productivityUnit: string | null;
+    }>;
+  }>;
+  materiasPrimas: Array<{
+    id: string;
+    codigo: string;
+    nombre: string;
+    familia: string;
+    subfamilia: string;
+    variantes: Array<{
+      id: string;
+      sku: string;
+      nombreVariante: string | null;
+      precioReferencia: string | null;
+    }>;
+  }>;
+}
+
+export async function getLookupsConfigPaso(): Promise<LookupsConfigPaso> {
+  return apiRequest<LookupsConfigPaso>('/productos-servicios/lookups-config-paso');
+}
+
 // ============================================================================
 // MOTOR — invocación de cotización
 // ============================================================================
