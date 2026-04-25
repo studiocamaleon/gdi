@@ -201,6 +201,10 @@ const REPLACEMENT_COMPONENT_OPTIONS_BY_TEMPLATE: Record<PlantillaMaquinaria, str
   plotter_de_corte: ["cuchilla", "filtro", "kit_mantenimiento", "otro"],
   plotter_cad: ["cabezal", "filtro", "kit_mantenimiento", "otro"],
   impresora_3d: ["cabezal", "filtro", "kit_mantenimiento", "otro"],
+  // G-S2 (2026-04-25): plantillas pendientes históricas del doc §6.15.
+  soldadora: ["kit_mantenimiento", "otro"],
+  cabina_pintura: ["filtro", "kit_mantenimiento", "otro"],
+  anilladora: ["kit_mantenimiento", "otro"],
 };
 
 export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [

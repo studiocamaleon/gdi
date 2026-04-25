@@ -27,6 +27,32 @@ import {
 import { calcularOutputsCanonicos } from './outputs-canonicos';
 
 /**
+ * G-M9 — Resuelve la unidad efectiva de un material consumido. Cuando la
+ * fórmula del slot tiene dimensión implícita (`por_m2`, `por_metro_lineal`),
+ * la unidad del consumo es esa dimensión. Para el resto (`fijo`, `por_pieza`,
+ * `por_unidad_productiva`), se hereda la unidad de stock de la materia prima
+ * (PLIEGO, ROLLO, METRO_LINEAL, UNIDAD, KG, M2, etc.) en minúsculas para
+ * presentación humana. Si no hay info, fallback `'unidad'` para no romper.
+ */
+function unidadEfectivaDeFormula(
+  formula: string,
+  unidadStock: string | null | undefined,
+): string {
+  switch (formula) {
+    case 'por_m2':
+      return 'm2';
+    case 'por_metro_lineal':
+      return 'm_lineales';
+    case 'por_pieza':
+    case 'por_unidad_productiva':
+    case 'fijo':
+      return unidadStock ? unidadStock.toLowerCase() : 'unidad';
+    default:
+      return unidadStock ? unidadStock.toLowerCase() : 'unidad';
+  }
+}
+
+/**
  * G-M2 — Mapeo familia → output canónico que hereda por default cuando
  * `mecanismoCantidad = HEREDAR_DEL_OUTPUT_CANONICO` y no se especificó
  * `campoOutput` en `mecanismoCantidadConfigJson`. Convención: cada familia
@@ -426,7 +452,7 @@ export class MotorUniversalService {
     //      se cae al fallback de m² crudos / cantidad directa.
     const slotPrincipal = paso.slots[0] ?? null;
     const materialPreliminar = slotPrincipal
-      ? await this.resolverMaterialSlot(slotPrincipal, jobContext)
+      ? await this.resolverMaterialSlot(slotPrincipal, jobContext, paso)
       : null;
 
     // d) NESTING (G-M1 — F.2.13): si el paso usa CALCULADO_POR_PASO y la familia
@@ -744,7 +770,7 @@ export class MotorUniversalService {
     const ejecutados: MaterialEjecutado[] = [];
 
     for (const slot of paso.slots) {
-      const materialResuelto = await this.resolverMaterialSlot(slot, jobContext);
+      const materialResuelto = await this.resolverMaterialSlot(slot, jobContext, paso);
       if (!materialResuelto) continue;
 
       // Cantidad: depende de la fórmula. Si hay nesting, ajustamos a la
@@ -802,7 +828,12 @@ export class MotorUniversalService {
         materialVarianteId: materialResuelto.id,
         materialNombre: materialResuelto.sku,
         cantidad,
-        unidad: 'unidad', // TODO: leer de la materia prima
+        // G-M9: la unidad efectiva depende de la fórmula del slot. Para
+        // fórmulas con dimensión implícita (`por_m2`, `por_metro_lineal`)
+        // usamos esa unidad. Para `fijo`, `por_pieza`, `por_unidad_productiva`
+        // heredamos la unidad de stock de la materia prima (PLIEGO, ROLLO,
+        // METRO_LINEAL, UNIDAD, etc.) en minúsculas.
+        unidad: unidadEfectivaDeFormula(slot.formula, materialResuelto.unidadStock),
         precioUnitario,
         costoTotal,
         estrategiaCosto: slot.estrategiaCosto,
@@ -827,7 +858,20 @@ export class MotorUniversalService {
   private async resolverMaterialSlot(
     slot: PasoCargado['slots'][number],
     jobContext: JobContext,
-  ): Promise<{ id: string; sku: string; precioReferencia: number | null } | null> {
+    /**
+     * G-M7: si se pasa `paso`, MAYOR_APROVECHAMIENTO ejecuta el dispatcher
+     * de nesting con CADA candidato y elige el de mayor aprovechamientoPct
+     * (en vez de la heurística "más ancho"). Si no se pasa, mantiene la
+     * heurística (compat para callers que no necesitan nesting real).
+     */
+    paso?: PasoCargado,
+  ): Promise<{
+    id: string;
+    sku: string;
+    precioReferencia: number | null;
+    unidadStock?: string | null;
+    atributosVarianteJson?: Record<string, unknown> | null;
+  } | null> {
     if (slot.modoSeleccion === 'HARDCODED') {
       return slot.materialVariante ?? null;
     }
@@ -865,8 +909,28 @@ export class MotorUniversalService {
       }
 
       if (criterio === 'MAYOR_APROVECHAMIENTO') {
-        // Heurística simple: para rollos, el más ancho que sea >= ancho de pieza
-        // tiende a aprovechar mejor. Devolver el de mayor anchoMm de variante.
+        // G-M7: si recibimos `paso`, corremos el dispatcher de nesting con cada
+        // candidato y elegimos el de mayor `aprovechamientoPct`. Si el dispatcher
+        // no aplica para ningún candidato (familia no soportada), caemos a la
+        // heurística histórica (más ancho = mejor para rollos).
+        if (paso) {
+          const evaluados = validos.map((v) => {
+            const dispatch = runNestingForPaso(paso, jobContext, {
+              id: v.id,
+              atributosVarianteJson: (v.atributosVarianteJson ?? null) as
+                | Record<string, unknown>
+                | null,
+            });
+            return { v, aprovechamiento: dispatch?.aprovechamientoPct ?? -1 };
+          });
+          const conNesting = evaluados.filter((e) => e.aprovechamiento >= 0);
+          if (conNesting.length > 0) {
+            conNesting.sort((a, b) => b.aprovechamiento - a.aprovechamiento);
+            return conNesting[0].v;
+          }
+          // Ningún candidato cubierto por nesting → fallback heurístico.
+        }
+        // Heurística (fallback): el más ancho gana (favorece rollos grandes).
         return validos.sort((a, b) => {
           const anchoA = Number((a as { anchoMm?: number }).anchoMm ?? 0);
           const anchoB = Number((b as { anchoMm?: number }).anchoMm ?? 0);
@@ -896,8 +960,20 @@ export class MotorUniversalService {
   /** Carga una variante de materia prima por ID (helper para resolución de materiales). */
   private async cargarVariantePorId(
     variantId: string,
-  ): Promise<{ id: string; sku: string; precioReferencia: number | null; anchoMm?: number } | null> {
-    const v = await this.prisma.materiaPrimaVariante.findUnique({ where: { id: variantId } });
+  ): Promise<{
+    id: string;
+    sku: string;
+    precioReferencia: number | null;
+    anchoMm?: number;
+    /** G-M9: unidad de stock heredada (PLIEGO, METRO_LINEAL, etc.). */
+    unidadStock?: string | null;
+    /** G-M7: necesario para correr nesting con cada candidato. */
+    atributosVarianteJson?: Record<string, unknown> | null;
+  } | null> {
+    const v = await this.prisma.materiaPrimaVariante.findUnique({
+      where: { id: variantId },
+      include: { materiaPrima: { select: { unidadStock: true } } },
+    });
     if (!v) return null;
     const attrs = v.atributosVarianteJson as Record<string, unknown> | null;
     return {
@@ -905,6 +981,9 @@ export class MotorUniversalService {
       sku: v.sku,
       precioReferencia: v.precioReferencia ? Number(v.precioReferencia) : null,
       anchoMm: typeof attrs?.anchoMm === 'number' ? attrs.anchoMm : undefined,
+      // Variante puede tener override; sino hereda de la materia prima padre.
+      unidadStock: v.unidadStock ?? v.materiaPrima?.unidadStock ?? null,
+      atributosVarianteJson: attrs,
     };
   }
 
@@ -1145,17 +1224,19 @@ export class MotorUniversalService {
   }
 
   /**
-   * F.2.4 — Selección automática de perfil dentro de la máquina M-1.
+   * F.2.4 / G-M8 — Selección automática de perfil dentro de la máquina M-1.
    *
-   * Si la máquina tiene varios perfiles (ej: Ricoh "Simple faz" + "Doble faz"),
-   * el motor elige el correcto según el JobContext.
-   *
-   * Heurísticas (MVP):
-   *  - Si la familia es `impresion_por_hoja` y jobContext.caras === 2:
-   *    buscar perfil con nombre que contenga "doble" o `detalleJson.dobleFaz === true`.
-   *  - Si la familia es `impresion_por_hoja` y jobContext.caras === 1:
-   *    buscar perfil con "simple" o `dobleFaz === false`.
-   *  - Si no hay match heurístico → mantener el perfil default del config.
+   * Estrategia (en orden):
+   *  1. **Regla declarativa** (G-M8): cada perfil puede declarar
+   *     `detalleJson.reglaSeleccion: JsonLogic`. El motor evalúa la regla
+   *     contra el JobContext y elige el PRIMER perfil activo cuya regla
+   *     devuelve `true`. Esto cubre cualquier criterio (caras, gramaje,
+   *     tipo trabajo, calidad, etc.) sin código por familia.
+   *  2. **Heurística legacy** (fallback): para `impresion_por_hoja` con
+   *     `jobContext.caras`, busca perfil "doble"/"simple" por nombre o
+   *     `detalleJson.dobleFaz`. Útil cuando los perfiles del seed no
+   *     declaran reglas explícitas.
+   *  3. Si nada match → mantener perfil default del config.
    *
    * Devuelve el perfil resuelto (o null si no se cambió nada respecto al default).
    */
@@ -1167,7 +1248,29 @@ export class MotorUniversalService {
       return null; // no hay alternativas, mantener default
     }
 
-    // Heurística para impresión por hoja según caras
+    const ctx = jobContext as unknown as Record<string, unknown>;
+
+    // ─── 1. G-M8 — Regla declarativa por perfil ──────────────────────
+    for (const perfil of paso.perfilesDisponibles) {
+      if (!perfil.activo) continue;
+      const detalle = (perfil.detalleJson ?? {}) as Record<string, unknown>;
+      const regla = detalle.reglaSeleccion ?? detalle.condicion ?? null;
+      if (regla === null || regla === undefined) continue;
+      const evaluacion = evaluarRegla(regla, ctx);
+      if (evaluacion.error) continue; // regla mal formada → ignorar perfil
+      if (evaluacion.resultado === true && perfil.id !== paso.perfilM1Id) {
+        return {
+          id: perfil.id,
+          nombre: perfil.nombre,
+          productivityValue: perfil.productivityValue,
+          productivityUnit: null,
+          setupMin: perfil.setupMin,
+          cleanupMin: perfil.cleanupMin,
+        };
+      }
+    }
+
+    // ─── 2. Heurística legacy: impresión por hoja según caras ────────
     if (paso.familiaCodigo === 'impresion_por_hoja' && typeof jobContext.caras === 'number') {
       const buscarDoble = jobContext.caras === 2;
       const candidato = paso.perfilesDisponibles.find((p) => {
@@ -1350,7 +1453,11 @@ export class MotorUniversalService {
                 },
                 perfilM1: true,
                 slotsMateriales: {
-                  include: { materialVariante: true },
+                  include: {
+                    materialVariante: {
+                      include: { materiaPrima: { select: { unidadStock: true } } },
+                    },
+                  },
                 },
                 cargosDirectosPaso: {
                   where: { activo: true },
@@ -1450,6 +1557,10 @@ export class MotorUniversalService {
                 ? Number(s.materialVariante.precioReferencia)
                 : null,
               atributosVarianteJson: s.materialVariante.atributosVarianteJson as Record<string, unknown> | null,
+              unidadStock:
+                s.materialVariante.unidadStock ??
+                s.materialVariante.materiaPrima?.unidadStock ??
+                null,
             }
           : undefined,
       })),

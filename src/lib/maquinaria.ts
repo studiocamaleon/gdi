@@ -19,7 +19,11 @@ export type PlantillaMaquinaria =
   | "impresora_laser"
   | "plotter_cad"
   | "mesa_de_corte"
-  | "plotter_de_corte";
+  | "plotter_de_corte"
+  // G-S2 (2026-04-25): plantillas históricas pendientes del doc §6.15.
+  | "soldadora"
+  | "cabina_pintura"
+  | "anilladora";
 
 export type FamiliaPlantillaMaquinaria =
   | "corte_mecanizado"

@@ -3294,6 +3294,59 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
       examples: ["Plotter de corte 140 cm para vinilo de rotulacion"],
     },
   }),
+  // G-S2 (2026-04-25): plantillas pendientes históricas del doc §6.15.
+  // Templates mínimos reusando estructura de Guillotina para que existan en
+  // el catálogo y el admin pueda configurar perfiles. Los detalles
+  // específicos por máquina (electrodos, hilos, presiones, anillos) se
+  // refinan cuando aparezca el primer caso real.
+  template({
+    id: "soldadora",
+    label: "Soldadora",
+    family: "terminacion",
+    description: "Equipo de soldadura para herrería y cartelería estructural.",
+    geometry: "volumen",
+    defaultProductionUnit: "hora",
+    visibleSections: commonTemplateSections.filter((sectionId) => sectionId !== "parametros_tecnicos"),
+    sections: buildGuillotinaSections(),
+    help: {
+      summary:
+        "Plantilla mínima para soldadoras. Personalizá perfiles operativos según tipo (MIG, TIG, electrodo) y material.",
+      tips: ["Configurá perfiles separados por tipo de soldadura y material."],
+      examples: ["MIG/TIG para luminosos y carteles estructurales"],
+    },
+  }),
+  template({
+    id: "cabina_pintura",
+    label: "Cabina de pintura",
+    family: "terminacion",
+    description: "Cabina presurizada para aplicación de pintura sobre rígidos.",
+    geometry: "volumen",
+    defaultProductionUnit: "hora",
+    visibleSections: commonTemplateSections.filter((sectionId) => sectionId !== "parametros_tecnicos"),
+    sections: buildGuillotinaSections(),
+    help: {
+      summary:
+        "Plantilla mínima para cabinas de pintura. Personalizá perfiles según pintura y curado.",
+      tips: ["Definí consumibles de pintura y secado por perfil."],
+      examples: ["Cabina con horno para letras corpóreas"],
+    },
+  }),
+  template({
+    id: "anilladora",
+    label: "Anilladora",
+    family: "terminacion",
+    description: "Equipo de encuadernación con anillo (espiral plástico, wire-O).",
+    geometry: "pliego",
+    defaultProductionUnit: "hora",
+    visibleSections: commonTemplateSections.filter((sectionId) => sectionId !== "parametros_tecnicos"),
+    sections: buildGuillotinaSections(),
+    help: {
+      summary:
+        "Plantilla mínima para anilladoras. El motor elige automáticamente el diámetro de espiral según hojas/libro (criterio MENOR_CAPACIDAD_QUE_CUMPLA).",
+      tips: ["Cargá variantes de anillo con su capacidadMaxHojas para que el motor elija."],
+      examples: ["Renz Combi-S para libros de hasta 250 hojas"],
+    },
+  }),
 ];
 
 export const plantillaMaquinariaItems = maquinariaTemplates.map((templateItem) => ({

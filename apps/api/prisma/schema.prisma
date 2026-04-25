@@ -132,6 +132,10 @@ enum PlantillaMaquinaria {
   PLOTTER_CAD
   MESA_DE_CORTE
   PLOTTER_DE_CORTE
+  // G-S2 (2026-04-25): pendientes históricas del doc §6.15.
+  SOLDADORA
+  CABINA_PINTURA
+  ANILLADORA
 }
 
 enum EstadoMaquina {

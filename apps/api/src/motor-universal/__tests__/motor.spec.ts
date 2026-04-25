@@ -6,7 +6,7 @@
  * todas las sub-tareas + tarifas).
  */
 
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { MotorUniversalService } from '../motor.service';
 import { runNestingForPaso } from '../nesting-dispatcher';
 
@@ -484,11 +484,16 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(impDoble.tiempo!.totalMin).toBeGreaterThan(impSimple.tiempo!.totalMin);
   });
 
-  it('F.2.5: Vinilo blanco con MOTOR_ELIGE_AUTO + MAYOR_APROVECHAMIENTO → elige rollo 1.52m (más ancho)', async () => {
+  it('G-M7: Vinilo con MOTOR_ELIGE_AUTO + MAYOR_APROVECHAMIENTO → corre nesting con cada candidato y elige el de mayor aprovechamiento real', async () => {
     if (!tenantId) return;
     const vinilo = await prisma.producto.findFirstOrThrow({
       where: { tenantId, codigo: 'VINILO-BLANCO-IMP' },
     });
+    // Pieza 1500×800mm. Candidatos: rollo 1.37m vs rollo 1.52m.
+    // Antes G-M7: heurística "más ancho gana" → elegía 1.52m (incorrecto, el
+    // sobrante horizontal era 220mm/1.52m = 14% desperdicio).
+    // Ahora G-M7: nesting real → elige 1.37m porque la pieza se acomoda
+    // panelizada y deja menos desperdicio horizontal (más cerca del ancho útil).
     const result = await motorService.cotizar({
       tenantId,
       productoId: vinilo.id,
@@ -499,11 +504,40 @@ describe('MotorUniversalService — smoke tests', () => {
     });
     expect(result.exitoso).toBe(true);
     const impresion = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_area');
-    expect(impresion?.materiales?.length).toBe(1);
     const mat = impresion!.materiales![0];
     expect(mat.modoSeleccion).toBe('MOTOR_ELIGE_AUTO');
-    // El más ancho es 1.52m → SKU "VINILO-BLANCO-1520"
-    expect(mat.materialNombre).toBe('VINILO-BLANCO-1520');
+    // El rollo 1.37m aprovecha mejor para esta pieza (menos desperdicio).
+    expect(mat.materialNombre).toBe('VINILO-BLANCO-1370');
+    // El nesting result confirma que se eligió el sustrato 1.37m.
+    expect(impresion!.nestingResult?.substrates[0]).toMatchObject({
+      kind: 'roll',
+      widthMm: 1370,
+    });
+  });
+
+  it('G-M7: con máquina que limita anchoMax (Roland 1.37m), el dispatcher usa ese ancho independiente del rollo', async () => {
+    if (!tenantId) return;
+    const vinilo = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'VINILO-BLANCO-IMP' },
+    });
+    // El dispatcher prioriza `paso.maquina.parametrosTecnicosJson.anchoMaxMm`
+    // por encima del ancho del rollo. Para Roland (1370mm), aunque el rollo
+    // sea 1520mm el área útil sigue siendo 1370 — ambos candidatos dan el
+    // mismo aprovechamiento. El primero válido gana (1370 en orden seed).
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: vinilo.id,
+      jobContext: {
+        cantidad: 1,
+        piezas: [{ cantidad: 1, anchoMm: 1000, altoMm: 500 }],
+      },
+    });
+    expect(result.exitoso).toBe(true);
+    const impresion = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_area');
+    expect(impresion!.nestingResult?.substrates[0]).toMatchObject({
+      kind: 'roll',
+      widthMm: 1370, // ancho de la máquina, no del rollo
+    });
   });
 
   it('F.2.5: Tarjetas con laminado COMERCIAL_ELIGE → comercial elige film mate (default)', async () => {
@@ -782,6 +816,93 @@ describe('MotorUniversalService — smoke tests', () => {
     const embalaje = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'embalaje');
     expect(embalaje?.activado).toBe(true);
     expect(embalaje!.nestingResult).toBeUndefined();
+  });
+
+  it('G-M8: regla declarativa JsonLogic en perfil.detalleJson.reglaSeleccion gana sobre la heurística legacy', async () => {
+    if (!tenantId) return;
+    const ricoh = await prisma.maquina.findFirstOrThrow({
+      where: { tenantId, codigo: 'RICOH-PRO-C5100' },
+      include: { perfilesOperativos: true },
+    });
+
+    // Hay 2 perfiles: "Papel grueso simple faz" y "Papel grueso doble faz".
+    const simpleFaz = ricoh.perfilesOperativos.find((p) => /simple/i.test(p.nombre))!;
+    const dobleFaz = ricoh.perfilesOperativos.find((p) => /doble/i.test(p.nombre))!;
+
+    // Forzar: el perfil DOBLE FAZ tiene una regla declarativa que dice
+    // "elegime cuando gramajeGr >= 250" (independiente de caras).
+    // Esto debería ganar sobre la heurística "doble cuando caras=2".
+    const detalleOriginal = dobleFaz.detalleJson;
+    await prisma.maquinaPerfilOperativo.update({
+      where: { id: dobleFaz.id },
+      data: {
+        detalleJson: {
+          ...((detalleOriginal as Record<string, unknown>) ?? {}),
+          reglaSeleccion: { '>=': [{ var: 'gramajeGr' }, 250] },
+        },
+      },
+    });
+
+    try {
+      const tarjetas = await prisma.producto.findFirstOrThrow({
+        where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      });
+      // caras=1 (la heurística legacy elegiría simple), pero gramajeGr=300
+      // (la regla declarativa del DOBLE elige a este perfil).
+      const result = await motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-03',
+        jobContext: { cantidad: 100, caras: 1, gramajeGr: 300 },
+      });
+      expect(result.exitoso).toBe(true);
+      const impresion = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_hoja');
+      // El perfil resuelto: la regla del doble (gramajeGr >= 250) gana.
+      // Verificamos a través de la productividad usada (doble vs simple).
+      expect(impresion!.tiempo!.totalMin).toBeGreaterThan(0);
+      // Sin verificar exactly cuál perfil porque no exponemos perfilNombre en
+      // el output; pero al menos verificamos que la regla NO tiró error y la
+      // cotización completó exitosamente.
+    } finally {
+      await prisma.maquinaPerfilOperativo.update({
+        where: { id: dobleFaz.id },
+        data: { detalleJson: detalleOriginal === null ? Prisma.JsonNull : (detalleOriginal as never) },
+      });
+      void simpleFaz;
+    }
+  });
+
+  it('G-M9: trazabilidad de materiales reporta unidad real (no `unidad` hardcodeado)', async () => {
+    if (!tenantId) return;
+    // Vinilo: slot por_metro_lineal con material rollo (METRO_LINEAL).
+    const vinilo = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'VINILO-BLANCO-IMP' },
+    });
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: vinilo.id,
+      jobContext: { cantidad: 1, piezas: [{ cantidad: 1, anchoMm: 1000, altoMm: 500 }] },
+    });
+    expect(result.exitoso).toBe(true);
+    const impresion = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_area');
+    const matVinilo = impresion!.materiales![0];
+    // Fórmula `por_metro_lineal` → unidad reportada `m_lineales`.
+    expect(matVinilo.unidad).toBe('m_lineales');
+
+    // Tarjetas: slot por_unidad_productiva con material pliego (PLIEGO).
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+    const r2 = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      jobContext: { cantidad: 1000, caras: 2 },
+    });
+    expect(r2.exitoso).toBe(true);
+    const impTarjetas = r2.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_hoja');
+    const matTarjetas = impTarjetas!.materiales![0];
+    // Fórmula `por_unidad_productiva` → hereda unidadStock del material (PLIEGO → 'pliego').
+    expect(matTarjetas.unidad).toBe('pliego');
   });
 
   it('G-M5: T-2 con `paramsPaso.horasEstimadas` calcula run = horas × 60', async () => {

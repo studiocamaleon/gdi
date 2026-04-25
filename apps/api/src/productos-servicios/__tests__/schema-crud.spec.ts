@@ -164,10 +164,17 @@ describe('Schema CRUD — Modelo Universal V2', () => {
   });
 
   describe('Productos + configuración por paso', () => {
-    it('hay 4 productos activos', async () => {
+    it('hay al menos los 4 productos del seed activos', async () => {
       if (!tenantId) return;
+      // ≥ 4 (no === 4) para tolerar productos creados manualmente por el
+      // usuario vía UI durante pruebas; el seed instala 4 fijos.
       const count = await prisma.producto.count({ where: { tenantId, activo: true } });
-      expect(count).toBe(4);
+      expect(count).toBeGreaterThanOrEqual(4);
+      const seedCodigos = ['TARJ-PREMIUM-300', 'VINILO-BLANCO-IMP', 'TALON-DUPL-A4', 'RIGIDO-CUSTOM'];
+      const seedExistentes = await prisma.producto.count({
+        where: { tenantId, activo: true, codigo: { in: seedCodigos } },
+      });
+      expect(seedExistentes).toBe(4);
     });
 
     it('Talonario tiene 2 rutas alternativas (emblocado preferido + abrochado)', async () => {

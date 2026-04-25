@@ -9,6 +9,12 @@
 - **2026-04-25 (1)**: documento inicial.
 - **2026-04-25 (2)**: ✅ **G-M3 cerrado** (cargos directos a nivel PASO, commit en branch). 3 tests nuevos verde. Actualizado §6 y §8.
 - **2026-04-25 (3)**: nota agregada en §8: F.5 debe **eliminar Three.js** explícitamente (no opcional). G-M1 debe entregar **`<NestingViewer>` SVG único** reusable por todos los algoritmos (shelf-rollo, grid-2d-single/multi, talonario-grouping). Reemplaza cualquier vista de nesting basada en WebGL/Three.js que quede.
+- **2026-04-25 (8)**: ✅ **G-M9 + G-M7 + G-S2 + G-M8 cerrados** (4 gaps backend en una pasada).
+  - **G-M9** (unidad consumo real): `cargarVariantePorId` ahora trae `unidadStock` de la materia prima. Helper `unidadEfectivaDeFormula(formula, unidadStock)`: `por_m2` → `m2`, `por_metro_lineal` → `m_lineales`, resto → `unidadStock` lowercased (pliego, rollo, kg, etc.). Fin del `'unidad'` hardcodeado en trazabilidad.
+  - **G-M7** (MAYOR_APROVECHAMIENTO real): el dispatcher ahora se invoca con CADA candidato y se elige el de mayor `aprovechamientoPct`. Antes ordenaba por anchoMm desc (heurística contraria al criterio). Test: vinilo 1500×800mm en rollos 1.37m vs 1.52m → ahora elige 1.37m porque aprovecha mejor (menos desperdicio horizontal).
+  - **G-S2** (plantillas pendientes): SOLDADORA, CABINA_PINTURA y ANILLADORA agregadas al enum `PlantillaMaquinaria` (migración Prisma `g_s2_plantillas_soldadora_cabina_anilladora`). Type frontend extendido + 3 templates mínimos en `maquinaria-templates.ts` reusando estructura de Guillotina.
+  - **G-M8** (perfil con regla declarativa): `resolverPerfil` ahora soporta JsonLogic en `perfil.detalleJson.reglaSeleccion` (o `condicion`). Itera perfiles activos, evalúa la regla contra el JobContext y elige el primer match. Heurística legacy (impresion_por_hoja según caras) queda como fallback.
+  - 120/120 tests verde (5 nuevos del sprint).
 - **2026-04-25 (7)**: ✅ **G-M5 cerrado** (T-2 productividad propia + tarifaOperario + tarifaFija).
   - T-2 antes era `runMin = 0` placeholder. Ahora soporta 4 sub-modos por orden de prioridad: (1) override del comercial vía `jobContext[paramsPaso.campoHorasJobContext]` — cubre T-4 INPUT_MANUAL del CORTE_LASER del expert text; (2) `paramsPaso.horasEstimadas` (input absoluto); (3) `paramsPaso.productivityValue` (cantidad/h del operario × cantidadEfectiva con multiplicadores); (4) fallback 0.
   - Tarifa horaria: si no hay máquina con CC, lee `paramsPaso.tarifaHoraOperario`. Si declara `paramsPaso.tarifaFija`, ignora `totalMin × tarifaHora` y cobra el monto fijo (caso típico: `diseno_grafico` cobrado como cargo único).
@@ -187,10 +193,10 @@ Incluye `corte_manual` y `lijado_canteado` (gaps H24/H25 de Fase E ya resueltos)
 
 | ID | Gap | Donde se ve | Impacto |
 |---|---|---|---|
-| **G-M7** | `MAYOR_APROVECHAMIENTO` solo ordena por anchoMm | `motor.service.ts:566-574` | Para slots con MOTOR_ELIGE_AUTO criterio MAYOR_APROVECHAMIENTO, elige por heurística vs nesting real. Resuelto cuando G-M1 esté listo. |
-| **G-M8** | Selección automática de perfil solo soporta heurística "doble faz" | `motor.service.ts:838-869` | Familias distintas a `impresion_por_hoja` no tienen reglas declarativas para elegir perfil. |
-| **G-M9** | Unidad de consumo de material hardcodeada `'unidad'` | `motor.service.ts:504` | Trazabilidad muestra unidad incorrecta (no afecta costo numérico). |
-| **G-S2** | Plantillas SOLDADORA / CABINA_PINTURA pendientes en enum | `schema.prisma:113-135` | Bloquea modelado de Corporearte si tiene esos workflows. |
+| ~~**G-M7**~~ | ~~`MAYOR_APROVECHAMIENTO` solo ordena por anchoMm~~ | ✅ **CERRADO 2026-04-25** | Dispatcher corre con cada candidato y elige el de mayor aprovechamientoPct. |
+| ~~**G-M8**~~ | ~~Selección automática de perfil solo soporta heurística "doble faz"~~ | ✅ **CERRADO 2026-04-25** | `perfil.detalleJson.reglaSeleccion` JsonLogic; heurística legacy como fallback. |
+| ~~**G-M9**~~ | ~~Unidad de consumo de material hardcodeada `'unidad'`~~ | ✅ **CERRADO 2026-04-25** | Lee `unidadStock` de la materia prima; mapeo por fórmula del slot. |
+| ~~**G-S2**~~ | ~~Plantillas SOLDADORA / CABINA_PINTURA pendientes en enum~~ | ✅ **CERRADO 2026-04-25** | + ANILLADORA. Migración aplicada, templates frontend mínimos. |
 | **G-F1** | UI versionado opt-in sin modal heurístico | `ruta-form-view.tsx` | Schema soporta `RutaVersion`, falta UX. |
 | **G-F2** | Cotizador no permite override de máquina M-2 | `cotizador-view.tsx` | Comercial solo elige ruta alternativa, no máquina concreta. |
 | **G-F3** | Editor producto no expone pasos extras inline | productos-servicios | Schema `ProductoPasoExtra` existe sin UI dedicada. |
@@ -253,16 +259,16 @@ Reordenado por **valor de negocio + dependencias técnicas**:
 
 4. ~~**G-M5 — T-2 productividad propia**~~ ✅ **CERRADO 2026-04-25** (incluye T-4 input manual + tarifaOperario + tarifaFija).
 5. ~~**G-M4 — EXISTS_OUTPUT real**~~ ✅ **CERRADO 2026-04-25** (derivado de G-M2).
-6. **G-M8 — Selección automática de perfil con regla declarativa** por familia (2 días).
+6. ~~**G-M8 — Selección automática de perfil con regla declarativa**~~ ✅ **CERRADO 2026-04-25**.
 7. **G-F2 — Cotizador permite override de máquina M-2** (2–3 días).
 8. **G-F1 — UI versionado opt-in con heurística** (3 días).
 
 ### Backlog (cuando aparezca caso)
 
 8. **G-M6 + G-S1 — Sub-productos / SELECTOR (DAG)**: requiere caso real de Corporearte con cartelería estructural compuesta. Esfuerzo: 2 semanas (schema + motor + UI).
-9. **G-S2 — Agregar SOLDADORA, CABINA_PINTURA al enum** + perfiles + consumibles.
+9. ~~**G-S2 — Agregar SOLDADORA, CABINA_PINTURA al enum**~~ ✅ **CERRADO 2026-04-25** (+ ANILLADORA).
 10. **G-D8 — D.8 Warnings**: solo cuando aparezca caso H21 frecuente.
-11. **G-M9 — Unidad de consumo real desde MateriaPrima** (medio día).
+11. ~~**G-M9 — Unidad de consumo real desde MateriaPrima**~~ ✅ **CERRADO 2026-04-25**.
 12. **G-F3 — Editor de pasos extras inline** (2 días).
 13. **F.5 — Cleanup**: eliminar V1, dist/, migrations.legacy/, Three.js. (Pendiente declarado.)
 

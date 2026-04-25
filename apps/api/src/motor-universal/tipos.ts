@@ -325,6 +325,8 @@ export interface SlotCargado {
     sku: string;
     precioReferencia: number | null;
     atributosVarianteJson?: Record<string, unknown> | null;
+    /** G-M9: unidad de stock heredada de la materia prima padre. */
+    unidadStock?: string | null;
   };
 }
 
