@@ -22,6 +22,20 @@ export async function getProductoById(id: string): Promise<ProductoDetalle> {
   return apiRequest<ProductoDetalle>(`/productos-servicios/productos/${id}`);
 }
 
+export interface ValidacionProducto {
+  exitoso: boolean;
+  errores: Array<{
+    severidad: 'ERROR' | 'WARNING';
+    codigo: string;
+    mensaje: string;
+    ubicacion?: { rutaAltId?: string; rutaPasoId?: string; slotCodigo?: string };
+  }>;
+}
+
+export async function validarProducto(id: string): Promise<ValidacionProducto> {
+  return apiRequest<ValidacionProducto>(`/productos-servicios/productos/${id}/validar`);
+}
+
 export interface CrearProductoPayload {
   codigo: string;
   nombre: string;

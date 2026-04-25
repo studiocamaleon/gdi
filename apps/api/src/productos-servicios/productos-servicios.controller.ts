@@ -56,6 +56,13 @@ export class ProductosServiciosController {
     return this.service.obtenerProducto(tenantId, id);
   }
 
+  @Get('productos/:id/validar')
+  async validarProducto(@Req() req: RequestWithAuth, @Param('id') id: string) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.validarProducto(tenantId, id);
+  }
+
   @Post('productos')
   async crearProducto(@Req() req: RequestWithAuth, @Body() dto: CrearProductoDto) {
     const tenantId = req.auth?.tenantId;

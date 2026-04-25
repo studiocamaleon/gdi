@@ -654,6 +654,143 @@ export class ProductosServiciosService {
   }
 
   // ============================================================================
+  // VALIDACIÓN del producto (F.3.11) — Tipo C de D.7
+  // ============================================================================
+
+  async validarProducto(tenantId: string, productoId: string) {
+    const producto = await this.obtenerProducto(tenantId, productoId);
+    const errores: Array<{
+      severidad: 'ERROR' | 'WARNING';
+      codigo: string;
+      mensaje: string;
+      ubicacion?: { rutaAltId?: string; rutaPasoId?: string; slotCodigo?: string };
+    }> = [];
+
+    if (producto.rutasAlternativas.length === 0) {
+      errores.push({
+        severidad: 'ERROR',
+        codigo: 'sin_rutas_alternativas',
+        mensaje: 'El producto no tiene ninguna ruta alternativa asociada. No se puede cotizar.',
+      });
+      return { exitoso: false, errores };
+    }
+
+    // Verificar que hay al menos 1 preferida
+    if (!producto.rutasAlternativas.some((r) => r.esPreferida)) {
+      errores.push({
+        severidad: 'WARNING',
+        codigo: 'sin_ruta_preferida',
+        mensaje: 'No hay ruta preferida marcada. Se usará la primera por orden.',
+      });
+    }
+
+    // Por cada ruta alternativa, validar configPasos
+    for (const ra of producto.rutasAlternativas) {
+      const pasosRuta = ra.ruta.pasos;
+      const configMap = new Map(ra.configPasos.map((cp) => [cp.rutaPasoId, cp]));
+
+      for (const paso of pasosRuta) {
+        const familia = FAMILIAS[paso.familiaCodigo as keyof typeof FAMILIAS];
+        if (!familia) {
+          errores.push({
+            severidad: 'ERROR',
+            codigo: 'familia_desconocida',
+            mensaje: `Paso ${paso.orden} usa familia desconocida "${paso.familiaCodigo}"`,
+            ubicacion: { rutaAltId: ra.id, rutaPasoId: paso.id },
+          });
+          continue;
+        }
+
+        const config = configMap.get(paso.id);
+        if (!config) {
+          errores.push({
+            severidad: 'ERROR',
+            codigo: 'config_paso_faltante',
+            mensaje: `Paso ${paso.orden} (${familia.nombre}) en ruta "${ra.nombre}" no tiene configuración`,
+            ubicacion: { rutaAltId: ra.id, rutaPasoId: paso.id },
+          });
+          continue;
+        }
+
+        // Si la familia requiere M-1 y no hay máquina asignada
+        if (
+          familia.relacionMaquinaSoportada.includes('M-1') &&
+          !familia.relacionMaquinaSoportada.includes('M-0') &&
+          !config.maquinaM1Id
+        ) {
+          errores.push({
+            severidad: 'ERROR',
+            codigo: 'maquina_m1_faltante',
+            mensaje: `Paso ${paso.orden} (${familia.nombre}) requiere máquina M-1 pero no tiene ninguna asignada`,
+            ubicacion: { rutaAltId: ra.id, rutaPasoId: paso.id },
+          });
+        }
+
+        // Slots requeridos sin material
+        for (const slotDecl of familia.slotsRequeridos) {
+          if (!slotDecl.requerido) continue;
+          const slotConfig = config.slotsMateriales.find(
+            (s) => s.slotCodigo === slotDecl.codigo,
+          );
+          if (!slotConfig) {
+            errores.push({
+              severidad: 'ERROR',
+              codigo: 'slot_requerido_sin_config',
+              mensaje: `Paso ${paso.orden} (${familia.nombre}): slot requerido "${slotDecl.nombre}" sin configuración`,
+              ubicacion: { rutaAltId: ra.id, rutaPasoId: paso.id, slotCodigo: slotDecl.codigo },
+            });
+            continue;
+          }
+          if (
+            slotConfig.modoSeleccion === 'HARDCODED' &&
+            !slotConfig.materialVariante
+          ) {
+            errores.push({
+              severidad: 'ERROR',
+              codigo: 'slot_hardcoded_sin_material',
+              mensaje: `Paso ${paso.orden}: slot "${slotDecl.nombre}" en modo HARDCODED sin material asignado`,
+              ubicacion: { rutaAltId: ra.id, rutaPasoId: paso.id, slotCodigo: slotDecl.codigo },
+            });
+          }
+          if (
+            (slotConfig.modoSeleccion === 'COMERCIAL_ELIGE' ||
+              slotConfig.modoSeleccion === 'MOTOR_ELIGE_AUTO') &&
+            (!slotConfig.materialesCandidatosJson ||
+              (Array.isArray(slotConfig.materialesCandidatosJson) &&
+                slotConfig.materialesCandidatosJson.length === 0))
+          ) {
+            errores.push({
+              severidad: 'ERROR',
+              codigo: 'slot_sin_candidatos',
+              mensaje: `Paso ${paso.orden}: slot "${slotDecl.nombre}" en modo ${slotConfig.modoSeleccion} sin candidatos definidos`,
+              ubicacion: { rutaAltId: ra.id, rutaPasoId: paso.id, slotCodigo: slotDecl.codigo },
+            });
+          }
+        }
+
+        // Modo de tiempo si la familia soporta solo uno y no está seteado
+        if (
+          familia.modosTiempoSoportados.length === 1 &&
+          !config.modoTiempo
+        ) {
+          errores.push({
+            severidad: 'WARNING',
+            codigo: 'modo_tiempo_faltante',
+            mensaje: `Paso ${paso.orden}: modo de tiempo no especificado (default: ${familia.modosTiempoSoportados[0]})`,
+            ubicacion: { rutaAltId: ra.id, rutaPasoId: paso.id },
+          });
+        }
+      }
+    }
+
+    const tieneErrores = errores.some((e) => e.severidad === 'ERROR');
+    return {
+      exitoso: !tieneErrores,
+      errores,
+    };
+  }
+
+  // ============================================================================
   // ASOCIACIÓN CARGOS ↔ PRODUCTO/PASO (F.3.10)
   // ============================================================================
 

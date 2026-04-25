@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ProductoValidacionPanel } from "@/components/productos-servicios/producto-validacion-panel";
 import type { ProductoDetalle, RutaAlternativaDetalle } from "@/lib/productos-servicios";
 
 export function ProductoDetalleView({ producto }: { producto: ProductoDetalle }) {
@@ -71,6 +72,9 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
           </div>
         </div>
       </div>
+
+      {/* F.3.11 — Panel de validación */}
+      <ProductoValidacionPanel productoId={producto.id} />
 
       {/* Atributos comerciales */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
