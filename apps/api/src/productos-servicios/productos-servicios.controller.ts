@@ -15,6 +15,11 @@ import { Request } from 'express';
 import { ProductosServiciosService } from './productos-servicios.service';
 import { ActualizarProductoDto, CrearProductoDto } from './dto/producto.dto';
 import { ActualizarRutaDto, CrearRutaDto } from './dto/ruta.dto';
+import {
+  ActualizarProductoRutaAlternativaDto,
+  CrearProductoRutaAlternativaDto,
+  UpsertProductoConfigPasoDto,
+} from './dto/producto-ruta.dto';
 
 interface RequestWithAuth extends Request {
   auth?: { tenantId: string; userId: string };
@@ -109,6 +114,52 @@ export class ProductosServiciosController {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
     await this.service.eliminarRuta(tenantId, id);
+  }
+
+  // === PRODUCTO ↔ RUTAS ALTERNATIVAS ===
+
+  @Post('productos/:productoId/rutas-alternativas')
+  async crearProductoRutaAlternativa(
+    @Req() req: RequestWithAuth,
+    @Param('productoId') productoId: string,
+    @Body() dto: CrearProductoRutaAlternativaDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.crearProductoRutaAlternativa(tenantId, productoId, dto);
+  }
+
+  @Patch('productos/rutas-alternativas/:rutaAltId')
+  async actualizarProductoRutaAlternativa(
+    @Req() req: RequestWithAuth,
+    @Param('rutaAltId') rutaAltId: string,
+    @Body() dto: ActualizarProductoRutaAlternativaDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.actualizarProductoRutaAlternativa(tenantId, rutaAltId, dto);
+  }
+
+  @Delete('productos/rutas-alternativas/:rutaAltId')
+  @HttpCode(204)
+  async eliminarProductoRutaAlternativa(
+    @Req() req: RequestWithAuth,
+    @Param('rutaAltId') rutaAltId: string,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    await this.service.eliminarProductoRutaAlternativa(tenantId, rutaAltId);
+  }
+
+  @Post('productos/rutas-alternativas/:rutaAltId/config-pasos')
+  async upsertConfigPaso(
+    @Req() req: RequestWithAuth,
+    @Param('rutaAltId') rutaAltId: string,
+    @Body() dto: UpsertProductoConfigPasoDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.upsertConfigPaso(tenantId, rutaAltId, dto);
   }
 
   @Get('familias')

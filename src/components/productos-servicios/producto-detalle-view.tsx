@@ -49,6 +49,12 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
             <Badge variant={producto.activo ? "default" : "secondary"}>
               {producto.activo ? "Activo" : "Inactivo"}
             </Badge>
+            <Link href={`/productos-servicios/${producto.id}/rutas`}>
+              <Button variant="outline" size="sm">
+                <GitBranchIcon className="mr-2 size-3" />
+                Configurar rutas
+              </Button>
+            </Link>
             <Link href={`/productos-servicios/${producto.id}/editar`}>
               <Button variant="outline" size="sm">
                 <PencilIcon className="mr-2 size-3" />

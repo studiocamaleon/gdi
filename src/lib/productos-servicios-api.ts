@@ -115,6 +115,94 @@ export async function eliminarRuta(id: string) {
   return apiRequest(`/productos-servicios/rutas/${id}`, { method: 'DELETE' });
 }
 
+// ============================================================================
+// PRODUCTO ↔ RUTAS ALTERNATIVAS
+// ============================================================================
+
+export interface CrearProductoRutaAltPayload {
+  rutaId: string;
+  rutaVersion: number;
+  nombre: string;
+  esPreferida?: boolean;
+  reglaAutoSeleccionJson?: Record<string, unknown>;
+  orden?: number;
+}
+
+export async function crearProductoRutaAlt(productoId: string, payload: CrearProductoRutaAltPayload) {
+  return apiRequest(`/productos-servicios/productos/${productoId}/rutas-alternativas`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export interface ActualizarProductoRutaAltPayload {
+  nombre?: string;
+  esPreferida?: boolean;
+  reglaAutoSeleccionJson?: Record<string, unknown>;
+  orden?: number;
+  activo?: boolean;
+}
+
+export async function actualizarProductoRutaAlt(
+  rutaAltId: string,
+  payload: ActualizarProductoRutaAltPayload,
+) {
+  return apiRequest(`/productos-servicios/productos/rutas-alternativas/${rutaAltId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export async function eliminarProductoRutaAlt(rutaAltId: string) {
+  return apiRequest(`/productos-servicios/productos/rutas-alternativas/${rutaAltId}`, {
+    method: 'DELETE',
+  });
+}
+
+// ============================================================================
+// CONFIG PASO (upsert)
+// ============================================================================
+
+export interface UpsertSlotMaterialPayload {
+  slotCodigo: string;
+  modoSeleccion: 'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO';
+  criterioMotorAuto?: string | null;
+  criterioInputCampo?: string | null;
+  criterioMaterialCampo?: string | null;
+  materialVarianteId?: string | null;
+  materialesCandidatosJson?: Array<Record<string, unknown>>;
+  estrategiaCosto?: string;
+  formula?: string;
+  aplicaMultiCaras?: boolean;
+}
+
+export interface UpsertConfigPasoPayload {
+  rutaPasoId: string;
+  modoActivacion?: string | null;
+  condicionActivacionJson?: Record<string, unknown> | null;
+  modoTiempo?: string | null;
+  mecanismoCantidad?: string | null;
+  mecanismoCantidadConfigJson?: Record<string, unknown> | null;
+  multiplicadoresActivos?: string[];
+  paramsPasoJson?: Record<string, unknown> | null;
+  maquinaM1Id?: string | null;
+  perfilM1Id?: string | null;
+  setupOverrideMin?: number | null;
+  cleanupOverrideMin?: number | null;
+  tiempoFijoOverrideMin?: number | null;
+  slotsMateriales?: UpsertSlotMaterialPayload[];
+}
+
+export async function upsertConfigPaso(rutaAltId: string, payload: UpsertConfigPasoPayload) {
+  return apiRequest(`/productos-servicios/productos/rutas-alternativas/${rutaAltId}/config-pasos`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
 export async function getCatalogoFamilias(): Promise<CatalogoFamilias> {
   return apiRequest<CatalogoFamilias>('/productos-servicios/familias');
 }
