@@ -9,6 +9,13 @@
 - **2026-04-25 (1)**: documento inicial.
 - **2026-04-25 (2)**: ✅ **G-M3 cerrado** (cargos directos a nivel PASO, commit en branch). 3 tests nuevos verde. Actualizado §6 y §8.
 - **2026-04-25 (3)**: nota agregada en §8: F.5 debe **eliminar Three.js** explícitamente (no opcional). G-M1 debe entregar **`<NestingViewer>` SVG único** reusable por todos los algoritmos (shelf-rollo, grid-2d-single/multi, talonario-grouping). Reemplaza cualquier vista de nesting basada en WebGL/Three.js que quede.
+- **2026-04-25 (10)**: ✅ **Validación end-to-end via API + fix de bug latente**.
+  - Login admin + cotización REST de Tarjetas, Vinilo, Talonarios + viático con zonas. Todos OK funcionalmente.
+  - **Bug detectado** durante validación: `por_unidad_productiva` no respetaba `HEREDAR_DEL_OUTPUT_CANONICO`. Tarjetas cobraban 2000 pliegos cuando deberían ser 36 (18 pliegos heredados × 2 caras). Sub-cobro 18×.
+  - **Fix**: la rama `por_unidad_productiva` ahora invoca `this.resolverCantidad()` en vez de leer `jobContext.cantidad` directo. Unifica con la lógica de `calcularTiempo` que ya estaba bien.
+  - Verificación: 1000 tarjetas Premium 300gr → de $327.500 a $18.050. Vinilo y Talonarios sin cambios (otros mecanismos).
+  - 120/120 tests verde (sin nuevos: el caso ya estaba en `F.2.3 embalaje CONVERSION` pero no validaba el monto exacto del material).
+  - **Tag v2.6-validacion-end-to-end**.
 - **2026-04-25 (9)**: ✅ **G-F2 + G-F1 + G-F3 cerrados** (sprint frontend completo).
   - **G-F2** (override M-2 desde cotizador): `cargarProductoYRuta` ahora trae `maquinasCandidatas` con perfiles. Nuevo método `resolverMaquinaM2` lee `jobContext[\`maquinaSeleccionada_${configPasoId}\`]` o usa la `esPreferida`. Frontend: nuevo selector por paso en cotizador-view, oculto cuando no hay candidatas.
   - **G-F1** (UI versionado opt-in con heurística fina): backend ya tenía la lógica `nuevaVersion` boolean. Frontend ahora detecta cambios tipados (AGREGAR_PASO, QUITAR_PASO, CAMBIAR_FAMILIA, CAMBIAR_ORDEN) y los lista al usuario. Aviso reforzado cuando hay productos asociados (color naranja + texto explícito sobre el riesgo de patch in-place).
