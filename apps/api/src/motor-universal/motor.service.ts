@@ -82,7 +82,6 @@ function defaultOutputParaHeredar(familiaCodigo: string): string | null {
  *   F.2.13 nesting (shelf-rollo + grid-2d-single, G-M1).
  *
  * Pendientes (ver `docs/motor-por-pasos-analisis/auditoria-gaps-2026-04-25.md`):
- * - G-M5: T-2 (productividad propia).
  * - G-M6: sub-productos / SELECTOR (DAG).
  * - G-M7/M8: nesting MAYOR_APROVECHAMIENTO real con cada candidato + perfil
  *   con regla declarativa.
@@ -645,9 +644,39 @@ export class MotorUniversalService {
       // Fijo: solo el tiempoFijo cuenta
       runMin = 0;
     } else if (modoTiempo === 'T-2') {
-      // Productividad propia (no implementado todavía: leer de paramsPaso)
-      // Por ahora asumimos productividad nula → run 0 (TODO F.2.x)
-      runMin = 0;
+      // G-M5 — Productividad PROPIA del paso (típico de pasos M-0 manuales:
+      // embalaje, conteo, lijado, modificacion_post, instalacion). Soporta:
+      //
+      //  1) `paramsPaso.horasEstimadas`: input absoluto en HORAS. El comercial
+      //     o el modelador estiman directamente cuántas horas tarda el paso
+      //     (independiente de cantidad). Útil para `diseno_grafico` y casos
+      //     donde no hay productividad estable.
+      //  2) `jobContext[campoOverride]` con `campoOverride = paramsPaso.campoHorasJobContext`:
+      //     permite que el comercial sobrescriba en runtime (ej. T-4 INPUT_MANUAL
+      //     queda cubierto vía este path: el comercial ingresa el valor del RIP
+      //     del láser).
+      //  3) `paramsPaso.productivityValue`: cantidad/hora del operario.
+      //     `runMin = (cantidadEfectiva × multiplicadores) / productividad × 60`.
+      //  4) Fallback: 0 (tiempo fijo y/o cleanup cubren el caso).
+      const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
+      const campoOverride = typeof params.campoHorasJobContext === 'string'
+        ? params.campoHorasJobContext
+        : null;
+      const horasOverride = campoOverride
+        ? Number((jobContext as Record<string, unknown>)[campoOverride])
+        : NaN;
+      const horasParams = Number(params.horasEstimadas ?? NaN);
+      const productividadPropia = Number(params.productivityValue ?? 0);
+
+      if (Number.isFinite(horasOverride) && horasOverride > 0) {
+        runMin = horasOverride * 60;
+      } else if (Number.isFinite(horasParams) && horasParams > 0) {
+        runMin = horasParams * 60;
+      } else if (productividadPropia > 0) {
+        let cantidadEfectiva = this.resolverCantidad(paso, jobContext, nestingDispatch);
+        cantidadEfectiva = this.aplicarMultiplicadores(cantidadEfectiva, paso, jobContext);
+        runMin = (cantidadEfectiva / productividadPropia) * 60;
+      }
     } else if (modoTiempo === 'T-3') {
       // Productividad del perfil — necesita: cantidad y productividad
       const productividad = Number(paso.perfil?.productivityValue ?? 0);
@@ -674,7 +703,12 @@ export class MotorUniversalService {
 
     const totalMin = Math.ceil(setupMin + runMin + cleanupMin + tiempoFijoMin);
 
-    // F.2.10 — Tarifa horaria real del centro de costo de la máquina (período publicado)
+    // F.2.10 — Tarifa horaria. Prioridades:
+    //   1. Centro de costo de la máquina (período publicado) — comportamiento principal.
+    //   2. G-M5: `paramsPaso.tarifaHoraOperario` para pasos M-0 (T-2 sin máquina).
+    //   3. G-M5: `paramsPaso.tarifaFija` (monto absoluto del paso, no por hora).
+    //      Cuando se declara tarifaFija el costo ES la tarifaFija, ignorando totalMin
+    //      × tarifaHora. Útil para `diseno_grafico` cobrado como cargo único.
     let tarifaHora = 0;
     if (paso.maquina?.centroCostoPrincipalId) {
       const tarifaDecimal = tarifasMap.get(paso.maquina.centroCostoPrincipalId);
@@ -682,7 +716,13 @@ export class MotorUniversalService {
         tarifaHora = Number(tarifaDecimal);
       }
     }
-    const costo = (totalMin / 60) * tarifaHora;
+    const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
+    if (tarifaHora === 0) {
+      const tarifaOperario = Number(params.tarifaHoraOperario ?? 0);
+      if (tarifaOperario > 0) tarifaHora = tarifaOperario;
+    }
+    const tarifaFija = Number(params.tarifaFija ?? 0);
+    const costo = tarifaFija > 0 ? tarifaFija : (totalMin / 60) * tarifaHora;
 
     return {
       setupMin,

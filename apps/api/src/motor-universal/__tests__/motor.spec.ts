@@ -784,6 +784,194 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(embalaje!.nestingResult).toBeUndefined();
   });
 
+  it('G-M5: T-2 con `paramsPaso.horasEstimadas` calcula run = horas × 60', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    const ruta = tarjetas.rutasAlternativas[0];
+    const diseno = ruta.configPasos.find((c) => c.rutaPaso.familiaCodigo === 'diseno_grafico');
+    expect(diseno).toBeDefined();
+
+    // Forzar T-2 + horasEstimadas + tarifaHoraOperario para diseno_grafico
+    await prisma.productoConfigPaso.update({
+      where: { id: diseno!.id },
+      data: {
+        modoTiempo: 'T-2',
+        paramsPasoJson: { horasEstimadas: 2, tarifaHoraOperario: 5000 },
+      },
+    });
+
+    try {
+      const result = await motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-03',
+        jobContext: {
+          cantidad: 1000,
+          caras: 2,
+          opcionalesActivados: { [diseno!.id]: true },
+        },
+      });
+      expect(result.exitoso).toBe(true);
+      const pasoDiseno = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'diseno_grafico');
+      expect(pasoDiseno!.activado).toBe(true);
+      // 2 horas × 60 = 120 min de run
+      expect(pasoDiseno!.tiempo!.runMin).toBe(120);
+      expect(pasoDiseno!.tiempo!.tarifaHora).toBe(5000);
+      // costo = 120/60 × 5000 = 10000
+      expect(pasoDiseno!.tiempo!.costo).toBeCloseTo(10000, 0);
+    } finally {
+      // Restaurar config original
+      await prisma.productoConfigPaso.update({
+        where: { id: diseno!.id },
+        data: {
+          modoTiempo: 'T-1',
+          paramsPasoJson: { tarifaFija: 5000 },
+        },
+      });
+    }
+  });
+
+  it('G-M5: T-2 con `paramsPaso.productivityValue` calcula tiempo desde cantidad/productividad', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    const ruta = tarjetas.rutasAlternativas[0];
+    const embalaje = ruta.configPasos.find((c) => c.rutaPaso.familiaCodigo === 'embalaje');
+
+    // Embalaje T-2 CONVERSION: 1000 piezas / 100 por caja = 10 cajas.
+    // Productividad operario = 5 cajas/hora → run = 10/5 × 60 = 120min.
+    await prisma.productoConfigPaso.update({
+      where: { id: embalaje!.id },
+      data: {
+        paramsPasoJson: {
+          piezasPorCaja: 100,
+          productivityValue: 5,
+          tarifaHoraOperario: 3000,
+        },
+      },
+    });
+
+    try {
+      const result = await motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-03',
+        jobContext: { cantidad: 1000, caras: 2 },
+      });
+      expect(result.exitoso).toBe(true);
+      const pasoEmbalaje = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'embalaje');
+      expect(pasoEmbalaje!.activado).toBe(true);
+      // 10 cajas / 5 cajas/h × 60 = 120min
+      expect(pasoEmbalaje!.tiempo!.runMin).toBeCloseTo(120, 0);
+      expect(pasoEmbalaje!.tiempo!.tarifaHora).toBe(3000);
+    } finally {
+      await prisma.productoConfigPaso.update({
+        where: { id: embalaje!.id },
+        data: {
+          paramsPasoJson: { piezasPorCaja: 100 },
+        },
+      });
+    }
+  });
+
+  it('G-M5: T-2 con `paramsPaso.campoHorasJobContext` permite override del comercial (T-4 input manual)', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    const ruta = tarjetas.rutasAlternativas[0];
+    const diseno = ruta.configPasos.find((c) => c.rutaPaso.familiaCodigo === 'diseno_grafico');
+
+    await prisma.productoConfigPaso.update({
+      where: { id: diseno!.id },
+      data: {
+        modoTiempo: 'T-2',
+        paramsPasoJson: {
+          campoHorasJobContext: 'horasDiseno',
+          horasEstimadas: 1, // fallback si el comercial no ingresa
+          tarifaHoraOperario: 4000,
+        },
+      },
+    });
+
+    try {
+      // El comercial ingresa 3.5 horas en runtime
+      const result = await motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-03',
+        jobContext: {
+          cantidad: 1000,
+          caras: 2,
+          opcionalesActivados: { [diseno!.id]: true },
+          horasDiseno: 3.5, // override del comercial
+        },
+      });
+      expect(result.exitoso).toBe(true);
+      const pasoDiseno = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'diseno_grafico');
+      // 3.5 × 60 = 210min
+      expect(pasoDiseno!.tiempo!.runMin).toBe(210);
+      expect(pasoDiseno!.tiempo!.costo).toBeCloseTo(210 / 60 * 4000, 0);
+    } finally {
+      await prisma.productoConfigPaso.update({
+        where: { id: diseno!.id },
+        data: {
+          modoTiempo: 'T-1',
+          paramsPasoJson: { tarifaFija: 5000 },
+        },
+      });
+    }
+  });
+
+  it('G-M5: T-1 con `paramsPaso.tarifaFija` cobra el monto fijo independiente del tiempo', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    const ruta = tarjetas.rutasAlternativas[0];
+    const diseno = ruta.configPasos.find((c) => c.rutaPaso.familiaCodigo === 'diseno_grafico');
+
+    // diseño grafico T-1 con tarifaFija 5000 (config del seed por default)
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      periodo: '2026-03',
+      jobContext: {
+        cantidad: 1000,
+        caras: 2,
+        opcionalesActivados: { [diseno!.id]: true },
+      },
+    });
+    expect(result.exitoso).toBe(true);
+    const pasoDiseno = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'diseno_grafico');
+    expect(pasoDiseno!.activado).toBe(true);
+    // tarifaFija 5000 → costo = 5000 (no totalMin × tarifaHora)
+    expect(pasoDiseno!.tiempo!.costo).toBe(5000);
+  });
+
   it('G-M2: pre_prensa publica `pliegos_calculados` y `poses_por_pliego` vía look-ahead a impresion_por_hoja', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({
