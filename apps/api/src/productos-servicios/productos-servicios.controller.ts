@@ -20,6 +20,10 @@ import {
   CrearProductoRutaAlternativaDto,
   UpsertProductoConfigPasoDto,
 } from './dto/producto-ruta.dto';
+import {
+  ActualizarCargoDirectoDto,
+  CrearCargoDirectoDto,
+} from './dto/cargo-directo.dto';
 
 interface RequestWithAuth extends Request {
   auth?: { tenantId: string; userId: string };
@@ -175,9 +179,38 @@ export class ProductosServiciosController {
   }
 
   @Get('cargos-directos')
-  async listarCargosDirectos(@Req() req: RequestWithAuth) {
+  async listarCargosDirectos(
+    @Req() req: RequestWithAuth,
+    @Query('soloActivos') soloActivos?: string,
+  ) {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
-    return this.service.listarCargosDirectos(tenantId);
+    return this.service.listarCargosDirectos(tenantId, soloActivos !== 'false');
+  }
+
+  @Post('cargos-directos')
+  async crearCargoDirecto(@Req() req: RequestWithAuth, @Body() dto: CrearCargoDirectoDto) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.crearCargoDirecto(tenantId, dto);
+  }
+
+  @Patch('cargos-directos/:id')
+  async actualizarCargoDirecto(
+    @Req() req: RequestWithAuth,
+    @Param('id') id: string,
+    @Body() dto: ActualizarCargoDirectoDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.actualizarCargoDirecto(tenantId, id, dto);
+  }
+
+  @Delete('cargos-directos/:id')
+  @HttpCode(204)
+  async eliminarCargoDirecto(@Req() req: RequestWithAuth, @Param('id') id: string) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    await this.service.eliminarCargoDirecto(tenantId, id);
   }
 }

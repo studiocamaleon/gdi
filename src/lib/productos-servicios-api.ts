@@ -207,8 +207,47 @@ export async function getCatalogoFamilias(): Promise<CatalogoFamilias> {
   return apiRequest<CatalogoFamilias>('/productos-servicios/familias');
 }
 
-export async function getCargosDirectosCatalogo(): Promise<CargoDirectoCatalogo[]> {
-  return apiRequest<CargoDirectoCatalogo[]>('/productos-servicios/cargos-directos');
+export async function getCargosDirectosCatalogo(soloActivos = true): Promise<CargoDirectoCatalogo[]> {
+  const qs = soloActivos ? '' : '?soloActivos=false';
+  return apiRequest<CargoDirectoCatalogo[]>(`/productos-servicios/cargos-directos${qs}`);
+}
+
+export interface CrearCargoDirectoPayload {
+  codigo: string;
+  nombre: string;
+  descripcion?: string;
+  modoCalculo: 'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT';
+  modosActivacionSoportados?: string[];
+  configJson?: Record<string, unknown>;
+}
+
+export async function crearCargoDirecto(payload: CrearCargoDirectoPayload) {
+  return apiRequest('/productos-servicios/cargos-directos', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export interface ActualizarCargoDirectoPayload {
+  nombre?: string;
+  descripcion?: string;
+  modoCalculo?: 'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT';
+  modosActivacionSoportados?: string[];
+  configJson?: Record<string, unknown>;
+  activo?: boolean;
+}
+
+export async function actualizarCargoDirecto(id: string, payload: ActualizarCargoDirectoPayload) {
+  return apiRequest(`/productos-servicios/cargos-directos/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export async function eliminarCargoDirecto(id: string) {
+  return apiRequest(`/productos-servicios/cargos-directos/${id}`, { method: 'DELETE' });
 }
 
 export interface LookupsConfigPaso {

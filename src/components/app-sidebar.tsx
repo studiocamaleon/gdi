@@ -21,6 +21,7 @@ import {
   PrinterIcon,
   UsersIcon,
   WorkflowIcon,
+  WrenchIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -106,6 +107,11 @@ const costos = [
     title: "Catalogo de productos",
     href: "/productos-servicios",
     icon: BoxesIcon,
+  },
+  {
+    title: "Cargos directos",
+    href: "/productos-servicios/cargos-directos",
+    icon: WrenchIcon,
   },
 ];
 

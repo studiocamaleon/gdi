@@ -10,6 +10,7 @@ import type {
   CrearProductoRutaAlternativaDto,
   UpsertProductoConfigPasoDto,
 } from './dto/producto-ruta.dto';
+import type { ActualizarCargoDirectoDto, CrearCargoDirectoDto } from './dto/cargo-directo.dto';
 
 /**
  * Service F.3 — CRUD del Modelo Universal V2.
@@ -578,10 +579,72 @@ export class ProductosServiciosService {
   // CARGOS DIRECTOS CATÁLOGO
   // ============================================================================
 
-  async listarCargosDirectos(tenantId: string) {
+  async listarCargosDirectos(tenantId: string, soloActivos = true) {
     return this.prisma.cargoDirectoCatalogo.findMany({
-      where: { tenantId, activo: true },
+      where: { tenantId, ...(soloActivos ? { activo: true } : {}) },
       orderBy: { nombre: 'asc' },
     });
+  }
+
+  async crearCargoDirecto(tenantId: string, dto: CrearCargoDirectoDto) {
+    try {
+      return await this.prisma.cargoDirectoCatalogo.create({
+        data: {
+          tenantId,
+          codigo: dto.codigo,
+          nombre: dto.nombre,
+          descripcion: dto.descripcion ?? null,
+          modoCalculo: dto.modoCalculo,
+          modosActivacionSoportados: dto.modosActivacionSoportados ?? ['OPCIONAL'],
+          configJson: (dto.configJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+          activo: true,
+        },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new BadRequestException(`Ya existe un cargo con código "${dto.codigo}"`);
+      }
+      throw err;
+    }
+  }
+
+  async actualizarCargoDirecto(tenantId: string, id: string, dto: ActualizarCargoDirectoDto) {
+    const existente = await this.prisma.cargoDirectoCatalogo.findFirst({
+      where: { id, tenantId },
+    });
+    if (!existente) throw new NotFoundException(`Cargo ${id} no encontrado`);
+
+    const data: Prisma.CargoDirectoCatalogoUpdateInput = {};
+    if (dto.nombre !== undefined) data.nombre = dto.nombre;
+    if (dto.descripcion !== undefined) data.descripcion = dto.descripcion;
+    if (dto.modoCalculo !== undefined) data.modoCalculo = dto.modoCalculo;
+    if (dto.modosActivacionSoportados !== undefined) {
+      data.modosActivacionSoportados = dto.modosActivacionSoportados;
+    }
+    if (dto.configJson !== undefined) data.configJson = dto.configJson as Prisma.InputJsonValue;
+    if (dto.activo !== undefined) data.activo = dto.activo;
+
+    return this.prisma.cargoDirectoCatalogo.update({ where: { id }, data });
+  }
+
+  async eliminarCargoDirecto(tenantId: string, id: string) {
+    const existente = await this.prisma.cargoDirectoCatalogo.findFirst({
+      where: { id, tenantId },
+      include: {
+        pasoCargos: { take: 1 },
+        cotizacionCargos: { take: 1 },
+      },
+    });
+    if (!existente) throw new NotFoundException(`Cargo ${id} no encontrado`);
+
+    if (existente.pasoCargos.length > 0 || existente.cotizacionCargos.length > 0) {
+      // Soft-delete (preserva integridad de productos que lo usan)
+      return this.prisma.cargoDirectoCatalogo.update({
+        where: { id },
+        data: { activo: false },
+      });
+    }
+
+    return this.prisma.cargoDirectoCatalogo.delete({ where: { id } });
   }
 }
