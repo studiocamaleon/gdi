@@ -14,6 +14,7 @@ import {
 import { Request } from 'express';
 import { ProductosServiciosService } from './productos-servicios.service';
 import { ActualizarProductoDto, CrearProductoDto } from './dto/producto.dto';
+import { ActualizarRutaDto, CrearRutaDto } from './dto/ruta.dto';
 
 interface RequestWithAuth extends Request {
   auth?: { tenantId: string; userId: string };
@@ -82,6 +83,32 @@ export class ProductosServiciosController {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
     return this.service.obtenerRuta(tenantId, id);
+  }
+
+  @Post('rutas')
+  async crearRuta(@Req() req: RequestWithAuth, @Body() dto: CrearRutaDto) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.crearRuta(tenantId, dto);
+  }
+
+  @Patch('rutas/:id')
+  async actualizarRuta(
+    @Req() req: RequestWithAuth,
+    @Param('id') id: string,
+    @Body() dto: ActualizarRutaDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.actualizarRuta(tenantId, id, dto);
+  }
+
+  @Delete('rutas/:id')
+  @HttpCode(204)
+  async eliminarRuta(@Req() req: RequestWithAuth, @Param('id') id: string) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    await this.service.eliminarRuta(tenantId, id);
   }
 
   @Get('familias')

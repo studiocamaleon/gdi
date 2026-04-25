@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { FAMILIAS, listarFamilias as listarFamiliasCatalogo } from './pasos/familias';
 import { CATEGORIAS } from './pasos/categorias';
 import type { ActualizarProductoDto, CrearProductoDto } from './dto/producto.dto';
+import type { ActualizarRutaDto, CrearRutaDto } from './dto/ruta.dto';
 
 /**
  * Service F.3 — CRUD del Modelo Universal V2.
@@ -172,6 +173,149 @@ export class ProductosServiciosService {
         _count: { select: { productosAlternativas: true } },
       },
     });
+  }
+
+  async crearRuta(tenantId: string, dto: CrearRutaDto) {
+    this.validarFamiliasDePasos(dto.pasos);
+    try {
+      const ruta = await this.prisma.ruta.create({
+        data: {
+          tenantId,
+          codigo: dto.codigo,
+          nombre: dto.nombre,
+          descripcion: dto.descripcion ?? null,
+          versionActual: 1,
+          activo: true,
+          pasos: {
+            create: dto.pasos.map((p) => ({
+              tenantId,
+              orden: p.orden,
+              familiaCodigo: p.familiaCodigo,
+              activo: true,
+            })),
+          },
+        },
+        include: { pasos: true },
+      });
+      // Crear versión inicial snapshot
+      await this.prisma.rutaVersion.create({
+        data: {
+          tenantId,
+          rutaId: ruta.id,
+          version: 1,
+          snapshotJson: {
+            pasos: ruta.pasos.map((p) => ({ orden: p.orden, familia: p.familiaCodigo })),
+          },
+          cambios: 'Versión inicial',
+        },
+      });
+      return ruta;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new BadRequestException(`Ya existe una ruta con código "${dto.codigo}"`);
+      }
+      throw err;
+    }
+  }
+
+  async actualizarRuta(tenantId: string, id: string, dto: ActualizarRutaDto) {
+    const existente = await this.prisma.ruta.findFirst({
+      where: { id, tenantId },
+      include: { pasos: { orderBy: { orden: 'asc' } }, productosAlternativas: true },
+    });
+    if (!existente) throw new NotFoundException(`Ruta ${id} no encontrada`);
+
+    if (dto.pasos) {
+      this.validarFamiliasDePasos(dto.pasos);
+    }
+
+    // Heurística: si cambian pasos y nuevaVersion no se especifica, sugerir nueva versión
+    const cambioEstructural = dto.pasos !== undefined;
+    const debeSerNuevaVersion = dto.nuevaVersion === true || (cambioEstructural && dto.nuevaVersion !== false);
+
+    return this.prisma.$transaction(async (tx) => {
+      const dataBase: Prisma.RutaUpdateInput = {};
+      if (dto.nombre !== undefined) dataBase.nombre = dto.nombre;
+      if (dto.descripcion !== undefined) dataBase.descripcion = dto.descripcion;
+      if (dto.activo !== undefined) dataBase.activo = dto.activo;
+
+      if (dto.pasos) {
+        if (debeSerNuevaVersion && existente.productosAlternativas.length > 0) {
+          // Crear nueva versión: incrementa versionActual + nuevo snapshot
+          const nuevaVersion = existente.versionActual + 1;
+          dataBase.versionActual = nuevaVersion;
+          // Eliminar pasos viejos + insertar nuevos
+          await tx.rutaPaso.deleteMany({ where: { rutaId: id } });
+          await tx.rutaPaso.createMany({
+            data: dto.pasos.map((p) => ({
+              tenantId,
+              rutaId: id,
+              orden: p.orden,
+              familiaCodigo: p.familiaCodigo,
+              activo: true,
+            })),
+          });
+          await tx.rutaVersion.create({
+            data: {
+              tenantId,
+              rutaId: id,
+              version: nuevaVersion,
+              snapshotJson: { pasos: dto.pasos.map((p) => ({ orden: p.orden, familia: p.familiaCodigo })) },
+              cambios: dto.cambios ?? 'Actualización de pasos',
+            },
+          });
+        } else {
+          // Patch in-place: reemplazar pasos sin nueva versión
+          await tx.rutaPaso.deleteMany({ where: { rutaId: id } });
+          await tx.rutaPaso.createMany({
+            data: dto.pasos.map((p) => ({
+              tenantId,
+              rutaId: id,
+              orden: p.orden,
+              familiaCodigo: p.familiaCodigo,
+              activo: true,
+            })),
+          });
+        }
+      }
+
+      return tx.ruta.update({
+        where: { id },
+        data: dataBase,
+        include: { pasos: { orderBy: { orden: 'asc' } } },
+      });
+    });
+  }
+
+  async eliminarRuta(tenantId: string, id: string) {
+    const existente = await this.prisma.ruta.findFirst({
+      where: { id, tenantId },
+      include: { productosAlternativas: { take: 1 } },
+    });
+    if (!existente) throw new NotFoundException(`Ruta ${id} no encontrada`);
+
+    if (existente.productosAlternativas.length > 0) {
+      throw new BadRequestException(
+        `Ruta "${existente.nombre}" está siendo usada por ${existente.productosAlternativas.length} producto(s). Marcala como inactiva en vez de eliminarla.`,
+      );
+    }
+
+    return this.prisma.ruta.delete({ where: { id } });
+  }
+
+  /** Verifica que cada `familiaCodigo` exista en el catálogo hardcoded. */
+  private validarFamiliasDePasos(pasos: Array<{ familiaCodigo: string; orden: number }>) {
+    const familiasValidas = new Set(listarFamiliasCatalogo());
+    const ordenes = new Set<number>();
+    for (const p of pasos) {
+      if (!familiasValidas.has(p.familiaCodigo as never)) {
+        throw new BadRequestException(`Familia desconocida: "${p.familiaCodigo}"`);
+      }
+      if (ordenes.has(p.orden)) {
+        throw new BadRequestException(`Orden ${p.orden} duplicado en los pasos`);
+      }
+      ordenes.add(p.orden);
+    }
   }
 
   async obtenerRuta(tenantId: string, id: string) {

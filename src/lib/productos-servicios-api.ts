@@ -74,6 +74,47 @@ export async function getRutaById(id: string) {
   return apiRequest(`/productos-servicios/rutas/${id}`);
 }
 
+export interface PasoRutaPayload {
+  orden: number;
+  familiaCodigo: string;
+}
+
+export interface CrearRutaPayload {
+  codigo: string;
+  nombre: string;
+  descripcion?: string;
+  pasos: PasoRutaPayload[];
+}
+
+export async function crearRuta(payload: CrearRutaPayload) {
+  return apiRequest('/productos-servicios/rutas', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export interface ActualizarRutaPayload {
+  nombre?: string;
+  descripcion?: string;
+  activo?: boolean;
+  pasos?: PasoRutaPayload[];
+  nuevaVersion?: boolean;
+  cambios?: string;
+}
+
+export async function actualizarRuta(id: string, payload: ActualizarRutaPayload) {
+  return apiRequest(`/productos-servicios/rutas/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export async function eliminarRuta(id: string) {
+  return apiRequest(`/productos-servicios/rutas/${id}`, { method: 'DELETE' });
+}
+
 export async function getCatalogoFamilias(): Promise<CatalogoFamilias> {
   return apiRequest<CatalogoFamilias>('/productos-servicios/familias');
 }

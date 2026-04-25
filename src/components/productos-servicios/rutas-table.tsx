@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { GitBranchIcon, PlusIcon, WorkflowIcon } from "lucide-react";
+import Link from "next/link";
+import { ExternalLinkIcon, GitBranchIcon, PlusIcon, WorkflowIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,10 +30,12 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
             pueden referenciar.
           </p>
         </div>
-        <Button disabled title="Editor de rutas en F.3.x">
-          <PlusIcon className="mr-2 size-4" />
-          Nueva ruta
-        </Button>
+        <Link href="/productos-servicios/rutas/nueva">
+          <Button>
+            <PlusIcon className="mr-2 size-4" />
+            Nueva ruta
+          </Button>
+        </Link>
       </div>
 
       {rutas.length === 0 ? (
@@ -61,6 +64,7 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
                   <TableHead className="w-1/3">Pasos</TableHead>
                   <TableHead className="text-center">Versión</TableHead>
                   <TableHead className="text-center">Productos que la usan</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -95,6 +99,15 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
                         <GitBranchIcon className="size-3" />
                         {r._count.productosAlternativas}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Link
+                        href={`/productos-servicios/rutas/${r.id}`}
+                        className="text-primary inline-flex items-center text-sm hover:underline"
+                      >
+                        Ver / editar
+                        <ExternalLinkIcon className="ml-1 size-3" />
+                      </Link>
                     </TableCell>
                   </TableRow>
                 ))}
