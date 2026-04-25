@@ -784,12 +784,15 @@ export class MotorUniversalService {
       // cantidad real con desperdicio.
       let cantidad = 0;
       if (slot.formula === 'por_unidad_productiva') {
-        // Para grid-2d-single: por_unidad_productiva en sustrato sheet = pliegos.
-        if (nestingDispatch?.algorithm === 'grid-2d-single') {
-          cantidad = nestingDispatch.cantidadCalculada;
-        } else {
-          cantidad = Number(jobContext.cantidad ?? 0);
-        }
+        // G-M9 fix (validación end-to-end 2026-04-25): la cantidad de
+        // material por_unidad_productiva debe respetar el mecanismo del paso:
+        //   - CALCULADO_POR_PASO con nesting → cantidadCalculada (pliegos).
+        //   - HEREDAR_DEL_OUTPUT_CANONICO → output del paso anterior
+        //     (ej. impresion_por_hoja hereda pliegos_calculados de pre_prensa).
+        //   - DIRECT_FROM_JOBCONTEXT / CONVERSION → vía resolverCantidad.
+        // Antes leía siempre `jobContext.cantidad` cuando no había nesting,
+        // lo que causaba que tarjetas consumiera 1000 pliegos en vez de 18.
+        cantidad = this.resolverCantidad(paso, jobContext, nestingDispatch);
       } else if (slot.formula === 'por_pieza') {
         cantidad = Number(jobContext.cantidad ?? 0);
       } else if (slot.formula === 'fijo') {
