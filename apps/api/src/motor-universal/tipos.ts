@@ -137,6 +137,48 @@ export interface PasoEjecutado {
   costoTotal: number;
   /** Outputs canónicos que el paso escribió al JobContext. */
   outputsCanonicos?: Record<string, unknown>;
+  /**
+   * Resultado del nesting cuando el paso usa `mecanismoCantidad =
+   * CALCULADO_POR_PASO` y la familia tiene un algoritmo soportado por el
+   * dispatcher (G-M1). Trae la cantidad calculada real (con desperdicio) +
+   * placements para visualización en frontend.
+   */
+  nestingResult?: NestingEjecutado;
+}
+
+/** Resultado del nesting visible al consumidor (motor, frontend). */
+export interface NestingEjecutado {
+  algorithm: 'shelf-rollo' | 'grid-2d-single' | 'grid-2d-multi';
+  /** Cantidad calculada en su unidad (m_lineales, pliegos, m2, piezas). */
+  cantidadCalculada: number;
+  unidad: 'm_lineales' | 'pliegos' | 'm2' | 'piezas';
+  aprovechamientoPct: number;
+  /** Sustratos consumidos. Para visualizar el "envase" (rollo o pliego). */
+  substrates: Array<
+    | { kind: 'sheet'; count: number; widthMm: number; heightMm: number }
+    | { kind: 'roll'; lengthMm: number; widthMm: number }
+  >;
+  /** Placements para dibujar piezas dentro del sustrato. */
+  placements: Array<{
+    pieceId: string;
+    substrateIndex?: number;
+    xMm: number;
+    yMm: number;
+    widthMm: number;
+    heightMm: number;
+    rotated: boolean;
+    panelIndex?: number;
+    panelCount?: number;
+    panelAxis?: 'vertical' | 'horizontal';
+    usefulWidthMm?: number;
+    usefulHeightMm?: number;
+    overlapStartMm?: number;
+    overlapEndMm?: number;
+    meta?: unknown;
+  }>;
+  piezasPorPliego?: number;
+  consumedLengthMm?: number;
+  piezasAcomodadas: number;
 }
 
 export interface MaterialEjecutado {

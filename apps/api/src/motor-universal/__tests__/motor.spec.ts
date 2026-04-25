@@ -8,6 +8,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import { MotorUniversalService } from '../motor.service';
+import { runNestingForPaso } from '../nesting-dispatcher';
 
 const prisma = new PrismaClient();
 
@@ -397,13 +398,15 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(result.exitoso).toBe(true);
   });
 
-  it('F.2.3: Vinilo con piezas → mecanismo CALCULADO_POR_PASO usa m² total para impresion_por_area', async () => {
+  it('G-M1: Vinilo con piezas → CALCULADO_POR_PASO usa shelf-rollo (cantidad real con desperdicio)', async () => {
     if (!tenantId) return;
     const vinilo = await prisma.producto.findFirstOrThrow({
       where: { tenantId, codigo: 'VINILO-BLANCO-IMP' },
     });
 
-    // 3 paños de 2x1m = 6m² total
+    // 3 paños de 2x1m. El rollo es 1.37m → cada paño rota a 1×2m, 1 por fila.
+    // 3 filas × 2m + márgenes + separaciones ≈ 6.03m de rollo consumido.
+    // Área total consumida (con desperdicio): 6.03m × 1.37m ≈ 8.26 m².
     const result = await motorService.cotizar({
       tenantId,
       productoId: vinilo.id,
@@ -416,9 +419,22 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(result.exitoso).toBe(true);
     const impresion = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_area');
     expect(impresion?.activado).toBe(true);
-    // 6 m² / 6 m²/h = 1 hora = 60min de run + setup/cleanup
-    expect(impresion!.tiempo!.totalMin).toBeGreaterThan(60);
-    expect(impresion!.tiempo!.totalMin).toBeLessThan(80);
+
+    // Nesting result presente con shelf-rollo
+    expect(impresion!.nestingResult).toBeDefined();
+    expect(impresion!.nestingResult!.algorithm).toBe('shelf-rollo');
+    expect(impresion!.nestingResult!.unidad).toBe('m_lineales');
+    expect(impresion!.nestingResult!.consumedLengthMm).toBeGreaterThan(6000);
+    expect(impresion!.nestingResult!.consumedLengthMm).toBeLessThan(6500);
+    expect(impresion!.nestingResult!.placements.length).toBe(3);
+    // Aprovechamiento: 6 m² útiles / 8.26 m² totales ≈ 72-73%
+    expect(impresion!.nestingResult!.aprovechamientoPct).toBeGreaterThan(60);
+    expect(impresion!.nestingResult!.aprovechamientoPct).toBeLessThan(80);
+
+    // Tiempo: ~8.26 m² / 6 m²/h × 60 = ~82.6min run + setup(10) + cleanup(5) ≈ 98min.
+    // Antes de G-M1 (m² crudos sin desperdicio): ~60min run = ~75min total. Diferencia = subcosto.
+    expect(impresion!.tiempo!.totalMin).toBeGreaterThan(90);
+    expect(impresion!.tiempo!.totalMin).toBeLessThan(110);
   });
 
   it('F.2.3: Tarjetas con embalaje CONVERSION → 1000 piezas / 100 piezasPorCaja = 10 cajas', async () => {
@@ -703,6 +719,69 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(result.cotizacion!.precio!.metodoUsado).toBe('margen_variable');
     // cantidad=1 cae en primer tier (≤5) con margen 100%
     expect(result.cotizacion!.precio!.margenAplicadoPct).toBe(100);
+  });
+
+  it('G-M1: dispatcher grid-2d-single funciona cuando se invoca directamente (unit test)', async () => {
+    // Test unitario del dispatcher (sin DB) que verifica el caso grid-2d-single.
+    // El seed actual de Tarjetas NO ejecuta nesting porque `pre_prensa` usa T-1
+    // tiempo fijo y `impresion_por_hoja` usa HEREDAR_DEL_OUTPUT_CANONICO (depende
+    // de G-M2 + reseed para que el flujo end-to-end use grid-2d). Hasta entonces,
+    // testeamos el dispatcher en aislamiento.
+    const fakePaso = {
+      rutaPasoId: 'rp1',
+      rutaPasoOrden: 1,
+      familiaCodigo: 'impresion_por_hoja',
+      configPasoId: 'cp1',
+      modoActivacion: 'OBLIGATORIO',
+      condicionActivacionJson: null,
+      modoTiempo: 'T-3',
+      mecanismoCantidad: 'CALCULADO_POR_PASO',
+      mecanismoCantidadConfigJson: null,
+      multiplicadoresActivos: [],
+      paramsPasoJson: null,
+      maquinaM1Id: null,
+      perfilM1Id: null,
+      setupOverrideMin: null,
+      cleanupOverrideMin: null,
+      tiempoFijoOverrideMin: null,
+      slots: [],
+      cargosDirectosPaso: [],
+      maquina: { id: 'm1', codigo: 'X', nombre: 'X', plantilla: 'IMPRESORA_LASER',
+        parametrosTecnicosJson: { margenesNoImprimiblesMm: { izq: 5, der: 5, sup: 5, inf: 5 } } },
+    };
+    const fakeMaterial = {
+      id: 'mat1',
+      atributosVarianteJson: { anchoMm: 220, largoMm: 340 },
+    };
+    const fakeJobContext = {
+      cantidad: 1000,
+      caras: 1 as const,
+      piezas: [{ cantidad: 1000, anchoMm: 90, altoMm: 50 }],
+    };
+
+    const r = runNestingForPaso(fakePaso as never, fakeJobContext, fakeMaterial);
+    expect(r).not.toBeNull();
+    expect(r!.algorithm).toBe('grid-2d-single');
+    expect(r!.unidad).toBe('pliegos');
+    expect(r!.piezasPorPliego).toBeGreaterThanOrEqual(12); // pliego 22x34, pieza 9x5 = ~14
+    expect(r!.cantidadCalculada).toBeLessThanOrEqual(85); // ceil(1000/12) = 84
+    expect(r!.placements.length).toBe(r!.piezasPorPliego);
+  });
+
+  it('G-M1: dispatcher devuelve null para familia sin algoritmo (mantiene fallback)', async () => {
+    if (!tenantId) return;
+    // Embalaje (CONVERSION) NO debería tener nestingResult.
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      jobContext: { cantidad: 1000, caras: 2 },
+    });
+    const embalaje = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'embalaje');
+    expect(embalaje?.activado).toBe(true);
+    expect(embalaje!.nestingResult).toBeUndefined();
   });
 
   it('G-M3: cargo directo a nivel PASO (MONTO_FIJO_PLANO OBLIGATORIO) se aplica al paso', async () => {

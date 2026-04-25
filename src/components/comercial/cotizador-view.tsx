@@ -33,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { NestingViewer } from "@/components/nesting/nesting-viewer";
 import {
   cotizar,
   cotizarYGuardar,
@@ -652,6 +653,27 @@ function ResultadoCotizacion({
             </div>
           ))}
         </div>
+      )}
+
+      {c.pasos.some((p) => p.nestingResult) && (
+        <details className="text-sm" open>
+          <summary className="hover:bg-accent cursor-pointer rounded p-2 font-medium">
+            Visualización de nesting (
+            {c.pasos.filter((p) => p.nestingResult).length} pasos)
+          </summary>
+          <div className="space-y-4 mt-2">
+            {c.pasos
+              .filter((p) => p.nestingResult)
+              .map((p) => (
+                <div key={p.rutaPasoOrden} className="space-y-2">
+                  <div className="text-sm font-medium">
+                    Paso {p.rutaPasoOrden}. {p.familiaCodigo}
+                  </div>
+                  <NestingViewer result={p.nestingResult!} />
+                </div>
+              ))}
+          </div>
+        </details>
       )}
     </div>
   );

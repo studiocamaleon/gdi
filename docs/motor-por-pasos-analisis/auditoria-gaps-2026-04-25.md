@@ -9,6 +9,14 @@
 - **2026-04-25 (1)**: documento inicial.
 - **2026-04-25 (2)**: ✅ **G-M3 cerrado** (cargos directos a nivel PASO, commit en branch). 3 tests nuevos verde. Actualizado §6 y §8.
 - **2026-04-25 (3)**: nota agregada en §8: F.5 debe **eliminar Three.js** explícitamente (no opcional). G-M1 debe entregar **`<NestingViewer>` SVG único** reusable por todos los algoritmos (shelf-rollo, grid-2d-single/multi, talonario-grouping). Reemplaza cualquier vista de nesting basada en WebGL/Three.js que quede.
+- **2026-04-25 (5)**: ✅ **G-M1 cerrado** (nesting al motor + viewer SVG único).
+  - Backend: nuevo `nesting-dispatcher.ts` que conecta `shelf-rollo` (gran formato) y `grid-2d-single` (digital) al motor cuando `mecanismoCantidad = CALCULADO_POR_PASO`. Devuelve cantidad real con desperdicio.
+  - Vinilo (caso real): cotización de 3 paños 2×1m en rollo 1.37m pasa de 60min (m² crudos) a ~98min (8.26 m² reales con desperdicio del rollo). **Sub-cobro silencioso del nesting cerrado.**
+  - `PasoEjecutado.nestingResult` propaga substrates + placements + métricas al frontend.
+  - Frontend: nuevo `<NestingViewer>` SVG **único reusable** por todos los algoritmos (shelf-rollo, grid-2d-single, grid-2d-multi futuro). Renderiza el sustrato (rollo o pliego) + placements con color por pieceId + labels de medida. Integrado en `cotizador-view.tsx` como sección colapsable "Visualización de nesting".
+  - 3 tests nuevos: vinilo end-to-end con shelf-rollo + dispatcher unitario grid-2d-single + dispatcher devuelve null para familia no soportada (mantiene fallback).
+  - **Pendiente para G-M2**: tarjetas con `pre_prensa` HEREDAR_DEL_OUTPUT_CANONICO requiere outputs canónicos reales. El dispatcher ya soporta grid-2d-single, falta el wiring desde `pre_prensa` que escriba `pliegos_calculados` al jobContext.
+  - 110/110 tests verde.
 - **2026-04-25 (4)**: ✅ **F.5 cerrado** (cleanup pre-v2). 5811 LOC eliminadas:
   - `src/components/plotter-simulator.tsx` (huérfano, único consumidor de Three.js).
   - `src/components/vinyl-cut-nesting-workspace.tsx` (276 LOC, viewer legacy reemplazado por el `<NestingViewer>` único de G-M1).
@@ -214,12 +222,11 @@ Reordenado por **valor de negocio + dependencias técnicas**:
    - 108/108 tests verde + typecheck + `npm run build` verde.
    - Tag `v2.0-modelo-universal-implementado` aplicado.
 
-3. **G-M1 — Conectar nesting al motor (F.2.13)**
-   - Modificar `resolverCantidad` rama `CALCULADO_POR_PASO` para invocar `nesting/algorithms/*` según familia.
-   - Mapeo: `impresion_por_area` → `shelf-rollo`, `impresion_por_hoja` + `pre_prensa` → `grid-2d-single`/`grid-2d-multi`, talonarios → `talonario-grouping`.
-   - Devolver pliegos/m² REAL con desperdicio reportado en trazabilidad.
-   - **Entregable colateral**: `<NestingViewer>` único en frontend (SVG declarativo, **NO Three.js / WebGL**) reusable por los 4 algoritmos. Recibe el resultado del nesting y dibuja piezas + desperdicio + etiquetas. Reemplaza cualquier visualización 3D existente.
-   - Esfuerzo: 4–6 días (motor 3-5 + viewer 1-2).
+3. ~~**G-M1 — Conectar nesting al motor (F.2.13)**~~ ✅ **CERRADO 2026-04-25**
+   - Backend: `nesting-dispatcher.ts` conecta shelf-rollo (`impresion_por_area`, `plotter_corte`) y grid-2d-single (`impresion_por_hoja`) al motor.
+   - Frontend: `<NestingViewer>` SVG único, reemplaza vinyl-cut-nesting-workspace eliminado en F.5.
+   - Vinilo end-to-end con desperdicio real (60min → ~98min para 3 paños 2×1m, **sub-cobro cerrado**).
+   - Talonarios + multi-medida rígidos quedan para iteración futura cuando aparezca caso real (talonarios depende de G-M2).
 
 4. **G-M2 — Outputs canónicos reales**
    - Implementar `calcularOutputs` por familia (los 13 outputs canónicos del catálogo).

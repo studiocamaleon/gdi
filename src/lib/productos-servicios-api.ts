@@ -347,6 +347,46 @@ export async function getLookupsConfigPaso(): Promise<LookupsConfigPaso> {
 // MOTOR — invocación de cotización
 // ============================================================================
 
+/**
+ * Input compartido del NestingViewer (G-M1).
+ *
+ * Replica el shape `NestingEjecutado` del backend
+ * (`apps/api/src/motor-universal/tipos.ts`) para que el frontend lo consuma sin
+ * duplicar lógica. Cualquier algoritmo soportado (shelf-rollo, grid-2d-single,
+ * grid-2d-multi) produce este mismo shape, lo que permite que `<NestingViewer>`
+ * sea único para todos.
+ */
+export interface NestingViewerInput {
+  algorithm: 'shelf-rollo' | 'grid-2d-single' | 'grid-2d-multi';
+  cantidadCalculada: number;
+  unidad: 'm_lineales' | 'pliegos' | 'm2' | 'piezas';
+  aprovechamientoPct: number;
+  substrates: Array<
+    | { kind: 'sheet'; count: number; widthMm: number; heightMm: number }
+    | { kind: 'roll'; lengthMm: number; widthMm: number }
+  >;
+  placements: Array<{
+    pieceId: string;
+    substrateIndex?: number;
+    xMm: number;
+    yMm: number;
+    widthMm: number;
+    heightMm: number;
+    rotated: boolean;
+    panelIndex?: number;
+    panelCount?: number;
+    panelAxis?: 'vertical' | 'horizontal';
+    usefulWidthMm?: number;
+    usefulHeightMm?: number;
+    overlapStartMm?: number;
+    overlapEndMm?: number;
+    meta?: unknown;
+  }>;
+  piezasPorPliego?: number;
+  consumedLengthMm?: number;
+  piezasAcomodadas: number;
+}
+
 export interface CotizarRequest {
   productoId: string;
   rutaAlternativaId?: string | null;
@@ -405,7 +445,15 @@ export interface CotizarResponse {
       razonNoActivado?: string;
       tiempo?: { totalMin: number; tarifaHora: number; costo: number };
       materiales?: Array<{ materialNombre: string; cantidad: number; costoTotal: number }>;
+      cargosDirectosPaso?: Array<{
+        cargoCodigo: string;
+        cargoNombre: string;
+        monto: number;
+        modoCalculo: string;
+      }>;
       costoTotal: number;
+      /** G-M1 — Resultado del nesting cuando el paso lo invoca. */
+      nestingResult?: NestingViewerInput;
     }>;
     cargosDirectosCotizacion: Array<{
       cargoCodigo: string;

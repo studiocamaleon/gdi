@@ -17,7 +17,9 @@ import type {
   MaterialEjecutado,
   CargoDirectoEjecutado,
   CargoPasoCargado,
+  NestingEjecutado,
 } from './tipos';
+import { runNestingForPaso, type NestingDispatchResult } from './nesting-dispatcher';
 
 /**
  * Motor Universal por Pasos.
@@ -327,17 +329,45 @@ export class MotorUniversalService {
     // c) RESOLVER PERFIL automáticamente si aplica (F.2.4 — D.2)
     const perfilResuelto = this.resolverPerfil(paso, jobContext);
 
-    // d) TIEMPO (D.4) — usa el perfil resuelto si difiere del default
+    // c.1) RESOLVER MATERIAL PRELIMINAR (necesario para el nesting de pliegos
+    //      o rollos: el algoritmo necesita conocer las dimensiones del sustrato).
+    //      Si el slot principal no se puede resolver, el dispatcher devuelve null y
+    //      se cae al fallback de m² crudos / cantidad directa.
+    const slotPrincipal = paso.slots[0] ?? null;
+    const materialPreliminar = slotPrincipal
+      ? await this.resolverMaterialSlot(slotPrincipal, jobContext)
+      : null;
+
+    // d) NESTING (G-M1 — F.2.13): si el paso usa CALCULADO_POR_PASO y la familia
+    //    está soportada por el dispatcher, ejecutamos el algoritmo correspondiente
+    //    (shelf-rollo o grid-2d-single) y obtenemos cantidadCalculada con
+    //    desperdicio real. Resultado se propaga a tiempo y materiales.
+    let nestingDispatch: NestingDispatchResult | null = null;
+    if (paso.mecanismoCantidad === 'CALCULADO_POR_PASO') {
+      nestingDispatch = runNestingForPaso(paso, jobContext, materialPreliminar);
+    }
+
+    // e) TIEMPO (D.4) — usa el perfil resuelto si difiere del default; si hay
+    //    nesting, su cantidadCalculada se usa como cantidad efectiva del paso.
     const pasoConPerfil: PasoCargado = perfilResuelto
       ? { ...paso, perfil: perfilResuelto }
       : paso;
-    const tiempo = this.calcularTiempo(pasoConPerfil, jobContext, errores, tarifasMap);
+    const tiempo = this.calcularTiempo(
+      pasoConPerfil,
+      jobContext,
+      errores,
+      tarifasMap,
+      nestingDispatch,
+    );
 
-    // e) MATERIALES (D.5) — F.2.5: HARDCODED + COMERCIAL_ELIGE + MOTOR_ELIGE_AUTO
-    const materiales = await this.calcularMateriales(paso, jobContext);
+    // f) MATERIALES (D.5) — F.2.5: HARDCODED + COMERCIAL_ELIGE + MOTOR_ELIGE_AUTO.
+    //    Si hay nesting con cantidad calculada, usamos esa cantidad para fórmulas
+    //    compatibles (por_metro_lineal con shelf-rollo, por_unidad_productiva con
+    //    grid-2d-single → pliegos).
+    const materiales = await this.calcularMateriales(paso, jobContext, nestingDispatch);
     const materialesCosto = materiales.reduce((acc, m) => acc + m.costoTotal, 0);
 
-    // f) CARGOS DIRECTOS A NIVEL PASO (G-M3 / D.6)
+    // g) CARGOS DIRECTOS A NIVEL PASO (G-M3 / D.6)
     //    Base de PORCENTAJE_SOBRE_BASE = subtotal del PASO (tiempo + materiales).
     const subtotalPaso = tiempo.costo + materialesCosto;
     const cargosDirectosPaso = this.aplicarCargosPaso(
@@ -346,6 +376,20 @@ export class MotorUniversalService {
       subtotalPaso,
     );
     const cargosPasoTotal = cargosDirectosPaso.reduce((acc, c) => acc + c.monto, 0);
+
+    const nestingResult: NestingEjecutado | undefined = nestingDispatch
+      ? {
+          algorithm: nestingDispatch.algorithm,
+          cantidadCalculada: nestingDispatch.cantidadCalculada,
+          unidad: nestingDispatch.unidad,
+          aprovechamientoPct: nestingDispatch.aprovechamientoPct,
+          substrates: nestingDispatch.substrates,
+          placements: nestingDispatch.placements,
+          piezasPorPliego: nestingDispatch.piezasPorPliego,
+          consumedLengthMm: nestingDispatch.consumedLengthMm,
+          piezasAcomodadas: nestingDispatch.piezasAcomodadas,
+        }
+      : undefined;
 
     return {
       rutaPasoId: paso.rutaPasoId,
@@ -358,6 +402,7 @@ export class MotorUniversalService {
       cargosDirectosPaso,
       costoTotal: subtotalPaso + cargosPasoTotal,
       outputsCanonicos: this.calcularOutputs(familia?.outputsCanonicos ?? [], paso, jobContext),
+      nestingResult,
     };
   }
 
@@ -457,6 +502,7 @@ export class MotorUniversalService {
     jobContext: JobContext,
     _errores: ErrorMotor[],
     tarifasMap: Map<string, unknown>,
+    nestingDispatch: NestingDispatchResult | null = null,
   ): NonNullable<PasoEjecutado['tiempo']> {
     const modoTiempo = paso.modoTiempo ?? 'T-1';
 
@@ -480,10 +526,22 @@ export class MotorUniversalService {
       // Productividad del perfil — necesita: cantidad y productividad
       const productividad = Number(paso.perfil?.productivityValue ?? 0);
       if (productividad > 0) {
-        // F.2.3 — Mecanismo de cantidad
-        let cantidadEfectiva = this.resolverCantidad(paso, jobContext);
+        // F.2.3 — Mecanismo de cantidad (nesting tiene prioridad si aplica)
+        let cantidadEfectiva = this.resolverCantidad(paso, jobContext, nestingDispatch);
         // F.2.6 — aplicar multiplicadores activos
         cantidadEfectiva = this.aplicarMultiplicadores(cantidadEfectiva, paso, jobContext);
+        // Para T-3 con shelf-rollo, la productividad suele estar en m²/h y la
+        // cantidadCalculada del nesting está en metros lineales. Convertimos a m²
+        // multiplicando por el ancho útil del rollo (que viene en el sustrato).
+        if (
+          nestingDispatch?.algorithm === 'shelf-rollo' &&
+          paso.perfil?.productivityUnit === 'M2_H'
+        ) {
+          const ancho = nestingDispatch.substrates[0]?.kind === 'roll'
+            ? nestingDispatch.substrates[0].widthMm / 1000
+            : 0;
+          cantidadEfectiva = nestingDispatch.cantidadCalculada * ancho; // m_lin × ancho_m = m²
+        }
         runMin = (cantidadEfectiva / productividad) * 60;
       }
     }
@@ -515,6 +573,7 @@ export class MotorUniversalService {
   private async calcularMateriales(
     paso: PasoCargado,
     jobContext: JobContext,
+    nestingDispatch: NestingDispatchResult | null = null,
   ): Promise<MaterialEjecutado[]> {
     const ejecutados: MaterialEjecutado[] = [];
 
@@ -522,18 +581,36 @@ export class MotorUniversalService {
       const materialResuelto = await this.resolverMaterialSlot(slot, jobContext);
       if (!materialResuelto) continue;
 
-      // Cantidad: depende de la fórmula
+      // Cantidad: depende de la fórmula. Si hay nesting, ajustamos a la
+      // cantidad real con desperdicio.
       let cantidad = 0;
       if (slot.formula === 'por_unidad_productiva') {
-        cantidad = Number(jobContext.cantidad ?? 0);
+        // Para grid-2d-single: por_unidad_productiva en sustrato sheet = pliegos.
+        if (nestingDispatch?.algorithm === 'grid-2d-single') {
+          cantidad = nestingDispatch.cantidadCalculada;
+        } else {
+          cantidad = Number(jobContext.cantidad ?? 0);
+        }
       } else if (slot.formula === 'por_pieza') {
         cantidad = Number(jobContext.cantidad ?? 0);
       } else if (slot.formula === 'fijo') {
         cantidad = 1;
       } else if (slot.formula === 'por_m2') {
-        cantidad = this.calcularM2DesdePiezas(jobContext);
+        if (nestingDispatch?.algorithm === 'shelf-rollo') {
+          // Shelf-rollo cobra por m² consumidos del rollo (no útiles): largo × ancho
+          const sub = nestingDispatch.substrates[0];
+          if (sub?.kind === 'roll') {
+            cantidad = (sub.lengthMm * sub.widthMm) / 1_000_000;
+          }
+        } else {
+          cantidad = this.calcularM2DesdePiezas(jobContext);
+        }
       } else if (slot.formula === 'por_metro_lineal') {
-        cantidad = this.calcularMetrosLinealesDesdePiezas(jobContext);
+        if (nestingDispatch?.algorithm === 'shelf-rollo' && nestingDispatch.consumedLengthMm) {
+          cantidad = nestingDispatch.consumedLengthMm / 1000;
+        } else {
+          cantidad = this.calcularMetrosLinealesDesdePiezas(jobContext);
+        }
       }
 
       // F.2.6 — multi-caras (legacy flag)
@@ -834,7 +911,11 @@ export class MotorUniversalService {
    *  - CONVERSION: aplica fórmula a otro valor
    *    (config: { piezasPorCaja: 100 } → ceil(cantidad / piezasPorCaja))
    */
-  private resolverCantidad(paso: PasoCargado, jobContext: JobContext): number {
+  private resolverCantidad(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    nestingDispatch: NestingDispatchResult | null = null,
+  ): number {
     const mecanismo = paso.mecanismoCantidad ?? 'DIRECT_FROM_JOBCONTEXT';
 
     if (mecanismo === 'DIRECT_FROM_JOBCONTEXT') {
@@ -849,10 +930,13 @@ export class MotorUniversalService {
     }
 
     if (mecanismo === 'CALCULADO_POR_PASO') {
-      // F.2.13 PENDIENTE: aquí debería invocarse el algoritmo de nesting correspondiente
-      // (shelf-rollo para impresion_por_area, grid-2d-single para impresion_por_hoja con
-      // pre_prensa, talonario-grouping para talonarios) y devolver pliegos/m² REAL con
-      // desperdicio. Por ahora MVP: para impresion_por_area suma m² cruda de las piezas.
+      // G-M1: si el dispatcher devolvió nesting, usar la cantidad calculada
+      // con desperdicio real (m_lineales para shelf-rollo, pliegos para grid).
+      if (nestingDispatch) {
+        return nestingDispatch.cantidadCalculada;
+      }
+      // Fallback histórico: m² crudos de las piezas (sin desperdicio) cuando
+      // la familia no tiene algoritmo soportado por el dispatcher.
       if (paso.familiaCodigo === 'impresion_por_area' || paso.familiaCodigo === 'plotter_corte') {
         return this.calcularM2DesdePiezas(jobContext);
       }
