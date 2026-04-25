@@ -9,12 +9,14 @@ import {
   CogIcon,
   GitBranchIcon,
   PackageIcon,
+  PencilIcon,
   RulerIcon,
   TagIcon,
   WrenchIcon,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ProductoDetalle, RutaAlternativaDetalle } from "@/lib/productos-servicios";
@@ -47,6 +49,12 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
             <Badge variant={producto.activo ? "default" : "secondary"}>
               {producto.activo ? "Activo" : "Inactivo"}
             </Badge>
+            <Link href={`/productos-servicios/${producto.id}/editar`}>
+              <Button variant="outline" size="sm">
+                <PencilIcon className="mr-2 size-3" />
+                Editar
+              </Button>
+            </Link>
           </div>
         </div>
       </div>

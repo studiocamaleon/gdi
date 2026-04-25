@@ -1,0 +1,359 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ArrowLeftIcon, SaveIcon, Trash2Icon } from "lucide-react";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  actualizarProducto,
+  crearProducto,
+  eliminarProducto,
+} from "@/lib/productos-servicios-api";
+import type { ProductoDetalle } from "@/lib/productos-servicios";
+import { unidadComercialProductoItems } from "@/lib/productos-servicios";
+
+type Modo = "crear" | "editar";
+
+interface Props {
+  modo: Modo;
+  productoExistente?: ProductoDetalle;
+}
+
+const MODOS_MEDIDAS = [
+  { value: "FIJA", label: "Medidas fijas (default declarado)" },
+  { value: "LIBRE", label: "Medidas libres (comercial las carga al cotizar)" },
+  { value: "COMERCIAL_ELIGE", label: "Comercial elige (fija o libre al cotizar)" },
+];
+
+const METODOS_PRECIO = [
+  { value: "por_margen", label: "Por margen fijo" },
+  { value: "precio_fijo", label: "Precio fijo" },
+  { value: "margen_variable", label: "Margen variable por tramos" },
+  { value: "precio_fijo_para_margen_minimo", label: "Precio fijo con margen mínimo" },
+  { value: "fijado_por_cantidad", label: "Cantidades fijas con precio fijo" },
+  { value: "fijo_con_margen_variable", label: "Cantidades fijas con margen variable" },
+  { value: "variable_por_cantidad", label: "Rangos de cantidad con precio fijo" },
+];
+
+export function ProductoFormView({ modo, productoExistente }: Props) {
+  const router = useRouter();
+  const [guardando, setGuardando] = React.useState(false);
+  const [eliminando, setEliminando] = React.useState(false);
+
+  const [codigo, setCodigo] = React.useState(productoExistente?.codigo ?? "");
+  const [nombre, setNombre] = React.useState(productoExistente?.nombre ?? "");
+  const [descripcion, setDescripcion] = React.useState(productoExistente?.descripcion ?? "");
+  const [unidadComercial, setUnidadComercial] = React.useState(
+    productoExistente?.unidadComercial ?? "unidad",
+  );
+  const [modoMedidas, setModoMedidas] = React.useState(productoExistente?.modoMedidas ?? "FIJA");
+  const [anchoDefault, setAnchoDefault] = React.useState(
+    productoExistente?.medidaDefaultAnchoMm ?? "",
+  );
+  const [altoDefault, setAltoDefault] = React.useState(
+    productoExistente?.medidaDefaultAltoMm ?? "",
+  );
+  const [activo, setActivo] = React.useState(productoExistente?.activo ?? true);
+
+  // Tab Precio simplificado: método + 2 detalles típicos (margen o precio)
+  const precioConfigInicial = (productoExistente?.precioConfigJson ?? {
+    metodoCalculo: "por_margen",
+    detalle: { marginPct: 100, minimumMarginPct: 50 },
+  }) as { metodoCalculo: string; detalle: Record<string, unknown> };
+
+  const [metodoPrecio, setMetodoPrecio] = React.useState<string>(
+    precioConfigInicial.metodoCalculo ?? "por_margen",
+  );
+  const [marginPct, setMarginPct] = React.useState<number>(
+    Number(precioConfigInicial.detalle?.marginPct ?? 100),
+  );
+  const [precioFijo, setPrecioFijo] = React.useState<number>(
+    Number(precioConfigInicial.detalle?.price ?? 0),
+  );
+
+  const handleGuardar = async () => {
+    setGuardando(true);
+    try {
+      const detallePrecio: Record<string, unknown> =
+        metodoPrecio === "por_margen"
+          ? { marginPct, minimumMarginPct: Math.max(0, marginPct - 50) }
+          : metodoPrecio === "precio_fijo"
+            ? { price: precioFijo, minimumPrice: 0 }
+            : metodoPrecio === "precio_fijo_para_margen_minimo"
+              ? { price: precioFijo, minimumPrice: 0, minimumMarginPct: marginPct }
+              : { tiers: [] };
+
+      const precioConfigJson = {
+        metodoCalculo: metodoPrecio,
+        detalle: detallePrecio,
+      };
+
+      const payload = {
+        nombre,
+        descripcion: descripcion || undefined,
+        unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
+        modoMedidas: modoMedidas as "FIJA" | "LIBRE" | "COMERCIAL_ELIGE",
+        medidaDefaultAnchoMm: anchoDefault ? Number(anchoDefault) : undefined,
+        medidaDefaultAltoMm: altoDefault ? Number(altoDefault) : undefined,
+        precioConfigJson,
+      };
+
+      if (modo === "crear") {
+        const creado = (await crearProducto({ ...payload, codigo })) as { id: string };
+        toast.success(`Producto "${nombre}" creado`);
+        router.push(`/productos-servicios/${creado.id}`);
+      } else {
+        await actualizarProducto(productoExistente!.id, { ...payload, activo });
+        toast.success(`Producto "${nombre}" actualizado`);
+        router.push(`/productos-servicios/${productoExistente!.id}`);
+      }
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error guardando");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const handleEliminar = async () => {
+    if (!productoExistente) return;
+    if (!confirm(`¿Eliminar "${productoExistente.nombre}"?\nSi tiene cotizaciones se marcará como inactivo en vez de borrar.`)) {
+      return;
+    }
+    setEliminando(true);
+    try {
+      await eliminarProducto(productoExistente.id);
+      toast.success("Producto eliminado");
+      router.push("/productos-servicios");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error eliminando");
+      setEliminando(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-1 flex-col gap-6 p-6">
+      <div className="flex flex-col gap-2">
+        <Link
+          href={modo === "editar" ? `/productos-servicios/${productoExistente!.id}` : "/productos-servicios"}
+          className="text-muted-foreground hover:text-foreground inline-flex items-center text-sm"
+        >
+          <ArrowLeftIcon className="mr-1 size-4" />
+          Volver
+        </Link>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {modo === "crear" ? "Nuevo producto" : `Editar producto: ${productoExistente?.nombre}`}
+        </h1>
+        <p className="text-muted-foreground text-sm">
+          {modo === "crear"
+            ? "Atributos comerciales del producto. La configuración de pasos / rutas se edita después."
+            : "Editás los atributos comerciales. Las rutas y configuración por paso se manejan en otra pantalla."}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Identidad</CardTitle>
+            <CardDescription>Código y nombre del producto en el catálogo.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="codigo">Código *</Label>
+              <Input
+                id="codigo"
+                value={codigo}
+                onChange={(e) => setCodigo(e.target.value)}
+                disabled={modo === "editar"}
+                placeholder="TARJ-PREMIUM-300"
+              />
+              {modo === "editar" && (
+                <p className="text-muted-foreground text-xs">El código no se puede modificar.</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="nombre">Nombre *</Label>
+              <Input
+                id="nombre"
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                placeholder="Tarjetas de Visita Premium 300gr"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="descripcion">Descripción</Label>
+              <Textarea
+                id="descripcion"
+                value={descripcion}
+                onChange={(e) => setDescripcion(e.target.value)}
+                rows={3}
+              />
+            </div>
+            {modo === "editar" && (
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="activo">Activo</Label>
+                  <p className="text-muted-foreground text-xs">Si está inactivo no aparece en el cotizador.</p>
+                </div>
+                <Switch id="activo" checked={activo} onCheckedChange={setActivo} />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Comercial y medidas</CardTitle>
+            <CardDescription>Cómo se cobra y cómo se manejan las medidas al cotizar.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="unidad">Unidad comercial</Label>
+              <Select value={unidadComercial} onValueChange={(v) => setUnidadComercial(v ?? "unidad")}>
+                <SelectTrigger id="unidad">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {unidadComercialProductoItems.map((it) => (
+                    <SelectItem key={it.value} value={it.value}>
+                      {it.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="modoMedidas">Modo de medidas</Label>
+              <Select value={modoMedidas} onValueChange={(v) => setModoMedidas(v ?? "FIJA")}>
+                <SelectTrigger id="modoMedidas">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MODOS_MEDIDAS.map((it) => (
+                    <SelectItem key={it.value} value={it.value}>
+                      {it.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {modoMedidas !== "LIBRE" && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="ancho">Ancho default (mm)</Label>
+                  <Input
+                    id="ancho"
+                    type="number"
+                    value={anchoDefault}
+                    onChange={(e) => setAnchoDefault(e.target.value)}
+                    placeholder="90"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="alto">Alto default (mm)</Label>
+                  <Input
+                    id="alto"
+                    type="number"
+                    value={altoDefault}
+                    onChange={(e) => setAltoDefault(e.target.value)}
+                    placeholder="50"
+                  />
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Tab Precio</CardTitle>
+            <CardDescription>
+              Cómo se calcula el precio de venta a partir del costo del motor.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="metodoPrecio">Método de cálculo</Label>
+              <Select value={metodoPrecio} onValueChange={(v) => setMetodoPrecio(v ?? "por_margen")}>
+                <SelectTrigger id="metodoPrecio">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {METODOS_PRECIO.map((it) => (
+                    <SelectItem key={it.value} value={it.value}>
+                      {it.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {(metodoPrecio === "por_margen" ||
+              metodoPrecio === "precio_fijo_para_margen_minimo") && (
+              <div className="space-y-2">
+                <Label htmlFor="margen">
+                  {metodoPrecio === "por_margen" ? "Margen (%)" : "Margen mínimo (%)"}
+                </Label>
+                <Input
+                  id="margen"
+                  type="number"
+                  value={marginPct}
+                  onChange={(e) => setMarginPct(Number(e.target.value))}
+                />
+              </div>
+            )}
+            {(metodoPrecio === "precio_fijo" ||
+              metodoPrecio === "precio_fijo_para_margen_minimo") && (
+              <div className="space-y-2">
+                <Label htmlFor="precio">Precio fijo</Label>
+                <Input
+                  id="precio"
+                  type="number"
+                  value={precioFijo}
+                  onChange={(e) => setPrecioFijo(Number(e.target.value))}
+                />
+              </div>
+            )}
+            {(metodoPrecio === "margen_variable" ||
+              metodoPrecio === "fijado_por_cantidad" ||
+              metodoPrecio === "fijo_con_margen_variable" ||
+              metodoPrecio === "variable_por_cantidad") && (
+              <p className="text-muted-foreground text-xs">
+                ⚠ Edición de tramos para este método pendiente. El producto se guarda con tramos
+                vacíos; podés editar el JSON en una sub-fase futura.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="flex items-center justify-between">
+        {modo === "editar" ? (
+          <Button
+            variant="destructive"
+            onClick={handleEliminar}
+            disabled={guardando || eliminando}
+          >
+            <Trash2Icon className="mr-2 size-4" />
+            {eliminando ? "Eliminando..." : "Eliminar"}
+          </Button>
+        ) : (
+          <div />
+        )}
+        <Button onClick={handleGuardar} disabled={guardando || !codigo || !nombre} size="lg">
+          <SaveIcon className="mr-2 size-4" />
+          {guardando ? "Guardando..." : modo === "crear" ? "Crear producto" : "Guardar cambios"}
+        </Button>
+      </div>
+    </div>
+  );
+}

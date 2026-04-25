@@ -33,10 +33,12 @@ export function ProductosServiciosTable({
             {productos.length} productos cargados en el modelo universal por pasos.
           </p>
         </div>
-        <Button disabled title="Editor de productos en F.3.x">
-          <PlusIcon className="mr-2 size-4" />
-          Nuevo producto
-        </Button>
+        <Link href="/productos-servicios/nuevo">
+          <Button>
+            <PlusIcon className="mr-2 size-4" />
+            Nuevo producto
+          </Button>
+        </Link>
       </div>
 
       {productos.length === 0 ? (

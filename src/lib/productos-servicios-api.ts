@@ -22,6 +22,50 @@ export async function getProductoById(id: string): Promise<ProductoDetalle> {
   return apiRequest<ProductoDetalle>(`/productos-servicios/productos/${id}`);
 }
 
+export interface CrearProductoPayload {
+  codigo: string;
+  nombre: string;
+  descripcion?: string;
+  unidadComercial: 'unidad' | 'm2' | 'metro_lineal';
+  modoMedidas: 'FIJA' | 'LIBRE' | 'COMERCIAL_ELIGE';
+  medidaDefaultAnchoMm?: number;
+  medidaDefaultAltoMm?: number;
+  precioConfigJson?: Record<string, unknown>;
+}
+
+export async function crearProducto(payload: CrearProductoPayload) {
+  return apiRequest('/productos-servicios/productos', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export interface ActualizarProductoPayload {
+  nombre?: string;
+  descripcion?: string;
+  unidadComercial?: 'unidad' | 'm2' | 'metro_lineal';
+  modoMedidas?: 'FIJA' | 'LIBRE' | 'COMERCIAL_ELIGE';
+  medidaDefaultAnchoMm?: number | null;
+  medidaDefaultAltoMm?: number | null;
+  precioConfigJson?: Record<string, unknown>;
+  activo?: boolean;
+}
+
+export async function actualizarProducto(id: string, payload: ActualizarProductoPayload) {
+  return apiRequest(`/productos-servicios/productos/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export async function eliminarProducto(id: string) {
+  return apiRequest(`/productos-servicios/productos/${id}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function getRutas(): Promise<RutaListItem[]> {
   return apiRequest<RutaListItem[]>('/productos-servicios/rutas');
 }

@@ -1,6 +1,19 @@
-import { Controller, Get, Param, Query, Req, UnauthorizedException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { ProductosServiciosService } from './productos-servicios.service';
+import { ActualizarProductoDto, CrearProductoDto } from './dto/producto.dto';
 
 interface RequestWithAuth extends Request {
   auth?: { tenantId: string; userId: string };
@@ -29,6 +42,32 @@ export class ProductosServiciosController {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
     return this.service.obtenerProducto(tenantId, id);
+  }
+
+  @Post('productos')
+  async crearProducto(@Req() req: RequestWithAuth, @Body() dto: CrearProductoDto) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.crearProducto(tenantId, dto);
+  }
+
+  @Patch('productos/:id')
+  async actualizarProducto(
+    @Req() req: RequestWithAuth,
+    @Param('id') id: string,
+    @Body() dto: ActualizarProductoDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.actualizarProducto(tenantId, id, dto);
+  }
+
+  @Delete('productos/:id')
+  @HttpCode(204)
+  async eliminarProducto(@Req() req: RequestWithAuth, @Param('id') id: string) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    await this.service.eliminarProducto(tenantId, id);
   }
 
   @Get('rutas')
