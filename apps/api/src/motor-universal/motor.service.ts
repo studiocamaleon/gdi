@@ -443,8 +443,15 @@ export class MotorUniversalService {
       }
     }
 
+    // b) G-F2 — Resolver máquina M-2 si el paso tiene candidatas. El comercial
+    //    puede elegir vía `jobContext[\`maquinaSeleccionada_${configPasoId}\`]`.
+    //    Si no eligió, gana esPreferida o la primera (orden ya es preferidas
+    //    primero, después orden ascendente). Si no hay candidatas, mantiene M-1.
+    const pasoConMaquina = this.resolverMaquinaM2(paso, jobContext);
+
     // c) RESOLVER PERFIL automáticamente si aplica (F.2.4 — D.2)
-    const perfilResuelto = this.resolverPerfil(paso, jobContext);
+    const perfilResuelto = this.resolverPerfil(pasoConMaquina, jobContext);
+    paso = pasoConMaquina; // todo lo siguiente usa el paso con máquina resuelta
 
     // c.1) RESOLVER MATERIAL PRELIMINAR (necesario para el nesting de pliegos
     //      o rollos: el algoritmo necesita conocer las dimensiones del sustrato).
@@ -1224,6 +1231,68 @@ export class MotorUniversalService {
   }
 
   /**
+   * G-F2 — Resuelve qué máquina usar cuando el paso tiene candidatas M-2.
+   *
+   * Prioridad:
+   *  1. Override del comercial: `jobContext[\`maquinaSeleccionada_${configPasoId}\`]`
+   *     o `jobContext[\`maquinaSeleccionada_${rutaPasoId}\`]` (clave alternativa).
+   *  2. Candidata `esPreferida = true` (las candidatas vienen ordenadas con
+   *     preferidas primero, así que la primera de la lista cumple).
+   *  3. Si no hay candidatas: usar la M-1 default (`maquinaM1Id`).
+   *
+   * Devuelve un nuevo `PasoCargado` con `maquina` (y perfilesDisponibles)
+   * apuntando a la M-2 elegida, o el `paso` original si no había candidatas.
+   */
+  private resolverMaquinaM2(paso: PasoCargado, jobContext: JobContext): PasoCargado {
+    if (!paso.maquinasCandidatas || paso.maquinasCandidatas.length === 0) {
+      return paso; // sin candidatas, mantiene M-1 default
+    }
+
+    const ctx = jobContext as unknown as Record<string, unknown>;
+    const keyById = `maquinaSeleccionada_${paso.configPasoId}`;
+    const keyByPasoId = `maquinaSeleccionada_${paso.rutaPasoId}`;
+    const eleccion =
+      typeof ctx[keyById] === 'string' ? (ctx[keyById] as string) :
+      typeof ctx[keyByPasoId] === 'string' ? (ctx[keyByPasoId] as string) :
+      null;
+
+    let elegida = eleccion
+      ? paso.maquinasCandidatas.find((c) => c.maquinaId === eleccion || c.id === eleccion)
+      : null;
+    if (!elegida) {
+      elegida = paso.maquinasCandidatas[0]; // ya viene ordenada (preferida primero)
+    }
+
+    return {
+      ...paso,
+      maquinaM1Id: elegida.maquinaId,
+      maquina: elegida.maquina,
+      perfilesDisponibles: elegida.perfilesOperativos.map((p) => ({
+        id: p.id,
+        nombre: p.nombre,
+        activo: p.activo,
+        productivityValue: p.productivityValue,
+        setupMin: p.setupMin,
+        cleanupMin: p.cleanupMin,
+        detalleJson: p.detalleJson,
+      })),
+      // Reset perfil M-1 (se vuelve a resolver con resolverPerfil sobre los
+      // perfiles de la nueva máquina).
+      perfil: elegida.perfilesOperativos[0]
+        ? {
+            id: elegida.perfilesOperativos[0].id,
+            nombre: elegida.perfilesOperativos[0].nombre,
+            productivityValue: elegida.perfilesOperativos[0].productivityValue,
+            productivityUnit: elegida.perfilesOperativos[0].productivityUnit,
+            setupMin: elegida.perfilesOperativos[0].setupMin,
+            cleanupMin: elegida.perfilesOperativos[0].cleanupMin,
+          }
+        : paso.perfil,
+      perfilM1Id: elegida.perfilesOperativos[0]?.id ?? paso.perfilM1Id,
+    };
+  }
+
+  /**
    * F.2.4 / G-M8 — Selección automática de perfil dentro de la máquina M-1.
    *
    * Estrategia (en orden):
@@ -1459,6 +1528,13 @@ export class MotorUniversalService {
                     },
                   },
                 },
+                maquinasCandidatas: {
+                  where: { activo: true },
+                  orderBy: [{ esPreferida: 'desc' }, { orden: 'asc' }],
+                  include: {
+                    maquina: { include: { perfilesOperativos: true } },
+                  },
+                },
                 cargosDirectosPaso: {
                   where: { activo: true },
                   include: { cargoDirectoCatalogo: true },
@@ -1536,6 +1612,30 @@ export class MotorUniversalService {
         setupMin: p.setupMin ? Number(p.setupMin) : null,
         cleanupMin: p.cleanupMin ? Number(p.cleanupMin) : null,
         detalleJson: p.detalleJson,
+      })),
+      maquinasCandidatas: cp.maquinasCandidatas.map((mc) => ({
+        id: mc.id,
+        maquinaId: mc.maquinaId,
+        esPreferida: mc.esPreferida,
+        orden: mc.orden,
+        maquina: {
+          id: mc.maquina.id,
+          codigo: mc.maquina.codigo,
+          nombre: mc.maquina.nombre,
+          plantilla: mc.maquina.plantilla,
+          centroCostoPrincipalId: mc.maquina.centroCostoPrincipalId,
+          parametrosTecnicosJson: mc.maquina.parametrosTecnicosJson as Record<string, unknown> | null,
+        },
+        perfilesOperativos: mc.maquina.perfilesOperativos.map((p) => ({
+          id: p.id,
+          nombre: p.nombre,
+          activo: p.activo,
+          productivityValue: p.productivityValue ? Number(p.productivityValue) : null,
+          productivityUnit: p.productivityUnit,
+          setupMin: p.setupMin ? Number(p.setupMin) : null,
+          cleanupMin: p.cleanupMin ? Number(p.cleanupMin) : null,
+          detalleJson: p.detalleJson,
+        })),
       })),
       slots: cp.slotsMateriales.map((s) => ({
         id: s.id,

@@ -95,6 +95,14 @@ export interface ConfigPasoDetalle {
   maquinaM1: { id: string; codigo: string; nombre: string; plantilla: string } | null;
   perfilM1: { id: string; nombre: string } | null;
   slotsMateriales: Array<SlotMaterialDetalle>;
+  /** G-F2: candidatas M-2; cuando length > 1 el cotizador muestra Select de override. */
+  maquinasCandidatas?: Array<{
+    id: string;
+    maquinaId: string;
+    esPreferida: boolean;
+    orden: number;
+    maquina: { id: string; codigo: string; nombre: string; plantilla: string };
+  }>;
   cargosDirectosPaso: Array<CargoPasoDetalle>;
 }
 

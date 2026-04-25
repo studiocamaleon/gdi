@@ -9,6 +9,12 @@
 - **2026-04-25 (1)**: documento inicial.
 - **2026-04-25 (2)**: ✅ **G-M3 cerrado** (cargos directos a nivel PASO, commit en branch). 3 tests nuevos verde. Actualizado §6 y §8.
 - **2026-04-25 (3)**: nota agregada en §8: F.5 debe **eliminar Three.js** explícitamente (no opcional). G-M1 debe entregar **`<NestingViewer>` SVG único** reusable por todos los algoritmos (shelf-rollo, grid-2d-single/multi, talonario-grouping). Reemplaza cualquier vista de nesting basada en WebGL/Three.js que quede.
+- **2026-04-25 (9)**: ✅ **G-F2 + G-F1 + G-F3 cerrados** (sprint frontend completo).
+  - **G-F2** (override M-2 desde cotizador): `cargarProductoYRuta` ahora trae `maquinasCandidatas` con perfiles. Nuevo método `resolverMaquinaM2` lee `jobContext[\`maquinaSeleccionada_${configPasoId}\`]` o usa la `esPreferida`. Frontend: nuevo selector por paso en cotizador-view, oculto cuando no hay candidatas.
+  - **G-F1** (UI versionado opt-in con heurística fina): backend ya tenía la lógica `nuevaVersion` boolean. Frontend ahora detecta cambios tipados (AGREGAR_PASO, QUITAR_PASO, CAMBIAR_FAMILIA, CAMBIAR_ORDEN) y los lista al usuario. Aviso reforzado cuando hay productos asociados (color naranja + texto explícito sobre el riesgo de patch in-place).
+  - **G-F3** (editor pasos extras inline): backend gana 2 endpoints (`POST /productos/:id/pasos-extras`, `DELETE /productos/pasos-extras/:id`) + DTO `AgregarPasoExtraDto` + métodos service. Frontend: nuevo `<PasosExtrasPanel>` (componente independiente reusable) integrado en la página de rutas del producto. Lista actuales + form mínimo de agregar (familia + activación + tiempo).
+  - 120/120 tests verde (sin nuevos tests porque G-F2 backend reusa lógica de slot por jobContext y G-F1/F3 son UI/wiring).
+  - typecheck verde + build verde (frontend + backend).
 - **2026-04-25 (8)**: ✅ **G-M9 + G-M7 + G-S2 + G-M8 cerrados** (4 gaps backend en una pasada).
   - **G-M9** (unidad consumo real): `cargarVariantePorId` ahora trae `unidadStock` de la materia prima. Helper `unidadEfectivaDeFormula(formula, unidadStock)`: `por_m2` → `m2`, `por_metro_lineal` → `m_lineales`, resto → `unidadStock` lowercased (pliego, rollo, kg, etc.). Fin del `'unidad'` hardcodeado en trazabilidad.
   - **G-M7** (MAYOR_APROVECHAMIENTO real): el dispatcher ahora se invoca con CADA candidato y se elige el de mayor `aprovechamientoPct`. Antes ordenaba por anchoMm desc (heurística contraria al criterio). Test: vinilo 1500×800mm en rollos 1.37m vs 1.52m → ahora elige 1.37m porque aprovecha mejor (menos desperdicio horizontal).
@@ -197,9 +203,9 @@ Incluye `corte_manual` y `lijado_canteado` (gaps H24/H25 de Fase E ya resueltos)
 | ~~**G-M8**~~ | ~~Selección automática de perfil solo soporta heurística "doble faz"~~ | ✅ **CERRADO 2026-04-25** | `perfil.detalleJson.reglaSeleccion` JsonLogic; heurística legacy como fallback. |
 | ~~**G-M9**~~ | ~~Unidad de consumo de material hardcodeada `'unidad'`~~ | ✅ **CERRADO 2026-04-25** | Lee `unidadStock` de la materia prima; mapeo por fórmula del slot. |
 | ~~**G-S2**~~ | ~~Plantillas SOLDADORA / CABINA_PINTURA pendientes en enum~~ | ✅ **CERRADO 2026-04-25** | + ANILLADORA. Migración aplicada, templates frontend mínimos. |
-| **G-F1** | UI versionado opt-in sin modal heurístico | `ruta-form-view.tsx` | Schema soporta `RutaVersion`, falta UX. |
-| **G-F2** | Cotizador no permite override de máquina M-2 | `cotizador-view.tsx` | Comercial solo elige ruta alternativa, no máquina concreta. |
-| **G-F3** | Editor producto no expone pasos extras inline | productos-servicios | Schema `ProductoPasoExtra` existe sin UI dedicada. |
+| ~~**G-F1**~~ | ~~UI versionado opt-in sin modal heurístico~~ | ✅ **CERRADO 2026-04-25** | Cambios tipados (AGREGAR/QUITAR/CAMBIAR_FAMILIA/CAMBIAR_ORDEN) listados al usuario. Aviso reforzado con productos asociados. |
+| ~~**G-F2**~~ | ~~Cotizador no permite override de máquina M-2~~ | ✅ **CERRADO 2026-04-25** | Selector por paso en cotizador-view + override vía `jobContext[\`maquinaSeleccionada_${configPasoId}\`]`. |
+| ~~**G-F3**~~ | ~~Editor producto no expone pasos extras inline~~ | ✅ **CERRADO 2026-04-25** | `<PasosExtrasPanel>` integrado en página de rutas del producto. |
 
 ### BAJOS — postergados explícitamente
 
@@ -260,8 +266,8 @@ Reordenado por **valor de negocio + dependencias técnicas**:
 4. ~~**G-M5 — T-2 productividad propia**~~ ✅ **CERRADO 2026-04-25** (incluye T-4 input manual + tarifaOperario + tarifaFija).
 5. ~~**G-M4 — EXISTS_OUTPUT real**~~ ✅ **CERRADO 2026-04-25** (derivado de G-M2).
 6. ~~**G-M8 — Selección automática de perfil con regla declarativa**~~ ✅ **CERRADO 2026-04-25**.
-7. **G-F2 — Cotizador permite override de máquina M-2** (2–3 días).
-8. **G-F1 — UI versionado opt-in con heurística** (3 días).
+7. ~~**G-F2 — Cotizador permite override de máquina M-2**~~ ✅ **CERRADO 2026-04-25**.
+8. ~~**G-F1 — UI versionado opt-in con heurística**~~ ✅ **CERRADO 2026-04-25** (heurística fina con cambios tipados).
 
 ### Backlog (cuando aparezca caso)
 
@@ -269,7 +275,7 @@ Reordenado por **valor de negocio + dependencias técnicas**:
 9. ~~**G-S2 — Agregar SOLDADORA, CABINA_PINTURA al enum**~~ ✅ **CERRADO 2026-04-25** (+ ANILLADORA).
 10. **G-D8 — D.8 Warnings**: solo cuando aparezca caso H21 frecuente.
 11. ~~**G-M9 — Unidad de consumo real desde MateriaPrima**~~ ✅ **CERRADO 2026-04-25**.
-12. **G-F3 — Editor de pasos extras inline** (2 días).
+12. ~~**G-F3 — Editor de pasos extras inline**~~ ✅ **CERRADO 2026-04-25** (panel mínimo: agregar/eliminar; configuración avanzada futura).
 13. **F.5 — Cleanup**: eliminar V1, dist/, migrations.legacy/, Three.js. (Pendiente declarado.)
 
 ---

@@ -17,6 +17,7 @@ import { ActualizarProductoDto, CrearProductoDto } from './dto/producto.dto';
 import { ActualizarRutaDto, CrearRutaDto } from './dto/ruta.dto';
 import {
   ActualizarProductoRutaAlternativaDto,
+  AgregarPasoExtraDto,
   CrearProductoRutaAlternativaDto,
   UpsertProductoConfigPasoDto,
 } from './dto/producto-ruta.dto';
@@ -267,5 +268,29 @@ export class ProductosServiciosController {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
     await this.service.desasociarCargoPaso(tenantId, asociacionId);
+  }
+
+  // === PASOS EXTRAS INLINE (G-F3) ===
+
+  @Post('productos/:productoId/pasos-extras')
+  async agregarPasoExtra(
+    @Req() req: RequestWithAuth,
+    @Param('productoId') productoId: string,
+    @Body() dto: AgregarPasoExtraDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.agregarPasoExtra(tenantId, productoId, dto);
+  }
+
+  @Delete('productos/pasos-extras/:pasoExtraId')
+  @HttpCode(204)
+  async eliminarPasoExtra(
+    @Req() req: RequestWithAuth,
+    @Param('pasoExtraId') pasoExtraId: string,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    await this.service.eliminarPasoExtra(tenantId, pasoExtraId);
   }
 }

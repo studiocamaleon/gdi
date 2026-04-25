@@ -71,6 +71,8 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
   const [tipoCopia, setTipoCopia] = React.useState<1 | 2 | 3>(1);
   const [opcionalesActivados, setOpcionalesActivados] = React.useState<Record<string, boolean>>({});
   const [seleccionMaterial, setSeleccionMaterial] = React.useState<Record<string, string>>({});
+  // G-F2: máquina elegida por configPasoId cuando hay candidatas M-2.
+  const [seleccionMaquina, setSeleccionMaquina] = React.useState<Record<string, string>>({});
   const [zonaInstalacion, setZonaInstalacion] = React.useState<string>("CABA");
   const [m2Instalados, setM2Instalados] = React.useState<number>(0);
   const [piezas, setPiezas] = React.useState<PiezaInput[]>([]);
@@ -84,6 +86,7 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
     setResultado(null);
     setOpcionalesActivados({});
     setSeleccionMaterial({});
+    setSeleccionMaquina({});
     setPiezas([]);
     void getProductoById(productoId).then((d) => {
       setProductoDetalle(d);
@@ -127,6 +130,16 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
         })),
     ) ?? [];
 
+  // G-F2: pasos con máquinas candidatas M-2 (más de 1) → mostrar selector.
+  const pasosConCandidatas =
+    rutaSel?.configPasos
+      .filter((cp) => (cp.maquinasCandidatas?.length ?? 0) > 1)
+      .map((cp) => ({
+        configPasoId: cp.id,
+        familiaCodigo: cp.rutaPaso.familiaCodigo,
+        candidatas: cp.maquinasCandidatas ?? [],
+      })) ?? [];
+
   const necesitaInstalacion = productoDetalle?.cargosDirectosCotizacion.some(
     (c) => c.cargoDirectoCatalogo.codigo === "viatico",
   );
@@ -150,6 +163,10 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
     // Inyectar selección de material por slot (key: slotMaterial_<slotCodigo>)
     for (const [slotCodigo, variantId] of Object.entries(seleccionMaterial)) {
       ctx[`slotMaterial_${slotCodigo}`] = variantId;
+    }
+    // G-F2: inyectar override de máquina M-2 por configPasoId.
+    for (const [configPasoId, maquinaId] of Object.entries(seleccionMaquina)) {
+      if (maquinaId) ctx[`maquinaSeleccionada_${configPasoId}`] = maquinaId;
     }
     return ctx;
   };
@@ -390,6 +407,43 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
                         {slot.candidatos.map((c) => (
                           <SelectItem key={c.variantId} value={c.variantId}>
                             {c.label ?? c.variantId} {c.default && "(default)"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* G-F2: Override de máquina M-2 cuando hay candidatas */}
+            {pasosConCandidatas.length > 0 && (
+              <div className="space-y-2">
+                <Label>Máquina por paso (M-2 alternativas)</Label>
+                {pasosConCandidatas.map((p) => (
+                  <div key={p.configPasoId} className="space-y-1">
+                    <Label
+                      htmlFor={`maq-${p.configPasoId}`}
+                      className="text-muted-foreground text-xs"
+                    >
+                      {p.familiaCodigo}
+                    </Label>
+                    <Select
+                      value={seleccionMaquina[p.configPasoId] ?? ""}
+                      onValueChange={(v) =>
+                        setSeleccionMaquina((prev) => ({
+                          ...prev,
+                          [p.configPasoId]: v ?? "",
+                        }))
+                      }
+                    >
+                      <SelectTrigger id={`maq-${p.configPasoId}`}>
+                        <SelectValue placeholder="(usar preferida)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {p.candidatas.map((c) => (
+                          <SelectItem key={c.maquinaId} value={c.maquinaId}>
+                            {c.maquina.nombre} {c.esPreferida ? "★" : ""}
                           </SelectItem>
                         ))}
                       </SelectContent>

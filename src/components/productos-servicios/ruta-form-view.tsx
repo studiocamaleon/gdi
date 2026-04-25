@@ -83,11 +83,59 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
 
   // Diff respecto a inicial: detectar cambio estructural (heurística)
   const pasosOriginales = React.useRef(rutaExistente?.pasos ?? []);
-  const cambioEstructural = React.useMemo(() => {
-    if (modo === "crear") return false;
-    if (pasos.length !== pasosOriginales.current.length) return true;
-    return pasos.some((p, i) => p.familiaCodigo !== pasosOriginales.current[i]?.familiaCodigo);
+
+  // G-F1 — heurística fina (doc §7.6): detecta cambios tipados estructurales.
+  // - AGREGAR_PASO / QUITAR_PASO / CAMBIAR_FAMILIA / CAMBIAR_ORDEN → sugerencia: nueva versión.
+  // - Cambios de meta (nombre/descripción) → patch in-place.
+  type CambioTipado =
+    | { tipo: "AGREGAR_PASO"; orden: number; familia: string }
+    | { tipo: "QUITAR_PASO"; orden: number; familia: string }
+    | { tipo: "CAMBIAR_FAMILIA"; orden: number; antes: string; despues: string }
+    | { tipo: "CAMBIAR_ORDEN"; familia: string; antes: number; despues: number };
+
+  const cambiosDetectados = React.useMemo<CambioTipado[]>(() => {
+    if (modo === "crear") return [];
+    const originales = pasosOriginales.current;
+    const cambios: CambioTipado[] = [];
+    const maxLen = Math.max(originales.length, pasos.length);
+    for (let i = 0; i < maxLen; i++) {
+      const orig = originales[i];
+      const nuevo = pasos[i];
+      if (!orig && nuevo) {
+        cambios.push({ tipo: "AGREGAR_PASO", orden: i + 1, familia: nuevo.familiaCodigo });
+        continue;
+      }
+      if (orig && !nuevo) {
+        cambios.push({ tipo: "QUITAR_PASO", orden: i + 1, familia: orig.familiaCodigo });
+        continue;
+      }
+      if (orig && nuevo && orig.familiaCodigo !== nuevo.familiaCodigo) {
+        // Si la familia "nueva" en esta posición existe en otra posición original,
+        // probablemente es un reorder — pero por simplicidad lo marcamos como CAMBIAR_FAMILIA.
+        // El reorder verdadero requiere comparar conjuntos antes que posiciones.
+        const eraEnOtraPosicion = originales.findIndex((p) => p.familiaCodigo === nuevo.familiaCodigo);
+        if (eraEnOtraPosicion !== -1 && eraEnOtraPosicion !== i) {
+          cambios.push({
+            tipo: "CAMBIAR_ORDEN",
+            familia: nuevo.familiaCodigo,
+            antes: eraEnOtraPosicion + 1,
+            despues: i + 1,
+          });
+        } else {
+          cambios.push({
+            tipo: "CAMBIAR_FAMILIA",
+            orden: i + 1,
+            antes: orig.familiaCodigo,
+            despues: nuevo.familiaCodigo,
+          });
+        }
+      }
+    }
+    return cambios;
   }, [pasos, modo]);
+
+  const cambioEstructural = cambiosDetectados.length > 0;
+  const productosAfectados = rutaExistente?.productosAlternativas?.length ?? 0;
 
   const [nuevaVersion, setNuevaVersion] = React.useState<boolean>(true);
   const [cambiosDescripcion, setCambiosDescripcion] = React.useState("");
@@ -252,13 +300,49 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
               />
             </div>
             {modo === "editar" && cambioEstructural && (
-              <Card className="bg-yellow-50 border-yellow-200">
+              <Card
+                className={
+                  productosAfectados > 0
+                    ? "bg-orange-50 border-orange-300"
+                    : "bg-yellow-50 border-yellow-200"
+                }
+              >
                 <CardContent className="pt-4">
-                  <p className="text-yellow-900 mb-2 text-sm font-medium">
-                    Detectaste cambios estructurales en los pasos.
+                  <p
+                    className={
+                      productosAfectados > 0
+                        ? "text-orange-900 mb-2 text-sm font-semibold"
+                        : "text-yellow-900 mb-2 text-sm font-medium"
+                    }
+                  >
+                    {productosAfectados > 0
+                      ? `⚠ Cambios estructurales con ${productosAfectados} producto(s) usando esta ruta`
+                      : "Cambios estructurales detectados"}
                   </p>
-                  <p className="text-yellow-800 mb-3 text-xs">
-                    Recomendado: crear nueva versión para preservar productos asociados.
+                  <ul className="mb-3 ml-4 list-disc text-xs text-foreground/80 space-y-0.5">
+                    {cambiosDetectados.map((c, idx) => (
+                      <li key={idx}>
+                        {c.tipo === "AGREGAR_PASO" &&
+                          `Agregás paso ${c.orden}: ${c.familia}`}
+                        {c.tipo === "QUITAR_PASO" &&
+                          `Quitás paso ${c.orden}: ${c.familia}`}
+                        {c.tipo === "CAMBIAR_FAMILIA" &&
+                          `Paso ${c.orden}: ${c.antes} → ${c.despues}`}
+                        {c.tipo === "CAMBIAR_ORDEN" &&
+                          `${c.familia} cambia de paso ${c.antes} a ${c.despues}`}
+                      </li>
+                    ))}
+                  </ul>
+                  <p
+                    className={
+                      productosAfectados > 0
+                        ? "text-orange-800 mb-3 text-xs"
+                        : "text-yellow-800 mb-3 text-xs"
+                    }
+                  >
+                    {productosAfectados > 0
+                      ? `Recomendado: crear nueva versión. Patch in-place rompería los ${productosAfectados} producto(s) asociados.`
+                      : "Recomendado: crear nueva versión para preservar trazabilidad histórica."}
                   </p>
                   <label className="flex items-center gap-2 text-sm">
                     <input
@@ -270,11 +354,17 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                       Crear nueva versión (v{(rutaExistente?.versionActual ?? 0) + 1})
                     </span>
                   </label>
+                  {!nuevaVersion && productosAfectados > 0 && (
+                    <p className="mt-2 text-xs font-medium text-red-600">
+                      ⚠ Patch in-place modificará los {productosAfectados} producto(s)
+                      asociados sin aviso. Considerá crear nueva versión.
+                    </p>
+                  )}
                   <Input
                     className="mt-2"
                     value={cambiosDescripcion}
                     onChange={(e) => setCambiosDescripcion(e.target.value)}
-                    placeholder="Descripción del cambio (opcional)"
+                    placeholder="Descripción del cambio (opcional, queda en el historial)"
                   />
                 </CardContent>
               </Card>

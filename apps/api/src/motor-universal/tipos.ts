@@ -292,6 +292,37 @@ export interface PasoCargado {
     setupMin: number | null;
     cleanupMin: number | null;
   };
+  /**
+   * G-F2 — Máquinas candidatas M-2 declaradas para este paso.
+   * Cuando hay >1 candidata, el comercial puede elegir desde el cotizador
+   * vía `jobContext[\`maquinaSeleccionada_${configPasoId}\`] = maquinaId`.
+   * Si no eligió, el motor usa la `esPreferida` o la primera; si tampoco
+   * hay candidatas, usa la M-1 default (`maquinaM1Id`).
+   */
+  maquinasCandidatas?: Array<{
+    id: string;
+    maquinaId: string;
+    esPreferida: boolean;
+    orden: number;
+    maquina: {
+      id: string;
+      codigo: string;
+      nombre: string;
+      plantilla: string;
+      centroCostoPrincipalId?: string | null;
+      parametrosTecnicosJson?: Record<string, unknown> | null;
+    };
+    perfilesOperativos: Array<{
+      id: string;
+      nombre: string;
+      activo: boolean;
+      productivityValue: number | null;
+      productivityUnit: string | null;
+      setupMin: number | null;
+      cleanupMin: number | null;
+      detalleJson: unknown;
+    }>;
+  }>;
   /** Otros perfiles disponibles de la máquina M-1 (para selección automática). */
   perfilesDisponibles?: Array<{
     id: string;

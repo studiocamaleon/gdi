@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { FAMILIAS, listarFamilias as listarFamiliasCatalogo } from './pasos/familias';
+import type { FamiliaCodigo } from './pasos/types';
 import { CATEGORIAS } from './pasos/categorias';
 import type { ActualizarProductoDto, CrearProductoDto } from './dto/producto.dto';
 import type { ActualizarRutaDto, CrearRutaDto } from './dto/ruta.dto';
@@ -147,6 +148,13 @@ export class ProductosServiciosService {
                     materialVariante: {
                       select: { id: true, sku: true, nombreVariante: true, precioReferencia: true },
                     },
+                  },
+                },
+                maquinasCandidatas: {
+                  where: { activo: true },
+                  orderBy: [{ esPreferida: 'desc' }, { orden: 'asc' }],
+                  include: {
+                    maquina: { select: { id: true, codigo: true, nombre: true, plantilla: true } },
                   },
                 },
                 cargosDirectosPaso: {
@@ -862,5 +870,62 @@ export class ProductosServiciosService {
     });
     if (!existente) throw new NotFoundException(`Asociación ${asociacionId} no encontrada`);
     return this.prisma.productoCargoDirectoPaso.delete({ where: { id: asociacionId } });
+  }
+
+  // ============================================================================
+  // PASOS EXTRAS INLINE (G-F3)
+  // ============================================================================
+
+  async agregarPasoExtra(
+    tenantId: string,
+    productoId: string,
+    dto: import('./dto/producto-ruta.dto').AgregarPasoExtraDto,
+  ) {
+    // Verificar que el producto existe y pertenece al tenant
+    const producto = await this.prisma.producto.findFirst({
+      where: { id: productoId, tenantId },
+    });
+    if (!producto) throw new NotFoundException(`Producto ${productoId} no encontrado`);
+
+    // Validar familia
+    if (!FAMILIAS[dto.familiaCodigo as FamiliaCodigo]) {
+      throw new BadRequestException(`Familia desconocida: ${dto.familiaCodigo}`);
+    }
+
+    // Calcular ordenInterno auto si no se pasa: max(actual) + 1
+    let ordenInterno = dto.ordenInterno ?? 0;
+    if (dto.ordenInterno === undefined) {
+      const last = await this.prisma.productoPasoExtra.findFirst({
+        where: { productoId, tenantId },
+        orderBy: { ordenInterno: 'desc' },
+      });
+      ordenInterno = (last?.ordenInterno ?? 0) + 1;
+    }
+
+    return this.prisma.productoPasoExtra.create({
+      data: {
+        tenantId,
+        productoId,
+        familiaCodigo: dto.familiaCodigo,
+        insertarDespuesDeRutaPasoId: dto.insertarDespuesDeRutaPasoId ?? null,
+        ordenInterno,
+        modoActivacion: dto.modoActivacion ?? null,
+        condicionActivacionJson: (dto.condicionActivacionJson as never) ?? Prisma.JsonNull,
+        modoTiempo: dto.modoTiempo ?? null,
+        mecanismoCantidad: dto.mecanismoCantidad ?? null,
+        paramsPasoJson: (dto.paramsPasoJson as never) ?? Prisma.JsonNull,
+        maquinaM1Id: dto.maquinaM1Id ?? null,
+        perfilM1Id: dto.perfilM1Id ?? null,
+        activo: true,
+      },
+    });
+  }
+
+  async eliminarPasoExtra(tenantId: string, pasoExtraId: string) {
+    const existente = await this.prisma.productoPasoExtra.findFirst({
+      where: { id: pasoExtraId, tenantId },
+    });
+    if (!existente) throw new NotFoundException(`Paso extra ${pasoExtraId} no encontrado`);
+    return this.prisma.productoPasoExtra.delete({ where: { id: pasoExtraId } });
   }
 }

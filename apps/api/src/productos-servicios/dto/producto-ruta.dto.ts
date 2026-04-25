@@ -163,3 +163,53 @@ export class UpsertSlotMaterialDto {
   @IsBoolean()
   aplicaMultiCaras?: boolean;
 }
+
+/**
+ * G-F3 — DTO para agregar un paso extra inline al producto.
+ *
+ * Pasos extras NO son reusables: viven dentro del producto y se insertan
+ * en la ruta heredada. `insertarDespuesDeRutaPasoId` apunta a un RutaPaso
+ * (de cualquier ruta alternativa); null = al inicio del flujo.
+ */
+export class AgregarPasoExtraDto {
+  @IsString()
+  @IsNotEmpty()
+  familiaCodigo!: string;
+
+  @IsOptional()
+  @IsUUID()
+  insertarDespuesDeRutaPasoId?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  ordenInterno?: number;
+
+  @IsOptional()
+  @IsString()
+  modoActivacion?: string;
+
+  @IsOptional()
+  @IsObject()
+  condicionActivacionJson?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsString()
+  modoTiempo?: string;
+
+  @IsOptional()
+  @IsString()
+  mecanismoCantidad?: string;
+
+  @IsOptional()
+  @IsObject()
+  paramsPasoJson?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsUUID()
+  maquinaM1Id?: string;
+
+  @IsOptional()
+  @IsUUID()
+  perfilM1Id?: string;
+}

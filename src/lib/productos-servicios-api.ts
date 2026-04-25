@@ -311,6 +311,34 @@ export async function desasociarCargoPaso(asociacionId: string) {
   });
 }
 
+// === G-F3: Pasos extras inline ===
+
+export interface AgregarPasoExtraPayload {
+  familiaCodigo: string;
+  insertarDespuesDeRutaPasoId?: string | null;
+  ordenInterno?: number;
+  modoActivacion?: 'OBLIGATORIO' | 'OPCIONAL' | 'CONDICIONAL';
+  modoTiempo?: 'T-1' | 'T-2' | 'T-3' | 'T-4';
+  mecanismoCantidad?: 'DIRECT_FROM_JOBCONTEXT' | 'CONVERSION';
+  paramsPasoJson?: Record<string, unknown>;
+  maquinaM1Id?: string;
+  perfilM1Id?: string;
+}
+
+export async function agregarPasoExtra(productoId: string, payload: AgregarPasoExtraPayload) {
+  return apiRequest(`/productos-servicios/productos/${productoId}/pasos-extras`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export async function eliminarPasoExtra(pasoExtraId: string) {
+  return apiRequest(`/productos-servicios/productos/pasos-extras/${pasoExtraId}`, {
+    method: 'DELETE',
+  });
+}
+
 export interface LookupsConfigPaso {
   maquinas: Array<{
     id: string;
