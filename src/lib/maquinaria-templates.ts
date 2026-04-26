@@ -1,3 +1,21 @@
+/**
+ * Catálogo de plantillas de maquinaria — modelo v3.0 (2026-04-26).
+ *
+ * Doc: `docs/motor-por-pasos-analisis/06-maquinas-y-perfiles.md` §5–§13.
+ *
+ * Cada plantilla declara las secciones y campos que el frontend renderiza
+ * para crear/editar una máquina. Los campos son los EXACTOS que el doc
+ * declara para cada plantilla — no se inventan campos extras.
+ *
+ * Estructura por sección:
+ *   - capacidades_fisicas → columnas universales de Maquina (anchoUtil, etc.).
+ *   - parametros_tecnicos → claves específicas en `parametrosTecnicosJson`.
+ *   - perfiles_operativos → universales del PerfilOperativo + discriminantes
+ *     que viven en `perfil.detalle`.
+ *   - consumibles → MaquinaConsumible.
+ *   - desgaste_repuestos → MaquinaComponenteDesgaste.
+ */
+
 import {
   maquinariaBaseSectionOrder,
   type MaquinariaTemplateDefinition,
@@ -7,11 +25,7 @@ import {
   type PlantillaMaquinaria,
 } from "@/lib/maquinaria";
 
-function option(
-  value: string,
-  label: string,
-  description?: string,
-): MaquinariaTemplateOption {
+function option(value: string, label: string, description?: string): MaquinariaTemplateOption {
   return { value, label, description };
 }
 
@@ -27,175 +41,118 @@ function template(definition: MaquinariaTemplateDefinition): MaquinariaTemplateD
   return definition;
 }
 
-const qualityOptions = [
-  option("rapido", "Rapido"),
-  option("normal", "Normal"),
-  option("alta", "Alta calidad"),
+// ─── Opciones reutilizables (alineadas al doc) ────────────────────
+
+const formatosPliegoOptions = [
+  option("A4", "A4"),
+  option("A3", "A3"),
+  option("SRA3", "SRA3"),
 ];
 
-const printModeOptions = [
-  option("k", "K"),
-  option("cmyk", "CMYK"),
+const coloresImpresorLaserOptions = [
+  option("BN", "Blanco y Negro"),
+  option("CMYK", "CMYK"),
 ];
 
-const carasPerfilOptions = [
-  option("simple_faz", "Simple faz"),
-  option("doble_faz", "Doble faz"),
+const carasOptions = [
+  option("SIMPLE_FAZ", "Simple faz"),
+  option("DOBLE_FAZ", "Doble faz"),
 ];
 
-const laminadoModeOptions = [
-  option("una_cara", "Una cara"),
-  option("dos_caras_simultaneo", "Dos caras simultaneo"),
-  option("dos_caras_dos_pasadas", "Dos caras en dos pasadas"),
+const tecnologiaGranFormatoOptions = [
+  option("LATEX", "Látex"),
+  option("SOLVENTE", "Solvente"),
+  option("UV", "UV"),
+  option("SUBLIMACION", "Sublimación"),
+  option("DTF_UV", "DTF UV"),
+  option("DTF_TEXTIL", "DTF Textil"),
 ];
 
-const guillotinaPaperPresetOptions = [
-  option("obra_90", "Obra 90 g"),
-  option("ilustracion_150", "Ilustración 150 g"),
-  option("ilustracion_200", "Ilustración 200 g"),
-  option("ilustracion_250", "Ilustración 250 g"),
-  option("ilustracion_300", "Ilustración 300 g"),
-  option("otro", "Otro"),
+const geometriaGranFormatoOptions = [
+  option("ROLLO", "Rollo"),
+  option("MESA_EXTENSORA", "Mesa extensora"),
 ];
 
-const uvPrintModeOptions = [
-  option("cmyk", "CMYK"),
-  option("cmyk_blanco", "CMYK + W"),
-  option("cmyk_barniz", "CMYK + V"),
-  option("cmyk_blanco_barniz", "CMYK + W + V"),
+const coloresGranFormatoOptions = [
+  option("CMYK", "CMYK"),
+  option("CMYK+blanco", "CMYK + Blanco"),
+  option("CMYK+blanco+barniz", "CMYK + Blanco + Barniz"),
 ];
 
-const uvMesaTypeOptions = [
-  option("mesa_extensora", "Mesa extensora"),
-  option("cinta", "Cinta"),
-  option("hibrida", "Hibrida"),
+const modoCalidadOptions = [
+  option("DRAFT", "Borrador"),
+  option("NORMAL", "Normal"),
+  option("ALTA", "Alta calidad"),
 ];
 
-const rollMediaOptions = [
-  option("vinilo", "Vinilo"),
-  option("lona", "Lona"),
-  option("film", "Film"),
-  option("papel", "Papel"),
-  option("textil", "Textil"),
-  option("backlit", "Backlit"),
-  option("canvas", "Canvas"),
+const modoOperacionMesaOptions = [
+  option("ROLLO", "Rollo"),
+  option("RIGIDO", "Rígido"),
 ];
 
-const rigidMediaOptions = [
-  option("acrilico", "Acrilico"),
-  option("madera", "Madera"),
-  option("mdf", "MDF"),
-  option("pvc", "PVC"),
-  option("carton_pluma", "Carton pluma"),
-  option("vidrio", "Vidrio"),
-  option("metal", "Metal"),
-  option("corrugado", "Corrugado"),
+const tipoCorteOptions = [
+  option("COMPLETO", "Corte completo"),
+  option("KISS_CUT", "Kiss cut"),
 ];
 
-const cylindricalObjectOptions = [
-  option("botella", "Botella"),
-  option("termo", "Termo"),
-  option("vaso", "Vaso"),
-  option("frasco", "Frasco"),
-  option("tubo", "Tubo"),
+const modoOperacionPlotterOptions = [
+  option("ROLLO", "Rollo"),
+  option("HOJAS", "Hojas"),
 ];
 
-const cncMaterialOptions = [
-  option("mdf", "MDF"),
-  option("madera", "Madera"),
-  option("acrilico", "Acrilico"),
-  option("pvc", "PVC"),
-  option("aluminio", "Aluminio"),
-  option("dibond", "Dibond"),
-  option("foamboard", "Foamboard"),
+const modoLaminadoOptions = [
+  option("UNA_CARA", "Una cara"),
+  option("DOS_CARAS_1_PASADA", "Dos caras (1 pasada)"),
+  option("DOS_CARAS_2_PASADAS", "Dos caras (2 pasadas)"),
 ];
 
-const laserMaterialOptions = [
-  option("acrilico", "Acrilico"),
-  option("madera", "Madera"),
-  option("mdf", "MDF"),
-  option("carton", "Carton"),
-  option("papel", "Papel"),
-  option("cuero", "Cuero"),
-  option("tela", "Tela"),
+const tipoLaserOptions = [option("CO2", "CO2"), option("FIBRA", "Fibra")];
+
+const operacionesLaserOptions = [
+  option("CORTE", "Corte"),
+  option("GRABADO", "Grabado"),
 ];
 
-const additiveMaterialOptions = [
-  option("pla", "PLA"),
-  option("abs", "ABS"),
-  option("petg", "PETG"),
-  option("resina", "Resina"),
-  option("nylon", "Nylon"),
-  option("tpu", "TPU"),
+const operacionesCncOptions = [
+  option("CORTE_PASANTE", "Corte pasante"),
+  option("FRESADO", "Fresado"),
+  option("PERFORADO", "Perforado"),
 ];
 
-const cuttingToolOptions = [
-  option("cuchilla_arrastre", "Cuchilla de arrastre"),
-  option("cuchilla_tangencial", "Cuchilla tangencial"),
-  option("rueda_hendido", "Rueda de hendido"),
-  option("punzon", "Punzon"),
-  option("fresa", "Fresa"),
+const tipoTrabajoCadOptions = [
+  option("CAD", "CAD (técnico)"),
+  option("FOTO", "Foto"),
 ];
 
-const laserTypeOptions = [
-  option("co2", "CO2"),
-  option("fibra", "Fibra"),
-  option("mixto", "Mixto"),
+const calidadCadOptions = [
+  option("DRAFT", "Borrador"),
+  option("NORMAL", "Normal"),
+  option("ALTA", "Alta"),
 ];
 
-const cornerRadiusOptions = [
-  option("r2", "R2"),
-  option("r3", "R3"),
-  option("r4", "R4"),
-  option("r6", "R6"),
-  option("r8", "R8"),
-  option("r10", "R10"),
+const tipoAnilloOptions = [
+  option("ESPIRAL_PLASTICO", "Espiral plástico"),
+  option("WIRE_O", "Wire-O"),
 ];
 
-const perforationTypeOptions = [
-  option("estandar", "Perforado estandar"),
-  option("micro", "Microperforado"),
+const pasosOrificiosOptions = [
+  option("3:1", "Paso 3:1"),
+  option("2:1", "Paso 2:1"),
 ];
 
-const sheetFormatOptions = [
-  option("a5", "A5"),
-  option("a4", "A4"),
-  option("a3", "A3"),
-  option("sra3", "SRA3"),
-  option("personalizado", "Personalizado"),
-];
-
-const threeDTechnologyOptions = [
-  option("fdm", "FDM"),
-  option("sla", "SLA"),
-  option("dlp", "DLP"),
-  option("resina", "Resina"),
-];
-
-const dtfInkOptions = [
-  option("cmyk_blanco", "CMYK + W"),
-  option("cmyk_blanco_fluor", "CMYK + W + Fluor"),
-];
-
-const cureSystemOptions = [
-  option("aire", "Secado por aire"),
-  option("calor", "Secado por calor"),
-  option("uv_led", "UV LED"),
-  option("sublimacion", "Transferencia termica"),
-];
+// ─── Secciones comunes a todas las plantillas ─────────────────────
 
 const commonTemplateSections = maquinariaBaseSectionOrder;
 
-const genericConsumableFields = [
+const genericConsumableFields: MaquinariaTemplateField[] = [
   field({
     key: "nombre",
     label: "Nombre",
     scope: "consumible",
     kind: "text",
     required: true,
-    description: "Nombre tecnico o comercial del consumible.",
-    tooltip: "Usa un nombre claro, por ejemplo Toner negro o Tinta blanca.",
-    placeholder: "Toner negro",
+    description: "Nombre técnico o comercial del consumible.",
+    placeholder: "Tóner negro",
   }),
   field({
     key: "tipo",
@@ -203,9 +160,9 @@ const genericConsumableFields = [
     scope: "consumible",
     kind: "select",
     required: true,
-    description: "Clasifica el consumible para ordenar la carga y futuros calculos.",
+    description: "Categoría del consumible.",
     options: [
-      option("toner", "Toner"),
+      option("toner", "Tóner"),
       option("tinta", "Tinta"),
       option("barniz", "Barniz"),
       option("primer", "Primer"),
@@ -223,53 +180,35 @@ const genericConsumableFields = [
     scope: "consumible",
     kind: "select",
     required: true,
-    description: "Unidad de compra o control del consumible.",
+    description: "Unidad en la que se mide el consumo.",
     options: [
+      option("ml", "ml"),
+      option("litro", "Litro"),
+      option("gramo", "g"),
+      option("kg", "kg"),
       option("unidad", "Unidad"),
-      option("ml", "Mililitros"),
-      option("litro", "Litros"),
-      option("gramo", "Gramos"),
-      option("kg", "Kilogramos"),
-      option("m2", "Metro cuadrado"),
-      option("metro_lineal", "Metro lineal"),
-      option("pagina", "Pagina"),
-      option("a4_equiv", "A4 equivalente"),
+      option("m2", "m²"),
+      option("metro_lineal", "m lineal"),
     ],
   }),
   field({
-    key: "materiaPrimaVarianteId",
-    label: "Variante de materia prima",
-    scope: "consumible",
-    kind: "select",
-    required: true,
-    description: "Variante stockeable desde Inventario habilitada como consumible.",
-  }),
-  field({
-    key: "rendimientoEstimado",
-    label: "Rendimiento estimado",
+    key: "consumoBase",
+    label: "Consumo base",
     scope: "consumible",
     kind: "number",
-    description: "Rendimiento esperado del consumible en su unidad de control.",
-    placeholder: "0",
-  }),
-  field({
-    key: "dependePerfilOperativo",
-    label: "Depende del perfil operativo",
-    scope: "consumible",
-    kind: "boolean",
-    description: "Indica si el consumible cambia segun calidad, modo o material.",
+    description: "Cantidad consumida por unidad de producción (m², pliego, etc.).",
   }),
 ];
 
-const genericWearFields = [
+const genericWearFields: MaquinariaTemplateField[] = [
   field({
     key: "nombre",
-    label: "Nombre",
+    label: "Componente",
     scope: "desgaste",
     kind: "text",
     required: true,
-    description: "Nombre del repuesto o componente de desgaste.",
-    placeholder: "Fusor principal",
+    description: "Nombre del componente de desgaste.",
+    placeholder: "Cabezal de impresión",
   }),
   field({
     key: "tipo",
@@ -277,26 +216,10 @@ const genericWearFields = [
     scope: "desgaste",
     kind: "select",
     required: true,
-    description: "Categoria del componente para ordenar el prorrateo futuro.",
+    description: "Categoría del componente.",
     options: [
-      option("fusor", "Fusor"),
-      option("drum", "Tambor (drum) genérico"),
-      option("drum_opc", "Tambor OPC"),
-      option("developer", "Revelador"),
-      option("developer_unit", "Unidad reveladora (developer unit)"),
-      option("charge_unit", "Unidad de carga (PCR/corona)"),
-      option("drum_cleaning_blade", "Cuchilla de limpieza de tambor"),
-      option("correa_transferencia", "Correa de transferencia"),
-      option("transfer_belt_itb", "Banda/correa de transferencia ITB"),
-      option("transfer_roller", "Rodillo de transferencia"),
-      option("fuser_belt", "Banda de fusor"),
-      option("pressure_roller", "Rodillo de presión"),
-      option("fuser_cleaning_web", "Web de limpieza del fusor"),
-      option("wax_lubricant_bar", "Barra de cera/lubricación"),
-      option("fuser_stripper_finger", "Uña separadora del fusor"),
-      option("waste_toner_subsystem", "Subsistema de residual de tóner"),
       option("cabezal", "Cabezal"),
-      option("lampara_uv", "Lampara UV"),
+      option("lampara_uv", "Lámpara UV"),
       option("fresa", "Fresa"),
       option("cuchilla", "Cuchilla"),
       option("filtro", "Filtro"),
@@ -306,2999 +229,642 @@ const genericWearFields = [
   }),
   field({
     key: "vidaUtilEstimada",
-    label: "Vida util estimada",
+    label: "Vida útil estimada",
     scope: "desgaste",
     kind: "number",
-    required: true,
-    description: "Cantidad esperada antes del reemplazo.",
-    placeholder: "0",
+    description: "Cantidad procesada hasta agotar el componente.",
   }),
   field({
     key: "unidadDesgaste",
-    label: "Unidad de desgaste",
+    label: "Unidad de vida útil",
     scope: "desgaste",
     kind: "select",
     required: true,
-    description: "Unidad sobre la cual se consume el componente.",
+    description: "Unidad en la que se mide la vida útil del componente.",
     options: [
-      option("copias_a4_equiv", "Copias A4 equivalentes"),
-      option("m2", "Metros cuadrados"),
-      option("metros_lineales", "Metros lineales"),
-      option("horas", "Horas"),
-      option("ciclos", "Ciclos"),
-      option("piezas", "Piezas"),
+      option("copias_a4_equiv", "Copias A4-eq"),
+      option("m2", "m²"),
+      option("metros_lineales", "m lineales"),
+      option("horas", "horas"),
+      option("ciclos", "ciclos"),
+      option("piezas", "piezas"),
     ],
-  }),
-  field({
-    key: "materiaPrimaVarianteId",
-    label: "Variante de materia prima",
-    scope: "desgaste",
-    kind: "select",
-    required: true,
-    description: "Variante stockeable desde Inventario habilitada como repuesto.",
   }),
 ];
 
-function buildLaserPrinterSections(): MaquinariaTemplateSection[] {
+// ─── Builders por plantilla (alineados a doc §5–§13) ──────────────
+
+/** §5 — Capacidades físicas universales + paramsTecnicos de IMPRESORA_LASER. */
+function buildLaserSections(): MaquinariaTemplateSection[] {
   return [
     section({
       id: "capacidades_fisicas",
-      title: "Capacidades fisicas",
-      description: "Limites reales de hoja, area imprimible y gramajes admitidos.",
-      tooltip: "Estos datos condicionan que formatos podran vincularse luego en procesos.",
+      title: "Capacidades físicas",
+      description: "Medidas máximas de pliego soportadas por la máquina.",
       fields: [
-        field({
-          key: "anchoMinHoja",
-          label: "Ancho minimo hoja",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Ancho minimo de hoja que puede tomar la maquina.",
-          placeholder: "14.8",
-        }),
-        field({
-          key: "anchoMaxHoja",
-          label: "Ancho maximo hoja",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Ancho maximo de hoja soportado.",
-          placeholder: "33",
-        }),
-        field({
-          key: "altoMinHoja",
-          label: "Alto minimo hoja",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Alto minimo de hoja soportado.",
-          placeholder: "21",
-        }),
-        field({
-          key: "altoMaxHoja",
-          label: "Alto maximo hoja",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Alto maximo de hoja soportado.",
-          placeholder: "48.8",
-        }),
-        field({
-          key: "areaImprimibleMaxima",
-          label: "Area imprimible maxima",
-          scope: "maquina",
-          kind: "number",
-          unit: "m2",
-          description: "Superficie util de impresion en una hoja maxima.",
-          placeholder: "0.15",
-        }),
-        field({
-          key: "margenSuperior",
-          label: "Margen superior",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Margen no imprimible superior.",
-          placeholder: "0.5",
-        }),
-        field({
-          key: "margenInferior",
-          label: "Margen inferior",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Margen no imprimible inferior.",
-          placeholder: "0.5",
-        }),
-        field({
-          key: "margenIzquierdo",
-          label: "Margen izquierdo",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Margen no imprimible izquierdo.",
-          placeholder: "0.5",
-        }),
-        field({
-          key: "margenDerecho",
-          label: "Margen derecho",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Margen no imprimible derecho.",
-          placeholder: "0.5",
-        }),
-        field({
-          key: "gramajeMinimo",
-          label: "Gramaje minimo",
-          scope: "maquina",
-          kind: "number",
-          unit: "g_m2",
-          description: "Gramaje minimo admitido.",
-          placeholder: "60",
-        }),
-        field({
-          key: "gramajeMaximo",
-          label: "Gramaje maximo",
-          scope: "maquina",
-          kind: "number",
-          unit: "g_m2",
-          description: "Gramaje maximo admitido.",
-          placeholder: "350",
-        }),
+        field({ key: "anchoUtil", label: "Ancho útil máximo", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Ancho máx de pliego (ej. 320mm)." }),
+        field({ key: "largoUtil", label: "Largo útil máximo", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Largo máx de pliego (ej. 1200mm)." }),
+        field({ key: "espesorMaximo", label: "Espesor máximo", scope: "maquina", kind: "number", unit: "mm", description: "Espesor máx admitido (ej. 0.4mm)." }),
+        field({ key: "gramajeMaxGr", label: "Gramaje máximo", scope: "maquina", kind: "number", unit: "g_m2", required: true, description: "Gramaje máx de papel (ej. 400gr)." }),
       ],
     }),
     section({
       id: "parametros_tecnicos",
-      title: "Parametros tecnicos",
-      description: "Configuracion de impresion y restricciones operativas del equipo.",
+      title: "Parámetros técnicos",
+      description: "Configuración específica de la impresora láser (paramsTecnicosJson).",
       fields: [
-        field({
-          key: "configuracionColor",
-          label: "Configuracion color",
-          scope: "maquina",
-          kind: "select",
-          required: true,
-          description: "Define si la maquina trabaja solo en negro o tambien color.",
-          options: [
-            option("bn", "Solo blanco y negro"),
-            option("color", "Color"),
-            option("color_especial", "Color con estaciones especiales"),
-          ],
-        }),
-        field({
-          key: "resolucionNominal",
-          label: "Resolucion nominal",
-          scope: "maquina",
-          kind: "number",
-          unit: "dpi",
-          description: "Resolucion nominal del equipo.",
-          placeholder: "1200",
-        }),
-        field({
-          key: "duplexSoportado",
-          label: "Duplex soportado",
-          scope: "maquina",
-          kind: "boolean",
-          description: "Indica si la maquina puede imprimir doble faz.",
-        }),
-        field({
-          key: "bannerSoportado",
-          label: "Banner soportado",
-          scope: "maquina",
-          kind: "boolean",
-          description: "Activalo si permite tiradas largas tipo banner.",
-        }),
-        field({
-          key: "largoMaximoBanner",
-          label: "Largo maximo banner",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Largo maximo de impresion en modo banner.",
-          placeholder: "120",
-        }),
-        field({
-          key: "controladorRip",
-          label: "Controlador o RIP",
-          scope: "maquina",
-          kind: "text",
-          description: "Nombre del controlador digital principal del equipo.",
-          placeholder: "Fiery",
-        }),
+        field({ key: "margenesNoImprimiblesMm", label: "Márgenes no imprimibles", scope: "maquina", kind: "textarea", required: true, description: "JSON: { sup, inf, izq, der } en mm. Usado por el motor para calcular área útil." }),
+        field({ key: "soporteDobleFaz", label: "Soporta doble faz", scope: "maquina", kind: "boolean", description: "Si la máquina puede imprimir ambas caras." }),
+        field({ key: "formatosPliegoSoportados", label: "Formatos soportados", scope: "maquina", kind: "multiselect", options: formatosPliegoOptions, description: "Lista de formatos que la máquina puede manejar." }),
+        field({ key: "coloresSoportados", label: "Colores soportados", scope: "maquina", kind: "multiselect", options: coloresImpresorLaserOptions, description: "Modos de color disponibles." }),
       ],
     }),
     section({
       id: "perfiles_operativos",
       title: "Perfiles operativos",
-      description: "Perfiles por formato, modo de color y calidad de impresion.",
-      tooltip: "Es la parte mas importante para reflejar la productividad real de una digital.",
+      description: "Cada perfil describe una combinación cara/color/formato/gramaje con su productividad.",
       fields: [
-        field({
-          key: "nombre",
-          label: "Nombre del perfil",
-          scope: "perfil_operativo",
-          kind: "text",
-          required: true,
-          description: "Nombre visible del perfil operativo.",
-          placeholder: "A4 Color Normal",
-        }),
-        field({
-          key: "formatoObjetivo",
-          label: "Formato objetivo",
-          scope: "perfil_operativo",
-          kind: "select",
-          required: true,
-          description: "Formato estandar o personalizado para este perfil.",
-          options: sheetFormatOptions,
-        }),
-        field({
-          key: "printMode",
-          label: "Modo de impresion",
-          scope: "perfil_operativo",
-          kind: "select",
-          required: true,
-          description: "Define si el perfil imprime en K o CMYK.",
-          options: printModeOptions,
-        }),
-        field({
-          key: "printSides",
-          label: "Caras",
-          scope: "perfil_operativo",
-          kind: "select",
-          required: true,
-          description: "Indica si el perfil corresponde a simple o doble faz.",
-          options: carasPerfilOptions,
-        }),
-        field({
-          key: "calidad",
-          label: "Calidad",
-          scope: "perfil_operativo",
-          kind: "select",
-          required: true,
-          description: "Nivel de calidad del perfil.",
-          options: qualityOptions,
-        }),
-        field({
-          key: "productivityValue",
-          label: "Productividad",
-          scope: "perfil_operativo",
-          kind: "number",
-          required: true,
-          unit: "ppm",
-          description: "Velocidad nominal del perfil en paginas por minuto.",
-          placeholder: "33",
-        }),
-        field({
-          key: "cleanupMin",
-          label: "Cleanup",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "min",
-          description: "Tiempo final de cierre o limpieza de la corrida.",
-          placeholder: "3",
-        }),
-        field({
-          key: "setupMin",
-          label: "Setup",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "min",
-          description: "Tiempo de setup/preparacion por corrida.",
-          placeholder: "5",
-        }),
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Papel grueso doble faz." }),
+        field({ key: "productivityValue", label: "Productividad", scope: "perfil_operativo", kind: "number", unit: "ppm", required: true, description: "Pliegos por minuto." }),
+        field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de preparación inicial." }),
+        field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza al terminar." }),
+        field({ key: "feedReloadMin", label: "Recarga papel", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de recarga entre tandas." }),
+        field({ key: "caras", label: "Caras", scope: "perfil_operativo", kind: "select", required: true, options: carasOptions, description: "Discriminante: simple o doble faz." }),
+        field({ key: "colores", label: "Colores", scope: "perfil_operativo", kind: "select", options: coloresImpresorLaserOptions, description: "Modo de color del perfil." }),
+        field({ key: "formatoSoportado", label: "Formato", scope: "perfil_operativo", kind: "select", options: formatosPliegoOptions, description: "Formato máximo del perfil." }),
+        field({ key: "gramajeMinGr", label: "Gramaje mínimo", scope: "perfil_operativo", kind: "number", unit: "g_m2", description: "Gramaje mínimo del rango." }),
+        field({ key: "gramajeMaxGr", label: "Gramaje máximo", scope: "perfil_operativo", kind: "number", unit: "g_m2", description: "Gramaje máximo del rango." }),
       ],
     }),
-    section({
-      id: "consumibles",
-      title: "Consumibles",
-      description: "Toners y otros insumos variables del equipo.",
-      fields: genericConsumableFields,
-    }),
-    section({
-      id: "desgaste_repuestos",
-      title: "Desgaste y repuestos",
-      description: "Componentes con vida util que deben prorratearse.",
-      fields: genericWearFields,
-    }),
+    section({ id: "consumibles", title: "Consumibles", description: "Tóner declarado por máquina.", fields: genericConsumableFields }),
+    section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Fusor, drum, transferencia, etc.", fields: genericWearFields }),
   ];
 }
 
-function buildUvFlatbedSections(kind: "flatbed" | "mesa_extensora"): MaquinariaTemplateSection[] {
+/** §6 — IMPRESORA_GRAN_FORMATO_POR_AREA con discriminantes tecnologia + geometria. */
+function buildGranFormatoSections(): MaquinariaTemplateSection[] {
   return [
     section({
       id: "capacidades_fisicas",
-      title: "Capacidades fisicas",
-      description: "Boca de impresion, dimensiones de cama y altura maxima real del objeto.",
+      title: "Capacidades físicas",
+      description: "Para rollo: anchoUtil del rollo. Para mesa: medidas de la cama.",
       fields: [
-        field({
-          key: "anchoBoca",
-          label: "Ancho de boca",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Ancho maximo efectivo de impresion del puente o cabezal.",
-          placeholder: "180",
-        }),
-        field({
-          key: "anchoCama",
-          label: "Ancho de cama",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Ancho fisico util de la cama o mesa de apoyo.",
-          placeholder: "180",
-        }),
-        field({
-          key: "largoCama",
-          label: "Largo de cama",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Largo fisico util de la cama o mesa de apoyo.",
-          placeholder: "300",
-        }),
-        field({
-          key: "alturaMaximaObjeto",
-          label: "Altura maxima objeto",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "mm",
-          description: "Altura maxima del objeto que puede imprimirse.",
-          placeholder: "27",
-        }),
+        field({ key: "anchoUtil", label: "Ancho útil", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Ancho máx imprimible (ej. 1370mm)." }),
+        field({ key: "largoUtil", label: "Largo útil (mesa)", scope: "maquina", kind: "number", unit: "mm", description: "Solo para geometría MESA_EXTENSORA." }),
+        field({ key: "espesorMaximo", label: "Espesor máximo", scope: "maquina", kind: "number", unit: "mm", description: "Espesor máx (rollo: ~1mm; mesa: cm)." }),
       ],
     }),
     section({
       id: "parametros_tecnicos",
-      title: "Parametros tecnicos",
-      description: "Canales de tinta y capacidades especiales del equipo UV.",
+      title: "Parámetros técnicos",
+      description: "Tecnología y geometría definen las variantes de esta plantilla unificada.",
       fields: [
-        ...(kind === "mesa_extensora"
-          ? [
-              field({
-                key: "tipoMesa",
-                label: "Tipo de mesa",
-                scope: "maquina",
-                kind: "select",
-                required: true,
-                description: "Define si el equipo trabaja con mesa extensora, cinta o configuracion hibrida.",
-                options: uvMesaTypeOptions,
-              }),
-            ]
-          : []),
-        field({
-          key: "configuracionCanales",
-          label: "Configuracion de canales",
-          scope: "maquina",
-          kind: "select",
-          required: true,
-          description: "Combinacion de canales de tinta habilitada en la maquina.",
-          options: uvPrintModeOptions,
-        }),
-        field({
-          key: "primerDisponible",
-          label: "Primer disponible",
-          scope: "maquina",
-          kind: "boolean",
-          description: "Activalo si el equipo puede usar primer en linea.",
-        }),
-        field({
-          key: "margenIzquierdo",
-          label: "Margen izquierdo no imprimible",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Reserva lateral izquierda que no se usa para impresion.",
-          placeholder: "0.5",
-        }),
-        field({
-          key: "margenDerecho",
-          label: "Margen derecho no imprimible",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Reserva lateral derecha que no se usa para impresion.",
-          placeholder: "0.5",
-        }),
-        field({
-          key: "margenSuperior",
-          label: "Margen superior no imprimible",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Reserva superior que no se usa para impresion.",
-          placeholder: "0.5",
-        }),
-        field({
-          key: "margenInferior",
-          label: "Margen inferior no imprimible",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Reserva inferior que no se usa para impresion.",
-          placeholder: "0.5",
-        }),
+        field({ key: "tecnologia", label: "Tecnología", scope: "maquina", kind: "select", required: true, options: tecnologiaGranFormatoOptions, description: "Tipo de impresión (LATEX, UV, etc.)." }),
+        field({ key: "geometria", label: "Geometría", scope: "maquina", kind: "select", required: true, options: geometriaGranFormatoOptions, description: "Rollo o mesa extensora." }),
+        field({ key: "anchoMinRolloMm", label: "Ancho mínimo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Solo si geometría = ROLLO." }),
+        field({ key: "anchoMaxRolloMm", label: "Ancho máximo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Solo si geometría = ROLLO." }),
+        field({ key: "anchoMesaMm", label: "Ancho mesa", scope: "maquina", kind: "number", unit: "mm", description: "Solo si geometría = MESA_EXTENSORA." }),
+        field({ key: "largoMesaMm", label: "Largo mesa", scope: "maquina", kind: "number", unit: "mm", description: "Solo si geometría = MESA_EXTENSORA." }),
+        field({ key: "alturaMaxCabezalMm", label: "Altura máx cabezal", scope: "maquina", kind: "number", unit: "mm", description: "Solo si geometría = MESA_EXTENSORA." }),
+        field({ key: "margenesNoImprimiblesMm", label: "Márgenes no imprimibles", scope: "maquina", kind: "textarea", required: true, description: "JSON: { sup, inf, izq, der } en mm." }),
+        field({ key: "coloresSoportados", label: "Colores soportados", scope: "maquina", kind: "multiselect", options: coloresGranFormatoOptions, description: "Modos de color (CMYK, +blanco, +barniz)." }),
       ],
     }),
     section({
       id: "perfiles_operativos",
       title: "Perfiles operativos",
-      description: "Modos de impresion por calidad, color y complejidad del objeto.",
+      description: "Cada perfil = combinación de pasadas + colores + calidad.",
       fields: [
-        field({
-          key: "nombre",
-          label: "Nombre del perfil",
-          scope: "perfil_operativo",
-          kind: "text",
-          required: true,
-          description: "Nombre tecnico del perfil UV.",
-          placeholder: "Rigido blanco y barniz - normal",
-        }),
-        field({
-          key: "printMode",
-          label: "Modo de impresion",
-          scope: "perfil_operativo",
-          kind: "select",
-          required: true,
-          description: "Combinacion de canales de impresion usada por este perfil, limitada por la configuracion de canales de la maquina.",
-          options: uvPrintModeOptions,
-        }),
-        field({
-          key: "calidad",
-          label: "Calidad",
-          scope: "perfil_operativo",
-          kind: "select",
-          required: true,
-          description: "Nivel de calidad esperado.",
-          options: qualityOptions,
-        }),
-        field({
-          key: "productivityValue",
-          label: "Productividad",
-          scope: "perfil_operativo",
-          kind: "number",
-          required: true,
-          unit: "m2_h",
-          description: "Rendimiento del perfil en metros cuadrados por hora.",
-          placeholder: "18",
-        }),
-        field({
-          key: "cantidadPasadas",
-          label: "Cantidad de pasadas",
-          scope: "perfil_operativo",
-          kind: "number",
-          description: "Numero de pasadas del cabezal para este perfil.",
-          placeholder: "8",
-        }),
-        field({
-          key: "setupMin",
-          label: "Setup",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "min",
-          description: "Tiempo medio para registro, fijacion y limpieza previa.",
-          placeholder: "5",
-        }),
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Latex CMYK 6 pasadas normal." }),
+        field({ key: "productivityValue", label: "Productividad", scope: "perfil_operativo", kind: "number", unit: "m2_h", required: true, description: "m²/hora." }),
+        field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de preparación inicial." }),
+        field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza al terminar." }),
+        field({ key: "feedReloadMin", label: "Recarga rollo", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de recarga de rollo." }),
+        field({ key: "numeroPasadas", label: "Número de pasadas", scope: "perfil_operativo", kind: "number", description: "PASS (4, 6, 8). Influye en calidad y velocidad." }),
+        field({ key: "colores", label: "Colores", scope: "perfil_operativo", kind: "select", options: coloresGranFormatoOptions, description: "Modo de color del perfil." }),
+        field({ key: "modoCalidad", label: "Calidad", scope: "perfil_operativo", kind: "select", options: modoCalidadOptions, description: "Borrador, normal o alta." }),
+        field({ key: "modoOperacion", label: "Modo operación", scope: "perfil_operativo", kind: "select", options: modoOperacionMesaOptions, description: "Solo si geometría=MESA_EXTENSORA." }),
       ],
     }),
-    section({
-      id: "consumibles",
-      title: "Consumibles",
-      description: "Tintas, barnices y fluidos del equipo UV.",
-      fields: genericConsumableFields,
-    }),
-    section({
-      id: "desgaste_repuestos",
-      title: "Desgaste y repuestos",
-      description: "Cabezales, filtros y componentes con vida util.",
-      fields: genericWearFields,
-    }),
+    section({ id: "consumibles", title: "Consumibles", description: "Tinta CMYK, blanca, barniz por perfil.", fields: genericConsumableFields }),
+    section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Cabezal y banda transportadora.", fields: genericWearFields }),
   ];
 }
 
-function buildUvRolloSections(): MaquinariaTemplateSection[] {
-  return [
-    section({
-      id: "capacidades_fisicas",
-      title: "Capacidades fisicas",
-      description: "Ancho util, limites de bobina y espesor del material.",
-      fields: [
-        field({
-          key: "anchoUtil",
-          label: "Ancho maximo imprimible",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Ancho maximo que la maquina puede imprimir sobre el material cargado.",
-          placeholder: "160",
-        }),
-        field({
-          key: "diametroMaximoBobina",
-          label: "Diametro maximo bobina",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Diametro maximo de rollo admitido.",
-          placeholder: "25",
-        }),
-        field({
-          key: "pesoMaximoBobina",
-          label: "Peso maximo bobina",
-          scope: "maquina",
-          kind: "number",
-          unit: "kg",
-          description: "Peso maximo de rollo admitido.",
-          placeholder: "45",
-        }),
-        field({
-          key: "espesorMaximoMaterial",
-          label: "Espesor maximo material",
-          scope: "maquina",
-          kind: "number",
-          unit: "mm",
-          description: "Espesor maximo del material flexible.",
-          placeholder: "1",
-        }),
-      ],
-    }),
-    section({
-      id: "parametros_tecnicos",
-      title: "Parametros tecnicos",
-      description: "Canales, secado y materiales compatibles.",
-      fields: [
-        field({
-          key: "configuracionCanales",
-          label: "Configuracion de canales",
-          scope: "maquina",
-          kind: "select",
-          required: true,
-          description: "Canales de tinta habilitados en la maquina.",
-          options: uvPrintModeOptions,
-        }),
-        field({
-          key: "primerDisponible",
-          label: "Primer disponible",
-          scope: "maquina",
-          kind: "boolean",
-          description: "Activalo si el equipo puede usar primer en linea.",
-        }),
-        field({
-          key: "sistemaCurado",
-          label: "Sistema curado",
-          scope: "maquina",
-          kind: "select",
-          description: "Tipo de curado principal del equipo.",
-          options: [option("uv_led", "UV LED")],
-        }),
-        field({
-          key: "margenInicioNoImprimible",
-          label: "Margen inicio no imprimible",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Avance inicial de material que no se utiliza para impresion.",
-          placeholder: "15",
-        }),
-        field({
-          key: "margenLateralIzquierdoNoImprimible",
-          label: "Margen lateral izquierdo no imprimible",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Reserva lateral izquierda que no se usa para impresion.",
-          placeholder: "0.5",
-        }),
-        field({
-          key: "margenLateralDerechoNoImprimible",
-          label: "Margen lateral derecho no imprimible",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Reserva lateral derecha que no se usa para impresion.",
-          placeholder: "0.5",
-        }),
-        field({
-          key: "margenFinalNoImprimible",
-          label: "Margen final no imprimible",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Reserva de material al final de tirada que no se imprime.",
-          placeholder: "8",
-        }),
-        field({
-          key: "materialesCompatibles",
-          label: "Materiales compatibles",
-          scope: "maquina",
-          kind: "multiselect",
-          description: "Materiales flexibles compatibles con esta maquina.",
-          options: rollMediaOptions,
-        }),
-      ],
-    }),
-    section({
-      id: "perfiles_operativos",
-      title: "Perfiles operativos",
-      description: "Perfiles por calidad, velocidad y configuracion de color.",
-      fields: [
-        field({
-          key: "nombre",
-          label: "Nombre del perfil",
-          scope: "perfil_operativo",
-          kind: "text",
-          required: true,
-          description: "Nombre del perfil UV rollo.",
-          placeholder: "Vinilo CMYK + W normal",
-        }),
-        field({
-          key: "printMode",
-          label: "Modo impresion",
-          scope: "perfil_operativo",
-          kind: "select",
-          required: true,
-          description: "Configuracion de canales de impresion usada en el perfil, limitada por la configuracion de canales de la maquina.",
-          options: uvPrintModeOptions,
-        }),
-        field({
-          key: "calidad",
-          label: "Calidad",
-          scope: "perfil_operativo",
-          kind: "select",
-          required: true,
-          description: "Nivel de calidad o produccion del perfil.",
-          options: qualityOptions,
-        }),
-        field({
-          key: "productivityValue",
-          label: "Productividad",
-          scope: "perfil_operativo",
-          kind: "number",
-          required: true,
-          unit: "m2_h",
-          description: "Rendimiento nominal por hora.",
-          placeholder: "22",
-        }),
-        field({
-          key: "cantidadPasadas",
-          label: "Cantidad de pasadas",
-          scope: "perfil_operativo",
-          kind: "number",
-          description: "Numero de pasadas del perfil.",
-          placeholder: "6",
-        }),
-        field({
-          key: "setupMin",
-          label: "Setup",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "min",
-          description: "Tiempo medio de montaje, tensado y limpieza.",
-          placeholder: "4",
-        }),
-      ],
-    }),
-    section({
-      id: "consumibles",
-      title: "Consumibles",
-      description: "Tintas y fluidos del equipo UV rollo.",
-      fields: genericConsumableFields,
-    }),
-    section({
-      id: "desgaste_repuestos",
-      title: "Desgaste y repuestos",
-      description: "Cabezales, filtros y partes de arrastre.",
-      fields: genericWearFields,
-    }),
-  ];
-}
-
-function buildUvCylindricalSections(): MaquinariaTemplateSection[] {
-  return [
-    section({
-      id: "capacidades_fisicas",
-      title: "Capacidades fisicas",
-      description: "Limites geometricos de objetos cilindricos.",
-      fields: [
-        field({
-          key: "diametroMinimo",
-          label: "Diametro minimo",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Diametro minimo admitido.",
-          placeholder: "4",
-        }),
-        field({
-          key: "diametroMaximo",
-          label: "Diametro maximo",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Diametro maximo admitido.",
-          placeholder: "12",
-        }),
-        field({
-          key: "largoUtil",
-          label: "Largo util",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Largo util de impresion del objeto.",
-          placeholder: "28",
-        }),
-        field({
-          key: "pesoMaximoObjeto",
-          label: "Peso maximo objeto",
-          scope: "maquina",
-          kind: "number",
-          unit: "kg",
-          description: "Peso maximo del objeto cilindrico.",
-          placeholder: "3",
-        }),
-      ],
-    }),
-    section({
-      id: "parametros_tecnicos",
-      title: "Parametros tecnicos",
-      description: "Canales y objetos compatibles de la maquina cilindrica.",
-      fields: [
-        field({
-          key: "configuracionCanales",
-          label: "Configuracion de canales",
-          scope: "maquina",
-          kind: "select",
-          required: true,
-          description: "Canales de tinta disponibles.",
-          options: uvPrintModeOptions,
-        }),
-        field({
-          key: "objetosCompatibles",
-          label: "Objetos compatibles",
-          scope: "maquina",
-          kind: "multiselect",
-          description: "Objetos cilindricos mas frecuentes.",
-          options: cylindricalObjectOptions,
-        }),
-        field({
-          key: "rotacionControlada",
-          label: "Rotacion controlada",
-          scope: "maquina",
-          kind: "boolean",
-          description: "Activalo si controla automaticamente la rotacion del objeto.",
-        }),
-        field({
-          key: "anguloConicidadMaxima",
-          label: "Conicidad maxima",
-          scope: "maquina",
-          kind: "number",
-          description: "Angulo maximo de conicidad soportado por accesorio cilindrico.",
-          placeholder: "7.5",
-        }),
-      ],
-    }),
-    section({
-      id: "perfiles_operativos",
-      title: "Perfiles operativos",
-      description: "Perfiles de impresion por tipo de objeto y calidad.",
-      fields: [
-        field({
-          key: "nombre",
-          label: "Nombre del perfil",
-          scope: "perfil_operativo",
-          kind: "text",
-          required: true,
-          description: "Nombre del perfil de objeto cilindrico.",
-          placeholder: "Termo blanco normal",
-        }),
-        field({
-          key: "printMode",
-          label: "Modo impresion",
-          scope: "perfil_operativo",
-          kind: "select",
-          required: true,
-          description: "Configuracion de canales de impresion usada por este perfil, limitada por la configuracion de canales de la maquina.",
-          options: uvPrintModeOptions,
-        }),
-        field({
-          key: "calidad",
-          label: "Calidad",
-          scope: "perfil_operativo",
-          kind: "select",
-          required: true,
-          description: "Nivel de calidad del perfil.",
-          options: qualityOptions,
-        }),
-        field({
-          key: "productivityValue",
-          label: "Productividad",
-          scope: "perfil_operativo",
-          kind: "number",
-          required: true,
-          unit: "piezas_h",
-          description: "Piezas por hora para este perfil.",
-          placeholder: "40",
-        }),
-        field({
-          key: "cantidadPasadas",
-          label: "Cantidad de pasadas",
-          scope: "perfil_operativo",
-          kind: "number",
-          description: "Cantidad de pasadas del cabezal.",
-          placeholder: "6",
-        }),
-        field({
-          key: "setupMin",
-          label: "Setup",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "min",
-          description: "Tiempo medio de ajuste y fijacion del objeto.",
-          placeholder: "5",
-        }),
-      ],
-    }),
-    section({
-      id: "consumibles",
-      title: "Consumibles",
-      description: "Tintas y fluidos asociados a impresion cilindrica.",
-      fields: genericConsumableFields,
-    }),
-    section({
-      id: "desgaste_repuestos",
-      title: "Desgaste y repuestos",
-      description: "Cabezales, rodillos y componentes de desgaste.",
-      fields: genericWearFields,
-    }),
-  ];
-}
-
-function buildRollInkjetSections(
-  familyLabel: string,
-  extraDescription: string,
-): MaquinariaTemplateSection[] {
-  return [
-    section({
-      id: "capacidades_fisicas",
-      title: "Capacidades fisicas",
-      description: "Ancho util y limites de bobina del equipo.",
-      fields: [
-        field({
-          key: "anchoUtil",
-          label: "Ancho maximo imprimible",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Ancho maximo que la maquina puede imprimir sobre el material cargado.",
-          placeholder: "160",
-        }),
-        field({
-          key: "diametroMaximoBobina",
-          label: "Diametro maximo bobina",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Diametro maximo de rollo admitido.",
-          placeholder: "25",
-        }),
-        field({
-          key: "pesoMaximoBobina",
-          label: "Peso maximo bobina",
-          scope: "maquina",
-          kind: "number",
-          unit: "kg",
-          description: "Peso maximo de rollo admitido.",
-          placeholder: "40",
-        }),
-        field({
-          key: "espesorMaximoMaterial",
-          label: "Espesor maximo material",
-          scope: "maquina",
-          kind: "number",
-          unit: "mm",
-          description: "Espesor maximo del sustrato.",
-          placeholder: "1",
-        }),
-      ],
-    }),
-    section({
-      id: "parametros_tecnicos",
-      title: "Parametros tecnicos",
-      description: extraDescription,
-      fields: [
-        field({
-          key: "configuracionTintas",
-          label: "Configuracion de tintas",
-          scope: "maquina",
-          kind: "text",
-          description: "Describe la configuracion principal de tintas del equipo.",
-          placeholder: "CMYK + Light Cyan + Light Magenta",
-        }),
-        field({
-          key: "resolucionNominal",
-          label: "Resolucion nominal",
-          scope: "maquina",
-          kind: "number",
-          unit: "dpi",
-          description: "Resolucion nominal del equipo.",
-          placeholder: "1200",
-        }),
-        field({
-          key: "sistemaSecadoCurado",
-          label: "Sistema secado/curado",
-          scope: "maquina",
-          kind: "select",
-          description: "Sistema de secado o curado principal.",
-          options: cureSystemOptions,
-        }),
-        field({
-          key: "margenLateralIzquierdoNoImprimible",
-          label: "Margen lateral izquierdo no imprimible",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Reserva lateral izquierda que no se usa para impresion.",
-          placeholder: "0.5",
-        }),
-        field({
-          key: "margenLateralDerechoNoImprimible",
-          label: "Margen lateral derecho no imprimible",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Reserva lateral derecha que no se usa para impresion.",
-          placeholder: "0.5",
-        }),
-        field({
-          key: "margenInicioNoImprimible",
-          label: "Margen inicio no imprimible",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Avance inicial de material que no se utiliza para impresion.",
-          placeholder: "10",
-        }),
-        field({
-          key: "margenFinalNoImprimible",
-          label: "Margen final no imprimible",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Reserva de material al final de tirada que no se imprime.",
-          placeholder: "5",
-        }),
-        field({
-          key: "materialesCompatibles",
-          label: "Materiales compatibles",
-          scope: "maquina",
-          kind: "multiselect",
-          description: "Materiales que puede procesar la maquina.",
-          options: rollMediaOptions,
-        }),
-      ],
-    }),
-    section({
-      id: "perfiles_operativos",
-      title: "Perfiles operativos",
-      description: `Perfiles de ${familyLabel.toLowerCase()} por calidad, pasadas y material.`,
-      fields: [
-        field({
-          key: "nombre",
-          label: "Nombre del perfil",
-          scope: "perfil_operativo",
-          kind: "text",
-          required: true,
-          description: "Nombre del perfil operativo.",
-          placeholder: "Vinilo alta calidad",
-        }),
-        field({
-          key: "calidad",
-          label: "Calidad",
-          scope: "perfil_operativo",
-          kind: "select",
-          required: true,
-          description: "Nivel de calidad del perfil.",
-          options: qualityOptions,
-        }),
-        field({
-          key: "productivityValue",
-          label: "Productividad",
-          scope: "perfil_operativo",
-          kind: "number",
-          required: true,
-          unit: "m2_h",
-          description: "Rendimiento en metros cuadrados por hora.",
-          placeholder: "25",
-        }),
-        field({
-          key: "cantidadPasadas",
-          label: "Cantidad de pasadas",
-          scope: "perfil_operativo",
-          kind: "number",
-          description: "Numero de pasadas del perfil.",
-          placeholder: "6",
-        }),
-        field({
-          key: "setupMin",
-          label: "Setup",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "min",
-          description: "Tiempo medio de montaje, tensado y limpieza.",
-          placeholder: "4",
-        }),
-      ],
-    }),
-    section({
-      id: "consumibles",
-      title: "Consumibles",
-      description: "Tintas y materiales variables del equipo.",
-      fields: genericConsumableFields,
-    }),
-    section({
-      id: "desgaste_repuestos",
-      title: "Desgaste y repuestos",
-      description: "Cabezales, filtros y piezas de arrastre.",
-      fields: genericWearFields,
-    }),
-  ];
-}
-
-function buildDtfSections(kind: "dtf" | "dtf_uv"): MaquinariaTemplateSection[] {
-  return [
-    section({
-      id: "capacidades_fisicas",
-      title: "Capacidades fisicas",
-      description: "Ancho util y limitaciones del consumible de transferencia.",
-      fields: [
-        field({
-          key: "anchoUtil",
-          label: "Ancho maximo imprimible",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Ancho maximo que la maquina puede imprimir sobre el film cargado.",
-          placeholder: "60",
-        }),
-        field({
-          key: "espesorMaximoFilm",
-          label: "Espesor maximo film",
-          scope: "maquina",
-          kind: "number",
-          unit: "mm",
-          description: "Espesor maximo admitido del film.",
-          placeholder: "0.5",
-        }),
-      ],
-    }),
-    section({
-      id: "parametros_tecnicos",
-      title: "Parametros tecnicos",
-      description:
-        kind === "dtf"
-          ? "Canales, tipo de film y configuracion de impresion DTF."
-          : "Canales, materiales y laminacion para transferencia DTF UV.",
-      fields: [
-        field({
-          key: "margenLateralIzquierdoNoImprimible",
-          label: "Margen lateral izquierdo no imprimible",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Reserva lateral izquierda que no se usa para impresion.",
-          placeholder: "0.3",
-        }),
-        field({
-          key: "margenLateralDerechoNoImprimible",
-          label: "Margen lateral derecho no imprimible",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Reserva lateral derecha que no se usa para impresion.",
-          placeholder: "0.3",
-        }),
-        field({
-          key: "margenInicioNoImprimible",
-          label: "Margen inicio no imprimible",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Avance inicial de film que no se utiliza para impresion.",
-          placeholder: "5",
-        }),
-        field({
-          key: "margenFinalNoImprimible",
-          label: "Margen final no imprimible",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Reserva de film al final de tirada que no se imprime.",
-          placeholder: "3",
-        }),
-        field({
-          key: "configuracionCanales",
-          label: "Configuracion de canales",
-          scope: "maquina",
-          kind: "select",
-          required: true,
-          description: "Configuracion de canales/tintas del equipo.",
-          options:
-            kind === "dtf"
-              ? dtfInkOptions
-              : [
-                  option("cmyk_blanco_barniz", "CMYK + W + V"),
-                  option("cmyk_blanco", "CMYK + W"),
-                ],
-        }),
-        field({
-          key: "tipoFilm",
-          label: "Tipo de film",
-          scope: "maquina",
-          kind: "text",
-          description: "Tipo de film o material de transferencia utilizado.",
-          placeholder: kind === "dtf" ? "PET hot peel" : "Film A/B UV",
-        }),
-        field({
-          key: "sistemaSecadoCurado",
-          label: "Sistema secado/curado",
-          scope: "maquina",
-          kind: "select",
-          description: "Sistema principal de secado o curado.",
-          options:
-            kind === "dtf"
-              ? [option("calor", "Secado por calor")]
-              : [option("uv_led", "UV LED")],
-        }),
-        field({
-          key: "resolucionNominal",
-          label: "Resolucion nominal",
-          scope: "maquina",
-          kind: "number",
-          unit: "dpi",
-          description: "Resolucion nominal del equipo en modo productivo.",
-          placeholder: "1440",
-        }),
-        ...(kind === "dtf_uv"
-          ? [
-              field({
-                key: "sistemaLaminacionTransferencia",
-                label: "Sistema laminacion/transferencia",
-                scope: "maquina",
-                kind: "select",
-                required: true,
-                description: "Define como se realiza la laminacion o transferencia UV.",
-                options: [
-                  option("inline", "Laminacion en linea"),
-                  option("laminador_externo", "Laminador externo"),
-                  option("manual", "Aplicacion manual"),
-                ],
-              }),
-            ]
-          : []),
-        field({
-          key: "materialesCompatibles",
-          label: "Materiales compatibles",
-          scope: "maquina",
-          kind: "multiselect",
-          description:
-            kind === "dtf"
-              ? "Textiles sobre los que suele aplicarse la transferencia."
-              : "Superficies sobre las que puede adherirse la transferencia UV.",
-          options:
-            kind === "dtf"
-              ? [
-                  option("algodon", "Algodon"),
-                  option("polyester", "Polyester"),
-                  option("mezcla", "Mezcla"),
-                ]
-              : rigidMediaOptions,
-        }),
-      ],
-    }),
-    section({
-      id: "perfiles_operativos",
-      title: "Perfiles operativos",
-      description: "Perfiles por calidad, ancho de trabajo y configuracion de tintas.",
-      fields: [
-        field({
-          key: "nombre",
-          label: "Nombre del perfil",
-          scope: "perfil_operativo",
-          kind: "text",
-          required: true,
-          description: "Nombre del perfil DTF.",
-          placeholder:
-            kind === "dtf" ? "Textil color normal" : "Transfer UV rigido normal",
-        }),
-        field({
-          key: "calidad",
-          label: "Calidad",
-          scope: "perfil_operativo",
-          kind: "select",
-          required: true,
-          description: "Nivel de calidad del perfil.",
-          options: qualityOptions,
-        }),
-        field({
-          key: "productivityValue",
-          label: "Productividad",
-          scope: "perfil_operativo",
-          kind: "number",
-          required: true,
-          unit: "m2_h",
-          description: "Rendimiento por hora del perfil.",
-          placeholder: "8",
-        }),
-        field({
-          key: "cantidadPasadas",
-          label: "Cantidad de pasadas",
-          scope: "perfil_operativo",
-          kind: "number",
-          description: "Numero de pasadas del perfil.",
-          placeholder: "8",
-        }),
-        field({
-          key: "setupMin",
-          label: "Setup",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "min",
-          description: "Tiempo medio de preparacion por corrida.",
-          placeholder: "4",
-        }),
-      ],
-    }),
-    section({
-      id: "consumibles",
-      title: "Consumibles",
-      description: "Tintas, film, polvo y materiales auxiliares.",
-      fields: genericConsumableFields,
-    }),
-    section({
-      id: "desgaste_repuestos",
-      title: "Desgaste y repuestos",
-      description: "Cabezales, filtros y kits del equipo.",
-      fields: genericWearFields,
-    }),
-  ];
-}
-
-function build3dSections(): MaquinariaTemplateSection[] {
-  return [
-    section({
-      id: "capacidades_fisicas",
-      title: "Capacidades fisicas",
-      description: "Volumen util de impresion y limites geometricos del equipo 3D.",
-      fields: [
-        field({
-          key: "volumenX",
-          label: "Volumen X",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Medida util del eje X.",
-          placeholder: "22",
-        }),
-        field({
-          key: "volumenY",
-          label: "Volumen Y",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Medida util del eje Y.",
-          placeholder: "22",
-        }),
-        field({
-          key: "volumenZ",
-          label: "Volumen Z",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Medida util del eje Z.",
-          placeholder: "30",
-        }),
-      ],
-    }),
-    section({
-      id: "parametros_tecnicos",
-      title: "Parametros tecnicos",
-      description: "Tecnologia, materiales y granularidad de impresion 3D.",
-      fields: [
-        field({
-          key: "tecnologia",
-          label: "Tecnologia",
-          scope: "maquina",
-          kind: "select",
-          required: true,
-          description: "Tecnologia principal de fabricacion.",
-          options: threeDTechnologyOptions,
-        }),
-        field({
-          key: "alturaMinimaCapa",
-          label: "Altura minima capa",
-          scope: "maquina",
-          kind: "number",
-          unit: "micrones",
-          description: "Altura minima de capa soportada.",
-          placeholder: "50",
-        }),
-        field({
-          key: "alturaMaximaCapa",
-          label: "Altura maxima capa",
-          scope: "maquina",
-          kind: "number",
-          unit: "micrones",
-          description: "Altura maxima de capa soportada.",
-          placeholder: "300",
-        }),
-        field({
-          key: "cantidadExtrusores",
-          label: "Cantidad extrusores/cabezales",
-          scope: "maquina",
-          kind: "number",
-          description: "Cantidad de extrusores o cabezales utiles.",
-          placeholder: "1",
-        }),
-        field({
-          key: "diametroBoquilla",
-          label: "Diametro boquilla",
-          scope: "maquina",
-          kind: "number",
-          unit: "mm",
-          description: "Diametro de boquilla principal.",
-          placeholder: "0.4",
-        }),
-        field({
-          key: "materialesCompatibles",
-          label: "Materiales compatibles",
-          scope: "maquina",
-          kind: "multiselect",
-          description: "Materiales imprimibles en esta maquina.",
-          options: additiveMaterialOptions,
-        }),
-      ],
-    }),
-    section({
-      id: "perfiles_operativos",
-      title: "Perfiles operativos",
-      description: "Perfiles de calidad y produccion para impresiones 3D repetibles.",
-      fields: [
-        field({
-          key: "nombre",
-          label: "Nombre del perfil",
-          scope: "perfil_operativo",
-          kind: "text",
-          required: true,
-          description: "Nombre del perfil 3D.",
-          placeholder: "PLA calidad normal",
-        }),
-        field({
-          key: "materialObjetivo",
-          label: "Material objetivo",
-          scope: "perfil_operativo",
-          kind: "select",
-          description: "Material recomendado para este perfil.",
-          options: additiveMaterialOptions,
-        }),
-        field({
-          key: "calidad",
-          label: "Calidad",
-          scope: "perfil_operativo",
-          kind: "select",
-          required: true,
-          description: "Nivel de calidad del perfil.",
-          options: qualityOptions,
-        }),
-        field({
-          key: "alturaCapa",
-          label: "Altura de capa",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "micrones",
-          description: "Altura de capa usada por el perfil.",
-          placeholder: "150",
-        }),
-        field({
-          key: "productivityValue",
-          label: "Productividad",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "piezas_h",
-          description: "Piezas estimadas por hora en este perfil.",
-          placeholder: "2",
-        }),
-      ],
-    }),
-    section({
-      id: "consumibles",
-      title: "Consumibles",
-      description: "Filamentos, resinas y materiales auxiliares.",
-      fields: genericConsumableFields,
-    }),
-    section({
-      id: "desgaste_repuestos",
-      title: "Desgaste y repuestos",
-      description: "Boquillas, filtros y kits de mantenimiento.",
-      fields: genericWearFields,
-    }),
-  ];
-}
-
-function buildRouterSections(): MaquinariaTemplateSection[] {
-  return [
-    section({
-      id: "capacidades_fisicas",
-      title: "Capacidades fisicas",
-      description: "Area util de trabajo y limite de espesor para mecanizado.",
-      fields: [
-        field({
-          key: "ejeXUtil",
-          label: "Eje X util",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Area util del eje X.",
-          placeholder: "210",
-        }),
-        field({
-          key: "ejeYUtil",
-          label: "Eje Y util",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Area util del eje Y.",
-          placeholder: "310",
-        }),
-        field({
-          key: "ejeZUtil",
-          label: "Eje Z util",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Recorrido util del eje Z.",
-          placeholder: "20",
-        }),
-        field({
-          key: "espesorMaximo",
-          label: "Espesor maximo",
-          scope: "maquina",
-          kind: "number",
-          unit: "mm",
-          description: "Espesor maximo del material procesable.",
-          placeholder: "80",
-        }),
-      ],
-    }),
-    section({
-      id: "parametros_tecnicos",
-      title: "Parametros tecnicos",
-      description: "Potencia, velocidad y configuracion mecanica del router.",
-      fields: [
-        field({
-          key: "potenciaSpindle",
-          label: "Potencia spindle",
-          scope: "maquina",
-          kind: "number",
-          unit: "kw",
-          description: "Potencia nominal del spindle.",
-          placeholder: "6",
-        }),
-        field({
-          key: "rpmMinima",
-          label: "RPM minima",
-          scope: "maquina",
-          kind: "number",
-          unit: "rpm",
-          description: "RPM minima del spindle.",
-          placeholder: "6000",
-        }),
-        field({
-          key: "rpmMaxima",
-          label: "RPM maxima",
-          scope: "maquina",
-          kind: "number",
-          unit: "rpm",
-          description: "RPM maxima del spindle.",
-          placeholder: "24000",
-        }),
-        field({
-          key: "velocidadAvance",
-          label: "Velocidad avance",
-          scope: "maquina",
-          kind: "number",
-          unit: "mm_s",
-          description: "Velocidad maxima de avance.",
-          placeholder: "300",
-        }),
-        field({
-          key: "velocidadDesplazamiento",
-          label: "Velocidad desplazamiento",
-          scope: "maquina",
-          kind: "number",
-          unit: "mm_s",
-          description: "Velocidad maxima en vacio.",
-          placeholder: "500",
-        }),
-        field({
-          key: "cantidadHerramientas",
-          label: "Cantidad herramientas",
-          scope: "maquina",
-          kind: "number",
-          description: "Cantidad de herramientas en magazin o cambiador.",
-          placeholder: "8",
-        }),
-        field({
-          key: "cambiadorAutomatico",
-          label: "Cambiador automatico",
-          scope: "maquina",
-          kind: "boolean",
-          description: "Activalo si el equipo cambia herramientas automaticamente.",
-        }),
-        field({
-          key: "vacioSujecion",
-          label: "Vacio o sujecion",
-          scope: "maquina",
-          kind: "boolean",
-          description: "Indica si tiene mesa de vacio o sistema de sujecion asistido.",
-        }),
-        field({
-          key: "materialesCompatibles",
-          label: "Materiales compatibles",
-          scope: "maquina",
-          kind: "multiselect",
-          description: "Materiales que el router puede mecanizar con seguridad.",
-          options: cncMaterialOptions,
-        }),
-      ],
-    }),
-    section({
-      id: "perfiles_operativos",
-      title: "Perfiles operativos",
-      description: "Perfiles por material, herramienta y estrategia de mecanizado.",
-      fields: [
-        field({
-          key: "nombre",
-          label: "Nombre del perfil",
-          scope: "perfil_operativo",
-          kind: "text",
-          required: true,
-          description: "Nombre del perfil de mecanizado.",
-          placeholder: "Acrilico 5 mm corte limpio",
-        }),
-        field({
-          key: "tipoOperacion",
-          label: "Tipo de operacion",
-          scope: "perfil_operativo",
-          kind: "select",
-          required: true,
-          description: "Tipo principal de operacion del perfil.",
-          options: [
-            option("corte", "Corte"),
-            option("grabado", "Grabado"),
-            option("desbaste", "Desbaste"),
-            option("terminacion", "Terminacion"),
-          ],
-        }),
-        field({
-          key: "materialObjetivo",
-          label: "Material objetivo",
-          scope: "perfil_operativo",
-          kind: "select",
-          description: "Material principal del perfil.",
-          options: cncMaterialOptions,
-        }),
-        field({
-          key: "herramienta",
-          label: "Herramienta",
-          scope: "perfil_operativo",
-          kind: "text",
-          description: "Herramienta principal recomendada para el perfil.",
-          placeholder: "Fresa 3 mm 2 filos",
-        }),
-        field({
-          key: "profundidadMaximaPorPasada",
-          label: "Profundidad max por pasada",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "mm",
-          description: "Profundidad maxima por pasada.",
-          placeholder: "2",
-        }),
-        field({
-          key: "velocidadAvance",
-          label: "Velocidad avance",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "mm_s",
-          description: "Velocidad de avance recomendada.",
-          placeholder: "120",
-        }),
-        field({
-          key: "rpmSpindle",
-          label: "RPM spindle",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "rpm",
-          description: "RPM sugerida para el perfil.",
-          placeholder: "18000",
-        }),
-      ],
-    }),
-    section({
-      id: "consumibles",
-      title: "Consumibles",
-      description: "Lubricantes y materiales auxiliares del equipo.",
-      fields: genericConsumableFields,
-    }),
-    section({
-      id: "desgaste_repuestos",
-      title: "Desgaste y repuestos",
-      description: "Fresas, filtros y componentes de mantenimiento.",
-      fields: genericWearFields,
-    }),
-  ];
-}
-
-function buildLaserCutSections(): MaquinariaTemplateSection[] {
-  return [
-    section({
-      id: "capacidades_fisicas",
-      title: "Capacidades fisicas",
-      description: "Area util y despeje del equipo de corte laser.",
-      fields: [
-        field({
-          key: "ejeXUtil",
-          label: "Eje X util",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Area util del eje X.",
-          placeholder: "130",
-        }),
-        field({
-          key: "ejeYUtil",
-          label: "Eje Y util",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Area util del eje Y.",
-          placeholder: "90",
-        }),
-        field({
-          key: "despejeZ",
-          label: "Despeje Z",
-          scope: "maquina",
-          kind: "number",
-          unit: "cm",
-          description: "Despeje vertical disponible.",
-          placeholder: "15",
-        }),
-      ],
-    }),
-    section({
-      id: "parametros_tecnicos",
-      title: "Parametros tecnicos",
-      description: "Potencia, tipo de laser y materiales compatibles.",
-      fields: [
-        field({
-          key: "tipoLaser",
-          label: "Tipo de laser",
-          scope: "maquina",
-          kind: "select",
-          required: true,
-          description: "Tecnologia principal del tubo o fuente.",
-          options: laserTypeOptions,
-        }),
-        field({
-          key: "espesorMaximoPorMaterial",
-          label: "Espesor maximo por material",
-          scope: "maquina",
-          kind: "textarea",
-          description: "Limites de espesor por material para evitar sobreestimar capacidad.",
-          placeholder: "Acrilico: 8 mm; MDF: 6 mm; Carton: 4 mm",
-        }),
-        field({
-          key: "potenciaLaser",
-          label: "Potencia laser",
-          scope: "maquina",
-          kind: "number",
-          unit: "kw",
-          description: "Potencia nominal del laser.",
-          placeholder: "0.15",
-        }),
-        field({
-          key: "velocidadCorte",
-          label: "Velocidad corte",
-          scope: "maquina",
-          kind: "number",
-          unit: "mm_s",
-          description: "Velocidad maxima de corte.",
-          placeholder: "400",
-        }),
-        field({
-          key: "velocidadGrabado",
-          label: "Velocidad grabado",
-          scope: "maquina",
-          kind: "number",
-          unit: "mm_s",
-          description: "Velocidad maxima de grabado.",
-          placeholder: "600",
-        }),
-        field({
-          key: "extraccionAsistida",
-          label: "Extraccion asistida",
-          scope: "maquina",
-          kind: "boolean",
-          description: "Activalo si el equipo cuenta con extraccion o asistencia de aire.",
-        }),
-        field({
-          key: "materialesCompatibles",
-          label: "Materiales compatibles",
-          scope: "maquina",
-          kind: "multiselect",
-          description: "Materiales aptos para corte o grabado en esta maquina.",
-          options: laserMaterialOptions,
-        }),
-      ],
-    }),
-    section({
-      id: "perfiles_operativos",
-      title: "Perfiles operativos",
-      description: "Perfiles por material, potencia y velocidad.",
-      fields: [
-        field({
-          key: "nombre",
-          label: "Nombre del perfil",
-          scope: "perfil_operativo",
-          kind: "text",
-          required: true,
-          description: "Nombre del perfil de corte o grabado.",
-          placeholder: "Acrilico 3 mm corte limpio",
-        }),
-        field({
-          key: "tipoOperacion",
-          label: "Tipo de operacion",
-          scope: "perfil_operativo",
-          kind: "select",
-          required: true,
-          description: "Operacion principal del perfil.",
-          options: [
-            option("corte", "Corte"),
-            option("grabado", "Grabado"),
-          ],
-        }),
-        field({
-          key: "materialObjetivo",
-          label: "Material objetivo",
-          scope: "perfil_operativo",
-          kind: "select",
-          description: "Material principal del perfil.",
-          options: laserMaterialOptions,
-        }),
-        field({
-          key: "potenciaAplicada",
-          label: "Potencia aplicada",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "porcentaje",
-          description: "Potencia recomendada del perfil.",
-          placeholder: "80",
-        }),
-        field({
-          key: "velocidadTrabajo",
-          label: "Velocidad trabajo",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "mm_s",
-          description: "Velocidad recomendada del perfil.",
-          placeholder: "150",
-        }),
-        field({
-          key: "cantidadPasadas",
-          label: "Cantidad de pasadas",
-          scope: "perfil_operativo",
-          kind: "number",
-          description: "Pasadas necesarias para el resultado deseado.",
-          placeholder: "1",
-        }),
-      ],
-    }),
-    section({
-      id: "consumibles",
-      title: "Consumibles",
-      description: "Gases, lubricantes o materiales auxiliares.",
-      fields: genericConsumableFields,
-    }),
-    section({
-      id: "desgaste_repuestos",
-      title: "Desgaste y repuestos",
-      description: "Lentes, espejos, filtros y piezas de mantenimiento.",
-      fields: genericWearFields,
-    }),
-  ];
-}
-
-function buildCuttingTableSections(kind: "mesa" | "plotter"): MaquinariaTemplateSection[] {
-  return [
-    section({
-      id: "capacidades_fisicas",
-      title: "Capacidades fisicas",
-      description: kind === "mesa"
-        ? "Area util de trabajo y espesor maximo del material."
-        : "Area util de trabajo del plotter.",
-      fields: [
-        field({
-          key: "anchoUtil",
-          label: "Ancho util",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Ancho util de trabajo.",
-          placeholder: kind === "mesa" ? "160" : "140",
-        }),
-        ...(kind === "mesa"
-          ? [
-              field({
-                key: "largoUtil",
-                label: "Largo util",
-                scope: "maquina",
-                kind: "number",
-                required: true,
-                unit: "cm",
-                description: "Largo util de trabajo.",
-                placeholder: "300",
-              }),
-            ]
-          : []),
-        ...(kind === "mesa"
-          ? [
-              field({
-                key: "espesorMaximo",
-                label: "Espesor maximo",
-                scope: "maquina",
-                kind: "number",
-                unit: "mm",
-                description: "Espesor maximo procesable.",
-                placeholder: "20",
-              }),
-            ]
-          : []),
-      ],
-    }),
-    section({
-      id: "parametros_tecnicos",
-      title: "Parametros tecnicos",
-      description:
-        kind === "mesa"
-          ? "Herramientas, vacio y materiales del equipo de corte."
-          : "Velocidad de referencia y sujecion del plotter de corte.",
-      fields: [
-        ...(kind === "mesa"
-          ? [
-              field({
-                key: "herramientasCompatibles",
-                label: "Herramientas compatibles",
-                scope: "maquina",
-                kind: "multiselect",
-                description: "Herramientas disponibles para esta maquina.",
-                options: cuttingToolOptions,
-              }),
-            ]
-          : []),
-        field({
-          key: "velocidadCorte",
-          label: kind === "mesa" ? "Velocidad corte" : "Velocidad maxima de corte",
-          scope: "maquina",
-          kind: "number",
-          unit: "mm_s",
-          description: kind === "mesa"
-            ? "Velocidad maxima de corte."
-            : "Velocidad maxima del equipo (referencia). La velocidad efectiva se define en cada perfil operativo.",
-          placeholder: "600",
-        }),
-        field({
-          key: "vacioSujecion",
-          label: "Vacio o sujecion",
-          scope: "maquina",
-          kind: "boolean",
-          description: "Activalo si cuenta con cama de vacio o sujecion asistida.",
-        }),
-        ...(kind === "plotter"
-          ? [
-              field({
-                key: "margenIzquierdo",
-                label: "Margen izquierdo no trazable",
-                scope: "maquina",
-                kind: "number",
-                unit: "cm",
-                description: "Zona izquierda del rollo donde la cuchilla no puede trazar (en cm). Se aplica a todos los jobs salvo que el perfil tenga marca de registro propia.",
-                placeholder: "0.5",
-              }),
-              field({
-                key: "margenDerecho",
-                label: "Margen derecho no trazable",
-                scope: "maquina",
-                kind: "number",
-                unit: "cm",
-                description: "Zona derecha del rollo donde la cuchilla no puede trazar (en cm).",
-                placeholder: "0.5",
-              }),
-              field({
-                key: "margenSuperior",
-                label: "Margen superior (inicio job)",
-                scope: "maquina",
-                kind: "number",
-                unit: "cm",
-                description: "Espacio no trazable al inicio de cada job, en cm. Ej: 1 = 1 cm.",
-                placeholder: "1",
-              }),
-              field({
-                key: "margenInferior",
-                label: "Margen inferior (fin job)",
-                scope: "maquina",
-                kind: "number",
-                unit: "cm",
-                description: "Espacio no trazable al final de cada job, en cm. Ej: 1 = 1 cm.",
-                placeholder: "1",
-              }),
-            ]
-          : []),
-        ...(kind === "mesa"
-          ? [
-              field({
-                key: "materialesCompatibles",
-                label: "Materiales compatibles",
-                scope: "maquina",
-                kind: "multiselect",
-                description: "Materiales procesables por este equipo.",
-                options: [
-                  option("carton", "Carton"),
-                  option("corrugado", "Corrugado"),
-                  option("foamboard", "Foamboard"),
-                  option("vinilo", "Vinilo"),
-                  option("pvc", "PVC"),
-                ],
-              }),
-            ]
-          : []),
-      ],
-    }),
-    section({
-      id: "perfiles_operativos",
-      title: "Perfiles operativos",
-      description: "Perfiles de corte por material, herramienta y velocidad.",
-      fields: [
-        field({
-          key: "nombre",
-          label: "Nombre del perfil",
-          scope: "perfil_operativo",
-          kind: "text",
-          required: true,
-          description: "Nombre del perfil de corte.",
-          placeholder: kind === "mesa" ? "Corrugado corte rapido" : "Vinilo rotulacion fino",
-        }),
-        ...(kind === "mesa"
-          ? [
-              field({
-                key: "materialObjetivo",
-                label: "Material objetivo",
-                scope: "perfil_operativo",
-                kind: "text",
-                description: "Material principal del perfil.",
-                placeholder: "Corrugado doble canal",
-              }),
-              field({
-                key: "herramienta",
-                label: "Herramienta",
-                scope: "perfil_operativo",
-                kind: "text",
-                description: "Herramienta principal del perfil.",
-                placeholder: "Cuchilla tangencial",
-              }),
-            ]
-          : []),
-        ...(kind === "plotter"
-          ? [
-              field({
-                key: "velocidadCortePerf",
-                label: "Velocidad de corte",
-                scope: "perfil_operativo",
-                kind: "number",
-                unit: "mm_s",
-                description:
-                  "Velocidad de corte para este perfil. El sistema calcula la productividad en m²/h automáticamente.",
-                placeholder: "350",
-              }),
-              field({
-                key: "nivelComplejidad",
-                label: "Complejidad del diseño",
-                scope: "perfil_operativo",
-                kind: "select",
-                description:
-                  "Define la densidad de trayectoria del diseño. Determina cuántos metros de corte hay por m² de material.",
-                options: [
-                  option("facil", "Fácil (~37 m²/h a 350 mm/s)"),
-                  option("intermedio", "Intermedio (~6.5 m²/h a 200 mm/s)"),
-                  option("dificil", "Complejo (~1.2 m²/h a 100 mm/s)"),
-                ],
-              }),
-              field({
-                key: "marcaRegistro",
-                label: "Marca de registro",
-                scope: "perfil_operativo",
-                kind: "select",
-                description:
-                  "Define si este perfil tiene sus propios márgenes de trabajo. Si es No, se usan los márgenes no trazables definidos a nivel máquina.",
-                options: [
-                  option("no", "No (usar márgenes de la máquina)"),
-                  option("si", "Sí (márgenes propios del perfil)"),
-                ],
-              }),
-              field({
-                key: "margenIzquierdoPerf",
-                label: "Margen izquierdo",
-                scope: "perfil_operativo",
-                kind: "number",
-                unit: "cm",
-                description: "Zona izquierda no trazable, en cm. Solo aplica cuando Marca de registro es Sí.",
-                placeholder: "0.5",
-              }),
-              field({
-                key: "margenDerechoPerf",
-                label: "Margen derecho",
-                scope: "perfil_operativo",
-                kind: "number",
-                unit: "cm",
-                description: "Zona derecha no trazable, en cm. Solo aplica cuando Marca de registro es Sí.",
-                placeholder: "0.5",
-              }),
-              field({
-                key: "margenSuperiorPerf",
-                label: "Margen superior (inicio job)",
-                scope: "perfil_operativo",
-                kind: "number",
-                unit: "cm",
-                description: "Espacio no trazable al inicio del job, en cm. Solo aplica cuando Marca de registro es Sí.",
-                placeholder: "1",
-              }),
-              field({
-                key: "margenInferiorPerf",
-                label: "Margen inferior (fin job)",
-                scope: "perfil_operativo",
-                kind: "number",
-                unit: "cm",
-                description: "Espacio no trazable al final del job. Solo aplica cuando Marca de registro es Sí.",
-                placeholder: "0",
-              }),
-            ]
-          : []),
-        field({
-          key: "productivityValue",
-          label: "Productividad",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "m2_h",
-          description:
-            kind === "plotter"
-              ? "Productividad en m²/h. Se calcula automáticamente desde velocidad y complejidad, o puede ingresarse manualmente."
-              : "Rendimiento nominal del perfil.",
-          placeholder: kind === "mesa" ? "35" : "37",
-        }),
-        field({
-          key: "setupMin",
-          label: "Setup",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "min",
-          description: "Tiempo medio de carga y ajuste.",
-          placeholder: "3",
-        }),
-      ],
-    }),
-    section({
-      id: "consumibles",
-      title: "Consumibles",
-      description: "Materiales auxiliares y consumibles del equipo.",
-      fields: genericConsumableFields,
-    }),
-    section({
-      id: "desgaste_repuestos",
-      title: "Desgaste y repuestos",
-      description: "Cuchillas, ruedas y kits de mantenimiento.",
-      fields: genericWearFields,
-    }),
-  ];
-}
-
+/** §7 — GUILLOTINA con fórmula no lineal (productividad NULL). */
 function buildGuillotinaSections(): MaquinariaTemplateSection[] {
   return [
     section({
       id: "capacidades_fisicas",
-      title: "Capacidades fisicas",
-      description: "Limites de carga y corte del equipo.",
+      title: "Capacidades físicas",
+      description: "Largo de cuchilla, profundidad de mesa, altura física máx de pila.",
       fields: [
-        field({
-          key: "altoBocaMm",
-          label: "Alto de boca (mm)",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "mm",
-          description: "Altura maxima de pila que admite el equipo.",
-          placeholder: "80",
-        }),
+        field({ key: "anchoUtil", label: "Largo de cuchilla", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Ancho máx de pliego = largo de la cuchilla." }),
+        field({ key: "largoUtil", label: "Profundidad de mesa", scope: "maquina", kind: "number", unit: "mm", description: "Profundidad útil de la mesa." }),
+        field({ key: "altoUtil", label: "Altura máx de boca", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Altura física máx de pila (ej. 165mm)." }),
+      ],
+    }),
+    section({
+      id: "parametros_tecnicos",
+      title: "Parámetros técnicos",
+      description: "Tiempo por corte (constante en la máquina, casi no varía con material).",
+      fields: [
+        field({ key: "tiempoPorCorteSeg", label: "Tiempo por corte", scope: "maquina", kind: "number", unit: "min", required: true, description: "Segundos por cada corte individual (ej. 8)." }),
+      ],
+    }),
+    section({
+      id: "perfiles_operativos",
+      title: "Perfiles operativos por rango de material",
+      description: "Un perfil por rango de gramaje. La capacidad varía con el grosor.",
+      fields: [
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Papel grueso 100-250gr." }),
+        field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de preparación inicial." }),
+        field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza." }),
+        field({ key: "feedReloadMin", label: "Tiempo entre tandas", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo para preparar la siguiente tanda." }),
+        field({ key: "gramajeMinGr", label: "Gramaje mínimo", scope: "perfil_operativo", kind: "number", unit: "g_m2", description: "Gramaje mínimo del rango." }),
+        field({ key: "gramajeMaxGr", label: "Gramaje máximo", scope: "perfil_operativo", kind: "number", unit: "g_m2", required: true, description: "Gramaje máximo del rango." }),
+        field({ key: "pliegosMaxPorTanda", label: "Pliegos máx por tanda", scope: "perfil_operativo", kind: "number", required: true, description: "Cantidad máx de pliegos que entran en una tanda (ej. 500)." }),
+      ],
+    }),
+    section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Cuchilla y tabla de corte.", fields: genericWearFields }),
+  ];
+}
+
+/** §8 — PLOTTER_DE_CORTE con discriminantes tipoCorte + modoOperacion. */
+function buildPlotterCorteSections(): MaquinariaTemplateSection[] {
+  return [
+    section({
+      id: "capacidades_fisicas",
+      title: "Capacidades físicas",
+      description: "Ancho máximo de rollo aceptado.",
+      fields: [
+        field({ key: "anchoUtil", label: "Ancho útil", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Ancho máx de rollo (ej. 600mm)." }),
+        field({ key: "espesorMaximo", label: "Espesor máximo", scope: "maquina", kind: "number", unit: "mm", description: "Vinilo, films delgados (ej. 1mm)." }),
+      ],
+    }),
+    section({
+      id: "parametros_tecnicos",
+      title: "Parámetros técnicos",
+      description: "Rangos de rollo y modos soportados.",
+      fields: [
+        field({ key: "anchoMinRolloMm", label: "Ancho mínimo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Mínimo de rollo aceptado." }),
+        field({ key: "anchoMaxRolloMm", label: "Ancho máximo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Máximo de rollo aceptado." }),
+        field({ key: "modosOperacionSoportados", label: "Modos soportados", scope: "maquina", kind: "multiselect", required: true, options: modoOperacionPlotterOptions, description: "Rollo y/o hojas." }),
       ],
     }),
     section({
       id: "perfiles_operativos",
       title: "Perfiles operativos",
-      description: "Perfiles por sustrato y configuración operativa de corte.",
+      description: "Por tipo de corte + modo de operación. Complejidad la elige el comercial al cotizar.",
       fields: [
-        field({
-          key: "nombre",
-          label: "Nombre del perfil",
-          scope: "perfil_operativo",
-          kind: "text",
-          required: true,
-          description: "Nombre del perfil operativo.",
-          placeholder: "Papel 300g corte estandar",
-        }),
-        field({
-          key: "materialPreset",
-          label: "Papel / gramaje",
-          scope: "perfil_operativo",
-          kind: "select",
-          description: "Preset asistido para autocompletar el espesor de hoja. Es orientativo.",
-          options: guillotinaPaperPresetOptions,
-          placeholder: "Seleccionar preset",
-        }),
-        field({
-          key: "sheetThicknessMm",
-          label: "Espesor hoja (mm)",
-          scope: "perfil_operativo",
-          kind: "number",
-          required: true,
-          unit: "mm",
-          description: "Espesor unitario de la hoja. Se usa para calcular la capacidad por tanda.",
-          placeholder: "0.12",
-        }),
-        field({
-          key: "productivityValue",
-          label: "Cortes por minuto",
-          scope: "perfil_operativo",
-          kind: "number",
-          required: true,
-          description: "Velocidad real de corte para este perfil operativo.",
-          placeholder: "28",
-        }),
-        field({
-          key: "setupMin",
-          label: "Setup (min)",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "min",
-          description: "Tiempo de preparación inicial para este perfil.",
-          placeholder: "2",
-        }),
-        field({
-          key: "feedReloadMin",
-          label: "Recarga de tanda (min)",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "min",
-          description: "Tiempo promedio de recarga entre tandas para este perfil.",
-          placeholder: "0.8",
-        }),
-        field({
-          key: "maxBatchHeightMm",
-          label: "Altura máxima de tanda (mm)",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "mm",
-          description: "Límite operativo opcional. Si no se carga, se usa el alto de boca de la máquina.",
-          placeholder: "60",
-        }),
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Corte completo - rollo." }),
+        field({ key: "productivityValue", label: "Productividad", scope: "perfil_operativo", kind: "number", unit: "m2_h", required: true, description: "m²/hora base (cortes simples)." }),
+        field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de carga de rollo y calibración." }),
+        field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza." }),
+        field({ key: "feedReloadMin", label: "Cambio de rollo", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo entre rollos." }),
+        field({ key: "tipoCorte", label: "Tipo de corte", scope: "perfil_operativo", kind: "select", required: true, options: tipoCorteOptions, description: "Completo (atraviesa) o kiss-cut (solo vinilo)." }),
+        field({ key: "modoOperacion", label: "Modo operación", scope: "perfil_operativo", kind: "select", options: modoOperacionPlotterOptions, description: "Rollo u hojas." }),
+        field({ key: "factorComplejidad", label: "Factor complejidad (JSON)", scope: "perfil_operativo", kind: "textarea", description: "JSON: { SIMPLE: 1.0, INTERMEDIO: 1.5, COMPLEJO: 3.0 }." }),
       ],
     }),
-    section({
-      id: "consumibles",
-      title: "Consumibles",
-      description: "Consumibles asociados al corte.",
-      fields: genericConsumableFields,
-    }),
-    section({
-      id: "desgaste_repuestos",
-      title: "Desgaste y repuestos",
-      description: "Cuchillas y repuestos de mantenimiento.",
-      fields: genericWearFields,
-    }),
+    section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Cuchilla.", fields: genericWearFields }),
   ];
 }
 
+/** §10 — PLOTTER_CAD con discriminantes tipoTrabajo + calidad. */
+function buildPlotterCadSections(): MaquinariaTemplateSection[] {
+  return [
+    section({
+      id: "capacidades_fisicas",
+      title: "Capacidades físicas",
+      description: "Ancho máx de rollo (típico 1067mm = 42 pulgadas).",
+      fields: [
+        field({ key: "anchoUtil", label: "Ancho útil máximo", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Ancho máx de rollo." }),
+      ],
+    }),
+    section({
+      id: "parametros_tecnicos",
+      title: "Parámetros técnicos",
+      description: "Rangos de rollo, márgenes y colores soportados.",
+      fields: [
+        field({ key: "anchoMinRolloMm", label: "Ancho mínimo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Mínimo aceptado." }),
+        field({ key: "anchoMaxRolloMm", label: "Ancho máximo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Máximo aceptado." }),
+        field({ key: "margenesNoImprimiblesMm", label: "Márgenes no imprimibles", scope: "maquina", kind: "textarea", required: true, description: "JSON: { sup, inf, izq, der } en mm." }),
+        field({ key: "coloresSoportados", label: "Colores soportados", scope: "maquina", kind: "multiselect", options: [option("CMYK", "CMYK")], description: "Solo CMYK típicamente." }),
+      ],
+    }),
+    section({
+      id: "perfiles_operativos",
+      title: "Perfiles operativos",
+      description: "Por tipo de trabajo + calidad. Cambian abismalmente velocidad y consumo de tinta.",
+      fields: [
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. CAD - Borrador, Foto - Alta." }),
+        field({ key: "productivityValue", label: "Productividad", scope: "perfil_operativo", kind: "number", unit: "m2_h", required: true, description: "m²/hora del perfil." }),
+        field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de calibración." }),
+        field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza." }),
+        field({ key: "feedReloadMin", label: "Cambio de rollo", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo entre rollos." }),
+        field({ key: "tipoTrabajo", label: "Tipo de trabajo", scope: "perfil_operativo", kind: "select", required: true, options: tipoTrabajoCadOptions, description: "CAD (rápido, baja densidad) o FOTO (lento, alta densidad)." }),
+        field({ key: "calidad", label: "Calidad", scope: "perfil_operativo", kind: "select", required: true, options: calidadCadOptions, description: "Borrador, normal o alta." }),
+      ],
+    }),
+    section({ id: "consumibles", title: "Consumibles", description: "Tinta CMYK por perfil.", fields: genericConsumableFields }),
+    section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Cabezal por ml de tinta procesada.", fields: genericWearFields }),
+  ];
+}
+
+/** §9 — LAMINADORA_BOPP_ROLLO con perfil único "Estándar". */
 function buildLaminadoraBoppSections(): MaquinariaTemplateSection[] {
   return [
     section({
       id: "capacidades_fisicas",
-      title: "Capacidades fisicas",
-      description: "Parametros fisicos del rollo y del equipo.",
+      title: "Capacidades físicas",
+      description: "Ancho máx de pliego que pasa.",
       fields: [
-        field({
-          key: "anchoRolloMm",
-          label: "Ancho rollo (mm)",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "mm",
-          description: "Ancho util del rollo BOPP.",
-          placeholder: "330",
-        }),
-        field({
-          key: "soportaDobleRollo",
-          label: "Soporta doble rollo",
-          scope: "maquina",
-          kind: "boolean",
-          description: "Indica si la maquina puede laminar ambas caras al mismo tiempo con dos rollos.",
-        }),
+        field({ key: "anchoUtil", label: "Ancho útil máximo", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Ancho máx de pliego." }),
+        field({ key: "espesorMaximo", label: "Espesor máximo", scope: "maquina", kind: "number", unit: "mm", description: "Espesor máx del pliego (ej. 1mm)." }),
       ],
     }),
     section({
       id: "parametros_tecnicos",
-      title: "Parametros tecnicos",
-      description: "Velocidad y mermas base de laminado.",
+      title: "Parámetros técnicos",
+      description: "Modos de operación y márgenes de desperdicio del rollo de film.",
       fields: [
-        field({
-          key: "velocidadMmSeg",
-          label: "Velocidad (mm/seg)",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          description: "Velocidad lineal nominal del equipo segun ficha tecnica.",
-          placeholder: "333",
-        }),
-        field({
-          key: "velocidadDobleRolloMmSeg",
-          label: "Velocidad doble rollo (mm/seg)",
-          scope: "maquina",
-          kind: "number",
-          description: "Velocidad lineal cuando la maquina lamina ambas caras al mismo tiempo. Si no se completa, se usa la velocidad normal.",
-          placeholder: "280",
-        }),
-        field({
-          key: "mermaArranqueMm",
-          label: "Merma arranque (mm)",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "mm",
-          description: "Consumo inicial por arranque/calibracion.",
-          placeholder: "500",
-        }),
-        field({
-          key: "mermaCierreMm",
-          label: "Merma cierre (mm)",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "mm",
-          description: "Consumo final de cierre de tirada.",
-          placeholder: "300",
-        }),
+        field({ key: "modosOperacionSoportados", label: "Modos soportados", scope: "maquina", kind: "multiselect", required: true, options: modoLaminadoOptions, description: "Una cara siempre + dos caras (1 o 2 pasadas según máquina)." }),
+        field({ key: "margenesDesperdicioMm", label: "Márgenes de desperdicio", scope: "maquina", kind: "textarea", required: true, description: "JSON: { inicio, fin, izquierdo, derecho } en mm." }),
+        field({ key: "margenEntrePliegosMm", label: "Margen entre pliegos", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Separación entre pliegos consecutivos." }),
       ],
     }),
     section({
       id: "perfiles_operativos",
-      title: "Perfiles operativos",
-      description: "Perfiles operativos simples para laminado.",
+      title: "Perfil operativo (único)",
+      description: "Solo 1 perfil 'Estándar': la velocidad/setup no varía mucho entre tipos de film.",
       fields: [
-        field({
-          key: "nombre",
-          label: "Nombre del perfil",
-          scope: "perfil_operativo",
-          kind: "text",
-          required: true,
-          description: "Nombre del perfil operativo.",
-          placeholder: "BOPP brillo estandar",
-        }),
-        field({
-          key: "modoLaminado",
-          label: "Modo de laminado",
-          scope: "perfil_operativo",
-          kind: "select",
-          required: true,
-          description: "Define si el perfil lamina una cara, ambas en simultaneo o ambas en dos pasadas.",
-          options: laminadoModeOptions,
-        }),
-        field({
-          key: "velocidadTrabajoMmSeg",
-          label: "Velocidad trabajo (mm/seg)",
-          scope: "perfil_operativo",
-          kind: "number",
-          description: "Velocidad real de trabajo para este perfil. Si no se completa, se usa la velocidad nominal de la maquina.",
-          placeholder: "300",
-        }),
-        field({
-          key: "velocidadDobleRolloTrabajoMmSeg",
-          label: "Velocidad doble rollo (mm/seg)",
-          scope: "perfil_operativo",
-          kind: "number",
-          description: "Velocidad real cuando este perfil trabaja con doble rollo. Si no se completa, se usa la velocidad de doble rollo de la maquina o la normal.",
-          placeholder: "250",
-        }),
-        field({
-          key: "gapEntreHojasMm",
-          label: "Gap entre hojas (mm)",
-          scope: "perfil_operativo",
-          kind: "number",
-          required: true,
-          unit: "mm",
-          description: "Separacion longitudinal entre hojas.",
-          placeholder: "6",
-        }),
-        field({
-          key: "warmupMin",
-          label: "Warmup (min)",
-          scope: "perfil_operativo",
-          kind: "number",
-          unit: "min",
-          description: "Tiempo de calentamiento adicional.",
-          placeholder: "4",
-        }),
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Estándar." }),
+        field({ key: "productivityValue", label: "Velocidad", scope: "perfil_operativo", kind: "number", unit: "mm_s", required: true, description: "mm/min de avance." }),
+        field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Incluye calentamiento." }),
+        field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza." }),
+        field({ key: "feedReloadMin", label: "Cambio de rollo film", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo entre rollos de film." }),
       ],
-    }),
-    section({
-      id: "consumibles",
-      title: "Consumibles",
-      description: "Film BOPP y auxiliares.",
-      fields: genericConsumableFields,
-    }),
-    section({
-      id: "desgaste_repuestos",
-      title: "Desgaste y repuestos",
-      description: "Rodillos, cuchillas y kits de mantenimiento.",
-      fields: genericWearFields,
     }),
   ];
 }
 
-function buildRedondeadoraSections(): MaquinariaTemplateSection[] {
+/** §11 — CORTE_LASER con perfil único "Estándar" (T-4 input manual). */
+function buildCorteLaserSections(): MaquinariaTemplateSection[] {
   return [
     section({
       id: "capacidades_fisicas",
-      title: "Capacidades fisicas",
-      description: "Capacidad de trabajo del equipo.",
+      title: "Capacidades físicas",
+      description: "Dimensiones de mesa y espesor máximo.",
       fields: [
-        field({
-          key: "maxEspesorPilaMm",
-          label: "Max espesor pila (mm)",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "mm",
-          description: "Espesor maximo de pila por golpe.",
-          placeholder: "10",
-        }),
+        field({ key: "anchoUtil", label: "Ancho de mesa", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Ancho útil de la mesa (ej. 1300mm)." }),
+        field({ key: "largoUtil", label: "Largo de mesa", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Largo útil de la mesa (ej. 2500mm)." }),
+        field({ key: "espesorMaximo", label: "Altura ajustable de mesa", scope: "maquina", kind: "number", unit: "mm", description: "Altura máx ajustable (ej. 25mm)." }),
       ],
     }),
     section({
       id: "parametros_tecnicos",
-      title: "Parametros tecnicos",
-      description: "Ritmo de operación del equipo.",
+      title: "Parámetros técnicos",
+      description: "Tipo de láser y operaciones soportadas.",
       fields: [
-        field({
-          key: "golpesMinNominal",
-          label: "Golpes por minuto",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          description: "Frecuencia nominal de golpes del equipo.",
-          placeholder: "35",
-        }),
+        field({ key: "tipoLaser", label: "Tipo de láser", scope: "maquina", kind: "select", required: true, options: tipoLaserOptions, description: "CO2 o Fibra." }),
+        field({ key: "potenciaWatts", label: "Potencia", scope: "maquina", kind: "number", unit: "kw", description: "Potencia del láser en watts." }),
+        field({ key: "operacionesSoportadas", label: "Operaciones", scope: "maquina", kind: "multiselect", required: true, options: operacionesLaserOptions, description: "Corte y/o grabado." }),
       ],
     }),
     section({
       id: "perfiles_operativos",
-      title: "Perfiles operativos",
-      description: "Perfiles por radio y cantidad de esquinas.",
+      title: "Perfil operativo (único)",
+      description: "Tiempo del trabajo NO se estandariza — el comercial lo ingresa al cotizar (T-4 input manual del RIP del láser).",
       fields: [
-        field({
-          key: "nombre",
-          label: "Nombre del perfil",
-          scope: "perfil_operativo",
-          kind: "text",
-          required: true,
-          description: "Nombre del perfil operativo.",
-          placeholder: "Tarjeta radio 3",
-        }),
-        field({
-          key: "radio",
-          label: "Radio",
-          scope: "perfil_operativo",
-          kind: "select",
-          description: "Radio de redondeado configurado.",
-          options: cornerRadiusOptions,
-        }),
-        field({
-          key: "esquinasPorPieza",
-          label: "Esquinas por pieza",
-          scope: "perfil_operativo",
-          kind: "number",
-          required: true,
-          description: "Cantidad de esquinas a redondear por pieza.",
-          placeholder: "4",
-        }),
-        field({
-          key: "factorVelocidad",
-          label: "Factor velocidad",
-          scope: "perfil_operativo",
-          kind: "number",
-          description: "Ajuste multiplicador sobre velocidad nominal (1 = normal).",
-          placeholder: "1",
-        }),
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Estándar." }),
+        field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo típico de carga + calibración." }),
+        field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza." }),
+      ],
+    }),
+    section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Tubo láser por horas de uso.", fields: genericWearFields }),
+  ];
+}
+
+/** §12 — ROUTER_CNC con perfil único "Estándar" (T-3 productividad nominal). */
+function buildRouterCncSections(): MaquinariaTemplateSection[] {
+  return [
+    section({
+      id: "capacidades_fisicas",
+      title: "Capacidades físicas",
+      description: "Recorrido X/Y/Z y espesor máximo.",
+      fields: [
+        field({ key: "anchoUtil", label: "Eje X útil", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Recorrido máx en X." }),
+        field({ key: "largoUtil", label: "Eje Y útil", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Recorrido máx en Y." }),
+        field({ key: "altoUtil", label: "Eje Z útil", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Espesor máx (= eje Z)." }),
+        field({ key: "espesorMaximo", label: "Espesor máximo", scope: "maquina", kind: "number", unit: "mm", description: "Igual a alto útil para CNC." }),
       ],
     }),
     section({
-      id: "consumibles",
-      title: "Consumibles",
-      description: "Consumibles auxiliares del proceso.",
-      fields: genericConsumableFields,
+      id: "parametros_tecnicos",
+      title: "Parámetros técnicos",
+      description: "Husillo, velocidad y operaciones soportadas.",
+      fields: [
+        field({ key: "potenciaHusilloKw", label: "Potencia husillo", scope: "maquina", kind: "number", unit: "kw", required: true, description: "Potencia del husillo (ej. 5.5 kW)." }),
+        field({ key: "velocidadMaxRPM", label: "Velocidad máxima", scope: "maquina", kind: "number", unit: "rpm", description: "RPM máximas del husillo." }),
+        field({ key: "operacionesSoportadas", label: "Operaciones", scope: "maquina", kind: "multiselect", required: true, options: operacionesCncOptions, description: "Corte pasante, fresado, perforado." }),
+        field({ key: "tieneAspiracionViruta", label: "Aspiración de viruta", scope: "maquina", kind: "boolean", description: "Si la máquina tiene sistema de aspiración." }),
+      ],
     }),
     section({
-      id: "desgaste_repuestos",
-      title: "Desgaste y repuestos",
-      description: "Cuchillas y repuestos de mantenimiento.",
-      fields: genericWearFields,
+      id: "perfiles_operativos",
+      title: "Perfil operativo (único)",
+      description: "Productividad nominal m²/h para casos repetitivos. Casos custom usan T-4 input manual.",
+      fields: [
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Estándar." }),
+        field({ key: "productivityValue", label: "Productividad nominal", scope: "perfil_operativo", kind: "number", unit: "m2_h", required: true, description: "m²/hora para T-3." }),
+        field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Carga material + calibración." }),
+        field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Aspirar viruta + retirar piezas." }),
+      ],
+    }),
+    section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Fresa por horas de uso.", fields: genericWearFields }),
+  ];
+}
+
+/** §13 — ANILLADORA con discriminante tipoAnillo. */
+function buildAnilladoraSections(): MaquinariaTemplateSection[] {
+  return [
+    section({
+      id: "capacidades_fisicas",
+      title: "Capacidades físicas",
+      description: "Largo máx del anillado y diámetro máx de anillo.",
+      fields: [
+        field({ key: "anchoUtil", label: "Largo máx anillado", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Largo máx del libro a anillar (ej. 360mm)." }),
+        field({ key: "altoUtil", label: "Diámetro máx anillo", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Diámetro máx soportado (ej. 50mm)." }),
+      ],
+    }),
+    section({
+      id: "parametros_tecnicos",
+      title: "Parámetros técnicos",
+      description: "Tipos de anillo y pasos de orificios soportados.",
+      fields: [
+        field({ key: "tiposAnilloSoportados", label: "Tipos de anillo", scope: "maquina", kind: "multiselect", required: true, options: tipoAnilloOptions, description: "Espiral plástico y/o wire-O." }),
+        field({ key: "pasosOrificiosSoportados", label: "Pasos de orificios", scope: "maquina", kind: "multiselect", options: pasosOrificiosOptions, description: "3:1 y/o 2:1." }),
+      ],
+    }),
+    section({
+      id: "perfiles_operativos",
+      title: "Perfiles operativos por tipo de anillo",
+      description: "Un perfil por tipo de anillo (espiral plástico vs wire-O).",
+      fields: [
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Espiral plástico." }),
+        field({ key: "productivityValue", label: "Productividad", scope: "perfil_operativo", kind: "number", unit: "piezas_h", required: true, description: "Hojas por hora (ej. 1200)." }),
+        field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de calibración del paso de orificios." }),
+        field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza." }),
+        field({ key: "tipoAnillo", label: "Tipo de anillo", scope: "perfil_operativo", kind: "select", required: true, options: tipoAnilloOptions, description: "Espiral plástico o wire-O." }),
+        field({ key: "diametrosSoportadosMm", label: "Diámetros soportados", scope: "perfil_operativo", kind: "multiselect", description: "JSON: array de mm. Ej. [6, 10, 15, 20, 30, 50]." }),
+      ],
     }),
   ];
 }
 
-function buildPerforadoraSections(): MaquinariaTemplateSection[] {
+/** §15 — SOLDADORA (pendiente, sin schema detallado). */
+function buildSoldadoraSections(): MaquinariaTemplateSection[] {
   return [
     section({
       id: "capacidades_fisicas",
-      title: "Capacidades fisicas",
-      description: "Ancho útil y capacidad de alimentación.",
+      title: "Capacidades físicas",
+      description: "Volumen útil de trabajo.",
       fields: [
-        field({
-          key: "anchoUtil",
-          label: "Ancho util",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          unit: "cm",
-          description: "Ancho maximo de hoja a perforar.",
-          placeholder: "50",
-        }),
-      ],
-    }),
-    section({
-      id: "parametros_tecnicos",
-      title: "Parametros tecnicos",
-      description: "Capacidad nominal y lineas por pasada.",
-      fields: [
-        field({
-          key: "pliegosMinNominal",
-          label: "Pliegos por minuto",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          description: "Capacidad nominal del alimentador.",
-          placeholder: "80",
-        }),
-        field({
-          key: "lineasPorPasadaMax",
-          label: "Lineas por pasada (max)",
-          scope: "maquina",
-          kind: "number",
-          required: true,
-          description: "Cantidad maxima de lineas perforables por pasada.",
-          placeholder: "1",
-        }),
+        field({ key: "anchoUtil", label: "Ancho útil", scope: "maquina", kind: "number", unit: "mm", description: "Espacio de trabajo." }),
+        field({ key: "largoUtil", label: "Largo útil", scope: "maquina", kind: "number", unit: "mm", description: "Espacio de trabajo." }),
+        field({ key: "altoUtil", label: "Alto útil", scope: "maquina", kind: "number", unit: "mm", description: "Espacio de trabajo." }),
       ],
     }),
     section({
       id: "perfiles_operativos",
       title: "Perfiles operativos",
-      description: "Perfiles por tipo y cantidad de lineas.",
+      description: "Personalizar perfiles por tipo de soldadura (MIG, TIG, electrodo) y material.",
       fields: [
-        field({
-          key: "nombre",
-          label: "Nombre del perfil",
-          scope: "perfil_operativo",
-          kind: "text",
-          required: true,
-          description: "Nombre del perfil operativo.",
-          placeholder: "Microperforado doble linea",
-        }),
-        field({
-          key: "lineasPerforado",
-          label: "Lineas por hoja",
-          scope: "perfil_operativo",
-          kind: "number",
-          required: true,
-          description: "Cantidad de lineas requeridas por hoja.",
-          placeholder: "2",
-        }),
-        field({
-          key: "tipoPerforado",
-          label: "Tipo perforado",
-          scope: "perfil_operativo",
-          kind: "select",
-          description: "Tipo de herramienta/perforación.",
-          options: perforationTypeOptions,
-        }),
-        field({
-          key: "factorVelocidad",
-          label: "Factor velocidad",
-          scope: "perfil_operativo",
-          kind: "number",
-          description: "Ajuste multiplicador sobre velocidad nominal (1 = normal).",
-          placeholder: "1",
-        }),
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. MIG acero estándar." }),
+        field({ key: "productivityValue", label: "Productividad", scope: "perfil_operativo", kind: "number", description: "cm/min lineales típicamente (T-2)." }),
+        field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Preparación inicial." }),
+        field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Limpieza." }),
+      ],
+    }),
+    section({ id: "consumibles", title: "Consumibles", description: "Electrodos, gas (argón, CO2).", fields: genericConsumableFields }),
+  ];
+}
+
+/** §15 — CABINA_PINTURA (pendiente). */
+function buildCabinaPinturaSections(): MaquinariaTemplateSection[] {
+  return [
+    section({
+      id: "capacidades_fisicas",
+      title: "Capacidades físicas",
+      description: "Volumen interior de la cabina.",
+      fields: [
+        field({ key: "anchoUtil", label: "Ancho útil", scope: "maquina", kind: "number", unit: "mm", description: "Ancho interior." }),
+        field({ key: "largoUtil", label: "Largo útil", scope: "maquina", kind: "number", unit: "mm", description: "Largo interior." }),
+        field({ key: "altoUtil", label: "Alto útil", scope: "maquina", kind: "number", unit: "mm", description: "Alto interior." }),
       ],
     }),
     section({
-      id: "consumibles",
-      title: "Consumibles",
-      description: "Consumibles auxiliares del perforado.",
-      fields: genericConsumableFields,
+      id: "perfiles_operativos",
+      title: "Perfiles operativos",
+      description: "Por tipo de pintura (laca, esmalte) y curado (aire, horno).",
+      fields: [
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Laca poliuretánica." }),
+        field({ key: "productivityValue", label: "Productividad", scope: "perfil_operativo", kind: "number", unit: "m2_h", description: "m²/hora aproximado." }),
+        field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Preparación." }),
+        field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Limpieza de equipo." }),
+      ],
     }),
-    section({
-      id: "desgaste_repuestos",
-      title: "Desgaste y repuestos",
-      description: "Peines, cuchillas y repuestos.",
-      fields: genericWearFields,
-    }),
+    section({ id: "consumibles", title: "Consumibles", description: "Pintura, laca, solvente, primer.", fields: genericConsumableFields }),
   ];
 }
+
+/** Plantilla provisional MESA_DE_CORTE — postergada (doc §15). */
+function buildMesaCorteSections(): MaquinariaTemplateSection[] {
+  return [
+    section({
+      id: "capacidades_fisicas",
+      title: "Capacidades físicas",
+      description: "Dimensiones de mesa y espesor máximo.",
+      fields: [
+        field({ key: "anchoUtil", label: "Ancho mesa", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Ancho útil de mesa." }),
+        field({ key: "largoUtil", label: "Largo mesa", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Largo útil de mesa." }),
+        field({ key: "espesorMaximo", label: "Espesor máximo", scope: "maquina", kind: "number", unit: "mm", description: "Espesor máx del material." }),
+      ],
+    }),
+    section({
+      id: "perfiles_operativos",
+      title: "Perfiles operativos",
+      description: "Perfiles por herramienta y material.",
+      fields: [
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Cuchilla cartón." }),
+        field({ key: "productivityValue", label: "Productividad", scope: "perfil_operativo", kind: "number", unit: "m2_h", description: "m²/hora." }),
+        field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Preparación." }),
+        field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Limpieza." }),
+      ],
+    }),
+    section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Cuchillas y filtros.", fields: genericWearFields }),
+  ];
+}
+
+// ─── Catálogo final ────────────────────────────────────────────────
 
 export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
   template({
-    id: "router_cnc",
-    label: "Router CNC",
-    family: "corte_mecanizado",
-    description: "Equipo de mecanizado para corte, grabado o desbaste de materiales rigidos.",
-    geometry: "volumen",
-    defaultProductionUnit: "hora",
+    id: "impresora_laser",
+    label: "Impresora láser",
+    family: "impresion_digital",
+    description: "Impresora digital láser por tóner. Imprime sobre pliegos de papel/cartulina.",
+    geometry: "pliego",
+    defaultProductionUnit: "ppm",
     visibleSections: commonTemplateSections,
-    sections: buildRouterSections(),
+    sections: buildLaserSections(),
     help: {
-      summary:
-        "Usa esta plantilla para routers CNC donde el recorrido X/Y/Z y la configuracion del spindle determinan la capacidad del equipo.",
+      summary: "Plantilla unificada para impresoras láser (Ricoh, Konica, Xerox). Productividad medida en pliegos por minuto (PPM).",
       tips: [
-        "Carga las medidas utiles reales y no el tamano nominal del banco.",
-        "Conviene crear perfiles separados por material y herramienta.",
-        "Si el equipo usa vacio o cambiador automatico, dejalo explicitado porque impacta la operacion.",
+        "Cargá márgenes no imprimibles para que el motor calcule área útil correcta.",
+        "Creá perfiles separados por simple/doble faz y rangos de gramaje.",
       ],
-      examples: ["Router CNC 210x310 cm para acrilico y MDF"],
+      examples: ["Ricoh PRO C5100s para tarjetas, talonarios, folletería"],
     },
   }),
   template({
-    id: "corte_laser",
-    label: "Corte laser",
-    family: "corte_mecanizado",
-    description: "Equipo laser para corte y grabado de materiales livianos o rigidos segun potencia.",
-    geometry: "plano",
-    defaultProductionUnit: "hora",
+    id: "impresora_gran_formato_por_area",
+    label: "Impresora gran formato por área",
+    family: "impresion_gran_formato",
+    description: "Impresora unificada para LATEX, SOLVENTE, UV, SUBLIMACION, DTF (rollo o mesa). Productividad m²/h.",
+    geometry: "rollo",
+    defaultProductionUnit: "m2_h",
     visibleSections: commonTemplateSections,
-    sections: buildLaserCutSections(),
+    sections: buildGranFormatoSections(),
     help: {
-      summary:
-        "Usa esta plantilla para equipos donde la potencia del laser, el tipo de fuente y el material definen el rendimiento real.",
+      summary: "Una sola plantilla unifica las 7 viejas (LATEX, UV, DTF, etc.) usando discriminantes tecnologia + geometria.",
       tips: [
-        "Separa perfiles de corte y grabado para evitar mezclar velocidades.",
-        "Registra los materiales compatibles de forma conservadora.",
+        "Si geometria=ROLLO, completá anchoMinRolloMm y anchoMaxRolloMm.",
+        "Si geometria=MESA_EXTENSORA, completá anchoMesaMm/largoMesaMm/alturaMaxCabezalMm.",
+        "Las DTF necesitan un paso siguiente de Aplicación de transfer (otra máquina, plancha térmica).",
       ],
-      warnings: [
-        "No todos los materiales son aptos para corte laser; evita cargar compatibilidades dudosas.",
+      examples: [
+        "Roland VG3-540 → tecnologia=LATEX + geometria=ROLLO",
+        "Mimaki UJF-7151 → tecnologia=UV + geometria=MESA_EXTENSORA",
       ],
-      examples: ["Laser CO2 130x90 cm para acrilico y MDF"],
     },
   }),
   template({
     id: "guillotina",
     label: "Guillotina",
     family: "terminacion",
-    description: "Equipo de corte en pila para terminación de pliegos.",
+    description: "Corte en pila con cuchilla horizontal. Fórmula no lineal (tandas × cortes/tanda).",
     geometry: "pliego",
     defaultProductionUnit: "cortes_min",
     allowedProductionUnits: ["cortes_min", "ciclo"],
-    visibleSections: commonTemplateSections.filter((sectionId) => sectionId !== "parametros_tecnicos"),
+    visibleSections: commonTemplateSections,
     sections: buildGuillotinaSections(),
     help: {
-      summary:
-        "Usa esta plantilla para guillotinas donde la capacidad física y el perfil del sustrato determinan la velocidad real de corte.",
+      summary: "Productividad NULL en perfiles — la guillotina usa fórmula tandas × cortes/tanda.",
       tips: [
-        "Configura alto de boca en capacidades físicas y define por perfil el espesor real del sustrato.",
-        "Usa presets de papel/gramaje como ayuda inicial y corrige el espesor si tu proveedor difiere.",
+        "tiempoPorCorteSeg es constante en la máquina.",
+        "Creá un perfil por rango de gramaje. Cada uno declara pliegosMaxPorTanda.",
       ],
-      examples: ["Guillotina 92 cm para corte final de pliegos impresos"],
-    },
-  }),
-  template({
-    id: "laminadora_bopp_rollo",
-    label: "Laminadora BOPP rollo",
-    family: "terminacion",
-    description: "Equipo de laminación en rollo con consumo continuo de film.",
-    geometry: "rollo",
-    defaultProductionUnit: "metro_lineal",
-    visibleSections: commonTemplateSections,
-    sections: buildLaminadoraBoppSections(),
-    help: {
-      summary:
-        "Usa esta plantilla para laminado térmico/BOPP en rollo, contemplando mermas longitudinales y trabajo a una o dos caras.",
-      tips: [
-        "Define si la maquina soporta doble rollo y, si aplica, carga una velocidad especifica para ese modo.",
-        "Usa perfiles distintos para una cara, dos caras simultaneo o dos caras en dos pasadas.",
-        "Carga warmup cuando la máquina requiere estabilización térmica.",
-      ],
-      examples: ["Laminadora BOPP para tarjetas y folletería en hoja"],
-    },
-  }),
-  template({
-    id: "redondeadora_puntas",
-    label: "Redondeadora de puntas",
-    family: "terminacion",
-    description: "Equipo para redondeo de esquinas en piezas finales.",
-    geometry: "pliego",
-    defaultProductionUnit: "pieza",
-    visibleSections: commonTemplateSections,
-    sections: buildRedondeadoraSections(),
-    help: {
-      summary:
-        "Usa esta plantilla para redondeadoras donde la productividad depende de golpes por minuto y esquinas por pieza.",
-      tips: [
-        "Separa perfiles por radio y cantidad de esquinas para reflejar tiempos reales.",
-      ],
-      examples: ["Redondeadora para tarjetas personales"],
-    },
-  }),
-  template({
-    id: "perforadora",
-    label: "Perforadora",
-    family: "terminacion",
-    description: "Equipo para perforado y microperforado en hoja/pliego.",
-    geometry: "pliego",
-    defaultProductionUnit: "hoja",
-    visibleSections: commonTemplateSections,
-    sections: buildPerforadoraSections(),
-    help: {
-      summary:
-        "Usa esta plantilla para perforado donde la cantidad de líneas por hoja puede requerir múltiples pasadas.",
-      tips: [
-        "Configura líneas máximas por pasada para modelar correctamente el tiempo de corrida.",
-      ],
-      examples: ["Perforadora para cuponeras y desprendibles"],
-    },
-  }),
-  template({
-    id: "impresora_3d",
-    label: "Impresora 3D",
-    family: "fabricacion_aditiva",
-    description: "Equipo de fabricacion aditiva para piezas, prototipos y series cortas.",
-    geometry: "volumen",
-    defaultProductionUnit: "pieza",
-    visibleSections: commonTemplateSections,
-    sections: build3dSections(),
-    help: {
-      summary:
-        "Usa esta plantilla para equipos 3D donde el volumen de impresion, la tecnologia y el material condicionan la capacidad del equipo.",
-      tips: [
-        "Conviene cargar perfiles separados por material y altura de capa.",
-        "Si una impresora usa resina o tecnologia distinta, reflejalo en el campo de tecnologia.",
-      ],
-      examples: ["Impresora FDM de 22x22x30 cm con PLA y PETG"],
-    },
-  }),
-  template({
-    id: "impresora_dtf",
-    label: "Impresora DTF",
-    family: "impresion_transferencia",
-    description: "Equipo DTF para impresion sobre film y transferencia textil.",
-    geometry: "rollo",
-    defaultProductionUnit: "m2",
-    visibleSections: commonTemplateSections,
-    sections: buildDtfSections("dtf"),
-    help: {
-      summary:
-        "Usa esta plantilla para DTF textil donde el ancho de film, la configuracion de tintas y el secado explican el comportamiento del equipo.",
-      tips: [
-        "Conviene separar perfiles por calidad y tipo de prenda.",
-        "Carga film y polvo como consumibles distintos.",
-      ],
-      examples: ["DTF 60 cm CMYK + W para remeras y buzos"],
-    },
-  }),
-  template({
-    id: "impresora_dtf_uv",
-    label: "Impresora DTF UV",
-    family: "impresion_transferencia",
-    description: "Equipo DTF UV para transferencia sobre superficies rigidas o semirigidas.",
-    geometry: "rollo",
-    defaultProductionUnit: "m2",
-    visibleSections: commonTemplateSections,
-    sections: buildDtfSections("dtf_uv"),
-    help: {
-      summary:
-        "Usa esta plantilla para DTF UV con film A/B o esquemas similares de transferencia.",
-      tips: [
-        "Conviene separar perfiles por tipo de superficie objetivo.",
-        "Si usa barniz o blanco, reflejalo en los perfiles y consumibles.",
-      ],
-      examples: ["DTF UV 30 cm para stickers y decoracion sobre rigidos"],
-    },
-  }),
-  template({
-    id: "impresora_uv_mesa_extensora",
-    label: "Impresora UV mesa extensora/cinta",
-    family: "impresion_uv",
-    description: "Equipo UV para rigidos o piezas especiales con mesa extensora o cinta.",
-    geometry: "plano",
-    defaultProductionUnit: "m2",
-    visibleSections: commonTemplateSections,
-    sections: buildUvFlatbedSections("mesa_extensora"),
-    help: {
-      summary:
-        "Usa esta plantilla para UV con mesa extensora o alimentacion por cinta, util en piezas largas o flujos semicontinuos.",
-      tips: [
-        "Carga ancho de boca y dimensiones reales de cama para no mezclar capacidad fisica con area util generica.",
-        "Crea perfiles separados si el equipo cambia mucho entre rigidos y piezas largas.",
-      ],
-      examples: ["UV con mesa extensora para PVC espumado y corrugado"],
-    },
-  }),
-  template({
-    id: "impresora_uv_cilindrica",
-    label: "Impresora UV 360 - Cilindrica",
-    family: "impresion_uv",
-    description: "Equipo UV para impresion directa sobre objetos cilindricos.",
-    geometry: "cilindrico",
-    defaultProductionUnit: "pieza",
-    visibleSections: commonTemplateSections,
-    sections: buildUvCylindricalSections(),
-    help: {
-      summary:
-        "Usa esta plantilla para equipos UV con rotacion controlada para botellas, vasos o termos.",
-      tips: [
-        "Carga los diametros minimos y maximos reales para evitar sobreestimar capacidad.",
-        "Conviene separar perfiles por tipo de objeto y calidad.",
-      ],
-      examples: ["UV cilindrica para termos y botellas promocionales"],
-    },
-  }),
-  template({
-    id: "impresora_uv_flatbed",
-    label: "Impresora UV Flatbed",
-    family: "impresion_uv",
-    description: "Equipo UV de cama plana para impresion directa sobre rigidos.",
-    geometry: "plano",
-    defaultProductionUnit: "m2",
-    visibleSections: commonTemplateSections,
-    sections: buildUvFlatbedSections("flatbed"),
-    help: {
-      summary:
-        "Usa esta plantilla para impresoras UV de cama plana donde la superficie util, la altura de objeto y los canales especiales marcan la capacidad.",
-      tips: [
-        "Carga ancho de boca, ancho de cama, largo de cama y altura maxima real del objeto.",
-        "Separa perfiles por uso de blanco y barniz porque alteran mucho el rendimiento.",
-      ],
-      examples: ["UV flatbed 250x130 cm con blanco y barniz"],
-    },
-  }),
-  template({
-    id: "impresora_uv_rollo",
-    label: "Impresora UV rollo a rollo",
-    family: "impresion_uv",
-    description: "Equipo UV para materiales flexibles en bobina.",
-    geometry: "rollo",
-    defaultProductionUnit: "m2",
-    visibleSections: commonTemplateSections,
-    sections: buildUvRolloSections(),
-    help: {
-      summary:
-        "Usa esta plantilla para UV rollo a rollo sobre vinilos, films y otros materiales flexibles.",
-      tips: [
-        "La productividad real cambia mucho segun pasadas y canales; por eso conviene usar perfiles.",
-        "Carga diametro y peso de bobina reales para evitar datos irreales de capacidad.",
-      ],
-      examples: ["UV rollo 160 cm para vinilo backlit y film"],
-    },
-  }),
-  template({
-    id: "impresora_solvente",
-    label: "Impresora solvente",
-    family: "impresion_inkjet",
-    description: "Equipo de gran formato solvente para materiales flexibles.",
-    geometry: "rollo",
-    defaultProductionUnit: "m2",
-    visibleSections: commonTemplateSections,
-    sections: buildRollInkjetSections(
-      "Impresion solvente",
-      "Tintas, resolucion y secado del equipo solvente.",
-    ),
-    help: {
-      summary:
-        "Usa esta plantilla para equipos solventes de exterior o grafica de alto volumen.",
-      tips: [
-        "Conviene separar perfiles por calidad y por tipo de material.",
-        "Carga tintas y limpiezas como consumibles distintos.",
-      ],
-      examples: ["Solvente 320 cm para lona y vinilo exterior"],
-    },
-  }),
-  template({
-    id: "impresora_inyeccion_tinta",
-    label: "Impresora de inyeccion de tinta",
-    family: "impresion_inkjet",
-    description: "Equipo inkjet general para produccion sobre materiales flexibles.",
-    geometry: "rollo",
-    defaultProductionUnit: "m2",
-    visibleSections: commonTemplateSections,
-    sections: buildRollInkjetSections(
-      "Impresion inkjet",
-      "Tintas, resolucion y secado del equipo inkjet.",
-    ),
-    help: {
-      summary:
-        "Usa esta plantilla cuando el equipo sea inkjet pero no encaje mejor en latex, solvente o sublimacion.",
-      tips: [
-        "Si la tecnologia principal es clara, prioriza la plantilla especifica.",
-        "Usa esta como categoria general controlada y no como comodin indiscriminado.",
-      ],
-      examples: ["Inkjet 180 cm para papeles y films especiales"],
-    },
-  }),
-  template({
-    id: "impresora_latex",
-    label: "Impresora de latex",
-    family: "impresion_inkjet",
-    description: "Equipo latex para impresion sobre sustratos flexibles con secado integrado.",
-    geometry: "rollo",
-    defaultProductionUnit: "m2",
-    visibleSections: commonTemplateSections,
-    sections: buildRollInkjetSections(
-      "Impresion latex",
-      "Tintas latex, resolucion y secado integrado del equipo.",
-    ),
-    help: {
-      summary:
-        "Usa esta plantilla para equipos latex donde el secado y el tipo de tinta condicionan la velocidad real.",
-      tips: [
-        "Distingue perfiles de alta calidad y produccion porque pueden variar mucho en m2/h.",
-        "Carga los materiales flexibles compatibles reales del fabricante.",
-      ],
-      examples: ["Latex 160 cm para vinilo, canvas y papeles mural"],
-    },
-  }),
-  template({
-    id: "impresora_sublimacion_gran_formato",
-    label: "Impresora de sublimacion - Grandes formatos",
-    family: "impresion_inkjet",
-    description: "Equipo para sublimacion sobre papel de transferencia o flujos textiles relacionados.",
-    geometry: "rollo",
-    defaultProductionUnit: "m2",
-    visibleSections: commonTemplateSections,
-    sections: buildRollInkjetSections(
-      "Impresion sublimacion",
-      "Tintas de sublimacion, resolucion y secado del equipo.",
-    ),
-    help: {
-      summary:
-        "Usa esta plantilla para equipos de sublimacion de gran formato sobre papel o soportes de transferencia.",
-      tips: [
-        "Carga el papel de sublimacion como consumible independiente de la tinta.",
-        "Si el negocio separa impresion y planchado, aqui modela solo la parte de impresion.",
-      ],
-      examples: ["Sublimacion 190 cm para textil deportivo y decoracion"],
-    },
-  }),
-  template({
-    id: "impresora_laser",
-    label: "Impresora laser",
-    family: "impresion_digital",
-    description: "Equipo digital hoja a hoja con tecnologia laser o toner.",
-    geometry: "pliego",
-    defaultProductionUnit: "copia",
-    visibleSections: commonTemplateSections,
-    sections: buildLaserPrinterSections(),
-    help: {
-      summary:
-        "Usa esta plantilla para digitales laser o toner donde perfiles, toners y repuestos con vida util forman parte del costo operativo real.",
-      tips: [
-        "Crea perfiles separados por formato, color y calidad.",
-        "Ademas de toner, registra fusor, drum y kits de mantenimiento en desgaste.",
-        "Carga solo los margenes realmente no imprimibles para no perder superficie util sin motivo.",
-      ],
-      examples: ["Digital SRA3 color con perfiles A4, A3 y duplex"],
-    },
-  }),
-  template({
-    id: "plotter_cad",
-    label: "Impresora CAD/Plotter",
-    family: "impresion_inkjet",
-    description: "Equipo de impresion tecnica para planos, lineas y reproduccion CAD.",
-    geometry: "rollo",
-    defaultProductionUnit: "metro_lineal",
-    visibleSections: commonTemplateSections,
-    sections: buildRollInkjetSections(
-      "Impresion CAD/plotter",
-      "Tintas, resolucion y materiales para reproduccion tecnica.",
-    ),
-    help: {
-      summary:
-        "Usa esta plantilla para plotters CAD donde predominan planos, lineas y formatos tecnicos.",
-      tips: [
-        "Conviene separar perfiles monocromo y color.",
-        "Si la productividad se mide mejor por metro lineal, reflejalo luego en procesos o costeo.",
-      ],
-      examples: ["Plotter CAD 91 cm para planos y documentacion tecnica"],
-    },
-  }),
-  template({
-    id: "mesa_de_corte",
-    label: "Mesa de corte",
-    family: "corte_mecanizado",
-    description: "Equipo de corte digital plano para materiales flexibles o semirigidos.",
-    geometry: "plano",
-    defaultProductionUnit: "m2",
-    visibleSections: commonTemplateSections,
-    sections: buildCuttingTableSections("mesa"),
-    help: {
-      summary:
-        "Usa esta plantilla para mesas de corte digital con herramientas intercambiables y cama de vacio.",
-      tips: [
-        "Carga las herramientas y materiales compatibles de forma conservadora.",
-        "Conviene crear perfiles por material y herramienta para reflejar mejor la realidad operativa.",
-      ],
-      examples: ["Mesa de corte 160x300 cm para carton, foamboard y corrugado"],
+      examples: ["Polar 92 ED para corte de pliegos impresos"],
     },
   }),
   template({
     id: "plotter_de_corte",
     label: "Plotter de corte",
     family: "corte_mecanizado",
-    description: "Equipo de corte continuo para vinilo, film y materiales delgados.",
+    description: "Cuchilla móvil que corta vinilos en rollo. Soporta corte completo o kiss-cut.",
     geometry: "rollo",
-    defaultProductionUnit: "metro_lineal",
+    defaultProductionUnit: "m2_h",
     visibleSections: commonTemplateSections,
-    sections: buildCuttingTableSections("plotter"),
+    sections: buildPlotterCorteSections(),
     help: {
-      summary:
-        "Usa esta plantilla para plotters de corte continuo donde velocidad, cuchilla y material son la base del rendimiento.",
+      summary: "Perfiles por tipoCorte + modoOperacion. Complejidad la elige el comercial al cotizar (factor multiplicador).",
       tips: [
-        "Conviene separar perfiles por tipo de vinilo o film.",
-        "Si trabajas con transferencia, registra cuchillas y bandas como desgaste.",
+        "Configurá factorComplejidad como JSON con keys SIMPLE / INTERMEDIO / COMPLEJO.",
+        "Para multi-rollo, declarar feedReloadMin > 0.",
       ],
-      examples: ["Plotter de corte 140 cm para vinilo de rotulacion"],
+      examples: ["Skycut C24 para vinilo de rotulación"],
     },
   }),
-  // G-S2 (2026-04-25): plantillas pendientes históricas del doc §6.15.
-  // Templates mínimos reusando estructura de Guillotina para que existan en
-  // el catálogo y el admin pueda configurar perfiles. Los detalles
-  // específicos por máquina (electrodos, hilos, presiones, anillos) se
-  // refinan cuando aparezca el primer caso real.
+  template({
+    id: "plotter_cad",
+    label: "Plotter CAD",
+    family: "impresion_gran_formato",
+    description: "Plotter inkjet técnico para planos, mapas, fotos sobre rollo.",
+    geometry: "rollo",
+    defaultProductionUnit: "m2_h",
+    visibleSections: commonTemplateSections,
+    sections: buildPlotterCadSections(),
+    help: {
+      summary: "Perfiles por tipoTrabajo (CAD vs FOTO) + calidad (DRAFT/NORMAL/ALTA). Cambian abismalmente velocidad y tinta.",
+      tips: ["Declará el consumo de tinta en ml/m² por perfil — varía mucho entre CAD y foto."],
+      examples: ["HP DesignJet T1700, Canon imagePROGRAF"],
+    },
+  }),
+  template({
+    id: "laminadora_bopp_rollo",
+    label: "Laminadora BOPP rollo",
+    family: "terminacion",
+    description: "Aplica film transparente (BOPP brillo, mate, UV) sobre pliegos.",
+    geometry: "rollo",
+    defaultProductionUnit: "m_min",
+    visibleSections: commonTemplateSections,
+    sections: buildLaminadoraBoppSections(),
+    help: {
+      summary: "Perfil único 'Estándar'. Velocidad medida en mm/min.",
+      tips: [
+        "Declarar modosOperacionSoportados según las capacidades reales (1 o 2 pasadas para doble cara).",
+        "Los márgenes de desperdicio impactan el cálculo de consumo de film.",
+      ],
+      examples: ["GMP Excelam-II"],
+    },
+  }),
+  template({
+    id: "corte_laser",
+    label: "Corte láser",
+    family: "corte_mecanizado",
+    description: "Láser CO2 o Fibra para corte y grabado de materiales rígidos.",
+    geometry: "plano",
+    defaultProductionUnit: "hora",
+    visibleSections: commonTemplateSections,
+    sections: buildCorteLaserSections(),
+    help: {
+      summary: "El tiempo del trabajo NO se estandariza — el comercial lo ingresa al cotizar (T-4 input manual del RIP).",
+      tips: ["Una misma máquina hace corte y grabado según potencia/velocidad usada."],
+      examples: ["Bodor BCL1309X, Trotec Speedy"],
+    },
+  }),
+  template({
+    id: "router_cnc",
+    label: "Router CNC",
+    family: "corte_mecanizado",
+    description: "Control Numérico Computarizado para corte/fresado/perforado de materiales rígidos.",
+    geometry: "volumen",
+    defaultProductionUnit: "m2_h",
+    visibleSections: commonTemplateSections,
+    sections: buildRouterCncSections(),
+    help: {
+      summary: "Productividad nominal m²/h para casos repetitivos (T-3). Casos custom usan T-4 input manual del CAM.",
+      tips: ["Declarar operacionesSoportadas según las herramientas disponibles."],
+      examples: ["Felder F500 CNC, ShopBot, AXYZ"],
+    },
+  }),
+  template({
+    id: "anilladora",
+    label: "Anilladora",
+    family: "terminacion",
+    description: "Encuadernación con espiral plástico o wire-O.",
+    geometry: "pliego",
+    defaultProductionUnit: "hora",
+    visibleSections: commonTemplateSections,
+    sections: buildAnilladoraSections(),
+    help: {
+      summary: "El motor elige el diámetro de espiral según hojas/libro (criterio MENOR_CAPACIDAD_QUE_CUMPLA).",
+      tips: ["Cargá variantes de anillo con su capacidadMaxHojas en el catálogo de materia prima."],
+      examples: ["Renz Combi-S, GBC, Rilecart"],
+    },
+  }),
   template({
     id: "soldadora",
     label: "Soldadora",
@@ -3306,13 +872,12 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     description: "Equipo de soldadura para herrería y cartelería estructural.",
     geometry: "volumen",
     defaultProductionUnit: "hora",
-    visibleSections: commonTemplateSections.filter((sectionId) => sectionId !== "parametros_tecnicos"),
-    sections: buildGuillotinaSections(),
+    visibleSections: commonTemplateSections,
+    sections: buildSoldadoraSections(),
     help: {
-      summary:
-        "Plantilla mínima para soldadoras. Personalizá perfiles operativos según tipo (MIG, TIG, electrodo) y material.",
-      tips: ["Configurá perfiles separados por tipo de soldadura y material."],
-      examples: ["MIG/TIG para luminosos y carteles estructurales"],
+      summary: "Plantilla pendiente de modelado detallado (doc §15). Personalizá perfiles por tipo (MIG/TIG/electrodo) y material.",
+      tips: ["Productividad típica T-2 (cm/min lineales)."],
+      examples: ["Soldadoras MIG/TIG para luminosos y carteles estructurales"],
     },
   }),
   template({
@@ -3321,38 +886,35 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     family: "terminacion",
     description: "Cabina presurizada para aplicación de pintura sobre rígidos.",
     geometry: "volumen",
-    defaultProductionUnit: "hora",
-    visibleSections: commonTemplateSections.filter((sectionId) => sectionId !== "parametros_tecnicos"),
-    sections: buildGuillotinaSections(),
+    defaultProductionUnit: "m2_h",
+    visibleSections: commonTemplateSections,
+    sections: buildCabinaPinturaSections(),
     help: {
-      summary:
-        "Plantilla mínima para cabinas de pintura. Personalizá perfiles según pintura y curado.",
-      tips: ["Definí consumibles de pintura y secado por perfil."],
+      summary: "Plantilla pendiente de modelado detallado (doc §15). Personalizá perfiles según pintura y curado.",
+      tips: ["Definí consumibles de pintura, laca, primer y solvente por perfil."],
       examples: ["Cabina con horno para letras corpóreas"],
     },
   }),
   template({
-    id: "anilladora",
-    label: "Anilladora",
-    family: "terminacion",
-    description: "Equipo de encuadernación con anillo (espiral plástico, wire-O).",
-    geometry: "pliego",
-    defaultProductionUnit: "hora",
-    visibleSections: commonTemplateSections.filter((sectionId) => sectionId !== "parametros_tecnicos"),
-    sections: buildGuillotinaSections(),
+    id: "mesa_de_corte",
+    label: "Mesa de corte",
+    family: "corte_mecanizado",
+    description: "Mesa digital para corte con herramientas intercambiables (cuchilla, fresa).",
+    geometry: "plano",
+    defaultProductionUnit: "m2",
+    visibleSections: commonTemplateSections,
+    sections: buildMesaCorteSections(),
     help: {
-      summary:
-        "Plantilla mínima para anilladoras. El motor elige automáticamente el diámetro de espiral según hojas/libro (criterio MENOR_CAPACIDAD_QUE_CUMPLA).",
-      tips: ["Cargá variantes de anillo con su capacidadMaxHojas para que el motor elija."],
-      examples: ["Renz Combi-S para libros de hasta 250 hojas"],
+      summary: "Plantilla provisional (doc §15: postergada — evaluar si CORTE_LASER + PLOTTER cubren los casos).",
+      tips: ["Configurá perfiles por herramienta y material."],
+      examples: ["Mesa Zünd, Esko Kongsberg"],
     },
   }),
 ];
 
-export const plantillaMaquinariaItems = maquinariaTemplates.map((templateItem) => ({
-  label: templateItem.label,
-  value: templateItem.id,
-})).sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" }));
+export const plantillaMaquinariaItems = maquinariaTemplates
+  .map((templateItem) => ({ label: templateItem.label, value: templateItem.id }))
+  .sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" }));
 
 export function getMaquinariaTemplate(templateId: PlantillaMaquinaria) {
   return maquinariaTemplates.find((templateItem) => templateItem.id === templateId) ?? null;

@@ -38,23 +38,24 @@ async function seedRutasYProductos(prisma, tenantId, maquinas, materiales) {
   const ricohDobleFazPerfil = await prisma.maquinaPerfilOperativo.findFirstOrThrow({
     where: { tenantId, maquinaId: maquinas.ricoh.id, nombre: "Papel grueso doble faz" },
   });
+  // Polar: usa perfil de "Papel grueso 100-250gr" (rango común para tarjetas).
   const polarPerfil = await prisma.maquinaPerfilOperativo.findFirstOrThrow({
-    where: { tenantId, maquinaId: maquinas.polar.id, nombre: "Corte estándar" },
+    where: { tenantId, maquinaId: maquinas.polar.id, nombre: "Papel grueso 100-250gr" },
   });
   const laminadoraPerfil = await prisma.maquinaPerfilOperativo.findFirstOrThrow({
     where: { tenantId, maquinaId: maquinas.laminadora.id },
   });
   const rolandPerfil = await prisma.maquinaPerfilOperativo.findFirstOrThrow({
-    where: { tenantId, maquinaId: maquinas.roland.id, nombre: "Latex CMYK estándar" },
+    where: { tenantId, maquinaId: maquinas.roland.id, nombre: "Latex CMYK normal 6 pasadas" },
   });
   const skycutPerfil = await prisma.maquinaPerfilOperativo.findFirstOrThrow({
-    where: { tenantId, maquinaId: maquinas.skycut.id, nombre: "Corte estándar" },
+    where: { tenantId, maquinaId: maquinas.skycut.id, nombre: "Corte completo - rollo" },
   });
   const mimakiCMYKPerfil = await prisma.maquinaPerfilOperativo.findFirstOrThrow({
-    where: { tenantId, maquinaId: maquinas.mimaki.id, nombre: "UV CMYK rígido" },
+    where: { tenantId, maquinaId: maquinas.mimaki.id, nombre: "UV CMYK rígido normal" },
   });
   const cncPerfil = await prisma.maquinaPerfilOperativo.findFirstOrThrow({
-    where: { tenantId, maquinaId: maquinas.cnc.id, nombre: "Corte CNC estándar" },
+    where: { tenantId, maquinaId: maquinas.cnc.id, nombre: "Estándar" },
   });
 
   // ============================================================================

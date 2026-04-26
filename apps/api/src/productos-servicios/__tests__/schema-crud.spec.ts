@@ -71,10 +71,10 @@ describe('Schema CRUD — Modelo Universal V2', () => {
   });
 
   describe('Materiales', () => {
-    it('hay 12 materias primas activas', async () => {
+    it('hay 11 materias primas activas (seed v3.0)', async () => {
       if (!tenantId) return;
       const count = await prisma.materiaPrima.count({ where: { tenantId, activo: true } });
-      expect(count).toBe(12);
+      expect(count).toBe(11);
     });
 
     it('Vinilo blanco tiene 2 variantes (1.37m y 1.52m)', async () => {

@@ -509,9 +509,11 @@ describe('MotorUniversalService — smoke tests', () => {
     // El rollo 1.37m aprovecha mejor para esta pieza (menos desperdicio).
     expect(mat.materialNombre).toBe('VINILO-BLANCO-1370');
     // El nesting result confirma que se eligió el sustrato 1.37m.
+    // v3.0: ahora con márgenes no imprimibles de Roland (5mm izq + 5mm der),
+    // el ancho efectivo del rollo es 1370 - 10 = 1360mm.
     expect(impresion!.nestingResult?.substrates[0]).toMatchObject({
       kind: 'roll',
-      widthMm: 1370,
+      widthMm: 1360,
     });
   });
 
@@ -536,7 +538,7 @@ describe('MotorUniversalService — smoke tests', () => {
     const impresion = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_area');
     expect(impresion!.nestingResult?.substrates[0]).toMatchObject({
       kind: 'roll',
-      widthMm: 1370, // ancho de la máquina, no del rollo
+      widthMm: 1360, // 1370 ancho rollo - 10mm márgenes no imprimibles
     });
   });
 

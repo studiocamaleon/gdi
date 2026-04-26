@@ -110,17 +110,37 @@ function runShelfRollo(
   const piezas = jobContext.piezas ?? [];
   if (piezas.length === 0) return null;
 
-  // Ancho útil: prioriza el ancho de la máquina, fallback al ancho del rollo.
-  const anchoMaquinaMm = readNumber(paso.maquina?.parametrosTecnicosJson, 'anchoMaxMm');
+  // v3.0: ancho útil viene del paramsTecnicos de la máquina.
+  // Para IMPRESORA_GRAN_FORMATO_POR_AREA con geometria=ROLLO: `anchoMaxRolloMm`.
+  // Compat retro: `anchoMaxMm` (nombre legacy).
+  // Fallback: ancho declarado en la variante de material.
+  const maqParams = (paso.maquina?.parametrosTecnicosJson ?? {}) as Record<string, unknown>;
+  const anchoMaquinaMm =
+    readNumber(maqParams, 'anchoMaxRolloMm') ??
+    readNumber(maqParams, 'anchoMaxMm');
   const anchoMaterialMm = readNumber(materialResuelto?.atributosVarianteJson, 'anchoMm');
-  const printableWidthMm = anchoMaquinaMm ?? anchoMaterialMm;
+  let printableWidthMm = anchoMaquinaMm ?? anchoMaterialMm;
   if (!printableWidthMm || printableWidthMm <= 0) return null;
 
-  // Margenes (config del paso o defaults sensatos para gran formato).
+  // v3.0 (doc §6): márgenes no imprimibles de la MÁQUINA reducen el ancho útil.
+  // `margenesNoImprimiblesMm = { sup, inf, izq, der }`. Para shelf-rollo:
+  //   - izq + der → restan al ancho útil del rollo.
+  //   - sup → marginStartMm (inicio del rollo).
+  //   - inf → marginEndMm (fin de cada trabajo).
+  // El paso puede sobrescribir vía `paramsPasoJson`.
+  const margenesMaquina = (maqParams.margenesNoImprimiblesMm ?? {}) as Record<string, unknown>;
+  const margenIzqMaq = Number(margenesMaquina.izq ?? 0);
+  const margenDerMaq = Number(margenesMaquina.der ?? 0);
+  const margenSupMaq = Number(margenesMaquina.sup ?? 0);
+  const margenInfMaq = Number(margenesMaquina.inf ?? 0);
+  printableWidthMm = printableWidthMm - margenIzqMaq - margenDerMaq;
+  if (printableWidthMm <= 0) return null;
+
+  // Overrides del paso > márgenes de máquina > defaults.
   const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
-  const marginLeftMm = Number(params.marginLeftMm ?? 5);
-  const marginStartMm = Number(params.marginStartMm ?? 10);
-  const marginEndMm = Number(params.marginEndMm ?? 10);
+  const marginLeftMm = Number(params.marginLeftMm ?? margenIzqMaq) || 0;
+  const marginStartMm = Number(params.marginStartMm ?? margenSupMaq ?? 10);
+  const marginEndMm = Number(params.marginEndMm ?? margenInfMaq ?? 10);
   const separacionHorizontalMm = Number(params.separacionHorizontalMm ?? 5);
   const separacionVerticalMm = Number(params.separacionVerticalMm ?? 5);
   const permitirRotacion = Boolean(params.permitirRotacion ?? true);

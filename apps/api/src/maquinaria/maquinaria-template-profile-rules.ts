@@ -3,196 +3,159 @@ import {
   PlantillaMaquinariaDto,
 } from './dto/upsert-maquina.dto';
 
+/**
+ * Reglas de validación de perfiles operativos por plantilla — v3.0 (2026-04-26).
+ *
+ * Doc: `docs/motor-por-pasos-analisis/06-maquinas-y-perfiles.md` §5–§13.
+ *
+ * - `allowedProfileKeys`: claves permitidas en `perfil.detalle` para esta plantilla.
+ *   Si el modelador envía una clave fuera de la lista, el upsert falla.
+ * - `requiredProfileKeys`: claves obligatorias para que el perfil sea válido.
+ *   Pueden ser columnas universales (productivityValue, etc.) o claves del
+ *   `detalle` (gramajeMinGr, pliegosMaxPorTanda, etc.).
+ * - `modeSourceKeys`: campos del `detalle` cuya combinación define un "modo de
+ *   trabajo" del perfil (caras, tipoCorte, etc.).
+ */
 type PerfilTemplateRule = {
   allowedProfileKeys: Set<string>;
   requiredProfileKeys: Set<string>;
   modeSourceKeys: Set<string>;
 };
 
+/**
+ * Columnas universales del PerfilOperativo (todas las plantillas las soportan).
+ * Estas SIEMPRE son válidas como required keys.
+ */
 const COMMON_PROFILE_KEYS = [
   'nombre',
   'tipoPerfil',
   'activo',
-  'anchoAplicable',
-  'altoAplicable',
-  'operationMode',
-  'printMode',
-  'printSides',
   'productivityValue',
   'productivityUnit',
   'setupMin',
   'cleanupMin',
   'feedReloadMin',
-  'sheetThicknessMm',
-  'maxBatchHeightMm',
-  'materialPreset',
-  'cantidadPasadas',
-  'dobleFaz',
 ] as const;
 
+/**
+ * Claves que viven en columnas universales (no en `detalle`).
+ * Para `getPerfilFieldValue`: priorizar lectura directa antes que detalle.
+ */
 const DIRECT_PROFILE_FIELD_KEYS = new Set([
   'nombre',
+  'tipoPerfil',
+  'activo',
   'productivityValue',
   'productivityUnit',
   'setupMin',
   'cleanupMin',
   'feedReloadMin',
-  'sheetThicknessMm',
-  'maxBatchHeightMm',
-  'materialPreset',
-  'cantidadPasadas',
-  'dobleFaz',
-  'anchoAplicable',
-  'altoAplicable',
-  'operationMode',
-  'printMode',
-  'printSides',
 ]);
 
 function buildRule(params: {
-  profileFieldKeys: string[];
+  /** Claves específicas de esta plantilla, permitidas en `detalle`. */
+  detalleKeys: string[];
+  /** Claves obligatorias (universales o detalle). */
   requiredFieldKeys: string[];
   modeSourceKeys?: string[];
 }): PerfilTemplateRule {
   return {
-    allowedProfileKeys: new Set([
-      ...COMMON_PROFILE_KEYS,
-      ...params.profileFieldKeys,
-    ]),
+    allowedProfileKeys: new Set([...COMMON_PROFILE_KEYS, ...params.detalleKeys]),
     requiredProfileKeys: new Set(params.requiredFieldKeys),
     modeSourceKeys: new Set(params.modeSourceKeys ?? []),
   };
 }
 
 const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
+  // ─── §5 IMPRESORA_LASER ─────────────────────────────────────────
+  // Discriminantes (detalle): caras, colores, formatoSoportado, gramajeMinGr,
+  // gramajeMaxGr.
   [PlantillaMaquinariaDto.impresora_laser]: buildRule({
-    profileFieldKeys: ['formatoObjetivo'],
-    requiredFieldKeys: [
-      'nombre',
-      'formatoObjetivo',
-      'printMode',
-      'productivityValue',
-    ],
-    modeSourceKeys: ['printMode'],
+    detalleKeys: ['caras', 'colores', 'formatoSoportado', 'gramajeMinGr', 'gramajeMaxGr'],
+    requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit', 'caras'],
+    modeSourceKeys: ['caras', 'colores'],
   }),
-  [PlantillaMaquinariaDto.impresora_uv_flatbed]: buildRule({
-    profileFieldKeys: [],
-    requiredFieldKeys: ['nombre', 'printMode', 'productivityValue'],
-    modeSourceKeys: ['printMode'],
+
+  // ─── §6 IMPRESORA_GRAN_FORMATO_POR_AREA ─────────────────────────
+  // Discriminantes (detalle): numeroPasadas, colores, modoCalidad, modoOperacion
+  // (solo si plantilla geometria=MESA_EXTENSORA).
+  [PlantillaMaquinariaDto.impresora_gran_formato_por_area]: buildRule({
+    detalleKeys: ['numeroPasadas', 'colores', 'modoCalidad', 'modoOperacion'],
+    requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit'],
+    modeSourceKeys: ['modoCalidad', 'colores'],
   }),
-  [PlantillaMaquinariaDto.impresora_uv_mesa_extensora]: buildRule({
-    profileFieldKeys: [],
-    requiredFieldKeys: ['nombre', 'printMode', 'productivityValue'],
-    modeSourceKeys: ['printMode'],
-  }),
-  [PlantillaMaquinariaDto.impresora_uv_rollo]: buildRule({
-    profileFieldKeys: [],
-    requiredFieldKeys: ['nombre', 'printMode', 'productivityValue'],
-    modeSourceKeys: ['printMode'],
-  }),
-  [PlantillaMaquinariaDto.impresora_uv_cilindrica]: buildRule({
-    profileFieldKeys: [],
-    requiredFieldKeys: ['nombre', 'printMode', 'productivityValue'],
-    modeSourceKeys: ['printMode'],
-  }),
-  [PlantillaMaquinariaDto.impresora_solvente]: buildRule({
-    profileFieldKeys: [],
-    requiredFieldKeys: ['nombre', 'productivityValue'],
-  }),
-  [PlantillaMaquinariaDto.impresora_inyeccion_tinta]: buildRule({
-    profileFieldKeys: [],
-    requiredFieldKeys: ['nombre', 'productivityValue'],
-  }),
-  [PlantillaMaquinariaDto.impresora_latex]: buildRule({
-    profileFieldKeys: [],
-    requiredFieldKeys: ['nombre', 'productivityValue'],
-  }),
-  [PlantillaMaquinariaDto.impresora_sublimacion_gran_formato]: buildRule({
-    profileFieldKeys: [],
-    requiredFieldKeys: ['nombre', 'productivityValue'],
-  }),
-  [PlantillaMaquinariaDto.plotter_cad]: buildRule({
-    profileFieldKeys: [],
-    requiredFieldKeys: ['nombre', 'productivityValue'],
-  }),
-  [PlantillaMaquinariaDto.impresora_dtf]: buildRule({
-    profileFieldKeys: [],
-    requiredFieldKeys: ['nombre', 'productivityValue'],
-  }),
-  [PlantillaMaquinariaDto.impresora_dtf_uv]: buildRule({
-    profileFieldKeys: [],
-    requiredFieldKeys: ['nombre', 'productivityValue'],
-  }),
-  [PlantillaMaquinariaDto.impresora_3d]: buildRule({
-    profileFieldKeys: ['materialObjetivo', 'alturaCapa'],
-    requiredFieldKeys: ['nombre'],
-  }),
-  [PlantillaMaquinariaDto.router_cnc]: buildRule({
-    profileFieldKeys: [
-      'tipoOperacion',
-      'materialObjetivo',
-      'herramienta',
-      'profundidadMaximaPorPasada',
-      'velocidadAvance',
-      'rpmSpindle',
-    ],
-    requiredFieldKeys: ['nombre', 'tipoOperacion'],
-    modeSourceKeys: ['tipoOperacion'],
-  }),
-  [PlantillaMaquinariaDto.corte_laser]: buildRule({
-    profileFieldKeys: [
-      'tipoOperacion',
-      'materialObjetivo',
-      'potenciaAplicada',
-      'velocidadTrabajo',
-    ],
-    requiredFieldKeys: ['nombre', 'tipoOperacion'],
-    modeSourceKeys: ['tipoOperacion'],
-  }),
+
+  // ─── §7 GUILLOTINA ──────────────────────────────────────────────
+  // Productividad NULL (fórmula no lineal).
+  // Discriminantes (detalle): gramajeMinGr, gramajeMaxGr.
+  // paramsPerfilJson (detalle): pliegosMaxPorTanda.
   [PlantillaMaquinariaDto.guillotina]: buildRule({
-    profileFieldKeys: [],
-    requiredFieldKeys: ['nombre', 'sheetThicknessMm', 'productivityValue'],
+    detalleKeys: ['gramajeMinGr', 'gramajeMaxGr', 'pliegosMaxPorTanda'],
+    requiredFieldKeys: ['nombre', 'pliegosMaxPorTanda', 'gramajeMaxGr'],
   }),
+
+  // ─── §8 PLOTTER_DE_CORTE ────────────────────────────────────────
+  // Discriminantes (detalle): tipoCorte (COMPLETO|KISS_CUT), modoOperacion (ROLLO|HOJAS).
+  // paramsPerfilJson (detalle): factorComplejidad {SIMPLE,INTERMEDIO,COMPLEJO}.
+  [PlantillaMaquinariaDto.plotter_de_corte]: buildRule({
+    detalleKeys: ['tipoCorte', 'modoOperacion', 'factorComplejidad'],
+    requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit', 'tipoCorte'],
+    modeSourceKeys: ['tipoCorte', 'modoOperacion'],
+  }),
+
+  // ─── §10 PLOTTER_CAD ────────────────────────────────────────────
+  // Discriminantes (detalle): tipoTrabajo (CAD|FOTO), calidad (DRAFT|NORMAL|ALTA).
+  [PlantillaMaquinariaDto.plotter_cad]: buildRule({
+    detalleKeys: ['tipoTrabajo', 'calidad'],
+    requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit', 'tipoTrabajo', 'calidad'],
+    modeSourceKeys: ['tipoTrabajo', 'calidad'],
+  }),
+
+  // ─── §9 LAMINADORA_BOPP_ROLLO ───────────────────────────────────
+  // Perfil único "Estándar". Sin discriminantes.
   [PlantillaMaquinariaDto.laminadora_bopp_rollo]: buildRule({
-    profileFieldKeys: [
-      'modoLaminado',
-      'velocidadTrabajoMmSeg',
-      'velocidadDobleRolloTrabajoMmSeg',
-      'gapEntreHojasMm',
-      'warmupMin',
-    ],
-    requiredFieldKeys: ['nombre', 'modoLaminado', 'gapEntreHojasMm'],
+    detalleKeys: [],
+    requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit'],
   }),
-  [PlantillaMaquinariaDto.redondeadora_puntas]: buildRule({
-    profileFieldKeys: [
-      'esquinasPorPieza',
-      'radio',
-      'factorVelocidad',
-    ],
-    requiredFieldKeys: ['nombre', 'esquinasPorPieza'],
-  }),
-  [PlantillaMaquinariaDto.perforadora]: buildRule({
-    profileFieldKeys: [
-      'lineasPerforado',
-      'tipoPerforado',
-      'factorVelocidad',
-    ],
-    requiredFieldKeys: ['nombre', 'lineasPerforado'],
-  }),
-  [PlantillaMaquinariaDto.mesa_de_corte]: buildRule({
-    profileFieldKeys: ['materialObjetivo', 'herramienta'],
+
+  // ─── §11 CORTE_LASER ────────────────────────────────────────────
+  // Perfil único "Estándar". T-4 input manual → productividad NULL.
+  [PlantillaMaquinariaDto.corte_laser]: buildRule({
+    detalleKeys: [],
     requiredFieldKeys: ['nombre'],
   }),
-  [PlantillaMaquinariaDto.plotter_de_corte]: buildRule({
-    profileFieldKeys: [
-      'velocidadCortePerf',
-      'nivelComplejidad',
-      'marcaRegistro',
-      'margenIzquierdoPerf',
-      'margenDerechoPerf',
-      'margenSuperiorPerf',
-      'margenInferiorPerf',
-    ],
+
+  // ─── §12 ROUTER_CNC ─────────────────────────────────────────────
+  // Perfil único "Estándar". Productividad nominal m²/h para T-3.
+  [PlantillaMaquinariaDto.router_cnc]: buildRule({
+    detalleKeys: [],
+    requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit'],
+  }),
+
+  // ─── §13 ANILLADORA ─────────────────────────────────────────────
+  // Discriminantes (detalle): tipoAnillo (ESPIRAL_PLASTICO|WIRE_O).
+  // paramsPerfilJson (detalle): diametrosSoportadosMm.
+  [PlantillaMaquinariaDto.anilladora]: buildRule({
+    detalleKeys: ['tipoAnillo', 'diametrosSoportadosMm'],
+    requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit', 'tipoAnillo'],
+    modeSourceKeys: ['tipoAnillo'],
+  }),
+
+  // ─── §15 SOLDADORA (pendiente, sin perfilado detallado todavía) ──
+  [PlantillaMaquinariaDto.soldadora]: buildRule({
+    detalleKeys: [],
+    requiredFieldKeys: ['nombre'],
+  }),
+
+  // ─── §15 CABINA_PINTURA (pendiente) ─────────────────────────────
+  [PlantillaMaquinariaDto.cabina_pintura]: buildRule({
+    detalleKeys: [],
+    requiredFieldKeys: ['nombre'],
+  }),
+
+  // ─── MESA_DE_CORTE (postergada — evaluar) ────────────────────────
+  [PlantillaMaquinariaDto.mesa_de_corte]: buildRule({
+    detalleKeys: ['tipoCorte', 'modoOperacion'],
     requiredFieldKeys: ['nombre'],
   }),
 };
@@ -218,10 +181,8 @@ function getPerfilFieldValue(
   fieldKey: string,
 ) {
   const directRecord = perfil as unknown as Record<string, unknown>;
-  const directValue = directRecord[fieldKey];
-
-  if (DIRECT_PROFILE_FIELD_KEYS.has(fieldKey) && directValue !== undefined) {
-    return directValue;
+  if (DIRECT_PROFILE_FIELD_KEYS.has(fieldKey) && directRecord[fieldKey] !== undefined) {
+    return directRecord[fieldKey];
   }
 
   const detailValue = (perfil.detalle ?? {})[fieldKey];
@@ -229,7 +190,7 @@ function getPerfilFieldValue(
     return detailValue;
   }
 
-  return directValue;
+  return directRecord[fieldKey];
 }
 
 export function validatePerfilOperativoByTemplate(

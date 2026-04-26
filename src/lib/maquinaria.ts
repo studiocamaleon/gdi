@@ -1,38 +1,33 @@
+/**
+ * Plantillas de maquinaria — modelo final v3.0 (2026-04-26).
+ * Doc: `docs/motor-por-pasos-analisis/06-maquinas-y-perfiles.md` §4.
+ * 12 plantillas finales (las 8 viejas de impresoras gran formato unificadas
+ * en `impresora_gran_formato_por_area` con discriminantes tecnologia + geometria).
+ */
 export type PlantillaMaquinaria =
-  | "router_cnc"
-  | "corte_laser"
-  | "guillotina"
-  | "laminadora_bopp_rollo"
-  | "redondeadora_puntas"
-  | "perforadora"
-  | "impresora_3d"
-  | "impresora_dtf"
-  | "impresora_dtf_uv"
-  | "impresora_uv_mesa_extensora"
-  | "impresora_uv_cilindrica"
-  | "impresora_uv_flatbed"
-  | "impresora_uv_rollo"
-  | "impresora_solvente"
-  | "impresora_inyeccion_tinta"
-  | "impresora_latex"
-  | "impresora_sublimacion_gran_formato"
   | "impresora_laser"
-  | "plotter_cad"
-  | "mesa_de_corte"
+  | "impresora_gran_formato_por_area"
+  | "guillotina"
   | "plotter_de_corte"
-  // G-S2 (2026-04-25): plantillas históricas pendientes del doc §6.15.
+  | "plotter_cad"
+  | "laminadora_bopp_rollo"
+  | "corte_laser"
+  | "router_cnc"
+  | "anilladora"
   | "soldadora"
   | "cabina_pintura"
-  | "anilladora";
+  | "mesa_de_corte";
 
+/**
+ * Familias de plantilla — agrupación visual para el catálogo.
+ * v3.0: simplificadas a 4 (eliminadas las sub-categorías de impresoras
+ * porque ahora hay 1 sola plantilla unificada).
+ */
 export type FamiliaPlantillaMaquinaria =
+  | "impresion_digital"
+  | "impresion_gran_formato"
   | "corte_mecanizado"
-  | "terminacion"
-  | "fabricacion_aditiva"
-  | "impresion_transferencia"
-  | "impresion_uv"
-  | "impresion_inkjet"
-  | "impresion_digital";
+  | "terminacion";
 
 export type EstadoMaquina = "activa" | "inactiva" | "mantenimiento" | "baja";
 
@@ -70,9 +65,6 @@ export type TipoPerfilOperativoMaquina =
   | "grabado"
   | "fabricacion"
   | "mixto";
-
-export type ModoImpresionPerfil = "cmyk" | "k";
-export type CarasPerfil = "simple_faz" | "doble_faz";
 
 export type TipoConsumibleMaquina =
   | "toner"
@@ -224,17 +216,15 @@ export type MaquinariaTemplateDefinition = {
   help: MaquinariaTemplateHelp;
 };
 
+// v3.0: 4 familias finales (alineadas a las 12 plantillas finales).
 export const familiaPlantillaMaquinariaItems: Array<{
   label: string;
   value: FamiliaPlantillaMaquinaria;
 }> = [
+  { label: "Impresión digital", value: "impresion_digital" },
+  { label: "Impresión gran formato", value: "impresion_gran_formato" },
   { label: "Corte y mecanizado", value: "corte_mecanizado" },
-  { label: "Terminacion", value: "terminacion" },
-  { label: "Fabricacion aditiva", value: "fabricacion_aditiva" },
-  { label: "Impresion por transferencia", value: "impresion_transferencia" },
-  { label: "Impresion UV", value: "impresion_uv" },
-  { label: "Impresion inkjet", value: "impresion_inkjet" },
-  { label: "Impresion digital", value: "impresion_digital" },
+  { label: "Terminación", value: "terminacion" },
 ];
 
 export const estadoMaquinaItems: Array<{ label: string; value: EstadoMaquina }> = [
@@ -309,43 +299,38 @@ export function getMaquinaGeometriasCompatibles(input: {
   if (normalized.length > 0) {
     return Array.from(new Set(normalized));
   }
-  if (input.plantilla === "impresora_uv_mesa_extensora") {
+  // v3.0: GRAN_FORMATO_POR_AREA con geometria=MESA_EXTENSORA puede operar
+  // en plano y rollo según el modo. El resto usa su geometría declarada.
+  if (input.plantilla === "impresora_gran_formato_por_area") {
     return ["plano", "rollo"] as GeometriaTrabajoMaquina[];
   }
   return [input.geometriaTrabajo];
 }
 
+/**
+ * v3.0: la tecnología de la máquina ahora es un discriminante explícito en
+ * `parametrosTecnicosJson.tecnologia` (LATEX | SOLVENTE | UV | SUBLIMACION |
+ * DTF_UV | DTF_TEXTIL) para IMPRESORA_GRAN_FORMATO_POR_AREA. Para
+ * IMPRESORA_LASER, es siempre "laser".
+ */
 export function getMaquinaTecnologia(input: {
   plantilla?: PlantillaMaquinaria;
+  parametrosTecnicos?: Record<string, unknown> | null;
   capacidadesAvanzadas?: Record<string, unknown> | null;
 }) {
+  // 1. Lectura explícita desde paramsTecnicos (modelo v3.0).
+  const tecnologiaExplicita = input.parametrosTecnicos?.tecnologia;
+  if (typeof tecnologiaExplicita === "string" && tecnologiaExplicita.trim()) {
+    return tecnologiaExplicita.toLowerCase();
+  }
+  // 2. Compat: legacy capacidadesAvanzadas.tecnologiaMaquina.
   const explicit = normalizeTecnologiaMaquinaValue(input.capacidadesAvanzadas?.tecnologiaMaquina);
   if (explicit) {
     return explicit;
   }
-
-  switch (input.plantilla) {
-    case "impresora_uv_mesa_extensora":
-    case "impresora_uv_flatbed":
-    case "impresora_uv_rollo":
-      return "uv";
-    case "impresora_solvente":
-      return "eco_solvente";
-    case "impresora_latex":
-      return "latex";
-    case "impresora_sublimacion_gran_formato":
-      return "sublimacion";
-    case "impresora_dtf":
-      return "dtf_textil";
-    case "impresora_dtf_uv":
-      return "dtf_uv";
-    case "impresora_inyeccion_tinta":
-      return "inkjet";
-    case "impresora_laser":
-      return "laser";
-    default:
-      return null;
-  }
+  // 3. Default por plantilla (las únicas con tecnología fija).
+  if (input.plantilla === "impresora_laser") return "laser";
+  return null;
 }
 
 export const unidadProduccionMaquinaItems: Array<{
@@ -488,28 +473,27 @@ export function getUnidadProduccionMaquinaLabel(value: UnidadProduccionMaquina) 
   return unidadProduccionMaquinaItems.find((item) => item.value === value)?.label ?? value;
 }
 
+/**
+ * Perfil operativo — modelo v3.0 (2026-04-26).
+ * Solo columnas universales del doc §5–§13. Los discriminantes específicos
+ * por plantilla (caras, colores, gramajeMinGr, tipoCorte, modoCalidad, etc.)
+ * viven en `detalle` (JSON libre).
+ */
 export type MaquinaPerfilOperativo = {
   id: string;
   nombre: string;
   tipoPerfil: TipoPerfilOperativoMaquina;
   activo: boolean;
-  anchoAplicable: number | null;
-  altoAplicable: number | null;
-  operationMode: string;
-  printMode: ModoImpresionPerfil | "";
-  printSides: CarasPerfil | "";
   productivityValue: number | null;
   productivityUnit: UnidadProduccionMaquina | "";
   setupMin: number | null;
   cleanupMin: number | null;
   feedReloadMin: number | null;
-  sheetThicknessMm: number | null;
-  maxBatchHeightMm: number | null;
-  materialPreset: string;
   setupEstimadoMin: number | null;
-  cantidadPasadas: number | null;
-  dobleFaz: boolean;
+  /** Discriminantes y params específicos según plantilla (doc §5–§13). */
   detalle: Record<string, unknown> | null;
+  /** v3.0 (G-M8): JsonLogic para auto-selección por el motor. */
+  reglaSeleccionJson: Record<string, unknown> | null;
 };
 
 export type MaquinaConsumible = {
@@ -610,22 +594,13 @@ export type MaquinaPayload = {
     nombre: string;
     tipoPerfil: TipoPerfilOperativoMaquina;
     activo: boolean;
-    anchoAplicable?: number;
-    altoAplicable?: number;
-    operationMode?: string;
-    printMode?: ModoImpresionPerfil;
-    printSides?: CarasPerfil;
     productivityValue?: number;
     productivityUnit?: UnidadProduccionMaquina;
     setupMin?: number;
     cleanupMin?: number;
     feedReloadMin?: number;
-    sheetThicknessMm?: number;
-    maxBatchHeightMm?: number;
-    materialPreset?: string;
-    cantidadPasadas?: number;
-    dobleFaz?: boolean;
     detalle?: Record<string, unknown>;
+    reglaSeleccionJson?: Record<string, unknown>;
   }>;
   consumibles: Array<{
     id?: string;
@@ -655,12 +630,6 @@ export type MaquinaPayload = {
   }>;
 };
 
-export const printModeItems: Array<{ label: string; value: ModoImpresionPerfil }> = [
-  { label: "CMYK", value: "cmyk" },
-  { label: "K", value: "k" },
-];
-
-export const printSidesItems: Array<{ label: string; value: CarasPerfil }> = [
-  { label: "Simple faz", value: "simple_faz" },
-  { label: "Doble faz", value: "doble_faz" },
-];
+// v3.0: items legacy (printModeItems, printSidesItems) eliminados.
+// Los discriminantes de impresoras (caras, colores) ahora se editan vía
+// `perfil.detalle` JSON desde el editor de plantilla específica.

@@ -67,7 +67,8 @@ const proof: DefinicionFamilia = {
     { codigo: 'sustrato_proof', nombre: 'Sustrato del proof', tipo: 'SUSTRATO', requerido: true },
   ],
   permiteSlotsAdicionales: false,
-  plantillasCompatibles: ['IMPRESORA_LASER', 'IMPRESORA_INYECCION_TINTA'],
+  // v3.0: solo IMPRESORA_LASER (INYECCION_TINTA descartada según doc §4).
+  plantillasCompatibles: ['IMPRESORA_LASER'],
   inputsRequeridos: [],
   outputsCanonicos: ['proof_aprobado'],
   validaciones: [],
@@ -95,7 +96,8 @@ const impresion_por_hoja: DefinicionFamilia = {
     { codigo: 'tinta_o_toner', nombre: 'Tinta / tóner', tipo: 'CONSUMIBLE_MAQUINA', requerido: true },
   ],
   permiteSlotsAdicionales: false,
-  plantillasCompatibles: ['IMPRESORA_LASER', 'IMPRESORA_INYECCION_TINTA'],
+  // v3.0: solo IMPRESORA_LASER (INYECCION_TINTA descartada según doc §4).
+  plantillasCompatibles: ['IMPRESORA_LASER'],
   inputsRequeridos: ['cantidad', 'caras'],
   outputsCanonicos: ['pliegos_impresos', 'tiempo_real_impresion'],
   validaciones: [
@@ -131,14 +133,11 @@ const impresion_por_area: DefinicionFamilia = {
     { codigo: 'tinta', nombre: 'Tinta', tipo: 'CONSUMIBLE_MAQUINA', requerido: true },
   ],
   permiteSlotsAdicionales: false,
-  plantillasCompatibles: [
-    'IMPRESORA_SOLVENTE',
-    'IMPRESORA_LATEX',
-    'IMPRESORA_UV_FLATBED',
-    'IMPRESORA_UV_ROLLO',
-    'IMPRESORA_UV_MESA_EXTENSORA',
-    'IMPRESORA_SUBLIMACION_GRAN_FORMATO',
-  ],
+  // v3.0 (doc §6): unificadas en IMPRESORA_GRAN_FORMATO_POR_AREA con
+  // discriminantes paramsTecnicosJson.tecnologia (LATEX|SOLVENTE|UV|
+  // SUBLIMACION|DTF_*) + .geometria (ROLLO|MESA_EXTENSORA).
+  // PLOTTER_CAD también aplica para impresión técnica/CAD por área.
+  plantillasCompatibles: ['IMPRESORA_GRAN_FORMATO_POR_AREA', 'PLOTTER_CAD'],
   inputsRequeridos: ['piezas'], // gap H7: lista de piezas
   outputsCanonicos: ['m2_calculados', 'aprovechamiento_pct', 'tiempo_real_impresion'],
   validaciones: [
@@ -164,7 +163,10 @@ const impresion_por_pieza: DefinicionFamilia = {
     { codigo: 'tinta', nombre: 'Tinta', tipo: 'CONSUMIBLE_MAQUINA', requerido: true },
   ],
   permiteSlotsAdicionales: false,
-  plantillasCompatibles: ['IMPRESORA_UV_FLATBED', 'IMPRESORA_UV_CILINDRICA', 'IMPRESORA_UV_MESA_EXTENSORA'],
+  // v3.0: unificada en IMPRESORA_GRAN_FORMATO_POR_AREA con
+  // paramsTecnicosJson.geometria=MESA_EXTENSORA + tecnologia=UV.
+  // (UV_CILINDRICA descartada según doc §4 — fuera del rubro objetivo).
+  plantillasCompatibles: ['IMPRESORA_GRAN_FORMATO_POR_AREA'],
   inputsRequeridos: ['cantidad'],
   outputsCanonicos: ['piezas_impresas'],
   validaciones: [
@@ -190,7 +192,11 @@ const aplicacion_transfer: DefinicionFamilia = {
     { codigo: 'film_transfer', nombre: 'Film transfer impreso', tipo: 'INSUMO_PASO', requerido: true },
   ],
   permiteSlotsAdicionales: false,
-  plantillasCompatibles: ['IMPRESORA_DTF', 'IMPRESORA_DTF_UV'],
+  // v3.0: la impresión del FILM DTF la hace IMPRESORA_GRAN_FORMATO_POR_AREA
+  // con tecnologia=DTF_UV o DTF_TEXTIL (paso anterior). Esta familia es la
+  // APLICACIÓN del transfer, hecha con plancha térmica (sin plantilla
+  // específica modelada todavía — pendiente).
+  plantillasCompatibles: [],
   inputsRequeridos: ['cantidad'],
   outputsCanonicos: ['piezas_aplicadas'],
   validaciones: [],

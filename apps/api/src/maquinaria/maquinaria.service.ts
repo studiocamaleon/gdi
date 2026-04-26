@@ -11,8 +11,6 @@ import {
   GeometriaTrabajoMaquina,
   PlantillaMaquinaria,
   Prisma,
-  TipoImpresionProductoVariante,
-  CarasProductoVariante,
   TipoComponenteDesgasteMaquina,
   TipoConsumibleMaquina,
   TipoPerfilOperativoMaquina,
@@ -82,17 +80,25 @@ type TemplateCatalogRule = {
   allowedProductionUnits?: UnidadProduccionMaquinaDto[];
 };
 
+/**
+ * Reglas de geometría + unidad de producción por plantilla — v3.0 (2026-04-26).
+ * Doc: `docs/motor-por-pasos-analisis/06-maquinas-y-perfiles.md` §5–§13.
+ */
 const TEMPLATE_CATALOG_RULES: Record<
   PlantillaMaquinariaDto,
   TemplateCatalogRule
 > = {
-  router_cnc: {
-    geometry: GeometriaTrabajoMaquinaDto.volumen,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.hora,
+  impresora_laser: {
+    geometry: GeometriaTrabajoMaquinaDto.pliego,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.ppm,
   },
-  corte_laser: {
-    geometry: GeometriaTrabajoMaquinaDto.plano,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.hora,
+  // §6: una sola plantilla unifica LATEX/SOLVENTE/UV/SUBLIMACION/DTF_*.
+  // La geometría real (rollo o mesa) viene del paramsTecnicos.geometria.
+  // Geometría aquí: rollo por defecto (más común), el modelador puede
+  // cambiar en el frontend si declara MESA_EXTENSORA.
+  impresora_gran_formato_por_area: {
+    geometry: GeometriaTrabajoMaquinaDto.rollo,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.m2_h,
   },
   guillotina: {
     geometry: GeometriaTrabajoMaquinaDto.pliego,
@@ -102,77 +108,41 @@ const TEMPLATE_CATALOG_RULES: Record<
       UnidadProduccionMaquinaDto.ciclo,
     ],
   },
-  laminadora_bopp_rollo: {
+  plotter_de_corte: {
     geometry: GeometriaTrabajoMaquinaDto.rollo,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.metro_lineal,
-  },
-  redondeadora_puntas: {
-    geometry: GeometriaTrabajoMaquinaDto.pliego,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.pieza,
-  },
-  perforadora: {
-    geometry: GeometriaTrabajoMaquinaDto.pliego,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.hoja,
-  },
-  impresora_3d: {
-    geometry: GeometriaTrabajoMaquinaDto.volumen,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.pieza,
-  },
-  impresora_dtf: {
-    geometry: GeometriaTrabajoMaquinaDto.rollo,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
-  },
-  impresora_dtf_uv: {
-    geometry: GeometriaTrabajoMaquinaDto.rollo,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
-  },
-  impresora_uv_mesa_extensora: {
-    geometry: GeometriaTrabajoMaquinaDto.plano,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
-  },
-  impresora_uv_cilindrica: {
-    geometry: GeometriaTrabajoMaquinaDto.cilindrico,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.pieza,
-  },
-  impresora_uv_flatbed: {
-    geometry: GeometriaTrabajoMaquinaDto.plano,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
-  },
-  impresora_uv_rollo: {
-    geometry: GeometriaTrabajoMaquinaDto.rollo,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
-  },
-  impresora_solvente: {
-    geometry: GeometriaTrabajoMaquinaDto.rollo,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
-  },
-  impresora_inyeccion_tinta: {
-    geometry: GeometriaTrabajoMaquinaDto.rollo,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
-  },
-  impresora_latex: {
-    geometry: GeometriaTrabajoMaquinaDto.rollo,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
-  },
-  impresora_sublimacion_gran_formato: {
-    geometry: GeometriaTrabajoMaquinaDto.rollo,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
-  },
-  impresora_laser: {
-    geometry: GeometriaTrabajoMaquinaDto.pliego,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.copia,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.m2_h,
   },
   plotter_cad: {
     geometry: GeometriaTrabajoMaquinaDto.rollo,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.metro_lineal,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.m2_h,
+  },
+  laminadora_bopp_rollo: {
+    geometry: GeometriaTrabajoMaquinaDto.rollo,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.m_min,
+  },
+  corte_laser: {
+    geometry: GeometriaTrabajoMaquinaDto.plano,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.hora,
+  },
+  router_cnc: {
+    geometry: GeometriaTrabajoMaquinaDto.volumen,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.m2_h,
+  },
+  anilladora: {
+    geometry: GeometriaTrabajoMaquinaDto.pliego,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.hora,
+  },
+  soldadora: {
+    geometry: GeometriaTrabajoMaquinaDto.volumen,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.hora,
+  },
+  cabina_pintura: {
+    geometry: GeometriaTrabajoMaquinaDto.volumen,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.m2_h,
   },
   mesa_de_corte: {
     geometry: GeometriaTrabajoMaquinaDto.plano,
     defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
-  },
-  plotter_de_corte: {
-    geometry: GeometriaTrabajoMaquinaDto.rollo,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.metro_lineal,
   },
 };
 
@@ -268,17 +238,11 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
   'maxEspesorPilaMm',
   'pliegosMinNominal',
   'lineasPorPasadaMax',
-  'operationMode',
-  'printMode',
-  'printSides',
   'productivityValue',
   'productivityUnit',
   'setupMin',
   'cleanupMin',
   'feedReloadMin',
-  'sheetThicknessMm',
-  'maxBatchHeightMm',
-  'materialPreset',
   'ripMin',
   'gapEntreHojasMm',
   'modoLaminado',
@@ -294,18 +258,14 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
 
 const ALLOWED_CONSUMABLE_DETAIL_KEYS = new Set(['dependePerfilOperativo', 'color']);
 const ALLOWED_WEAR_DETAIL_KEYS = new Set<string>();
+/**
+ * Plantillas de impresora que requieren consumibles (tinta/tóner) declarados.
+ * v3.0: simplificado a las 3 plantillas finales del modelo doc.
+ */
 const PRINTER_TEMPLATES_WITH_INK_CONSUMPTION = new Set<PlantillaMaquinariaDto>([
-  PlantillaMaquinariaDto.impresora_dtf,
-  PlantillaMaquinariaDto.impresora_dtf_uv,
-  PlantillaMaquinariaDto.impresora_uv_mesa_extensora,
-  PlantillaMaquinariaDto.impresora_uv_cilindrica,
-  PlantillaMaquinariaDto.impresora_uv_flatbed,
-  PlantillaMaquinariaDto.impresora_uv_rollo,
-  PlantillaMaquinariaDto.impresora_solvente,
-  PlantillaMaquinariaDto.impresora_inyeccion_tinta,
-  PlantillaMaquinariaDto.impresora_latex,
-  PlantillaMaquinariaDto.impresora_sublimacion_gran_formato,
   PlantillaMaquinariaDto.impresora_laser,
+  PlantillaMaquinariaDto.impresora_gran_formato_por_area,
+  PlantillaMaquinariaDto.plotter_cad,
 ]);
 
 @Injectable()
@@ -716,6 +676,13 @@ export class MaquinariaService {
     maquinaId: string,
     payload: MaquinaPerfilOperativoItemDto,
   ) {
+    // v3.0 (2026-04-26): solo columnas universales del modelo doc §5–§13.
+    // Los discriminantes específicos (caras, colores, formato, gramaje, etc.)
+    // viven en `detalleJson`. Si el payload trae estos campos como flat keys
+    // los mergeamos al detalle para preservar compat de DTO.
+    const detalle: Record<string, unknown> = {
+      ...((payload.detalle ?? {}) as Record<string, unknown>),
+    };
     return {
       tenantId,
       maquinaId,
@@ -724,15 +691,6 @@ export class MaquinariaService {
         payload.tipoPerfil,
       ),
       activo: payload.activo,
-      anchoAplicable: this.toDecimal(payload.anchoAplicable),
-      altoAplicable: this.toDecimal(payload.altoAplicable),
-      operationMode: payload.operationMode?.trim() || null,
-      printMode: payload.printMode
-        ? this.toPrismaEnum<TipoImpresionProductoVariante>(payload.printMode)
-        : null,
-      printSides: payload.printSides
-        ? this.toPrismaEnum<CarasProductoVariante>(payload.printSides)
-        : null,
       productivityValue: this.toDecimal(payload.productivityValue),
       productivityUnit: payload.productivityUnit
         ? this.toPrismaEnum<UnidadProduccionMaquina>(
@@ -742,15 +700,10 @@ export class MaquinariaService {
       setupMin: this.toDecimal(payload.setupMin),
       cleanupMin: this.toDecimal(payload.cleanupMin),
       feedReloadMin: this.toDecimal(payload.feedReloadMin),
-      sheetThicknessMm: this.toDecimal(payload.sheetThicknessMm),
-      maxBatchHeightMm: this.toDecimal(payload.maxBatchHeightMm),
-      materialPreset: payload.materialPreset?.trim() || null,
-      cantidadPasadas:
-        payload.cantidadPasadas !== undefined
-          ? Math.round(payload.cantidadPasadas)
-          : null,
-      dobleFaz: payload.dobleFaz ?? false,
-      detalleJson: this.toNullableJson(payload.detalle),
+      detalleJson: Object.keys(detalle).length > 0 ? (detalle as never) : Prisma.JsonNull,
+      reglaSeleccionJson: payload.reglaSeleccionJson
+        ? (payload.reglaSeleccionJson as never)
+        : Prisma.JsonNull,
     };
   }
 
@@ -841,15 +794,12 @@ export class MaquinariaService {
         if (!perfil.nombre?.trim()) {
           return false;
         }
+        // v3.0 (doc §7): GUILLOTINA usa fórmula no lineal — productividad NULL
+        // y `pliegosMaxPorTanda` (ahora en detalleJson) es el dato crítico.
         if (payload.plantilla === PlantillaMaquinariaDto.guillotina) {
-          const sheetThicknessMm = Number(perfil.sheetThicknessMm ?? 0);
-          const productivityValue = Number(perfil.productivityValue ?? 0);
-          return (
-            Number.isFinite(sheetThicknessMm) &&
-            sheetThicknessMm > 0 &&
-            Number.isFinite(productivityValue) &&
-            productivityValue > 0
-          );
+          const detalle = (perfil.detalle ?? {}) as Record<string, unknown>;
+          const pliegosMax = Number(detalle.pliegosMaxPorTanda ?? 0);
+          return Number.isFinite(pliegosMax) && pliegosMax > 0;
         }
         return (
           perfil.productivityValue !== undefined &&
@@ -1265,15 +1215,6 @@ export class MaquinariaService {
           perfil.tipoPerfil,
         ) as TipoPerfilOperativoMaquinaDto,
         activo: perfil.activo,
-        anchoAplicable: this.toNumber(perfil.anchoAplicable),
-        altoAplicable: this.toNumber(perfil.altoAplicable),
-        operationMode: perfil.operationMode ?? '',
-        printMode: perfil.printMode
-          ? (this.toApiEnum(perfil.printMode) as 'cmyk' | 'k')
-          : '',
-        printSides: perfil.printSides
-          ? (this.toApiEnum(perfil.printSides) as 'simple_faz' | 'doble_faz')
-          : '',
         productivityValue: this.toNumber(perfil.productivityValue),
         productivityUnit: perfil.productivityUnit
           ? (this.toApiEnum(
@@ -1283,13 +1224,10 @@ export class MaquinariaService {
         setupMin: this.toNumber(perfil.setupMin),
         cleanupMin: this.toNumber(perfil.cleanupMin),
         feedReloadMin: this.toNumber(perfil.feedReloadMin),
-        sheetThicknessMm: this.toNumber(perfil.sheetThicknessMm),
-        maxBatchHeightMm: this.toNumber(perfil.maxBatchHeightMm),
-        materialPreset: perfil.materialPreset ?? '',
         setupEstimadoMin: this.computeSetupEstimadoPerfil(perfil),
-        cantidadPasadas: perfil.cantidadPasadas ?? null,
-        dobleFaz: perfil.dobleFaz,
         detalle: (perfil.detalleJson as Record<string, unknown> | null) ?? null,
+        reglaSeleccionJson:
+          (perfil.reglaSeleccionJson as Record<string, unknown> | null) ?? null,
       })),
       consumibles: maquina.consumibles.map((consumible) => ({
         id: consumible.id,
@@ -1581,45 +1519,41 @@ export class MaquinariaService {
     return Number.isFinite(parsed) ? parsed : null;
   }
 
+  /**
+   * v3.0: derivar dimensiones de la máquina desde paramsTecnicos cuando
+   * aplica. Solo IMPRESORA_LASER (anchoImprimibleMaximo + altoImprimibleMaximo)
+   * y IMPRESORA_GRAN_FORMATO_POR_AREA (anchoMaxRolloMm o anchoMesaMm).
+   */
   private getDerivedMachineDimensions(
     payload: UpsertMaquinaDto,
     parametrosTecnicos?: Record<string, unknown>,
   ) {
-    if (
-      [
-        PlantillaMaquinariaDto.impresora_dtf,
-        PlantillaMaquinariaDto.impresora_dtf_uv,
-        PlantillaMaquinariaDto.impresora_uv_rollo,
-        PlantillaMaquinariaDto.impresora_solvente,
-        PlantillaMaquinariaDto.impresora_inyeccion_tinta,
-        PlantillaMaquinariaDto.impresora_latex,
-        PlantillaMaquinariaDto.impresora_sublimacion_gran_formato,
-      ].includes(payload.plantilla) &&
-      parametrosTecnicos
-    ) {
-      const ancho = this.toNumeric(parametrosTecnicos.anchoImprimibleMaximo);
+    if (!parametrosTecnicos) {
+      return { anchoUtil: payload.anchoUtil, largoUtil: payload.largoUtil };
+    }
+
+    if (payload.plantilla === PlantillaMaquinariaDto.impresora_gran_formato_por_area) {
+      // El ancho útil viene de anchoMaxRolloMm (geometria=ROLLO) o
+      // anchoMesaMm (geometria=MESA_EXTENSORA).
+      const ancho =
+        this.toNumeric(parametrosTecnicos.anchoMaxRolloMm) ??
+        this.toNumeric(parametrosTecnicos.anchoMesaMm);
+      const largo = this.toNumeric(parametrosTecnicos.largoMesaMm);
       return {
         anchoUtil: ancho ?? payload.anchoUtil,
-        largoUtil: payload.largoUtil,
+        largoUtil: largo ?? payload.largoUtil,
       };
     }
 
-    if (
-      payload.plantilla !== PlantillaMaquinariaDto.impresora_laser ||
-      !parametrosTecnicos
-    ) {
+    if (payload.plantilla === PlantillaMaquinariaDto.impresora_laser) {
+      const ancho = this.toNumeric(parametrosTecnicos.anchoImprimibleMaximo);
+      const largo = this.toNumeric(parametrosTecnicos.altoImprimibleMaximo);
       return {
-        anchoUtil: payload.anchoUtil,
-        largoUtil: payload.largoUtil,
+        anchoUtil: ancho ?? payload.anchoUtil,
+        largoUtil: largo ?? payload.largoUtil,
       };
     }
 
-    const ancho = this.toNumeric(parametrosTecnicos.anchoImprimibleMaximo);
-    const largo = this.toNumeric(parametrosTecnicos.altoImprimibleMaximo);
-
-    return {
-      anchoUtil: ancho ?? payload.anchoUtil,
-      largoUtil: largo ?? payload.largoUtil,
-    };
+    return { anchoUtil: payload.anchoUtil, largoUtil: payload.largoUtil };
   }
 }

@@ -110,32 +110,28 @@ enum EstadoTarifaCentroCostoPeriodo {
   PUBLICADA
 }
 
+/// Plantillas de maquinaria — modelo final v3.0 (2026-04-26).
+/// Doc: `docs/motor-por-pasos-analisis/06-maquinas-y-perfiles.md` §4.
+///
+/// 13 plantillas finales después del cleanup:
+///   - 8 impresoras viejas unificadas en IMPRESORA_GRAN_FORMATO_POR_AREA con
+///     discriminantes paramsTecnicosJson.tecnologia + .geometria.
+///   - 3 descartadas por no aplicar al rubro: INYECCION_TINTA, 3D, UV_CILINDRICA.
+///   - 2 modeladas como familia (no plantilla): PERFORADORA, REDONDEADORA_PUNTAS
+///     (pasaron a `modificacion_post`).
 enum PlantillaMaquinaria {
-  ROUTER_CNC
-  CORTE_LASER
-  GUILLOTINA
-  LAMINADORA_BOPP_ROLLO
-  REDONDEADORA_PUNTAS
-  PERFORADORA
-  IMPRESORA_3D
-  IMPRESORA_DTF
-  IMPRESORA_DTF_UV
-  IMPRESORA_UV_MESA_EXTENSORA
-  IMPRESORA_UV_CILINDRICA
-  IMPRESORA_UV_FLATBED
-  IMPRESORA_UV_ROLLO
-  IMPRESORA_SOLVENTE
-  IMPRESORA_INYECCION_TINTA
-  IMPRESORA_LATEX
-  IMPRESORA_SUBLIMACION_GRAN_FORMATO
   IMPRESORA_LASER
-  PLOTTER_CAD
-  MESA_DE_CORTE
+  IMPRESORA_GRAN_FORMATO_POR_AREA
+  GUILLOTINA
   PLOTTER_DE_CORTE
-  // G-S2 (2026-04-25): pendientes históricas del doc §6.15.
+  PLOTTER_CAD
+  LAMINADORA_BOPP_ROLLO
+  CORTE_LASER
+  ROUTER_CNC
+  ANILLADORA
   SOLDADORA
   CABINA_PINTURA
-  ANILLADORA
+  MESA_DE_CORTE
 }
 
 enum EstadoMaquina {
@@ -348,16 +344,6 @@ enum OrigenMovimientoStockMateriaPrima {
   TRANSFERENCIA
   DEVOLUCION
   OTRO
-}
-
-enum TipoImpresionProductoVariante {
-  BN
-  CMYK
-}
-
-enum CarasProductoVariante {
-  SIMPLE_FAZ
-  DOBLE_FAZ
 }
 
 model Tenant {
@@ -881,6 +867,10 @@ model Maquina {
   altoUtil                     Decimal?                             @db.Decimal(12, 2)
   espesorMaximo                Decimal?                             @db.Decimal(12, 2)
   pesoMaximo                   Decimal?                             @db.Decimal(12, 2)
+  /// v3.0 (2026-04-26): columna universal agregada según doc §5
+  /// (IMPRESORA_LASER) y §10 (PLOTTER_CAD). Para máquinas que no aplica,
+  /// queda null.
+  gramajeMaxGr                 Decimal?                             @db.Decimal(12, 2)
   fechaAlta                    DateTime?                            @db.Date
   activo                       Boolean                              @default(true)
   observaciones                String?
@@ -907,6 +897,15 @@ model Maquina {
   @@index([tenantId, centroCostoPrincipalId])
 }
 
+/// Perfil operativo de una máquina. Modelo universal alineado a doc §5–§13:
+/// - Universales (columnas): productividad, setup, cleanup, feedReload, tipo.
+/// - Discriminantes específicos por plantilla: en `detalleJson` (JSON libre).
+///
+/// v3.0 (2026-04-26): eliminadas 10 columnas legacy del modelo viejo
+/// (printMode, printSides, cantidadPasadas, dobleFaz, materialPreset,
+/// sheetThicknessMm, maxBatchHeightMm, operationMode, anchoAplicable,
+/// altoAplicable). Ahora todas viven en `detalleJson` con las claves que la
+/// plantilla declare.
 model MaquinaPerfilOperativo {
   id                    String                         @id @default(uuid()) @db.Uuid
   tenantId              String                         @db.Uuid
@@ -914,22 +913,21 @@ model MaquinaPerfilOperativo {
   nombre                String
   tipoPerfil            TipoPerfilOperativoMaquina
   activo                Boolean                        @default(true)
-  anchoAplicable        Decimal?                       @db.Decimal(12, 2)
-  altoAplicable         Decimal?                       @db.Decimal(12, 2)
-  operationMode         String?
-  printMode             TipoImpresionProductoVariante?
-  printSides            CarasProductoVariante?
   productivityValue     Decimal?                       @db.Decimal(12, 2)
   productivityUnit      UnidadProduccionMaquina?
   setupMin              Decimal?                       @db.Decimal(12, 2)
   cleanupMin            Decimal?                       @db.Decimal(12, 2)
   feedReloadMin         Decimal?                       @db.Decimal(12, 2)
-  sheetThicknessMm      Decimal?                       @db.Decimal(12, 3)
-  maxBatchHeightMm      Decimal?                       @db.Decimal(12, 2)
-  materialPreset        String?
-  cantidadPasadas       Int?
-  dobleFaz              Boolean                        @default(false)
+  /// Discriminantes y params específicos de la plantilla.
+  /// Ej. IMPRESORA_LASER: { caras: 'SIMPLE_FAZ' | 'DOBLE_FAZ',
+  ///   colores: 'BN' | 'CMYK', formatoSoportado: 'A4' | 'A3' | 'SRA3',
+  ///   gramajeMinGr, gramajeMaxGr }
+  /// Ej. GUILLOTINA: { gramajeMinGr, gramajeMaxGr, pliegosMaxPorTanda }
+  /// Ej. PLOTTER_DE_CORTE: { tipoCorte: 'COMPLETO' | 'KISS_CUT',
+  ///   modoOperacion: 'ROLLO' | 'HOJAS', factorComplejidad: {...} }
   detalleJson           Json?
+  /// Regla declarativa JsonLogic para auto-selección por el motor (G-M8).
+  reglaSeleccionJson    Json?
   createdAt             DateTime                       @default(now())
   updatedAt             DateTime                       @updatedAt
   tenant                Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Cascade)

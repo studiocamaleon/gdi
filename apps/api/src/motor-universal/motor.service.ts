@@ -1343,12 +1343,18 @@ export class MotorUniversalService {
     }
 
     // ─── 2. Heurística legacy: impresión por hoja según caras ────────
+    // v3.0 (doc §5): el discriminante canónico es `detalle.caras`
+    // ('SIMPLE_FAZ' | 'DOBLE_FAZ'). Heurística retro-compat: también
+    // detecta el legacy `detalle.dobleFaz === true` y nombre del perfil.
     if (paso.familiaCodigo === 'impresion_por_hoja' && typeof jobContext.caras === 'number') {
       const buscarDoble = jobContext.caras === 2;
       const candidato = paso.perfilesDisponibles.find((p) => {
         if (!p.activo) return false;
         const detalle = (p.detalleJson ?? {}) as Record<string, unknown>;
-        const esDobleFaz = detalle.dobleFaz === true || /doble/i.test(p.nombre);
+        const esDobleFaz =
+          detalle.caras === 'DOBLE_FAZ' ||
+          detalle.dobleFaz === true ||
+          /doble/i.test(p.nombre);
         return buscarDoble ? esDobleFaz : !esDobleFaz;
       });
       if (candidato && candidato.id !== paso.perfilM1Id) {

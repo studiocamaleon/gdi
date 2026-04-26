@@ -80,28 +80,8 @@ export type UnidadMateriaPrima =
   | "pieza"
   | "par";
 
-export type PlantillaMaquinaria =
-  | "router_cnc"
-  | "corte_laser"
-  | "guillotina"
-  | "laminadora_bopp_rollo"
-  | "redondeadora_puntas"
-  | "perforadora"
-  | "impresora_3d"
-  | "impresora_dtf"
-  | "impresora_dtf_uv"
-  | "impresora_uv_mesa_extensora"
-  | "impresora_uv_cilindrica"
-  | "impresora_uv_flatbed"
-  | "impresora_uv_rollo"
-  | "impresora_solvente"
-  | "impresora_inyeccion_tinta"
-  | "impresora_latex"
-  | "impresora_sublimacion_gran_formato"
-  | "impresora_laser"
-  | "plotter_cad"
-  | "mesa_de_corte"
-  | "plotter_de_corte";
+// v3.0: re-export del type canónico para no duplicar (modelo doc §4).
+export type { PlantillaMaquinaria } from "./maquinaria";
 
 export type MateriaPrimaVariante = {
   id: string;

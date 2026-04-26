@@ -13,28 +13,23 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+/**
+ * Plantillas de maquinaria — modelo final v3.0 (2026-04-26).
+ * Doc: `docs/motor-por-pasos-analisis/06-maquinas-y-perfiles.md` §4.
+ */
 export enum PlantillaMaquinariaDto {
-  router_cnc = 'router_cnc',
-  corte_laser = 'corte_laser',
-  guillotina = 'guillotina',
-  laminadora_bopp_rollo = 'laminadora_bopp_rollo',
-  redondeadora_puntas = 'redondeadora_puntas',
-  perforadora = 'perforadora',
-  impresora_3d = 'impresora_3d',
-  impresora_dtf = 'impresora_dtf',
-  impresora_dtf_uv = 'impresora_dtf_uv',
-  impresora_uv_mesa_extensora = 'impresora_uv_mesa_extensora',
-  impresora_uv_cilindrica = 'impresora_uv_cilindrica',
-  impresora_uv_flatbed = 'impresora_uv_flatbed',
-  impresora_uv_rollo = 'impresora_uv_rollo',
-  impresora_solvente = 'impresora_solvente',
-  impresora_inyeccion_tinta = 'impresora_inyeccion_tinta',
-  impresora_latex = 'impresora_latex',
-  impresora_sublimacion_gran_formato = 'impresora_sublimacion_gran_formato',
   impresora_laser = 'impresora_laser',
-  plotter_cad = 'plotter_cad',
-  mesa_de_corte = 'mesa_de_corte',
+  impresora_gran_formato_por_area = 'impresora_gran_formato_por_area',
+  guillotina = 'guillotina',
   plotter_de_corte = 'plotter_de_corte',
+  plotter_cad = 'plotter_cad',
+  laminadora_bopp_rollo = 'laminadora_bopp_rollo',
+  corte_laser = 'corte_laser',
+  router_cnc = 'router_cnc',
+  anilladora = 'anilladora',
+  soldadora = 'soldadora',
+  cabina_pintura = 'cabina_pintura',
+  mesa_de_corte = 'mesa_de_corte',
 }
 
 export enum EstadoMaquinaDto {
@@ -84,16 +79,6 @@ export enum TipoPerfilOperativoMaquinaDto {
   grabado = 'grabado',
   fabricacion = 'fabricacion',
   mixto = 'mixto',
-}
-
-export enum ModoImpresionPerfilDto {
-  cmyk = 'cmyk',
-  k = 'k',
-}
-
-export enum CarasPerfilDto {
-  simple_faz = 'simple_faz',
-  doble_faz = 'doble_faz',
 }
 
 export enum TipoConsumibleMaquinaDto {
@@ -174,28 +159,6 @@ export class MaquinaPerfilOperativoItemDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  anchoAplicable?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  altoAplicable?: number;
-
-  @IsOptional()
-  @IsString()
-  operationMode?: string;
-
-  @IsOptional()
-  @IsEnum(ModoImpresionPerfilDto)
-  printMode?: ModoImpresionPerfilDto;
-
-  @IsOptional()
-  @IsEnum(CarasPerfilDto)
-  printSides?: CarasPerfilDto;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
   productivityValue?: number;
 
   @IsOptional()
@@ -217,32 +180,20 @@ export class MaquinaPerfilOperativoItemDto {
   @IsNumber()
   feedReloadMin?: number;
 
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  sheetThicknessMm?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  maxBatchHeightMm?: number;
-
-  @IsOptional()
-  @IsString()
-  materialPreset?: string;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  cantidadPasadas?: number;
-
-  @IsOptional()
-  @IsBoolean()
-  dobleFaz?: boolean;
-
+  /**
+   * v3.0: discriminantes específicos por plantilla viven en `detalle`.
+   * Ej. IMPRESORA_LASER: { caras, colores, formatoSoportado, gramajeMinGr,
+   * gramajeMaxGr }. GUILLOTINA: { gramajeMinGr, gramajeMaxGr,
+   * pliegosMaxPorTanda }. Etc.
+   */
   @IsOptional()
   @IsObject()
   detalle?: Record<string, unknown>;
+
+  /** v3.0 (G-M8): regla declarativa JsonLogic para auto-selección por motor. */
+  @IsOptional()
+  @IsObject()
+  reglaSeleccionJson?: Record<string, unknown>;
 }
 
 export class MaquinaConsumibleItemDto {

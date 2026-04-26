@@ -100,28 +100,20 @@ const REPLACEMENT_COMPONENT_OPTIONS = [
   "otro",
 ] as const;
 
+// v3.0: 12 plantillas finales (doc §4).
 const MAQUINARIA_TEMPLATE_OPTIONS = [
-  "router_cnc",
-  "corte_laser",
-  "guillotina",
-  "laminadora_bopp_rollo",
-  "redondeadora_puntas",
-  "perforadora",
-  "impresora_3d",
-  "impresora_dtf",
-  "impresora_dtf_uv",
-  "impresora_uv_mesa_extensora",
-  "impresora_uv_cilindrica",
-  "impresora_uv_flatbed",
-  "impresora_uv_rollo",
-  "impresora_solvente",
-  "impresora_inyeccion_tinta",
-  "impresora_latex",
-  "impresora_sublimacion_gran_formato",
   "impresora_laser",
-  "plotter_cad",
-  "mesa_de_corte",
+  "impresora_gran_formato_por_area",
+  "guillotina",
   "plotter_de_corte",
+  "plotter_cad",
+  "laminadora_bopp_rollo",
+  "corte_laser",
+  "router_cnc",
+  "anilladora",
+  "soldadora",
+  "cabina_pintura",
+  "mesa_de_corte",
 ];
 
 const REPLACEMENT_WEAR_UNIT_OPTIONS = [
@@ -159,6 +151,10 @@ export const REPLACEMENT_COMPONENT_LABELS: Record<string, string> = {
   otro: "Otro",
 };
 
+/**
+ * Componentes de desgaste sugeridos por plantilla — v3.0 (2026-04-26).
+ * Doc §5–§13: cada plantilla declara qué tipos de desgaste son comunes.
+ */
 const REPLACEMENT_COMPONENT_OPTIONS_BY_TEMPLATE: Record<PlantillaMaquinaria, string[]> = {
   impresora_laser: [
     "fusor",
@@ -181,27 +177,22 @@ const REPLACEMENT_COMPONENT_OPTIONS_BY_TEMPLATE: Record<PlantillaMaquinaria, str
     "kit_mantenimiento",
     "otro",
   ],
-  impresora_inyeccion_tinta: ["cabezal", "filtro", "kit_mantenimiento", "otro"],
-  impresora_latex: ["cabezal", "filtro", "kit_mantenimiento", "otro"],
-  impresora_solvente: ["cabezal", "filtro", "kit_mantenimiento", "otro"],
-  impresora_sublimacion_gran_formato: ["cabezal", "filtro", "kit_mantenimiento", "otro"],
-  impresora_dtf: ["cabezal", "filtro", "kit_mantenimiento", "otro"],
-  impresora_dtf_uv: ["cabezal", "lampara_uv", "filtro", "kit_mantenimiento", "otro"],
-  impresora_uv_flatbed: ["cabezal", "lampara_uv", "filtro", "kit_mantenimiento", "otro"],
-  impresora_uv_rollo: ["cabezal", "lampara_uv", "filtro", "kit_mantenimiento", "otro"],
-  impresora_uv_cilindrica: ["cabezal", "lampara_uv", "filtro", "kit_mantenimiento", "otro"],
-  impresora_uv_mesa_extensora: ["cabezal", "lampara_uv", "filtro", "kit_mantenimiento", "otro"],
+  // §6: gran formato unificado — cabezal + lámpara UV (si aplica) + filtro.
+  impresora_gran_formato_por_area: [
+    "cabezal",
+    "lampara_uv",
+    "correa_transferencia",
+    "filtro",
+    "kit_mantenimiento",
+    "otro",
+  ],
   router_cnc: ["fresa", "cuchilla", "filtro", "kit_mantenimiento", "otro"],
   corte_laser: ["filtro", "cuchilla", "kit_mantenimiento", "otro"],
   guillotina: ["cuchilla", "kit_mantenimiento", "otro"],
   laminadora_bopp_rollo: ["cuchilla", "filtro", "kit_mantenimiento", "otro"],
-  redondeadora_puntas: ["cuchilla", "kit_mantenimiento", "otro"],
-  perforadora: ["cuchilla", "kit_mantenimiento", "otro"],
   mesa_de_corte: ["cuchilla", "filtro", "kit_mantenimiento", "otro"],
   plotter_de_corte: ["cuchilla", "filtro", "kit_mantenimiento", "otro"],
   plotter_cad: ["cabezal", "filtro", "kit_mantenimiento", "otro"],
-  impresora_3d: ["cabezal", "filtro", "kit_mantenimiento", "otro"],
-  // G-S2 (2026-04-25): plantillas pendientes históricas del doc §6.15.
   soldadora: ["kit_mantenimiento", "otro"],
   cabina_pintura: ["filtro", "kit_mantenimiento", "otro"],
   anilladora: ["kit_mantenimiento", "otro"],
@@ -340,7 +331,7 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
     dimensionesVariante: ["color"],
     requiredAtributos: ["tecnologiaCompatible", "color"],
     atributosIniciales: {
-      tecnologiaCompatible: "impresora_uv_rollo",
+      tecnologiaCompatible: "impresora_gran_formato_por_area",
       color: "c",
       baseQuimica: "uv",
       rendimientoReferencia: 1,
@@ -389,7 +380,7 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
       largo: 100,
       tipoRelease: "cold_peel",
       espesorMicrones: 75,
-      tecnologiaCompatible: "impresora_dtf",
+      tecnologiaCompatible: "impresora_gran_formato_por_area",
     },
   },
   {
@@ -458,7 +449,7 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
     requiredAtributos: ["volumenPresentacion", "tecnologiaCompatible"],
     atributosIniciales: {
       volumenPresentacion: 1000,
-      tecnologiaCompatible: "impresora_uv_flatbed",
+      tecnologiaCompatible: "impresora_gran_formato_por_area",
       superficiesCompatibles: "acrilico,pvc,vidrio",
     },
   },
