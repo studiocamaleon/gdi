@@ -90,10 +90,14 @@ export interface ConfigPasoDetalle {
   condicionActivacionJson: unknown;
   modoTiempo: string | null;
   mecanismoCantidad: string | null;
+  mecanismoCantidadConfigJson?: unknown;
   multiplicadoresActivos: string[];
   paramsPasoJson: unknown;
   maquinaM1: { id: string; codigo: string; nombre: string; plantilla: string } | null;
   perfilM1: { id: string; nombre: string } | null;
+  setupOverrideMin?: number | null;
+  cleanupOverrideMin?: number | null;
+  tiempoFijoOverrideMin?: number | null;
   slotsMateriales: Array<SlotMaterialDetalle>;
   /** G-F2: candidatas M-2; cuando length > 1 el cotizador muestra Select de override. */
   maquinasCandidatas?: Array<{
