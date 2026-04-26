@@ -179,6 +179,19 @@ export interface NestingEjecutado {
   piezasPorPliego?: number;
   consumedLengthMm?: number;
   piezasAcomodadas: number;
+  /** v3.1: solo cuando se aplicó talonario-grouping (post-nesting). */
+  talonarioGrouping?: {
+    talonariosEfectivos: number;
+    talonariosPedidos: number;
+    posesXPliego: number;
+    talonariosPorGrupo: number;
+    gruposCompletos: number;
+    talonariosResiduo: number;
+    pliegosXCapa: number;
+    pliegosDesperdicio: number;
+    numerosXTalonario: number;
+    modoIncompleto: string;
+  };
 }
 
 export interface MaterialEjecutado {

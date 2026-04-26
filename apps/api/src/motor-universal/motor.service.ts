@@ -527,6 +527,7 @@ export class MotorUniversalService {
           piezasPorPliego: nestingDispatch.piezasPorPliego,
           consumedLengthMm: nestingDispatch.consumedLengthMm,
           piezasAcomodadas: nestingDispatch.piezasAcomodadas,
+          talonarioGrouping: nestingDispatch.talonarioGrouping,
         }
       : undefined;
 

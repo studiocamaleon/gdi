@@ -27,6 +27,11 @@
 
 import { evaluateGranFormatoMixedShelfLayout } from '../productos-servicios/nesting/algorithms/shelf-rollo';
 import { nestGrid2DSingle } from '../productos-servicios/nesting/algorithms/grid-2d-single';
+import { nestGrid2DMulti } from '../productos-servicios/nesting/algorithms/grid-2d-multi';
+import {
+  calculateTalonarioGrouping,
+  type TalonarioGroupingResult,
+} from '../productos-servicios/nesting/helpers/talonario-grouping';
 import type {
   NestingResult,
   Placement,
@@ -38,11 +43,11 @@ import type { PasoCargado, JobContext } from './tipos';
  * Resultado del dispatcher con TODO lo que el motor + viewer necesitan.
  */
 export interface NestingDispatchResult {
-  algorithm: 'shelf-rollo' | 'grid-2d-single';
+  algorithm: 'shelf-rollo' | 'grid-2d-single' | 'grid-2d-multi';
   /**
    * Cantidad CALCULADA del paso, en la unidad correcta:
    *  - Para shelf-rollo: metros lineales consumidos del rollo.
-   *  - Para grid-2d-single: pliegos necesarios.
+   *  - Para grid-2d-single y grid-2d-multi: pliegos necesarios.
    */
   cantidadCalculada: number;
   unidad: 'm_lineales' | 'pliegos' | 'm2' | 'piezas';
@@ -54,12 +59,18 @@ export interface NestingDispatchResult {
   placements: Placement[];
   /** Métricas crudas heredadas del algoritmo (para trazabilidad). */
   metricasRaw: NestingResult['metrics'];
-  /** Sólo grid-2d-single: piezas por pliego (útil para outputs canónicos). */
+  /** Solo grid-2d-single: piezas por pliego (útil para outputs canónicos). */
   piezasPorPliego?: number;
-  /** Sólo shelf-rollo: largo consumido del rollo en mm. */
+  /** Solo shelf-rollo: largo consumido del rollo en mm. */
   consumedLengthMm?: number;
   /** Cantidad de instancias de pieza efectivamente acomodadas. */
   piezasAcomodadas: number;
+  /**
+   * Solo cuando se aplicó talonario-grouping (post-nesting):
+   * info sobre tandas/pliegos efectivos vs pedidos según el modo
+   * `aprovechar_pliego` vs `pose_completa` del paso.
+   */
+  talonarioGrouping?: TalonarioGroupingResult;
 }
 
 /** Material resuelto que el motor pasa al dispatcher (subset de SlotCargado). */
@@ -212,33 +223,24 @@ function runShelfRollo(
   };
 }
 
+/**
+ * Decide entre grid-2d-single (1 pieza repetida en grilla) y grid-2d-multi
+ * (N piezas de medidas distintas en una o más placas con bin-packing).
+ *
+ * Heurística: si `jobContext.piezas` tiene >1 medida distinta → multi.
+ * Si solo hay 1 medida (o sin piezas pero con medidaCustom/params) → single.
+ */
 function runGrid2DSingle(
   paso: PasoCargado,
   jobContext: JobContext,
   materialResuelto: MaterialResueltoParaNesting | null,
 ): NestingDispatchResult | null {
-  // Pieza: prioriza medidaCustomMm (modoMedidas=LIBRE), después primera pieza, después params.
-  let widthMm = 0;
-  let heightMm = 0;
-  if (jobContext.medidaCustomMm) {
-    widthMm = jobContext.medidaCustomMm.anchoMm;
-    heightMm = jobContext.medidaCustomMm.altoMm;
-  } else if (jobContext.piezas && jobContext.piezas.length > 0) {
-    widthMm = jobContext.piezas[0].anchoMm;
-    heightMm = jobContext.piezas[0].altoMm;
-  } else {
-    const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
-    widthMm = Number(params.piezaAnchoMm ?? 0);
-    heightMm = Number(params.piezaAltoMm ?? 0);
-  }
-  if (widthMm <= 0 || heightMm <= 0) return null;
-
-  // Sustrato: dimensiones del pliego (variante de papel).
+  // Sustrato común a ambos modos.
   const sheetWidthMm = readNumber(materialResuelto?.atributosVarianteJson, 'anchoMm');
   const sheetHeightMm = readNumber(materialResuelto?.atributosVarianteJson, 'largoMm');
   if (!sheetWidthMm || !sheetHeightMm) return null;
 
-  // Margenes de la máquina (defaults sensatos para impresión digital).
+  // Márgenes de la máquina (alineado al doc §5: paramsTecnicos.margenesNoImprimiblesMm).
   const maqParams = (paso.maquina?.parametrosTecnicosJson ?? {}) as Record<string, unknown>;
   const margins = (maqParams.margenesNoImprimiblesMm ?? {}) as Record<string, unknown>;
   const marginLeftMm = Number(margins.izq ?? margins.leftMm ?? 5);
@@ -251,37 +253,60 @@ function runGrid2DSingle(
   const sepVMm = Number(params.separacionVerticalMm ?? 0);
   const allowRotation = Boolean(params.permitirRotacion ?? true);
 
+  const sustrato = {
+    kind: 'sheet' as const,
+    widthMm: sheetWidthMm,
+    heightMm: sheetHeightMm,
+    margins: {
+      leftMm: marginLeftMm,
+      rightMm: marginRightMm,
+      topMm: marginTopMm,
+      bottomMm: marginBottomMm,
+    },
+  };
+
+  // ─── Detección de modo multi-medida ──────────────────────────────
+  if (jobContext.piezas && jobContext.piezas.length > 0) {
+    // Detectar si hay >1 medida distinta. Si todas son iguales, single
+    // es más eficiente y devuelve `piezasPorPliego` que el motor usa
+    // para `HEREDAR_DEL_OUTPUT_CANONICO`.
+    const medidasDistintas = new Set(
+      jobContext.piezas.map((p) => `${p.anchoMm}x${p.altoMm}`),
+    );
+    if (medidasDistintas.size > 1) {
+      return runGrid2DMulti(jobContext, sustrato, {
+        separationHMm: sepHMm,
+        separationVMm: sepVMm,
+        allowRotation,
+      });
+    }
+  }
+
+  // ─── Modo single (1 pieza repetida) ──────────────────────────────
+  let widthMm = 0;
+  let heightMm = 0;
+  if (jobContext.medidaCustomMm) {
+    widthMm = jobContext.medidaCustomMm.anchoMm;
+    heightMm = jobContext.medidaCustomMm.altoMm;
+  } else if (jobContext.piezas && jobContext.piezas.length > 0) {
+    widthMm = jobContext.piezas[0].anchoMm;
+    heightMm = jobContext.piezas[0].altoMm;
+  } else {
+    widthMm = Number(params.piezaAnchoMm ?? 0);
+    heightMm = Number(params.piezaAltoMm ?? 0);
+  }
+  if (widthMm <= 0 || heightMm <= 0) return null;
+
   const result = nestGrid2DSingle(
-    {
-      id: 'pieza_principal',
-      widthMm,
-      heightMm,
-      quantity: 1,
-    },
-    {
-      kind: 'sheet',
-      widthMm: sheetWidthMm,
-      heightMm: sheetHeightMm,
-      margins: {
-        leftMm: marginLeftMm,
-        rightMm: marginRightMm,
-        topMm: marginTopMm,
-        bottomMm: marginBottomMm,
-      },
-    },
-    {
-      separationHMm: sepHMm,
-      separationVMm: sepVMm,
-      allowRotation,
-    },
+    { id: 'pieza_principal', widthMm, heightMm, quantity: 1 },
+    sustrato,
+    { separationHMm: sepHMm, separationVMm: sepVMm, allowRotation },
   );
 
   const piezasPorPliego = result.metrics.piezasPorSustrato ?? 0;
   if (piezasPorPliego <= 0) return null;
 
   const cantidadPiezas = Number(jobContext.cantidad ?? 0);
-  // Si caras=2, multiplicamos: doble faz duplica las pasadas pero NO los pliegos.
-  // El motor luego aplica el multiplicador 'caras' al tiempo, no a los pliegos.
   const pliegosNecesarios = Math.ceil(cantidadPiezas / piezasPorPliego);
 
   return {
@@ -293,7 +318,55 @@ function runGrid2DSingle(
     placements: result.placements,
     metricasRaw: result.metrics,
     piezasPorPliego,
-    piezasAcomodadas: piezasPorPliego, // las acomodadas en 1 pliego "modelo"
+    piezasAcomodadas: piezasPorPliego,
+  };
+}
+
+/**
+ * Bin-packing 2D para múltiples piezas de medidas distintas en una o más
+ * placas. Usa `nestGrid2DMulti` (MaxRectsPacker) que abre nuevas placas
+ * automáticamente cuando lo pendiente no entra en la actual.
+ *
+ * Útil para impresión rígida (CNC, UV flatbed) donde un job mezcla piezas
+ * de tamaños distintos.
+ */
+function runGrid2DMulti(
+  jobContext: JobContext,
+  sustrato: {
+    kind: 'sheet';
+    widthMm: number;
+    heightMm: number;
+    margins: { leftMm: number; rightMm: number; topMm: number; bottomMm: number };
+  },
+  options: { separationHMm: number; separationVMm: number; allowRotation: boolean },
+): NestingDispatchResult | null {
+  const piezas = jobContext.piezas ?? [];
+  if (piezas.length === 0) return null;
+
+  const result = nestGrid2DMulti(
+    piezas.map((p, idx) => ({
+      id: `pieza_${idx}`,
+      widthMm: p.anchoMm,
+      heightMm: p.altoMm,
+      quantity: p.cantidad,
+    })),
+    sustrato,
+    options,
+  );
+
+  if (result.placements.length === 0) return null;
+
+  const cantidadPlacas = result.substrates.length;
+
+  return {
+    algorithm: 'grid-2d-multi',
+    cantidadCalculada: cantidadPlacas, // pliegos/placas necesarios
+    unidad: 'pliegos',
+    aprovechamientoPct: result.metrics.aprovechamientoPct,
+    substrates: result.substrates,
+    placements: result.placements,
+    metricasRaw: result.metrics,
+    piezasAcomodadas: result.placements.length,
   };
 }
 
@@ -337,7 +410,64 @@ export async function runNestingForPrePrensa(
     paramsPasoJson: paso.paramsPasoJson, // mantener overrides locales de pre_prensa
   };
 
-  return runNestingForPaso(pasoSintetico, jobContext, material);
+  const baseResult = runNestingForPaso(pasoSintetico, jobContext, material);
+  if (!baseResult) return null;
+
+  // ─── Talonario-grouping (post-nesting) ──────────────────────────
+  // Si pre_prensa declara `paramsPaso.modoTalonarioIncompleto` Y el JobContext
+  // tiene `numerosXTalonario`, aplicamos el grouping para obtener
+  // `pliegosXCapa` real considerando si la cantidad pedida no completa un
+  // grupo (modos 'aprovechar_pliego' vs 'pose_completa').
+  //
+  // El resultado sobrescribe la `cantidadCalculada` del base (que era pliegos
+  // sin grouping = ceil(cantidad / piezasPorPliego)) por `pliegosXCapa` que
+  // considera el modo del modelador.
+  return aplicarTalonarioGroupingSiCorresponde(baseResult, paso, jobContext);
+}
+
+/**
+ * Si el paso `pre_prensa` declara `paramsPaso.modoTalonarioIncompleto` y el
+ * JobContext es de talonario (`numerosXTalonario` declarado), aplica el
+ * grouping al resultado del nesting base. Sino, devuelve baseResult sin tocar.
+ */
+function aplicarTalonarioGroupingSiCorresponde(
+  baseResult: NestingDispatchResult,
+  paso: PasoCargado,
+  jobContext: JobContext,
+): NestingDispatchResult {
+  const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
+  const modo = params.modoTalonarioIncompleto;
+  if (modo !== 'aprovechar_pliego' && modo !== 'pose_completa') {
+    return baseResult; // no es talonario
+  }
+  const numerosXTalonario = Number(jobContext.numerosXTalonario ?? 0);
+  if (!numerosXTalonario || numerosXTalonario <= 0) {
+    return baseResult; // sin info de hojas por talonario, no aplica
+  }
+  const piezasPorPliego = baseResult.piezasPorPliego ?? 0;
+  if (piezasPorPliego <= 0) {
+    return baseResult; // sin nesting, no se puede calcular grouping
+  }
+  const cantidadTalonarios = Number(jobContext.cantidad ?? 0);
+  if (!cantidadTalonarios || cantidadTalonarios <= 0) {
+    return baseResult;
+  }
+
+  const grouping = calculateTalonarioGrouping({
+    cantidadTalonarios,
+    posesXPliego: piezasPorPliego,
+    numerosXTalonario,
+    modoTalonarioIncompleto: modo as 'aprovechar_pliego' | 'pose_completa',
+  });
+
+  // Sobrescribir la cantidad por la real con grouping (pliegosXCapa).
+  // baseResult.cantidadCalculada antes era ceil(cantidad/piezasPorPliego);
+  // ahora es pliegosXCapa que considera el residuo + modo del modelador.
+  return {
+    ...baseResult,
+    cantidadCalculada: grouping.pliegosXCapa,
+    talonarioGrouping: grouping,
+  };
 }
 
 // ────────────────────────────────────────────────────────────────────

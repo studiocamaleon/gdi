@@ -413,6 +413,19 @@ export interface NestingViewerInput {
   piezasPorPliego?: number;
   consumedLengthMm?: number;
   piezasAcomodadas: number;
+  /** v3.1: solo cuando se aplicó talonario-grouping. */
+  talonarioGrouping?: {
+    talonariosEfectivos: number;
+    talonariosPedidos: number;
+    posesXPliego: number;
+    talonariosPorGrupo: number;
+    gruposCompletos: number;
+    talonariosResiduo: number;
+    pliegosXCapa: number;
+    pliegosDesperdicio: number;
+    numerosXTalonario: number;
+    modoIncompleto: string;
+  };
 }
 
 export interface CotizarRequest {

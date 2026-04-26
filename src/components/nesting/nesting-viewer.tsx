@@ -104,22 +104,38 @@ function NestingHeader({ result }: { result: NestingViewerInput }) {
   }[result.algorithm];
 
   return (
-    <div className="flex flex-wrap gap-3 text-xs">
-      <span className="px-2 py-0.5 rounded bg-muted font-medium">{algorithmLabel}</span>
-      <span>
-        <strong>{result.cantidadCalculada.toFixed(2)}</strong> {labelUnidad(result.unidad)}
-      </span>
-      <span>
-        Aprovech: <strong>{result.aprovechamientoPct.toFixed(1)}%</strong>
-      </span>
-      <span>
-        {result.piezasAcomodadas} piezas acomodadas
-      </span>
-      {result.piezasPorPliego != null ? (
-        <span>{result.piezasPorPliego}/pliego</span>
-      ) : null}
-      {result.consumedLengthMm != null ? (
-        <span>Largo rollo: {formatMm(result.consumedLengthMm)}</span>
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-3 text-xs">
+        <span className="px-2 py-0.5 rounded bg-muted font-medium">{algorithmLabel}</span>
+        <span>
+          <strong>{result.cantidadCalculada.toFixed(2)}</strong> {labelUnidad(result.unidad)}
+        </span>
+        <span>
+          Aprovech: <strong>{result.aprovechamientoPct.toFixed(1)}%</strong>
+        </span>
+        <span>{result.piezasAcomodadas} piezas acomodadas</span>
+        {result.piezasPorPliego != null ? (
+          <span>{result.piezasPorPliego}/pliego</span>
+        ) : null}
+        {result.consumedLengthMm != null ? (
+          <span>Largo rollo: {formatMm(result.consumedLengthMm)}</span>
+        ) : null}
+      </div>
+      {result.talonarioGrouping ? (
+        <div className="flex flex-wrap gap-3 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
+          <span className="font-medium">Talonario:</span>
+          <span>
+            {result.talonarioGrouping.talonariosEfectivos}/{result.talonarioGrouping.talonariosPedidos} efectivos
+          </span>
+          <span>
+            {result.talonarioGrouping.gruposCompletos} grupo(s) + {result.talonarioGrouping.talonariosResiduo} residuo
+          </span>
+          <span>{result.talonarioGrouping.pliegosXCapa} pliegos × capa</span>
+          {result.talonarioGrouping.pliegosDesperdicio > 0 && (
+            <span>⚠ {result.talonarioGrouping.pliegosDesperdicio} pliegos desperdicio</span>
+          )}
+          <span className="text-amber-700">modo: {result.talonarioGrouping.modoIncompleto}</span>
+        </div>
       ) : null}
     </div>
   );

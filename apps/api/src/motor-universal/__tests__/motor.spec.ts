@@ -1095,6 +1095,145 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(pasoDiseno!.tiempo!.costo).toBe(5000);
   });
 
+  it('v3.1 talonario-grouping: pre_prensa con paramsPaso.modoTalonarioIncompleto aplica grouping post-nesting', async () => {
+    if (!tenantId) return;
+    const talonario = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TALON-DUPL-A4' },
+    });
+    // Cantidad NO completa un grupo (ej: 100 talonarios y poses_por_pliego ~22).
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: talonario.id,
+      periodo: '2026-03',
+      jobContext: {
+        cantidad: 100,
+        caras: 1,
+        tipoCopia: 1,
+        numerosXTalonario: 50,
+      },
+    });
+    expect(result.exitoso).toBe(true);
+    const prePrensa = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'pre_prensa');
+    expect(prePrensa).toBeDefined();
+    expect(prePrensa!.activado).toBe(true);
+    // Verificar que el grouping se aplicó.
+    expect(prePrensa!.nestingResult?.talonarioGrouping).toBeDefined();
+    const tg = prePrensa!.nestingResult!.talonarioGrouping!;
+    expect(tg.talonariosPedidos).toBe(100);
+    expect(tg.numerosXTalonario).toBe(50);
+    expect(tg.modoIncompleto).toBe('aprovechar_pliego');
+    expect(tg.posesXPliego).toBeGreaterThan(0);
+    expect(tg.pliegosXCapa).toBeGreaterThan(0);
+    // Con aprovechar_pliego: residuo se imprime con poses vacías → desperdicio>0.
+    if (tg.talonariosResiduo > 0) {
+      expect(tg.pliegosDesperdicio).toBeGreaterThan(0);
+    }
+    // pliegos_calculados publicado debe coincidir con pliegosXCapa.
+    const outs = prePrensa!.outputsCanonicos as Record<string, unknown>;
+    expect(outs.pliegos_calculados).toBe(tg.pliegosXCapa);
+  });
+
+  it('v3.1 grid-2d-multi: jobContext con piezas de medidas distintas → multi-bin packing', async () => {
+    // Test unitario del dispatcher multi (no requiere producto seed específico).
+    const fakePaso = {
+      rutaPasoId: 'rp1',
+      rutaPasoOrden: 1,
+      familiaCodigo: 'impresion_por_hoja',
+      configPasoId: 'cp1',
+      modoActivacion: 'OBLIGATORIO',
+      condicionActivacionJson: null,
+      modoTiempo: 'T-3',
+      mecanismoCantidad: 'CALCULADO_POR_PASO',
+      mecanismoCantidadConfigJson: null,
+      multiplicadoresActivos: [],
+      paramsPasoJson: null,
+      maquinaM1Id: null,
+      perfilM1Id: null,
+      setupOverrideMin: null,
+      cleanupOverrideMin: null,
+      tiempoFijoOverrideMin: null,
+      slots: [],
+      cargosDirectosPaso: [],
+      maquina: {
+        id: 'm1',
+        codigo: 'X',
+        nombre: 'X',
+        plantilla: 'IMPRESORA_LASER',
+        parametrosTecnicosJson: { margenesNoImprimiblesMm: { izq: 5, der: 5, sup: 5, inf: 5 } },
+      },
+    };
+    const fakeMaterial = {
+      id: 'mat1',
+      atributosVarianteJson: { anchoMm: 220, largoMm: 340 },
+    };
+    const fakeJobContext = {
+      cantidad: 1,
+      caras: 1 as const,
+      // 3 medidas distintas → debería disparar grid-2d-multi.
+      piezas: [
+        { cantidad: 5, anchoMm: 90, altoMm: 50 },
+        { cantidad: 3, anchoMm: 100, altoMm: 70 },
+        { cantidad: 2, anchoMm: 60, altoMm: 80 },
+      ],
+    };
+
+    const r = runNestingForPaso(fakePaso as never, fakeJobContext, fakeMaterial);
+    expect(r).not.toBeNull();
+    expect(r!.algorithm).toBe('grid-2d-multi');
+    expect(r!.unidad).toBe('pliegos');
+    expect(r!.cantidadCalculada).toBeGreaterThanOrEqual(1);
+    expect(r!.placements.length).toBe(10); // 5+3+2 instancias acomodadas
+    expect(r!.aprovechamientoPct).toBeGreaterThan(0);
+  });
+
+  it('v3.1 grid-2d-multi: piezas todas iguales → cae a single (más eficiente)', async () => {
+    const fakePaso = {
+      rutaPasoId: 'rp1',
+      rutaPasoOrden: 1,
+      familiaCodigo: 'impresion_por_hoja',
+      configPasoId: 'cp1',
+      modoActivacion: 'OBLIGATORIO',
+      condicionActivacionJson: null,
+      modoTiempo: 'T-3',
+      mecanismoCantidad: 'CALCULADO_POR_PASO',
+      mecanismoCantidadConfigJson: null,
+      multiplicadoresActivos: [],
+      paramsPasoJson: null,
+      maquinaM1Id: null,
+      perfilM1Id: null,
+      setupOverrideMin: null,
+      cleanupOverrideMin: null,
+      tiempoFijoOverrideMin: null,
+      slots: [],
+      cargosDirectosPaso: [],
+      maquina: {
+        id: 'm1',
+        codigo: 'X',
+        nombre: 'X',
+        plantilla: 'IMPRESORA_LASER',
+        parametrosTecnicosJson: { margenesNoImprimiblesMm: { izq: 5, der: 5, sup: 5, inf: 5 } },
+      },
+    };
+    const fakeMaterial = {
+      id: 'mat1',
+      atributosVarianteJson: { anchoMm: 220, largoMm: 340 },
+    };
+    // 2 entradas con la MISMA medida → 1 medida distinta → single.
+    const fakeJobContext = {
+      cantidad: 1000,
+      caras: 1 as const,
+      piezas: [
+        { cantidad: 500, anchoMm: 90, altoMm: 50 },
+        { cantidad: 500, anchoMm: 90, altoMm: 50 },
+      ],
+    };
+
+    const r = runNestingForPaso(fakePaso as never, fakeJobContext, fakeMaterial);
+    expect(r).not.toBeNull();
+    expect(r!.algorithm).toBe('grid-2d-single');
+    expect(r!.piezasPorPliego).toBeGreaterThan(0);
+  });
+
   it('G-M2: pre_prensa publica `pliegos_calculados` y `poses_por_pliego` vía look-ahead a impresion_por_hoja', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({
