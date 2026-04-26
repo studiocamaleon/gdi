@@ -90,7 +90,7 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
                 Cargos directos
               </Button>
             </Link>
-            <Link href={`/productos-servicios/${producto.id}/editar`}>
+            <Link href={`/productos-servicios/${producto.id}/wizard`}>
               <Button variant="outline" size="sm">
                 <PencilIcon className="mr-2 size-3" />
                 Editar

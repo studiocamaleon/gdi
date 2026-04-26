@@ -1,24 +1,18 @@
-import { notFound } from "next/navigation";
-
-import { ProductoFormView } from "@/components/productos-servicios/producto-form-view";
-import { ApiError } from "@/lib/api";
-import { getProductoById } from "@/lib/productos-servicios-api";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function EditarProductoPage({
+/**
+ * /[productoId]/editar — redirige al wizard del producto.
+ *
+ * El editor monolítico fue reemplazado por el wizard de 5 steps en Sprint 3.
+ * Mantiene la URL para no romper links externos / históricos.
+ */
+export default async function EditarProductoRedirectPage({
   params,
 }: {
   params: Promise<{ productoId: string }>;
 }) {
   const { productoId } = await params;
-  try {
-    const producto = await getProductoById(productoId);
-    return <ProductoFormView modo="editar" productoExistente={producto} />;
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 404) {
-      notFound();
-    }
-    throw err;
-  }
+  redirect(`/productos-servicios/${productoId}/wizard`);
 }

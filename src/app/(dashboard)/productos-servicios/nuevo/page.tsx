@@ -1,7 +1,7 @@
-import { ProductoFormView } from "@/components/productos-servicios/producto-form-view";
+import { ProductoWizard } from "@/components/productos-servicios/producto-wizard";
 
 export const dynamic = "force-dynamic";
 
 export default function NuevoProductoPage() {
-  return <ProductoFormView modo="crear" />;
+  return <ProductoWizard modo="crear" />;
 }
