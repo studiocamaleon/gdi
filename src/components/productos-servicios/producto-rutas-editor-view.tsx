@@ -26,6 +26,7 @@ import {
   crearProductoRutaAlt,
   eliminarProductoRutaAlt,
 } from "@/lib/productos-servicios-api";
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import type { ProductoDetalle, RutaListItem } from "@/lib/productos-servicios";
 
 interface Props {
@@ -82,13 +83,14 @@ export function ProductoRutasEditorView({ producto, rutasDisponibles }: Props) {
     }
   };
 
-  const quitarRutaAlt = async (rutaAltId: string, nombre: string) => {
-    if (!confirm(`¿Quitar la ruta alternativa "${nombre}" del producto?\n\nLa configuración de pasos para esta ruta también se elimina.`)) {
-      return;
-    }
+  const [aQuitar, setAQuitar] = React.useState<{ id: string; nombre: string } | null>(null);
+
+  const ejecutarQuitar = async () => {
+    if (!aQuitar) return;
     try {
-      await eliminarProductoRutaAlt(rutaAltId);
+      await eliminarProductoRutaAlt(aQuitar.id);
       toast.success("Ruta quitada del producto");
+      setAQuitar(null);
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error");
@@ -237,7 +239,7 @@ export function ProductoRutasEditorView({ producto, rutasDisponibles }: Props) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => quitarRutaAlt(ra.id, ra.nombre)}
+                    onClick={() => setAQuitar({ id: ra.id, nombre: ra.nombre })}
                     className="text-red-600 hover:text-red-700"
                   >
                     <Trash2Icon className="size-3" />
@@ -261,6 +263,27 @@ export function ProductoRutasEditorView({ producto, rutasDisponibles }: Props) {
           </CardContent>
         </Card>
       )}
+
+      <ConfirmacionDestructiva
+        open={!!aQuitar}
+        onOpenChange={(open) => !open && setAQuitar(null)}
+        titulo="Quitar ruta del producto"
+        descripcion={
+          aQuitar ? (
+            <>
+              Vas a quitar la ruta alternativa <strong>{aQuitar.nombre}</strong> de{" "}
+              <strong>{producto.nombre}</strong>.
+            </>
+          ) : null
+        }
+        impacto={[
+          "La configuración de pasos para esta ruta se elimina también.",
+          "Si era la ruta preferida, hay que designar otra.",
+        ]}
+        nombreItem={aQuitar?.nombre}
+        accionLabel="Quitar ruta"
+        onConfirmar={ejecutarQuitar}
+      />
     </div>
   );
 }

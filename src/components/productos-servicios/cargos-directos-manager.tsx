@@ -42,6 +42,8 @@ import {
 } from "@/lib/productos-servicios-api";
 import type { CargoDirectoCatalogo } from "@/lib/productos-servicios";
 import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import { EstadoVacio } from "@/components/ui/estado-vacio";
 import {
   getLabel,
   modoActivacionLabels,
@@ -128,11 +130,14 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
     }
   };
 
-  const handleEliminar = async (c: CargoDirectoCatalogo) => {
-    if (!confirm(`¿Eliminar cargo "${c.nombre}"?\nSi está en uso se marcará como inactivo.`)) return;
+  const [aBorrar, setABorrar] = React.useState<CargoDirectoCatalogo | null>(null);
+
+  const ejecutarBorrado = async () => {
+    if (!aBorrar) return;
     try {
-      await eliminarCargoDirecto(c.id);
+      await eliminarCargoDirecto(aBorrar.id);
       toast.success("Cargo eliminado");
+      setABorrar(null);
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error");
@@ -304,9 +309,13 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
         </CardHeader>
         <CardContent>
           {initialCargos.length === 0 ? (
-            <p className="text-muted-foreground py-8 text-center text-sm">
-              Sin cargos cargados. Creá el primero.
-            </p>
+            <EstadoVacio
+              variant="compacto"
+              icon={<WrenchIcon />}
+              titulo="Sin cargos cargados"
+              descripcion="Los cargos directos son extras que se aplican al cotizar (viático, recargo urgencia, tercerización). Empezá creando el primero."
+              cta={{ label: "Nuevo cargo", onClick: abrirNuevo, icon: PlusIcon }}
+            />
           ) : (
             <Table>
               <TableHeader>
@@ -366,7 +375,7 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleEliminar(c)}
+                        onClick={() => setABorrar(c)}
                         className="text-red-600 hover:text-red-700"
                       >
                         <Trash2Icon className="size-3" />
@@ -379,6 +388,27 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
           )}
         </CardContent>
       </Card>
+
+      <ConfirmacionDestructiva
+        open={!!aBorrar}
+        onOpenChange={(open) => !open && setABorrar(null)}
+        titulo="Eliminar cargo del catálogo"
+        descripcion={
+          aBorrar ? (
+            <>
+              Vas a eliminar el cargo <strong>{aBorrar.nombre}</strong>{" "}
+              (<code className="text-xs">{aBorrar.codigo}</code>) del catálogo del tenant.
+            </>
+          ) : null
+        }
+        impacto={[
+          "Si está asociado a productos, se marca como inactivo en vez de borrarse.",
+          "Si no está en uso, se elimina definitivamente.",
+        ]}
+        nombreItem={aBorrar?.nombre}
+        accionLabel="Eliminar cargo"
+        onConfirmar={ejecutarBorrado}
+      />
     </div>
   );
 }

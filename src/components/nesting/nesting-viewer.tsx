@@ -74,9 +74,25 @@ export function NestingViewer({
   // Por ahora dibujamos sólo el primer sustrato (el más común). Para multi-bin
   // (rígidos), iteramos todos.
   const totalSubstrates = result.substrates.length;
+
+  // Leyenda: color → label (basado en pieceId únicos en placements)
+  const piezasUnicas = React.useMemo(() => {
+    const map = new Map<string, { color: string; label: string }>();
+    result.placements.forEach((p, idx) => {
+      if (map.has(p.pieceId)) return;
+      const meta = p.meta as { label?: string } | undefined;
+      map.set(p.pieceId, {
+        color: colorForPieceId(p.pieceId, idx),
+        label: meta?.label ?? p.pieceId,
+      });
+    });
+    return Array.from(map.entries()).map(([id, info]) => ({ id, ...info }));
+  }, [result.placements]);
+
   return (
     <div className={className ?? "space-y-3"}>
       <NestingHeader result={result} />
+      {piezasUnicas.length > 0 && <NestingLeyenda piezas={piezasUnicas} />}
       {result.substrates.map((sub, idx) => (
         <SubstrateView
           key={idx}
@@ -89,6 +105,33 @@ export function NestingViewer({
           maxPx={maxPx}
           showLabels={showLabels}
         />
+      ))}
+    </div>
+  );
+}
+
+// ─── Leyenda de colores por pieza ────────────────────────────────
+
+function NestingLeyenda({
+  piezas,
+}: {
+  piezas: Array<{ id: string; color: string; label: string }>;
+}) {
+  // Si todos comparten label (caso típico: una sola pieza), no es útil mostrar
+  // la leyenda — el rect entero es de un único color.
+  if (piezas.length <= 1) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+      <span className="text-muted-foreground font-medium">Referencia:</span>
+      {piezas.map((p) => (
+        <span key={p.id} className="inline-flex items-center gap-1" title={p.id}>
+          <span
+            className="inline-block size-3 shrink-0 rounded-sm border border-foreground/30"
+            style={{ backgroundColor: p.color, opacity: 0.65 }}
+            aria-hidden
+          />
+          <span>{p.label}</span>
+        </span>
       ))}
     </div>
   );

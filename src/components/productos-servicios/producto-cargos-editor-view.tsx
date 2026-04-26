@@ -30,6 +30,7 @@ import {
   asociarCargoCotizacion,
   desasociarCargoCotizacion,
 } from "@/lib/productos-servicios-api";
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import type { CargoDirectoCatalogo, ProductoDetalle } from "@/lib/productos-servicios";
 import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
 import {
@@ -80,11 +81,16 @@ export function ProductoCargosEditorView({ producto, catalogoCargos }: Props) {
     }
   };
 
-  const desasociar = async (asocId: string, nombre: string) => {
-    if (!confirm(`¿Quitar el cargo "${nombre}" del producto?`)) return;
+  const [aDesasociar, setADesasociar] = React.useState<{ id: string; nombre: string } | null>(
+    null,
+  );
+
+  const ejecutarDesasociar = async () => {
+    if (!aDesasociar) return;
     try {
-      await desasociarCargoCotizacion(asocId);
+      await desasociarCargoCotizacion(aDesasociar.id);
       toast.success("Cargo desasociado");
+      setADesasociar(null);
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error");
@@ -243,7 +249,7 @@ export function ProductoCargosEditorView({ producto, catalogoCargos }: Props) {
                     variant="ghost"
                     size="sm"
                     onClick={() =>
-                      desasociar(cd.id, cd.cargoDirectoCatalogo.nombre)
+                      setADesasociar({ id: cd.id, nombre: cd.cargoDirectoCatalogo.nombre })
                     }
                     className="h-7 w-7 p-0 text-red-600"
                   >
@@ -273,6 +279,27 @@ export function ProductoCargosEditorView({ producto, catalogoCargos }: Props) {
           ))}
         </div>
       )}
+
+      <ConfirmacionDestructiva
+        open={!!aDesasociar}
+        onOpenChange={(open) => !open && setADesasociar(null)}
+        titulo="Quitar cargo del producto"
+        descripcion={
+          aDesasociar ? (
+            <>
+              Vas a desasociar el cargo <strong>{aDesasociar.nombre}</strong> de este producto.
+            </>
+          ) : null
+        }
+        impacto={[
+          "El cargo deja de ofrecerse al cotizar este producto.",
+          "El cargo sigue existiendo en el catálogo del tenant.",
+        ]}
+        nombreItem={aDesasociar?.nombre}
+        requiereTipear={false}
+        accionLabel="Quitar cargo"
+        onConfirmar={ejecutarDesasociar}
+      />
     </div>
   );
 }

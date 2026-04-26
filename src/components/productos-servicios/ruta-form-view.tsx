@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import {
   actualizarRuta,
   crearRuta,
@@ -222,13 +223,15 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
     }
   };
 
-  const handleEliminar = async () => {
+  const [confirmandoBorrado, setConfirmandoBorrado] = React.useState(false);
+
+  const ejecutarEliminar = async () => {
     if (!rutaExistente) return;
-    if (!confirm(`¿Eliminar ruta "${rutaExistente.nombre}"?`)) return;
     setEliminando(true);
     try {
       await eliminarRuta(rutaExistente.id);
       toast.success("Ruta eliminada");
+      setConfirmandoBorrado(false);
       router.push("/productos-servicios/rutas");
       router.refresh();
     } catch (err) {
@@ -493,7 +496,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
         {modo === "editar" ? (
           <Button
             variant="destructive"
-            onClick={handleEliminar}
+            onClick={() => setConfirmandoBorrado(true)}
             disabled={guardando || eliminando}
           >
             <Trash2Icon className="mr-2 size-4" />
@@ -507,6 +510,31 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
           {guardando ? "Guardando..." : modo === "crear" ? "Crear ruta" : "Guardar cambios"}
         </Button>
       </div>
+
+      {rutaExistente && (
+        <ConfirmacionDestructiva
+          open={confirmandoBorrado}
+          onOpenChange={setConfirmandoBorrado}
+          titulo="Eliminar ruta"
+          descripcion={
+            <>
+              Vas a eliminar la ruta <strong>{rutaExistente.nombre}</strong>{" "}
+              (<code className="text-xs">{rutaExistente.codigo}</code>).
+            </>
+          }
+          impacto={
+            productosAfectados > 0
+              ? [
+                  `Hay ${productosAfectados} producto(s) usando esta ruta.`,
+                  "El backend rechaza el borrado si la ruta está en uso — primero quitala de los productos.",
+                ]
+              : ["La ruta y todos sus pasos se borran del catálogo."]
+          }
+          nombreItem={rutaExistente.nombre}
+          accionLabel="Eliminar ruta"
+          onConfirmar={ejecutarEliminar}
+        />
+      )}
     </div>
   );
 }
