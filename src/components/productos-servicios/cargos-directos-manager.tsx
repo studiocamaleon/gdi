@@ -41,13 +41,14 @@ import {
   eliminarCargoDirecto,
 } from "@/lib/productos-servicios-api";
 import type { CargoDirectoCatalogo } from "@/lib/productos-servicios";
+import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
+import {
+  getLabel,
+  modoActivacionLabels,
+  modoCalculoCargoLabels,
+} from "@/lib/labels-humanos";
 
-const MODOS_CALCULO = [
-  { value: "MONTO_FIJO_PLANO", label: "Monto fijo plano (puede tener zonas)" },
-  { value: "PORCENTAJE_SOBRE_BASE", label: "% sobre base (subtotal/venta/costo)" },
-  { value: "POR_UNIDAD_INPUT", label: "Por unidad de input ($/km, $/copia, etc.)" },
-];
-
+const MODOS_CALCULO = ["MONTO_FIJO_PLANO", "PORCENTAJE_SOBRE_BASE", "POR_UNIDAD_INPUT"];
 const MODOS_ACTIVACION = ["OBLIGATORIO", "OPCIONAL", "CONDICIONAL"];
 
 export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoDirectoCatalogo[] }) {
@@ -201,52 +202,83 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="modoCalculo">Modo de cálculo *</Label>
+                <LabelConTooltip
+                  label="Modo de cálculo"
+                  required
+                  htmlFor="modoCalculo"
+                  tooltip="Cómo se calcula el monto del cargo: monto fijo, porcentaje sobre subtotal, o precio por unidad de input."
+                />
                 <Select value={modoCalculo} onValueChange={(v) => setModoCalculo(v ?? "MONTO_FIJO_PLANO")}>
                   <SelectTrigger id="modoCalculo">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {MODOS_CALCULO.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>
-                        {m.label}
-                      </SelectItem>
-                    ))}
+                    {MODOS_CALCULO.map((m) => {
+                      const lbl = getLabel(modoCalculoCargoLabels, m);
+                      return (
+                        <SelectItem key={m} value={m}>
+                          {lbl.label}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
+                <p className="text-muted-foreground text-xs">
+                  {getLabel(modoCalculoCargoLabels, modoCalculo).descripcion}
+                </p>
               </div>
               <div className="space-y-2">
-                <Label>Modos de activación soportados</Label>
+                <LabelConTooltip
+                  label="¿Cuándo se aplica?"
+                  tooltip="Marcá los modos de activación que el modelador podrá elegir cuando asocie este cargo a un producto/paso."
+                />
                 <div className="flex flex-wrap gap-2">
-                  {MODOS_ACTIVACION.map((m) => (
-                    <label
-                      key={m}
-                      className="hover:bg-accent flex items-center gap-2 rounded border px-2 py-1 text-xs"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={modosActivacion.includes(m)}
-                        onChange={() => toggleModoActivacion(m)}
-                      />
-                      <span>{m}</span>
-                    </label>
-                  ))}
+                  {MODOS_ACTIVACION.map((m) => {
+                    const lbl = getLabel(modoActivacionLabels, m);
+                    return (
+                      <label
+                        key={m}
+                        className="hover:bg-accent flex items-center gap-2 rounded border px-2 py-1 text-xs"
+                        title={lbl.descripcion}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={modosActivacion.includes(m)}
+                          onChange={() => toggleModoActivacion(m)}
+                        />
+                        <span>{lbl.label}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="configJson">Config JSON</Label>
+                <LabelConTooltip
+                  label="Configuración (JSON)"
+                  htmlFor="configJson"
+                  tooltip="Valores default para este cargo. El formato depende del modo de cálculo elegido."
+                />
                 <Textarea
                   id="configJson"
                   value={configJsonStr}
                   onChange={(e) => setConfigJsonStr(e.target.value)}
                   rows={6}
                   className="font-mono text-xs"
-                  placeholder='{"monto": 5000, "zonas": [...]}'
+                  placeholder={
+                    modoCalculo === "MONTO_FIJO_PLANO"
+                      ? '{"monto": 5000} o {"zonas": [{"codigo": "CABA", "monto": 3000}, ...]}'
+                      : modoCalculo === "PORCENTAJE_SOBRE_BASE"
+                        ? '{"porcentajeDefault": 30}'
+                        : '{"precioPorUnidad": 80, "unidad": "km", "inputCantidad": "distanciaKm"}'
+                  }
                 />
                 <p className="text-muted-foreground text-xs">
-                  Defaults según modo: MONTO_FIJO_PLANO → {"{monto: N}"} o {"{zonas: [...]}"};
-                  PORCENTAJE_SOBRE_BASE → {"{porcentajeDefault: N, baseDeCalculo: 'SUBTOTAL'}"};
-                  POR_UNIDAD_INPUT → {"{precioPorUnidad: N, unidad: 'km', inputCantidad: 'distanciaKm'}"}
+                  {modoCalculo === "MONTO_FIJO_PLANO" &&
+                    "Ej. monto único: { monto: 500 }. Con zonas: { zonas: [{codigo, nombre, monto}, ...] }."}
+                  {modoCalculo === "PORCENTAJE_SOBRE_BASE" &&
+                    "Ej. { porcentajeDefault: 30 } aplica 30% sobre subtotal."}
+                  {modoCalculo === "POR_UNIDAD_INPUT" &&
+                    "Ej. { precioPorUnidad: 80, inputCantidad: 'distanciaKm' } cobra $80 × cantidad de km del JobContext."}
                 </p>
               </div>
             </div>
@@ -298,15 +330,28 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{c.modoCalculo}</Badge>
+                      <Badge
+                        variant="outline"
+                        title={getLabel(modoCalculoCargoLabels, c.modoCalculo).descripcion}
+                      >
+                        {getLabel(modoCalculoCargoLabels, c.modoCalculo).label}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
-                        {c.modosActivacionSoportados.map((m) => (
-                          <Badge key={m} variant="secondary" className="text-[10px]">
-                            {m}
-                          </Badge>
-                        ))}
+                        {c.modosActivacionSoportados.map((m) => {
+                          const lbl = getLabel(modoActivacionLabels, m);
+                          return (
+                            <Badge
+                              key={m}
+                              variant="secondary"
+                              className="text-[10px]"
+                              title={lbl.descripcion}
+                            >
+                              {lbl.label}
+                            </Badge>
+                          );
+                        })}
                       </div>
                     </TableCell>
                     <TableCell>

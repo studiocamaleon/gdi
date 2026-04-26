@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { ProductoListItem } from "@/lib/productos-servicios";
+import { getLabel, modoMedidasLabels, unidadComercialLabels } from "@/lib/labels-humanos";
 
 export function ProductosServiciosTable({
   initialProductos,
@@ -65,15 +66,18 @@ export function ProductosServiciosTable({
                 <TableRow>
                   <TableHead>Código</TableHead>
                   <TableHead>Nombre</TableHead>
-                  <TableHead>Unidad comercial</TableHead>
-                  <TableHead>Modo medidas</TableHead>
+                  <TableHead>¿Cómo se cobra?</TableHead>
+                  <TableHead>Manejo de medidas</TableHead>
                   <TableHead>Rutas</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {productos.map((p) => (
+                {productos.map((p) => {
+                  const lblUnidad = getLabel(unidadComercialLabels, p.unidadComercial);
+                  const lblMedidas = getLabel(modoMedidasLabels, p.modoMedidas);
+                  return (
                   <TableRow key={p.id}>
                     <TableCell className="font-mono text-xs">{p.codigo}</TableCell>
                     <TableCell>
@@ -83,11 +87,16 @@ export function ProductosServiciosTable({
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{p.unidadComercial}</Badge>
+                      <Badge variant="outline" title={lblUnidad.descripcion}>
+                        {lblUnidad.label}
+                      </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={p.modoMedidas === "FIJA" ? "secondary" : "default"}>
-                        {p.modoMedidas}
+                      <Badge
+                        variant={p.modoMedidas === "FIJA" ? "secondary" : "default"}
+                        title={lblMedidas.descripcion}
+                      >
+                        {lblMedidas.label}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -119,7 +128,8 @@ export function ProductosServiciosTable({
                       </Link>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>

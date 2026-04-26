@@ -20,6 +20,12 @@ import {
 } from "@/lib/productos-servicios-api";
 import type { ProductoDetalle } from "@/lib/productos-servicios";
 import { unidadComercialProductoItems } from "@/lib/productos-servicios";
+import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
+import {
+  getLabel,
+  modoMedidasLabels,
+  unidadComercialLabels,
+} from "@/lib/labels-humanos";
 import {
   TabPrecioEditor,
   type TabPrecioConfig,
@@ -193,32 +199,47 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="unidad">Unidad comercial</Label>
+              <LabelConTooltip
+                label="¿Cómo se cobra?"
+                htmlFor="unidad"
+                tooltip={getLabel(unidadComercialLabels, unidadComercial).descripcion}
+              />
               <Select value={unidadComercial} onValueChange={(v) => setUnidadComercial(v ?? "unidad")}>
                 <SelectTrigger id="unidad">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {unidadComercialProductoItems.map((it) => (
-                    <SelectItem key={it.value} value={it.value}>
-                      {it.label}
-                    </SelectItem>
-                  ))}
+                  {unidadComercialProductoItems.map((it) => {
+                    const lbl = getLabel(unidadComercialLabels, it.value);
+                    return (
+                      <SelectItem key={it.value} value={it.value}>
+                        {lbl.label}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="modoMedidas">Modo de medidas</Label>
+              <LabelConTooltip
+                label="Manejo de medidas"
+                htmlFor="modoMedidas"
+                tooltip={getLabel(modoMedidasLabels, modoMedidas).descripcion}
+                ejemplo={getLabel(modoMedidasLabels, modoMedidas).ejemplo}
+              />
               <Select value={modoMedidas} onValueChange={(v) => setModoMedidas(v ?? "FIJA")}>
                 <SelectTrigger id="modoMedidas">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {MODOS_MEDIDAS.map((it) => (
-                    <SelectItem key={it.value} value={it.value}>
-                      {it.label}
-                    </SelectItem>
-                  ))}
+                  {MODOS_MEDIDAS.map((it) => {
+                    const lbl = getLabel(modoMedidasLabels, it.value);
+                    return (
+                      <SelectItem key={it.value} value={it.value}>
+                        {lbl.label}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>

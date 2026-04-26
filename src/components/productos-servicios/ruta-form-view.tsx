@@ -151,6 +151,13 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
     return map;
   }, [catalogoFamilias]);
 
+  const familiaNombre = React.useCallback(
+    (codigo: string): string => {
+      return catalogoFamilias.familias.find((f) => f.codigo === codigo)?.nombre ?? codigo;
+    },
+    [catalogoFamilias],
+  );
+
   const agregarPaso = () => {
     setPasos((prev) => [
       ...prev,
@@ -323,13 +330,13 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                     {cambiosDetectados.map((c, idx) => (
                       <li key={idx}>
                         {c.tipo === "AGREGAR_PASO" &&
-                          `Agregás paso ${c.orden}: ${c.familia}`}
+                          `Agregás paso ${c.orden}: ${familiaNombre(c.familia)}`}
                         {c.tipo === "QUITAR_PASO" &&
-                          `Quitás paso ${c.orden}: ${c.familia}`}
+                          `Quitás paso ${c.orden}: ${familiaNombre(c.familia)}`}
                         {c.tipo === "CAMBIAR_FAMILIA" &&
-                          `Paso ${c.orden}: ${c.antes} → ${c.despues}`}
+                          `Paso ${c.orden}: ${familiaNombre(c.antes)} → ${familiaNombre(c.despues)}`}
                         {c.tipo === "CAMBIAR_ORDEN" &&
-                          `${c.familia} cambia de paso ${c.antes} a ${c.despues}`}
+                          `${familiaNombre(c.familia)} cambia de paso ${c.antes} a ${c.despues}`}
                       </li>
                     ))}
                   </ul>

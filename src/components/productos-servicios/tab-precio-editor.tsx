@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
 import {
   Select,
   SelectContent,
@@ -14,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { getLabel, metodoPrecioLabels } from "@/lib/labels-humanos";
 
 export type MetodoPrecio =
   | "por_margen"
@@ -34,15 +36,15 @@ interface Props {
   onChange: (config: TabPrecioConfig) => void;
 }
 
-const METODOS = [
-  { value: "por_margen", label: "Margen fijo (% sobre costo)" },
-  { value: "precio_fijo", label: "Precio fijo" },
-  { value: "precio_fijo_para_margen_minimo", label: "Precio fijo + margen mínimo garantizado" },
-  { value: "margen_variable", label: "Margen variable por tramos (rangos de cantidad)" },
-  { value: "fijado_por_cantidad", label: "Cantidades fijas con precio fijo" },
-  { value: "fijo_con_margen_variable", label: "Cantidades fijas con margen" },
-  { value: "variable_por_cantidad", label: "Rangos de cantidad con precio fijo" },
-] as const;
+const METODOS: ReadonlyArray<{ value: MetodoPrecio }> = [
+  { value: "por_margen" },
+  { value: "precio_fijo" },
+  { value: "precio_fijo_para_margen_minimo" },
+  { value: "margen_variable" },
+  { value: "fijado_por_cantidad" },
+  { value: "fijo_con_margen_variable" },
+  { value: "variable_por_cantidad" },
+];
 
 interface TierBase {
   uiKey: string;
@@ -163,22 +165,32 @@ export function TabPrecioEditor({ value, onChange }: Props) {
     setTiers((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  const metodoLabel = getLabel(metodoPrecioLabels, metodo);
+
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label>Método de cálculo</Label>
+        <LabelConTooltip
+          label="Método de cálculo"
+          tooltip={metodoLabel.descripcion}
+          ejemplo={metodoLabel.ejemplo}
+        />
         <Select value={metodo} onValueChange={(v) => setMetodo((v ?? "por_margen") as MetodoPrecio)}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {METODOS.map((m) => (
-              <SelectItem key={m.value} value={m.value}>
-                {m.label}
-              </SelectItem>
-            ))}
+            {METODOS.map((m) => {
+              const lbl = getLabel(metodoPrecioLabels, m.value);
+              return (
+                <SelectItem key={m.value} value={m.value}>
+                  {lbl.label}
+                </SelectItem>
+              );
+            })}
           </SelectContent>
         </Select>
+        <p className="text-muted-foreground text-xs">{metodoLabel.descripcion}</p>
       </div>
 
       {/* MÉTODOS SIMPLES */}

@@ -23,9 +23,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { agregarPasoExtra, eliminarPasoExtra } from "@/lib/productos-servicios-api";
 import type { CatalogoFamilias, PasoExtra } from "@/lib/productos-servicios";
+import {
+  categoriaFamiliaLabels,
+  getLabel,
+  modoActivacionLabels,
+  modoTiempoLabels,
+} from "@/lib/labels-humanos";
 
 interface Props {
   productoId: string;
@@ -99,30 +106,42 @@ export function PasosExtrasPanel({ productoId, pasosExtras, catalogoFamilias }: 
           <p className="text-muted-foreground text-sm italic">Sin pasos extras.</p>
         ) : (
           <div className="space-y-2">
-            {pasosExtras.map((pe) => (
-              <div
-                key={pe.id}
-                className="bg-muted/30 flex items-center justify-between gap-2 rounded border p-2 text-sm"
-              >
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">{pe.ordenInterno}</Badge>
-                  <span className="font-medium">{pe.familiaCodigo}</span>
-                  {pe.modoActivacion && (
-                    <Badge variant="secondary" className="text-xs">
-                      {pe.modoActivacion}
-                    </Badge>
-                  )}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleEliminar(pe.id, pe.familiaCodigo)}
-                  className="text-destructive hover:text-destructive size-7"
+            {pasosExtras.map((pe) => {
+              const fam = familias.find((f) => f.codigo === pe.familiaCodigo);
+              const lblAct = pe.modoActivacion
+                ? getLabel(modoActivacionLabels, pe.modoActivacion)
+                : null;
+              return (
+                <div
+                  key={pe.id}
+                  className="bg-muted/30 flex items-center justify-between gap-2 rounded border p-2 text-sm"
                 >
-                  <Trash2Icon className="size-4" />
-                </Button>
-              </div>
-            ))}
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{pe.ordenInterno}</Badge>
+                    <span className="font-medium" title={pe.familiaCodigo}>
+                      {fam?.nombre ?? pe.familiaCodigo}
+                    </span>
+                    {lblAct && (
+                      <Badge
+                        variant="secondary"
+                        className="text-xs"
+                        title={lblAct.descripcion}
+                      >
+                        {lblAct.label}
+                      </Badge>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleEliminar(pe.id, pe.familiaCodigo)}
+                    className="text-destructive hover:text-destructive size-7"
+                  >
+                    <Trash2Icon className="size-4" />
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -130,10 +149,12 @@ export function PasosExtrasPanel({ productoId, pasosExtras, catalogoFamilias }: 
         <div className="border-t pt-4 space-y-3">
           <Label className="text-sm font-medium">Agregar nuevo paso extra</Label>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-            <div>
-              <Label htmlFor="familia" className="text-xs text-muted-foreground">
-                Familia
-              </Label>
+            <div className="space-y-1">
+              <LabelConTooltip
+                label="Familia"
+                htmlFor="familia"
+                tooltip="Tipo de operación (impresión, corte, laminado, encuadernación, etc.). Definí qué hace el paso, no qué máquina lo ejecuta."
+              />
               <Select
                 value={familiaCodigo}
                 onValueChange={(v) => setFamiliaCodigo(v ?? "")}
@@ -142,25 +163,33 @@ export function PasosExtrasPanel({ productoId, pasosExtras, catalogoFamilias }: 
                   <SelectValue placeholder="Elegí familia" />
                 </SelectTrigger>
                 <SelectContent className="max-h-80">
-                  {Array.from(familiasPorCategoria.entries()).map(([categoria, fams]) => (
-                    <React.Fragment key={categoria}>
-                      <div className="text-muted-foreground px-2 py-1 text-xs uppercase">
-                        {categoria}
-                      </div>
-                      {fams.map((f) => (
-                        <SelectItem key={f.codigo} value={f.codigo}>
-                          {f.nombre}
-                        </SelectItem>
-                      ))}
-                    </React.Fragment>
-                  ))}
+                  {Array.from(familiasPorCategoria.entries()).map(([categoria, fams]) => {
+                    const lblCat = getLabel(categoriaFamiliaLabels, categoria);
+                    return (
+                      <React.Fragment key={categoria}>
+                        <div
+                          className="text-muted-foreground px-2 py-1 text-xs uppercase"
+                          title={lblCat.descripcion}
+                        >
+                          {lblCat.label}
+                        </div>
+                        {fams.map((f) => (
+                          <SelectItem key={f.codigo} value={f.codigo} title={f.descripcion}>
+                            {f.nombre}
+                          </SelectItem>
+                        ))}
+                      </React.Fragment>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label htmlFor="modoact" className="text-xs text-muted-foreground">
-                Activación
-              </Label>
+            <div className="space-y-1">
+              <LabelConTooltip
+                label="¿Cuándo se aplica?"
+                htmlFor="modoact"
+                tooltip={getLabel(modoActivacionLabels, modoActivacion).descripcion}
+              />
               <Select
                 value={modoActivacion}
                 onValueChange={(v) =>
@@ -171,15 +200,22 @@ export function PasosExtrasPanel({ productoId, pasosExtras, catalogoFamilias }: 
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="OBLIGATORIO">OBLIGATORIO</SelectItem>
-                  <SelectItem value="OPCIONAL">OPCIONAL</SelectItem>
+                  <SelectItem value="OBLIGATORIO">
+                    {getLabel(modoActivacionLabels, "OBLIGATORIO").label}
+                  </SelectItem>
+                  <SelectItem value="OPCIONAL">
+                    {getLabel(modoActivacionLabels, "OPCIONAL").label}
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label htmlFor="modot" className="text-xs text-muted-foreground">
-                Tiempo
-              </Label>
+            <div className="space-y-1">
+              <LabelConTooltip
+                label="¿Cómo se calcula el tiempo?"
+                htmlFor="modot"
+                tooltip={getLabel(modoTiempoLabels, modoTiempo).descripcion}
+                ejemplo={getLabel(modoTiempoLabels, modoTiempo).ejemplo}
+              />
               <Select
                 value={modoTiempo}
                 onValueChange={(v) => setModoTiempo((v ?? "T-2") as "T-1" | "T-2")}
@@ -188,8 +224,12 @@ export function PasosExtrasPanel({ productoId, pasosExtras, catalogoFamilias }: 
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="T-1">T-1 (fijo)</SelectItem>
-                  <SelectItem value="T-2">T-2 (productividad propia)</SelectItem>
+                  <SelectItem value="T-1">
+                    {getLabel(modoTiempoLabels, "T-1").label}
+                  </SelectItem>
+                  <SelectItem value="T-2">
+                    {getLabel(modoTiempoLabels, "T-2").label}
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>

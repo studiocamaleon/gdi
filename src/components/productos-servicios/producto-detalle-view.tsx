@@ -21,12 +21,39 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProductoValidacionPanel } from "@/components/productos-servicios/producto-validacion-panel";
-import type { ProductoDetalle, RutaAlternativaDetalle } from "@/lib/productos-servicios";
+import type { FamiliaListItem, ProductoDetalle, RutaAlternativaDetalle } from "@/lib/productos-servicios";
+import { getCatalogoFamilias } from "@/lib/productos-servicios-api";
+import {
+  getLabel,
+  modoActivacionLabels,
+  modoMedidasLabels,
+  modoSeleccionMaterialLabels,
+  modoTiempoLabels,
+  unidadComercialLabels,
+} from "@/lib/labels-humanos";
 
 export function ProductoDetalleView({ producto }: { producto: ProductoDetalle }) {
   const [rutaActiva, setRutaActiva] = React.useState<string>(
     producto.rutasAlternativas.find((r) => r.esPreferida)?.id ?? producto.rutasAlternativas[0]?.id ?? "",
   );
+  const [familias, setFamilias] = React.useState<FamiliaListItem[]>([]);
+
+  React.useEffect(() => {
+    getCatalogoFamilias()
+      .then((cat) => setFamilias(cat.familias))
+      .catch(() => setFamilias([]));
+  }, []);
+
+  const familiaLabel = React.useCallback(
+    (codigo: string): string => {
+      const f = familias.find((x) => x.codigo === codigo);
+      return f?.nombre ?? codigo;
+    },
+    [familias],
+  );
+
+  const unidadLbl = getLabel(unidadComercialLabels, producto.unidadComercial);
+  const modoMedidasLbl = getLabel(modoMedidasLabels, producto.modoMedidas);
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
@@ -78,21 +105,21 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
 
       {/* Atributos comerciales */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Card>
+        <Card title={unidadLbl.descripcion}>
           <CardHeader className="pb-2">
             <CardDescription className="flex items-center gap-1 text-xs">
-              <TagIcon className="size-3" /> Unidad comercial
+              <TagIcon className="size-3" /> ¿Cómo se cobra?
             </CardDescription>
-            <CardTitle className="text-base">{producto.unidadComercial}</CardTitle>
+            <CardTitle className="text-base">{unidadLbl.label}</CardTitle>
           </CardHeader>
         </Card>
-        <Card>
+        <Card title={modoMedidasLbl.descripcion}>
           <CardHeader className="pb-2">
             <CardDescription className="flex items-center gap-1 text-xs">
-              <RulerIcon className="size-3" /> Modo de medidas
+              <RulerIcon className="size-3" /> Manejo de medidas
             </CardDescription>
             <CardTitle className="text-base">
-              {producto.modoMedidas}
+              {modoMedidasLbl.label}
               {producto.modoMedidas === "FIJA" && producto.medidaDefaultAnchoMm && (
                 <span className="text-muted-foreground ml-2 text-sm font-normal">
                   ({producto.medidaDefaultAnchoMm} × {producto.medidaDefaultAltoMm} mm)
@@ -120,12 +147,15 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {producto.cargosDirectosCotizacion.map((c) => (
-                <Badge key={c.id} variant="outline">
-                  {c.cargoDirectoCatalogo.nombre}
-                  <span className="text-muted-foreground ml-1 text-xs">({c.modoActivacion})</span>
-                </Badge>
-              ))}
+              {producto.cargosDirectosCotizacion.map((c) => {
+                const lblAct = getLabel(modoActivacionLabels, c.modoActivacion);
+                return (
+                  <Badge key={c.id} variant="outline" title={lblAct.descripcion}>
+                    {c.cargoDirectoCatalogo.nombre}
+                    <span className="text-muted-foreground ml-1 text-xs">({lblAct.label})</span>
+                  </Badge>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -156,7 +186,7 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
             </TabsList>
             {producto.rutasAlternativas.map((r) => (
               <TabsContent key={r.id} value={r.id} className="mt-4">
-                <RutaAlternativaContent ruta={r} />
+                <RutaAlternativaContent ruta={r} familiaLabel={familiaLabel} />
               </TabsContent>
             ))}
           </Tabs>
@@ -166,7 +196,13 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
   );
 }
 
-function RutaAlternativaContent({ ruta }: { ruta: RutaAlternativaDetalle }) {
+function RutaAlternativaContent({
+  ruta,
+  familiaLabel,
+}: {
+  ruta: RutaAlternativaDetalle;
+  familiaLabel: (codigo: string) => string;
+}) {
   const pasosOrdenados = ruta.ruta.pasos;
   const configByPasoId = new Map(ruta.configPasos.map((c) => [c.rutaPasoId, c]));
 
@@ -193,17 +229,28 @@ function RutaAlternativaContent({ ruta }: { ruta: RutaAlternativaDetalle }) {
                   <div className="flex-1 space-y-2">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="font-medium">{paso.familiaCodigo}</div>
+                        <div
+                          className="font-medium"
+                          title={`Código familia: ${paso.familiaCodigo}`}
+                        >
+                          {familiaLabel(paso.familiaCodigo)}
+                        </div>
                         {config?.modoActivacion && (
                           <div className="text-muted-foreground text-xs">
                             <Badge
                               variant={config.modoActivacion === "OBLIGATORIO" ? "default" : "outline"}
                               className="mr-1 text-[10px]"
+                              title={getLabel(modoActivacionLabels, config.modoActivacion).descripcion}
                             >
-                              {config.modoActivacion}
+                              {getLabel(modoActivacionLabels, config.modoActivacion).label}
                             </Badge>
                             {config.modoTiempo && (
-                              <span className="text-muted-foreground">tiempo: {config.modoTiempo}</span>
+                              <span
+                                className="text-muted-foreground"
+                                title={getLabel(modoTiempoLabels, config.modoTiempo).descripcion}
+                              >
+                                tiempo: {getLabel(modoTiempoLabels, config.modoTiempo).label}
+                              </span>
                             )}
                           </div>
                         )}
@@ -223,26 +270,30 @@ function RutaAlternativaContent({ ruta }: { ruta: RutaAlternativaDetalle }) {
 
                     {config && config.slotsMateriales.length > 0 && (
                       <div className="ml-0 grid grid-cols-1 gap-2 md:grid-cols-2">
-                        {config.slotsMateriales.map((slot) => (
-                          <div
-                            key={slot.id}
-                            className="bg-muted/50 flex items-center gap-2 rounded p-2 text-xs"
-                          >
-                            <PackageIcon className="text-muted-foreground size-3" />
-                            <div className="flex-1">
-                              <div className="font-medium">{slot.slotCodigo}</div>
-                              <div className="text-muted-foreground">
-                                {slot.modoSeleccion}
-                                {slot.materialVariante && (
-                                  <>
-                                    {" · "}
-                                    {slot.materialVariante.nombreVariante ?? slot.materialVariante.sku}
-                                  </>
-                                )}
+                        {config.slotsMateriales.map((slot) => {
+                          const lblSel = getLabel(modoSeleccionMaterialLabels, slot.modoSeleccion);
+                          return (
+                            <div
+                              key={slot.id}
+                              className="bg-muted/50 flex items-center gap-2 rounded p-2 text-xs"
+                              title={lblSel.descripcion}
+                            >
+                              <PackageIcon className="text-muted-foreground size-3" />
+                              <div className="flex-1">
+                                <div className="font-medium">{slot.slotCodigo}</div>
+                                <div className="text-muted-foreground">
+                                  {lblSel.label}
+                                  {slot.materialVariante && (
+                                    <>
+                                      {" · "}
+                                      {slot.materialVariante.nombreVariante ?? slot.materialVariante.sku}
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
 

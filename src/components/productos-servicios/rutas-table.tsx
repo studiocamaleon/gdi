@@ -15,10 +15,26 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { RutaListItem } from "@/lib/productos-servicios";
+import type { FamiliaListItem, RutaListItem } from "@/lib/productos-servicios";
+import { getCatalogoFamilias } from "@/lib/productos-servicios-api";
 
 export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
   const rutas = initialRutas;
+  const [familias, setFamilias] = React.useState<FamiliaListItem[]>([]);
+
+  React.useEffect(() => {
+    getCatalogoFamilias()
+      .then((cat) => setFamilias(cat.familias))
+      .catch(() => setFamilias([]));
+  }, []);
+
+  const familiaLabel = React.useCallback(
+    (codigo: string): string => {
+      const f = familias.find((x) => x.codigo === codigo);
+      return f?.nombre ?? codigo;
+    },
+    [familias],
+  );
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
@@ -81,8 +97,12 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
                       <div className="flex flex-wrap items-center gap-1 text-xs">
                         {r.pasos.map((p, i) => (
                           <React.Fragment key={p.id}>
-                            <Badge variant="outline" className="text-[10px]">
-                              {i + 1}. {p.familiaCodigo}
+                            <Badge
+                              variant="outline"
+                              className="text-[10px]"
+                              title={p.familiaCodigo}
+                            >
+                              {i + 1}. {familiaLabel(p.familiaCodigo)}
                             </Badge>
                             {i < r.pasos.length - 1 && (
                               <span className="text-muted-foreground">→</span>

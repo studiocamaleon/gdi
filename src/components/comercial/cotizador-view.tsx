@@ -34,6 +34,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
+import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
+import { getCatalogoFamilias } from "@/lib/productos-servicios-api";
+import { categoriaFamiliaLabels, getLabel } from "@/lib/labels-humanos";
 import {
   cotizar,
   cotizarYGuardar,
@@ -65,6 +68,17 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
   const router = useRouter();
   const [productoId, setProductoId] = React.useState<string>("");
   const [productoDetalle, setProductoDetalle] = React.useState<ProductoDetalle | null>(null);
+  // Catálogo de familias para mostrar nombres humanos en lugar de códigos.
+  const [catalogoFamilias, setCatalogoFamilias] = React.useState<Map<string, string>>(new Map());
+  React.useEffect(() => {
+    void getCatalogoFamilias().then((cat) => {
+      setCatalogoFamilias(new Map(cat.familias.map((f) => [f.codigo, f.nombre])));
+    });
+  }, []);
+  const familiaLabel = React.useCallback(
+    (codigo: string) => catalogoFamilias.get(codigo) ?? codigo,
+    [catalogoFamilias],
+  );
   const [rutaAlternativaId, setRutaAlternativaId] = React.useState<string>("");
   const [cantidad, setCantidad] = React.useState<number>(100);
   const [caras, setCaras] = React.useState<1 | 2>(1);
@@ -388,11 +402,14 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
             {/* Slots COMERCIAL_ELIGE */}
             {slotsComercialElige.length > 0 && (
               <div className="space-y-2">
-                <Label>Materiales a elegir</Label>
+                <LabelConTooltip
+                  label="Materiales a elegir"
+                  tooltip="El producto te deja elegir el material para ciertos pasos (ej: tipo de film para laminado)."
+                />
                 {slotsComercialElige.map((slot) => (
                   <div key={`${slot.configPasoId}-${slot.slotCodigo}`} className="space-y-1">
                     <div className="text-muted-foreground text-xs">
-                      {slot.familiaCodigo} → {slot.slotCodigo}
+                      {familiaLabel(slot.familiaCodigo)} — {slot.slotCodigo.replace(/_/g, " ")}
                     </div>
                     <Select
                       value={seleccionMaterial[slot.slotCodigo] ?? ""}
@@ -419,14 +436,17 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
             {/* G-F2: Override de máquina M-2 cuando hay candidatas */}
             {pasosConCandidatas.length > 0 && (
               <div className="space-y-2">
-                <Label>Máquina por paso (M-2 alternativas)</Label>
+                <LabelConTooltip
+                  label="Máquina por paso"
+                  tooltip="Algunos pasos tienen máquinas alternativas. Podés elegir cuál usar para esta cotización; si no elegís, se usa la marcada como preferida."
+                />
                 {pasosConCandidatas.map((p) => (
                   <div key={p.configPasoId} className="space-y-1">
                     <Label
                       htmlFor={`maq-${p.configPasoId}`}
                       className="text-muted-foreground text-xs"
                     >
-                      {p.familiaCodigo}
+                      {familiaLabel(p.familiaCodigo)}
                     </Label>
                     <Select
                       value={seleccionMaquina[p.configPasoId] ?? ""}
@@ -456,7 +476,10 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
             {/* Pasos opcionales */}
             {pasosOpcionales.length > 0 && (
               <div className="space-y-2">
-                <Label>Pasos opcionales</Label>
+                <LabelConTooltip
+                  label="Pasos opcionales"
+                  tooltip="Pasos del producto que se incluyen solo si el cliente los elige (ej: laminado, redondeo)."
+                />
                 <div className="space-y-1.5">
                   {pasosOpcionales.map((cp) => (
                     <label
@@ -473,7 +496,7 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
                           }))
                         }
                       />
-                      <span>{cp.rutaPaso.familiaCodigo}</span>
+                      <span className="font-medium">{familiaLabel(cp.rutaPaso.familiaCodigo)}</span>
                       {cp.maquinaM1 && (
                         <span className="text-muted-foreground text-xs">
                           ({cp.maquinaM1.nombre})
@@ -592,7 +615,7 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
                 </ul>
               </div>
             ) : resultado.cotizacion ? (
-              <ResultadoCotizacion cotizacion={resultado.cotizacion} />
+              <ResultadoCotizacion cotizacion={resultado.cotizacion} familiaLabel={familiaLabel} />
             ) : null}
           </CardContent>
         </Card>
@@ -603,8 +626,10 @@ export function CotizadorView({ productos }: { productos: ProductoListItem[] }) 
 
 function ResultadoCotizacion({
   cotizacion,
+  familiaLabel,
 }: {
   cotizacion: NonNullable<CotizarResponse["cotizacion"]>;
+  familiaLabel: (codigo: string) => string;
 }) {
   const c = cotizacion;
   return (
@@ -679,7 +704,7 @@ function ResultadoCotizacion({
                 </TableCell>
                 <TableCell>
                   <div className="font-medium">
-                    {p.rutaPasoOrden}. {p.familiaCodigo}
+                    {p.rutaPasoOrden}. {familiaLabel(p.familiaCodigo)}
                   </div>
                   {!p.activado && p.razonNoActivado && (
                     <div className="text-muted-foreground text-xs">{p.razonNoActivado}</div>
@@ -710,10 +735,11 @@ function ResultadoCotizacion({
       )}
 
       {c.pasos.some((p) => p.nestingResult) && (
-        <details className="text-sm" open>
+        <details className="text-sm">
           <summary className="hover:bg-accent cursor-pointer rounded p-2 font-medium">
-            Visualización de nesting (
-            {c.pasos.filter((p) => p.nestingResult).length} pasos)
+            Cómo se acomodan las piezas (
+            {c.pasos.filter((p) => p.nestingResult).length}{" "}
+            {c.pasos.filter((p) => p.nestingResult).length === 1 ? "paso" : "pasos"})
           </summary>
           <div className="space-y-4 mt-2">
             {c.pasos
@@ -721,7 +747,7 @@ function ResultadoCotizacion({
               .map((p) => (
                 <div key={p.rutaPasoOrden} className="space-y-2">
                   <div className="text-sm font-medium">
-                    Paso {p.rutaPasoOrden}. {p.familiaCodigo}
+                    Paso {p.rutaPasoOrden}. {familiaLabel(p.familiaCodigo)}
                   </div>
                   <NestingViewer result={p.nestingResult!} />
                 </div>

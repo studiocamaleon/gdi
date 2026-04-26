@@ -98,10 +98,16 @@ export function NestingViewer({
 
 function NestingHeader({ result }: { result: NestingViewerInput }) {
   const algorithmLabel = {
-    "shelf-rollo": "Shelf-rollo (gran formato)",
-    "grid-2d-single": "Grid 2D single (digital)",
-    "grid-2d-multi": "Grid 2D multi (rígidos)",
+    "shelf-rollo": "Acomodo en rollo (gran formato)",
+    "grid-2d-single": "Grilla en pliego (digital)",
+    "grid-2d-multi": "Grilla multi-pliego (rígidos)",
   }[result.algorithm];
+
+  const modoIncompletoLabel: Record<string, string> = {
+    PERMITIR: "permite incompletos",
+    DESCARTAR: "descarta incompletos",
+    REDONDEAR_ARRIBA: "redondea hacia arriba",
+  };
 
   return (
     <div className="space-y-1.5">
@@ -134,7 +140,12 @@ function NestingHeader({ result }: { result: NestingViewerInput }) {
           {result.talonarioGrouping.pliegosDesperdicio > 0 && (
             <span>⚠ {result.talonarioGrouping.pliegosDesperdicio} pliegos desperdicio</span>
           )}
-          <span className="text-amber-700">modo: {result.talonarioGrouping.modoIncompleto}</span>
+          <span
+            className="text-amber-700"
+            title={`código: ${result.talonarioGrouping.modoIncompleto}`}
+          >
+            modo: {modoIncompletoLabel[result.talonarioGrouping.modoIncompleto] ?? result.talonarioGrouping.modoIncompleto}
+          </span>
         </div>
       ) : null}
     </div>

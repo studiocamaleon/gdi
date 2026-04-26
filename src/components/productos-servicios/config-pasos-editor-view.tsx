@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
 import {
   upsertConfigPaso,
   type LookupsConfigPaso,
@@ -29,6 +30,15 @@ import type {
   ProductoDetalle,
   RutaAlternativaDetalle,
 } from "@/lib/productos-servicios";
+import {
+  criterioMotorAutoLabels,
+  formulaConsumoLabels,
+  getLabel,
+  mecanismoCantidadLabels,
+  modoActivacionLabels,
+  modoSeleccionMaterialLabels,
+  modoTiempoLabels,
+} from "@/lib/labels-humanos";
 
 interface Props {
   producto: ProductoDetalle;
@@ -193,9 +203,21 @@ export function ConfigPasosEditorView({
                       {familia?.nombre ?? paso.familiaCodigo}
                     </CardTitle>
                     {familia && (
-                      <CardDescription className="font-mono text-xs">
-                        {familia.codigo} · {familia.relacionMaquinaSoportada.join(", ")}
-                      </CardDescription>
+                      <>
+                        <CardDescription className="font-mono text-xs">
+                          {familia.codigo} · {familia.relacionMaquinaSoportada.join(", ")}
+                        </CardDescription>
+                        {familia.descripcion && (
+                          <p className="text-muted-foreground mt-1 max-w-prose text-xs">
+                            {familia.descripcion}
+                          </p>
+                        )}
+                        {familia.productosTipicos && familia.productosTipicos.length > 0 && (
+                          <p className="text-muted-foreground mt-1 max-w-prose text-xs italic">
+                            Ejemplos: {familia.productosTipicos.join(" · ")}
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
                   <Button
@@ -212,7 +234,10 @@ export function ConfigPasosEditorView({
                 {/* Modos */}
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                   <div className="space-y-1">
-                    <Label className="text-xs">Modo activación</Label>
+                    <LabelConTooltip
+                      label="¿Cuándo se ejecuta?"
+                      tooltip="Decide si el paso siempre va, si el comercial lo activa, o si depende de una regla."
+                    />
                     <Select
                       value={cfg.modoActivacion ?? ""}
                       onValueChange={(v) => updateConfig(paso.id, { modoActivacion: v ?? null })}
@@ -223,16 +248,22 @@ export function ConfigPasosEditorView({
                       <SelectContent>
                         {MODOS_ACTIVACION.filter((m) =>
                           (familia?.modosActivacionSoportados ?? MODOS_ACTIVACION).includes(m as never),
-                        ).map((m) => (
-                          <SelectItem key={m} value={m}>
-                            {m}
-                          </SelectItem>
-                        ))}
+                        ).map((m) => {
+                          const lbl = getLabel(modoActivacionLabels, m);
+                          return (
+                            <SelectItem key={m} value={m}>
+                              {lbl.label}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Modo tiempo</Label>
+                    <LabelConTooltip
+                      label="¿Cómo se calcula el tiempo?"
+                      tooltip="Define la base del cálculo: tiempo fijo, productividad propia, productividad de máquina, o input manual del comercial."
+                    />
                     <Select
                       value={cfg.modoTiempo ?? ""}
                       onValueChange={(v) => updateConfig(paso.id, { modoTiempo: v ?? null })}
@@ -242,17 +273,23 @@ export function ConfigPasosEditorView({
                       </SelectTrigger>
                       <SelectContent>
                         {(familia?.modosTiempoSoportados ?? ["T-1", "T-2", "T-3", "T-4"]).map(
-                          (m) => (
-                            <SelectItem key={m} value={m}>
-                              {m}
-                            </SelectItem>
-                          ),
+                          (m) => {
+                            const lbl = getLabel(modoTiempoLabels, m);
+                            return (
+                              <SelectItem key={m} value={m}>
+                                {lbl.label}
+                              </SelectItem>
+                            );
+                          },
                         )}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Mecanismo cantidad</Label>
+                    <LabelConTooltip
+                      label="¿De dónde sale la cantidad?"
+                      tooltip="Cómo el motor decide cuántas unidades produce este paso (cantidad pedida, hereda de paso anterior, calcula por nesting, o conversión)."
+                    />
                     <Select
                       value={cfg.mecanismoCantidad ?? ""}
                       onValueChange={(v) => updateConfig(paso.id, { mecanismoCantidad: v ?? null })}
@@ -268,11 +305,14 @@ export function ConfigPasosEditorView({
                             "CALCULADO_POR_PASO",
                             "CONVERSION",
                           ]
-                        ).map((m) => (
-                          <SelectItem key={m} value={m}>
-                            {m}
-                          </SelectItem>
-                        ))}
+                        ).map((m) => {
+                          const lbl = getLabel(mecanismoCantidadLabels, m);
+                          return (
+                            <SelectItem key={m} value={m}>
+                              {lbl.label}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </div>
@@ -282,10 +322,15 @@ export function ConfigPasosEditorView({
                 {familia && familia.relacionMaquinaSoportada.includes("M-1") && (
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <div className="space-y-1">
-                      <Label className="text-xs">
-                        <CogIcon className="mr-1 inline size-3" />
-                        Máquina (M-1)
-                      </Label>
+                      <LabelConTooltip
+                        label={
+                          <>
+                            <CogIcon className="mr-1 inline size-3" />
+                            Máquina principal
+                          </>
+                        }
+                        tooltip="Máquina del taller que ejecuta este paso. La lista filtra por compatibilidad con la familia."
+                      />
                       <Select
                         value={cfg.maquinaM1Id ?? ""}
                         onValueChange={(v) =>
@@ -301,7 +346,7 @@ export function ConfigPasosEditorView({
                         <SelectContent>
                           {maquinasCompatibles.map((m) => (
                             <SelectItem key={m.id} value={m.id}>
-                              {m.nombre} ({m.plantilla})
+                              {m.nombre}
                             </SelectItem>
                           ))}
                           {maquinasCompatibles.length === 0 && (
@@ -313,7 +358,10 @@ export function ConfigPasosEditorView({
                       </Select>
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">Perfil operativo</Label>
+                      <LabelConTooltip
+                        label="Perfil de la máquina"
+                        tooltip="Configuración operativa específica (ej: simple/doble faz, tipo de corte, modo de calidad). Define la productividad."
+                      />
                       <Select
                         value={cfg.perfilM1Id ?? ""}
                         onValueChange={(v) => updateConfig(paso.id, { perfilM1Id: v || null })}
@@ -338,10 +386,18 @@ export function ConfigPasosEditorView({
                 {familia && familia.slotsRequeridos.length > 0 && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <Label className="text-xs">
-                        <PackageIcon className="mr-1 inline size-3" />
-                        Slots de materiales
-                      </Label>
+                      <LabelConTooltip
+                        label={
+                          <>
+                            <PackageIcon className="mr-1 inline size-3" />
+                            Materiales que consume el paso
+                          </>
+                        }
+                        tooltip="Cada slot es un tipo de material que el paso necesita (papel, tinta, film, etc.). Podés definir si el material es fijo, lo elige el comercial, o lo elige el sistema automáticamente."
+                      />
+                      <div className="hidden">
+                        {/* placeholder para preservar estructura del flex */}
+                      </div>
                       <div className="flex gap-1">
                         {familia.slotsRequeridos.map((slot) => {
                           const yaExiste = cfg.slotsMateriales?.some(
@@ -376,46 +432,64 @@ export function ConfigPasosEditorView({
                             ×
                           </Button>
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Select
-                            value={slot.modoSeleccion}
-                            onValueChange={(v) =>
-                              updateSlot(paso.id, slotIdx, {
-                                modoSeleccion: (v ?? "HARDCODED") as
-                                  | "HARDCODED"
-                                  | "COMERCIAL_ELIGE"
-                                  | "MOTOR_ELIGE_AUTO",
-                              })
-                            }
-                          >
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {MODOS_SELECCION.map((m) => (
-                                <SelectItem key={m} value={m}>
-                                  {m}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Select
-                            value={slot.formula ?? "por_unidad_productiva"}
-                            onValueChange={(v) =>
-                              updateSlot(paso.id, slotIdx, { formula: v ?? "por_unidad_productiva" })
-                            }
-                          >
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {FORMULAS.map((f) => (
-                                <SelectItem key={f} value={f}>
-                                  {f}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                          <div className="space-y-1">
+                            <LabelConTooltip
+                              label="¿Quién elige el material?"
+                              tooltip="Material fijo (modelador), el comercial elige al cotizar, o el sistema elige automáticamente con un criterio."
+                            />
+                            <Select
+                              value={slot.modoSeleccion}
+                              onValueChange={(v) =>
+                                updateSlot(paso.id, slotIdx, {
+                                  modoSeleccion: (v ?? "HARDCODED") as
+                                    | "HARDCODED"
+                                    | "COMERCIAL_ELIGE"
+                                    | "MOTOR_ELIGE_AUTO",
+                                })
+                              }
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {MODOS_SELECCION.map((m) => {
+                                  const lbl = getLabel(modoSeleccionMaterialLabels, m);
+                                  return (
+                                    <SelectItem key={m} value={m}>
+                                      {lbl.label}
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <LabelConTooltip
+                              label="¿Cómo se calcula el consumo?"
+                              tooltip="Fórmula que el motor usa para calcular cuánto material se consume (por pieza, por m², por metro lineal, etc.)."
+                            />
+                            <Select
+                              value={slot.formula ?? "por_unidad_productiva"}
+                              onValueChange={(v) =>
+                                updateSlot(paso.id, slotIdx, { formula: v ?? "por_unidad_productiva" })
+                              }
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {FORMULAS.map((f) => {
+                                  const lbl = getLabel(formulaConsumoLabels, f);
+                                  return (
+                                    <SelectItem key={f} value={f}>
+                                      {lbl.label}
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
                         {slot.modoSeleccion === "HARDCODED" && (
                           <Select
@@ -441,25 +515,34 @@ export function ConfigPasosEditorView({
                           </Select>
                         )}
                         {slot.modoSeleccion === "MOTOR_ELIGE_AUTO" && (
-                          <Select
-                            value={slot.criterioMotorAuto ?? ""}
-                            onValueChange={(v) =>
-                              updateSlot(paso.id, slotIdx, { criterioMotorAuto: v || null })
-                            }
-                          >
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue placeholder="Criterio motor" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {CRITERIOS_AUTO.map((c) => (
-                                <SelectItem key={c} value={c}>
-                                  {c}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <div className="space-y-1">
+                            <LabelConTooltip
+                              label="Criterio del sistema"
+                              tooltip="Cómo elige el sistema entre los candidatos: el más barato, el de mejor aprovechamiento, o el de capacidad mínima que cumpla."
+                            />
+                            <Select
+                              value={slot.criterioMotorAuto ?? ""}
+                              onValueChange={(v) =>
+                                updateSlot(paso.id, slotIdx, { criterioMotorAuto: v || null })
+                              }
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Elegí criterio" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {CRITERIOS_AUTO.map((c) => {
+                                  const lbl = getLabel(criterioMotorAutoLabels, c);
+                                  return (
+                                    <SelectItem key={c} value={c}>
+                                      {lbl.label}
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         )}
-                        <label className="flex items-center gap-1 text-xs">
+                        <label className="flex items-center gap-2 text-xs">
                           <input
                             type="checkbox"
                             checked={!!slot.aplicaMultiCaras}
@@ -467,7 +550,12 @@ export function ConfigPasosEditorView({
                               updateSlot(paso.id, slotIdx, { aplicaMultiCaras: e.target.checked })
                             }
                           />
-                          <span>aplica multi-caras</span>
+                          <span>
+                            Multiplicar consumo por caras
+                            <span className="text-muted-foreground ml-1">
+                              (si doble faz, consume el doble)
+                            </span>
+                          </span>
                         </label>
                       </div>
                     ))}

@@ -70,6 +70,7 @@ import type { CentroCosto, Planta } from "@/lib/costos";
 import {
   estadoMaquinaItems,
   geometriaTrabajoMaquinaItems,
+  getEstadoMaquinaLabel,
   tipoPerfilOperativoMaquinaItems,
   type Maquina,
   type MaquinaPayload,
@@ -82,6 +83,7 @@ import {
   getPlantillaMaquinariaLabel,
   maquinariaTemplates,
 } from "@/lib/maquinaria-templates";
+import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
 
 // ─── Props ──────────────────────────────────────────────────────────
 
@@ -582,8 +584,9 @@ export function MaquinariaPanel({
                     <TableCell>
                       <Badge
                         variant={m.estado === "activa" ? "default" : "secondary"}
+                        title={`código: ${m.estado}`}
                       >
-                        {m.estado}
+                        {getEstadoMaquinaLabel(m.estado)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -650,7 +653,11 @@ export function MaquinariaPanel({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label>Plantilla *</Label>
+                    <LabelConTooltip
+                      label="Plantilla"
+                      required
+                      tooltip="Tipo de máquina (define qué campos pide y qué familias puede ejecutar). Ej: impresora láser, plotter eco-solvente, guillotina, plegadora."
+                    />
                     <Select
                       value={form.plantilla}
                       onValueChange={(v) => handlePlantillaChange((v ?? "impresora_laser") as PlantillaMaquinaria)}
@@ -729,7 +736,10 @@ export function MaquinariaPanel({
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label>Geometría</Label>
+                    <LabelConTooltip
+                      label="Geometría de trabajo"
+                      tooltip="Forma del sustrato sobre el que opera la máquina. Pliego = hojas precortadas; Rollo = bobina continua; Plano/Cilindrico/Volumen = piezas tridimensionales."
+                    />
                     <Select
                       value={form.geometriaTrabajo}
                       onValueChange={(v) =>
@@ -877,7 +887,11 @@ function PerfilesOperativosEditor({
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div className="space-y-1">
-                <Label className="text-xs">Tipo de perfil</Label>
+                <LabelConTooltip
+                  label="Tipo de perfil"
+                  iconSize="sm"
+                  tooltip="Define qué tipo de operación ejecuta este perfil dentro de la máquina (impresión, corte, laminado, mecanizado, etc.). Una misma máquina puede tener múltiples perfiles si soporta más de un tipo."
+                />
                 <Select
                   value={perfil.tipoPerfil}
                   onValueChange={(v) => {

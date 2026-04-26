@@ -31,6 +31,12 @@ import {
   desasociarCargoCotizacion,
 } from "@/lib/productos-servicios-api";
 import type { CargoDirectoCatalogo, ProductoDetalle } from "@/lib/productos-servicios";
+import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
+import {
+  getLabel,
+  modoActivacionLabels,
+  modoCalculoCargoLabels,
+} from "@/lib/labels-humanos";
 
 interface Props {
   producto: ProductoDetalle;
@@ -129,7 +135,10 @@ export function ProductoCargosEditorView({ producto, catalogoCargos }: Props) {
               </SheetHeader>
               <div className="space-y-4 px-4">
                 <div className="space-y-2">
-                  <Label>Cargo del catálogo</Label>
+                  <LabelConTooltip
+                    label="Cargo del catálogo"
+                    tooltip="Elegí un cargo de la lista que ya creaste en el catálogo (viático, recargo, tercerización, etc.)."
+                  />
                   <Select
                     value={cargoSeleccionado}
                     onValueChange={(v) => setCargoSeleccionado(v ?? "")}
@@ -138,16 +147,25 @@ export function ProductoCargosEditorView({ producto, catalogoCargos }: Props) {
                       <SelectValue placeholder="Elegí cargo..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {disponibles.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.nombre} ({c.modoCalculo})
-                        </SelectItem>
-                      ))}
+                      {disponibles.map((c) => {
+                        const lblCalc = getLabel(modoCalculoCargoLabels, c.modoCalculo);
+                        return (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.nombre}
+                            <span className="text-muted-foreground ml-1 text-xs">
+                              · {lblCalc.label}
+                            </span>
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Modo de activación</Label>
+                  <LabelConTooltip
+                    label="¿Cuándo se aplica?"
+                    tooltip={getLabel(modoActivacionLabels, modoActivacion).descripcion}
+                  />
                   <Select
                     value={modoActivacion}
                     onValueChange={(v) => setModoActivacion(v ?? "OPCIONAL")}
@@ -156,16 +174,18 @@ export function ProductoCargosEditorView({ producto, catalogoCargos }: Props) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {MODOS_ACTIVACION.map((m) => (
-                        <SelectItem key={m} value={m}>
-                          {m}
-                        </SelectItem>
-                      ))}
+                      {MODOS_ACTIVACION.map((m) => {
+                        const lbl = getLabel(modoActivacionLabels, m);
+                        return (
+                          <SelectItem key={m} value={m}>
+                            {lbl.label}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                   <p className="text-muted-foreground text-xs">
-                    OBLIGATORIO: siempre se aplica. OPCIONAL: comercial decide al cotizar.
-                    CONDICIONAL: regla automática (no editable desde UI todavía).
+                    {getLabel(modoActivacionLabels, modoActivacion).descripcion}
                   </p>
                 </div>
               </div>
@@ -233,14 +253,19 @@ export function ProductoCargosEditorView({ producto, catalogoCargos }: Props) {
               </CardHeader>
               <CardContent className="space-y-2">
                 <div className="flex items-center gap-1">
-                  <Badge variant="outline" className="text-[10px]">
-                    {cd.cargoDirectoCatalogo.modoCalculo}
+                  <Badge
+                    variant="outline"
+                    className="text-[10px]"
+                    title={getLabel(modoCalculoCargoLabels, cd.cargoDirectoCatalogo.modoCalculo).descripcion}
+                  >
+                    {getLabel(modoCalculoCargoLabels, cd.cargoDirectoCatalogo.modoCalculo).label}
                   </Badge>
                   <Badge
                     variant={cd.modoActivacion === "OBLIGATORIO" ? "default" : "secondary"}
                     className="text-[10px]"
+                    title={getLabel(modoActivacionLabels, cd.modoActivacion).descripcion}
                   >
-                    {cd.modoActivacion}
+                    {getLabel(modoActivacionLabels, cd.modoActivacion).label}
                   </Badge>
                 </div>
               </CardContent>
