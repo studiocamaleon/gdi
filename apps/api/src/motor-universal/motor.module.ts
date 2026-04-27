@@ -2,9 +2,15 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { MotorUniversalController } from './motor.controller';
 import { MotorUniversalService } from './motor.service';
+import { PrecioModule } from '../productos-servicios/precio/precio.module';
 
+/**
+ * MotorUniversalModule importa PrecioModule para que MotorUniversalService pueda
+ * inyectar AplicarPrecioService + PreciosEspecialesClientesService al persistir
+ * un CotizacionItem (Sprint 5.a — snapshots inmutables del Tab Precio).
+ */
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, PrecioModule],
   controllers: [MotorUniversalController],
   providers: [MotorUniversalService],
   exports: [MotorUniversalService],

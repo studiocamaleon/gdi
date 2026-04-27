@@ -5,6 +5,13 @@ import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 import { evaluarRegla } from './evaluador-jsonlogic';
 import { loadTarifasHorarias } from '../productos-servicios/costing/load-tarifas';
 import { calcularPrecio, type PrecioConfig } from './calculador-precio';
+import { AplicarPrecioService } from '../productos-servicios/precio/aplicar-precio.service';
+import { PreciosEspecialesClientesService } from '../productos-servicios/precio/precios-especiales-clientes/precios-especiales-clientes.service';
+import type {
+  ImpuestoSnapshot as PrecioImpuestoSnapshot,
+  ComisionSnapshot as PrecioComisionSnapshot,
+  PrecioConfig as TabPrecioConfig,
+} from '../productos-servicios/precio/aplicar-precio.types';
 import type {
   CotizarInput,
   CotizarOutput,
@@ -114,7 +121,11 @@ function defaultOutputParaHeredar(familiaCodigo: string): string | null {
  */
 @Injectable()
 export class MotorUniversalService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly aplicarPrecio: AplicarPrecioService,
+    private readonly preciosEspecialesClientes: PreciosEspecialesClientesService,
+  ) {}
 
   async cotizar(input: CotizarInput): Promise<CotizarOutput> {
     const errores: ErrorMotor[] = [];
@@ -332,6 +343,15 @@ export class MotorUniversalService {
       input.rutaAlternativaId ?? null,
     );
 
+    // 2.b Sprint 5.a — calcular precio + snapshots inmutables del Tab Precio
+    const precioResultado = await this.calcularPrecioConSnapshots({
+      tenantId: input.tenantId,
+      productoId: input.productoId,
+      clienteId: input.clienteId ?? undefined,
+      costoUnitario: Number(result.cotizacion.costos.unitario),
+      cantidad: Number(result.cotizacion.cantidadEfectiva),
+    });
+
     // 3. Crear CotizacionItem con snapshot
     const item = await this.prisma.cotizacionItem.create({
       data: {
@@ -374,14 +394,121 @@ export class MotorUniversalService {
         } as never,
         costoUnitario: result.cotizacion.costos.unitario.toString(),
         costoTotal: result.cotizacion.costos.total.toString(),
+        precioUnitario: precioResultado?.precioUnitario?.toString() ?? null,
+        precioTotal: precioResultado?.precioTotal?.toString() ?? null,
         trazabilidadJson: {
           pasos: result.cotizacion.pasos,
           cargosDirectosCotizacion: result.cotizacion.cargosDirectosCotizacion,
         } as never,
+        // Sprint 5.a — snapshots inmutables del Tab Precio
+        precioConfigSnapshotJson: (precioResultado?.snapshots.precioConfig ?? null) as never,
+        impuestosSnapshotJson: (precioResultado?.snapshots.impuestos ?? null) as never,
+        comisionesSnapshotJson: (precioResultado?.snapshots.comisiones ?? null) as never,
+        precioEspecialClienteSnapshotJson:
+          (precioResultado?.snapshots.precioEspecialCliente ?? null) as never,
       },
     });
 
     return { result, cotizacionId, cotizacionItemId: item.id };
+  }
+
+  /**
+   * Sprint 5.a — Resuelve la capa comercial al cotizar:
+   *   1) Lee `precioConfigJson` del producto (o del override por cliente si aplica).
+   *   2) Carga impuestos y comisiones aplicados al producto (con sus catálogos).
+   *   3) Llama a `AplicarPrecioService.aplicar()` con todo eso y el costo del motor.
+   *
+   * Devuelve `null` si el producto no tiene `precioConfigJson` configurado
+   * (caso transición: producto creado sin Tab Precio). En ese caso el item
+   * se persiste sin precio y la UI mostrará "—".
+   */
+  private async calcularPrecioConSnapshots(args: {
+    tenantId: string;
+    productoId: string;
+    clienteId?: string;
+    costoUnitario: number;
+    cantidad: number;
+  }): Promise<{
+    precioUnitario: number;
+    precioTotal: number;
+    snapshots: {
+      precioConfig: TabPrecioConfig;
+      impuestos: PrecioImpuestoSnapshot[];
+      comisiones: PrecioComisionSnapshot[];
+      precioEspecialCliente: import('../productos-servicios/precio/aplicar-precio.types').PrecioEspecialClienteSnapshot | null;
+    };
+  } | null> {
+    // 1. Producto y su precio standard
+    const productoDb = await this.prisma.producto.findFirst({
+      where: { id: args.productoId, tenantId: args.tenantId },
+      select: { precioConfigJson: true },
+    });
+    if (!productoDb?.precioConfigJson) return null;
+    const precioStandard = productoDb.precioConfigJson as unknown as TabPrecioConfig;
+
+    // 2. Override por cliente (si hay clienteId)
+    let precioConfigEfectivo: TabPrecioConfig = precioStandard;
+    let precioEspecialSnapshot: import('../productos-servicios/precio/aplicar-precio.types').PrecioEspecialClienteSnapshot | null = null;
+    if (args.clienteId) {
+      const override = await this.preciosEspecialesClientes.buscarActivo(
+        args.tenantId,
+        args.productoId,
+        args.clienteId,
+      );
+      if (override) {
+        precioConfigEfectivo = override.configJson as unknown as TabPrecioConfig;
+        precioEspecialSnapshot = {
+          precioEspecialId: override.id,
+          clienteId: override.clienteId,
+          config: precioConfigEfectivo,
+        };
+      }
+    }
+
+    // 3. Impuestos y comisiones aplicados (con sus catálogos para snapshot)
+    const [impuestosAplicados, comisionesAplicadas] = await Promise.all([
+      this.prisma.productoImpuestoAplicado.findMany({
+        where: { tenantId: args.tenantId, productoId: args.productoId },
+        include: { impuestoCatalogo: true },
+        orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+      }),
+      this.prisma.productoComisionAplicada.findMany({
+        where: { tenantId: args.tenantId, productoId: args.productoId },
+        include: { comisionCatalogo: true },
+        orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+      }),
+    ]);
+
+    const impuestosSnapshot: PrecioImpuestoSnapshot[] = impuestosAplicados.map((ia) => ({
+      catalogoId: ia.impuestoCatalogo.id,
+      codigo: ia.impuestoCatalogo.codigo,
+      nombre: ia.impuestoCatalogo.nombre,
+      porcentaje: ia.impuestoCatalogo.porcentaje,
+      orden: ia.orden,
+    }));
+    const comisionesSnapshot: PrecioComisionSnapshot[] = comisionesAplicadas.map((ca) => ({
+      catalogoId: ca.comisionCatalogo.id,
+      codigo: ca.comisionCatalogo.codigo,
+      nombre: ca.comisionCatalogo.nombre,
+      porcentaje: ca.comisionCatalogo.porcentaje,
+      orden: ca.orden,
+    }));
+
+    // 4. Aplicar
+    const out = this.aplicarPrecio.aplicar({
+      costoUnitario: args.costoUnitario,
+      cantidad: args.cantidad,
+      precioConfig: precioConfigEfectivo,
+      impuestos: impuestosSnapshot,
+      comisiones: comisionesSnapshot,
+      precioEspecialCliente: precioEspecialSnapshot ?? undefined,
+    });
+
+    return {
+      precioUnitario: out.precioBrutoUnitario,
+      precioTotal: out.precioBrutoTotal,
+      snapshots: out.snapshots,
+    };
   }
 
   // ============================================================================

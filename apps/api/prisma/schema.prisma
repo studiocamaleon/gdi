@@ -402,6 +402,8 @@ model Tenant {
   cotizacionesV2                       Cotizacion[]
   cotizacionesV2Items                  CotizacionItem[]
   productosPreciosEspecialesClientesV2 ProductoPrecioEspecialClienteV2[]
+  productosImpuestosAplicados          ProductoImpuestoAplicado[]
+  productosComisionesAplicadas         ProductoComisionAplicada[]
 }
 
 model User {
@@ -1140,35 +1142,79 @@ model MovimientoStockMateriaPrima {
 }
 
 model ProductoImpuestoCatalogo {
-  id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @db.Uuid
-  codigo      String
-  nombre      String
-  porcentaje  Float
-  detalleJson Json?
-  activo      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id                 String                     @id @default(uuid()) @db.Uuid
+  tenantId           String                     @db.Uuid
+  codigo             String
+  nombre             String
+  porcentaje         Float
+  detalleJson        Json?
+  activo             Boolean                    @default(true)
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  tenant             Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productosAplicados ProductoImpuestoAplicado[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, nombre, activo])
 }
 
 model ProductoComisionCatalogo {
-  id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @db.Uuid
-  codigo      String
-  nombre      String
-  porcentaje  Float
-  detalleJson Json?
-  activo      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id                 String                     @id @default(uuid()) @db.Uuid
+  tenantId           String                     @db.Uuid
+  codigo             String
+  nombre             String
+  porcentaje         Float
+  detalleJson        Json?
+  activo             Boolean                    @default(true)
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  tenant             Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productosAplicados ProductoComisionAplicada[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, nombre, activo])
+}
+
+/// Pivot Producto ⇄ ProductoImpuestoCatalogo. Reemplaza el embebido
+/// `precioConfigJson.impuestos.esquemaId` para ganar integridad referencial,
+/// unicidad por par (producto, impuesto), y queries reverse eficientes.
+/// onDelete: Restrict en impuestoCatalogo evita borrar un esquema en uso —
+/// el flujo correcto es marcarlo `activo: false` en el catálogo.
+model ProductoImpuestoAplicado {
+  id                 String                   @id @default(uuid()) @db.Uuid
+  tenantId           String                   @db.Uuid
+  productoId         String                   @db.Uuid
+  impuestoCatalogoId String                   @db.Uuid
+  /// Orden de aplicación si el cálculo es secuencial (default 0 = todos en paralelo).
+  orden              Int                      @default(0)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  tenant             Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  producto           Producto                 @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  impuestoCatalogo   ProductoImpuestoCatalogo @relation(fields: [impuestoCatalogoId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, productoId, impuestoCatalogoId])
+  @@index([tenantId, impuestoCatalogoId])
+  @@index([tenantId, productoId])
+}
+
+/// Pivot Producto ⇄ ProductoComisionCatalogo. Mismas garantías que
+/// ProductoImpuestoAplicado.
+model ProductoComisionAplicada {
+  id                 String                   @id @default(uuid()) @db.Uuid
+  tenantId           String                   @db.Uuid
+  productoId         String                   @db.Uuid
+  comisionCatalogoId String                   @db.Uuid
+  orden              Int                      @default(0)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  tenant             Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  producto           Producto                 @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  comisionCatalogo   ProductoComisionCatalogo @relation(fields: [comisionCatalogoId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, productoId, comisionCatalogoId])
+  @@index([tenantId, comisionCatalogoId])
+  @@index([tenantId, productoId])
 }
 
 model Ruta {
@@ -1248,6 +1294,8 @@ model Producto {
   pasosExtras               ProductoPasoExtra[]
   cargosDirectosCotizacion  ProductoCargoDirectoCotizacion[]
   preciosEspecialesClientes ProductoPrecioEspecialClienteV2[]
+  impuestosAplicados        ProductoImpuestoAplicado[]
+  comisionesAplicadas       ProductoComisionAplicada[]
   cotizacionItems           CotizacionItem[]
 
   @@unique([tenantId, codigo])
@@ -1503,6 +1551,19 @@ model CotizacionItem {
   precioTotal       Decimal?   @db.Decimal(14, 2)
   /// Trazabilidad por bucket (a-g del molde).
   trazabilidadJson  Json?
+  /// === Snapshots inmutables del Tab Precio al momento de cotizar (Sprint 5.a) ===
+  /// Si los catalogos del tenant cambian (porcentajes, esquemas inactivados),
+  /// la cotización guarda lo que se aplicó realmente. Sin esto, recargar una
+  /// cotización del pasado mostraría números distintos a los facturados.
+  /// Forma esperada: { metodoCalculo, detalle } — copia de Producto.precioConfigJson.
+  precioConfigSnapshotJson          Json?
+  /// Forma esperada: [{ catalogoId, codigo, nombre, porcentaje, orden }]
+  impuestosSnapshotJson             Json?
+  /// Forma esperada: [{ catalogoId, codigo, nombre, porcentaje, orden }]
+  comisionesSnapshotJson            Json?
+  /// Si aplicó override por cliente: copia de ProductoPrecioEspecialClienteV2.configJson
+  /// + metadata { precioEspecialId, clienteId, descripcion }. Null si se usó precio standard.
+  precioEspecialClienteSnapshotJson Json?
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
   tenant            Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)

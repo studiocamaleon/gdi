@@ -9,6 +9,8 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { MotorUniversalService } from '../motor.service';
 import { runNestingForPaso } from '../nesting-dispatcher';
+import { AplicarPrecioService } from '../../productos-servicios/precio/aplicar-precio.service';
+import { PreciosEspecialesClientesService } from '../../productos-servicios/precio/precios-especiales-clientes/precios-especiales-clientes.service';
 
 const prisma = new PrismaClient();
 
@@ -18,8 +20,11 @@ let motorService: MotorUniversalService;
 beforeAll(async () => {
   const tenant = await prisma.tenant.findUnique({ where: { slug: 'gdi-demo' } });
   tenantId = tenant?.id ?? null;
-  // Inyectamos el prisma client directamente (sin DI de NestJS para test unitario)
-  motorService = new MotorUniversalService(prisma as never);
+  // Inyectamos el prisma client directamente (sin DI de NestJS para test unitario).
+  // AplicarPrecioService es stateless; PreciosEspecialesClientesService usa prisma.
+  const aplicarPrecio = new AplicarPrecioService();
+  const preciosEspeciales = new PreciosEspecialesClientesService(prisma as never);
+  motorService = new MotorUniversalService(prisma as never, aplicarPrecio, preciosEspeciales);
 });
 
 afterAll(async () => {
