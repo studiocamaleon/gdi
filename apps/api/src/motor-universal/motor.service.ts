@@ -299,6 +299,38 @@ export class MotorUniversalService {
       );
     }
 
+    // Sprint 5.a — Desglose completo (impuestos + comisiones + override cliente).
+    // Se calcula en cualquier caso (no sólo al guardar) para que el cotizador en
+    // preview muestre el precio bruto real.
+    const desglose = await this.calcularPrecioConSnapshots({
+      tenantId: input.tenantId,
+      productoId: input.productoId,
+      clienteId: input.clienteId ?? undefined,
+      costoUnitario: cotizacion.costos.unitario,
+      cantidad: cantidadEfectiva,
+    });
+    if (desglose) {
+      cotizacion.desglosePrecio = {
+        precioConfig: desglose.snapshots.precioConfig as never,
+        impuestos: desglose.snapshots.impuestos,
+        comisiones: desglose.snapshots.comisiones,
+        precioEspecialCliente: desglose.snapshots.precioEspecialCliente
+          ? {
+              precioEspecialId: desglose.snapshots.precioEspecialCliente.precioEspecialId,
+              clienteId: desglose.snapshots.precioEspecialCliente.clienteId,
+            }
+          : null,
+        precioBase: desglose.precioBase,
+        totalComisiones: desglose.totalComisiones,
+        totalImpuestos: desglose.totalImpuestos,
+        margenEfectivoPct: desglose.margenEfectivoPct,
+        precioNetoUnitario: desglose.precioNetoUnitario,
+        precioBrutoUnitario: desglose.precioBrutoUnitario,
+        precioNetoTotal: desglose.precioNetoTotal,
+        precioBrutoTotal: desglose.precioBrutoTotal,
+      };
+    }
+
     return { exitoso: true, errores: [], cotizacion };
   }
 
@@ -343,14 +375,23 @@ export class MotorUniversalService {
       input.rutaAlternativaId ?? null,
     );
 
-    // 2.b Sprint 5.a — calcular precio + snapshots inmutables del Tab Precio
-    const precioResultado = await this.calcularPrecioConSnapshots({
-      tenantId: input.tenantId,
-      productoId: input.productoId,
-      clienteId: input.clienteId ?? undefined,
-      costoUnitario: Number(result.cotizacion.costos.unitario),
-      cantidad: Number(result.cotizacion.cantidadEfectiva),
-    });
+    // 2.b Sprint 5.a — usar el desglose ya calculado en cotizar() (evita
+    // recalcular). Nota: cotizar() ya invocó calcularPrecioConSnapshots y dejó
+    // todo en `result.cotizacion.desglosePrecio`. Acá sólo lo usamos para
+    // poblar los campos de CotizacionItem.
+    const desglosePrecio = result.cotizacion.desglosePrecio;
+    const precioResultado = desglosePrecio
+      ? {
+          precioUnitario: desglosePrecio.precioBrutoUnitario,
+          precioTotal: desglosePrecio.precioBrutoTotal,
+          snapshots: {
+            precioConfig: desglosePrecio.precioConfig,
+            impuestos: desglosePrecio.impuestos,
+            comisiones: desglosePrecio.comisiones,
+            precioEspecialCliente: desglosePrecio.precioEspecialCliente,
+          },
+        }
+      : null;
 
     // 3. Crear CotizacionItem con snapshot
     const item = await this.prisma.cotizacionItem.create({
@@ -431,6 +472,14 @@ export class MotorUniversalService {
   }): Promise<{
     precioUnitario: number;
     precioTotal: number;
+    precioBase: number;
+    totalComisiones: number;
+    totalImpuestos: number;
+    margenEfectivoPct: number;
+    precioNetoUnitario: number;
+    precioBrutoUnitario: number;
+    precioNetoTotal: number;
+    precioBrutoTotal: number;
     snapshots: {
       precioConfig: TabPrecioConfig;
       impuestos: PrecioImpuestoSnapshot[];
@@ -507,6 +556,14 @@ export class MotorUniversalService {
     return {
       precioUnitario: out.precioBrutoUnitario,
       precioTotal: out.precioBrutoTotal,
+      precioBase: out.desglose.precioBase,
+      totalComisiones: out.desglose.totalComisiones,
+      totalImpuestos: out.desglose.totalImpuestos,
+      margenEfectivoPct: out.desglose.margenEfectivoPct,
+      precioNetoUnitario: out.precioNetoUnitario,
+      precioBrutoUnitario: out.precioBrutoUnitario,
+      precioNetoTotal: out.precioNetoTotal,
+      precioBrutoTotal: out.precioBrutoTotal,
       snapshots: out.snapshots,
     };
   }

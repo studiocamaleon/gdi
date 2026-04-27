@@ -18,7 +18,9 @@ import {
   IdCardIcon,
   ClipboardListIcon,
   LayoutDashboardIcon,
+  PercentIcon,
   PrinterIcon,
+  ReceiptIcon,
   UsersIcon,
   WorkflowIcon,
   WrenchIcon,
@@ -112,6 +114,16 @@ const costos = [
     title: "Cargos directos",
     href: "/productos-servicios/cargos-directos",
     icon: WrenchIcon,
+  },
+  {
+    title: "Impuestos",
+    href: "/productos-servicios/impuestos-catalogo",
+    icon: ReceiptIcon,
+  },
+  {
+    title: "Comisiones",
+    href: "/productos-servicios/comisiones-catalogo",
+    icon: PercentIcon,
   },
 ];
 

@@ -644,7 +644,22 @@ function ResultadoCotizacion({
           <div className="text-muted-foreground text-xs">Costo total</div>
           <div className="text-lg font-semibold">{formatARS(c.costos.total)}</div>
         </div>
-        {c.precio && (
+        {c.desglosePrecio ? (
+          <div className="bg-primary/10 rounded p-3">
+            <div className="text-muted-foreground text-xs">Precio total (con IVA)</div>
+            <div className="text-primary text-lg font-semibold">
+              {formatARS(c.desglosePrecio.precioBrutoTotal)}
+            </div>
+            <div className="text-muted-foreground mt-1 text-xs">
+              margen efectivo: {c.desglosePrecio.margenEfectivoPct.toFixed(1)}%
+              {c.desglosePrecio.precioEspecialCliente && (
+                <span className="text-amber-700 ml-1">
+                  · precio especial aplicado
+                </span>
+              )}
+            </div>
+          </div>
+        ) : c.precio ? (
           <div className="bg-primary/10 rounded p-3">
             <div className="text-muted-foreground text-xs">Precio total (Tab Precio)</div>
             <div className="text-primary text-lg font-semibold">
@@ -656,12 +671,17 @@ function ResultadoCotizacion({
               </div>
             )}
           </div>
-        )}
+        ) : null}
       </div>
 
       <div className="text-muted-foreground text-xs">
         Costo unitario: {formatARS(c.costos.unitario)}
-        {c.precio && ` · Precio unitario: ${formatARS(c.precio.precioUnitario)}`}
+        {c.desglosePrecio && (
+          <> · Precio unitario bruto: {formatARS(c.desglosePrecio.precioBrutoUnitario)}</>
+        )}
+        {!c.desglosePrecio && c.precio && (
+          <> · Precio unitario: {formatARS(c.precio.precioUnitario)}</>
+        )}
       </div>
 
       <div className="space-y-1 text-sm">
@@ -678,6 +698,92 @@ function ResultadoCotizacion({
           <span className="font-mono">{formatARS(c.costos.cargosDirectosTotal)}</span>
         </div>
       </div>
+
+      {/* Sprint 5.a — Desglose comercial (precio base + comisiones + impuestos) */}
+      {c.desglosePrecio && (
+        <details className="text-sm">
+          <summary className="hover:bg-accent cursor-pointer rounded p-2 font-medium">
+            Desglose comercial del precio
+          </summary>
+          <div className="mt-2 space-y-2 rounded border bg-muted/30 p-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Precio base:</span>
+              <span className="font-mono">
+                {formatARS(c.desglosePrecio.precioBase)} / unidad
+              </span>
+            </div>
+
+            {c.desglosePrecio.comisiones.length > 0 && (
+              <div className="space-y-1 border-t pt-2">
+                <div className="text-muted-foreground text-xs font-medium uppercase">
+                  Comisiones
+                </div>
+                {c.desglosePrecio.comisiones.map((com) => (
+                  <div key={com.catalogoId} className="flex justify-between text-xs">
+                    <span>
+                      {com.nombre}{" "}
+                      <span className="text-muted-foreground font-mono">
+                        ({com.porcentaje.toFixed(2)}%)
+                      </span>
+                    </span>
+                  </div>
+                ))}
+                <div className="flex justify-between border-t pt-1 text-sm">
+                  <span className="text-muted-foreground">Total comisiones:</span>
+                  <span className="font-mono">
+                    {formatARS(c.desglosePrecio.totalComisiones)} / unidad
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {c.desglosePrecio.impuestos.length > 0 && (
+              <div className="space-y-1 border-t pt-2">
+                <div className="text-muted-foreground text-xs font-medium uppercase">
+                  Impuestos
+                </div>
+                {c.desglosePrecio.impuestos.map((imp) => (
+                  <div key={imp.catalogoId} className="flex justify-between text-xs">
+                    <span>
+                      {imp.nombre}{" "}
+                      <span className="text-muted-foreground font-mono">
+                        ({imp.porcentaje.toFixed(2)}%)
+                      </span>
+                    </span>
+                  </div>
+                ))}
+                <div className="flex justify-between border-t pt-1 text-sm">
+                  <span className="text-muted-foreground">Total impuestos:</span>
+                  <span className="font-mono">
+                    {formatARS(c.desglosePrecio.totalImpuestos)} / unidad
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-1 border-t pt-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Precio neto unitario:</span>
+                <span className="font-mono">
+                  {formatARS(c.desglosePrecio.precioNetoUnitario)}
+                </span>
+              </div>
+              <div className="flex justify-between font-semibold">
+                <span>Precio bruto unitario (con IVA):</span>
+                <span className="font-mono">
+                  {formatARS(c.desglosePrecio.precioBrutoUnitario)}
+                </span>
+              </div>
+            </div>
+
+            {c.desglosePrecio.precioEspecialCliente && (
+              <div className="border-t pt-2 text-xs text-amber-700">
+                ⚠ Se aplicó precio especial del cliente (override del standard).
+              </div>
+            )}
+          </div>
+        </details>
+      )}
 
       <details className="text-sm">
         <summary className="hover:bg-accent cursor-pointer rounded p-2 font-medium">

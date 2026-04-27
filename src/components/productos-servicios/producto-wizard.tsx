@@ -58,10 +58,8 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ProductoValidacionPanel } from "@/components/productos-servicios/producto-validacion-panel";
-import {
-  TabPrecioEditor,
-  type TabPrecioConfig,
-} from "@/components/productos-servicios/tab-precio-editor";
+import { type TabPrecioConfig } from "@/components/productos-servicios/tab-precio-editor";
+import { TabPrecioCompleto } from "@/components/productos-servicios/tab-precio-completo";
 import {
   actualizarProducto,
   actualizarProductoRutaAlt,
@@ -1144,17 +1142,11 @@ function StepPrecio({
 }) {
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>Precio de venta</CardTitle>
-          <CardDescription>
-            Cómo se calcula el precio a partir del costo del motor.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <TabPrecioEditor value={precioConfig} onChange={setPrecioConfig} />
-        </CardContent>
-      </Card>
+      <TabPrecioCompleto
+        productoId={producto?.id ?? null}
+        precioConfig={precioConfig}
+        onChangePrecioConfig={setPrecioConfig}
+      />
 
       {producto && (
         <Card>

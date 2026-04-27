@@ -479,6 +479,33 @@ export interface CotizarResponse {
       margenNegativo: boolean;
       mensaje?: string;
     };
+    /** Sprint 5.a — desglose con impuestos + comisiones + override cliente. */
+    desglosePrecio?: {
+      precioConfig: { metodoCalculo: string; detalle: Record<string, unknown> };
+      impuestos: Array<{
+        catalogoId: string;
+        codigo: string;
+        nombre: string;
+        porcentaje: number;
+        orden: number;
+      }>;
+      comisiones: Array<{
+        catalogoId: string;
+        codigo: string;
+        nombre: string;
+        porcentaje: number;
+        orden: number;
+      }>;
+      precioEspecialCliente: { precioEspecialId: string; clienteId: string } | null;
+      precioBase: number;
+      totalComisiones: number;
+      totalImpuestos: number;
+      margenEfectivoPct: number;
+      precioNetoUnitario: number;
+      precioBrutoUnitario: number;
+      precioNetoTotal: number;
+      precioBrutoTotal: number;
+    };
     pasos: Array<{
       rutaPasoOrden: number;
       familiaCodigo: string;
@@ -525,5 +552,271 @@ export async function cotizarYGuardar(
     method: 'POST',
     body: JSON.stringify(req),
     headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+// ================================================================================
+// SPRINT 5.a — Tab Precio v2: catálogos + aplicaciones + precios especiales
+// ================================================================================
+
+// ── Catálogo de Impuestos del tenant ────────────────────────────────────────────
+
+export interface ImpuestoCatalogoItem {
+  id: string;
+  codigo: string;
+  nombre: string;
+  porcentaje: number;
+  detalleJson: unknown | null;
+  activo: boolean;
+  _count?: { productosAplicados: number };
+}
+
+export interface CrearImpuestoCatalogoPayload {
+  codigo: string;
+  nombre: string;
+  porcentaje: number;
+  detalleJson?: Record<string, unknown>;
+}
+
+export interface ActualizarImpuestoCatalogoPayload {
+  nombre?: string;
+  porcentaje?: number;
+  detalleJson?: Record<string, unknown>;
+  activo?: boolean;
+}
+
+export async function getImpuestosCatalogo(soloActivos = true): Promise<ImpuestoCatalogoItem[]> {
+  const qs = soloActivos ? '' : '?soloActivos=false';
+  return apiRequest<ImpuestoCatalogoItem[]>(`/productos-servicios/impuestos-catalogo${qs}`);
+}
+
+export async function getImpuestoCatalogoById(id: string): Promise<ImpuestoCatalogoItem> {
+  return apiRequest<ImpuestoCatalogoItem>(`/productos-servicios/impuestos-catalogo/${id}`);
+}
+
+export async function crearImpuestoCatalogo(payload: CrearImpuestoCatalogoPayload) {
+  return apiRequest<ImpuestoCatalogoItem>('/productos-servicios/impuestos-catalogo', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export async function actualizarImpuestoCatalogo(
+  id: string,
+  payload: ActualizarImpuestoCatalogoPayload,
+) {
+  return apiRequest<ImpuestoCatalogoItem>(`/productos-servicios/impuestos-catalogo/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export async function eliminarImpuestoCatalogo(id: string) {
+  return apiRequest<{ tipo: 'soft' | 'hard'; item: ImpuestoCatalogoItem }>(
+    `/productos-servicios/impuestos-catalogo/${id}`,
+    { method: 'DELETE' },
+  );
+}
+
+// ── Catálogo de Comisiones del tenant ───────────────────────────────────────────
+
+export interface ComisionCatalogoItem {
+  id: string;
+  codigo: string;
+  nombre: string;
+  porcentaje: number;
+  detalleJson: unknown | null;
+  activo: boolean;
+  _count?: { productosAplicados: number };
+}
+
+export interface CrearComisionCatalogoPayload {
+  codigo: string;
+  nombre: string;
+  porcentaje: number;
+  detalleJson?: Record<string, unknown>;
+}
+
+export interface ActualizarComisionCatalogoPayload {
+  nombre?: string;
+  porcentaje?: number;
+  detalleJson?: Record<string, unknown>;
+  activo?: boolean;
+}
+
+export async function getComisionesCatalogo(soloActivos = true): Promise<ComisionCatalogoItem[]> {
+  const qs = soloActivos ? '' : '?soloActivos=false';
+  return apiRequest<ComisionCatalogoItem[]>(`/productos-servicios/comisiones-catalogo${qs}`);
+}
+
+export async function getComisionCatalogoById(id: string): Promise<ComisionCatalogoItem> {
+  return apiRequest<ComisionCatalogoItem>(`/productos-servicios/comisiones-catalogo/${id}`);
+}
+
+export async function crearComisionCatalogo(payload: CrearComisionCatalogoPayload) {
+  return apiRequest<ComisionCatalogoItem>('/productos-servicios/comisiones-catalogo', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export async function actualizarComisionCatalogo(
+  id: string,
+  payload: ActualizarComisionCatalogoPayload,
+) {
+  return apiRequest<ComisionCatalogoItem>(`/productos-servicios/comisiones-catalogo/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export async function eliminarComisionCatalogo(id: string) {
+  return apiRequest<{ tipo: 'soft' | 'hard'; item: ComisionCatalogoItem }>(
+    `/productos-servicios/comisiones-catalogo/${id}`,
+    { method: 'DELETE' },
+  );
+}
+
+// ── Aplicaciones (pivot Producto ⇄ Catálogo) ────────────────────────────────────
+
+export interface ImpuestoAplicado {
+  id: string;
+  productoId: string;
+  impuestoCatalogoId: string;
+  orden: number;
+  impuestoCatalogo: ImpuestoCatalogoItem;
+}
+
+export interface ComisionAplicada {
+  id: string;
+  productoId: string;
+  comisionCatalogoId: string;
+  orden: number;
+  comisionCatalogo: ComisionCatalogoItem;
+}
+
+export interface AsignarBatchItem {
+  catalogoId: string;
+  orden?: number;
+}
+
+export async function getImpuestosAplicados(productoId: string): Promise<ImpuestoAplicado[]> {
+  return apiRequest<ImpuestoAplicado[]>(
+    `/productos-servicios/productos/${productoId}/precio/impuestos`,
+  );
+}
+
+export async function setImpuestosAplicados(
+  productoId: string,
+  items: Array<{ impuestoCatalogoId: string; orden?: number }>,
+) {
+  return apiRequest<ImpuestoAplicado[]>(
+    `/productos-servicios/productos/${productoId}/precio/impuestos`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ items }),
+      headers: { 'Content-Type': 'application/json' },
+    },
+  );
+}
+
+export async function quitarImpuestoAplicado(productoId: string, impuestoCatalogoId: string) {
+  return apiRequest(
+    `/productos-servicios/productos/${productoId}/precio/impuestos/${impuestoCatalogoId}`,
+    { method: 'DELETE' },
+  );
+}
+
+export async function getComisionesAplicadas(productoId: string): Promise<ComisionAplicada[]> {
+  return apiRequest<ComisionAplicada[]>(
+    `/productos-servicios/productos/${productoId}/precio/comisiones`,
+  );
+}
+
+export async function setComisionesAplicadas(
+  productoId: string,
+  items: Array<{ comisionCatalogoId: string; orden?: number }>,
+) {
+  return apiRequest<ComisionAplicada[]>(
+    `/productos-servicios/productos/${productoId}/precio/comisiones`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ items }),
+      headers: { 'Content-Type': 'application/json' },
+    },
+  );
+}
+
+export async function quitarComisionAplicada(productoId: string, comisionCatalogoId: string) {
+  return apiRequest(
+    `/productos-servicios/productos/${productoId}/precio/comisiones/${comisionCatalogoId}`,
+    { method: 'DELETE' },
+  );
+}
+
+// ── Precios especiales por cliente ──────────────────────────────────────────────
+
+export interface PrecioEspecialClienteItem {
+  id: string;
+  productoId: string;
+  clienteId: string;
+  configJson: unknown;
+  activo: boolean;
+  cliente: { id: string; nombre: string; razonSocial: string | null };
+}
+
+export interface CrearPrecioEspecialClientePayload {
+  clienteId: string;
+  configJson: Record<string, unknown>;
+}
+
+export interface ActualizarPrecioEspecialClientePayload {
+  configJson?: Record<string, unknown>;
+  activo?: boolean;
+}
+
+export async function getPreciosEspecialesProducto(
+  productoId: string,
+): Promise<PrecioEspecialClienteItem[]> {
+  return apiRequest<PrecioEspecialClienteItem[]>(
+    `/productos-servicios/productos/${productoId}/precios-especiales`,
+  );
+}
+
+export async function crearPrecioEspecialCliente(
+  productoId: string,
+  payload: CrearPrecioEspecialClientePayload,
+) {
+  return apiRequest<PrecioEspecialClienteItem>(
+    `/productos-servicios/productos/${productoId}/precios-especiales`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      headers: { 'Content-Type': 'application/json' },
+    },
+  );
+}
+
+export async function actualizarPrecioEspecialCliente(
+  id: string,
+  payload: ActualizarPrecioEspecialClientePayload,
+) {
+  return apiRequest<PrecioEspecialClienteItem>(
+    `/productos-servicios/precios-especiales/${id}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+      headers: { 'Content-Type': 'application/json' },
+    },
+  );
+}
+
+export async function eliminarPrecioEspecialCliente(id: string) {
+  return apiRequest(`/productos-servicios/precios-especiales/${id}`, {
+    method: 'DELETE',
   });
 }

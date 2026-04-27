@@ -93,7 +93,9 @@ export interface CotizacionResultado {
     total: number;
     unitario: number;
   };
-  /** Precio calculado por el Tab Precio (F.2.12). */
+  /** Precio calculado por el Tab Precio (F.2.12). Legacy — sin impuestos ni
+   * comisiones; se mantiene por compatibilidad con tests viejos. UI nueva
+   * lee `desglosePrecio`. */
   precio?: {
     metodoUsado: string;
     precioUnitario: number;
@@ -101,6 +103,42 @@ export interface CotizacionResultado {
     margenAplicadoPct?: number;
     margenNegativo: boolean;
     mensaje?: string;
+  };
+  /** Sprint 5.a — Desglose completo del precio con impuestos + comisiones +
+   * override por cliente. Lo aplica `AplicarPrecioService` desde el motor.
+   * undefined si el producto no tiene `precioConfigJson`. */
+  desglosePrecio?: {
+    /** Snapshot del precioConfig efectivo usado (override o standard). */
+    precioConfig: { metodoCalculo: string; detalle: Record<string, unknown> };
+    /** Lista de impuestos aplicados (snapshot del catálogo). */
+    impuestos: Array<{
+      catalogoId: string;
+      codigo: string;
+      nombre: string;
+      porcentaje: number;
+      orden: number;
+    }>;
+    /** Lista de comisiones aplicadas. */
+    comisiones: Array<{
+      catalogoId: string;
+      codigo: string;
+      nombre: string;
+      porcentaje: number;
+      orden: number;
+    }>;
+    /** Si el cliente tenía precio especial activo, snapshot del override. */
+    precioEspecialCliente: {
+      precioEspecialId: string;
+      clienteId: string;
+    } | null;
+    precioBase: number;
+    totalComisiones: number;
+    totalImpuestos: number;
+    margenEfectivoPct: number;
+    precioNetoUnitario: number;
+    precioBrutoUnitario: number;
+    precioNetoTotal: number;
+    precioBrutoTotal: number;
   };
   /** Trazabilidad por paso (orden topológico). */
   pasos: PasoEjecutado[];
