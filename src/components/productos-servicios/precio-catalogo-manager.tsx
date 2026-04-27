@@ -6,13 +6,21 @@
  * (codigo, nombre, porcentaje, detalleJson, activo), un solo componente
  * sirve para ambos: la diferencia son labels y los endpoints.
  *
- * El caller pasa un `adapter` con las funciones API + textos. Esto evita
- * duplicar 300 LOC entre `impuestos-catalogo` y `comisiones-catalogo`.
+ * Importante: el caller (Server Component) sólo pasa `tipo` + `initialItems`.
+ * El adapter (icono lucide + funciones API + textos) se resuelve INTERNAMENTE
+ * porque LucideIcon y funciones no son serializables a través del boundary
+ * Server → Client de React Server Components.
  */
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import {
+  PencilIcon,
+  PercentIcon,
+  PlusIcon,
+  ReceiptIcon,
+  Trash2Icon,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 
@@ -42,6 +50,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  actualizarComisionCatalogo,
+  actualizarImpuestoCatalogo,
+  crearComisionCatalogo,
+  crearImpuestoCatalogo,
+  eliminarComisionCatalogo,
+  eliminarImpuestoCatalogo,
+} from "@/lib/productos-servicios-api";
 
 // ─── Modelo común a impuestos y comisiones ────────────────────────────
 
@@ -55,54 +71,81 @@ export interface PrecioCatalogoItem {
   _count?: { productosAplicados: number };
 }
 
-export interface CrearPrecioCatalogoPayload {
+interface CrearPrecioCatalogoPayload {
   codigo: string;
   nombre: string;
   porcentaje: number;
   detalleJson?: Record<string, unknown>;
 }
 
-export interface ActualizarPrecioCatalogoPayload {
+interface ActualizarPrecioCatalogoPayload {
   nombre?: string;
   porcentaje?: number;
   detalleJson?: Record<string, unknown>;
   activo?: boolean;
 }
 
-export interface PrecioCatalogoAdapter {
-  /** Texto en singular (ej: "impuesto", "comisión"). */
-  entidadSingular: string;
-  /** Texto en plural (ej: "Impuestos", "Comisiones"). */
-  entidadPlural: string;
-  /** Artículo determinado (ej: "el impuesto", "la comisión"). */
-  articuloSingular: string;
-  /** Icono lucide para el header de la tabla. */
-  icono: LucideIcon;
-  /** Placeholder de código (ej: "iva_21"). */
-  placeholderCodigo: string;
-  /** Placeholder de nombre (ej: "IVA 21%"). */
-  placeholderNombre: string;
-  /** Placeholder del detalleJson textarea. */
-  placeholderDetalleJson: string;
-  /** Tooltip para el campo porcentaje. */
-  tooltipPorcentaje: string;
-  /** Tooltip para el campo detalleJson. */
-  tooltipDetalleJson: string;
+export type PrecioCatalogoTipo = "impuestos" | "comisiones";
 
-  // CRUD
+interface PrecioCatalogoAdapter {
+  entidadSingular: string;
+  entidadPlural: string;
+  articuloSingular: string;
+  icono: LucideIcon;
+  placeholderCodigo: string;
+  placeholderNombre: string;
+  placeholderDetalleJson: string;
+  tooltipPorcentaje: string;
+  tooltipDetalleJson: string;
   crear: (payload: CrearPrecioCatalogoPayload) => Promise<unknown>;
   actualizar: (id: string, payload: ActualizarPrecioCatalogoPayload) => Promise<unknown>;
   eliminar: (id: string) => Promise<unknown>;
 }
 
+const ADAPTERS: Record<PrecioCatalogoTipo, PrecioCatalogoAdapter> = {
+  impuestos: {
+    entidadSingular: "impuesto",
+    entidadPlural: "Impuestos",
+    articuloSingular: "el impuesto",
+    icono: ReceiptIcon,
+    placeholderCodigo: "iva_21",
+    placeholderNombre: "IVA 21%",
+    placeholderDetalleJson: '{"jurisdiccion": "AR", "categoria": "general"}',
+    tooltipPorcentaje:
+      "Porcentaje del impuesto que se aplica sobre el subtotal (precio + comisiones).",
+    tooltipDetalleJson:
+      "Metadata adicional del impuesto (jurisdicción, categoría AFIP, código fiscal, etc.). El motor no usa este campo, queda como referencia para reportes y exportaciones.",
+    crear: crearImpuestoCatalogo,
+    actualizar: actualizarImpuestoCatalogo,
+    eliminar: eliminarImpuestoCatalogo,
+  },
+  comisiones: {
+    entidadSingular: "comisión",
+    entidadPlural: "Comisiones",
+    articuloSingular: "la comisión",
+    icono: PercentIcon,
+    placeholderCodigo: "vendedor_5",
+    placeholderNombre: "Comisión vendedor 5%",
+    placeholderDetalleJson: '{"tipo": "vendedor", "empleadoId": null}',
+    tooltipPorcentaje:
+      "Porcentaje de la comisión que se aplica sobre el precio base. Las comisiones se suman al precio antes de calcular impuestos.",
+    tooltipDetalleJson:
+      "Metadata del esquema (tipo: 'vendedor' o 'financiera', empleadoId asignado, condiciones especiales, etc.). El motor no usa este campo directamente.",
+    crear: crearComisionCatalogo,
+    actualizar: actualizarComisionCatalogo,
+    eliminar: eliminarComisionCatalogo,
+  },
+};
+
 interface Props {
   initialItems: PrecioCatalogoItem[];
-  adapter: PrecioCatalogoAdapter;
+  tipo: PrecioCatalogoTipo;
 }
 
 // ─── Componente principal ────────────────────────────────────────────
 
-export function PrecioCatalogoManager({ initialItems, adapter }: Props) {
+export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
+  const adapter = ADAPTERS[tipo];
   const router = useRouter();
   const [editando, setEditando] = React.useState<PrecioCatalogoItem | null>(null);
   const [openSheet, setOpenSheet] = React.useState(false);
