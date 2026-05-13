@@ -3,11 +3,13 @@
 import * as React from "react";
 import {
   Building2Icon,
+  CheckCircle2Icon,
   FolderTreeIcon,
   PencilIcon,
   PlusIcon,
   RefreshCcwIcon,
-  SparklesIcon,
+  SlidersHorizontalIcon,
+  Trash2Icon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -63,7 +65,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -374,15 +375,15 @@ export function CostosPanel({
   };
 
   return (
-    <div className="content">
-      <div className="page-head">
+    <div className="content cost-centers-content">
+      <div className="page-head cc-page-head">
         <div className="title-block">
           <h1>Centros de costo</h1>
           <div className="sub">
             Administra la estructura multi-tenant de plantas, áreas y centros de costo para el costeo operativo de la gráfica.
           </div>
         </div>
-        <button type="button" className="btn" onClick={reloadAll}>
+        <button type="button" className="btn cc-refresh" onClick={reloadAll}>
           <RefreshCcwIcon size={14} className={isReloading ? "animate-spin" : undefined} />
           Refrescar
         </button>
@@ -496,8 +497,7 @@ export function CostosPanel({
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="px-4">Codigo</TableHead>
-                        <TableHead>Nombre</TableHead>
+                        <TableHead className="px-4">Nombre</TableHead>
                         <TableHead>Estado</TableHead>
                         <TableHead className="w-40">Acciones</TableHead>
                       </TableRow>
@@ -505,8 +505,7 @@ export function CostosPanel({
                     <TableBody>
                       {plantas.map((planta) => (
                         <TableRow key={planta.id}>
-                          <TableCell className="px-4 font-medium">{planta.codigo}</TableCell>
-                          <TableCell>{planta.nombre}</TableCell>
+                          <TableCell className="px-4 font-medium">{planta.nombre}</TableCell>
                           <TableCell>
                             <Badge variant={planta.activa ? "secondary" : "outline"}>
                               {planta.activa ? "Activa" : "Inactiva"}
@@ -662,7 +661,6 @@ export function CostosPanel({
                     <TableHeader>
                       <TableRow>
                         <TableHead className="px-4">Planta</TableHead>
-                        <TableHead>Codigo</TableHead>
                         <TableHead>Nombre</TableHead>
                         <TableHead>Estado</TableHead>
                         <TableHead className="w-40">Acciones</TableHead>
@@ -672,8 +670,7 @@ export function CostosPanel({
                       {areas.map((area) => (
                         <TableRow key={area.id}>
                           <TableCell className="px-4">{area.plantaNombre}</TableCell>
-                          <TableCell className="font-medium">{area.codigo}</TableCell>
-                          <TableCell>{area.nombre}</TableCell>
+                          <TableCell className="font-medium">{area.nombre}</TableCell>
                           <TableCell>
                             <Badge variant={area.activa ? "secondary" : "outline"}>
                               {area.activa ? "Activa" : "Inactiva"}
@@ -715,18 +712,20 @@ export function CostosPanel({
               </Card>
             </TabsContent>
 
-            <TabsContent value="centros" className="flex flex-col gap-6">
-              <Card className="rounded-2xl border-border/70 shadow-none">
-                <CardHeader>
-                  <CardTitle className="text-lg">Centros de costo</CardTitle>
-                  <CardDescription>
-                    Define el punto real de imputacion con clasificacion grafica,
-                    responsables y reglas operativas del centro.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form className="flex flex-col gap-4" onSubmit={handleCentroSubmit}>
-                    <FieldGroup className="grid gap-4 lg:grid-cols-4">
+            <TabsContent value="centros" className="cost-centers-tab">
+              <div className="wiz-section centros-form-section">
+                <div className="wiz-section-head">
+                  <div className="body">
+                    <h2>Centros de costo</h2>
+                    <div className="helptext">
+                      Define el punto real de imputación con clasificación gráfica,
+                      responsables y reglas operativas del centro.
+                    </div>
+                  </div>
+                </div>
+
+                <form className="centros-form" onSubmit={handleCentroSubmit}>
+                  <div className="cc-form-grid cols-cc">
                       <Field>
                         <FieldLabel htmlFor="centro-planta">Planta</FieldLabel>
                         <Select
@@ -773,7 +772,7 @@ export function CostosPanel({
                         </Select>
                       </Field>
                       <Field>
-                        <FieldLabel htmlFor="centro-area">Area</FieldLabel>
+                        <FieldLabel htmlFor="centro-area">Área</FieldLabel>
                         <Select
                           value={centroForm.areaCostoId}
                           onValueChange={(value) => {
@@ -844,9 +843,6 @@ export function CostosPanel({
                           placeholder="CTP principal"
                         />
                       </Field>
-                    </FieldGroup>
-
-                    <FieldGroup className="grid gap-4 lg:grid-cols-4">
                       <Field>
                         <FieldLabel htmlFor="centro-tipo">Tipo</FieldLabel>
                         <Select
@@ -885,7 +881,7 @@ export function CostosPanel({
                         </Select>
                       </Field>
                       <Field>
-                        <FieldLabel htmlFor="centro-categoria">Categoria grafica</FieldLabel>
+                        <FieldLabel htmlFor="centro-categoria">Categoría gráfica</FieldLabel>
                         <Select
                           value={centroForm.categoriaGrafica}
                           onValueChange={(value) => {
@@ -923,7 +919,7 @@ export function CostosPanel({
                         </Select>
                       </Field>
                       <Field>
-                        <FieldLabel htmlFor="centro-imputacion">Imputacion</FieldLabel>
+                        <FieldLabel htmlFor="centro-imputacion">Imputación</FieldLabel>
                         <Select
                           value={centroForm.imputacionPreferida}
                           onValueChange={(value) => {
@@ -998,9 +994,6 @@ export function CostosPanel({
                           </SelectContent>
                         </Select>
                       </Field>
-                    </FieldGroup>
-
-                    <FieldGroup className="grid gap-4 lg:grid-cols-4">
                       <Field>
                         <FieldLabel htmlFor="centro-responsable">Responsable</FieldLabel>
                         <Select
@@ -1044,8 +1037,8 @@ export function CostosPanel({
                           </SelectContent>
                         </Select>
                       </Field>
-                      <Field className="lg:col-span-3">
-                        <FieldLabel htmlFor="centro-descripcion">Descripcion</FieldLabel>
+                      <Field className="cc-desc-field">
+                        <FieldLabel htmlFor="centro-descripcion">Descripción</FieldLabel>
                         <Input
                           id="centro-descripcion"
                           value={centroForm.descripcion ?? ""}
@@ -1058,176 +1051,161 @@ export function CostosPanel({
                           placeholder="Comentarios operativos"
                         />
                       </Field>
-                    </FieldGroup>
+                  </div>
 
-                    <Field className="max-w-xs">
-                      <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-muted/20 px-4 py-3">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium">Activo</span>
-                          <span className="text-xs text-muted-foreground">
-                            Determina si se puede seguir imputando
-                          </span>
-                        </div>
-                        <Switch
-                          checked={centroForm.activo}
-                          onCheckedChange={(checked) =>
-                            setCentroForm((current) => ({
-                              ...current,
-                              activo: checked,
-                            }))
-                          }
-                        />
-                      </div>
-                    </Field>
-
-                    <div className="flex gap-2">
-                      <Button type="submit" variant="brand">
-                        {isSaving ? <GdiSpinner className="size-4" /> : <PlusIcon />}
-                        {editingCentroId ? "Guardar cambios" : "Nuevo centro"}
-                      </Button>
-                      {editingCentroId ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => {
-                            setEditingCentroId(null);
-                            setCentroForm(createEmptyCentro(centroForm.plantaId, ""));
-                          }}
-                        >
-                          Cancelar
-                        </Button>
-                      ) : null}
+                  <div className="centro-active-row">
+                    <div>
+                      <strong>Activo</strong>
+                      <span>Determina si se puede seguir imputando</span>
                     </div>
-                  </form>
-                </CardContent>
-              </Card>
+                    <button
+                      type="button"
+                      className={`switch-lg ${centroForm.activo ? "on" : ""}`}
+                      role="switch"
+                      aria-checked={centroForm.activo}
+                      aria-label="Activo"
+                      onClick={() =>
+                        setCentroForm((current) => ({
+                          ...current,
+                          activo: !current.activo,
+                        }))
+                      }
+                    />
+                  </div>
 
-              <Card className="rounded-2xl border-border/70 shadow-none">
-                <CardContent className="px-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Centro</TableHead>
-                        <TableHead>Area</TableHead>
-                        <TableHead>Tipo</TableHead>
-                        <TableHead>Estado costeo</TableHead>
-                        <TableHead>Periodo</TableHead>
-                        <TableHead>Horas productivas</TableHead>
-                        <TableHead>Tarifa publicada</TableHead>
-                        <TableHead>Absorbido</TableHead>
-                        <TableHead>Tarifa total</TableHead>
-                        <TableHead>Estado</TableHead>
-                        <TableHead className="w-56">Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {centros.map((centro) => (
-                        <TableRow key={centro.id}>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span>{centro.nombre}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {centro.plantaNombre} / {centro.areaCostoNombre}
-                              </span>
+                  <div className="centros-form-actions">
+                    <button type="submit" className="btn btn-primary">
+                      {isSaving ? <GdiSpinner className="size-4" /> : <PlusIcon />}
+                      {editingCentroId ? "Guardar cambios" : "Nuevo centro"}
+                    </button>
+                    {editingCentroId ? (
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => {
+                          setEditingCentroId(null);
+                          setCentroForm(createEmptyCentro(centroForm.plantaId, ""));
+                        }}
+                      >
+                        Cancelar
+                      </button>
+                    ) : null}
+                  </div>
+                </form>
+              </div>
+
+              <div className="card tbl-scroll centros-costo-table-card">
+                <table className="tbl centros-costo-table">
+                  <thead>
+                    <tr>
+                      <th>Centro</th>
+                      <th>Área</th>
+                      <th>Tipo</th>
+                      <th>Estado costeo</th>
+                      <th>Período</th>
+                      <th className="right">Horas productivas</th>
+                      <th className="right">Tarifa publicada</th>
+                      <th className="right">Absorbido</th>
+                      <th className="right">Tarifa total</th>
+                      <th className="right sticky-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {centros.map((centro) => {
+                      const tarifaPublicada = formatMoneyOrDash(
+                        centro.ultimaTarifaBase ?? centro.ultimaTarifaPublicada,
+                      );
+                      const tarifaAbsorbida = formatMoneyOrDash(
+                        centro.ultimaTarifaAbsorbida,
+                      );
+                      const tarifaTotal = formatMoneyOrDash(
+                        centro.ultimaTarifaTotal ?? centro.ultimaTarifaPublicada,
+                      );
+                      const estadoCosteo =
+                        centro.estadoConfiguracion === "sin_configurar"
+                          ? "Sin configurar"
+                          : centro.estadoConfiguracion === "borrador"
+                            ? "Borrador"
+                            : "Publicado";
+                      const isTercerizado =
+                        centro.tipoCentro.toLowerCase() === "tercerizado";
+
+                      return (
+                        <tr key={centro.id}>
+                          <td>
+                            <div className="name">{centro.nombre}</div>
+                            <div className="desc mono-desc">
+                              {centro.plantaNombre} / {centro.areaCostoNombre}
                             </div>
-                          </TableCell>
-                          <TableCell>{centro.areaCostoNombre}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">
+                          </td>
+                          <td>{centro.areaCostoNombre}</td>
+                          <td>
+                            <span className={`tag ${isTercerizado ? "warm" : ""}`}>
                               {getTipoCentroLabel(centro.tipoCentro)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={
+                            </span>
+                          </td>
+                          <td>
+                            <span
+                              className={`tag ${
                                 centro.estadoConfiguracion === "publicado"
-                                  ? "secondary"
-                                  : "outline"
-                              }
+                                  ? "ok"
+                                  : "muted"
+                              }`}
                             >
-                              {centro.estadoConfiguracion === "sin_configurar"
-                                ? "Sin configurar"
-                                : centro.estadoConfiguracion === "borrador"
-                                  ? "Borrador"
-                                  : "Publicado"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
+                              {centro.estadoConfiguracion === "publicado" ? (
+                                <span className="d" />
+                              ) : null}
+                              {estadoCosteo}
+                            </span>
+                          </td>
+                          <td className="mono-cell">
                             {centro.ultimoPeriodoConfigurado || "Sin período"}
-                          </TableCell>
-                          <TableCell>
+                          </td>
+                          <td className="right numeric">
                             {typeof centro.ultimaCapacidadPractica === "number" &&
-                            Number.isFinite(centro.ultimaCapacidadPractica) ? (
-                              <span className="font-medium">
-                                {new Intl.NumberFormat("es-AR", {
+                            Number.isFinite(centro.ultimaCapacidadPractica)
+                              ? new Intl.NumberFormat("es-AR", {
                                   minimumFractionDigits: 0,
                                   maximumFractionDigits: 2,
-                                }).format(centro.ultimaCapacidadPractica)}
+                                }).format(centro.ultimaCapacidadPractica)
+                              : "—"}
+                          </td>
+                          <td className="right numeric">
+                            {tarifaPublicada ?? "Sin publicar"}
+                          </td>
+                          <td className="right numeric muted-value">
+                            {tarifaAbsorbida ?? "—"}
+                          </td>
+                          <td className="right numeric strong-value">
+                            {tarifaTotal ?? "—"}
+                          </td>
+                          <td className="right sticky-right">
+                            <span className="centros-actions">
+                              <span
+                                className={`centro-status-icon ${
+                                  centro.activo ? "active" : "inactive"
+                                }`}
+                                title={centro.activo ? "Activo" : "Inactivo"}
+                                aria-label={centro.activo ? "Activo" : "Inactivo"}
+                              >
+                                <CheckCircle2Icon />
                               </span>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {formatMoneyOrDash(
-                              centro.ultimaTarifaBase ?? centro.ultimaTarifaPublicada,
-                            ) === null ? (
-                              <span className="text-sm text-muted-foreground">
-                                Sin publicar
-                              </span>
-                            ) : (
-                              <div className="flex flex-col">
-                                <span className="font-medium">
-                                  {formatMoneyOrDash(
-                                    centro.ultimaTarifaBase ?? centro.ultimaTarifaPublicada,
-                                  )}
-                                </span>
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {formatMoneyOrDash(centro.ultimaTarifaAbsorbida) ? (
-                              <span className="font-medium">
-                                {formatMoneyOrDash(centro.ultimaTarifaAbsorbida)}
-                              </span>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {formatMoneyOrDash(
-                              centro.ultimaTarifaTotal ?? centro.ultimaTarifaPublicada,
-                            ) ? (
-                              <span className="font-medium">
-                                {formatMoneyOrDash(
-                                  centro.ultimaTarifaTotal ?? centro.ultimaTarifaPublicada,
-                                )}
-                              </span>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={centro.activo ? "secondary" : "outline"}>
-                              {centro.activo ? "Activo" : "Inactivo"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
+                              <button
+                                type="button"
+                                className="btn btn-primary configure-cost-btn"
                                 onClick={() => {
                                   setSelectedCentro(centro);
                                   setIsConfiguratorOpen(true);
                                 }}
                               >
-                                <SparklesIcon />
-                                Configurar costo
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
+                                <SlidersHorizontalIcon />
+                                Configurar
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                title="Editar"
+                                aria-label={`Editar ${centro.nombre}`}
                                 onClick={() => {
                                   setEditingCentroId(centro.id);
                                   setCentroForm({
@@ -1248,60 +1226,49 @@ export function CostosPanel({
                                 }}
                               >
                                 <PencilIcon />
-                                Editar
-                              </Button>
-                              <Button
-                                variant="sidebar"
-                                size="sm"
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                title={centro.activo ? "Inactivar" : "Activar"}
+                                aria-label={`${centro.activo ? "Inactivar" : "Activar"} ${centro.nombre}`}
                                 onClick={() => handleToggleCentro(centro.id)}
                               >
-                                {centro.activo ? "Inactivar" : "Activar"}
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
+                                <Trash2Icon />
+                              </button>
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
 
-              <div className="grid gap-4 lg:grid-cols-3">
-                <Card className="rounded-2xl border-border/70 shadow-none">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <Building2Icon className="size-4" />
-                      Plantas
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-semibold">{plantas.length}</p>
-                  </CardContent>
-                </Card>
-                <Card className="rounded-2xl border-border/70 shadow-none">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <FolderTreeIcon className="size-4" />
-                      Areas
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-semibold">{areas.length}</p>
-                  </CardContent>
-                </Card>
-                <Card className="rounded-2xl border-border/70 shadow-none">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <FolderTreeIcon className="size-4" />
-                      Centros activos
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-semibold">
-                      {centros.filter((item) => item.activo).length}
-                    </p>
-                  </CardContent>
-                </Card>
+              <div className="kpi-row">
+                <div className="kpi-card">
+                  <div className="lbl">
+                    <Building2Icon />
+                    Plantas
+                  </div>
+                  <div className="val">{plantas.length}</div>
+                </div>
+                <div className="kpi-card">
+                  <div className="lbl">
+                    <FolderTreeIcon />
+                    Áreas
+                  </div>
+                  <div className="val">{areas.length}</div>
+                </div>
+                <div className="kpi-card">
+                  <div className="lbl">
+                    <FolderTreeIcon />
+                    Centros activos
+                  </div>
+                  <div className="val">
+                    {centros.filter((item) => item.activo).length}
+                  </div>
+                </div>
               </div>
         </TabsContent>
       </Tabs>

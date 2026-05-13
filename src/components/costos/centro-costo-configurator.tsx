@@ -90,7 +90,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Tooltip,
@@ -125,7 +124,7 @@ type RepartoAbsorbidoItem = {
 type LocalRecurso = CentroCostoRecursoPayload & { id: string };
 type LocalComponente = CentroCostoComponenteCostoPayload & { id: string };
 const wizardSheetClassName =
-  "w-screen max-w-none overflow-y-auto data-[side=right]:w-[96vw] data-[side=right]:sm:max-w-[96vw] md:data-[side=right]:w-[92vw] md:data-[side=right]:sm:max-w-[92vw] lg:data-[side=right]:w-[1100px] lg:data-[side=right]:sm:max-w-[1100px] xl:data-[side=right]:w-[1280px] xl:data-[side=right]:sm:max-w-[1280px]";
+  "costo-sheet w-screen max-w-none gap-0 overflow-hidden p-0 data-[side=right]:w-[96vw] data-[side=right]:sm:max-w-[96vw] md:data-[side=right]:w-[92vw] md:data-[side=right]:sm:max-w-[92vw] lg:data-[side=right]:w-[1100px] lg:data-[side=right]:sm:max-w-[1100px] xl:data-[side=right]:w-[1280px] xl:data-[side=right]:sm:max-w-[1280px]";
 const systemCurrencyCode = "ARS";
 
 function createLocalId() {
@@ -3630,30 +3629,40 @@ export function CentroCostoConfigurator({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className={wizardSheetClassName}>
-        <SheetHeader className="border-b border-border/70">
-          <SheetTitle>Configurar costo de {centro.nombre}</SheetTitle>
-          <SheetDescription>
-            Vamos a ayudarte a estimar el costo del sector {centro.codigo} para
-            un mes de vigencia concreto, sin pedirte que pienses como contador.
-          </SheetDescription>
+      <SheetContent className={wizardSheetClassName} showCloseButton={false}>
+        <SheetHeader className="sheet-head">
+          <div className="body">
+            <SheetTitle>Configurar costo de {centro.nombre}</SheetTitle>
+            <SheetDescription>
+              Vamos a ayudarte a estimar el costo del sector{" "}
+              <strong>{centro.codigo}</strong> para un mes de vigencia concreto,
+              sin pedirte que pienses como contador.
+            </SheetDescription>
+          </div>
+          <button
+            type="button"
+            className="close"
+            onClick={() => onOpenChange(false)}
+            aria-label="Cerrar configurar costo"
+          >
+            <span aria-hidden="true">×</span>
+          </button>
         </SheetHeader>
 
-        <div className="flex flex-col gap-6 p-4">
-          <div className="flex flex-col gap-4 rounded-2xl border border-border/70 bg-muted/10 p-4">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Mes de vigencia</span>
+        <div className="sheet-body">
+          <div className="mes-row">
+            <div className="field">
+              <label>
+                Mes de vigencia
                   <Tooltip>
                     <TooltipTrigger
                       render={
                         <button
                           type="button"
-                          className="inline-flex items-center text-muted-foreground transition-colors hover:text-foreground"
+                          className="tooltip-dot"
                           aria-label="Explicación sobre el mes de vigencia"
                         >
-                          <InfoIcon className="size-4" />
+                          ?
                         </button>
                       }
                     />
@@ -3668,40 +3677,40 @@ export function CentroCostoConfigurator({
                       distinto.
                     </TooltipContent>
                   </Tooltip>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Input
-                    type="month"
-                    className="w-full sm:w-44"
-                    value={periodo}
-                    onChange={(event) => setPeriodo(event.target.value)}
-                    aria-label="Mes de vigencia"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleCopyLastPeriod}
-                  >
-                    <CopyIcon />
-                    Copiar mes anterior
-                  </Button>
-                </div>
-              </div>
-              <Badge variant="outline">Activo {formatPeriodo(periodo)}</Badge>
+              </label>
+              <Input
+                type="month"
+                value={periodo}
+                onChange={(event) => setPeriodo(event.target.value)}
+                aria-label="Mes de vigencia"
+              />
             </div>
+            <Button type="button" variant="outline" onClick={handleCopyLastPeriod}>
+              <CopyIcon />
+              Copiar mes anterior
+            </Button>
+            <span className="active-badge">Activo {formatPeriodo(periodo)}</span>
+          </div>
 
-            <Tabs
-              value={activeStep}
-              onValueChange={(value) => setActiveStep(value as WizardStep)}
-            >
-              <TabsList className="h-auto w-full flex-wrap justify-start gap-1 rounded-xl border border-sidebar-border/20 bg-sidebar/8 p-1">
-                <TabsTrigger value="identidad">1. Ajustes</TabsTrigger>
-                <TabsTrigger value="recursos">2. Recursos</TabsTrigger>
-                <TabsTrigger value="costos">3. Costos</TabsTrigger>
-                <TabsTrigger value="capacidad">4. Capacidad</TabsTrigger>
-                <TabsTrigger value="resultado">5. Resultado</TabsTrigger>
-              </TabsList>
-            </Tabs>
+          <div className="costo-tabs" role="tablist" aria-label="Pasos de configuración de costo">
+            {[
+              ["identidad", "1. Ajustes"],
+              ["recursos", "2. Recursos"],
+              ["costos", "3. Costos"],
+              ["capacidad", "4. Capacidad"],
+              ["resultado", "5. Resultado"],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={activeStep === value}
+                className={`costo-tab ${activeStep === value ? "active" : ""}`}
+                onClick={() => setActiveStep(value as WizardStep)}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
           {isLoading ? (
@@ -3713,9 +3722,9 @@ export function CentroCostoConfigurator({
           )}
         </div>
 
-        <SheetFooter className="border-t border-border/70">
-          <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap gap-2">
+        <SheetFooter className="sheet-foot">
+          <div className="sheet-foot-inner">
+            <div className="sheet-nav-actions">
               {activeStep !== "identidad" ? (
                 <Button
                   type="button"
@@ -3758,7 +3767,9 @@ export function CentroCostoConfigurator({
               ) : null}
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <span className="spacer" />
+
+            <div className="sheet-main-actions">
               <Button
                 type="button"
                 variant="outline"

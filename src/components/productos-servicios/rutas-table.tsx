@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { GitBranchIcon, PlusIcon, SearchIcon } from "lucide-react";
 
 import { EstadoVacio } from "@/components/ui/estado-vacio";
@@ -33,6 +34,7 @@ function StepChain({
 }
 
 export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
+  const router = useRouter();
   const rutas = initialRutas;
   const [familias, setFamilias] = React.useState<FamiliaListItem[]>([]);
   const [search, setSearch] = React.useState("");
@@ -60,6 +62,10 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
       return haystack.includes(term);
     });
   }, [rutas, search, familiaLabel]);
+
+  const openRuta = (id: string) => {
+    router.push(`/productos-servicios/rutas/${id}`);
+  };
 
   return (
     <div className="content">
@@ -113,7 +119,6 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th style={{ width: 170 }}>Código</th>
                   <th>Nombre</th>
                   <th style={{ width: "38%" }}>Pasos</th>
                   <th className="right" style={{ width: 90 }}>Versión</th>
@@ -123,8 +128,17 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
               </thead>
               <tbody>
                 {rutasFiltradas.map((ruta) => (
-                  <tr key={ruta.id}>
-                    <td><span className="code">{ruta.codigo}</span></td>
+                  <tr
+                    key={ruta.id}
+                    role="link"
+                    tabIndex={0}
+                    onClick={() => openRuta(ruta.id)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      openRuta(ruta.id);
+                    }}
+                  >
                     <td>
                       <div className="name">{ruta.nombre}</div>
                       {ruta.descripcion ? <div className="desc">{ruta.descripcion}</div> : null}
@@ -145,6 +159,7 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
                       <Link
                         href={`/productos-servicios/rutas/${ruta.id}`}
                         className="inline-flex items-center gap-2 text-[12.5px] font-medium text-[var(--ink)]"
+                        onClick={(event) => event.stopPropagation()}
                       >
                         Ver / editar
                         <span aria-hidden="true">→</span>

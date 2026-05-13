@@ -364,7 +364,6 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Código</TableHead>
                   <TableHead>Nombre</TableHead>
                   <TableHead className="text-right">%</TableHead>
                   <TableHead className="text-center">Productos que lo usan</TableHead>
@@ -375,7 +374,6 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
               <TableBody>
                 {initialItems.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell className="font-mono text-xs">{item.codigo}</TableCell>
                     <TableCell>
                       <div className="font-medium">{item.nombre}</div>
                     </TableCell>

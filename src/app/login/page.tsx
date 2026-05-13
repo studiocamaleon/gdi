@@ -1,8 +1,22 @@
 import { redirect } from "next/navigation";
 import { tryGetCurrentUser } from "@/lib/auth";
-import { GdiLoginArt } from "@/components/brand/gdi-login-art";
-import { GdiLogo } from "@/components/brand/gdi-logo";
+import { LoginConstellation } from "@/components/auth/login-constellation";
 import { LoginForm } from "@/components/auth/login-form";
+
+function LoginLogo() {
+  return (
+    <svg viewBox="0 0 24 24" width="32" height="32" fill="none" aria-hidden="true">
+      <path d="M5.5 6.5 L18 6.5" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M5.5 6.5 L12 17.5" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M18 6.5 L12 17.5" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M18 6.5 L18 14.5" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" opacity="0.55" />
+      <circle cx="5.5" cy="6.5" r="2.2" fill="#fff" />
+      <circle cx="18" cy="6.5" r="2.2" fill="#fff" />
+      <circle cx="12" cy="17.5" r="2.2" fill="#fff" />
+      <circle cx="18" cy="14.5" r="1.4" fill="#fff" opacity="0.55" />
+    </svg>
+  );
+}
 
 export default async function LoginPage() {
   const current = await tryGetCurrentUser();
@@ -12,38 +26,52 @@ export default async function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-screen bg-background lg:grid-cols-2">
-      <section className="relative min-h-[52vh] overflow-hidden bg-[#090d1d] text-white lg:min-h-screen">
-        <GdiLoginArt animated className="absolute inset-0 size-full object-cover" />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,9,20,0.18),rgba(6,9,20,0.58))]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,171,64,0.22),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(77,124,255,0.22),transparent_28%)]" />
+    <main className="gp-login">
+      <aside className="pane-left">
+        <LoginConstellation />
+        <div className="eyebrow">
+          <span className="rule" />
+          MOTOR DE COTIZACIÓN PARA GRÁFICAS
+        </div>
 
-        <div className="relative flex min-h-[52vh] flex-col justify-between px-6 py-8 sm:px-10 sm:py-10 lg:min-h-screen lg:px-12 lg:py-12">
-          <div className="flex flex-col gap-8">
-            <div className="max-w-2xl">
-              <p className="text-xs font-medium uppercase tracking-[0.24em] text-white/55">
-                Industria grafica digital
-              </p>
-              <h1 className="mt-4 max-w-xl text-3xl font-semibold tracking-tight text-balance sm:text-4xl lg:text-5xl">
-                El color es un poder que influye directamente en el alma.
-              </h1>
-              <p className="mt-3 text-sm text-white/62 sm:text-base">
-                Wassily Kandinsky
-              </p>
-            </div>
-          </div>
+        <h2 className="quote">
+          Toda producción gráfica
+          <br />
+          es un <em>grafo</em> de decisiones
+          <br />
+          conectadas.
+        </h2>
+        <div className="author">manifiesto Grafoprint</div>
 
-          <div className="flex justify-center">
-            <GdiLogo className="h-auto w-full max-w-[21rem] sm:max-w-[25rem] lg:max-w-[29rem]" />
+        <div className="graph-art" />
+
+        <div className="brand-block">
+          <span className="mark">
+            <LoginLogo />
+          </span>
+          <div>
+            <div className="word">grafoprint</div>
+            <div className="tagline">motor de cotización · industria gráfica</div>
           </div>
         </div>
+
+        <div className="corner">v2.0 · sandbox</div>
+      </aside>
+
+      <section className="pane-right">
+        <LoginForm />
       </section>
 
-      <section className="flex min-h-[48vh] items-center bg-[linear-gradient(180deg,oklch(0.992_0.004_85),oklch(0.968_0.008_85))] px-6 py-10 sm:px-10 lg:min-h-screen lg:px-16 lg:py-14">
-        <div className="mx-auto flex w-full max-w-xl items-center">
-          <LoginForm />
+      <div className="ingress-lockup" aria-hidden="true">
+        <LoginLogo />
+        <div className="word">grafoprint</div>
+        <div className="status">
+          <span className="dot" />
+          Validando sesión
         </div>
-      </section>
+      </div>
+
+      <div className="ingress-flash" aria-hidden="true" />
     </main>
   );
 }

@@ -305,7 +305,6 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Código</TableHead>
                   <TableHead>Nombre</TableHead>
                   <TableHead>Modo cálculo</TableHead>
                   <TableHead>Modos activación</TableHead>
@@ -316,7 +315,6 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
               <TableBody>
                 {initialCargos.map((c) => (
                   <TableRow key={c.id}>
-                    <TableCell className="font-mono text-xs">{c.codigo}</TableCell>
                     <TableCell>
                       <div className="font-medium">{c.nombre}</div>
                       {c.descripcion && (

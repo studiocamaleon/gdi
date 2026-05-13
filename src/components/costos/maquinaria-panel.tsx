@@ -699,6 +699,10 @@ export function MaquinariaPanel({
     setIsSheetOpen(true);
   }, []);
 
+  const updateMaquinariaUrl = React.useCallback((path: string) => {
+    window.history.pushState(null, "", path);
+  }, []);
+
   React.useEffect(() => {
     if (initialCreate) {
       openNueva();
@@ -711,11 +715,13 @@ export function MaquinariaPanel({
   }, [initialCreate, initialEditingId, maquinas, openEditar, openNueva]);
 
   const handleNueva = () => {
-    router.push("/costos/maquinaria/nueva");
+    openNueva();
+    updateMaquinariaUrl("/costos/maquinaria/nueva");
   };
 
   const handleEditar = (maquina: Maquina) => {
-    router.push(`/costos/maquinaria/${maquina.id}`);
+    openEditar(maquina);
+    updateMaquinariaUrl(`/costos/maquinaria/${maquina.id}`);
   };
 
   const handlePlantillaChange = (newPlantilla: PlantillaMaquinaria) => {
@@ -804,9 +810,7 @@ export function MaquinariaPanel({
         toast.success(`"${created.nombre}" creada`);
       }
       setIsSheetOpen(false);
-      if (initialCreate || initialEditingId) {
-        router.push("/costos/maquinaria");
-      }
+      updateMaquinariaUrl("/costos/maquinaria");
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error guardando");
@@ -894,7 +898,6 @@ export function MaquinariaPanel({
               <thead>
                 <tr>
                   <th style={{ width: 36 }}></th>
-                  <th style={{ width: 200 }}>Código</th>
                   <th>Nombre</th>
                   <th style={{ width: 260 }}>Plantilla</th>
                   <th style={{ width: 110 }}>Estado</th>
@@ -906,7 +909,13 @@ export function MaquinariaPanel({
                 {filteredMaquinas.map((m) => (
                   <tr key={m.id} onClick={() => handleEditar(m)}>
                     <td>
-                      <button onClick={() => handleToggle(m)}>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleToggle(m);
+                        }}
+                      >
                         {m.activo ? (
                           <span className="ok-pill"><CheckCircle2Icon size={12} /></span>
                         ) : (
@@ -914,7 +923,6 @@ export function MaquinariaPanel({
                         )}
                       </button>
                     </td>
-                    <td><span className="code">{m.codigo}</span></td>
                     <td className="name">{m.nombre}</td>
                     <td><span className="tag">{getPlantillaMaquinariaLabel(m.plantilla)}</span></td>
                     <td>
@@ -963,8 +971,8 @@ export function MaquinariaPanel({
         open={isSheetOpen}
         onOpenChange={(open) => {
           setIsSheetOpen(open);
-          if (!open && (initialCreate || initialEditingId)) {
-            router.push("/costos/maquinaria");
+          if (!open) {
+            updateMaquinariaUrl("/costos/maquinaria");
           }
         }}
       >

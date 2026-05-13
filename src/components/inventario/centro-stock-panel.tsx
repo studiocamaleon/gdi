@@ -538,7 +538,6 @@ export function CentroStockPanel({
             <TableHeader>
               <TableRow>
                 <TableHead>Almacén</TableHead>
-                <TableHead>Código</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead className="text-right">Items con stock</TableHead>
                 <TableHead className="text-right">Cantidad total</TableHead>
@@ -548,7 +547,7 @@ export function CentroStockPanel({
             <TableBody>
               {initialAlmacenes.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-muted-foreground">
+                  <TableCell colSpan={5} className="text-muted-foreground">
                     Aún no hay almacenes creados.
                   </TableCell>
                 </TableRow>
@@ -558,7 +557,6 @@ export function CentroStockPanel({
                   return (
                     <TableRow key={almacen.id}>
                       <TableCell>{almacen.nombre}</TableCell>
-                      <TableCell>{almacen.codigo}</TableCell>
                       <TableCell>
                         <Badge variant={almacen.activo ? "default" : "outline"}>
                           {almacen.activo ? "Activo" : "Inactivo"}

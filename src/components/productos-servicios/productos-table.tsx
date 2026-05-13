@@ -198,7 +198,6 @@ export function ProductosServiciosTable({
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th style={{ width: 180 }}>Código</th>
                     <th>Nombre</th>
                     <th>¿Cómo se cobra?</th>
                     <th>Manejo de medidas</th>
@@ -210,10 +209,9 @@ export function ProductosServiciosTable({
                 <tbody>
                   {productosFiltrados.map((p) => {
                     const lblUnidad = getLabel(unidadComercialLabels, p.unidadComercial);
-                    const lblMedidas = getLabel(modoMedidasLabels, p.modoMedidas);
-                    return (
-                      <tr key={p.id} onClick={() => openProduct(p.id)}>
-                        <td><span className="code">{p.codigo}</span></td>
+                      const lblMedidas = getLabel(modoMedidasLabels, p.modoMedidas);
+                      return (
+                        <tr key={p.id} onClick={() => openProduct(p.id)}>
                         <td>
                           <div className="name">{p.nombre}</div>
                           <div className="desc">{p.descripcion ?? ""}</div>

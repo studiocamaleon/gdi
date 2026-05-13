@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { HumanSelect, type HumanSelectOption } from "@/components/ui/human-select";
@@ -279,6 +278,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
       </div>
 
       <div className="route-editor">
+        <div className="route-cols">
         {/* Identidad */}
         <Card className="wiz-section">
           <CardHeader>
@@ -456,48 +456,61 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
         </Card>
 
         {/* Historial de versiones */}
-        {modo === "editar" && (rutaExistente?.versiones?.length ?? 0) > 0 && (
-          <Card className="wiz-section">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <HistoryIcon className="size-4" />
-                <CardTitle className="text-base">Historial de versiones</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2 text-sm">
-                {rutaExistente?.versiones?.map((v) => (
-                  <div key={v.version} className="bg-muted/50 flex items-center gap-2 rounded p-2">
-                    <Badge variant="secondary">v{v.version}</Badge>
-                    <span>{v.cambios ?? "sin descripción"}</span>
-                    <span className="text-muted-foreground ml-auto text-xs">
-                      {new Date(v.createdAt).toLocaleDateString("es-AR")}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+        </div>
 
-      <div className="route-actions-bar">
-        {modo === "editar" ? (
-          <Button
-            variant="destructive"
-            onClick={() => setConfirmandoBorrado(true)}
+        {modo === "editar" && (rutaExistente?.versiones?.length ?? 0) > 0 && (
+          <div className="card versions-block">
+            <div className="card-head">
+              <span className="inline-flex items-center gap-2">
+                <HistoryIcon className="size-4" />
+                <span className="title">Historial de versiones</span>
+              </span>
+            </div>
+            {rutaExistente!.versiones?.map((v) => (
+              <div key={v.version} className="versions-row">
+                <span className="vtag">v{v.version}</span>
+                <span className="vname">{v.cambios ?? "Versión inicial"}</span>
+                <span className="vdate">{new Date(v.createdAt).toLocaleDateString("es-AR")}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="route-actions-bar">
+          {modo === "editar" ? (
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={() => setConfirmandoBorrado(true)}
+              disabled={guardando || eliminando}
+            >
+              <Trash2Icon className="size-4" />
+              {eliminando ? "Eliminando..." : "Eliminar ruta"}
+            </button>
+          ) : (
+            <div />
+          )}
+          <span className="route-actions-copy">
+            Los cambios se aplican al guardar. Si querés versionar, se creará v{(rutaExistente?.versionActual ?? 1) + 1} automáticamente.
+          </span>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => router.push("/productos-servicios/rutas")}
             disabled={guardando || eliminando}
           >
-            <Trash2Icon className="mr-2 size-4" />
-            {eliminando ? "Eliminando..." : "Eliminar ruta"}
-          </Button>
-        ) : (
-          <div />
-        )}
-        <Button onClick={handleGuardar} disabled={guardando || !codigo || !nombre} size="lg">
-          <SaveIcon className="mr-2 size-4" />
-          {guardando ? "Guardando..." : modo === "crear" ? "Crear ruta" : "Guardar cambios"}
-        </Button>
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleGuardar}
+            disabled={guardando || !codigo || !nombre}
+          >
+            <SaveIcon className="size-4" />
+            {guardando ? "Guardando..." : modo === "crear" ? "Crear ruta" : "Guardar cambios"}
+          </button>
+        </div>
       </div>
 
       {rutaExistente && (
