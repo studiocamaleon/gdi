@@ -6,7 +6,12 @@
  * todas las sub-tareas + tarifas).
  */
 
-import { Prisma, PrismaClient } from '@prisma/client';
+import {
+  EstadoTarifaCentroCostoPeriodo,
+  Prisma,
+  PrismaClient,
+  UnidadBaseCentroCosto,
+} from '@prisma/client';
 import { MotorUniversalService } from '../motor.service';
 import { runNestingForPaso } from '../nesting-dispatcher';
 import { AplicarPrecioService } from '../../productos-servicios/precio/aplicar-precio.service';
@@ -16,20 +21,159 @@ const prisma = new PrismaClient();
 
 let tenantId: string | null = null;
 let motorService: MotorUniversalService;
+const tarifaHoraManual = 6000;
 
 beforeAll(async () => {
-  const tenant = await prisma.tenant.findUnique({ where: { slug: 'gdi-demo' } });
+  const tenant = await prisma.tenant.findUnique({
+    where: { slug: 'gdi-demo' },
+  });
   tenantId = tenant?.id ?? null;
   // Inyectamos el prisma client directamente (sin DI de NestJS para test unitario).
   // AplicarPrecioService es stateless; PreciosEspecialesClientesService usa prisma.
   const aplicarPrecio = new AplicarPrecioService();
-  const preciosEspeciales = new PreciosEspecialesClientesService(prisma as never);
-  motorService = new MotorUniversalService(prisma as never, aplicarPrecio, preciosEspeciales);
+  const preciosEspeciales = new PreciosEspecialesClientesService(
+    prisma as never,
+  );
+  motorService = new MotorUniversalService(
+    prisma as never,
+    aplicarPrecio,
+    preciosEspeciales,
+  );
+  if (tenantId) {
+    await ensureCentrosManualesDemo(tenantId);
+  }
+});
+
+afterEach(async () => {
+  if (tenantId) {
+    await ensureCentrosManualesDemo(tenantId);
+  }
 });
 
 afterAll(async () => {
   await prisma.$disconnect();
 });
+
+async function ensureCentroHorarioConTarifa(tenantId: string) {
+  const centro = await prisma.centroCosto.findFirstOrThrow({
+    where: {
+      tenantId,
+      activo: true,
+      unidadBaseFutura: UnidadBaseCentroCosto.HORA_HOMBRE,
+    },
+  });
+
+  await prisma.centroCostoTarifaPeriodo.upsert({
+    where: {
+      tenantId_centroCostoId_periodo_estado: {
+        tenantId,
+        centroCostoId: centro.id,
+        periodo: '2026-03',
+        estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
+      },
+    },
+    update: {
+      tarifaCalculada: tarifaHoraManual,
+      costoMensualTotal: tarifaHoraManual,
+      capacidadPractica: 1,
+      resumenJson: { test: true },
+    },
+    create: {
+      tenantId,
+      centroCostoId: centro.id,
+      periodo: '2026-03',
+      costoMensualTotal: tarifaHoraManual,
+      capacidadPractica: 1,
+      tarifaCalculada: tarifaHoraManual,
+      estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
+      resumenJson: { test: true },
+    },
+  });
+
+  return centro;
+}
+
+async function ensureTarifaPublicada(
+  tenantId: string,
+  centroCostoId: string,
+  periodo: string,
+  tarifaCalculada: number,
+) {
+  await prisma.centroCostoTarifaPeriodo.upsert({
+    where: {
+      tenantId_centroCostoId_periodo_estado: {
+        tenantId,
+        centroCostoId,
+        periodo,
+        estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
+      },
+    },
+    update: {
+      tarifaCalculada,
+      costoMensualTotal: tarifaCalculada,
+      capacidadPractica: 1,
+      resumenJson: { test: true },
+    },
+    create: {
+      tenantId,
+      centroCostoId,
+      periodo,
+      costoMensualTotal: tarifaCalculada,
+      capacidadPractica: 1,
+      tarifaCalculada,
+      estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
+      resumenJson: { test: true },
+    },
+  });
+}
+
+function periodoActualTest() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+async function ensureCentrosManualesDemo(tenantId: string) {
+  const centro = await ensureCentroHorarioConTarifa(tenantId);
+  const periodoActual = periodoActualTest();
+
+  await ensureTarifaPublicada(
+    tenantId,
+    centro.id,
+    periodoActual,
+    tarifaHoraManual,
+  );
+
+  const centrosMaquina = await prisma.centroCosto.findMany({
+    where: {
+      tenantId,
+      activo: true,
+      unidadBaseFutura: { not: UnidadBaseCentroCosto.HORA_HOMBRE },
+    },
+    select: { id: true },
+  });
+
+  for (const centroMaquina of centrosMaquina) {
+    await ensureTarifaPublicada(
+      tenantId,
+      centroMaquina.id,
+      periodoActual,
+      22727.27,
+    );
+  }
+
+  await prisma.productoConfigPaso.updateMany({
+    where: {
+      tenantId,
+      maquinaM1Id: null,
+      activo: true,
+      modoTiempo: { in: ['T-1', 'T-2', 'T-4'] },
+    },
+    data: {
+      centroCostoId: centro.id,
+    },
+  });
+
+  return centro;
+}
 
 describe('MotorUniversalService — smoke tests', () => {
   it('cotiza Tarjetas Premium 300gr y devuelve estructura válida', async () => {
@@ -83,14 +227,24 @@ describe('MotorUniversalService — smoke tests', () => {
       include: {
         rutasAlternativas: {
           include: {
-            configPasos: { include: { rutaPaso: true } },
+            configPasos: {
+              include: { rutaPaso: true, slotsMateriales: true },
+            },
           },
         },
       },
     });
     const ruta = tarjetas.rutasAlternativas[0];
-    const laminado = ruta.configPasos.find((c) => c.rutaPaso.familiaCodigo === 'laminado');
+    const laminado = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'laminado',
+    );
     expect(laminado).toBeDefined();
+    const slotFilm = laminado!.slotsMateriales.find(
+      (s) => s.slotCodigo === 'film',
+    )!;
+    const filmDefault = (
+      slotFilm.materialesCandidatosJson as Array<{ variantId: string }>
+    )[0];
 
     const result = await motorService.cotizar({
       tenantId,
@@ -99,6 +253,7 @@ describe('MotorUniversalService — smoke tests', () => {
         cantidad: 100,
         caras: 2,
         opcionalesActivados: { [laminado!.id]: true },
+        [`slotMaterial_${laminado!.id}_film`]: filmDefault.variantId,
       },
     });
 
@@ -126,7 +281,7 @@ describe('MotorUniversalService — smoke tests', () => {
     });
 
     expect(result.exitoso).toBe(true);
-    expect(result.cotizacion!.pasos.length).toBe(6);
+    expect(result.cotizacion!.pasos.length).toBe(5);
   });
 
   it('Talonario duplicado tipoCopia=2: capa 1 + capa 2 se activan, capa 3 NO (CONDICIONAL JsonLogic)', async () => {
@@ -158,7 +313,9 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(pasosImpresion[1].activado).toBe(true);
     // Capa 3: regla `tipoCopia >= 3` → con tipoCopia=2, NO se activa
     expect(pasosImpresion[2].activado).toBe(false);
-    expect(pasosImpresion[2].razonNoActivado).toContain('CONDICIONAL no se cumple');
+    expect(pasosImpresion[2].razonNoActivado).toContain(
+      'CONDICIONAL no se cumple',
+    );
   });
 
   it('Talonario triplicado tipoCopia=3: las 3 capas se activan', async () => {
@@ -207,7 +364,9 @@ describe('MotorUniversalService — smoke tests', () => {
       where: { tenantId, codigo: 'TALON-DUPL-A4' },
       include: { rutasAlternativas: true },
     });
-    const abrochada = talonario.rutasAlternativas.find((r) => r.nombre === 'Abrochado');
+    const abrochada = talonario.rutasAlternativas.find(
+      (r) => r.nombre === 'Abrochado',
+    );
 
     const result = await motorService.cotizar({
       tenantId,
@@ -224,6 +383,44 @@ describe('MotorUniversalService — smoke tests', () => {
     if (!tenantId) return;
     const rigido = await prisma.producto.findFirstOrThrow({
       where: { tenantId, codigo: 'RIGIDO-CUSTOM' },
+      include: {
+        rutasAlternativas: {
+          include: {
+            configPasos: {
+              include: { rutaPaso: true, slotsMateriales: true },
+            },
+          },
+        },
+      },
+    });
+    const impresion = rigido.rutasAlternativas[0].configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'impresion_por_area',
+    )!;
+    const slot = impresion.slotsMateriales.find(
+      (s) => s.slotCodigo === 'sustrato_principal',
+    )!;
+    const candidato = (
+      slot.materialesCandidatosJson as Array<{ variantId: string }>
+    )[0];
+
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: rigido.id,
+      jobContext: {
+        cantidad: 5,
+        medidaCustomMm: { anchoMm: 200, altoMm: 300 },
+        [`slotMaterial_${impresion.id}_${slot.slotCodigo}`]: candidato.variantId,
+      },
+    });
+
+    expect(result.exitoso).toBe(true);
+    expect(result.cotizacion!.pasos.length).toBe(8);
+  });
+
+  it('Rígido impreso requiere elección explícita del material comercial', async () => {
+    if (!tenantId) return;
+    const rigido = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'RIGIDO-CUSTOM' },
     });
 
     const result = await motorService.cotizar({
@@ -235,8 +432,15 @@ describe('MotorUniversalService — smoke tests', () => {
       },
     });
 
-    expect(result.exitoso).toBe(true);
-    expect(result.cotizacion!.pasos.length).toBe(8);
+    expect(result.exitoso).toBe(false);
+    expect(result.errores).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          codigo: 'material_comercial_requerido',
+          mensaje: expect.stringContaining('requiere elegir el material'),
+        }),
+      ]),
+    );
   });
 
   it('devuelve error si productoId no existe', async () => {
@@ -266,7 +470,7 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(result.cotizacion!.cantidadPedida).toBe(1000);
   });
 
-  it('F.2.6: Tarjetas doble faz consume MÁS tiempo y MÁS material que simple faz', async () => {
+  it('F.2.6: Tarjetas doble faz consume más tiempo y consumibles, sin duplicar sustrato', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({
       where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
@@ -288,9 +492,33 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(dobleFaz.exitoso).toBe(true);
 
     // Doble faz: el paso impresión debe consumir el doble de tiempo
-    const impSimple = simpleFaz.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_hoja');
-    const impDoble = dobleFaz.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_hoja');
-    expect(impDoble!.tiempo!.totalMin).toBeGreaterThan(impSimple!.tiempo!.totalMin);
+    const impSimple = simpleFaz.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'impresion_por_hoja',
+    );
+    const impDoble = dobleFaz.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'impresion_por_hoja',
+    );
+    expect(impDoble!.tiempo!.totalMin).toBeGreaterThan(
+      impSimple!.tiempo!.totalMin,
+    );
+    const sustratoSimple = impSimple!.materiales!.find(
+      (m) => m.slotCodigo === 'sustrato_principal',
+    );
+    const sustratoDoble = impDoble!.materiales!.find(
+      (m) => m.slotCodigo === 'sustrato_principal',
+    );
+    expect(sustratoDoble!.cantidad).toBe(sustratoSimple!.cantidad);
+    const tonerSimple = impSimple!.materiales!.filter(
+      (m) => m.tipoLineaCosto === 'CONSUMIBLE_MAQUINA',
+    );
+    const tonerDoble = impDoble!.materiales!.filter(
+      (m) => m.tipoLineaCosto === 'CONSUMIBLE_MAQUINA',
+    );
+    expect(
+      tonerDoble.reduce((acc, item) => acc + item.costoTotal, 0),
+    ).toBeGreaterThan(
+      tonerSimple.reduce((acc, item) => acc + item.costoTotal, 0),
+    );
   });
 
   it('F.2.6: Talonario con tipoCopia=3 multiplica el tiempo del paso impresión', async () => {
@@ -339,18 +567,20 @@ describe('MotorUniversalService — smoke tests', () => {
 
     expect(result.exitoso).toBe(true);
 
-    // Verificar que al menos un paso tiene tarifaHora > 0 (la del seed = 22727.27)
-    const pasoConTarifa = result.cotizacion!.pasos.find(
-      (p) => p.activado && (p.tiempo?.tarifaHora ?? 0) > 0,
+    // Verificar que hay tarifa manual y tarifa heredada desde máquina.
+    const tarifas = result.cotizacion!.pasos
+      .filter((p) => p.activado)
+      .map((p) => p.tiempo?.tarifaHora ?? 0);
+    expect(tarifas).toEqual(expect.arrayContaining([tarifaHoraManual]));
+    expect(tarifas.some((tarifa) => Math.abs(tarifa - 22727.27) < 0.5)).toBe(
+      true,
     );
-    expect(pasoConTarifa).toBeDefined();
-    expect(pasoConTarifa!.tiempo!.tarifaHora).toBeCloseTo(22727.27, 0);
 
     // Costo de tiempo total debe ser > 0
     expect(result.cotizacion!.costos.tiempoTotal).toBeGreaterThan(0);
   });
 
-  it('F.2.10: Vinilo con período inexistente NO encuentra tarifa, costo de tiempo = 0', async () => {
+  it('F.2.10: Vinilo con período inexistente falla por tarifa no publicada', async () => {
     if (!tenantId) return;
     const vinilo = await prisma.producto.findFirstOrThrow({
       where: { tenantId, codigo: 'VINILO-BLANCO-IMP' },
@@ -365,9 +595,15 @@ describe('MotorUniversalService — smoke tests', () => {
       },
     });
 
-    expect(result.exitoso).toBe(true);
-    // Sin tarifa publicada, todos los pasos tienen tarifaHora=0 → costo de tiempo = 0
-    expect(result.cotizacion!.costos.tiempoTotal).toBe(0);
+    expect(result.exitoso).toBe(false);
+    expect(result.errores).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          codigo: 'centro_costo_sin_tarifa_publicada',
+          mensaje: expect.stringContaining('1999-01'),
+        }),
+      ]),
+    );
   });
 
   it('F.2.8: cotización SIN cantidad explícita → ERROR validación REQUIRES_INPUT', async () => {
@@ -422,7 +658,9 @@ describe('MotorUniversalService — smoke tests', () => {
       },
     });
     expect(result.exitoso).toBe(true);
-    const impresion = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_area');
+    const impresion = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'impresion_por_area',
+    );
     expect(impresion?.activado).toBe(true);
 
     // Nesting result presente con shelf-rollo
@@ -432,6 +670,15 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(impresion!.nestingResult!.consumedLengthMm).toBeGreaterThan(6000);
     expect(impresion!.nestingResult!.consumedLengthMm).toBeLessThan(6500);
     expect(impresion!.nestingResult!.placements.length).toBe(3);
+    expect(impresion!.nestingResult!.visualConfig).toMatchObject({
+      margins: { leftMm: 5, rightMm: 5, topMm: 10, bottomMm: 10 },
+      spacing: { horizontalMm: 5, verticalMm: 5 },
+      usableArea: { xMm: 5, widthMm: 1360 },
+    });
+    expect(impresion!.nestingResult!.costingPreview).toMatchObject({
+      strategy: 'consumed-length',
+      chargedLengthMm: impresion!.nestingResult!.consumedLengthMm,
+    });
     // Aprovechamiento: 6 m² útiles / 8.26 m² totales ≈ 72-73%
     expect(impresion!.nestingResult!.aprovechamientoPct).toBeGreaterThan(60);
     expect(impresion!.nestingResult!.aprovechamientoPct).toBeLessThan(80);
@@ -454,14 +701,16 @@ describe('MotorUniversalService — smoke tests', () => {
       jobContext: { cantidad: 1000, caras: 2 },
     });
     expect(result.exitoso).toBe(true);
-    const embalaje = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'embalaje');
+    const embalaje = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'embalaje',
+    );
     expect(embalaje?.activado).toBe(true);
     // CONVERSION devuelve 10 cajas; el motor T-2 todavía no usa run, pero al menos
     // verificamos que el paso se ejecutó sin error
     expect(embalaje!.materiales?.length).toBeGreaterThan(0);
   });
 
-  it('F.2.4: Tarjetas doble faz → motor selecciona automáticamente perfil "Papel grueso doble faz" (1200 ppm vs 2400 simple)', async () => {
+  it('F.2.4: Tarjetas doble faz → motor selecciona automáticamente perfil "Papel grueso doble faz" (20 ppm vs 40 simple)', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({
       where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
@@ -480,13 +729,19 @@ describe('MotorUniversalService — smoke tests', () => {
       jobContext: { cantidad: 2400, caras: 2 },
     });
 
-    const impSimple = simple.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_hoja')!;
-    const impDoble = doble.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_hoja')!;
+    const impSimple = simple.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'impresion_por_hoja',
+    )!;
+    const impDoble = doble.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'impresion_por_hoja',
+    )!;
 
-    // El perfil simple faz produce a 2400 ppm → 2400 pliegos en ~60min
-    // El perfil doble faz produce a 1200 ppm + multiplicador caras=2 → 4800 piezas/1200ppm = 240min
+    // El perfil simple faz produce a 40 ppm → 2400 pliegos en ~60min
+    // El perfil doble faz produce a 20 ppm + multiplicador caras=2 → 4800 piezas/20ppm = 240min
     // Aunque ambos usan multiplicadores también, el run debe ser distinto
-    expect(impDoble.tiempo!.totalMin).toBeGreaterThan(impSimple.tiempo!.totalMin);
+    expect(impDoble.tiempo!.totalMin).toBeGreaterThan(
+      impSimple.tiempo!.totalMin,
+    );
   });
 
   it('G-M7: Vinilo con MOTOR_ELIGE_AUTO + MAYOR_APROVECHAMIENTO → corre nesting con cada candidato y elige el de mayor aprovechamiento real', async () => {
@@ -508,18 +763,23 @@ describe('MotorUniversalService — smoke tests', () => {
       },
     });
     expect(result.exitoso).toBe(true);
-    const impresion = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_area');
+    const impresion = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'impresion_por_area',
+    );
     const mat = impresion!.materiales![0];
     expect(mat.modoSeleccion).toBe('MOTOR_ELIGE_AUTO');
     // El rollo 1.37m aprovecha mejor para esta pieza (menos desperdicio).
     expect(mat.materialNombre).toBe('VINILO-BLANCO-1370');
     // El nesting result confirma que se eligió el sustrato 1.37m.
-    // v3.0: ahora con márgenes no imprimibles de Roland (5mm izq + 5mm der),
-    // el ancho efectivo del rollo es 1370 - 10 = 1360mm.
+    // El preview muestra el sustrato completo; el ancho útil descontado viaja
+    // en visualConfig.usableArea.
     expect(impresion!.nestingResult?.substrates[0]).toMatchObject({
       kind: 'roll',
-      widthMm: 1360,
+      widthMm: 1370,
     });
+    expect(impresion!.nestingResult?.visualConfig?.usableArea.widthMm).toBe(
+      1360,
+    );
   });
 
   it('G-M7: con máquina que limita anchoMax (Roland 1.37m), el dispatcher usa ese ancho independiente del rollo', async () => {
@@ -540,14 +800,41 @@ describe('MotorUniversalService — smoke tests', () => {
       },
     });
     expect(result.exitoso).toBe(true);
-    const impresion = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_area');
+    const impresion = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'impresion_por_area',
+    );
     expect(impresion!.nestingResult?.substrates[0]).toMatchObject({
       kind: 'roll',
-      widthMm: 1360, // 1370 ancho rollo - 10mm márgenes no imprimibles
+      widthMm: 1370,
     });
+    expect(impresion!.nestingResult?.visualConfig?.usableArea.widthMm).toBe(
+      1360,
+    );
   });
 
-  it('F.2.5: Tarjetas con laminado COMERCIAL_ELIGE → comercial elige film mate (default)', async () => {
+  it('F.2.5: Tarjetas sin laminado no exige elegir film', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      jobContext: {
+        cantidad: 1000,
+        caras: 2,
+      },
+    });
+
+    expect(result.exitoso).toBe(true);
+    const pasoLaminado = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'laminado',
+    );
+    expect(pasoLaminado?.activado).toBe(false);
+  });
+
+  it('F.2.5: Tarjetas con laminado activado exige elegir film explícitamente', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({
       where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
@@ -558,7 +845,9 @@ describe('MotorUniversalService — smoke tests', () => {
       },
     });
     const ruta = tarjetas.rutasAlternativas[0];
-    const laminado = ruta.configPasos.find((c) => c.rutaPaso.familiaCodigo === 'laminado');
+    const laminado = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'laminado',
+    );
 
     const result = await motorService.cotizar({
       tenantId,
@@ -567,19 +856,20 @@ describe('MotorUniversalService — smoke tests', () => {
         cantidad: 1000,
         caras: 2,
         opcionalesActivados: { [laminado!.id]: true },
-        // sin elección explícita → debería usar default = mate
       } as never,
     });
-    expect(result.exitoso).toBe(true);
-    const pasoLaminado = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'laminado');
-    expect(pasoLaminado?.activado).toBe(true);
-    expect(pasoLaminado?.materiales?.length).toBe(1);
-    const film = pasoLaminado!.materiales![0];
-    expect(film.modoSeleccion).toBe('COMERCIAL_ELIGE');
-    expect(film.materialNombre).toBe('BOPP-MATE-650'); // default
+    expect(result.exitoso).toBe(false);
+    expect(result.errores).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          codigo: 'material_comercial_requerido',
+          mensaje: expect.stringContaining('requiere elegir el material film'),
+        }),
+      ]),
+    );
   });
 
-  it('F.2.5: Tarjetas con laminado y comercial elige BRILLO explícito', async () => {
+  it('F.2.5: Tarjetas con laminado y comercial elige BRILLO explícito con clave por paso', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({
       where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
@@ -590,7 +880,9 @@ describe('MotorUniversalService — smoke tests', () => {
       },
     });
     const ruta = tarjetas.rutasAlternativas[0];
-    const laminado = ruta.configPasos.find((c) => c.rutaPaso.familiaCodigo === 'laminado');
+    const laminado = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'laminado',
+    );
 
     // Buscar el variantId del film brillo
     const filmBrillo = await prisma.materiaPrimaVariante.findFirstOrThrow({
@@ -604,13 +896,231 @@ describe('MotorUniversalService — smoke tests', () => {
         cantidad: 1000,
         caras: 2,
         opcionalesActivados: { [laminado!.id]: true },
-        slotMaterial_film: filmBrillo.id, // elección explícita por slot
+        [`slotMaterial_${laminado!.id}_film`]: filmBrillo.id,
       } as never,
     });
     expect(result.exitoso).toBe(true);
-    const pasoLaminado = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'laminado');
+    const pasoLaminado = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'laminado',
+    );
     const film = pasoLaminado!.materiales![0];
     expect(film.materialNombre).toBe('BOPP-BRILLO-650');
+    expect(film.materialSku).toBe('BOPP-BRILLO-650');
+    expect(film.materialDisplayName).toBeTruthy();
+    expect(film.tipoLineaCosto).toBe('MATERIAL');
+  });
+
+  it('F.2.5: Tarjetas con laminado acepta material elegido en slotMateriales', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    const ruta = tarjetas.rutasAlternativas[0];
+    const laminado = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'laminado',
+    );
+    const filmBrillo = await prisma.materiaPrimaVariante.findFirstOrThrow({
+      where: { tenantId, sku: 'BOPP-BRILLO-650' },
+    });
+
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      jobContext: {
+        cantidad: 1000,
+        caras: 2,
+        opcionalesActivados: { [laminado!.id]: true },
+        slotMateriales: {
+          [`${laminado!.id}_film`]: filmBrillo.id,
+        },
+      } as never,
+    });
+
+    expect(result.exitoso).toBe(true);
+    const pasoLaminado = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'laminado',
+    );
+    expect(pasoLaminado!.materiales![0].materialSku).toBe('BOPP-BRILLO-650');
+  });
+
+  it('Laminado: calcula film con nesting de rollo sobre pliegos impresos', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    const ruta = tarjetas.rutasAlternativas[0];
+    const laminado = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'laminado',
+    );
+    const filmBrillo = await prisma.materiaPrimaVariante.findFirstOrThrow({
+      where: { tenantId, sku: 'BOPP-BRILLO-650' },
+    });
+
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      jobContext: {
+        cantidad: 100,
+        caras: 1,
+        opcionalesActivados: { [laminado!.id]: true },
+        slotMateriales: {
+          [`${laminado!.id}_film`]: filmBrillo.id,
+        },
+      } as never,
+    });
+
+    expect(result.exitoso).toBe(true);
+    const pasoLaminado = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'laminado',
+    )!;
+    const film = pasoLaminado.materiales![0];
+    const nesting = pasoLaminado.nestingResult!;
+    expect(nesting.algorithm).toBe('shelf-rollo');
+    expect(nesting.unidad).toBe('m_lineales');
+    expect(nesting.consumedLengthMm).toBeCloseTo(1170, 0);
+    expect(film.cantidad).toBeCloseTo(1.17, 2);
+    expect(film.cantidad).toBeLessThan((10 * 297) / 1000);
+    expect(nesting.visualConfig?.margins).toMatchObject({
+      leftMm: 10,
+      rightMm: 10,
+      topMm: 50,
+      bottomMm: 50,
+    });
+    expect(nesting.visualConfig?.spacing).toMatchObject({
+      horizontalMm: 5,
+      verticalMm: 5,
+    });
+  });
+
+  it('Laminado: respeta allowRotation=false y mantiene multiplicador por caras', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    const ruta = tarjetas.rutasAlternativas[0];
+    const laminado = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'laminado',
+    );
+    const filmBrillo = await prisma.materiaPrimaVariante.findFirstOrThrow({
+      where: { tenantId, sku: 'BOPP-BRILLO-650' },
+    });
+
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      jobContext: {
+        cantidad: 100,
+        caras: 2,
+        opcionalesActivados: { [laminado!.id]: true },
+        slotMateriales: {
+          [`${laminado!.id}_film`]: filmBrillo.id,
+        },
+        configPasoRuntime: {
+          [laminado!.id]: {
+            nestingConfig: { allowRotation: false },
+          },
+        },
+      } as never,
+    });
+
+    expect(result.exitoso).toBe(true);
+    const pasoLaminado = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'laminado',
+    )!;
+    const film = pasoLaminado.materiales![0];
+    expect(pasoLaminado.nestingResult!.consumedLengthMm).toBeCloseTo(1605, 0);
+    expect(film.cantidad).toBeCloseTo(3.21, 2);
+  });
+
+  it('F.2.5: clave legacy de material por slot sigue funcionando temporalmente', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    const ruta = tarjetas.rutasAlternativas[0];
+    const laminado = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'laminado',
+    );
+    const filmMate = await prisma.materiaPrimaVariante.findFirstOrThrow({
+      where: { tenantId, sku: 'BOPP-MATE-650' },
+    });
+
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      jobContext: {
+        cantidad: 1000,
+        caras: 2,
+        opcionalesActivados: { [laminado!.id]: true },
+        slotMaterial_film: filmMate.id,
+      } as never,
+    });
+
+    expect(result.exitoso).toBe(true);
+    const pasoLaminado = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'laminado',
+    );
+    expect(pasoLaminado!.materiales![0].materialSku).toBe('BOPP-MATE-650');
+  });
+
+  it('F.2.5: rechaza material comercial que no pertenece a candidatos del slot', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    const ruta = tarjetas.rutasAlternativas[0];
+    const laminado = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'laminado',
+    );
+    const opalina = await prisma.materiaPrimaVariante.findFirstOrThrow({
+      where: { tenantId, sku: 'OPALINA-300-65X45' },
+    });
+
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      jobContext: {
+        cantidad: 1000,
+        caras: 2,
+        opcionalesActivados: { [laminado!.id]: true },
+        [`slotMaterial_${laminado!.id}_film`]: opalina.id,
+      } as never,
+    });
+
+    expect(result.exitoso).toBe(false);
+    expect(result.errores).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          codigo: 'material_comercial_invalido',
+          mensaje: expect.stringContaining('no es válida'),
+        }),
+      ]),
+    );
   });
 
   it('F.2.7: Vinilo SIN activar viático → cargosDirectosCotizacion vacío', async () => {
@@ -684,12 +1194,13 @@ describe('MotorUniversalService — smoke tests', () => {
     const tarjetas = await prisma.producto.findFirstOrThrow({
       where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
     });
-    const { result, cotizacionId, cotizacionItemId } = await motorService.cotizarYGuardar({
-      tenantId,
-      productoId: tarjetas.id,
-      periodo: '2026-03',
-      jobContext: { cantidad: 500, caras: 2 },
-    });
+    const { result, cotizacionId, cotizacionItemId } =
+      await motorService.cotizarYGuardar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-03',
+        jobContext: { cantidad: 500, caras: 2 },
+      });
 
     expect(result.exitoso).toBe(true);
     expect(cotizacionId).toBeDefined();
@@ -721,7 +1232,7 @@ describe('MotorUniversalService — smoke tests', () => {
     await prisma.cotizacion.delete({ where: { id: cotizacionId! } });
   });
 
-  it('F.2.12: Tarjetas (precioConfig por_margen 100%) → precio = costo × 2', async () => {
+  it('F.2.12: Tarjetas (precioConfig margen_variable) → calcula precio con tier vigente', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({
       where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
@@ -734,11 +1245,10 @@ describe('MotorUniversalService — smoke tests', () => {
     });
     expect(result.exitoso).toBe(true);
     expect(result.cotizacion!.precio).toBeDefined();
-    expect(result.cotizacion!.precio!.metodoUsado).toBe('por_margen');
-    // costo unitario × 2 = precio unitario (margen 100% del seed)
-    const costoUnit = result.cotizacion!.costos.unitario;
-    const precioUnit = result.cotizacion!.precio!.precioUnitario;
-    expect(precioUnit).toBeCloseTo(costoUnit * 2, 2);
+    expect(result.cotizacion!.precio!.metodoUsado).toBe('margen_variable');
+    expect(result.cotizacion!.precio!.precioUnitario).toBeGreaterThan(
+      result.cotizacion!.costos.unitario,
+    );
   });
 
   it('F.2.12: Vinilo (precioConfig margen_variable) → margen depende de cantidad', async () => {
@@ -762,7 +1272,7 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(result.cotizacion!.precio!.margenAplicadoPct).toBe(100);
   });
 
-  it('G-M1: dispatcher grid-2d-single funciona cuando se invoca directamente (unit test)', async () => {
+  it('G-M1: dispatcher grid-2d-single funciona cuando se invoca directamente (unit test)', () => {
     // Test unitario del dispatcher (sin DB) que verifica el caso grid-2d-single.
     // El seed actual de Tarjetas NO ejecuta nesting porque `pre_prensa` usa T-1
     // tiempo fijo y `impresion_por_hoja` usa HEREDAR_DEL_OUTPUT_CANONICO (depende
@@ -787,8 +1297,15 @@ describe('MotorUniversalService — smoke tests', () => {
       tiempoFijoOverrideMin: null,
       slots: [],
       cargosDirectosPaso: [],
-      maquina: { id: 'm1', codigo: 'X', nombre: 'X', plantilla: 'IMPRESORA_LASER',
-        parametrosTecnicosJson: { margenesNoImprimiblesMm: { izq: 5, der: 5, sup: 5, inf: 5 } } },
+      maquina: {
+        id: 'm1',
+        codigo: 'X',
+        nombre: 'X',
+        plantilla: 'IMPRESORA_LASER',
+        parametrosTecnicosJson: {
+          margenesNoImprimiblesMm: { izq: 5, der: 5, sup: 5, inf: 5 },
+        },
+      },
     };
     const fakeMaterial = {
       id: 'mat1',
@@ -800,13 +1317,80 @@ describe('MotorUniversalService — smoke tests', () => {
       piezas: [{ cantidad: 1000, anchoMm: 90, altoMm: 50 }],
     };
 
-    const r = runNestingForPaso(fakePaso as never, fakeJobContext, fakeMaterial);
+    const r = runNestingForPaso(
+      fakePaso as never,
+      fakeJobContext,
+      fakeMaterial,
+    );
     expect(r).not.toBeNull();
     expect(r!.algorithm).toBe('grid-2d-single');
     expect(r!.unidad).toBe('pliegos');
     expect(r!.piezasPorPliego).toBeGreaterThanOrEqual(12); // pliego 22x34, pieza 9x5 = ~14
     expect(r!.cantidadCalculada).toBeLessThanOrEqual(85); // ceil(1000/12) = 84
     expect(r!.placements.length).toBe(r!.piezasPorPliego);
+  });
+
+  it('impresion_por_hoja usa el pliego de impresión configurado en vez del tamaño comprado', () => {
+    const fakePaso = {
+      rutaPasoId: 'rp1',
+      rutaPasoOrden: 1,
+      familiaCodigo: 'impresion_por_hoja',
+      configPasoId: 'cp1',
+      modoActivacion: 'OBLIGATORIO',
+      condicionActivacionJson: null,
+      modoTiempo: 'T-3',
+      mecanismoCantidad: 'CALCULADO_POR_PASO',
+      mecanismoCantidadConfigJson: null,
+      multiplicadoresActivos: [],
+      paramsPasoJson: {
+        nestingConfig: {
+          pliegoImpresion: { anchoMm: 210, altoMm: 297 },
+        },
+      },
+      maquinaM1Id: null,
+      perfilM1Id: null,
+      setupOverrideMin: null,
+      cleanupOverrideMin: null,
+      tiempoFijoOverrideMin: null,
+      slots: [],
+      cargosDirectosPaso: [],
+      maquina: {
+        id: 'm1',
+        codigo: 'X',
+        nombre: 'X',
+        plantilla: 'IMPRESORA_LASER',
+        parametrosTecnicosJson: {
+          margenesNoImprimiblesMm: { izq: 5, der: 5, sup: 5, inf: 5 },
+        },
+      },
+    };
+    const fakeMaterial = {
+      id: 'mat1',
+      atributosVarianteJson: { anchoMm: 320, largoMm: 460 },
+    };
+
+    const r = runNestingForPaso(
+      fakePaso as never,
+      {
+        cantidad: 100,
+        caras: 1 as const,
+        piezas: [{ cantidad: 100, anchoMm: 90, altoMm: 50 }],
+      },
+      fakeMaterial,
+    );
+
+    expect(r).not.toBeNull();
+    expect(r!.substrates[0]).toMatchObject({
+      kind: 'sheet',
+      widthMm: 210,
+      heightMm: 297,
+    });
+    expect(r!.visualConfig).toMatchObject({
+      usableArea: {
+        widthMm: 200,
+        heightMm: 287,
+      },
+    });
   });
 
   it('G-M1: dispatcher devuelve null para familia sin algoritmo (mantiene fallback)', async () => {
@@ -820,7 +1404,9 @@ describe('MotorUniversalService — smoke tests', () => {
       productoId: tarjetas.id,
       jobContext: { cantidad: 1000, caras: 2 },
     });
-    const embalaje = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'embalaje');
+    const embalaje = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'embalaje',
+    );
     expect(embalaje?.activado).toBe(true);
     expect(embalaje!.nestingResult).toBeUndefined();
   });
@@ -833,8 +1419,12 @@ describe('MotorUniversalService — smoke tests', () => {
     });
 
     // Hay 2 perfiles: "Papel grueso simple faz" y "Papel grueso doble faz".
-    const simpleFaz = ricoh.perfilesOperativos.find((p) => /simple/i.test(p.nombre))!;
-    const dobleFaz = ricoh.perfilesOperativos.find((p) => /doble/i.test(p.nombre))!;
+    const simpleFaz = ricoh.perfilesOperativos.find((p) =>
+      /simple/i.test(p.nombre),
+    )!;
+    const dobleFaz = ricoh.perfilesOperativos.find((p) =>
+      /doble/i.test(p.nombre),
+    )!;
 
     // Forzar: el perfil DOBLE FAZ tiene una regla declarativa que dice
     // "elegime cuando gramajeGr >= 250" (independiente de caras).
@@ -863,7 +1453,9 @@ describe('MotorUniversalService — smoke tests', () => {
         jobContext: { cantidad: 100, caras: 1, gramajeGr: 300 },
       });
       expect(result.exitoso).toBe(true);
-      const impresion = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_hoja');
+      const impresion = result.cotizacion!.pasos.find(
+        (p) => p.familiaCodigo === 'impresion_por_hoja',
+      );
       // El perfil resuelto: la regla del doble (gramajeGr >= 250) gana.
       // Verificamos a través de la productividad usada (doble vs simple).
       expect(impresion!.tiempo!.totalMin).toBeGreaterThan(0);
@@ -873,7 +1465,12 @@ describe('MotorUniversalService — smoke tests', () => {
     } finally {
       await prisma.maquinaPerfilOperativo.update({
         where: { id: dobleFaz.id },
-        data: { detalleJson: detalleOriginal === null ? Prisma.JsonNull : (detalleOriginal as never) },
+        data: {
+          detalleJson:
+            detalleOriginal === null
+              ? Prisma.JsonNull
+              : (detalleOriginal as never),
+        },
       });
       void simpleFaz;
     }
@@ -888,10 +1485,15 @@ describe('MotorUniversalService — smoke tests', () => {
     const result = await motorService.cotizar({
       tenantId,
       productoId: vinilo.id,
-      jobContext: { cantidad: 1, piezas: [{ cantidad: 1, anchoMm: 1000, altoMm: 500 }] },
+      jobContext: {
+        cantidad: 1,
+        piezas: [{ cantidad: 1, anchoMm: 1000, altoMm: 500 }],
+      },
     });
     expect(result.exitoso).toBe(true);
-    const impresion = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_area');
+    const impresion = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'impresion_por_area',
+    );
     const matVinilo = impresion!.materiales![0];
     // Fórmula `por_metro_lineal` → unidad reportada `m_lineales`.
     expect(matVinilo.unidad).toBe('m_lineales');
@@ -906,10 +1508,47 @@ describe('MotorUniversalService — smoke tests', () => {
       jobContext: { cantidad: 1000, caras: 2 },
     });
     expect(r2.exitoso).toBe(true);
-    const impTarjetas = r2.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_hoja');
+    const impTarjetas = r2.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'impresion_por_hoja',
+    );
+    const prePrensaTarjetas = r2.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'pre_prensa',
+    );
     const matTarjetas = impTarjetas!.materiales![0];
-    // Fórmula `por_unidad_productiva` → hereda unidadStock del material (PLIEGO → 'pliego').
-    expect(matTarjetas.unidad).toBe('pliego');
+    // Fórmula `por_unidad_productiva` → hereda unidadStock del material.
+    expect(matTarjetas.unidad).toBe('hoja');
+    const pliegosImpresion = Number(
+      (prePrensaTarjetas!.outputsCanonicos as Record<string, unknown>)
+        .pliegos_calculados ?? 0,
+    );
+    expect(pliegosImpresion).toBeGreaterThan(0);
+    expect(matTarjetas.cantidad).toBeLessThanOrEqual(pliegosImpresion);
+    expect(matTarjetas.materialNombre).toBe('OPALINA-300-65X45');
+    expect(matTarjetas.materialSku).toBe('OPALINA-300-65X45');
+    expect(matTarjetas.materialDisplayName).toBeTruthy();
+    expect(matTarjetas.precioUnitario).toBeGreaterThan(0);
+    expect(matTarjetas.costoTotal).toBeGreaterThan(0);
+    expect(matTarjetas.tipoLineaCosto).toBe('MATERIAL');
+
+    const consumibles = impTarjetas!.materiales!.filter(
+      (m) => m.tipoLineaCosto === 'CONSUMIBLE_MAQUINA',
+    );
+    expect(consumibles.length).toBeGreaterThan(0);
+    const tonerPorGramo = consumibles.filter((m) => m.unidad === 'gramo');
+    expect(tonerPorGramo.length).toBeGreaterThan(0);
+    for (const consumible of tonerPorGramo) {
+      expect(consumible.precioUnitario).toBeGreaterThan(100);
+    }
+    expect(consumibles[0]).toEqual(
+      expect.objectContaining({
+        materialSku: expect.any(String),
+        materialDisplayName: expect.any(String),
+        unidad: expect.any(String),
+        precioUnitario: expect.any(Number),
+        costoTotal: expect.any(Number),
+        modoSeleccion: 'MAQUINA_CONSUMIBLE',
+      }),
+    );
   });
 
   it('G-M5: T-2 con `paramsPaso.horasEstimadas` calcula run = horas × 60', async () => {
@@ -923,14 +1562,19 @@ describe('MotorUniversalService — smoke tests', () => {
       },
     });
     const ruta = tarjetas.rutasAlternativas[0];
-    const diseno = ruta.configPasos.find((c) => c.rutaPaso.familiaCodigo === 'diseno_grafico');
+    const diseno = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'diseno_grafico',
+    );
     expect(diseno).toBeDefined();
 
-    // Forzar T-2 + horasEstimadas + tarifaHoraOperario para diseno_grafico
+    const centro = await ensureCentroHorarioConTarifa(tenantId);
+
+    // Forzar T-2 + horasEstimadas. tarifaHoraOperario queda como dato legacy ignorado.
     await prisma.productoConfigPaso.update({
       where: { id: diseno!.id },
       data: {
         modoTiempo: 'T-2',
+        centroCostoId: centro.id,
         paramsPasoJson: { horasEstimadas: 2, tarifaHoraOperario: 5000 },
       },
     });
@@ -947,19 +1591,25 @@ describe('MotorUniversalService — smoke tests', () => {
         },
       });
       expect(result.exitoso).toBe(true);
-      const pasoDiseno = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'diseno_grafico');
+      const pasoDiseno = result.cotizacion!.pasos.find(
+        (p) => p.familiaCodigo === 'diseno_grafico',
+      );
       expect(pasoDiseno!.activado).toBe(true);
       // 2 horas × 60 = 120 min de run
       expect(pasoDiseno!.tiempo!.runMin).toBe(120);
-      expect(pasoDiseno!.tiempo!.tarifaHora).toBe(5000);
-      // costo = 120/60 × 5000 = 10000
-      expect(pasoDiseno!.tiempo!.costo).toBeCloseTo(10000, 0);
+      expect(pasoDiseno!.tiempo!.tarifaHora).toBe(tarifaHoraManual);
+      // costo = totalMin/60 × tarifa publicada del centro; tarifaHoraOperario se ignora.
+      expect(pasoDiseno!.tiempo!.costo).toBeCloseTo(
+        (pasoDiseno!.tiempo!.totalMin / 60) * tarifaHoraManual,
+        0,
+      );
     } finally {
       // Restaurar config original
       await prisma.productoConfigPaso.update({
         where: { id: diseno!.id },
         data: {
           modoTiempo: 'T-1',
+          centroCostoId: null,
           paramsPasoJson: { tarifaFija: 5000 },
         },
       });
@@ -977,13 +1627,17 @@ describe('MotorUniversalService — smoke tests', () => {
       },
     });
     const ruta = tarjetas.rutasAlternativas[0];
-    const embalaje = ruta.configPasos.find((c) => c.rutaPaso.familiaCodigo === 'embalaje');
+    const embalaje = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'embalaje',
+    );
+    const centro = await ensureCentroHorarioConTarifa(tenantId);
 
     // Embalaje T-2 CONVERSION: 1000 piezas / 100 por caja = 10 cajas.
     // Productividad operario = 5 cajas/hora → run = 10/5 × 60 = 120min.
     await prisma.productoConfigPaso.update({
       where: { id: embalaje!.id },
       data: {
+        centroCostoId: centro.id,
         paramsPasoJson: {
           piezasPorCaja: 100,
           productivityValue: 5,
@@ -1000,15 +1654,18 @@ describe('MotorUniversalService — smoke tests', () => {
         jobContext: { cantidad: 1000, caras: 2 },
       });
       expect(result.exitoso).toBe(true);
-      const pasoEmbalaje = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'embalaje');
+      const pasoEmbalaje = result.cotizacion!.pasos.find(
+        (p) => p.familiaCodigo === 'embalaje',
+      );
       expect(pasoEmbalaje!.activado).toBe(true);
       // 10 cajas / 5 cajas/h × 60 = 120min
       expect(pasoEmbalaje!.tiempo!.runMin).toBeCloseTo(120, 0);
-      expect(pasoEmbalaje!.tiempo!.tarifaHora).toBe(3000);
+      expect(pasoEmbalaje!.tiempo!.tarifaHora).toBe(tarifaHoraManual);
     } finally {
       await prisma.productoConfigPaso.update({
         where: { id: embalaje!.id },
         data: {
+          centroCostoId: null,
           paramsPasoJson: { piezasPorCaja: 100 },
         },
       });
@@ -1026,12 +1683,16 @@ describe('MotorUniversalService — smoke tests', () => {
       },
     });
     const ruta = tarjetas.rutasAlternativas[0];
-    const diseno = ruta.configPasos.find((c) => c.rutaPaso.familiaCodigo === 'diseno_grafico');
+    const diseno = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'diseno_grafico',
+    );
+    const centro = await ensureCentroHorarioConTarifa(tenantId);
 
     await prisma.productoConfigPaso.update({
       where: { id: diseno!.id },
       data: {
         modoTiempo: 'T-2',
+        centroCostoId: centro.id,
         paramsPasoJson: {
           campoHorasJobContext: 'horasDiseno',
           horasEstimadas: 1, // fallback si el comercial no ingresa
@@ -1054,22 +1715,28 @@ describe('MotorUniversalService — smoke tests', () => {
         },
       });
       expect(result.exitoso).toBe(true);
-      const pasoDiseno = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'diseno_grafico');
+      const pasoDiseno = result.cotizacion!.pasos.find(
+        (p) => p.familiaCodigo === 'diseno_grafico',
+      );
       // 3.5 × 60 = 210min
       expect(pasoDiseno!.tiempo!.runMin).toBe(210);
-      expect(pasoDiseno!.tiempo!.costo).toBeCloseTo(210 / 60 * 4000, 0);
+      expect(pasoDiseno!.tiempo!.costo).toBeCloseTo(
+        (pasoDiseno!.tiempo!.totalMin / 60) * tarifaHoraManual,
+        0,
+      );
     } finally {
       await prisma.productoConfigPaso.update({
         where: { id: diseno!.id },
         data: {
           modoTiempo: 'T-1',
+          centroCostoId: null,
           paramsPasoJson: { tarifaFija: 5000 },
         },
       });
     }
   });
 
-  it('G-M5: T-1 con `paramsPaso.tarifaFija` cobra el monto fijo independiente del tiempo', async () => {
+  it('T-1 ignora `paramsPaso.tarifaFija` y usa tarifa publicada del centro manual', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({
       where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
@@ -1080,24 +1747,169 @@ describe('MotorUniversalService — smoke tests', () => {
       },
     });
     const ruta = tarjetas.rutasAlternativas[0];
-    const diseno = ruta.configPasos.find((c) => c.rutaPaso.familiaCodigo === 'diseno_grafico');
+    const diseno = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'diseno_grafico',
+    );
+    const centro = await ensureCentroHorarioConTarifa(tenantId);
 
-    // diseño grafico T-1 con tarifaFija 5000 (config del seed por default)
-    const result = await motorService.cotizar({
-      tenantId,
-      productoId: tarjetas.id,
-      periodo: '2026-03',
-      jobContext: {
-        cantidad: 1000,
-        caras: 2,
-        opcionalesActivados: { [diseno!.id]: true },
+    await prisma.productoConfigPaso.update({
+      where: { id: diseno!.id },
+      data: {
+        modoTiempo: 'T-1',
+        tiempoFijoOverrideMin: 60,
+        centroCostoId: centro.id,
+        paramsPasoJson: { tarifaFija: 5000 },
       },
     });
-    expect(result.exitoso).toBe(true);
-    const pasoDiseno = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'diseno_grafico');
-    expect(pasoDiseno!.activado).toBe(true);
-    // tarifaFija 5000 → costo = 5000 (no totalMin × tarifaHora)
-    expect(pasoDiseno!.tiempo!.costo).toBe(5000);
+
+    try {
+      const result = await motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-03',
+        jobContext: {
+          cantidad: 1000,
+          caras: 2,
+          opcionalesActivados: { [diseno!.id]: true },
+        },
+      });
+      expect(result.exitoso).toBe(true);
+      const pasoDiseno = result.cotizacion!.pasos.find(
+        (p) => p.familiaCodigo === 'diseno_grafico',
+      );
+      expect(pasoDiseno!.activado).toBe(true);
+      expect(pasoDiseno!.tiempo!.tarifaHora).toBe(tarifaHoraManual);
+      expect(pasoDiseno!.tiempo!.costo).toBe(tarifaHoraManual);
+    } finally {
+      await prisma.productoConfigPaso.update({
+        where: { id: diseno!.id },
+        data: {
+          centroCostoId: null,
+          tiempoFijoOverrideMin: null,
+          paramsPasoJson: { tarifaFija: 5000 },
+        },
+      });
+    }
+  });
+
+  it('paso sin máquina y sin centro horario falla al costear tiempo', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    const ruta = tarjetas.rutasAlternativas[0];
+    const diseno = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'diseno_grafico',
+    );
+
+    await prisma.productoConfigPaso.update({
+      where: { id: diseno!.id },
+      data: {
+        modoTiempo: 'T-1',
+        tiempoFijoOverrideMin: 60,
+        centroCostoId: null,
+        paramsPasoJson: {},
+      },
+    });
+
+    try {
+      const result = await motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-03',
+        jobContext: {
+          cantidad: 1000,
+          caras: 2,
+          opcionalesActivados: { [diseno!.id]: true },
+        },
+      });
+      expect(result.exitoso).toBe(false);
+      expect(result.errores).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ codigo: 'centro_costo_paso_faltante' }),
+        ]),
+      );
+    } finally {
+      await prisma.productoConfigPaso.update({
+        where: { id: diseno!.id },
+        data: {
+          tiempoFijoOverrideMin: null,
+          paramsPasoJson: { tarifaFija: 5000 },
+        },
+      });
+    }
+  });
+
+  it('paso sin máquina con centro sin tarifa publicada falla con error claro', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    const ruta = tarjetas.rutasAlternativas[0];
+    const diseno = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'diseno_grafico',
+    );
+    const centro = await ensureCentroHorarioConTarifa(tenantId);
+
+    await prisma.centroCostoTarifaPeriodo.deleteMany({
+      where: {
+        tenantId,
+        centroCostoId: centro.id,
+        periodo: '2026-03',
+        estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
+      },
+    });
+    await prisma.productoConfigPaso.update({
+      where: { id: diseno!.id },
+      data: {
+        modoTiempo: 'T-1',
+        tiempoFijoOverrideMin: 60,
+        centroCostoId: centro.id,
+        paramsPasoJson: {},
+      },
+    });
+
+    try {
+      const result = await motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-03',
+        jobContext: {
+          cantidad: 1000,
+          caras: 2,
+          opcionalesActivados: { [diseno!.id]: true },
+        },
+      });
+      expect(result.exitoso).toBe(false);
+      expect(result.errores).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            codigo: 'centro_costo_sin_tarifa_publicada',
+            mensaje: expect.stringContaining('2026-03'),
+          }),
+        ]),
+      );
+    } finally {
+      await prisma.productoConfigPaso.update({
+        where: { id: diseno!.id },
+        data: {
+          centroCostoId: null,
+          tiempoFijoOverrideMin: null,
+          paramsPasoJson: { tarifaFija: 5000 },
+        },
+      });
+      await ensureCentroHorarioConTarifa(tenantId);
+    }
   });
 
   it('v3.1 talonario-grouping: pre_prensa con paramsPaso.modoTalonarioIncompleto aplica grouping post-nesting', async () => {
@@ -1118,7 +1930,9 @@ describe('MotorUniversalService — smoke tests', () => {
       },
     });
     expect(result.exitoso).toBe(true);
-    const prePrensa = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'pre_prensa');
+    const prePrensa = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'pre_prensa',
+    );
     expect(prePrensa).toBeDefined();
     expect(prePrensa!.activado).toBe(true);
     // Verificar que el grouping se aplicó.
@@ -1138,7 +1952,7 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(outs.pliegos_calculados).toBe(tg.pliegosXCapa);
   });
 
-  it('v3.1 grid-2d-multi: jobContext con piezas de medidas distintas → multi-bin packing', async () => {
+  it('v3.1 grid-2d-multi: jobContext con piezas de medidas distintas → multi-bin packing', () => {
     // Test unitario del dispatcher multi (no requiere producto seed específico).
     const fakePaso = {
       rutaPasoId: 'rp1',
@@ -1164,7 +1978,9 @@ describe('MotorUniversalService — smoke tests', () => {
         codigo: 'X',
         nombre: 'X',
         plantilla: 'IMPRESORA_LASER',
-        parametrosTecnicosJson: { margenesNoImprimiblesMm: { izq: 5, der: 5, sup: 5, inf: 5 } },
+        parametrosTecnicosJson: {
+          margenesNoImprimiblesMm: { izq: 5, der: 5, sup: 5, inf: 5 },
+        },
       },
     };
     const fakeMaterial = {
@@ -1182,7 +1998,11 @@ describe('MotorUniversalService — smoke tests', () => {
       ],
     };
 
-    const r = runNestingForPaso(fakePaso as never, fakeJobContext, fakeMaterial);
+    const r = runNestingForPaso(
+      fakePaso as never,
+      fakeJobContext,
+      fakeMaterial,
+    );
     expect(r).not.toBeNull();
     expect(r!.algorithm).toBe('grid-2d-multi');
     expect(r!.unidad).toBe('pliegos');
@@ -1191,7 +2011,152 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(r!.aprovechamientoPct).toBeGreaterThan(0);
   });
 
-  it('v3.1 grid-2d-multi: piezas todas iguales → cae a single (más eficiente)', async () => {
+  it('v3.2 impresion_por_area con mesa extensora usa nesting de placa para rígidos', () => {
+    const fakePaso = {
+      rutaPasoId: 'rp1',
+      rutaPasoOrden: 1,
+      familiaCodigo: 'impresion_por_area',
+      configPasoId: 'cp1',
+      modoActivacion: 'OBLIGATORIO',
+      condicionActivacionJson: null,
+      modoTiempo: 'T-3',
+      mecanismoCantidad: 'CALCULADO_POR_PASO',
+      mecanismoCantidadConfigJson: null,
+      multiplicadoresActivos: [],
+      paramsPasoJson: null,
+      maquinaM1Id: null,
+      perfilM1Id: null,
+      setupOverrideMin: null,
+      cleanupOverrideMin: null,
+      tiempoFijoOverrideMin: null,
+      slots: [],
+      cargosDirectosPaso: [],
+      maquina: {
+        id: 'm1',
+        codigo: 'MESA',
+        nombre: 'Mesa UV',
+        plantilla: 'IMPRESORA_GRAN_FORMATO_POR_AREA',
+        parametrosTecnicosJson: {
+          geometria: 'MESA_EXTENSORA',
+          anchoMesaMm: 710,
+          largoMesaMm: 510,
+          margenesNoImprimiblesMm: { izq: 5, der: 5, sup: 5, inf: 5 },
+        },
+      },
+    };
+    const fakeMaterial = {
+      id: 'mat1',
+      atributosVarianteJson: { anchoMm: 1830, largoMm: 2750 },
+    };
+    const fakeJobContext = {
+      cantidad: 3,
+      piezas: [
+        { cantidad: 2, anchoMm: 300, altoMm: 200 },
+        { cantidad: 1, anchoMm: 250, altoMm: 180 },
+      ],
+    };
+
+    const r = runNestingForPaso(
+      fakePaso as never,
+      fakeJobContext,
+      fakeMaterial,
+    );
+    expect(r).not.toBeNull();
+    expect(['packingsolver-rectangle', 'grid-2d-multi']).toContain(r!.algorithm);
+    expect(r!.unidad).toBe('pliegos');
+    expect(r!.cantidadCalculada).toBeGreaterThanOrEqual(1);
+    expect(r!.placements.length).toBe(3);
+    expect(r!.substrates[0]).toMatchObject({
+      kind: 'sheet',
+      widthMm: 1830,
+      heightMm: 2750,
+    });
+    expect(r!.visualConfig).toMatchObject({
+      margins: { leftMm: 5, rightMm: 5, topMm: 5, bottomMm: 5 },
+      spacing: { horizontalMm: 5, verticalMm: 5 },
+      usableArea: {
+        xMm: 5,
+        yMm: 5,
+        widthMm: 1820,
+        heightMm: 2740,
+      },
+    });
+    expect(r!.aprovechamientoPct).toBeLessThan(10);
+  });
+
+  it('shelf-rollo paneliza sólo las piezas que no entran y conserva piezas normales', () => {
+    const fakePaso = {
+      rutaPasoId: 'rp-rollo',
+      rutaPasoOrden: 1,
+      familiaCodigo: 'impresion_por_area',
+      configPasoId: 'cp-rollo',
+      modoActivacion: 'OBLIGATORIO',
+      condicionActivacionJson: null,
+      modoTiempo: 'T-3',
+      mecanismoCantidad: 'CALCULADO_POR_PASO',
+      mecanismoCantidadConfigJson: null,
+      multiplicadoresActivos: [],
+      paramsPasoJson: {
+        nestingConfig: {
+          algorithm: 'shelf-rollo',
+          allowRotation: false,
+          separationHMm: 5,
+          separationVMm: 5,
+          panelizado: {
+            enabled: true,
+            mode: 'automatic',
+            axis: 'vertical',
+            overlapMm: 20,
+            maxPanelWidthMm: 0,
+            distribution: 'equilibrada',
+            widthInterpretation: 'total',
+          },
+        },
+      },
+      maquinaM1Id: null,
+      perfilM1Id: null,
+      setupOverrideMin: null,
+      cleanupOverrideMin: null,
+      tiempoFijoOverrideMin: null,
+      slots: [],
+      cargosDirectosPaso: [],
+      maquina: {
+        id: 'm-rollo',
+        codigo: 'ROLLO',
+        nombre: 'Rollo',
+        plantilla: 'IMPRESORA_GRAN_FORMATO_POR_AREA',
+        parametrosTecnicosJson: {
+          geometria: 'ROLLO',
+          anchoMaxRolloMm: 1370,
+          margenesNoImprimiblesMm: { izq: 5, der: 5, sup: 10, inf: 10 },
+        },
+      },
+    };
+    const r = runNestingForPaso(
+      fakePaso as never,
+      {
+        cantidad: 1,
+        piezas: [
+          { cantidad: 1, anchoMm: 1800, altoMm: 800 },
+          { cantidad: 2, anchoMm: 200, altoMm: 300 },
+        ],
+      },
+      { id: 'vinilo-137', atributosVarianteJson: { anchoMm: 1370 } },
+    );
+
+    expect(r).not.toBeNull();
+    expect(r!.algorithm).toBe('shelf-rollo');
+    expect(r!.visualConfig?.panelizado).toMatchObject({
+      enabled: true,
+      axis: 'vertical',
+      overlapMm: 20,
+      panelCount: 2,
+    });
+    expect(r!.placements.filter((p) => p.panelIndex != null)).toHaveLength(2);
+    expect(r!.placements.filter((p) => p.panelIndex == null)).toHaveLength(2);
+  });
+
+  it('v3.1 grid-2d-multi: piezas todas iguales → cae a single (más eficiente)', () => {
     const fakePaso = {
       rutaPasoId: 'rp1',
       rutaPasoOrden: 1,
@@ -1216,7 +2181,9 @@ describe('MotorUniversalService — smoke tests', () => {
         codigo: 'X',
         nombre: 'X',
         plantilla: 'IMPRESORA_LASER',
-        parametrosTecnicosJson: { margenesNoImprimiblesMm: { izq: 5, der: 5, sup: 5, inf: 5 } },
+        parametrosTecnicosJson: {
+          margenesNoImprimiblesMm: { izq: 5, der: 5, sup: 5, inf: 5 },
+        },
       },
     };
     const fakeMaterial = {
@@ -1233,7 +2200,11 @@ describe('MotorUniversalService — smoke tests', () => {
       ],
     };
 
-    const r = runNestingForPaso(fakePaso as never, fakeJobContext, fakeMaterial);
+    const r = runNestingForPaso(
+      fakePaso as never,
+      fakeJobContext,
+      fakeMaterial,
+    );
     expect(r).not.toBeNull();
     expect(r!.algorithm).toBe('grid-2d-single');
     expect(r!.piezasPorPliego).toBeGreaterThan(0);
@@ -1252,7 +2223,9 @@ describe('MotorUniversalService — smoke tests', () => {
       // sin piezas explícitas: motor usa medidaDefault (90×50) del producto
     });
     expect(result.exitoso).toBe(true);
-    const prePrensa = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'pre_prensa');
+    const prePrensa = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'pre_prensa',
+    );
     expect(prePrensa).toBeDefined();
     expect(prePrensa!.activado).toBe(true);
     // pre_prensa corrió grid-2d-single look-ahead y publicó los outputs.
@@ -1261,11 +2234,85 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(outs.poses_por_pliego).toBeGreaterThan(0);
     expect(outs.imposicion_calculada).toMatchObject({
       algorithm: 'grid-2d-single',
-      piezasPorPliego: expect.any(Number),
     });
-    expect(outs.cortes_calculados).toMatchObject({
-      cortesTotales: expect.any(Number),
+    expect(
+      (outs.imposicion_calculada as { piezasPorPliego?: unknown })
+        .piezasPorPliego,
+    ).toEqual(expect.any(Number));
+    expect(
+      (outs.cortes_calculados as { cortesTotales?: unknown }).cortesTotales,
+    ).toEqual(expect.any(Number));
+  });
+
+  it('pre_prensa respeta el pliego configurado en el paso de impresion_por_hoja', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
     });
+    const impresion = tarjetas.rutasAlternativas[0].configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'impresion_por_hoja',
+    );
+    expect(impresion).toBeDefined();
+
+    const originalParams = impresion!.paramsPasoJson;
+    await prisma.productoConfigPaso.update({
+      where: { id: impresion!.id },
+      data: {
+        paramsPasoJson: {
+          nestingConfig: {
+            pliegoImpresion: { preset: 'A4', anchoMm: 210, altoMm: 297 },
+          },
+        },
+      },
+    });
+
+    try {
+      const result = await motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-03',
+        jobContext: { cantidad: 1000, caras: 2 },
+      });
+      expect(result.exitoso).toBe(true);
+      const prePrensa = result.cotizacion!.pasos.find(
+        (p) => p.familiaCodigo === 'pre_prensa',
+      );
+      expect(prePrensa?.nestingResult?.substrates[0]).toMatchObject({
+        kind: 'sheet',
+        widthMm: 210,
+        heightMm: 297,
+      });
+      expect(prePrensa?.outputsCanonicos).toMatchObject({
+        pliego_impresion_ancho_mm: 210,
+        pliego_impresion_alto_mm: 297,
+        pliego_impresion_area_m2: (210 * 297) / 1_000_000,
+      });
+      const pliegosImpresion = Number(
+        (prePrensa!.outputsCanonicos as Record<string, unknown>)
+          .pliegos_calculados ?? 0,
+      );
+      const pasoImpresion = result.cotizacion!.pasos.find(
+        (p) => p.familiaCodigo === 'impresion_por_hoja',
+      );
+      const sustrato = pasoImpresion!.materiales!.find(
+        (m) => m.slotCodigo === 'sustrato_principal',
+      );
+      expect(sustrato?.materialSku).toBe('OPALINA-300-65X45');
+      expect(sustrato?.cantidad).toBe(Math.ceil(pliegosImpresion / 2));
+    } finally {
+      await prisma.productoConfigPaso.update({
+        where: { id: impresion!.id },
+        data: {
+          paramsPasoJson:
+            originalParams === null ? Prisma.JsonNull : (originalParams as never),
+        },
+      });
+    }
   });
 
   it('G-M2: impresion_por_hoja HEREDA `pliegos_calculados` y calcula tiempo basado en pliegos reales', async () => {
@@ -1280,20 +2327,84 @@ describe('MotorUniversalService — smoke tests', () => {
       jobContext: { cantidad: 1000, caras: 2 },
     });
     expect(result.exitoso).toBe(true);
-    const prePrensa = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'pre_prensa');
-    const impresion = result.cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_hoja');
+    const prePrensa = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'pre_prensa',
+    );
+    const impresion = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'impresion_por_hoja',
+    );
     expect(prePrensa).toBeDefined();
     expect(impresion).toBeDefined();
 
     // El paso de impresión debe haberse ejecutado con la cantidad de pliegos
     // calculada por pre_prensa (no con cantidad cruda 1000 piezas).
-    const pliegos = (prePrensa!.outputsCanonicos as Record<string, unknown>).pliegos_calculados as number;
+    const pliegos = (prePrensa!.outputsCanonicos as Record<string, unknown>)
+      .pliegos_calculados as number;
     expect(pliegos).toBeGreaterThan(0);
     expect(pliegos).toBeLessThan(1000); // 1000 tarjetas no requieren 1000 pliegos
 
     // pliegos_impresos publicado por impresion debe coincidir con la cantidad heredada.
     const outsImp = impresion!.outputsCanonicos as Record<string, unknown>;
     expect(outsImp.pliegos_impresos).toBe(pliegos);
+  });
+
+  it('v3.2 impresion_por_hoja calcula nesting propio si no hay output de pre-prensa', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    const prePrensa = tarjetas.rutasAlternativas[0].configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'pre_prensa',
+    );
+    expect(prePrensa).toBeDefined();
+
+    const original = {
+      modoActivacion: prePrensa!.modoActivacion,
+      tiempoFijoOverrideMin: prePrensa!.tiempoFijoOverrideMin,
+    };
+
+    await prisma.productoConfigPaso.update({
+      where: { id: prePrensa!.id },
+      data: { modoActivacion: 'OPCIONAL' },
+    });
+
+    try {
+      const result = await motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-03',
+        jobContext: { cantidad: 1000, caras: 2 },
+      });
+      expect(result.exitoso).toBe(true);
+
+      const pasoPrePrensa = result.cotizacion!.pasos.find(
+        (p) => p.familiaCodigo === 'pre_prensa',
+      );
+      const impresion = result.cotizacion!.pasos.find(
+        (p) => p.familiaCodigo === 'impresion_por_hoja',
+      );
+      const guillotina = result.cotizacion!.pasos.find(
+        (p) => p.familiaCodigo === 'corte_guillotina',
+      );
+
+      expect(pasoPrePrensa!.activado).toBe(false);
+      expect(impresion!.nestingResult?.algorithm).toBe('grid-2d-single');
+      expect(
+        (impresion!.outputsCanonicos as Record<string, unknown>)
+          .pliegos_calculados,
+      ).toBeGreaterThan(0);
+      expect(guillotina!.activado).toBe(true);
+    } finally {
+      await prisma.productoConfigPaso.update({
+        where: { id: prePrensa!.id },
+        data: original,
+      });
+    }
   });
 
   it('G-M2/G-M4: EXISTS_OUTPUT real bloquea corte_guillotina si pre_prensa no publicó pliegos_calculados', async () => {
@@ -1320,7 +2431,9 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(e).toBeDefined();
     expect(e!.severidad).toBe('ERROR');
     expect(e!.familiaCodigo).toBe('corte_guillotina');
-    expect((e!.contexto as { outputCanonico?: string }).outputCanonico).toBe('pliegos_calculados');
+    expect((e!.contexto as { outputCanonico?: string }).outputCanonico).toBe(
+      'pliegos_calculados',
+    );
   });
 
   it('G-M3: cargo directo a nivel PASO (MONTO_FIJO_PLANO OBLIGATORIO) se aplica al paso', async () => {
@@ -1377,13 +2490,18 @@ describe('MotorUniversalService — smoke tests', () => {
       // El costoTotal del paso debe incluir los 500 además de tiempo + materiales
       const subtotalEsperado =
         (pasoPrePrensa!.tiempo?.costo ?? 0) +
-        (pasoPrePrensa!.materiales?.reduce((acc, m) => acc + m.costoTotal, 0) ?? 0);
+        (pasoPrePrensa!.materiales?.reduce((acc, m) => acc + m.costoTotal, 0) ??
+          0);
       expect(pasoPrePrensa!.costoTotal).toBeCloseTo(subtotalEsperado + 500, 2);
 
       // El total agregado de la cotización también debe sumarlo
-      expect(result.cotizacion!.costos.cargosDirectosTotal).toBeGreaterThanOrEqual(500);
+      expect(
+        result.cotizacion!.costos.cargosDirectosTotal,
+      ).toBeGreaterThanOrEqual(500);
     } finally {
-      await prisma.productoCargoDirectoPaso.delete({ where: { id: cargoPaso.id } });
+      await prisma.productoCargoDirectoPaso.delete({
+        where: { id: cargoPaso.id },
+      });
     }
   });
 
@@ -1434,12 +2552,15 @@ describe('MotorUniversalService — smoke tests', () => {
       expect(pasoImpresion).toBeDefined();
       const subtotalPaso =
         (pasoImpresion!.tiempo?.costo ?? 0) +
-        (pasoImpresion!.materiales?.reduce((acc, m) => acc + m.costoTotal, 0) ?? 0);
+        (pasoImpresion!.materiales?.reduce((acc, m) => acc + m.costoTotal, 0) ??
+          0);
       const cargo = pasoImpresion!.cargosDirectosPaso![0];
       expect(cargo.monto).toBeCloseTo(subtotalPaso * 0.1, 2);
       expect((cargo.detalle as { scope?: string })?.scope).toBe('PASO');
     } finally {
-      await prisma.productoCargoDirectoPaso.delete({ where: { id: cargoPaso.id } });
+      await prisma.productoCargoDirectoPaso.delete({
+        where: { id: cargoPaso.id },
+      });
     }
   });
 
@@ -1502,7 +2623,9 @@ describe('MotorUniversalService — smoke tests', () => {
       expect(pasoActivado!.cargosDirectosPaso?.length).toBe(1);
       expect(pasoActivado!.cargosDirectosPaso![0].monto).toBe(1500);
     } finally {
-      await prisma.productoCargoDirectoPaso.delete({ where: { id: cargoPaso.id } });
+      await prisma.productoCargoDirectoPaso.delete({
+        where: { id: cargoPaso.id },
+      });
     }
   });
 
@@ -1517,12 +2640,10 @@ describe('MotorUniversalService — smoke tests', () => {
       jobContext: { cantidad: 1000 },
     });
     const c = result.cotizacion!.costos;
-    expect(c).toMatchObject({
-      tiempoTotal: expect.any(Number),
-      materialesTotal: expect.any(Number),
-      cargosDirectosTotal: expect.any(Number),
-      total: expect.any(Number),
-      unitario: expect.any(Number),
-    });
+    expect(c.tiempoTotal).toEqual(expect.any(Number));
+    expect(c.materialesTotal).toEqual(expect.any(Number));
+    expect(c.cargosDirectosTotal).toEqual(expect.any(Number));
+    expect(c.total).toEqual(expect.any(Number));
+    expect(c.unitario).toEqual(expect.any(Number));
   });
 });

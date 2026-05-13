@@ -33,7 +33,10 @@ export class ComisionesCatalogoController {
   constructor(private readonly service: ComisionesCatalogoService) {}
 
   @Get()
-  async listar(@Req() req: RequestWithAuth, @Query('soloActivos') soloActivos?: string) {
+  async listar(
+    @Req() req: RequestWithAuth,
+    @Query('soloActivos') soloActivos?: string,
+  ) {
     const filtro = soloActivos !== 'false';
     return this.service.listar(tenantId(req), filtro);
   }
@@ -44,7 +47,10 @@ export class ComisionesCatalogoController {
   }
 
   @Post()
-  async crear(@Req() req: RequestWithAuth, @Body() dto: CrearComisionCatalogoDto) {
+  async crear(
+    @Req() req: RequestWithAuth,
+    @Body() dto: CrearComisionCatalogoDto,
+  ) {
     return this.service.crear(tenantId(req), dto);
   }
 

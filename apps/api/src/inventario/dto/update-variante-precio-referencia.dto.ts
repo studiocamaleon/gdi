@@ -10,7 +10,7 @@ export class UpdateVariantePrecioReferenciaDto {
       }
       return Number(normalized);
     }
-    return value;
+    return value as unknown;
   })
   @IsNumber()
   @Min(0)

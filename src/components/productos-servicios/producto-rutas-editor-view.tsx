@@ -9,9 +9,9 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { HumanSelect } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -32,9 +32,10 @@ import type { ProductoDetalle, RutaListItem } from "@/lib/productos-servicios";
 interface Props {
   producto: ProductoDetalle;
   rutasDisponibles: RutaListItem[];
+  embedded?: boolean;
 }
 
-export function ProductoRutasEditorView({ producto, rutasDisponibles }: Props) {
+export function ProductoRutasEditorView({ producto, rutasDisponibles, embedded = false }: Props) {
   const router = useRouter();
   const [agregando, setAgregando] = React.useState(false);
   const [nuevaRutaId, setNuevaRutaId] = React.useState("");
@@ -98,18 +99,22 @@ export function ProductoRutasEditorView({ producto, rutasDisponibles }: Props) {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className={embedded ? "space-y-6" : "flex flex-1 flex-col gap-6 p-6"}>
       <div className="flex flex-col gap-2">
-        <Link
-          href={`/productos-servicios/${producto.id}`}
-          className="text-muted-foreground hover:text-foreground inline-flex items-center text-sm"
-        >
-          <ArrowLeftIcon className="mr-1 size-4" />
-          Volver a {producto.nombre}
-        </Link>
+        {!embedded && (
+          <Link
+            href={`/productos-servicios/${producto.id}`}
+            className="text-muted-foreground hover:text-foreground inline-flex items-center text-sm"
+          >
+            <ArrowLeftIcon className="mr-1 size-4" />
+            Volver a {producto.nombre}
+          </Link>
+        )}
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Rutas alternativas</h1>
+            <h1 className={embedded ? "text-lg font-semibold tracking-tight" : "text-2xl font-semibold tracking-tight"}>
+              Rutas alternativas
+            </h1>
             <p className="text-muted-foreground text-sm">
               Asociar/quitar rutas reusables a este producto. La ruta preferida es la default
               al cotizar.
@@ -135,18 +140,18 @@ export function ProductoRutasEditorView({ producto, rutasDisponibles }: Props) {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="ruta">Ruta del catálogo</Label>
-                  <Select value={nuevaRutaId} onValueChange={(v) => setNuevaRutaId(v ?? "")}>
-                    <SelectTrigger id="ruta">
-                      <SelectValue placeholder="Elegí una ruta..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {rutasParaAgregar.map((r) => (
-                        <SelectItem key={r.id} value={r.id}>
-                          {r.nombre} ({r.pasos.length} pasos)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <HumanSelect
+                    id="ruta"
+                    value={nuevaRutaId}
+                    onValueChange={(v) => setNuevaRutaId(v || "")}
+                    options={rutasParaAgregar.map((r) => ({
+                      value: r.id,
+                      label: r.nombre,
+                      code: r.codigo,
+                      description: `v${r.versionActual} · ${r.pasos.length} pasos`,
+                    }))}
+                    placeholder="Elegí una ruta..."
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="nombre">Nombre humano de la alternativa</Label>
@@ -220,7 +225,7 @@ export function ProductoRutasEditorView({ producto, rutasDisponibles }: Props) {
                   Configurados: {ra.configPasos.length}/{ra.ruta.pasos.length}
                 </div>
                 <div className="flex items-center gap-2 pt-2">
-                  <Link href={`/productos-servicios/${producto.id}/rutas/${ra.id}`}>
+                  <Link href={`/productos-servicios/${producto.id}?tab=pasos&rutaAltId=${ra.id}`}>
                     <Button variant="default" size="sm">
                       <CogIcon className="mr-1 size-3" />
                       Configurar pasos

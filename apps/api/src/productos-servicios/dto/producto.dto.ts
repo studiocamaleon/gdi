@@ -27,7 +27,7 @@ export class CrearProductoDto {
   @IsString()
   @IsNotEmpty()
   @Length(3, 50)
-  @Matches(/^[A-Za-z0-9_\-]+$/, {
+  @Matches(/^[A-Za-z0-9_-]+$/, {
     message: 'Código solo letras/números/_/-, sin espacios',
   })
   codigo!: string;

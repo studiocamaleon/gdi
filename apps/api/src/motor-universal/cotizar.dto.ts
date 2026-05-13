@@ -79,6 +79,10 @@ export class JobContextDto {
 
   @IsOptional()
   @IsObject()
+  slotMateriales?: Record<string, string>;
+
+  @IsOptional()
+  @IsObject()
   configPasoRuntime?: Record<string, Record<string, unknown>>;
 }
 

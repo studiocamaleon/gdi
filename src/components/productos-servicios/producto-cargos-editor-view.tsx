@@ -9,14 +9,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { HumanSelect, optionFromLabel } from "@/components/ui/human-select";
 import {
   Sheet,
   SheetContent,
@@ -42,11 +35,12 @@ import {
 interface Props {
   producto: ProductoDetalle;
   catalogoCargos: CargoDirectoCatalogo[];
+  embedded?: boolean;
 }
 
 const MODOS_ACTIVACION = ["OBLIGATORIO", "OPCIONAL", "CONDICIONAL"] as const;
 
-export function ProductoCargosEditorView({ producto, catalogoCargos }: Props) {
+export function ProductoCargosEditorView({ producto, catalogoCargos, embedded = false }: Props) {
   const router = useRouter();
   const [openSheet, setOpenSheet] = React.useState(false);
   const [guardando, setGuardando] = React.useState(false);
@@ -98,18 +92,22 @@ export function ProductoCargosEditorView({ producto, catalogoCargos }: Props) {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className={embedded ? "space-y-6" : "flex flex-1 flex-col gap-6 p-6"}>
       <div className="flex flex-col gap-2">
-        <Link
-          href={`/productos-servicios/${producto.id}`}
-          className="text-muted-foreground hover:text-foreground inline-flex items-center text-sm"
-        >
-          <ArrowLeftIcon className="mr-1 size-4" />
-          Volver a {producto.nombre}
-        </Link>
+        {!embedded && (
+          <Link
+            href={`/productos-servicios/${producto.id}`}
+            className="text-muted-foreground hover:text-foreground inline-flex items-center text-sm"
+          >
+            <ArrowLeftIcon className="mr-1 size-4" />
+            Volver a {producto.nombre}
+          </Link>
+        )}
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Cargos directos del producto</h1>
+            <h1 className={embedded ? "text-lg font-semibold tracking-tight" : "text-2xl font-semibold tracking-tight"}>
+              Cargos directos del producto
+            </h1>
             <p className="text-muted-foreground text-sm">
               Cargos a nivel cotización (ej: viático, recargo urgencia). Se ofrecen al
               comercial al cotizar este producto.
@@ -145,51 +143,31 @@ export function ProductoCargosEditorView({ producto, catalogoCargos }: Props) {
                     label="Cargo del catálogo"
                     tooltip="Elegí un cargo de la lista que ya creaste en el catálogo (viático, recargo, tercerización, etc.)."
                   />
-                  <Select
+                  <HumanSelect
                     value={cargoSeleccionado}
                     onValueChange={(v) => setCargoSeleccionado(v ?? "")}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Elegí cargo..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {disponibles.map((c) => {
-                        const lblCalc = getLabel(modoCalculoCargoLabels, c.modoCalculo);
-                        return (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.nombre}
-                            <span className="text-muted-foreground ml-1 text-xs">
-                              · {lblCalc.label}
-                            </span>
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
+                    options={disponibles.map((c) => {
+                      const lblCalc = getLabel(modoCalculoCargoLabels, c.modoCalculo);
+                      return {
+                        value: c.id,
+                        label: c.nombre,
+                        code: c.codigo,
+                        description: lblCalc.label,
+                      };
+                    })}
+                    placeholder="Elegí cargo..."
+                  />
                 </div>
                 <div className="space-y-2">
                   <LabelConTooltip
                     label="¿Cuándo se aplica?"
                     tooltip={getLabel(modoActivacionLabels, modoActivacion).descripcion}
                   />
-                  <Select
+                  <HumanSelect
                     value={modoActivacion}
                     onValueChange={(v) => setModoActivacion(v ?? "OPCIONAL")}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MODOS_ACTIVACION.map((m) => {
-                        const lbl = getLabel(modoActivacionLabels, m);
-                        return (
-                          <SelectItem key={m} value={m}>
-                            {lbl.label}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
+                    options={MODOS_ACTIVACION.map((m) => optionFromLabel(m, modoActivacionLabels))}
+                  />
                   <p className="text-muted-foreground text-xs">
                     {getLabel(modoActivacionLabels, modoActivacion).descripcion}
                   </p>

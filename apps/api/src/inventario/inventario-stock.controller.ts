@@ -100,7 +100,10 @@ export class InventarioStockController {
   }
 
   @Get('stock')
-  getStock(@CurrentSession() auth: CurrentAuth, @Query() query: GetStockQueryDto) {
+  getStock(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() query: GetStockQueryDto,
+  ) {
     return this.inventarioService.getStockActual(auth, query);
   }
 

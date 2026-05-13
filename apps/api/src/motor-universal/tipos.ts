@@ -56,6 +56,8 @@ export interface JobContext {
   zonaInstalacion?: string;
   /** Map booleano: opcionales activados por el comercial (key = configPasoId). */
   opcionalesActivados?: Record<string, boolean>;
+  /** Materiales elegidos explícitamente por el comercial (key = configPasoId_slotCodigo). */
+  slotMateriales?: Record<string, string>;
   /** Configuración runtime de cada paso (key = configPasoId). */
   configPasoRuntime?: Record<string, Record<string, unknown>>;
   /** Cualquier otro campo dinámico que el comercial cargue. */
@@ -186,7 +188,11 @@ export interface PasoEjecutado {
 
 /** Resultado del nesting visible al consumidor (motor, frontend). */
 export interface NestingEjecutado {
-  algorithm: 'shelf-rollo' | 'grid-2d-single' | 'grid-2d-multi';
+  algorithm:
+    | 'shelf-rollo'
+    | 'grid-2d-single'
+    | 'grid-2d-multi'
+    | 'packingsolver-rectangle';
   /** Cantidad calculada en su unidad (m_lineales, pliegos, m2, piezas). */
   cantidadCalculada: number;
   unidad: 'm_lineales' | 'pliegos' | 'm2' | 'piezas';
@@ -217,6 +223,10 @@ export interface NestingEjecutado {
   piezasPorPliego?: number;
   consumedLengthMm?: number;
   piezasAcomodadas: number;
+  /** Datos normalizados para que el SVG muestre cómo pensó el motor. */
+  visualConfig?: NestingVisualConfig;
+  /** Overlay/resumen del costeo de sustrato asociado al nesting. */
+  costingPreview?: NestingCostingPreview;
   /** v3.1: solo cuando se aplicó talonario-grouping (post-nesting). */
   talonarioGrouping?: {
     talonariosEfectivos: number;
@@ -232,25 +242,98 @@ export interface NestingEjecutado {
   };
 }
 
+export interface NestingVisualConfig {
+  margins: {
+    leftMm: number;
+    rightMm: number;
+    topMm: number;
+    bottomMm: number;
+  };
+  spacing: {
+    horizontalMm: number;
+    verticalMm: number;
+  };
+  allowRotation: boolean;
+  substrateLabel?: string;
+  usableArea: {
+    xMm: number;
+    yMm: number;
+    widthMm: number;
+    heightMm: number;
+  };
+  panelizado?: {
+    enabled: boolean;
+    mode: 'automatic' | 'manual';
+    axis: 'vertical' | 'horizontal' | null;
+    overlapMm: number | null;
+    maxPanelWidthMm: number | null;
+    distribution: 'equilibrada' | 'libre' | null;
+    widthInterpretation: 'total' | 'util' | null;
+    panelCount: number;
+  };
+}
+
+export interface NestingCostingPreview {
+  strategy: 'simple' | 'm2-exact' | 'consumed-length' | 'plate-segments';
+  label: string;
+  chargedRatio?: number;
+  chargedLengthMm?: number;
+  chargedAreaMm2?: number;
+  chargedBounds?: {
+    xMm: number;
+    yMm: number;
+    widthMm: number;
+    heightMm: number;
+  };
+  wasteAreaMm2?: number;
+  segmentAppliedPct?: number | null;
+}
+
 export interface MaterialEjecutado {
   slotCodigo: string;
   materialVarianteId: string;
+  /** Compatibilidad histórica: antes era el SKU. Se mantiene sin cambios. */
   materialNombre: string;
+  materialSku: string;
+  materialDisplayName: string;
+  materiaPrimaNombre?: string | null;
+  tipoLineaCosto: 'MATERIAL' | 'CONSUMIBLE_MAQUINA';
   cantidad: number;
   unidad: string;
   precioUnitario: number;
   costoTotal: number;
   /** Estrategia usada (simple, m2-exact, etc.). */
   estrategiaCosto: string;
+  /** Desglose cuando el costo del material se calculó desde el nesting. */
+  detalleCosteoNesting?: {
+    strategy: string;
+    totalCost: number;
+    unitPrice: number;
+    pricePerM2: number;
+    fullUnits: number;
+    fullUnitsCost: number;
+    lastUnit: {
+      occupationPct: number;
+      segmentApplied: number | null;
+      cost: number;
+    } | null;
+  };
   /** Modo de selección que se aplicó. */
-  modoSeleccion: 'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO';
+  modoSeleccion:
+    | 'HARDCODED'
+    | 'COMERCIAL_ELIGE'
+    | 'MOTOR_ELIGE_AUTO'
+    | 'MAQUINA_CONSUMIBLE';
 }
 
 export interface CargoDirectoEjecutado {
   cargoDirectoCatalogoId: string;
   cargoCodigo: string;
   cargoNombre: string;
-  modoCalculo: 'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT';
+  modoCalculo:
+    | 'MONTO_FIJO_PLANO'
+    | 'PORCENTAJE_SOBRE_BASE'
+    | 'POR_UNIDAD_INPUT';
   monto: number;
   detalle?: Record<string, unknown>;
 }
@@ -322,6 +405,7 @@ export interface PasoCargado {
   paramsPasoJson: unknown;
   maquinaM1Id: string | null;
   perfilM1Id: string | null;
+  centroCostoId: string | null;
   setupOverrideMin: number | null;
   cleanupOverrideMin: number | null;
   tiempoFijoOverrideMin: number | null;
@@ -331,8 +415,10 @@ export interface PasoCargado {
     codigo: string;
     nombre: string;
     plantilla: string;
+    anchoUtil?: number | null;
     centroCostoPrincipalId?: string | null;
     parametrosTecnicosJson?: Record<string, unknown> | null;
+    consumibles?: ConsumibleMaquinaCargado[];
   };
   /** Detalles del perfil (cargados del JOIN). */
   perfil?: {
@@ -342,6 +428,13 @@ export interface PasoCargado {
     productivityUnit: string | null;
     setupMin: number | null;
     cleanupMin: number | null;
+    detalleJson?: unknown;
+  };
+  /** Centro de costo manual para pasos sin máquina. */
+  centroCosto?: {
+    id: string;
+    codigo: string;
+    nombre: string;
   };
   /**
    * G-F2 — Máquinas candidatas M-2 declaradas para este paso.
@@ -360,8 +453,10 @@ export interface PasoCargado {
       codigo: string;
       nombre: string;
       plantilla: string;
+      anchoUtil?: number | null;
       centroCostoPrincipalId?: string | null;
       parametrosTecnicosJson?: Record<string, unknown> | null;
+      consumibles?: ConsumibleMaquinaCargado[];
     };
     perfilesOperativos: Array<{
       id: string;
@@ -389,6 +484,27 @@ export interface PasoCargado {
   cargosDirectosPaso: CargoPasoCargado[];
 }
 
+export interface ConsumibleMaquinaCargado {
+  id: string;
+  perfilOperativoId: string | null;
+  nombre: string;
+  tipo: string;
+  unidad: string;
+  rendimientoEstimado: number | null;
+  consumoBase: number | null;
+  activo: boolean;
+  detalleJson: unknown;
+  materialVariante: {
+    id: string;
+    sku: string;
+    nombreVariante?: string | null;
+    materiaPrimaNombre?: string | null;
+    precioReferencia: number | null;
+    unidadStock?: string | null;
+    atributosVarianteJson?: Record<string, unknown> | null;
+  };
+}
+
 export interface SlotCargado {
   id: string;
   slotCodigo: string;
@@ -405,6 +521,8 @@ export interface SlotCargado {
   materialVariante?: {
     id: string;
     sku: string;
+    nombreVariante?: string | null;
+    materiaPrimaNombre?: string | null;
     precioReferencia: number | null;
     atributosVarianteJson?: Record<string, unknown> | null;
     /** G-M9: unidad de stock heredada de la materia prima padre. */

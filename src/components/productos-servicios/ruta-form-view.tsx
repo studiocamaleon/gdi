@@ -18,17 +18,9 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { HumanSelect, type HumanSelectOption } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
@@ -98,40 +90,42 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
     if (modo === "crear") return [];
     const originales = pasosOriginales.current;
     const cambios: CambioTipado[] = [];
-    const maxLen = Math.max(originales.length, pasos.length);
-    for (let i = 0; i < maxLen; i++) {
-      const orig = originales[i];
-      const nuevo = pasos[i];
-      if (!orig && nuevo) {
-        cambios.push({ tipo: "AGREGAR_PASO", orden: i + 1, familia: nuevo.familiaCodigo });
-        continue;
+    const usadosNuevos = new Set<number>();
+
+    originales.forEach((orig, origIndex) => {
+      const nuevoIndex = pasos.findIndex(
+        (paso, idx) => !usadosNuevos.has(idx) && paso.familiaCodigo === orig.familiaCodigo,
+      );
+      if (nuevoIndex === -1) {
+        cambios.push({ tipo: "QUITAR_PASO", orden: origIndex + 1, familia: orig.familiaCodigo });
+        return;
       }
-      if (orig && !nuevo) {
-        cambios.push({ tipo: "QUITAR_PASO", orden: i + 1, familia: orig.familiaCodigo });
-        continue;
+      usadosNuevos.add(nuevoIndex);
+      if (nuevoIndex !== origIndex) {
+        cambios.push({
+          tipo: "CAMBIAR_ORDEN",
+          familia: orig.familiaCodigo,
+          antes: origIndex + 1,
+          despues: nuevoIndex + 1,
+        });
       }
-      if (orig && nuevo && orig.familiaCodigo !== nuevo.familiaCodigo) {
-        // Si la familia "nueva" en esta posición existe en otra posición original,
-        // probablemente es un reorder — pero por simplicidad lo marcamos como CAMBIAR_FAMILIA.
-        // El reorder verdadero requiere comparar conjuntos antes que posiciones.
-        const eraEnOtraPosicion = originales.findIndex((p) => p.familiaCodigo === nuevo.familiaCodigo);
-        if (eraEnOtraPosicion !== -1 && eraEnOtraPosicion !== i) {
-          cambios.push({
-            tipo: "CAMBIAR_ORDEN",
-            familia: nuevo.familiaCodigo,
-            antes: eraEnOtraPosicion + 1,
-            despues: i + 1,
-          });
-        } else {
-          cambios.push({
-            tipo: "CAMBIAR_FAMILIA",
-            orden: i + 1,
-            antes: orig.familiaCodigo,
-            despues: nuevo.familiaCodigo,
-          });
-        }
+    });
+
+    pasos.forEach((nuevo, nuevoIndex) => {
+      if (usadosNuevos.has(nuevoIndex)) return;
+      const orig = originales[nuevoIndex];
+      if (orig && !pasos.some((paso) => paso.familiaCodigo === orig.familiaCodigo)) {
+        cambios.push({
+          tipo: "CAMBIAR_FAMILIA",
+          orden: nuevoIndex + 1,
+          antes: orig.familiaCodigo,
+          despues: nuevo.familiaCodigo,
+        });
+        return;
       }
-    }
+      cambios.push({ tipo: "AGREGAR_PASO", orden: nuevoIndex + 1, familia: nuevo.familiaCodigo });
+    });
+
     return cambios;
   }, [pasos, modo]);
 
@@ -158,6 +152,19 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
     },
     [catalogoFamilias],
   );
+
+  const familiaOptions = React.useMemo<HumanSelectOption[]>(() => {
+    return Array.from(familiasPorCategoria.entries()).flatMap(([catCodigo, fams]) => {
+      const cat = catalogoFamilias.categorias.find((c) => c.codigo === catCodigo);
+      return fams.map((f) => ({
+        value: f.codigo,
+        label: f.nombre,
+        code: f.codigo,
+        description: f.descripcion,
+        group: cat?.nombre ?? catCodigo,
+      }));
+    });
+  }, [catalogoFamilias.categorias, familiasPorCategoria]);
 
   const agregarPaso = () => {
     setPasos((prev) => [
@@ -214,6 +221,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
           cambios: cambiosDescripcion || undefined,
         });
         toast.success(`Ruta "${nombre}" actualizada`);
+        router.push("/productos-servicios/rutas");
       }
       router.refresh();
     } catch (err) {
@@ -241,27 +249,24 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
-      <div className="flex flex-col gap-2">
-        <Link
-          href="/productos-servicios/rutas"
-          className="text-muted-foreground hover:text-foreground inline-flex items-center text-sm"
-        >
-          <ArrowLeftIcon className="mr-1 size-4" />
-          Volver a Rutas
+    <div className="content">
+      <div className="space-y-3">
+        <Link href="/productos-servicios/rutas" className="back-link">
+          <ArrowLeftIcon className="size-4" />
+          Rutas de producción
         </Link>
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
+        <div className="page-head wizard-head">
+          <div className="title-block">
+            <h1>
               {modo === "crear" ? "Nueva ruta" : `Editar ruta: ${rutaExistente?.nombre}`}
             </h1>
             {modo === "editar" && (
-              <div className="text-muted-foreground mt-1 flex items-center gap-2 text-xs">
-                <Badge variant="secondary">v{rutaExistente?.versionActual}</Badge>
-                <span className="font-mono">{rutaExistente?.codigo}</span>
+              <div className="sub mt-1 flex items-center gap-2">
+                <span className="tag version">v{rutaExistente?.versionActual}</span>
+                <span className="code">{rutaExistente?.codigo}</span>
                 {(rutaExistente?.productosAlternativas?.length ?? 0) > 0 && (
                   <span>
-                    · usado por {rutaExistente?.productosAlternativas?.length} producto(s)
+                    usado por {rutaExistente?.productosAlternativas?.length} producto(s)
                   </span>
                 )}
               </div>
@@ -273,9 +278,9 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="route-editor">
         {/* Identidad */}
-        <Card className="lg:col-span-1">
+        <Card className="wiz-section">
           <CardHeader>
             <CardTitle>Identidad</CardTitle>
             <CardDescription>Código y nombre de la ruta reusable.</CardDescription>
@@ -351,7 +356,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                     }
                   >
                     {productosAfectados > 0
-                      ? `Recomendado: crear nueva versión. Patch in-place rompería los ${productosAfectados} producto(s) asociados.`
+                      ? `Crear nueva versión preserva los ${productosAfectados} producto(s) como están. Para aplicar el cambio a esos productos, desactivá esta opción.`
                       : "Recomendado: crear nueva versión para preservar trazabilidad histórica."}
                   </p>
                   <label className="flex items-center gap-2 text-sm">
@@ -367,7 +372,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                   {!nuevaVersion && productosAfectados > 0 && (
                     <p className="mt-2 text-xs font-medium text-red-600">
                       ⚠ Patch in-place modificará los {productosAfectados} producto(s)
-                      asociados sin aviso. Considerá crear nueva versión.
+                      asociados y eliminará la configuración de los pasos quitados.
                     </p>
                   )}
                   <Input
@@ -383,7 +388,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
         </Card>
 
         {/* Pasos */}
-        <Card className="lg:col-span-2">
+        <Card className="wiz-section">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -401,41 +406,25 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
           </CardHeader>
           <CardContent className="space-y-2">
             {pasos.length === 0 ? (
-              <p className="text-muted-foreground py-8 text-center text-sm">
+              <p className="section-empty">
                 Sin pasos. Agregá uno para arrancar.
               </p>
             ) : (
               pasos.map((paso, idx) => (
                 <div
                   key={paso.uiKey}
-                  className="bg-muted/30 flex items-center gap-2 rounded-md border p-2"
+                  className="step-row"
                 >
-                  <div className="bg-muted flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
+                  <div className="step-num">
                     {idx + 1}
                   </div>
-                  <Select
+                  <HumanSelect
                     value={paso.familiaCodigo}
-                    onValueChange={(v) => cambiarPaso(idx, v ?? "pre_prensa")}
-                  >
-                    <SelectTrigger className="flex-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from(familiasPorCategoria.entries()).map(([catCodigo, fams]) => {
-                        const cat = catalogoFamilias.categorias.find((c) => c.codigo === catCodigo);
-                        return (
-                          <SelectGroup key={catCodigo}>
-                            <SelectLabel>{cat?.nombre ?? catCodigo}</SelectLabel>
-                            {fams.map((f) => (
-                              <SelectItem key={f.codigo} value={f.codigo}>
-                                {f.nombre}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
+                    onValueChange={(v) => cambiarPaso(idx, v || "pre_prensa")}
+                    options={familiaOptions}
+                    triggerClassName="flex-1"
+                    contentClassName="max-h-80"
+                  />
                   <Button
                     variant="ghost"
                     size="icon"
@@ -468,7 +457,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
 
         {/* Historial de versiones */}
         {modo === "editar" && (rutaExistente?.versiones?.length ?? 0) > 0 && (
-          <Card className="lg:col-span-3">
+          <Card className="wiz-section">
             <CardHeader>
               <div className="flex items-center gap-2">
                 <HistoryIcon className="size-4" />
@@ -492,7 +481,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
         )}
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="route-actions-bar">
         {modo === "editar" ? (
           <Button
             variant="destructive"

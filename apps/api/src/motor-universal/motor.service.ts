@@ -25,6 +25,7 @@ import type {
   CargoDirectoEjecutado,
   CargoPasoCargado,
   NestingEjecutado,
+  NestingCostingPreview,
 } from './tipos';
 import {
   runNestingForPaso,
@@ -32,6 +33,17 @@ import {
   type NestingDispatchResult,
 } from './nesting-dispatcher';
 import { calcularOutputsCanonicos } from './outputs-canonicos';
+import {
+  getConsumableChannelFromDetail,
+  getPerfilConsumableChannels,
+  PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES,
+  type ConsumableChannel,
+} from '../maquinaria/consumibles-impresion';
+import {
+  applyCostingStrategy,
+  type CostingStrategyKind,
+} from '../productos-servicios/nesting/costing';
+import { calculateSustratoToPliegoConversion } from '../productos-servicios/nesting/helpers/sustrato-to-pliego';
 
 /**
  * G-M9 — Resuelve la unidad efectiva de un material consumido. Cuando la
@@ -57,6 +69,90 @@ function unidadEfectivaDeFormula(
     default:
       return unidadStock ? unidadStock.toLowerCase() : 'unidad';
   }
+}
+
+function isNestingCostingStrategy(value: string): value is CostingStrategyKind {
+  return (
+    value === 'm2-exact' ||
+    value === 'consumed-length' ||
+    value === 'plate-segments'
+  );
+}
+
+type UnidadConvertible = {
+  familia: 'masa' | 'volumen' | 'lineal' | 'area' | 'unidad';
+  factorBase: number;
+};
+
+const UNIDADES_CONVERTIBLES: Record<string, UnidadConvertible> = {
+  GRAMO: { familia: 'masa', factorBase: 1 },
+  KG: { familia: 'masa', factorBase: 1000 },
+  ML: { familia: 'volumen', factorBase: 1 },
+  LITRO: { familia: 'volumen', factorBase: 1000 },
+  METRO_LINEAL: { familia: 'lineal', factorBase: 1 },
+  M2: { familia: 'area', factorBase: 1 },
+  UNIDAD: { familia: 'unidad', factorBase: 1 },
+  PIEZA: { familia: 'unidad', factorBase: 1 },
+  HOJA: { familia: 'unidad', factorBase: 1 },
+  PLIEGO: { familia: 'unidad', factorBase: 1 },
+  PAGINA: { familia: 'unidad', factorBase: 1 },
+  A4_EQUIV: { familia: 'unidad', factorBase: 1 },
+};
+
+function normalizarUnidad(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const normalized = value
+    .trim()
+    .toUpperCase()
+    .replaceAll('-', '_')
+    .replaceAll(' ', '_');
+  const aliases: Record<string, string> = {
+    G: 'GRAMO',
+    GR: 'GRAMO',
+    GRAM: 'GRAMO',
+    GRAMOS: 'GRAMO',
+    KILO: 'KG',
+    KILOS: 'KG',
+    L: 'LITRO',
+    LITROS: 'LITRO',
+    MILILITRO: 'ML',
+    MILILITROS: 'ML',
+    M_LINEAL: 'METRO_LINEAL',
+    M_LINEALES: 'METRO_LINEAL',
+    METROS_LINEALES: 'METRO_LINEAL',
+    METRO_CUADRADO: 'M2',
+    METROS_CUADRADOS: 'M2',
+    PAGINAS: 'PAGINA',
+  };
+  return aliases[normalized] ?? normalized;
+}
+
+function precioPorUnidadDeConsumo(
+  precioReferencia: number,
+  unidadStock: string | null | undefined,
+  unidadConsumo: string | null | undefined,
+  rendimientoEstimado: number | null | undefined,
+): number {
+  const stock = normalizarUnidad(unidadStock);
+  const consumo = normalizarUnidad(unidadConsumo);
+  const stockConv = stock ? UNIDADES_CONVERTIBLES[stock] : undefined;
+  const consumoConv = consumo ? UNIDADES_CONVERTIBLES[consumo] : undefined;
+
+  if (
+    stockConv &&
+    consumoConv &&
+    stockConv.familia === consumoConv.familia &&
+    (stockConv.familia !== 'unidad' || stock === consumo)
+  ) {
+    return (precioReferencia / stockConv.factorBase) * consumoConv.factorBase;
+  }
+
+  const rendimiento = Number(rendimientoEstimado ?? 0);
+  if (Number.isFinite(rendimiento) && rendimiento > 0) {
+    return precioReferencia / rendimiento;
+  }
+
+  return precioReferencia;
 }
 
 /**
@@ -127,6 +223,21 @@ export class MotorUniversalService {
     private readonly preciosEspecialesClientes: PreciosEspecialesClientesService,
   ) {}
 
+  private valueToMessage(value: unknown) {
+    if (value === null || value === undefined) {
+      return '?';
+    }
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean' ||
+      typeof value === 'bigint'
+    ) {
+      return String(value);
+    }
+    return JSON.stringify(value);
+  }
+
   async cotizar(input: CotizarInput): Promise<CotizarOutput> {
     const errores: ErrorMotor[] = [];
 
@@ -146,7 +257,8 @@ export class MotorUniversalService {
             codigo: 'producto_no_encontrado',
             severidad: 'ERROR',
             mensaje: err instanceof Error ? err.message : String(err),
-            sugerencia: 'Verificar que el producto y la ruta alternativa existen.',
+            sugerencia:
+              'Verificar que el producto y la ruta alternativa existen.',
           },
         ],
       };
@@ -175,13 +287,22 @@ export class MotorUniversalService {
         altoMm: producto.medidaDefaultAltoMm,
       };
     }
+    if (!jobContext.piezas && jobContext.medidaCustomMm) {
+      jobContext.piezas = [
+        {
+          cantidad: Number(jobContext.cantidad ?? 0),
+          anchoMm: jobContext.medidaCustomMm.anchoMm,
+          altoMm: jobContext.medidaCustomMm.altoMm,
+        },
+      ];
+    }
 
     // 1b. Cargar tarifas horarias publicadas para el período (F.2.10)
     const periodo = input.periodo ?? this.getPeriodoActual();
     const centroIds = Array.from(
       new Set(
         producto.pasos
-          .map((p) => p.maquina?.centroCostoPrincipalId)
+          .map((p) => this.resolveCentroCostoPaso(p).id)
           .filter((id): id is string => Boolean(id)),
       ),
     );
@@ -215,13 +336,18 @@ export class MotorUniversalService {
         jobContext,
         errores,
         tarifasMap,
+        periodo,
         pasosSiguientes,
         outputsAcumulados,
       );
       pasosEjecutados.push(ejecucion);
 
       // Si este paso generó errores, marcar para no seguir
-      if (errores.some((e) => e.rutaPasoId === paso.rutaPasoId && e.severidad === 'ERROR')) {
+      if (
+        errores.some(
+          (e) => e.rutaPasoId === paso.rutaPasoId && e.severidad === 'ERROR',
+        )
+      ) {
         huboErrorEnPasoAnterior = true;
         continue;
       }
@@ -255,22 +381,28 @@ export class MotorUniversalService {
     );
 
     // 5. COMPONER RESULTADO
-    const tiempoTotal = pasosEjecutados.reduce((acc, p) => acc + (p.tiempo?.costo ?? 0), 0);
+    const tiempoTotal = pasosEjecutados.reduce(
+      (acc, p) => acc + (p.tiempo?.costo ?? 0),
+      0,
+    );
     const materialesTotal = pasosEjecutados.reduce(
-      (acc, p) => acc + (p.materiales?.reduce((m, mat) => m + mat.costoTotal, 0) ?? 0),
+      (acc, p) =>
+        acc + (p.materiales?.reduce((m, mat) => m + mat.costoTotal, 0) ?? 0),
       0,
     );
     const cargosDirectosPasoTotal = pasosEjecutados.reduce(
-      (acc, p) => acc + (p.cargosDirectosPaso?.reduce((c, cd) => c + cd.monto, 0) ?? 0),
+      (acc, p) =>
+        acc + (p.cargosDirectosPaso?.reduce((c, cd) => c + cd.monto, 0) ?? 0),
       0,
     );
     const cargosDirectosCotizacionTotal = cargosDirectosCotizacion.reduce(
       (acc, c) => acc + c.monto,
       0,
     );
-    const cargosDirectosTotal = cargosDirectosPasoTotal + cargosDirectosCotizacionTotal;
+    const cargosDirectosTotal =
+      cargosDirectosPasoTotal + cargosDirectosCotizacionTotal;
     const total = tiempoTotal + materialesTotal + cargosDirectosTotal;
-    const cantidadEfectiva = (jobContext.cantidad ?? 1);
+    const cantidadEfectiva = jobContext.cantidad ?? 1;
 
     const cotizacion: CotizacionResultado = {
       productoId: producto.productoId,
@@ -316,7 +448,8 @@ export class MotorUniversalService {
         comisiones: desglose.snapshots.comisiones,
         precioEspecialCliente: desglose.snapshots.precioEspecialCliente
           ? {
-              precioEspecialId: desglose.snapshots.precioEspecialCliente.precioEspecialId,
+              precioEspecialId:
+                desglose.snapshots.precioEspecialCliente.precioEspecialId,
               clienteId: desglose.snapshots.precioEspecialCliente.clienteId,
             }
           : null,
@@ -349,7 +482,11 @@ export class MotorUniversalService {
    */
   async cotizarYGuardar(
     input: CotizarInput & { cotizacionId?: string },
-  ): Promise<{ result: CotizarOutput; cotizacionId?: string; cotizacionItemId?: string }> {
+  ): Promise<{
+    result: CotizarOutput;
+    cotizacionId?: string;
+    cotizacionItemId?: string;
+  }> {
     const result = await this.cotizar(input);
     if (!result.exitoso || !result.cotizacion) {
       return { result };
@@ -442,11 +579,14 @@ export class MotorUniversalService {
           cargosDirectosCotizacion: result.cotizacion.cargosDirectosCotizacion,
         } as never,
         // Sprint 5.a — snapshots inmutables del Tab Precio
-        precioConfigSnapshotJson: (precioResultado?.snapshots.precioConfig ?? null) as never,
-        impuestosSnapshotJson: (precioResultado?.snapshots.impuestos ?? null) as never,
-        comisionesSnapshotJson: (precioResultado?.snapshots.comisiones ?? null) as never,
-        precioEspecialClienteSnapshotJson:
-          (precioResultado?.snapshots.precioEspecialCliente ?? null) as never,
+        precioConfigSnapshotJson: (precioResultado?.snapshots.precioConfig ??
+          null) as never,
+        impuestosSnapshotJson: (precioResultado?.snapshots.impuestos ??
+          null) as never,
+        comisionesSnapshotJson: (precioResultado?.snapshots.comisiones ??
+          null) as never,
+        precioEspecialClienteSnapshotJson: (precioResultado?.snapshots
+          .precioEspecialCliente ?? null) as never,
       },
     });
 
@@ -484,7 +624,9 @@ export class MotorUniversalService {
       precioConfig: TabPrecioConfig;
       impuestos: PrecioImpuestoSnapshot[];
       comisiones: PrecioComisionSnapshot[];
-      precioEspecialCliente: import('../productos-servicios/precio/aplicar-precio.types').PrecioEspecialClienteSnapshot | null;
+      precioEspecialCliente:
+        | import('../productos-servicios/precio/aplicar-precio.types').PrecioEspecialClienteSnapshot
+        | null;
     };
   } | null> {
     // 1. Producto y su precio standard
@@ -493,11 +635,14 @@ export class MotorUniversalService {
       select: { precioConfigJson: true },
     });
     if (!productoDb?.precioConfigJson) return null;
-    const precioStandard = productoDb.precioConfigJson as unknown as TabPrecioConfig;
+    const precioStandard =
+      productoDb.precioConfigJson as unknown as TabPrecioConfig;
 
     // 2. Override por cliente (si hay clienteId)
     let precioConfigEfectivo: TabPrecioConfig = precioStandard;
-    let precioEspecialSnapshot: import('../productos-servicios/precio/aplicar-precio.types').PrecioEspecialClienteSnapshot | null = null;
+    let precioEspecialSnapshot:
+      | import('../productos-servicios/precio/aplicar-precio.types').PrecioEspecialClienteSnapshot
+      | null = null;
     if (args.clienteId) {
       const override = await this.preciosEspecialesClientes.buscarActivo(
         args.tenantId,
@@ -505,7 +650,8 @@ export class MotorUniversalService {
         args.clienteId,
       );
       if (override) {
-        precioConfigEfectivo = override.configJson as unknown as TabPrecioConfig;
+        precioConfigEfectivo =
+          override.configJson as unknown as TabPrecioConfig;
         precioEspecialSnapshot = {
           precioEspecialId: override.id,
           clienteId: override.clienteId,
@@ -528,20 +674,23 @@ export class MotorUniversalService {
       }),
     ]);
 
-    const impuestosSnapshot: PrecioImpuestoSnapshot[] = impuestosAplicados.map((ia) => ({
-      catalogoId: ia.impuestoCatalogo.id,
-      codigo: ia.impuestoCatalogo.codigo,
-      nombre: ia.impuestoCatalogo.nombre,
-      porcentaje: ia.impuestoCatalogo.porcentaje,
-      orden: ia.orden,
-    }));
-    const comisionesSnapshot: PrecioComisionSnapshot[] = comisionesAplicadas.map((ca) => ({
-      catalogoId: ca.comisionCatalogo.id,
-      codigo: ca.comisionCatalogo.codigo,
-      nombre: ca.comisionCatalogo.nombre,
-      porcentaje: ca.comisionCatalogo.porcentaje,
-      orden: ca.orden,
-    }));
+    const impuestosSnapshot: PrecioImpuestoSnapshot[] = impuestosAplicados.map(
+      (ia) => ({
+        catalogoId: ia.impuestoCatalogo.id,
+        codigo: ia.impuestoCatalogo.codigo,
+        nombre: ia.impuestoCatalogo.nombre,
+        porcentaje: ia.impuestoCatalogo.porcentaje,
+        orden: ia.orden,
+      }),
+    );
+    const comisionesSnapshot: PrecioComisionSnapshot[] =
+      comisionesAplicadas.map((ca) => ({
+        catalogoId: ca.comisionCatalogo.id,
+        codigo: ca.comisionCatalogo.codigo,
+        nombre: ca.comisionCatalogo.nombre,
+        porcentaje: ca.comisionCatalogo.porcentaje,
+        orden: ca.orden,
+      }));
 
     // 4. Aplicar
     const out = this.aplicarPrecio.aplicar({
@@ -585,6 +734,7 @@ export class MotorUniversalService {
     jobContext: JobContext,
     errores: ErrorMotor[],
     tarifasMap: Map<string, unknown>,
+    periodo: string,
     pasosSiguientes: PasoCargado[] = [],
     outputsAcumulados: Set<string> = new Set(),
   ): Promise<PasoEjecutado> {
@@ -648,11 +798,35 @@ export class MotorUniversalService {
 
     // d) NESTING (G-M1 — F.2.13): si el paso usa CALCULADO_POR_PASO y la familia
     //    está soportada por el dispatcher, ejecutamos el algoritmo correspondiente
-    //    (shelf-rollo o grid-2d-single) y obtenemos cantidadCalculada con
-    //    desperdicio real. Resultado se propaga a tiempo y materiales.
+    //    y obtenemos cantidadCalculada con desperdicio real. Para impresión por
+    //    hoja mantenemos compatibilidad con rutas viejas: si está configurada
+    //    como HEREDAR pero no existe output previo de pre-prensa, calcula su
+    //    propio nesting en el paso productivo.
     let nestingDispatch: NestingDispatchResult | null = null;
-    if (paso.mecanismoCantidad === 'CALCULADO_POR_PASO') {
+    const debeCalcularNestingProductivo =
+      paso.mecanismoCantidad === 'CALCULADO_POR_PASO' ||
+      this.debeAutocalcularNestingSiNoHayOutput(paso, jobContext) ||
+      this.debeCalcularNestingLaminado(paso);
+    if (debeCalcularNestingProductivo) {
       nestingDispatch = runNestingForPaso(paso, jobContext, materialPreliminar);
+    }
+    if (
+      paso.familiaCodigo === 'laminado' &&
+      materialPreliminar &&
+      this.debeCalcularNestingLaminado(paso) &&
+      !nestingDispatch
+    ) {
+      errores.push(
+        this.errorNestingLaminadoInvalido(paso, jobContext, materialPreliminar),
+      );
+      return {
+        rutaPasoId: paso.rutaPasoId,
+        rutaPasoOrden: paso.rutaPasoOrden,
+        familiaCodigo: paso.familiaCodigo,
+        configPasoId: paso.configPasoId,
+        activado: true,
+        costoTotal: 0,
+      };
     }
 
     // d.1) G-M2 — Look-ahead pre_prensa: si el paso es pre_prensa, busca el
@@ -680,6 +854,7 @@ export class MotorUniversalService {
       jobContext,
       errores,
       tarifasMap,
+      periodo,
       nestingDispatch,
     );
 
@@ -687,8 +862,17 @@ export class MotorUniversalService {
     //    Si hay nesting con cantidad calculada, usamos esa cantidad para fórmulas
     //    compatibles (por_metro_lineal con shelf-rollo, por_unidad_productiva con
     //    grid-2d-single → pliegos).
-    const materiales = await this.calcularMateriales(paso, jobContext, nestingDispatch);
-    const materialesCosto = materiales.reduce((acc, m) => acc + m.costoTotal, 0);
+    const materiales = await this.calcularMateriales(
+      pasoConPerfil,
+      jobContext,
+      nestingDispatch,
+      errores,
+      materialPreliminar,
+    );
+    const materialesCosto = materiales.reduce(
+      (acc, m) => acc + m.costoTotal,
+      0,
+    );
 
     // g) CARGOS DIRECTOS A NIVEL PASO (G-M3 / D.6)
     //    Base de PORCENTAJE_SOBRE_BASE = subtotal del PASO (tiempo + materiales).
@@ -698,7 +882,10 @@ export class MotorUniversalService {
       jobContext,
       subtotalPaso,
     );
-    const cargosPasoTotal = cargosDirectosPaso.reduce((acc, c) => acc + c.monto, 0);
+    const cargosPasoTotal = cargosDirectosPaso.reduce(
+      (acc, c) => acc + c.monto,
+      0,
+    );
 
     const nestingResult: NestingEjecutado | undefined = nestingDispatch
       ? {
@@ -711,6 +898,11 @@ export class MotorUniversalService {
           piezasPorPliego: nestingDispatch.piezasPorPliego,
           consumedLengthMm: nestingDispatch.consumedLengthMm,
           piezasAcomodadas: nestingDispatch.piezasAcomodadas,
+          visualConfig: nestingDispatch.visualConfig,
+          costingPreview: this.buildNestingCostingPreview(
+            nestingDispatch,
+            materiales,
+          ),
           talonarioGrouping: nestingDispatch.talonarioGrouping,
         }
       : undefined;
@@ -769,9 +961,8 @@ export class MotorUniversalService {
       const activado = this.evaluarActivacionCargo(cargo, jobContext);
       if (!activado) continue;
 
-      const config = (cargo.configOverrideJson ?? cargo.catalogo.configJson) as
-        | Record<string, unknown>
-        | null;
+      const config = (cargo.configOverrideJson ??
+        cargo.catalogo.configJson) as Record<string, unknown> | null;
       const monto = this.calcularMontoCargo(
         cargo.catalogo.modoCalculo,
         config,
@@ -792,6 +983,31 @@ export class MotorUniversalService {
       });
     }
     return ejecutados;
+  }
+
+  private debeAutocalcularNestingSiNoHayOutput(
+    paso: PasoCargado,
+    jobContext: JobContext,
+  ): boolean {
+    if (paso.mecanismoCantidad !== 'HEREDAR_DEL_OUTPUT_CANONICO') {
+      return false;
+    }
+    if (paso.familiaCodigo !== 'impresion_por_hoja') {
+      return false;
+    }
+
+    const config = (paso.mecanismoCantidadConfigJson ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const campoExplicito =
+      typeof config.campoOutput === 'string' ? config.campoOutput : null;
+    const campo =
+      campoExplicito ?? defaultOutputParaHeredar(paso.familiaCodigo);
+    if (!campo) return true;
+
+    const valor = (jobContext as Record<string, unknown>)[campo];
+    return !(typeof valor === 'number' && Number.isFinite(valor) && valor > 0);
   }
 
   /** D.1 — Decidir si el paso se activa. */
@@ -836,24 +1052,26 @@ export class MotorUniversalService {
       };
     }
 
-    return { activado: false, razon: `Modo de activación desconocido: ${modo}` };
+    return {
+      activado: false,
+      razon: `Modo de activación desconocido: ${modo}`,
+    };
   }
 
   /** D.4 — Calcular tiempo del paso (versión MVP + F.2.10 tarifas reales). */
   private calcularTiempo(
     paso: PasoCargado,
     jobContext: JobContext,
-    _errores: ErrorMotor[],
+    errores: ErrorMotor[],
     tarifasMap: Map<string, unknown>,
+    periodo: string,
     nestingDispatch: NestingDispatchResult | null = null,
   ): NonNullable<PasoEjecutado['tiempo']> {
     const modoTiempo = paso.modoTiempo ?? 'T-1';
 
     // Setup, cleanup, tiempoFijo: jerarquía override > perfil > familia > 0
-    const setupMin =
-      paso.setupOverrideMin ?? paso.perfil?.setupMin ?? 0;
-    const cleanupMin =
-      paso.cleanupOverrideMin ?? paso.perfil?.cleanupMin ?? 0;
+    const setupMin = paso.setupOverrideMin ?? paso.perfil?.setupMin ?? 0;
+    const cleanupMin = paso.cleanupOverrideMin ?? paso.perfil?.cleanupMin ?? 0;
     const tiempoFijoMin = paso.tiempoFijoOverrideMin ?? 0;
 
     let runMin = 0;
@@ -877,9 +1095,10 @@ export class MotorUniversalService {
       //     `runMin = (cantidadEfectiva × multiplicadores) / productividad × 60`.
       //  4) Fallback: 0 (tiempo fijo y/o cleanup cubren el caso).
       const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
-      const campoOverride = typeof params.campoHorasJobContext === 'string'
-        ? params.campoHorasJobContext
-        : null;
+      const campoOverride =
+        typeof params.campoHorasJobContext === 'string'
+          ? params.campoHorasJobContext
+          : null;
       const horasOverride = campoOverride
         ? Number((jobContext as Record<string, unknown>)[campoOverride])
         : NaN;
@@ -891,8 +1110,16 @@ export class MotorUniversalService {
       } else if (Number.isFinite(horasParams) && horasParams > 0) {
         runMin = horasParams * 60;
       } else if (productividadPropia > 0) {
-        let cantidadEfectiva = this.resolverCantidad(paso, jobContext, nestingDispatch);
-        cantidadEfectiva = this.aplicarMultiplicadores(cantidadEfectiva, paso, jobContext);
+        let cantidadEfectiva = this.resolverCantidad(
+          paso,
+          jobContext,
+          nestingDispatch,
+        );
+        cantidadEfectiva = this.aplicarMultiplicadores(
+          cantidadEfectiva,
+          paso,
+          jobContext,
+        );
         runMin = (cantidadEfectiva / productividadPropia) * 60;
       }
     } else if (modoTiempo === 'T-3') {
@@ -900,9 +1127,17 @@ export class MotorUniversalService {
       const productividad = Number(paso.perfil?.productivityValue ?? 0);
       if (productividad > 0) {
         // F.2.3 — Mecanismo de cantidad (nesting tiene prioridad si aplica)
-        let cantidadEfectiva = this.resolverCantidad(paso, jobContext, nestingDispatch);
+        let cantidadEfectiva = this.resolverCantidad(
+          paso,
+          jobContext,
+          nestingDispatch,
+        );
         // F.2.6 — aplicar multiplicadores activos
-        cantidadEfectiva = this.aplicarMultiplicadores(cantidadEfectiva, paso, jobContext);
+        cantidadEfectiva = this.aplicarMultiplicadores(
+          cantidadEfectiva,
+          paso,
+          jobContext,
+        );
         // Para T-3 con shelf-rollo, la productividad suele estar en m²/h y la
         // cantidadCalculada del nesting está en metros lineales. Convertimos a m²
         // multiplicando por el ancho útil del rollo (que viene en el sustrato).
@@ -910,9 +1145,12 @@ export class MotorUniversalService {
           nestingDispatch?.algorithm === 'shelf-rollo' &&
           paso.perfil?.productivityUnit === 'M2_H'
         ) {
-          const ancho = nestingDispatch.substrates[0]?.kind === 'roll'
-            ? nestingDispatch.substrates[0].widthMm / 1000
-            : 0;
+          const ancho =
+            nestingDispatch.visualConfig?.usableArea.widthMm != null
+              ? nestingDispatch.visualConfig.usableArea.widthMm / 1000
+              : nestingDispatch.substrates[0]?.kind === 'roll'
+                ? nestingDispatch.substrates[0].widthMm / 1000
+                : 0;
           cantidadEfectiva = nestingDispatch.cantidadCalculada * ancho; // m_lin × ancho_m = m²
         }
         runMin = (cantidadEfectiva / productividad) * 60;
@@ -921,26 +1159,51 @@ export class MotorUniversalService {
 
     const totalMin = Math.ceil(setupMin + runMin + cleanupMin + tiempoFijoMin);
 
-    // F.2.10 — Tarifa horaria. Prioridades:
-    //   1. Centro de costo de la máquina (período publicado) — comportamiento principal.
-    //   2. G-M5: `paramsPaso.tarifaHoraOperario` para pasos M-0 (T-2 sin máquina).
-    //   3. G-M5: `paramsPaso.tarifaFija` (monto absoluto del paso, no por hora).
-    //      Cuando se declara tarifaFija el costo ES la tarifaFija, ignorando totalMin
-    //      × tarifaHora. Útil para `diseno_grafico` cobrado como cargo único.
+    // F.2.10 — Tarifa horaria. Prioridad:
+    //   1. Centro de costo principal de la máquina.
+    //   2. Centro de costo manual del paso cuando no hay máquina.
     let tarifaHora = 0;
-    if (paso.maquina?.centroCostoPrincipalId) {
-      const tarifaDecimal = tarifasMap.get(paso.maquina.centroCostoPrincipalId);
+    const centroCosto = this.resolveCentroCostoPaso(paso);
+    if (centroCosto.id) {
+      const tarifaDecimal = tarifasMap.get(centroCosto.id);
       if (tarifaDecimal != null) {
         tarifaHora = Number(tarifaDecimal);
       }
     }
-    const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
-    if (tarifaHora === 0) {
-      const tarifaOperario = Number(params.tarifaHoraOperario ?? 0);
-      if (tarifaOperario > 0) tarifaHora = tarifaOperario;
+
+    if (totalMin > 0 && !centroCosto.id) {
+      errores.push({
+        codigo: 'centro_costo_paso_faltante',
+        severidad: 'ERROR',
+        mensaje:
+          'El paso no tiene centro de costo aplicable para calcular su tarifa.',
+        rutaPasoId: paso.rutaPasoId,
+        rutaPasoOrden: paso.rutaPasoOrden,
+        familiaCodigo: paso.familiaCodigo,
+        sugerencia:
+          'Asigná una máquina con centro de costo principal o elegí un centro de costo horario en la configuración del paso.',
+      });
+    } else if (
+      totalMin > 0 &&
+      centroCosto.id &&
+      !tarifasMap.has(centroCosto.id)
+    ) {
+      errores.push({
+        codigo: 'centro_costo_sin_tarifa_publicada',
+        severidad: 'ERROR',
+        mensaje: `El centro de costo ${centroCosto.nombre ?? centroCosto.id} no tiene tarifa publicada para ${periodo}.`,
+        rutaPasoId: paso.rutaPasoId,
+        rutaPasoOrden: paso.rutaPasoOrden,
+        familiaCodigo: paso.familiaCodigo,
+        contexto: {
+          centroCostoId: centroCosto.id,
+          centroCostoNombre: centroCosto.nombre,
+        },
+        sugerencia:
+          'Calculá y publicá la tarifa del centro de costo para el período antes de cotizar.',
+      });
     }
-    const tarifaFija = Number(params.tarifaFija ?? 0);
-    const costo = tarifaFija > 0 ? tarifaFija : (totalMin / 60) * tarifaHora;
+    const costo = (totalMin / 60) * tarifaHora;
 
     return {
       setupMin,
@@ -953,17 +1216,259 @@ export class MotorUniversalService {
     };
   }
 
+  private resolveCentroCostoPaso(paso: PasoCargado): {
+    id: string | null;
+    nombre: string | null;
+  } {
+    if (paso.maquina?.centroCostoPrincipalId) {
+      return {
+        id: paso.maquina.centroCostoPrincipalId,
+        nombre: null,
+      };
+    }
+    return {
+      id: paso.centroCostoId,
+      nombre: paso.centroCosto?.nombre ?? null,
+    };
+  }
+
+  private buildNestingCostingPreview(
+    nestingDispatch: NestingDispatchResult,
+    materiales: MaterialEjecutado[],
+  ): NestingCostingPreview | undefined {
+    const substrate = nestingDispatch.substrates[0];
+    if (!substrate) return undefined;
+
+    const materialConCosteo = materiales.find(
+      (material) => material.detalleCosteoNesting,
+    );
+    const materialPrincipal =
+      materialConCosteo ??
+      materiales.find((material) => material.modoSeleccion !== 'MAQUINA_CONSUMIBLE') ??
+      materiales[0];
+
+    const detail = materialConCosteo?.detalleCosteoNesting;
+    const strategy =
+      detail?.strategy ??
+      (nestingDispatch.algorithm === 'shelf-rollo'
+        ? 'consumed-length'
+        : materialPrincipal?.estrategiaCosto === 'simple'
+          ? 'simple'
+          : undefined);
+
+    if (
+      strategy !== 'simple' &&
+      strategy !== 'm2-exact' &&
+      strategy !== 'consumed-length' &&
+      strategy !== 'plate-segments'
+    ) {
+      return undefined;
+    }
+
+    const widthMm = substrate.widthMm;
+    const heightMm =
+      substrate.kind === 'roll' ? substrate.lengthMm : substrate.heightMm;
+    const totalAreaMm2 =
+      nestingDispatch.substrates.reduce((acc, sub) => {
+        if (sub.kind === 'roll') return acc + sub.widthMm * sub.lengthMm;
+        return acc + sub.widthMm * sub.heightMm * sub.count;
+      }, 0) || widthMm * heightMm;
+    const placedAreaMm2 = nestingDispatch.placements.reduce(
+      (acc, placement) => acc + placement.widthMm * placement.heightMm,
+      0,
+    );
+
+    if (strategy === 'm2-exact') {
+      return {
+        strategy,
+        label: 'm² exactos de piezas',
+        chargedAreaMm2: placedAreaMm2,
+        wasteAreaMm2: 0,
+      };
+    }
+
+    if (strategy === 'consumed-length') {
+      const chargedLengthMm =
+        nestingDispatch.consumedLengthMm ??
+        nestingDispatch.metricasRaw.largoConsumidoMm ??
+        heightMm;
+      const ratio = heightMm > 0 ? Math.min(1, chargedLengthMm / heightMm) : 0;
+      const chargedAreaMm2 = widthMm * chargedLengthMm;
+      return {
+        strategy,
+        label:
+          substrate.kind === 'roll'
+            ? 'largo consumido del rollo'
+            : 'largo consumido del sustrato',
+        chargedLengthMm,
+        chargedRatio: ratio,
+        chargedAreaMm2,
+        chargedBounds: {
+          xMm: 0,
+          yMm: 0,
+          widthMm,
+          heightMm: chargedLengthMm,
+        },
+        wasteAreaMm2: Math.max(0, chargedAreaMm2 - placedAreaMm2),
+      };
+    }
+
+    if (strategy === 'plate-segments') {
+      const segmentAppliedPct =
+        detail?.lastUnit?.segmentApplied ??
+        (detail && detail.fullUnits > 0 && !detail.lastUnit ? 100 : null);
+      const chargedRatio = (segmentAppliedPct ?? 100) / 100;
+      const chargedAreaMm2 = totalAreaMm2 * chargedRatio;
+      return {
+        strategy,
+        label: 'segmentos de placa',
+        chargedRatio,
+        chargedAreaMm2,
+        chargedBounds: {
+          xMm: 0,
+          yMm: 0,
+          widthMm,
+          heightMm: heightMm * chargedRatio,
+        },
+        wasteAreaMm2: Math.max(0, chargedAreaMm2 - placedAreaMm2),
+        segmentAppliedPct,
+      };
+    }
+
+    return {
+      strategy: 'simple',
+      label: 'costeo simple del material',
+    };
+  }
+
+  private debeCalcularNestingLaminado(paso: PasoCargado): boolean {
+    return (
+      paso.familiaCodigo === 'laminado' &&
+      paso.slots.some(
+        (slot) =>
+          slot.slotCodigo === 'film' && slot.formula === 'por_metro_lineal',
+      )
+    );
+  }
+
+  private errorNestingLaminadoInvalido(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    material: {
+      atributosVarianteJson?: Record<string, unknown> | null;
+    },
+  ): ErrorMotor {
+    const ctx = jobContext as Record<string, unknown>;
+    const pliegosImpresos = Number(ctx.pliegos_impresos ?? 0);
+    const anchoPliegoMm = Number(ctx.pliego_impresion_ancho_mm ?? 0);
+    const altoPliegoMm = Number(ctx.pliego_impresion_alto_mm ?? 0);
+    const attrs = material.atributosVarianteJson ?? {};
+    const anchoFilmMm = Number(attrs.anchoMm ?? attrs.widthMm ?? attrs.ancho ?? 0);
+    const maqParams = paso.maquina?.parametrosTecnicosJson ?? {};
+    const anchoMaxMaquinaMm = Number(
+      maqParams.anchoMaxRolloMm ??
+        maqParams.anchoMaxMm ??
+        maqParams.anchoUtil ??
+        paso.maquina?.anchoUtil ??
+        0,
+    );
+
+    if (
+      Number.isFinite(anchoFilmMm) &&
+      anchoFilmMm > 0 &&
+      Number.isFinite(anchoMaxMaquinaMm) &&
+      anchoMaxMaquinaMm > 0 &&
+      anchoFilmMm > anchoMaxMaquinaMm
+    ) {
+      return {
+        codigo: 'film_laminado_no_entra_en_maquina',
+        severidad: 'ERROR',
+        mensaje: `El film de laminado (${anchoFilmMm}mm) supera el ancho útil de la laminadora (${anchoMaxMaquinaMm}mm).`,
+        rutaPasoId: paso.rutaPasoId,
+        rutaPasoOrden: paso.rutaPasoOrden,
+        familiaCodigo: paso.familiaCodigo,
+        contexto: {
+          anchoFilmMm,
+          anchoMaxMaquinaMm,
+          maquinaId: paso.maquina?.id ?? null,
+        },
+        sugerencia:
+          'Elegí un film más angosto o una laminadora que soporte ese ancho.',
+      };
+    }
+
+    const faltantes: string[] = [];
+    if (!Number.isFinite(pliegosImpresos) || pliegosImpresos <= 0) {
+      faltantes.push('pliegos impresos');
+    }
+    if (!Number.isFinite(anchoPliegoMm) || anchoPliegoMm <= 0) {
+      faltantes.push('ancho del pliego de impresión');
+    }
+    if (!Number.isFinite(altoPliegoMm) || altoPliegoMm <= 0) {
+      faltantes.push('alto del pliego de impresión');
+    }
+    if (!Number.isFinite(anchoFilmMm) || anchoFilmMm <= 0) {
+      faltantes.push('ancho del film');
+    }
+
+    return {
+      codigo: 'nesting_laminado_invalido',
+      severidad: 'ERROR',
+      mensaje: `No se pudo calcular el nesting de laminado en rollo${
+        faltantes.length > 0 ? `: falta ${faltantes.join(', ')}.` : '.'
+      }`,
+      rutaPasoId: paso.rutaPasoId,
+      rutaPasoOrden: paso.rutaPasoOrden,
+      familiaCodigo: paso.familiaCodigo,
+      contexto: {
+        pliegosImpresos,
+        anchoPliegoMm,
+        altoPliegoMm,
+        anchoFilmMm,
+      },
+      sugerencia:
+        'Verificá que impresión publique pliegos y medidas, y que el film tenga ancho en sus atributos.',
+    };
+  }
+
   /** D.5 — Calcular materiales consumidos. F.2.5: soporta los 3 modos de selección. */
   private async calcularMateriales(
     paso: PasoCargado,
     jobContext: JobContext,
     nestingDispatch: NestingDispatchResult | null = null,
+    errores: ErrorMotor[] = [],
+    materialPreliminar: {
+      id: string;
+      atributosVarianteJson?: Record<string, unknown> | null;
+    } | null = null,
   ): Promise<MaterialEjecutado[]> {
     const ejecutados: MaterialEjecutado[] = [];
+    const familia = FAMILIAS[paso.familiaCodigo as FamiliaCodigo] as
+      | (typeof FAMILIAS)[FamiliaCodigo]
+      | undefined;
+    const automaticSlotCodes = new Set(
+      (familia?.slotsRequeridos ?? [])
+        .filter((slot) => slot.tipo === 'CONSUMIBLE_MAQUINA')
+        .map((slot) => slot.codigo),
+    );
 
     for (const slot of paso.slots) {
-      const materialResuelto = await this.resolverMaterialSlot(slot, jobContext, paso);
-      if (!materialResuelto) continue;
+      if (automaticSlotCodes.has(slot.slotCodigo)) {
+        continue;
+      }
+      const materialResuelto = await this.resolverMaterialSlot(
+        slot,
+        jobContext,
+        paso,
+      );
+      if (!materialResuelto) {
+        if (slot.modoSeleccion === 'COMERCIAL_ELIGE') {
+          errores.push(
+            this.errorMaterialComercialRequerido(slot, paso, jobContext),
+          );
+        }
+        continue;
+      }
 
       // Cantidad: depende de la fórmula. Si hay nesting, ajustamos a la
       // cantidad real con desperdicio.
@@ -978,36 +1483,75 @@ export class MotorUniversalService {
         // Antes leía siempre `jobContext.cantidad` cuando no había nesting,
         // lo que causaba que tarjetas consumiera 1000 pliegos en vez de 18.
         cantidad = this.resolverCantidad(paso, jobContext, nestingDispatch);
+        cantidad = this.ajustarCantidadSustratoComprado(
+          paso,
+          slot.slotCodigo,
+          cantidad,
+          jobContext,
+          nestingDispatch,
+          materialResuelto,
+        );
       } else if (slot.formula === 'por_pieza') {
         cantidad = Number(jobContext.cantidad ?? 0);
       } else if (slot.formula === 'fijo') {
         cantidad = 1;
       } else if (slot.formula === 'por_m2') {
-        if (nestingDispatch?.algorithm === 'shelf-rollo') {
-          // Shelf-rollo cobra por m² consumidos del rollo (no útiles): largo × ancho
-          const sub = nestingDispatch.substrates[0];
-          if (sub?.kind === 'roll') {
-            cantidad = (sub.lengthMm * sub.widthMm) / 1_000_000;
-          }
+        const areaPliegoImpresion = this.calcularM2DesdePliegoImpresion(
+          paso,
+          jobContext,
+          nestingDispatch,
+        );
+        if (areaPliegoImpresion > 0) {
+          cantidad = areaPliegoImpresion;
+        } else if (nestingDispatch?.substrates?.length) {
+          // Cobra por m² consumidos del sustrato, incluyendo desperdicio:
+          // rollo = largo consumido × ancho; placa/pliego = placas × ancho × alto.
+          cantidad = nestingDispatch.substrates.reduce((acc, sub) => {
+            if (sub.kind === 'roll') {
+              return acc + (sub.lengthMm * sub.widthMm) / 1_000_000;
+            }
+            return acc + (sub.count * sub.widthMm * sub.heightMm) / 1_000_000;
+          }, 0);
         } else {
           cantidad = this.calcularM2DesdePiezas(jobContext);
         }
       } else if (slot.formula === 'por_metro_lineal') {
-        if (nestingDispatch?.algorithm === 'shelf-rollo' && nestingDispatch.consumedLengthMm) {
+        if (
+          nestingDispatch?.algorithm === 'shelf-rollo' &&
+          nestingDispatch.consumedLengthMm
+        ) {
           cantidad = nestingDispatch.consumedLengthMm / 1000;
         } else {
-          cantidad = this.calcularMetrosLinealesDesdePiezas(jobContext);
+          const metrosPliegoImpresion =
+            this.calcularMetrosLinealesDesdePliegoImpresion(
+              paso,
+              jobContext,
+              nestingDispatch,
+            );
+          if (metrosPliegoImpresion > 0) {
+            cantidad = metrosPliegoImpresion;
+          } else {
+            cantidad = this.calcularMetrosLinealesDesdePiezas(jobContext);
+          }
         }
       }
 
+      const ignoraCaras = this.ignoraCarasEnMaterial(paso, slot.slotCodigo);
+      const aplicaMultiCaras = slot.aplicaMultiCaras && !ignoraCaras;
+
       // F.2.6 — multi-caras (legacy flag)
-      if (slot.aplicaMultiCaras && typeof jobContext.caras === 'number') {
+      if (aplicaMultiCaras && typeof jobContext.caras === 'number') {
         cantidad *= jobContext.caras;
       }
       // F.2.6 — multiplicadores activos
-      if (paso.multiplicadoresActivos && paso.multiplicadoresActivos.length > 0) {
+      if (
+        paso.multiplicadoresActivos &&
+        paso.multiplicadoresActivos.length > 0
+      ) {
         for (const codigoMult of paso.multiplicadoresActivos) {
-          if (codigoMult === 'caras' && slot.aplicaMultiCaras) continue;
+          if (codigoMult === 'caras' && (ignoraCaras || aplicaMultiCaras)) {
+            continue;
+          }
           const valor = (jobContext as Record<string, unknown>)[codigoMult];
           if (typeof valor === 'number' && valor > 0) {
             cantidad *= valor;
@@ -1016,27 +1560,558 @@ export class MotorUniversalService {
       }
 
       const precioUnitario = Number(materialResuelto.precioReferencia ?? 0);
-      const costoTotal = cantidad * precioUnitario;
+      const costeoNesting = this.calcularCosteoNestingMaterial(
+        this.resolverEstrategiaCosteoNesting(paso, slot.estrategiaCosto),
+        precioUnitario,
+        jobContext,
+        nestingDispatch,
+        paso,
+      );
+      if (costeoNesting && precioUnitario > 0) {
+        cantidad = costeoNesting.totalCost / precioUnitario;
+      }
+      const costoTotal = costeoNesting?.totalCost ?? cantidad * precioUnitario;
 
       ejecutados.push({
         slotCodigo: slot.slotCodigo,
         materialVarianteId: materialResuelto.id,
         materialNombre: materialResuelto.sku,
+        materialSku: materialResuelto.sku,
+        materialDisplayName: this.getMaterialDisplayName(materialResuelto),
+        materiaPrimaNombre: materialResuelto.materiaPrimaNombre ?? null,
+        tipoLineaCosto: 'MATERIAL',
         cantidad,
         // G-M9: la unidad efectiva depende de la fórmula del slot. Para
         // fórmulas con dimensión implícita (`por_m2`, `por_metro_lineal`)
         // usamos esa unidad. Para `fijo`, `por_pieza`, `por_unidad_productiva`
         // heredamos la unidad de stock de la materia prima (PLIEGO, ROLLO,
         // METRO_LINEAL, UNIDAD, etc.) en minúsculas.
-        unidad: unidadEfectivaDeFormula(slot.formula, materialResuelto.unidadStock),
+        unidad: unidadEfectivaDeFormula(
+          slot.formula,
+          materialResuelto.unidadStock,
+        ),
         precioUnitario,
         costoTotal,
-        estrategiaCosto: slot.estrategiaCosto,
-        modoSeleccion: slot.modoSeleccion as 'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO',
+        estrategiaCosto:
+          costeoNesting?.strategy ??
+          this.resolverEstrategiaCosteoNesting(paso, slot.estrategiaCosto),
+        detalleCosteoNesting: costeoNesting
+          ? {
+              strategy: costeoNesting.strategy,
+              totalCost: costeoNesting.totalCost,
+              unitPrice: costeoNesting.breakdown.unitPrice,
+              pricePerM2: costeoNesting.breakdown.pricePerM2,
+              fullUnits: costeoNesting.breakdown.fullUnits,
+              fullUnitsCost: costeoNesting.breakdown.fullUnitsCost,
+              lastUnit: costeoNesting.breakdown.lastUnit,
+            }
+          : undefined,
+        modoSeleccion: slot.modoSeleccion as
+          | 'HARDCODED'
+          | 'COMERCIAL_ELIGE'
+          | 'MOTOR_ELIGE_AUTO',
+      });
+    }
+
+    ejecutados.push(
+      ...this.calcularConsumiblesMaquina(
+        paso,
+        jobContext,
+        nestingDispatch,
+        errores,
+        materialPreliminar,
+      ),
+    );
+
+    return ejecutados;
+  }
+
+  private ignoraCarasEnMaterial(paso: PasoCargado, slotCodigo: string): boolean {
+    return (
+      paso.familiaCodigo === 'impresion_por_hoja' &&
+      slotCodigo === 'sustrato_principal'
+    );
+  }
+
+  private ajustarCantidadSustratoComprado(
+    paso: PasoCargado,
+    slotCodigo: string,
+    cantidadPliegosImpresion: number,
+    jobContext: JobContext,
+    nestingDispatch: NestingDispatchResult | null,
+    materialResuelto: {
+      unidadStock?: string | null;
+      atributosVarianteJson?: Record<string, unknown> | null;
+    },
+  ): number {
+    if (paso.familiaCodigo !== 'impresion_por_hoja') {
+      return cantidadPliegosImpresion;
+    }
+    if (slotCodigo !== 'sustrato_principal') {
+      return cantidadPliegosImpresion;
+    }
+    if (!Number.isFinite(cantidadPliegosImpresion) || cantidadPliegosImpresion <= 0) {
+      return cantidadPliegosImpresion;
+    }
+
+    const printSheet = nestingDispatch?.substrates.find(
+      (sub): sub is Extract<
+        (typeof nestingDispatch.substrates)[number],
+        { kind: 'sheet' }
+      > => sub.kind === 'sheet',
+    );
+    const ctx = jobContext as Record<string, unknown>;
+    const printSheetWidthMm = Number(
+      printSheet?.widthMm ?? ctx.pliego_impresion_ancho_mm ?? 0,
+    );
+    const printSheetHeightMm = Number(
+      printSheet?.heightMm ?? ctx.pliego_impresion_alto_mm ?? 0,
+    );
+    if (
+      !Number.isFinite(printSheetWidthMm) ||
+      printSheetWidthMm <= 0 ||
+      !Number.isFinite(printSheetHeightMm) ||
+      printSheetHeightMm <= 0
+    ) {
+      return cantidadPliegosImpresion;
+    }
+
+    const attrs = materialResuelto.atributosVarianteJson ?? {};
+    const anchoSustratoMm = Number(attrs.anchoMm ?? attrs.widthMm ?? 0);
+    const altoSustratoMm = Number(
+      attrs.largoMm ?? attrs.altoMm ?? attrs.heightMm ?? 0,
+    );
+    if (
+      !Number.isFinite(anchoSustratoMm) ||
+      anchoSustratoMm <= 0 ||
+      !Number.isFinite(altoSustratoMm) ||
+      altoSustratoMm <= 0
+    ) {
+      return cantidadPliegosImpresion;
+    }
+
+    const conversion = calculateSustratoToPliegoConversion({
+      sustrato: { anchoMm: anchoSustratoMm, altoMm: altoSustratoMm },
+      pliegoImpresion: {
+        anchoMm: printSheetWidthMm,
+        altoMm: printSheetHeightMm,
+      },
+    });
+
+    if (!conversion.esDerivado || conversion.pliegosPorSustrato <= 1) {
+      return cantidadPliegosImpresion;
+    }
+    return Math.ceil(cantidadPliegosImpresion / conversion.pliegosPorSustrato);
+  }
+
+  private calcularM2DesdePliegoImpresion(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    nestingDispatch: NestingDispatchResult | null,
+  ): number {
+    const pliego = this.resolverPliegoImpresionParaTerminacion(
+      paso,
+      jobContext,
+      nestingDispatch,
+    );
+    if (!pliego) return 0;
+    return (pliego.cantidad * pliego.anchoMm * pliego.altoMm) / 1_000_000;
+  }
+
+  private calcularMetrosLinealesDesdePliegoImpresion(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    nestingDispatch: NestingDispatchResult | null,
+  ): number {
+    const pliego = this.resolverPliegoImpresionParaTerminacion(
+      paso,
+      jobContext,
+      nestingDispatch,
+    );
+    if (!pliego) return 0;
+    return (pliego.cantidad * pliego.altoMm) / 1000;
+  }
+
+  private resolverPliegoImpresionParaTerminacion(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    nestingDispatch: NestingDispatchResult | null,
+  ): { cantidad: number; anchoMm: number; altoMm: number } | null {
+    const sheet = nestingDispatch?.substrates.find((sub) => sub.kind === 'sheet');
+    const anchoDesdeNesting = sheet?.kind === 'sheet' ? sheet.widthMm : 0;
+    const altoDesdeNesting = sheet?.kind === 'sheet' ? sheet.heightMm : 0;
+    const ctx = jobContext as Record<string, unknown>;
+    const anchoMm = Number(ctx.pliego_impresion_ancho_mm ?? anchoDesdeNesting);
+    const altoMm = Number(ctx.pliego_impresion_alto_mm ?? altoDesdeNesting);
+    if (
+      !Number.isFinite(anchoMm) ||
+      anchoMm <= 0 ||
+      !Number.isFinite(altoMm) ||
+      altoMm <= 0
+    ) {
+      return null;
+    }
+
+    const cantidad = this.resolverCantidad(paso, jobContext, nestingDispatch);
+    if (!Number.isFinite(cantidad) || cantidad <= 0) return null;
+    return { cantidad, anchoMm, altoMm };
+  }
+
+  private calcularCosteoNestingMaterial(
+    estrategiaCosto: string,
+    precioUnitario: number,
+    jobContext: JobContext,
+    nestingDispatch: NestingDispatchResult | null,
+    paso: PasoCargado,
+  ) {
+    if (!nestingDispatch || precioUnitario <= 0) return null;
+    if (!isNestingCostingStrategy(estrategiaCosto)) return null;
+    if (nestingDispatch.substrates[0]?.kind !== 'sheet') return null;
+
+    const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
+    const nestingConfig =
+      typeof params.nestingConfig === 'object' &&
+      params.nestingConfig !== null &&
+      !Array.isArray(params.nestingConfig)
+        ? (params.nestingConfig as Record<string, unknown>)
+        : {};
+    const costingConfig =
+      typeof nestingConfig.costing === 'object' &&
+      nestingConfig.costing !== null &&
+      !Array.isArray(nestingConfig.costing)
+        ? (nestingConfig.costing as Record<string, unknown>)
+        : {};
+    const segmentSteps = Array.isArray(costingConfig.segmentSteps)
+      ? costingConfig.segmentSteps
+          .map((item) => Number(item))
+          .filter((item) => Number.isFinite(item) && item > 0 && item <= 100)
+      : undefined;
+
+    const totalPieces = this.totalPiezasParaCosteo(jobContext);
+    const unitsNeeded =
+      nestingDispatch.substrates.reduce((acc, sub) => {
+        if (sub.kind !== 'sheet') return acc;
+        return acc + sub.count;
+      }, 0) || Math.ceil(nestingDispatch.cantidadCalculada);
+
+    return applyCostingStrategy({
+      strategy: estrategiaCosto,
+      nesting: {
+        algorithm: nestingDispatch.algorithm,
+        substrates: nestingDispatch.substrates,
+        placements: nestingDispatch.placements,
+        metrics: nestingDispatch.metricasRaw,
+      },
+      unitPrice: precioUnitario,
+      totalPieces,
+      unitsNeeded,
+      pieceWidthMm: jobContext.medidaCustomMm?.anchoMm,
+      pieceHeightMm: jobContext.medidaCustomMm?.altoMm,
+      segmentSteps,
+    });
+  }
+
+  private resolverEstrategiaCosteoNesting(
+    paso: PasoCargado,
+    estrategiaSlot: string,
+  ): string {
+    const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
+    const nestingConfig =
+      typeof params.nestingConfig === 'object' &&
+      params.nestingConfig !== null &&
+      !Array.isArray(params.nestingConfig)
+        ? (params.nestingConfig as Record<string, unknown>)
+        : {};
+    const costingConfig =
+      typeof nestingConfig.costing === 'object' &&
+      nestingConfig.costing !== null &&
+      !Array.isArray(nestingConfig.costing)
+        ? (nestingConfig.costing as Record<string, unknown>)
+        : {};
+    const strategy = costingConfig.strategy;
+    return typeof strategy === 'string' && strategy !== 'simple'
+      ? strategy
+      : estrategiaSlot;
+  }
+
+  private totalPiezasParaCosteo(jobContext: JobContext): number {
+    const piezas = jobContext.piezas ?? [];
+    if (piezas.length > 0) {
+      return piezas.reduce((acc, pieza) => acc + pieza.cantidad, 0);
+    }
+    return Number(jobContext.cantidad ?? 0);
+  }
+
+  private calcularConsumiblesMaquina(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    nestingDispatch: NestingDispatchResult | null,
+    errores: ErrorMotor[],
+    materialPreliminar: {
+      id: string;
+      atributosVarianteJson?: Record<string, unknown> | null;
+    } | null,
+  ): MaterialEjecutado[] {
+    const maquina = paso.maquina;
+    if (
+      !maquina ||
+      !PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES.has(maquina.plantilla)
+    ) {
+      return [];
+    }
+
+    const perfilDetalle =
+      (paso.perfil?.detalleJson as Record<string, unknown> | null) ??
+      ((paso.perfilesDisponibles?.find((p) => p.id === paso.perfilM1Id)
+        ?.detalleJson ?? null) as Record<string, unknown> | null);
+    const channels = getPerfilConsumableChannels(
+      perfilDetalle,
+      maquina.parametrosTecnicosJson ?? null,
+    );
+
+    if (channels.length === 0) {
+      errores.push({
+        codigo: 'consumibles_maquina_sin_canales',
+        severidad: 'ERROR',
+        mensaje: `El paso ${paso.rutaPasoOrden} usa una impresora, pero el perfil no declara canales de color.`,
+        rutaPasoId: paso.rutaPasoId,
+        rutaPasoOrden: paso.rutaPasoOrden,
+        familiaCodigo: paso.familiaCodigo,
+        sugerencia:
+          'Revisar el perfil operativo de la máquina y completar el campo Colores.',
+      });
+      return [];
+    }
+
+    const areaImpresaM2 = this.calcularAreaImpresaConsumiblesM2(
+      paso,
+      jobContext,
+      nestingDispatch,
+      materialPreliminar,
+    );
+    const caras = this.resolverCarasConsumible(paso, jobContext);
+    if (!Number.isFinite(areaImpresaM2) || areaImpresaM2 <= 0) {
+      errores.push({
+        codigo: 'consumibles_maquina_area_invalida',
+        severidad: 'ERROR',
+        mensaje: `No se pudo calcular el área impresa para los consumibles del paso ${paso.rutaPasoOrden}.`,
+        rutaPasoId: paso.rutaPasoId,
+        rutaPasoOrden: paso.rutaPasoOrden,
+        familiaCodigo: paso.familiaCodigo,
+        sugerencia:
+          'Revisar medidas del producto, nesting o dimensiones del sustrato principal.',
+      });
+      return [];
+    }
+
+    const consumibles = maquina.consumibles ?? [];
+    const ejecutados: MaterialEjecutado[] = [];
+
+    for (const channel of channels) {
+      const consumible = this.findConsumibleMaquina(
+        consumibles,
+        paso.perfil?.id ?? paso.perfilM1Id,
+        channel,
+      );
+
+      if (!consumible) {
+        errores.push({
+          codigo: 'consumible_maquina_faltante',
+          severidad: 'ERROR',
+          mensaje: `Falta configurar el consumible ${channel} en la máquina ${maquina.nombre}.`,
+          rutaPasoId: paso.rutaPasoId,
+          rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo,
+          contexto: {
+            maquinaId: maquina.id,
+            perfilId: paso.perfil?.id ?? paso.perfilM1Id,
+            channel,
+          },
+          sugerencia:
+            'Ir a Maquinaria > Consumibles y vincular una variante activa para ese canal.',
+        });
+        continue;
+      }
+
+      const consumoBase = Number(consumible.consumoBase ?? 0);
+      if (!Number.isFinite(consumoBase) || consumoBase <= 0) {
+        errores.push({
+          codigo: 'consumible_maquina_sin_consumo',
+          severidad: 'ERROR',
+          mensaje: `El consumible ${consumible.nombre} no tiene consumo base valido.`,
+          rutaPasoId: paso.rutaPasoId,
+          rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo,
+          sugerencia:
+            'Completar el consumo por m² del consumible en Maquinaria.',
+        });
+        continue;
+      }
+
+      const precioReferencia = consumible.materialVariante.precioReferencia;
+      if (precioReferencia == null) {
+        errores.push({
+          codigo: 'consumible_maquina_sin_precio',
+          severidad: 'ERROR',
+          mensaje: `La variante ${consumible.materialVariante.sku} no tiene precio de referencia.`,
+          rutaPasoId: paso.rutaPasoId,
+          rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo,
+          sugerencia:
+            'Completar el precio de referencia de la variante de materia prima.',
+        });
+        continue;
+      }
+
+      const cantidad = consumoBase * areaImpresaM2 * caras;
+      const precioUnitario = precioPorUnidadDeConsumo(
+        precioReferencia,
+        consumible.materialVariante.unidadStock,
+        consumible.unidad,
+        consumible.rendimientoEstimado,
+      );
+      const costoTotal = cantidad * precioUnitario;
+
+      ejecutados.push({
+        slotCodigo: `consumible_maquina:${channel}`,
+        materialVarianteId: consumible.materialVariante.id,
+        materialNombre: consumible.materialVariante.sku,
+        materialSku: consumible.materialVariante.sku,
+        materialDisplayName:
+          consumible.nombre ||
+          this.getMaterialDisplayName(consumible.materialVariante),
+        materiaPrimaNombre:
+          consumible.materialVariante.materiaPrimaNombre ?? null,
+        tipoLineaCosto: 'CONSUMIBLE_MAQUINA',
+        cantidad,
+        unidad: consumible.unidad,
+        precioUnitario,
+        costoTotal,
+        estrategiaCosto: 'consumo_maquina_por_m2',
+        modoSeleccion: 'MAQUINA_CONSUMIBLE',
       });
     }
 
     return ejecutados;
+  }
+
+  private findConsumibleMaquina(
+    consumibles: NonNullable<
+      NonNullable<PasoCargado['maquina']>['consumibles']
+    >,
+    perfilId: string | null | undefined,
+    channel: ConsumableChannel,
+  ) {
+    const matchesChannel = (consumible: (typeof consumibles)[number]) =>
+      consumible.activo &&
+      getConsumableChannelFromDetail(
+        (consumible.detalleJson as Record<string, unknown> | null) ?? null,
+      ) === channel;
+
+    return (
+      consumibles.find(
+        (consumible) =>
+          matchesChannel(consumible) &&
+          consumible.perfilOperativoId === perfilId,
+      ) ??
+      consumibles.find(
+        (consumible) =>
+          matchesChannel(consumible) && consumible.perfilOperativoId === null,
+      ) ??
+      null
+    );
+  }
+
+  private calcularAreaImpresaConsumiblesM2(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    nestingDispatch: NestingDispatchResult | null,
+    materialPreliminar: {
+      id: string;
+      atributosVarianteJson?: Record<string, unknown> | null;
+    } | null,
+  ) {
+    if (nestingDispatch?.substrates?.length) {
+      const area = nestingDispatch.substrates.reduce((acc, sub) => {
+        if (sub.kind === 'roll') {
+          return acc + (sub.lengthMm * sub.widthMm) / 1_000_000;
+        }
+        return acc + (sub.count * sub.widthMm * sub.heightMm) / 1_000_000;
+      }, 0);
+      if (area > 0) return area;
+    }
+
+    const areaPliegoImpresion = this.calcularM2DesdePliegoImpresion(
+      paso,
+      jobContext,
+      nestingDispatch,
+    );
+    if (areaPliegoImpresion > 0) return areaPliegoImpresion;
+
+    const attrs = materialPreliminar?.atributosVarianteJson ?? null;
+    const areaSustratoM2 = this.getAreaM2FromAttrs(attrs);
+    if (areaSustratoM2 > 0) {
+      const cantidad = this.resolverCantidad(paso, jobContext, nestingDispatch);
+      if (cantidad > 0) return areaSustratoM2 * cantidad;
+    }
+
+    const ctx = jobContext as Record<string, unknown>;
+    const explicitM2 = Number(
+      ctx.m2 ?? ctx.areaM2 ?? ctx.metrosCuadrados ?? ctx.m2_impresos ?? 0,
+    );
+    if (Number.isFinite(explicitM2) && explicitM2 > 0) return explicitM2;
+
+    const piezasM2 = this.calcularM2DesdePiezas(jobContext);
+    if (piezasM2 > 0) return piezasM2;
+
+    if (jobContext.medidaCustomMm) {
+      const cantidad = this.resolverCantidad(paso, jobContext, nestingDispatch);
+      return (
+        (jobContext.medidaCustomMm.anchoMm *
+          jobContext.medidaCustomMm.altoMm *
+          cantidad) /
+        1_000_000
+      );
+    }
+
+    return 0;
+  }
+
+  private getAreaM2FromAttrs(attrs: Record<string, unknown> | null) {
+    if (!attrs) return 0;
+    const anchoMm = Number(attrs.anchoMm ?? attrs.widthMm ?? 0);
+    const largoMm = Number(
+      attrs.largoMm ?? attrs.altoMm ?? attrs.heightMm ?? 0,
+    );
+    if (
+      Number.isFinite(anchoMm) &&
+      anchoMm > 0 &&
+      Number.isFinite(largoMm) &&
+      largoMm > 0
+    ) {
+      return (anchoMm * largoMm) / 1_000_000;
+    }
+
+    const anchoCm = Number(attrs.ancho ?? attrs.widthCm ?? 0);
+    const largoCm = Number(attrs.alto ?? attrs.largo ?? attrs.heightCm ?? 0);
+    if (
+      Number.isFinite(anchoCm) &&
+      anchoCm > 0 &&
+      Number.isFinite(largoCm) &&
+      largoCm > 0
+    ) {
+      return (anchoCm * largoCm) / 10_000;
+    }
+
+    return 0;
+  }
+
+  private resolverCarasConsumible(paso: PasoCargado, jobContext: JobContext) {
+    if (typeof jobContext.caras === 'number' && jobContext.caras > 0) {
+      return jobContext.caras;
+    }
+    const detalle = (paso.perfil?.detalleJson ?? {}) as Record<string, unknown>;
+    return detalle.caras === 'DOBLE_FAZ' ? 2 : 1;
   }
 
   /**
@@ -1044,9 +2119,9 @@ export class MotorUniversalService {
    *
    * Modos soportados:
    *  - HARDCODED: usa slot.materialVariante directamente
-   *  - COMERCIAL_ELIGE: lee del JobContext la elección del comercial
-   *    (key: `slotMaterial_<configPasoId>_<slotCodigo>`); si no eligió,
-   *    usa el material default (primero con default=true)
+   *  - COMERCIAL_ELIGE: lee del JobContext la elección explícita del comercial
+   *    (key: `slotMaterial_<configPasoId>_<slotCodigo>`; compat temporal con
+   *    `slotMaterial_<slotCodigo>`). Si no eligió, no resuelve material.
    *  - MOTOR_ELIGE_AUTO: aplica criterio del slot
    *    (MENOR_COSTO / MAYOR_APROVECHAMIENTO / MENOR_CAPACIDAD_QUE_CUMPLA)
    */
@@ -1063,6 +2138,8 @@ export class MotorUniversalService {
   ): Promise<{
     id: string;
     sku: string;
+    nombreVariante?: string | null;
+    materiaPrimaNombre?: string | null;
     precioReferencia: number | null;
     unidadStock?: string | null;
     atributosVarianteJson?: Record<string, unknown> | null;
@@ -1079,12 +2156,13 @@ export class MotorUniversalService {
     if (candidatos.length === 0) return null;
 
     if (slot.modoSeleccion === 'COMERCIAL_ELIGE') {
-      // Buscar elección del comercial en el JobContext (formato genérico)
-      const slotKey = `slotMaterial_${slot.slotCodigo}`;
-      const eleccion = (jobContext as Record<string, unknown>)[slotKey] as string | undefined;
+      const eleccion = this.getEleccionMaterialComercial(
+        slot,
+        jobContext,
+        paso,
+      );
       const elegido = candidatos.find((c) => c.variantId === eleccion);
-      const target = elegido ?? candidatos.find((c) => c.default) ?? candidatos[0];
-      return await this.cargarVariantePorId(target.variantId);
+      return elegido ? await this.cargarVariantePorId(elegido.variantId) : null;
     }
 
     if (slot.modoSeleccion === 'MOTOR_ELIGE_AUTO') {
@@ -1092,14 +2170,17 @@ export class MotorUniversalService {
       const variantes = await Promise.all(
         candidatos.map((c) => this.cargarVariantePorId(c.variantId)),
       );
-      const validos = variantes.filter((v): v is NonNullable<typeof v> => v != null);
+      const validos = variantes.filter(
+        (v): v is NonNullable<typeof v> => v != null,
+      );
       if (validos.length === 0) return null;
 
       const criterio = slot.criterioMotorAuto ?? 'MENOR_COSTO';
 
       if (criterio === 'MENOR_COSTO') {
         return validos.sort(
-          (a, b) => Number(a.precioReferencia ?? 0) - Number(b.precioReferencia ?? 0),
+          (a, b) =>
+            Number(a.precioReferencia ?? 0) - Number(b.precioReferencia ?? 0),
         )[0];
       }
 
@@ -1112,9 +2193,7 @@ export class MotorUniversalService {
           const evaluados = validos.map((v) => {
             const dispatch = runNestingForPaso(paso, jobContext, {
               id: v.id,
-              atributosVarianteJson: (v.atributosVarianteJson ?? null) as
-                | Record<string, unknown>
-                | null,
+              atributosVarianteJson: v.atributosVarianteJson ?? null,
             });
             return { v, aprovechamiento: dispatch?.aprovechamientoPct ?? -1 };
           });
@@ -1127,8 +2206,16 @@ export class MotorUniversalService {
         }
         // Heurística (fallback): el más ancho gana (favorece rollos grandes).
         return validos.sort((a, b) => {
-          const anchoA = Number((a as { anchoMm?: number }).anchoMm ?? 0);
-          const anchoB = Number((b as { anchoMm?: number }).anchoMm ?? 0);
+          const attrsA = (a.atributosVarianteJson ?? {}) as Record<
+            string,
+            unknown
+          >;
+          const attrsB = (b.atributosVarianteJson ?? {}) as Record<
+            string,
+            unknown
+          >;
+          const anchoA = Number(attrsA.anchoMm ?? attrsA.ancho ?? 0);
+          const anchoB = Number(attrsB.anchoMm ?? attrsB.ancho ?? 0);
           return anchoB - anchoA;
         })[0];
       }
@@ -1136,12 +2223,18 @@ export class MotorUniversalService {
       if (criterio === 'MENOR_CAPACIDAD_QUE_CUMPLA') {
         // Necesita criterioInputCampo del JobContext y criterioMaterialCampo de cada variante
         const inputValor = Number(
-          (jobContext as Record<string, unknown>)[slot.criterioInputCampo ?? ''] ?? 0,
+          (jobContext as Record<string, unknown>)[
+            slot.criterioInputCampo ?? ''
+          ] ?? 0,
         );
         const validosOrdenados = validos
           .map((v) => ({
             v,
-            cap: Number((v as Record<string, unknown>)[slot.criterioMaterialCampo ?? ''] ?? 0),
+            cap: Number(
+              (v as Record<string, unknown>)[
+                slot.criterioMaterialCampo ?? ''
+              ] ?? 0,
+            ),
           }))
           .filter((x) => x.cap >= inputValor)
           .sort((a, b) => a.cap - b.cap);
@@ -1152,12 +2245,84 @@ export class MotorUniversalService {
     return null;
   }
 
+  private getEleccionMaterialComercial(
+    slot: PasoCargado['slots'][number],
+    jobContext: JobContext,
+    paso?: PasoCargado,
+  ): string | null {
+    const ctx = jobContext as Record<string, unknown>;
+    const slotMateriales =
+      ctx.slotMateriales &&
+      typeof ctx.slotMateriales === 'object' &&
+      !Array.isArray(ctx.slotMateriales)
+        ? (ctx.slotMateriales as Record<string, unknown>)
+        : {};
+    const scopedSelectionKey = paso
+      ? `${paso.configPasoId}_${slot.slotCodigo}`
+      : null;
+    const scopedKey = paso
+      ? `slotMaterial_${paso.configPasoId}_${slot.slotCodigo}`
+      : null;
+    const legacyKey = `slotMaterial_${slot.slotCodigo}`;
+    const value = scopedSelectionKey
+      ? (slotMateriales[scopedSelectionKey] ?? slotMateriales[scopedKey!])
+      : undefined;
+    const flatValue = scopedKey ? ctx[scopedKey] : undefined;
+    const legacyValue =
+      slotMateriales[slot.slotCodigo] ?? slotMateriales[legacyKey] ?? ctx[legacyKey];
+    const selected = typeof value === 'string' ? value : flatValue;
+    const finalSelected = typeof selected === 'string' ? selected : legacyValue;
+    return typeof finalSelected === 'string' && finalSelected.trim()
+      ? finalSelected.trim()
+      : null;
+  }
+
+  private errorMaterialComercialRequerido(
+    slot: PasoCargado['slots'][number],
+    paso: PasoCargado,
+    jobContext: JobContext,
+  ): ErrorMotor {
+    const candidatos = (slot.materialesCandidatosJson ?? []) as Array<{
+      variantId: string;
+    }>;
+    const eleccion = this.getEleccionMaterialComercial(slot, jobContext, paso);
+    const slotLabel = slot.slotCodigo.replace(/_/g, ' ');
+    const base = {
+      severidad: 'ERROR' as const,
+      rutaPasoId: paso.rutaPasoId,
+      rutaPasoOrden: paso.rutaPasoOrden,
+      familiaCodigo: paso.familiaCodigo,
+      contexto: {
+        configPasoId: paso.configPasoId,
+        slotCodigo: slot.slotCodigo,
+        eleccion: eleccion ?? null,
+      },
+    };
+
+    if (eleccion && !candidatos.some((c) => c.variantId === eleccion)) {
+      return {
+        ...base,
+        codigo: 'material_comercial_invalido',
+        mensaje: `La selección de material ${slotLabel} no es válida para el paso ${paso.rutaPasoOrden}.`,
+        sugerencia:
+          'Elegir uno de los materiales candidatos configurados para el paso.',
+      };
+    }
+
+    return {
+      ...base,
+      codigo: 'material_comercial_requerido',
+      mensaje: `El paso ${paso.rutaPasoOrden} requiere elegir el material ${slotLabel}.`,
+      sugerencia: 'Seleccionar un material antes de cotizar.',
+    };
+  }
+
   /** Carga una variante de materia prima por ID (helper para resolución de materiales). */
-  private async cargarVariantePorId(
-    variantId: string,
-  ): Promise<{
+  private async cargarVariantePorId(variantId: string): Promise<{
     id: string;
     sku: string;
+    nombreVariante?: string | null;
+    materiaPrimaNombre?: string | null;
     precioReferencia: number | null;
     anchoMm?: number;
     /** G-M9: unidad de stock heredada (PLIEGO, METRO_LINEAL, etc.). */
@@ -1167,19 +2332,33 @@ export class MotorUniversalService {
   } | null> {
     const v = await this.prisma.materiaPrimaVariante.findUnique({
       where: { id: variantId },
-      include: { materiaPrima: { select: { unidadStock: true } } },
+      include: { materiaPrima: { select: { nombre: true, unidadStock: true } } },
     });
     if (!v) return null;
     const attrs = v.atributosVarianteJson as Record<string, unknown> | null;
     return {
       id: v.id,
       sku: v.sku,
+      nombreVariante: v.nombreVariante,
+      materiaPrimaNombre: v.materiaPrima?.nombre ?? null,
       precioReferencia: v.precioReferencia ? Number(v.precioReferencia) : null,
       anchoMm: typeof attrs?.anchoMm === 'number' ? attrs.anchoMm : undefined,
       // Variante puede tener override; sino hereda de la materia prima padre.
       unidadStock: v.unidadStock ?? v.materiaPrima?.unidadStock ?? null,
       atributosVarianteJson: attrs,
     };
+  }
+
+  private getMaterialDisplayName(material: {
+    sku: string;
+    nombreVariante?: string | null;
+    materiaPrimaNombre?: string | null;
+  }) {
+    return (
+      material.nombreVariante?.trim() ||
+      material.materiaPrimaNombre?.trim() ||
+      material.sku
+    );
   }
 
   /** Calcula m² totales desde la lista de piezas del JobContext (para fórmula por_m2). */
@@ -1240,7 +2419,9 @@ export class MotorUniversalService {
         if (v.fuenteB === 'JOBCONTEXT') {
           b = Number(ctx[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MAQUINA') {
-          const params = paso.maquina?.parametrosTecnicosJson as Record<string, unknown> | undefined;
+          const params = paso.maquina?.parametrosTecnicosJson as
+            | Record<string, unknown>
+            | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MATERIAL' && v.slotMaterial) {
           const slot = paso.slots.find((s) => s.slotCodigo === v.slotMaterial);
@@ -1249,7 +2430,9 @@ export class MotorUniversalService {
             | undefined;
           b = Number(attrs?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'CONFIG_PASO') {
-          const params = paso.paramsPasoJson as Record<string, unknown> | undefined;
+          const params = paso.paramsPasoJson as
+            | Record<string, unknown>
+            | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         }
         // Si falta uno de los datos, NO se valida (skip silencioso).
@@ -1278,7 +2461,11 @@ export class MotorUniversalService {
               break;
           }
         }
-        contextoError = { jc: { [v.campoJobContext]: a }, valorB: b, operador: v.operador };
+        contextoError = {
+          jc: { [v.campoJobContext]: a },
+          valorB: b,
+          operador: v.operador,
+        };
       } else if (v.tipo === 'IN_RANGE') {
         const valor = Number(ctx[v.campo] ?? NaN);
         cumple =
@@ -1287,9 +2474,19 @@ export class MotorUniversalService {
           (v.max == null || valor <= v.max);
         contextoError = { campo: v.campo, valor, min: v.min, max: v.max };
       } else if (v.tipo === 'ONE_OF') {
-        const valor = String(ctx[v.campo] ?? '');
+        const rawValor = ctx[v.campo];
+        const valor =
+          typeof rawValor === 'string' ||
+          typeof rawValor === 'number' ||
+          typeof rawValor === 'boolean'
+            ? String(rawValor)
+            : '';
         cumple = v.valoresPermitidos.includes(valor);
-        contextoError = { campo: v.campo, valor, valoresPermitidos: v.valoresPermitidos };
+        contextoError = {
+          campo: v.campo,
+          valor,
+          valoresPermitidos: v.valoresPermitidos,
+        };
       } else if (v.tipo === 'EXISTS_OUTPUT') {
         // G-M2 / G-M4 — Chequear que el output canónico haya sido publicado
         // por algún paso anterior (registrado en outputsAcumulados).
@@ -1301,7 +2498,12 @@ export class MotorUniversalService {
       }
 
       if (!cumple) {
-        const mensaje = this.interpolarMensaje(v.mensaje, contextoError, paso, jobContext);
+        const mensaje = this.interpolarMensaje(
+          v.mensaje,
+          contextoError,
+          paso,
+          jobContext,
+        );
         errores.push({
           codigo: v.codigo,
           severidad: 'ERROR',
@@ -1323,25 +2525,33 @@ export class MotorUniversalService {
     paso: PasoCargado,
     jobContext: JobContext,
   ): string {
-    return template.replace(/\{(jc|maq|mat)\.(\w+)\}/g, (_match, fuente: string, campo: string) => {
-      if (fuente === 'jc') {
-        return String((jobContext as Record<string, unknown>)[campo] ?? '?');
-      }
-      if (fuente === 'maq') {
-        const params = paso.maquina?.parametrosTecnicosJson as Record<string, unknown> | undefined;
-        return String(params?.[campo] ?? '?');
-      }
-      if (fuente === 'mat') {
-        // Buscar en cualquier slot
-        for (const s of paso.slots) {
-          const attrs = s.materialVariante?.atributosVarianteJson as
+    return template.replace(
+      /\{(jc|maq|mat)\.(\w+)\}/g,
+      (_match, fuente: string, campo: string) => {
+        if (fuente === 'jc') {
+          return this.valueToMessage(
+            (jobContext as Record<string, unknown>)[campo],
+          );
+        }
+        if (fuente === 'maq') {
+          const params = paso.maquina?.parametrosTecnicosJson as
             | Record<string, unknown>
             | undefined;
-          if (attrs && attrs[campo] !== undefined) return String(attrs[campo]);
+          return this.valueToMessage(params?.[campo]);
         }
-      }
-      return String(contexto[campo] ?? '?');
-    });
+        if (fuente === 'mat') {
+          // Buscar en cualquier slot
+          for (const s of paso.slots) {
+            const attrs = s.materialVariante?.atributosVarianteJson as
+              | Record<string, unknown>
+              | undefined;
+            if (attrs && attrs[campo] !== undefined)
+              return this.valueToMessage(attrs[campo]);
+          }
+        }
+        return this.valueToMessage(contexto[campo]);
+      },
+    );
   }
 
   /**
@@ -1372,9 +2582,14 @@ export class MotorUniversalService {
       // se determina por:
       //  1) `mecanismoCantidadConfigJson.campoOutput` (override explícito).
       //  2) Default por familia (mapeo abajo).
-      const config = (paso.mecanismoCantidadConfigJson ?? {}) as Record<string, unknown>;
-      const campoExplicito = typeof config.campoOutput === 'string' ? config.campoOutput : null;
-      const campo = campoExplicito ?? defaultOutputParaHeredar(paso.familiaCodigo);
+      const config = (paso.mecanismoCantidadConfigJson ?? {}) as Record<
+        string,
+        unknown
+      >;
+      const campoExplicito =
+        typeof config.campoOutput === 'string' ? config.campoOutput : null;
+      const campo =
+        campoExplicito ?? defaultOutputParaHeredar(paso.familiaCodigo);
       if (campo) {
         const v = (jobContext as Record<string, unknown>)[campo];
         if (typeof v === 'number' && Number.isFinite(v) && v > 0) return v;
@@ -1393,14 +2608,20 @@ export class MotorUniversalService {
       }
       // Fallback histórico: m² crudos de las piezas (sin desperdicio) cuando
       // la familia no tiene algoritmo soportado por el dispatcher.
-      if (paso.familiaCodigo === 'impresion_por_area' || paso.familiaCodigo === 'plotter_corte') {
+      if (
+        paso.familiaCodigo === 'impresion_por_area' ||
+        paso.familiaCodigo === 'plotter_corte'
+      ) {
         return this.calcularM2DesdePiezas(jobContext);
       }
       return Number(jobContext.cantidad ?? 0);
     }
 
     if (mecanismo === 'CONVERSION') {
-      const config = (paso.mecanismoCantidadConfigJson ?? {}) as Record<string, unknown>;
+      const config = (paso.mecanismoCantidadConfigJson ?? {}) as Record<
+        string,
+        unknown
+      >;
       const cantidadBase = Number(jobContext.cantidad ?? 0);
       // CONVERSION típica: cajas = ceil(piezas / piezasPorCaja)
       const piezasPorCaja = Number(config.piezasPorCaja ?? 0);
@@ -1431,7 +2652,10 @@ export class MotorUniversalService {
    * Devuelve un nuevo `PasoCargado` con `maquina` (y perfilesDisponibles)
    * apuntando a la M-2 elegida, o el `paso` original si no había candidatas.
    */
-  private resolverMaquinaM2(paso: PasoCargado, jobContext: JobContext): PasoCargado {
+  private resolverMaquinaM2(
+    paso: PasoCargado,
+    jobContext: JobContext,
+  ): PasoCargado {
     if (!paso.maquinasCandidatas || paso.maquinasCandidatas.length === 0) {
       return paso; // sin candidatas, mantiene M-1 default
     }
@@ -1440,12 +2664,16 @@ export class MotorUniversalService {
     const keyById = `maquinaSeleccionada_${paso.configPasoId}`;
     const keyByPasoId = `maquinaSeleccionada_${paso.rutaPasoId}`;
     const eleccion =
-      typeof ctx[keyById] === 'string' ? (ctx[keyById] as string) :
-      typeof ctx[keyByPasoId] === 'string' ? (ctx[keyByPasoId] as string) :
-      null;
+      typeof ctx[keyById] === 'string'
+        ? ctx[keyById]
+        : typeof ctx[keyByPasoId] === 'string'
+          ? ctx[keyByPasoId]
+          : null;
 
     let elegida = eleccion
-      ? paso.maquinasCandidatas.find((c) => c.maquinaId === eleccion || c.id === eleccion)
+      ? paso.maquinasCandidatas.find(
+          (c) => c.maquinaId === eleccion || c.id === eleccion,
+        )
       : null;
     if (!elegida) {
       elegida = paso.maquinasCandidatas[0]; // ya viene ordenada (preferida primero)
@@ -1474,6 +2702,7 @@ export class MotorUniversalService {
             productivityUnit: elegida.perfilesOperativos[0].productivityUnit,
             setupMin: elegida.perfilesOperativos[0].setupMin,
             cleanupMin: elegida.perfilesOperativos[0].cleanupMin,
+            detalleJson: elegida.perfilesOperativos[0].detalleJson,
           }
         : paso.perfil,
       perfilM1Id: elegida.perfilesOperativos[0]?.id ?? paso.perfilM1Id,
@@ -1523,6 +2752,7 @@ export class MotorUniversalService {
           productivityUnit: null,
           setupMin: perfil.setupMin,
           cleanupMin: perfil.cleanupMin,
+          detalleJson: perfil.detalleJson,
         };
       }
     }
@@ -1531,7 +2761,10 @@ export class MotorUniversalService {
     // v3.0 (doc §5): el discriminante canónico es `detalle.caras`
     // ('SIMPLE_FAZ' | 'DOBLE_FAZ'). Heurística retro-compat: también
     // detecta el legacy `detalle.dobleFaz === true` y nombre del perfil.
-    if (paso.familiaCodigo === 'impresion_por_hoja' && typeof jobContext.caras === 'number') {
+    if (
+      paso.familiaCodigo === 'impresion_por_hoja' &&
+      typeof jobContext.caras === 'number'
+    ) {
       const buscarDoble = jobContext.caras === 2;
       const candidato = paso.perfilesDisponibles.find((p) => {
         if (!p.activo) return false;
@@ -1550,6 +2783,7 @@ export class MotorUniversalService {
           productivityUnit: null,
           setupMin: candidato.setupMin,
           cleanupMin: candidato.cleanupMin,
+          detalleJson: candidato.detalleJson,
         };
       }
     }
@@ -1578,9 +2812,8 @@ export class MotorUniversalService {
       const activado = this.evaluarActivacionCargo(cargo, jobContext);
       if (!activado) continue;
 
-      const config = (cargo.configOverrideJson ?? cargo.catalogo.configJson) as
-        | Record<string, unknown>
-        | null;
+      const config = (cargo.configOverrideJson ??
+        cargo.catalogo.configJson) as Record<string, unknown> | null;
       const monto = this.calcularMontoCargo(
         cargo.catalogo.modoCalculo,
         config,
@@ -1604,7 +2837,11 @@ export class MotorUniversalService {
   }
 
   private evaluarActivacionCargo(
-    cargo: { modoActivacion: string; condicionActivacionJson: unknown; id: string },
+    cargo: {
+      modoActivacion: string;
+      condicionActivacionJson: unknown;
+      id: string;
+    },
     jobContext: JobContext,
   ): boolean {
     if (cargo.modoActivacion === 'OBLIGATORIO') return true;
@@ -1636,7 +2873,9 @@ export class MotorUniversalService {
 
     if (modoCalculo === 'MONTO_FIJO_PLANO') {
       // Si hay zonas (ej: viático), buscar la zona elegida en el JobContext
-      const zonas = config.zonas as Array<{ codigo: string; monto: number }> | undefined;
+      const zonas = config.zonas as
+        | Array<{ codigo: string; monto: number }>
+        | undefined;
       if (zonas && jobContext.zonaInstalacion) {
         const zona = zonas.find((z) => z.codigo === jobContext.zonaInstalacion);
         if (zona) return Number(zona.monto);
@@ -1652,8 +2891,11 @@ export class MotorUniversalService {
 
     if (modoCalculo === 'POR_UNIDAD_INPUT') {
       const precioPorUnidad = Number(config.precioPorUnidad ?? 0);
-      const inputCantidad = String(config.inputCantidad ?? '');
-      const valorInput = Number((jobContext as Record<string, unknown>)[inputCantidad] ?? 0);
+      const inputCantidad =
+        typeof config.inputCantidad === 'string' ? config.inputCantidad : '';
+      const valorInput = Number(
+        (jobContext as Record<string, unknown>)[inputCantidad] ?? 0,
+      );
       return precioPorUnidad * valorInput;
     }
 
@@ -1678,7 +2920,10 @@ export class MotorUniversalService {
     paso: PasoCargado,
     jobContext: JobContext,
   ): number {
-    if (!paso.multiplicadoresActivos || paso.multiplicadoresActivos.length === 0) {
+    if (
+      !paso.multiplicadoresActivos ||
+      paso.multiplicadoresActivos.length === 0
+    ) {
       return cantidadBase;
     }
     let resultado = cantidadBase;
@@ -1691,10 +2936,63 @@ export class MotorUniversalService {
     return resultado;
   }
 
-
   // ============================================================================
   // CARGA DE DATOS DEL DB
   // ============================================================================
+
+  private toConsumibleCargado(consumible: {
+    id: string;
+    perfilOperativoId: string | null;
+    nombre: string;
+    tipo: string;
+    unidad: string;
+    rendimientoEstimado: unknown;
+    consumoBase: unknown;
+    activo: boolean;
+    detalleJson: unknown;
+      materiaPrimaVariante: {
+        id: string;
+        sku: string;
+        nombreVariante?: string | null;
+        precioReferencia: unknown;
+        unidadStock?: string | null;
+        atributosVarianteJson: unknown;
+        materiaPrima?: { nombre: string; unidadStock: string };
+      };
+  }) {
+    return {
+      id: consumible.id,
+      perfilOperativoId: consumible.perfilOperativoId,
+      nombre: consumible.nombre,
+      tipo: consumible.tipo.toLowerCase(),
+      unidad: consumible.unidad.toLowerCase(),
+      rendimientoEstimado:
+        consumible.rendimientoEstimado == null
+          ? null
+          : Number(consumible.rendimientoEstimado),
+      consumoBase:
+        consumible.consumoBase == null ? null : Number(consumible.consumoBase),
+      activo: consumible.activo,
+      detalleJson: consumible.detalleJson,
+      materialVariante: {
+        id: consumible.materiaPrimaVariante.id,
+        sku: consumible.materiaPrimaVariante.sku,
+        nombreVariante: consumible.materiaPrimaVariante.nombreVariante ?? null,
+        materiaPrimaNombre:
+          consumible.materiaPrimaVariante.materiaPrima?.nombre ?? null,
+        precioReferencia:
+          consumible.materiaPrimaVariante.precioReferencia == null
+            ? null
+            : Number(consumible.materiaPrimaVariante.precioReferencia),
+        unidadStock:
+          consumible.materiaPrimaVariante.unidadStock ??
+          consumible.materiaPrimaVariante.materiaPrima?.unidadStock ??
+          null,
+        atributosVarianteJson: consumible.materiaPrimaVariante
+          .atributosVarianteJson as Record<string, unknown> | null,
+      },
+    };
+  }
 
   private async cargarProductoYRuta(
     tenantId: string,
@@ -1712,13 +3010,32 @@ export class MotorUniversalService {
               include: {
                 rutaPaso: true,
                 maquinaM1: {
-                  include: { perfilesOperativos: true },
+                  include: {
+                    perfilesOperativos: true,
+                    consumibles: {
+                      where: { activo: true },
+                      include: {
+                        materiaPrimaVariante: {
+                          include: {
+                            materiaPrima: {
+                              select: { nombre: true, unidadStock: true },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
                 },
                 perfilM1: true,
+                centroCosto: true,
                 slotsMateriales: {
                   include: {
                     materialVariante: {
-                      include: { materiaPrima: { select: { unidadStock: true } } },
+                      include: {
+                        materiaPrima: {
+                          select: { nombre: true, unidadStock: true },
+                        },
+                      },
                     },
                   },
                 },
@@ -1726,7 +3043,23 @@ export class MotorUniversalService {
                   where: { activo: true },
                   orderBy: [{ esPreferida: 'desc' }, { orden: 'asc' }],
                   include: {
-                    maquina: { include: { perfilesOperativos: true } },
+                    maquina: {
+                      include: {
+                        perfilesOperativos: true,
+                        consumibles: {
+                          where: { activo: true },
+                          include: {
+                            materiaPrimaVariante: {
+                              include: {
+                                materiaPrima: {
+                                  select: { nombre: true, unidadStock: true },
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
                   },
                 },
                 cargosDirectosPaso: {
@@ -1748,7 +3081,9 @@ export class MotorUniversalService {
       throw new Error(`Producto no encontrado: ${productoId}`);
     }
     if (producto.rutasAlternativas.length === 0) {
-      throw new Error(`Producto ${producto.codigo} no tiene rutas alternativas`);
+      throw new Error(
+        `Producto ${producto.codigo} no tiene rutas alternativas`,
+      );
     }
 
     // Elegir ruta alternativa: explícita > preferida > primera
@@ -1758,120 +3093,202 @@ export class MotorUniversalService {
     if (!rutaAlt) rutaAlt = producto.rutasAlternativas[0];
 
     if (!rutaAlt) {
-      throw new Error(`No se pudo elegir ruta alternativa para producto ${producto.codigo}`);
+      throw new Error(
+        `No se pudo elegir ruta alternativa para producto ${producto.codigo}`,
+      );
     }
 
-    const pasos: PasoCargado[] = rutaAlt.configPasos.map((cp) => ({
-      rutaPasoId: cp.rutaPaso.id,
-      rutaPasoOrden: cp.rutaPaso.orden,
-      familiaCodigo: cp.rutaPaso.familiaCodigo,
-      configPasoId: cp.id,
-      modoActivacion: cp.modoActivacion,
-      condicionActivacionJson: cp.condicionActivacionJson,
-      modoTiempo: cp.modoTiempo,
-      mecanismoCantidad: cp.mecanismoCantidad,
-      mecanismoCantidadConfigJson: cp.mecanismoCantidadConfigJson,
-      multiplicadoresActivos: cp.multiplicadoresActivos,
-      paramsPasoJson: cp.paramsPasoJson,
-      maquinaM1Id: cp.maquinaM1Id,
-      perfilM1Id: cp.perfilM1Id,
-      setupOverrideMin: cp.setupOverrideMin ? Number(cp.setupOverrideMin) : null,
-      cleanupOverrideMin: cp.cleanupOverrideMin ? Number(cp.cleanupOverrideMin) : null,
-      tiempoFijoOverrideMin: cp.tiempoFijoOverrideMin ? Number(cp.tiempoFijoOverrideMin) : null,
-      maquina: cp.maquinaM1
-        ? {
-            id: cp.maquinaM1.id,
-            codigo: cp.maquinaM1.codigo,
-            nombre: cp.maquinaM1.nombre,
-            plantilla: cp.maquinaM1.plantilla,
-            centroCostoPrincipalId: cp.maquinaM1.centroCostoPrincipalId,
-            parametrosTecnicosJson: cp.maquinaM1.parametrosTecnicosJson as Record<string, unknown> | null,
-          }
-        : undefined,
-      perfil: cp.perfilM1
-        ? {
-            id: cp.perfilM1.id,
-            nombre: cp.perfilM1.nombre,
-            productivityValue: cp.perfilM1.productivityValue ? Number(cp.perfilM1.productivityValue) : null,
-            productivityUnit: cp.perfilM1.productivityUnit,
-            setupMin: cp.perfilM1.setupMin ? Number(cp.perfilM1.setupMin) : null,
-            cleanupMin: cp.perfilM1.cleanupMin ? Number(cp.perfilM1.cleanupMin) : null,
-          }
-        : undefined,
-      perfilesDisponibles: cp.maquinaM1?.perfilesOperativos.map((p) => ({
-        id: p.id,
-        nombre: p.nombre,
-        activo: p.activo,
-        productivityValue: p.productivityValue ? Number(p.productivityValue) : null,
-        setupMin: p.setupMin ? Number(p.setupMin) : null,
-        cleanupMin: p.cleanupMin ? Number(p.cleanupMin) : null,
-        detalleJson: p.detalleJson,
-      })),
-      maquinasCandidatas: cp.maquinasCandidatas.map((mc) => ({
-        id: mc.id,
-        maquinaId: mc.maquinaId,
-        esPreferida: mc.esPreferida,
-        orden: mc.orden,
-        maquina: {
-          id: mc.maquina.id,
-          codigo: mc.maquina.codigo,
-          nombre: mc.maquina.nombre,
-          plantilla: mc.maquina.plantilla,
-          centroCostoPrincipalId: mc.maquina.centroCostoPrincipalId,
-          parametrosTecnicosJson: mc.maquina.parametrosTecnicosJson as Record<string, unknown> | null,
-        },
-        perfilesOperativos: mc.maquina.perfilesOperativos.map((p) => ({
+    const rutaVersion = await this.prisma.rutaVersion.findFirst({
+      where: {
+        tenantId,
+        rutaId: rutaAlt.rutaId,
+        version: rutaAlt.rutaVersion,
+      },
+    });
+    if (!rutaVersion) {
+      throw new Error(
+        `La ruta ${rutaAlt.ruta.codigo} no tiene snapshot de versión ${rutaAlt.rutaVersion}`,
+      );
+    }
+    const snapshotPasos = this.parseRutaVersionSnapshot(
+      rutaVersion.snapshotJson,
+    );
+    const snapshotById = new Map(
+      snapshotPasos.filter((p) => p.id).map((p) => [p.id!, p]),
+    );
+    const usaSnapshotConIds = snapshotById.size > 0;
+    const configPasosVersionados = rutaAlt.configPasos
+      .filter((cp) => {
+        if (usaSnapshotConIds) return snapshotById.has(cp.rutaPasoId);
+        return cp.rutaPaso.version === rutaAlt.rutaVersion;
+      })
+      .sort((a, b) => {
+        const ordenA =
+          snapshotById.get(a.rutaPasoId)?.orden ?? a.rutaPaso.orden;
+        const ordenB =
+          snapshotById.get(b.rutaPasoId)?.orden ?? b.rutaPaso.orden;
+        return ordenA - ordenB;
+      });
+
+    const pasos: PasoCargado[] = configPasosVersionados.map((cp) => {
+      const snapshotPaso = snapshotById.get(cp.rutaPasoId);
+      return {
+        rutaPasoId: cp.rutaPaso.id,
+        rutaPasoOrden: snapshotPaso?.orden ?? cp.rutaPaso.orden,
+        familiaCodigo: snapshotPaso?.familiaCodigo ?? cp.rutaPaso.familiaCodigo,
+        configPasoId: cp.id,
+        modoActivacion: cp.modoActivacion,
+        condicionActivacionJson: cp.condicionActivacionJson,
+        modoTiempo: cp.modoTiempo,
+        mecanismoCantidad: cp.mecanismoCantidad,
+        mecanismoCantidadConfigJson: cp.mecanismoCantidadConfigJson,
+        multiplicadoresActivos: cp.multiplicadoresActivos,
+        paramsPasoJson: cp.paramsPasoJson,
+        maquinaM1Id: cp.maquinaM1Id,
+        perfilM1Id: cp.perfilM1Id,
+        centroCostoId: cp.maquinaM1Id ? null : cp.centroCostoId,
+        setupOverrideMin: cp.setupOverrideMin
+          ? Number(cp.setupOverrideMin)
+          : null,
+        cleanupOverrideMin: cp.cleanupOverrideMin
+          ? Number(cp.cleanupOverrideMin)
+          : null,
+        tiempoFijoOverrideMin: cp.tiempoFijoOverrideMin
+          ? Number(cp.tiempoFijoOverrideMin)
+          : null,
+        maquina: cp.maquinaM1
+          ? {
+              id: cp.maquinaM1.id,
+              codigo: cp.maquinaM1.codigo,
+              nombre: cp.maquinaM1.nombre,
+              plantilla: cp.maquinaM1.plantilla,
+              anchoUtil: cp.maquinaM1.anchoUtil
+                ? Number(cp.maquinaM1.anchoUtil)
+                : null,
+              centroCostoPrincipalId: cp.maquinaM1.centroCostoPrincipalId,
+              parametrosTecnicosJson: cp.maquinaM1
+                .parametrosTecnicosJson as Record<string, unknown> | null,
+              consumibles: cp.maquinaM1.consumibles.map((c) =>
+                this.toConsumibleCargado(c),
+              ),
+            }
+          : undefined,
+        perfil: cp.perfilM1
+          ? {
+              id: cp.perfilM1.id,
+              nombre: cp.perfilM1.nombre,
+              productivityValue: cp.perfilM1.productivityValue
+                ? Number(cp.perfilM1.productivityValue)
+                : null,
+              productivityUnit: cp.perfilM1.productivityUnit,
+              setupMin: cp.perfilM1.setupMin
+                ? Number(cp.perfilM1.setupMin)
+                : null,
+              cleanupMin: cp.perfilM1.cleanupMin
+                ? Number(cp.perfilM1.cleanupMin)
+                : null,
+              detalleJson: cp.perfilM1.detalleJson,
+            }
+          : undefined,
+        centroCosto:
+          !cp.maquinaM1Id && cp.centroCosto
+            ? {
+                id: cp.centroCosto.id,
+                codigo: cp.centroCosto.codigo,
+                nombre: cp.centroCosto.nombre,
+              }
+            : undefined,
+        perfilesDisponibles: cp.maquinaM1?.perfilesOperativos.map((p) => ({
           id: p.id,
           nombre: p.nombre,
           activo: p.activo,
-          productivityValue: p.productivityValue ? Number(p.productivityValue) : null,
-          productivityUnit: p.productivityUnit,
+          productivityValue: p.productivityValue
+            ? Number(p.productivityValue)
+            : null,
           setupMin: p.setupMin ? Number(p.setupMin) : null,
           cleanupMin: p.cleanupMin ? Number(p.cleanupMin) : null,
           detalleJson: p.detalleJson,
         })),
-      })),
-      slots: cp.slotsMateriales.map((s) => ({
-        id: s.id,
-        slotCodigo: s.slotCodigo,
-        modoSeleccion: s.modoSeleccion,
-        criterioMotorAuto: s.criterioMotorAuto,
-        criterioInputCampo: s.criterioInputCampo,
-        criterioMaterialCampo: s.criterioMaterialCampo,
-        materialVarianteId: s.materialVarianteId,
-        materialesCandidatosJson: s.materialesCandidatosJson,
-        estrategiaCosto: s.estrategiaCosto,
-        formula: s.formula,
-        aplicaMultiCaras: s.aplicaMultiCaras,
-        materialVariante: s.materialVariante
-          ? {
+        maquinasCandidatas: cp.maquinasCandidatas.map((mc) => ({
+          id: mc.id,
+          maquinaId: mc.maquinaId,
+          esPreferida: mc.esPreferida,
+          orden: mc.orden,
+          maquina: {
+            id: mc.maquina.id,
+            codigo: mc.maquina.codigo,
+            nombre: mc.maquina.nombre,
+            plantilla: mc.maquina.plantilla,
+            anchoUtil: mc.maquina.anchoUtil
+              ? Number(mc.maquina.anchoUtil)
+              : null,
+            centroCostoPrincipalId: mc.maquina.centroCostoPrincipalId,
+            parametrosTecnicosJson: mc.maquina.parametrosTecnicosJson as Record<
+              string,
+              unknown
+            > | null,
+            consumibles: mc.maquina.consumibles.map((c) =>
+              this.toConsumibleCargado(c),
+            ),
+          },
+          perfilesOperativos: mc.maquina.perfilesOperativos.map((p) => ({
+            id: p.id,
+            nombre: p.nombre,
+            activo: p.activo,
+            productivityValue: p.productivityValue
+              ? Number(p.productivityValue)
+              : null,
+            productivityUnit: p.productivityUnit,
+            setupMin: p.setupMin ? Number(p.setupMin) : null,
+            cleanupMin: p.cleanupMin ? Number(p.cleanupMin) : null,
+            detalleJson: p.detalleJson,
+          })),
+        })),
+        slots: cp.slotsMateriales.map((s) => ({
+          id: s.id,
+          slotCodigo: s.slotCodigo,
+          modoSeleccion: s.modoSeleccion,
+          criterioMotorAuto: s.criterioMotorAuto,
+          criterioInputCampo: s.criterioInputCampo,
+          criterioMaterialCampo: s.criterioMaterialCampo,
+          materialVarianteId: s.materialVarianteId,
+          materialesCandidatosJson: s.materialesCandidatosJson,
+          estrategiaCosto: s.estrategiaCosto,
+          formula: s.formula,
+          aplicaMultiCaras: s.aplicaMultiCaras,
+          materialVariante: s.materialVariante
+            ? {
               id: s.materialVariante.id,
               sku: s.materialVariante.sku,
+              nombreVariante: s.materialVariante.nombreVariante,
+              materiaPrimaNombre: s.materialVariante.materiaPrima?.nombre ?? null,
               precioReferencia: s.materialVariante.precioReferencia
-                ? Number(s.materialVariante.precioReferencia)
-                : null,
-              atributosVarianteJson: s.materialVariante.atributosVarianteJson as Record<string, unknown> | null,
-              unidadStock:
-                s.materialVariante.unidadStock ??
-                s.materialVariante.materiaPrima?.unidadStock ??
-                null,
-            }
-          : undefined,
-      })),
-      cargosDirectosPaso: cp.cargosDirectosPaso.map((c) => ({
-        id: c.id,
-        cargoDirectoCatalogoId: c.cargoDirectoCatalogoId,
-        modoActivacion: c.modoActivacion,
-        condicionActivacionJson: c.condicionActivacionJson,
-        configOverrideJson: c.configOverrideJson,
-        catalogo: {
-          codigo: c.cargoDirectoCatalogo.codigo,
-          nombre: c.cargoDirectoCatalogo.nombre,
-          modoCalculo: c.cargoDirectoCatalogo.modoCalculo,
-          configJson: c.cargoDirectoCatalogo.configJson,
-        },
-      })),
-    }));
+                  ? Number(s.materialVariante.precioReferencia)
+                  : null,
+                atributosVarianteJson: s.materialVariante
+                  .atributosVarianteJson as Record<string, unknown> | null,
+                unidadStock:
+                  s.materialVariante.unidadStock ??
+                  s.materialVariante.materiaPrima?.unidadStock ??
+                  null,
+              }
+            : undefined,
+        })),
+        cargosDirectosPaso: cp.cargosDirectosPaso.map((c) => ({
+          id: c.id,
+          cargoDirectoCatalogoId: c.cargoDirectoCatalogoId,
+          modoActivacion: c.modoActivacion,
+          condicionActivacionJson: c.condicionActivacionJson,
+          configOverrideJson: c.configOverrideJson,
+          catalogo: {
+            codigo: c.cargoDirectoCatalogo.codigo,
+            nombre: c.cargoDirectoCatalogo.nombre,
+            modoCalculo: c.cargoDirectoCatalogo.modoCalculo,
+            configJson: c.cargoDirectoCatalogo.configJson,
+          },
+        })),
+      };
+    });
 
     return {
       productoId: producto.id,
@@ -1906,5 +3323,35 @@ export class MotorUniversalService {
         },
       })),
     };
+  }
+
+  private parseRutaVersionSnapshot(snapshotJson: unknown): Array<{
+    id?: string;
+    orden: number;
+    familiaCodigo: string;
+  }> {
+    const snapshot = snapshotJson as { pasos?: unknown[] } | null;
+    if (!snapshot || !Array.isArray(snapshot.pasos)) return [];
+
+    type SnapshotPaso = { id?: string; orden: number; familiaCodigo: string };
+    return snapshot.pasos
+      .map((paso) => {
+        const item = paso as Record<string, unknown>;
+        const orden = typeof item.orden === 'number' ? item.orden : null;
+        const familiaCodigo =
+          typeof item.familiaCodigo === 'string'
+            ? item.familiaCodigo
+            : typeof item.familia === 'string'
+              ? item.familia
+              : null;
+        if (orden == null || !familiaCodigo) return null;
+        const parsed: SnapshotPaso = {
+          id: typeof item.id === 'string' ? item.id : undefined,
+          orden,
+          familiaCodigo,
+        };
+        return parsed;
+      })
+      .filter((item): item is SnapshotPaso => item !== null);
   }
 }

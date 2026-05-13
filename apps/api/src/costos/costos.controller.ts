@@ -19,6 +19,7 @@ import { ReplaceCentroRecursosDto } from './dto/replace-centro-recursos.dto';
 import { ReplaceCentroComponentesCostoDto } from './dto/replace-centro-componentes-costo.dto';
 import { UpsertCentroCapacidadDto } from './dto/upsert-centro-capacidad.dto';
 import { UpsertCentroRecursosMaquinariaDto } from './dto/upsert-centro-recursos-maquinaria.dto';
+import { UpsertCentroConfiguracionPeriodoDto } from './dto/upsert-centro-configuracion-periodo.dto';
 
 @Controller('costos')
 export class CostosController {
@@ -121,6 +122,21 @@ export class CostosController {
     @Body() payload: UpsertCentroConfiguracionBaseDto,
   ) {
     return this.costosService.updateCentroConfiguracionBase(auth, id, payload);
+  }
+
+  @Put('centros-costo/:id/configuracion-periodo')
+  upsertCentroConfiguracionPeriodo(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Query('periodo') periodo: string,
+    @Body() payload: UpsertCentroConfiguracionPeriodoDto,
+  ) {
+    return this.costosService.upsertCentroConfiguracionPeriodo(
+      auth,
+      id,
+      periodo,
+      payload,
+    );
   }
 
   @Put('centros-costo/:id/recursos')

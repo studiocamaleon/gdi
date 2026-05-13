@@ -1,4 +1,10 @@
-import { IsBoolean, IsNotEmpty, IsObject, IsOptional, IsUUID } from 'class-validator';
+import {
+  IsBoolean,
+  IsNotEmpty,
+  IsObject,
+  IsOptional,
+  IsUUID,
+} from 'class-validator';
 
 export class CrearPrecioEspecialClienteDto {
   @IsUUID()

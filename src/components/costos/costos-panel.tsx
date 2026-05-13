@@ -72,7 +72,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 
 type CostosPanelProps = {
   initialPlantas: Planta[];
@@ -374,32 +374,44 @@ export function CostosPanel({
   };
 
   return (
-    <div className="flex flex-1 flex-col p-4 md:p-6">
-      <Card className="rounded-2xl border-border/70 shadow-sm">
-        <CardHeader className="gap-4 border-b border-border/70">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-3xl">
-              <CardTitle>Centros de costo</CardTitle>
-              <CardDescription>
-                Administra la estructura multi-tenant de plantas, areas y centros
-                de costo para el costeo operativo de la grafica.
-              </CardDescription>
-            </div>
-
-            <Button variant="sidebar" className="w-full sm:w-auto" onClick={reloadAll}>
-              <RefreshCcwIcon className={isReloading ? "animate-spin" : undefined} />
-              Refrescar
-            </Button>
+    <div className="content">
+      <div className="page-head">
+        <div className="title-block">
+          <h1>Centros de costo</h1>
+          <div className="sub">
+            Administra la estructura multi-tenant de plantas, áreas y centros de costo para el costeo operativo de la gráfica.
           </div>
-        </CardHeader>
+        </div>
+        <button type="button" className="btn" onClick={reloadAll}>
+          <RefreshCcwIcon size={14} className={isReloading ? "animate-spin" : undefined} />
+          Refrescar
+        </button>
+      </div>
 
-        <CardContent className="p-6">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-6 h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-xl border border-sidebar-border/20 bg-sidebar/8 p-1">
-              <TabsTrigger value="plantas">Plantas</TabsTrigger>
-              <TabsTrigger value="areas">Areas</TabsTrigger>
-              <TabsTrigger value="centros">Centros</TabsTrigger>
-            </TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <div className="cc-tabs">
+          <button
+            type="button"
+            className={`cc-tab ${activeTab === "plantas" ? "active" : ""}`}
+            onClick={() => setActiveTab("plantas")}
+          >
+            Plantas
+          </button>
+          <button
+            type="button"
+            className={`cc-tab ${activeTab === "areas" ? "active" : ""}`}
+            onClick={() => setActiveTab("areas")}
+          >
+            Áreas
+          </button>
+          <button
+            type="button"
+            className={`cc-tab ${activeTab === "centros" ? "active" : ""}`}
+            onClick={() => setActiveTab("centros")}
+          >
+            Centros
+          </button>
+        </div>
 
             <TabsContent value="plantas" className="flex flex-col gap-6">
               <Card className="rounded-2xl border-border/70 shadow-none">
@@ -1291,10 +1303,8 @@ export function CostosPanel({
                   </CardContent>
                 </Card>
               </div>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+        </TabsContent>
+      </Tabs>
       <CentroCostoConfigurator
         open={isConfiguratorOpen}
         onOpenChange={setIsConfiguratorOpen}

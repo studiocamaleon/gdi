@@ -43,7 +43,10 @@ export class ProductosServiciosController {
   constructor(private readonly service: ProductosServiciosService) {}
 
   @Get('productos')
-  async listarProductos(@Req() req: RequestWithAuth, @Query('activo') activo?: string) {
+  async listarProductos(
+    @Req() req: RequestWithAuth,
+    @Query('activo') activo?: string,
+  ) {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
     const filtroActivo = activo === undefined ? undefined : activo !== 'false';
@@ -65,7 +68,10 @@ export class ProductosServiciosController {
   }
 
   @Post('productos')
-  async crearProducto(@Req() req: RequestWithAuth, @Body() dto: CrearProductoDto) {
+  async crearProducto(
+    @Req() req: RequestWithAuth,
+    @Body() dto: CrearProductoDto,
+  ) {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
     return this.service.crearProducto(tenantId, dto);
@@ -151,7 +157,11 @@ export class ProductosServiciosController {
   ) {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
-    return this.service.actualizarProductoRutaAlternativa(tenantId, rutaAltId, dto);
+    return this.service.actualizarProductoRutaAlternativa(
+      tenantId,
+      rutaAltId,
+      dto,
+    );
   }
 
   @Delete('productos/rutas-alternativas/:rutaAltId')
@@ -199,7 +209,10 @@ export class ProductosServiciosController {
   }
 
   @Post('cargos-directos')
-  async crearCargoDirecto(@Req() req: RequestWithAuth, @Body() dto: CrearCargoDirectoDto) {
+  async crearCargoDirecto(
+    @Req() req: RequestWithAuth,
+    @Body() dto: CrearCargoDirectoDto,
+  ) {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
     return this.service.crearCargoDirecto(tenantId, dto);
@@ -218,7 +231,10 @@ export class ProductosServiciosController {
 
   @Delete('cargos-directos/:id')
   @HttpCode(204)
-  async eliminarCargoDirecto(@Req() req: RequestWithAuth, @Param('id') id: string) {
+  async eliminarCargoDirecto(
+    @Req() req: RequestWithAuth,
+    @Param('id') id: string,
+  ) {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
     await this.service.eliminarCargoDirecto(tenantId, id);

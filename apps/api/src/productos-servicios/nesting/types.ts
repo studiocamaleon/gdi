@@ -30,8 +30,8 @@ export interface Piece<T = unknown> {
 
 /** Discriminated union por geometría del sustrato. */
 export type Substrate =
-  | SheetSubstrate    // pliego de papel, placa rígida, cualquier rectángulo finito
-  | RollSubstrate;    // rollo (ancho fijo, largo variable)
+  | SheetSubstrate // pliego de papel, placa rígida, cualquier rectángulo finito
+  | RollSubstrate; // rollo (ancho fijo, largo variable)
 
 export interface SheetSubstrate {
   kind: 'sheet';
@@ -75,6 +75,7 @@ export interface PanelizadoOptions {
   maxPanelWidthMm: number;
   distribution: 'equilibrada' | 'libre';
   widthInterpretation: 'total' | 'util';
+  manualLayout?: Record<string, unknown> | null;
 }
 
 // ─── Resultado: posición individual ────────────────────────────────
@@ -127,6 +128,7 @@ export interface NestingResult<T = unknown> {
 export type NestingAlgorithm =
   | 'grid-2d-single'
   | 'grid-2d-multi'
+  | 'packingsolver-rectangle'
   | 'shelf-rollo';
 
 export interface NestingMetrics {
@@ -150,4 +152,6 @@ export interface NestingMetrics {
   wasteAreaM2?: number;
   /** Solo grid-2d-single: largo consumido en una placa parcial (para costeo largo_consumido). */
   largoConsumidoMm?: number;
+  /** Solo multi/sólver externo: métricas por placa real acomodada. */
+  perSubstrate?: Array<{ areaUtilMm2: number; consumedLengthMm: number }>;
 }

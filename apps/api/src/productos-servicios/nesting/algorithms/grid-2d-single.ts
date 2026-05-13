@@ -43,8 +43,14 @@ function calcGrid(
     return { columnas: 0, filas: 0 };
   }
   return {
-    columnas: Math.max(0, Math.floor((areaWidthMm + sepHMm) / (pieceWidthMm + sepHMm))),
-    filas: Math.max(0, Math.floor((areaHeightMm + sepVMm) / (pieceHeightMm + sepVMm))),
+    columnas: Math.max(
+      0,
+      Math.floor((areaWidthMm + sepHMm) / (pieceWidthMm + sepHMm)),
+    ),
+    filas: Math.max(
+      0,
+      Math.floor((areaHeightMm + sepVMm) / (pieceHeightMm + sepVMm)),
+    ),
   };
 }
 
@@ -70,13 +76,27 @@ export function nestGrid2DSingle<T = unknown>(
   const areaWidthMm = substrate.widthMm - marginLeftMm - marginRightMm;
   const areaHeightMm = substrate.heightMm - marginTopMm - marginBottomMm;
 
-  const orig = calcGrid(piece.widthMm, piece.heightMm, areaWidthMm, areaHeightMm, sepHMm, sepVMm);
+  const orig = calcGrid(
+    piece.widthMm,
+    piece.heightMm,
+    areaWidthMm,
+    areaHeightMm,
+    sepHMm,
+    sepVMm,
+  );
   const origCount = orig.columnas * orig.filas;
 
   let rot: GridDimensions = { columnas: 0, filas: 0 };
   let rotCount = 0;
   if (allowRotation && piece.widthMm !== piece.heightMm) {
-    rot = calcGrid(piece.heightMm, piece.widthMm, areaWidthMm, areaHeightMm, sepHMm, sepVMm);
+    rot = calcGrid(
+      piece.heightMm,
+      piece.widthMm,
+      areaWidthMm,
+      areaHeightMm,
+      sepHMm,
+      sepVMm,
+    );
     rotCount = rot.columnas * rot.filas;
   }
 
@@ -103,17 +123,22 @@ export function nestGrid2DSingle<T = unknown>(
 
   const areaTotalMm2 = substrate.widthMm * substrate.heightMm;
   const areaUtilMm2 = count * piece.widthMm * piece.heightMm;
-  const aprovechamientoPct = areaTotalMm2 > 0
-    ? Math.round((areaUtilMm2 / areaTotalMm2) * 10000) / 100
-    : 0;
+  const aprovechamientoPct =
+    areaTotalMm2 > 0
+      ? Math.round((areaUtilMm2 / areaTotalMm2) * 10000) / 100
+      : 0;
 
   // Largo consumido: legacy lo calcula como margen + filas × altura + (filas-1) × sep + margen
   // Esto es el "alto efectivo" que usa la pieza, útil para costeo `largo_consumido`.
   // Mantiene la fórmula exacta del código legacy (margen uniforme top+bottom).
   const marginVUniformMm = marginTopMm; // legacy usa el mismo margen para top y bottom
-  const largoConsumidoMm = best.filas > 0
-    ? marginVUniformMm + best.filas * placedHeightMm + (best.filas - 1) * sepVMm + (m.bottomMm ?? marginTopMm)
-    : 0;
+  const largoConsumidoMm =
+    best.filas > 0
+      ? marginVUniformMm +
+        best.filas * placedHeightMm +
+        (best.filas - 1) * sepVMm +
+        (m.bottomMm ?? marginTopMm)
+      : 0;
 
   return {
     algorithm: 'grid-2d-single',

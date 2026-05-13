@@ -32,7 +32,9 @@ describe('AplicarPrecioService', () => {
   const sinImpuestos: ImpuestoSnapshot[] = [];
   const sinComisiones: ComisionSnapshot[] = [];
 
-  const baseInput = (overrides: Partial<AplicarPrecioInput> = {}): AplicarPrecioInput => ({
+  const baseInput = (
+    overrides: Partial<AplicarPrecioInput> = {},
+  ): AplicarPrecioInput => ({
     costoUnitario: 100,
     cantidad: 10,
     precioConfig: { metodoCalculo: 'por_margen', detalle: { marginPct: 100 } },
@@ -57,14 +59,24 @@ describe('AplicarPrecioService', () => {
 
     it('margen 0% devuelve el costo', () => {
       const r = service.aplicar(
-        baseInput({ precioConfig: { metodoCalculo: 'por_margen', detalle: { marginPct: 0 } } }),
+        baseInput({
+          precioConfig: {
+            metodoCalculo: 'por_margen',
+            detalle: { marginPct: 0 },
+          },
+        }),
       );
       expect(r.desglose.precioBase).toBe(100);
     });
 
     it('margen 50% sobre costo 100: 150', () => {
       const r = service.aplicar(
-        baseInput({ precioConfig: { metodoCalculo: 'por_margen', detalle: { marginPct: 50 } } }),
+        baseInput({
+          precioConfig: {
+            metodoCalculo: 'por_margen',
+            detalle: { marginPct: 50 },
+          },
+        }),
       );
       expect(r.desglose.precioBase).toBe(150);
     });
@@ -72,7 +84,9 @@ describe('AplicarPrecioService', () => {
     it('rechaza si falta marginPct', () => {
       expect(() =>
         service.aplicar(
-          baseInput({ precioConfig: { metodoCalculo: 'por_margen', detalle: {} } }),
+          baseInput({
+            precioConfig: { metodoCalculo: 'por_margen', detalle: {} },
+          }),
         ),
       ).toThrow(BadRequestException);
     });
@@ -83,7 +97,10 @@ describe('AplicarPrecioService', () => {
       const r = service.aplicar(
         baseInput({
           costoUnitario: 50,
-          precioConfig: { metodoCalculo: 'precio_fijo', detalle: { price: 200 } },
+          precioConfig: {
+            metodoCalculo: 'precio_fijo',
+            detalle: { price: 200 },
+          },
         }),
       );
       expect(r.desglose.precioBase).toBe(200);
@@ -97,13 +114,17 @@ describe('AplicarPrecioService', () => {
     };
 
     it('si price > piso (costo × 1.3), usa price', () => {
-      const r = service.aplicar(baseInput({ costoUnitario: 100, precioConfig: cfg }));
+      const r = service.aplicar(
+        baseInput({ costoUnitario: 100, precioConfig: cfg }),
+      );
       // piso = 130, price = 200 → 200
       expect(r.desglose.precioBase).toBe(200);
     });
 
     it('si price < piso, usa piso', () => {
-      const r = service.aplicar(baseInput({ costoUnitario: 250, precioConfig: cfg }));
+      const r = service.aplicar(
+        baseInput({ costoUnitario: 250, precioConfig: cfg }),
+      );
       // piso = 250 × 1.3 = 325, price = 200 → 325
       expect(r.desglose.precioBase).toBe(325);
     });
@@ -127,17 +148,23 @@ describe('AplicarPrecioService', () => {
     });
 
     it('cantidad 100 → tramo 200, margen 80%', () => {
-      const r = service.aplicar(baseInput({ cantidad: 100, precioConfig: cfg }));
+      const r = service.aplicar(
+        baseInput({ cantidad: 100, precioConfig: cfg }),
+      );
       expect(r.desglose.precioBase).toBe(180);
     });
 
     it('cantidad 500 → último tramo, margen 60%', () => {
-      const r = service.aplicar(baseInput({ cantidad: 500, precioConfig: cfg }));
+      const r = service.aplicar(
+        baseInput({ cantidad: 500, precioConfig: cfg }),
+      );
       expect(r.desglose.precioBase).toBe(160);
     });
 
     it('cantidad por encima del último tramo cae al último', () => {
-      const r = service.aplicar(baseInput({ cantidad: 100000, precioConfig: cfg }));
+      const r = service.aplicar(
+        baseInput({ cantidad: 100000, precioConfig: cfg }),
+      );
       expect(r.desglose.precioBase).toBe(160);
     });
 
@@ -145,7 +172,10 @@ describe('AplicarPrecioService', () => {
       expect(() =>
         service.aplicar(
           baseInput({
-            precioConfig: { metodoCalculo: 'margen_variable', detalle: { tiers: [] } },
+            precioConfig: {
+              metodoCalculo: 'margen_variable',
+              detalle: { tiers: [] },
+            },
           }),
         ),
       ).toThrow(BadRequestException);
@@ -165,7 +195,9 @@ describe('AplicarPrecioService', () => {
     };
 
     it('cantidad 100 → $50/unidad', () => {
-      const r = service.aplicar(baseInput({ cantidad: 100, precioConfig: cfg }));
+      const r = service.aplicar(
+        baseInput({ cantidad: 100, precioConfig: cfg }),
+      );
       expect(r.desglose.precioBase).toBe(50);
       expect(r.precioNetoTotal).toBe(5000);
     });
@@ -183,7 +215,9 @@ describe('AplicarPrecioService', () => {
     };
 
     it('cantidad 100 → $50/unidad', () => {
-      const r = service.aplicar(baseInput({ cantidad: 100, precioConfig: cfg }));
+      const r = service.aplicar(
+        baseInput({ cantidad: 100, precioConfig: cfg }),
+      );
       expect(r.desglose.precioBase).toBe(50);
       expect(r.precioNetoTotal).toBe(5000);
     });
@@ -207,12 +241,16 @@ describe('AplicarPrecioService', () => {
     };
 
     it('costo 100 + cantidad 100 → margen 100% → $200/unidad', () => {
-      const r = service.aplicar(baseInput({ cantidad: 100, precioConfig: cfg }));
+      const r = service.aplicar(
+        baseInput({ cantidad: 100, precioConfig: cfg }),
+      );
       expect(r.desglose.precioBase).toBe(200);
     });
 
     it('cantidad 500 → margen 60% → $160/unidad', () => {
-      const r = service.aplicar(baseInput({ cantidad: 500, precioConfig: cfg }));
+      const r = service.aplicar(
+        baseInput({ cantidad: 500, precioConfig: cfg }),
+      );
       expect(r.desglose.precioBase).toBe(160);
     });
   });
@@ -239,7 +277,9 @@ describe('AplicarPrecioService', () => {
     });
 
     it('precio base 200 + IVA 21% + comisión 5%: impuesto se aplica sobre (precio+comisión)', () => {
-      const r = service.aplicar(baseInput({ impuestos: [iva21], comisiones: [comisVend5] }));
+      const r = service.aplicar(
+        baseInput({ impuestos: [iva21], comisiones: [comisVend5] }),
+      );
       // base 200 → +5% comisión = 210 → +21% impuesto sobre 210 = 254.10
       expect(r.desglose.totalComisiones).toBe(10);
       expect(r.desglose.totalImpuestos).toBe(44.1);
@@ -248,8 +288,15 @@ describe('AplicarPrecioService', () => {
     });
 
     it('múltiples impuestos suman su porcentaje', () => {
-      const ingresosBrutos = { ...iva21, codigo: 'iibb', nombre: 'IIBB 3%', porcentaje: 3 };
-      const r = service.aplicar(baseInput({ impuestos: [iva21, ingresosBrutos] }));
+      const ingresosBrutos = {
+        ...iva21,
+        codigo: 'iibb',
+        nombre: 'IIBB 3%',
+        porcentaje: 3,
+      };
+      const r = service.aplicar(
+        baseInput({ impuestos: [iva21, ingresosBrutos] }),
+      );
       // 200 + (21+3)% = 200 + 48 = 248
       expect(r.desglose.totalImpuestos).toBe(48);
       expect(r.precioBrutoUnitario).toBe(248);
@@ -293,9 +340,16 @@ describe('AplicarPrecioService', () => {
 
   describe('snapshots', () => {
     it('devuelve precioConfig + impuestos + comisiones intactos', () => {
-      const cfg: PrecioConfig = { metodoCalculo: 'por_margen', detalle: { marginPct: 75 } };
+      const cfg: PrecioConfig = {
+        metodoCalculo: 'por_margen',
+        detalle: { marginPct: 75 },
+      };
       const r = service.aplicar(
-        baseInput({ precioConfig: cfg, impuestos: [iva21], comisiones: [comisVend5] }),
+        baseInput({
+          precioConfig: cfg,
+          impuestos: [iva21],
+          comisiones: [comisVend5],
+        }),
       );
       expect(r.snapshots.precioConfig).toEqual(cfg);
       expect(r.snapshots.impuestos).toEqual([iva21]);
@@ -335,14 +389,19 @@ describe('AplicarPrecioService', () => {
     });
 
     it('rechaza cantidad cero', () => {
-      expect(() => service.aplicar(baseInput({ cantidad: 0 }))).toThrow(BadRequestException);
+      expect(() => service.aplicar(baseInput({ cantidad: 0 }))).toThrow(
+        BadRequestException,
+      );
     });
 
     it('rechaza método inválido', () => {
       expect(() =>
         service.aplicar(
           baseInput({
-            precioConfig: { metodoCalculo: 'cualquier_cosa' as never, detalle: {} },
+            precioConfig: {
+              metodoCalculo: 'cualquier_cosa' as never,
+              detalle: {},
+            },
           }),
         ),
       ).toThrow(BadRequestException);

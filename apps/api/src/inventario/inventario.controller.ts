@@ -47,6 +47,10 @@ export class InventarioController {
     @Param('varianteId') varianteId: string,
     @Body() payload: UpdateVariantePrecioReferenciaDto,
   ) {
-    return this.inventarioService.updateVariantePrecioReferencia(auth, varianteId, payload);
+    return this.inventarioService.updateVariantePrecioReferencia(
+      auth,
+      varianteId,
+      payload,
+    );
   }
 }

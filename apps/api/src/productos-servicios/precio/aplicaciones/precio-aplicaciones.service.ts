@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
@@ -49,7 +53,11 @@ export class PrecioAplicacionesService {
 
   // ── Replace-all (atómico) ───────────────────────────────────────────
 
-  async setImpuestos(tenantId: string, productoId: string, dto: AsignarImpuestosBatchDto) {
+  async setImpuestos(
+    tenantId: string,
+    productoId: string,
+    dto: AsignarImpuestosBatchDto,
+  ) {
     await this.assertProductoExiste(tenantId, productoId);
 
     // Validar que todos los catálogos referenciados existan y pertenezcan al tenant
@@ -60,14 +68,18 @@ export class PrecioAplicacionesService {
         select: { id: true },
       });
       if (validos.length !== new Set(ids).size) {
-        throw new BadRequestException('Hay impuestos del catálogo que no existen en el tenant');
+        throw new BadRequestException(
+          'Hay impuestos del catálogo que no existen en el tenant',
+        );
       }
     }
 
     // Validar que no haya duplicados en el batch
     const idsSet = new Set(dto.items.map((i) => i.impuestoCatalogoId));
     if (idsSet.size !== dto.items.length) {
-      throw new BadRequestException('No podés aplicar el mismo impuesto dos veces');
+      throw new BadRequestException(
+        'No podés aplicar el mismo impuesto dos veces',
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -76,7 +88,12 @@ export class PrecioAplicacionesService {
         where: {
           tenantId,
           productoId,
-          impuestoCatalogoId: { notIn: Array.from(idsSet).length > 0 ? Array.from(idsSet) : ['00000000-0000-0000-0000-000000000000'] },
+          impuestoCatalogoId: {
+            notIn:
+              Array.from(idsSet).length > 0
+                ? Array.from(idsSet)
+                : ['00000000-0000-0000-0000-000000000000'],
+          },
         },
       });
 
@@ -108,7 +125,11 @@ export class PrecioAplicacionesService {
     });
   }
 
-  async setComisiones(tenantId: string, productoId: string, dto: AsignarComisionesBatchDto) {
+  async setComisiones(
+    tenantId: string,
+    productoId: string,
+    dto: AsignarComisionesBatchDto,
+  ) {
     await this.assertProductoExiste(tenantId, productoId);
 
     if (dto.items.length > 0) {
@@ -118,13 +139,17 @@ export class PrecioAplicacionesService {
         select: { id: true },
       });
       if (validos.length !== new Set(ids).size) {
-        throw new BadRequestException('Hay comisiones del catálogo que no existen en el tenant');
+        throw new BadRequestException(
+          'Hay comisiones del catálogo que no existen en el tenant',
+        );
       }
     }
 
     const idsSet = new Set(dto.items.map((i) => i.comisionCatalogoId));
     if (idsSet.size !== dto.items.length) {
-      throw new BadRequestException('No podés aplicar la misma comisión dos veces');
+      throw new BadRequestException(
+        'No podés aplicar la misma comisión dos veces',
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -132,7 +157,12 @@ export class PrecioAplicacionesService {
         where: {
           tenantId,
           productoId,
-          comisionCatalogoId: { notIn: Array.from(idsSet).length > 0 ? Array.from(idsSet) : ['00000000-0000-0000-0000-000000000000'] },
+          comisionCatalogoId: {
+            notIn:
+              Array.from(idsSet).length > 0
+                ? Array.from(idsSet)
+                : ['00000000-0000-0000-0000-000000000000'],
+          },
         },
       });
 
@@ -165,33 +195,59 @@ export class PrecioAplicacionesService {
 
   // ── Operaciones individuales (utilitarias) ──────────────────────────
 
-  async quitarImpuesto(tenantId: string, productoId: string, impuestoCatalogoId: string) {
+  async quitarImpuesto(
+    tenantId: string,
+    productoId: string,
+    impuestoCatalogoId: string,
+  ) {
     await this.assertProductoExiste(tenantId, productoId);
     try {
       return await this.prisma.productoImpuestoAplicado.delete({
         where: {
-          tenantId_productoId_impuestoCatalogoId: { tenantId, productoId, impuestoCatalogoId },
+          tenantId_productoId_impuestoCatalogoId: {
+            tenantId,
+            productoId,
+            impuestoCatalogoId,
+          },
         },
       });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
-        throw new NotFoundException('El impuesto no estaba aplicado a este producto');
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
+        throw new NotFoundException(
+          'El impuesto no estaba aplicado a este producto',
+        );
       }
       throw err;
     }
   }
 
-  async quitarComision(tenantId: string, productoId: string, comisionCatalogoId: string) {
+  async quitarComision(
+    tenantId: string,
+    productoId: string,
+    comisionCatalogoId: string,
+  ) {
     await this.assertProductoExiste(tenantId, productoId);
     try {
       return await this.prisma.productoComisionAplicada.delete({
         where: {
-          tenantId_productoId_comisionCatalogoId: { tenantId, productoId, comisionCatalogoId },
+          tenantId_productoId_comisionCatalogoId: {
+            tenantId,
+            productoId,
+            comisionCatalogoId,
+          },
         },
       });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
-        throw new NotFoundException('La comisión no estaba aplicada a este producto');
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
+        throw new NotFoundException(
+          'La comisión no estaba aplicada a este producto',
+        );
       }
       throw err;
     }

@@ -100,8 +100,8 @@ export const modoTiempoLabels: DiccionarioLabels = {
   "T-3": {
     label: "Productividad de la máquina y perfil",
     descripcion:
-      "El tiempo se calcula con la productividad del perfil operativo de la máquina elegida (ej: 2400 ppm en Ricoh).",
-    ejemplo: "Impresión digital láser = 2400 pliegos/min.",
+      "El tiempo se calcula con la productividad del perfil operativo de la máquina elegida (ej: 40 ppm en Ricoh).",
+    ejemplo: "Impresión digital láser = 40 pliegos/min.",
   },
   "T-4": {
     label: "Tiempo ingresado por el comercial al cotizar",

@@ -34,7 +34,7 @@ export interface ImposicionBase {
 
 export interface TalonarioMotorConfig {
   encuadernacion: {
-    tipo: 'emblocado' | 'engrapado' | 'anillado' | string;
+    tipo: string;
   };
   puntillado: {
     habilitado: boolean;

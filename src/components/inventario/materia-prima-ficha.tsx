@@ -203,22 +203,81 @@ function parseJsonField(text: string, fallback: Record<string, unknown>) {
   }
 }
 
-function normalizeVarianteAtributos(attrs: Record<string, unknown>): Record<string, unknown> {
+function readFiniteNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(",", ".").trim());
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function setNumberIfMissing(
+  attrs: Record<string, unknown>,
+  key: string,
+  rawValue: unknown,
+  divider = 1,
+) {
+  if (attrs[key] !== undefined) return;
+  const parsed = readFiniteNumber(rawValue);
+  if (parsed === null) return;
+  attrs[key] = parsed / divider;
+}
+
+function setLegacyNumber(
+  attrs: Record<string, unknown>,
+  key: string,
+  rawValue: unknown,
+  multiplier = 1,
+) {
+  const parsed = readFiniteNumber(rawValue);
+  if (parsed === null) return;
+  attrs[key] = Math.round(parsed * multiplier * 1000) / 1000;
+}
+
+function normalizeVarianteAtributos(
+  attrs: Record<string, unknown>,
+  templateId?: string,
+): Record<string, unknown> {
   const normalized = { ...attrs };
+  const normalizedTemplateId = getMateriaPrimaTemplate(templateId ?? "")?.id;
+
+  if (normalizedTemplateId === "sustrato_hoja_v1") {
+    setNumberIfMissing(normalized, "ancho", normalized.anchoMm, 10);
+    setNumberIfMissing(normalized, "alto", normalized.largoMm ?? normalized.altoMm, 10);
+    setNumberIfMissing(normalized, "gramaje", normalized.gramajeGr);
+  } else if (
+    normalizedTemplateId === "sustrato_rollo_flexible_v1" ||
+    normalizedTemplateId === "vinilo_de_corte_rollo_v1"
+  ) {
+    setNumberIfMissing(normalized, "ancho", normalized.anchoMm, 1000);
+    setNumberIfMissing(
+      normalized,
+      "largo",
+      normalized.largoRolloMm ?? normalized.largoMm,
+      1000,
+    );
+  } else if (normalizedTemplateId === "sustrato_rigido_v1") {
+    setNumberIfMissing(normalized, "ancho", normalized.anchoMm, 1000);
+    setNumberIfMissing(normalized, "alto", normalized.largoMm ?? normalized.altoMm, 1000);
+    setNumberIfMissing(normalized, "espesor", normalized.espesorMm);
+  } else if (normalizedTemplateId === "laminado_film_v1") {
+    setNumberIfMissing(normalized, "ancho", normalized.anchoMm);
+    setNumberIfMissing(
+      normalized,
+      "largo",
+      normalized.largoRolloMm ?? normalized.largoMm,
+      1000,
+    );
+  }
+
   const aliasMap: Record<string, string> = {
     anchoCm: "ancho",
     altoCm: "alto",
     gramajeGm2: "gramaje",
-    anchoRolloM: "ancho",
-    largoRolloM: "largo",
-    anchoM: "ancho",
-    altoM: "alto",
-    espesorMm: "espesor",
     espesorMicrones: "espesor",
-    anchoMm: "ancho",
-    altoMm: "alto",
-    largoM: "largo",
     presentacionMl: "volumenPresentacion",
+    volumenMl: "volumenPresentacion",
     materialBase: "material",
     diametroMm: "diametro",
     diametroInternoMm: "diametroInterno",
@@ -301,7 +360,10 @@ function mapMateriaPrimaToForm(materiaPrima: MateriaPrima): FormState {
             sku: variante.sku,
             activo: variante.activo,
             atributosVarianteTexto: JSON.stringify(
-              normalizeVarianteAtributos(variante.atributosVariante ?? {}),
+              normalizeVarianteAtributos(
+                variante.atributosVariante ?? {},
+                materiaPrima.templateId,
+              ),
               null,
               2,
             ),
@@ -334,6 +396,39 @@ function buildPayload(
         normalized[key] = parsed;
       }
     }
+    const normalizedTemplateId = getMateriaPrimaTemplate(form.templateId)?.id;
+    if (normalizedTemplateId === "sustrato_hoja_v1") {
+      setLegacyNumber(normalized, "anchoMm", normalized.ancho, 10);
+      setLegacyNumber(normalized, "altoMm", normalized.alto, 10);
+      setLegacyNumber(normalized, "largoMm", normalized.alto, 10);
+      setLegacyNumber(normalized, "gramajeGr", normalized.gramaje);
+    } else if (
+      normalizedTemplateId === "sustrato_rollo_flexible_v1" ||
+      normalizedTemplateId === "vinilo_de_corte_rollo_v1"
+    ) {
+      setLegacyNumber(normalized, "anchoMm", normalized.ancho, 1000);
+      setLegacyNumber(normalized, "largoMm", normalized.largo, 1000);
+      setLegacyNumber(normalized, "largoRolloMm", normalized.largo, 1000);
+    } else if (normalizedTemplateId === "sustrato_rigido_v1") {
+      setLegacyNumber(normalized, "anchoMm", normalized.ancho, 1000);
+      setLegacyNumber(normalized, "altoMm", normalized.alto, 1000);
+      setLegacyNumber(normalized, "largoMm", normalized.alto, 1000);
+      setLegacyNumber(normalized, "espesorMm", normalized.espesor);
+    } else if (normalizedTemplateId === "laminado_film_v1") {
+      setLegacyNumber(normalized, "anchoMm", normalized.ancho);
+      setLegacyNumber(normalized, "largoMm", normalized.largo, 1000);
+      setLegacyNumber(normalized, "largoRolloMm", normalized.largo, 1000);
+    } else if (
+      normalizedTemplateId === "tinta_impresion_v1" ||
+      normalizedTemplateId === "quimico_acabado_v1"
+    ) {
+      setLegacyNumber(normalized, "volumenMl", normalized.volumenPresentacion);
+    } else if (normalizedTemplateId === "embalaje_proteccion_v1") {
+      setLegacyNumber(normalized, "anchoMm", normalized.ancho, 10);
+      setLegacyNumber(normalized, "altoMm", normalized.alto, 10);
+      setLegacyNumber(normalized, "largoMm", normalized.alto, 10);
+      setLegacyNumber(normalized, "piezasPorCaja", normalized.capacidadUnidades);
+    }
     return normalized;
   };
 
@@ -344,7 +439,7 @@ function buildPayload(
     familia: form.familia,
     subfamilia: form.subfamilia,
     tipoTecnico: form.tipoTecnico,
-    templateId: form.templateId,
+    templateId: getMateriaPrimaTemplate(form.templateId)?.id ?? form.templateId,
     unidadStock: form.unidadStock,
     unidadCompra: form.unidadCompra,
     esConsumible: form.esConsumible,

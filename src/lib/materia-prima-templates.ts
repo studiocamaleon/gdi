@@ -327,12 +327,15 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
     camposTecnicos: [
       { key: "tecnologiaCompatible", label: "Tecnología compatible", type: "text", required: true },
       { key: "color", label: "Color", type: "text", required: true },
+      { key: "volumenPresentacion", label: "Volumen de presentación", type: "number", unit: "ml", required: true },
+      { key: "equipoCompatible", label: "Equipo compatible", type: "text", optional: true },
     ],
-    dimensionesVariante: ["color"],
-    requiredAtributos: ["tecnologiaCompatible", "color"],
+    dimensionesVariante: ["color", "volumenPresentacion", "equipoCompatible"],
+    requiredAtributos: ["tecnologiaCompatible", "color", "volumenPresentacion"],
     atributosIniciales: {
       tecnologiaCompatible: "impresora_gran_formato_por_area",
       color: "c",
+      volumenPresentacion: 500,
       baseQuimica: "uv",
       rendimientoReferencia: 1,
     },
@@ -349,9 +352,11 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
     camposTecnicos: [
       { key: "color", label: "Color", type: "text", required: true },
       { key: "rendimientoPaginasIso", label: "Rendimiento", type: "number", required: true },
+      { key: "equipoCompatible", label: "Equipo compatible", type: "text", required: true },
+      { key: "presentacion", label: "Presentación", type: "text", optional: true },
     ],
-    dimensionesVariante: ["color"],
-    requiredAtributos: ["color", "rendimientoPaginasIso"],
+    dimensionesVariante: ["color", "rendimientoPaginasIso", "equipoCompatible"],
+    requiredAtributos: ["color", "rendimientoPaginasIso", "equipoCompatible"],
     atributosIniciales: {
       color: "negro",
       rendimientoPaginasIso: 5000,
@@ -729,6 +734,36 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
     },
   },
   {
+    id: "embalaje_proteccion_v1",
+    nombre: "Embalaje / protección",
+    descripcion: "Bolsas, cajas, sobres y protecciones para entrega.",
+    familia: "terminacion_editorial",
+    subfamilia: "embalaje_proteccion",
+    tipoTecnico: "embalaje_proteccion",
+    unidadStock: "unidad",
+    unidadCompra: "pack",
+    camposTecnicos: [
+      {
+        key: "tipoEmbalaje",
+        label: "Tipo",
+        type: "text",
+        options: ["Bolsa", "Caja", "Sobre", "Faja", "Protección"],
+        required: true,
+      },
+      { key: "capacidadUnidades", label: "Capacidad", type: "number", required: true },
+      { key: "ancho", label: "Ancho", type: "number", unit: "cm", optional: true },
+      { key: "alto", label: "Alto", type: "number", unit: "cm", optional: true },
+      { key: "material", label: "Material", type: "text", optional: true },
+    ],
+    dimensionesVariante: ["tipoEmbalaje", "capacidadUnidades", "ancho", "alto", "material"],
+    requiredAtributos: ["tipoEmbalaje", "capacidadUnidades"],
+    atributosIniciales: {
+      tipoEmbalaje: "Bolsa",
+      capacidadUnidades: 100,
+      material: "Celofán",
+    },
+  },
+  {
     id: "portabanner_estructura_v1",
     nombre: "Portabanner estructura",
     descripcion: "Estructuras roll-up, X, L o pop-up",
@@ -841,6 +876,14 @@ export const materiaPrimaTemplatesMap = new Map(
   materiaPrimaTemplatesV1.map((template) => [template.id, template]),
 );
 
+const LEGACY_TEMPLATE_ALIASES: Record<string, string> = {
+  papel_hoja: "sustrato_hoja_v1",
+  vinilo_rollo: "sustrato_rollo_flexible_v1",
+  rigido_placa: "sustrato_rigido_v1",
+  film_laminado: "laminado_film_v1",
+  embalaje: "embalaje_proteccion_v1",
+};
+
 for (const template of materiaPrimaTemplatesV1) {
   const fieldKeys = template.camposTecnicos.map((field) => field.key);
   assertCanonicalTemplateKeys(template.id, fieldKeys);
@@ -848,7 +891,11 @@ for (const template of materiaPrimaTemplatesV1) {
 }
 
 export function getMateriaPrimaTemplate(templateId: string) {
-  return materiaPrimaTemplatesMap.get(templateId) ?? null;
+  return (
+    materiaPrimaTemplatesMap.get(templateId) ??
+    materiaPrimaTemplatesMap.get(LEGACY_TEMPLATE_ALIASES[templateId] ?? "") ??
+    null
+  );
 }
 
 export function getReplacementComponentLabel(value: string) {

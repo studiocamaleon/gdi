@@ -25,7 +25,53 @@ const {
   GeometriaTrabajoMaquina,
   UnidadProduccionMaquina,
   TipoPerfilOperativoMaquina,
+  TipoConsumibleMaquina,
+  UnidadConsumoMaquina,
 } = require("@prisma/client");
+
+const CHANNEL_LABELS = {
+  cian: "Cian",
+  magenta: "Magenta",
+  amarillo: "Amarillo",
+  negro: "Negro",
+  blanco: "Blanco",
+  barniz: "Barniz",
+};
+
+async function createPrinterConsumibles(prisma, tenantId, maquinaId, perfiles, config) {
+  const skus = Object.values(config.skuByChannel);
+  const variantes = await prisma.materiaPrimaVariante.findMany({
+    where: { tenantId, sku: { in: skus } },
+    select: { id: true, sku: true },
+  });
+  const varianteBySku = new Map(variantes.map((variante) => [variante.sku, variante]));
+  const data = [];
+
+  for (const perfil of perfiles) {
+    for (const channel of config.channels) {
+      const sku = config.skuByChannel[channel];
+      const variante = varianteBySku.get(sku);
+      if (!variante) continue;
+      data.push({
+        tenantId,
+        maquinaId,
+        perfilOperativoId: perfil.id,
+        materiaPrimaVarianteId: variante.id,
+        nombre: `${CHANNEL_LABELS[channel]} · ${perfil.nombre}`,
+        tipo: config.tipo,
+        unidad: config.unidad,
+        rendimientoEstimado: config.rendimientoEstimado,
+        consumoBase: config.consumoBaseByChannel?.[channel] ?? config.consumoBase,
+        activo: true,
+        detalleJson: { color: channel },
+      });
+    }
+  }
+
+  if (data.length > 0) {
+    await prisma.maquinaConsumible.createMany({ data });
+  }
+}
 
 async function seedMaquinas(prisma, tenantId, plantaId) {
   const ccImpresion = await prisma.centroCosto.findFirstOrThrow({
@@ -67,14 +113,14 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
     },
   });
 
-  await prisma.maquinaPerfilOperativo.create({
+  const ricohSimple = await prisma.maquinaPerfilOperativo.create({
     data: {
       tenantId,
       maquinaId: ricoh.id,
       nombre: "Papel grueso simple faz",
       tipoPerfil: TipoPerfilOperativoMaquina.IMPRESION,
       activo: true,
-      productivityValue: "2400",
+      productivityValue: "40",
       productivityUnit: UnidadProduccionMaquina.PPM,
       setupMin: "5",
       cleanupMin: "2",
@@ -89,14 +135,14 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
     },
   });
 
-  await prisma.maquinaPerfilOperativo.create({
+  const ricohDoble = await prisma.maquinaPerfilOperativo.create({
     data: {
       tenantId,
       maquinaId: ricoh.id,
       nombre: "Papel grueso doble faz",
       tipoPerfil: TipoPerfilOperativoMaquina.IMPRESION,
       activo: true,
-      productivityValue: "1200",
+      productivityValue: "20",
       productivityUnit: UnidadProduccionMaquina.PPM,
       setupMin: "8",
       cleanupMin: "2",
@@ -108,6 +154,20 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
         gramajeMaxGr: 350,
       },
     },
+  });
+
+  await createPrinterConsumibles(prisma, tenantId, ricoh.id, [ricohSimple, ricohDoble], {
+    tipo: TipoConsumibleMaquina.TONER,
+    unidad: UnidadConsumoMaquina.GRAMO,
+    channels: ["cian", "magenta", "amarillo", "negro"],
+    skuByChannel: {
+      cian: "TONER-RICOH-C5100-C",
+      magenta: "TONER-RICOH-C5100-M",
+      amarillo: "TONER-RICOH-C5100-Y",
+      negro: "TONER-RICOH-C5100-K",
+    },
+    consumoBase: "1.73",
+    rendimientoEstimado: "500",
   });
 
   // ============================================================================
@@ -145,7 +205,7 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
     },
   });
 
-  await prisma.maquinaPerfilOperativo.create({
+  const rolandNormal = await prisma.maquinaPerfilOperativo.create({
     data: {
       tenantId,
       maquinaId: roland.id,
@@ -163,6 +223,20 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
         modoCalidad: "NORMAL",
       },
     },
+  });
+
+  await createPrinterConsumibles(prisma, tenantId, roland.id, [rolandNormal], {
+    tipo: TipoConsumibleMaquina.TINTA,
+    unidad: UnidadConsumoMaquina.ML,
+    channels: ["cian", "magenta", "amarillo", "negro"],
+    skuByChannel: {
+      cian: "TINTA-LATEX-ROLAND-C",
+      magenta: "TINTA-LATEX-ROLAND-M",
+      amarillo: "TINTA-LATEX-ROLAND-Y",
+      negro: "TINTA-LATEX-ROLAND-K",
+    },
+    consumoBase: "8",
+    rendimientoEstimado: "500",
   });
 
   // ============================================================================
@@ -201,7 +275,7 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
     },
   });
 
-  await prisma.maquinaPerfilOperativo.create({
+  const mimakiCmyk = await prisma.maquinaPerfilOperativo.create({
     data: {
       tenantId,
       maquinaId: mimaki.id,
@@ -221,7 +295,7 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
     },
   });
 
-  await prisma.maquinaPerfilOperativo.create({
+  const mimakiCmykBlanco = await prisma.maquinaPerfilOperativo.create({
     data: {
       tenantId,
       maquinaId: mimaki.id,
@@ -239,6 +313,36 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
         modoOperacion: "RIGIDO",
       },
     },
+  });
+
+  await createPrinterConsumibles(prisma, tenantId, mimaki.id, [mimakiCmyk], {
+    tipo: TipoConsumibleMaquina.TINTA,
+    unidad: UnidadConsumoMaquina.ML,
+    channels: ["cian", "magenta", "amarillo", "negro"],
+    skuByChannel: {
+      cian: "TINTA-UV-MIMAKI-C",
+      magenta: "TINTA-UV-MIMAKI-M",
+      amarillo: "TINTA-UV-MIMAKI-Y",
+      negro: "TINTA-UV-MIMAKI-K",
+    },
+    consumoBase: "8",
+    rendimientoEstimado: "600",
+  });
+
+  await createPrinterConsumibles(prisma, tenantId, mimaki.id, [mimakiCmykBlanco], {
+    tipo: TipoConsumibleMaquina.TINTA,
+    unidad: UnidadConsumoMaquina.ML,
+    channels: ["cian", "magenta", "amarillo", "negro", "blanco"],
+    skuByChannel: {
+      cian: "TINTA-UV-MIMAKI-C",
+      magenta: "TINTA-UV-MIMAKI-M",
+      amarillo: "TINTA-UV-MIMAKI-Y",
+      negro: "TINTA-UV-MIMAKI-K",
+      blanco: "TINTA-UV-MIMAKI-W",
+    },
+    consumoBase: "8",
+    consumoBaseByChannel: { blanco: "5" },
+    rendimientoEstimado: "600",
   });
 
   // ============================================================================

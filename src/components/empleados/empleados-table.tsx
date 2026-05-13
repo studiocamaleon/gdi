@@ -5,13 +5,20 @@ import { useRouter } from "next/navigation";
 import {
   ChevronDownIcon,
   DownloadIcon,
+  FileSpreadsheetIcon,
+  UploadIcon,
   PencilIcon,
   PlusIcon,
   Trash2Icon,
 } from "lucide-react";
+import { toast } from "sonner";
 
-import { deleteEmpleado } from "@/lib/empleados-api";
+import { createEmpleado, deleteEmpleado } from "@/lib/empleados-api";
 import { EmpleadoDetalle } from "@/lib/empleados";
+import {
+  downloadEmpleadosImportTemplate,
+  parseEmpleadosImportCsv,
+} from "@/lib/empleados-importacion";
 import { NavLink } from "@/components/navigation/nav-link";
 import { useNavigationFeedback } from "@/components/navigation/navigation-feedback";
 import { Badge } from "@/components/ui/badge";
@@ -80,7 +87,9 @@ export function EmpleadosTable({ initialEmpleados }: EmpleadosTableProps) {
   const [selectedEmpleados, setSelectedEmpleados] = React.useState<Set<string>>(
     new Set(),
   );
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [isDeleting, startDeleteTransition] = React.useTransition();
+  const [isImporting, startImportTransition] = React.useTransition();
 
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -94,7 +103,7 @@ export function EmpleadosTable({ initialEmpleados }: EmpleadosTableProps) {
     );
   }, [empleados, search]);
 
-  const { paged, page, pages, total, setPage, pageSize } = usePagination(filtered);
+  const { paged, page, total, setPage, pageSize } = usePagination(filtered);
 
   const selectedCount = selectedEmpleados.size;
   const allSelected = paged.length > 0 && paged.every((e) => selectedEmpleados.has(e.id));
@@ -171,6 +180,60 @@ export function EmpleadosTable({ initialEmpleados }: EmpleadosTableProps) {
     });
   };
 
+  const handleImportFile = (file: File | undefined) => {
+    if (!file) return;
+    startImportTransition(async () => {
+      const content = await file.text();
+      const parsed = parseEmpleadosImportCsv(content);
+      if (parsed.fatalError) {
+        toast.error(parsed.fatalError);
+        return;
+      }
+
+      const invalidRows = parsed.rows.filter((row) => row.errors.length > 0);
+      if (invalidRows.length > 0) {
+        const firstInvalid = invalidRows[0];
+        toast.error(
+          `No se importó el archivo. Fila ${firstInvalid.rowNumber}: ${firstInvalid.errors.join(" ")}`,
+        );
+        return;
+      }
+
+      const payloads = parsed.rows.flatMap((row) => (row.payload ? [row.payload] : []));
+      if (payloads.length === 0) {
+        toast.error("No hay empleados válidos para importar.");
+        return;
+      }
+
+      const created: EmpleadoDetalle[] = [];
+      const failed: string[] = [];
+      for (let idx = 0; idx < payloads.length; idx += 1) {
+        try {
+          const empleado = await createEmpleado(payloads[idx]);
+          created.push(empleado);
+        } catch (error) {
+          failed.push(
+            `Fila ${parsed.rows[idx].rowNumber}: ${
+              error instanceof Error ? error.message : "error desconocido"
+            }`,
+          );
+        }
+      }
+
+      if (created.length > 0) {
+        setEmpleados((current) => [...created, ...current]);
+        router.refresh();
+      }
+      if (failed.length > 0) {
+        toast.error(
+          `Se importaron ${created.length} empleado(s), con ${failed.length} error(es). ${failed[0]}`,
+        );
+      } else {
+        toast.success(`Se importaron ${created.length} empleado(s).`);
+      }
+    });
+  };
+
   return (
     <div className="flex flex-1 flex-col p-4 md:p-6">
       <Card className="rounded-2xl border-border/70 shadow-sm">
@@ -191,47 +254,68 @@ export function EmpleadosTable({ initialEmpleados }: EmpleadosTableProps) {
             />
 
             <div className="flex flex-col gap-2 sm:flex-row">
-              {selectedCount > 0 ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button variant="sidebar" className="w-full sm:w-auto" />
-                    }
-                  >
-                    Acciones ({selectedCount})
-                    <ChevronDownIcon data-icon="inline-end" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuGroup>
-                      <DropdownMenuItem
-                        disabled={selectedRows.length !== 1}
-                        onClick={handleEditSelection}
-                      >
-                        <PencilIcon />
-                        Editar seleccion
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={handleExportSelection}>
-                        <DownloadIcon />
-                        Exportar seleccion
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      variant="destructive"
-                      disabled={isDeleting}
-                      onClick={handleDeleteSelection}
-                    >
-                      <Trash2Icon />
-                      Eliminar seleccion
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                <Button variant="sidebar" className="w-full sm:w-auto" disabled>
-                  Acciones
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  handleImportFile(file);
+                }}
+              />
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button variant="sidebar" className="w-full sm:w-auto" />
+                  }
+                >
+                  {selectedCount > 0 ? `Acciones (${selectedCount})` : "Acciones"}
                   <ChevronDownIcon data-icon="inline-end" />
-                </Button>
-              )}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem onClick={downloadEmpleadosImportTemplate}>
+                      <FileSpreadsheetIcon />
+                      Descargar plantilla
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={isImporting}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <UploadIcon />
+                      {isImporting ? "Importando..." : "Importar empleados"}
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem
+                      disabled={selectedRows.length !== 1}
+                      onClick={handleEditSelection}
+                    >
+                      <PencilIcon />
+                      Editar seleccion
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={selectedRows.length === 0}
+                      onClick={handleExportSelection}
+                    >
+                      <DownloadIcon />
+                      Exportar seleccion
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    variant="destructive"
+                    disabled={selectedRows.length === 0 || isDeleting}
+                    onClick={handleDeleteSelection}
+                  >
+                    <Trash2Icon />
+                    Eliminar seleccion
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               <Button
                 variant="brand"

@@ -1,7 +1,14 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ProductosServiciosController } from './productos-servicios.controller';
+import { CargosDirectosProductoService } from './cargos-directos-producto.service';
+import { ConfigPasosService } from './config-pasos.service';
+import { FamiliasPasosService } from './familias-pasos.service';
+import { ProductoRutasService } from './producto-rutas.service';
+import { ProductoValidacionService } from './producto-validacion.service';
+import { ProductosService } from './productos.service';
 import { ProductosServiciosService } from './productos-servicios.service';
+import { RutasProduccionService } from './rutas-produccion.service';
 import { PrecioModule } from './precio/precio.module';
 
 /**
@@ -20,7 +27,16 @@ import { PrecioModule } from './precio/precio.module';
 @Module({
   imports: [PrismaModule, PrecioModule],
   controllers: [ProductosServiciosController],
-  providers: [ProductosServiciosService],
+  providers: [
+    ProductosServiciosService,
+    ProductosService,
+    RutasProduccionService,
+    ProductoRutasService,
+    ConfigPasosService,
+    FamiliasPasosService,
+    CargosDirectosProductoService,
+    ProductoValidacionService,
+  ],
   exports: [ProductosServiciosService, PrecioModule],
 })
 export class ProductosServiciosModule {}

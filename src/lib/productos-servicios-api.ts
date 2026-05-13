@@ -203,6 +203,7 @@ export interface UpsertConfigPasoPayload {
   paramsPasoJson?: Record<string, unknown> | null;
   maquinaM1Id?: string | null;
   perfilM1Id?: string | null;
+  centroCostoId?: string | null;
   setupOverrideMin?: number | null;
   cleanupOverrideMin?: number | null;
   tiempoFijoOverrideMin?: number | null;
@@ -345,6 +346,13 @@ export interface LookupsConfigPaso {
     codigo: string;
     nombre: string;
     plantilla: string;
+    parametrosTecnicosJson?: Record<string, unknown> | null;
+    centroCostoPrincipalId?: string | null;
+    centroCostoPrincipal?: {
+      id: string;
+      codigo: string;
+      nombre: string;
+    } | null;
     perfilesOperativos: Array<{
       id: string;
       nombre: string;
@@ -352,17 +360,25 @@ export interface LookupsConfigPaso {
       productivityUnit: string | null;
     }>;
   }>;
+  centrosCosto: Array<{
+    id: string;
+    codigo: string;
+    nombre: string;
+    unidadBaseFutura: string;
+  }>;
   materiasPrimas: Array<{
     id: string;
     codigo: string;
     nombre: string;
     familia: string;
     subfamilia: string;
+    templateId: string;
     variantes: Array<{
       id: string;
       sku: string;
       nombreVariante: string | null;
       precioReferencia: string | null;
+      atributosVarianteJson?: Record<string, unknown> | null;
     }>;
   }>;
 }
@@ -380,12 +396,15 @@ export async function getLookupsConfigPaso(): Promise<LookupsConfigPaso> {
  *
  * Replica el shape `NestingEjecutado` del backend
  * (`apps/api/src/motor-universal/tipos.ts`) para que el frontend lo consuma sin
- * duplicar lógica. Cualquier algoritmo soportado (shelf-rollo, grid-2d-single,
- * grid-2d-multi) produce este mismo shape, lo que permite que `<NestingViewer>`
- * sea único para todos.
+ * duplicar lógica. Cualquier algoritmo soportado produce este mismo shape, lo
+ * que permite que `<NestingViewer>` sea único para todos.
  */
 export interface NestingViewerInput {
-  algorithm: 'shelf-rollo' | 'grid-2d-single' | 'grid-2d-multi';
+  algorithm:
+    | 'shelf-rollo'
+    | 'grid-2d-single'
+    | 'grid-2d-multi'
+    | 'packingsolver-rectangle';
   cantidadCalculada: number;
   unidad: 'm_lineales' | 'pliegos' | 'm2' | 'piezas';
   aprovechamientoPct: number;
@@ -413,6 +432,51 @@ export interface NestingViewerInput {
   piezasPorPliego?: number;
   consumedLengthMm?: number;
   piezasAcomodadas: number;
+  visualConfig?: {
+    margins: {
+      leftMm: number;
+      rightMm: number;
+      topMm: number;
+      bottomMm: number;
+    };
+    spacing: {
+      horizontalMm: number;
+      verticalMm: number;
+    };
+    allowRotation: boolean;
+    substrateLabel?: string;
+    usableArea: {
+      xMm: number;
+      yMm: number;
+      widthMm: number;
+      heightMm: number;
+    };
+    panelizado?: {
+      enabled: boolean;
+      mode: 'automatic' | 'manual';
+      axis: 'vertical' | 'horizontal' | null;
+      overlapMm: number | null;
+      maxPanelWidthMm: number | null;
+      distribution: 'equilibrada' | 'libre' | null;
+      widthInterpretation: 'total' | 'util' | null;
+      panelCount: number;
+    };
+  };
+  costingPreview?: {
+    strategy: 'simple' | 'm2-exact' | 'consumed-length' | 'plate-segments';
+    label: string;
+    chargedRatio?: number;
+    chargedLengthMm?: number;
+    chargedAreaMm2?: number;
+    chargedBounds?: {
+      xMm: number;
+      yMm: number;
+      widthMm: number;
+      heightMm: number;
+    };
+    wasteAreaMm2?: number;
+    segmentAppliedPct?: number | null;
+  };
   /** v3.1: solo cuando se aplicó talonario-grouping. */
   talonarioGrouping?: {
     talonariosEfectivos: number;
@@ -444,6 +508,7 @@ export interface CotizarRequest {
     m2_instalados?: number;
     zonaInstalacion?: string;
     opcionalesActivados?: Record<string, boolean>;
+    slotMateriales?: Record<string, string>;
     [key: string]: unknown;
   };
   clienteId?: string | null;
@@ -512,7 +577,38 @@ export interface CotizarResponse {
       activado: boolean;
       razonNoActivado?: string;
       tiempo?: { totalMin: number; tarifaHora: number; costo: number };
-      materiales?: Array<{ materialNombre: string; cantidad: number; costoTotal: number }>;
+      materiales?: Array<{
+        slotCodigo: string;
+        materialVarianteId: string;
+        materialNombre: string;
+        materialSku: string;
+        materialDisplayName: string;
+        materiaPrimaNombre?: string | null;
+        tipoLineaCosto: 'MATERIAL' | 'CONSUMIBLE_MAQUINA';
+        cantidad: number;
+        unidad: string;
+        precioUnitario: number;
+        costoTotal: number;
+        estrategiaCosto: string;
+        modoSeleccion:
+          | 'HARDCODED'
+          | 'COMERCIAL_ELIGE'
+          | 'MOTOR_ELIGE_AUTO'
+          | 'MAQUINA_CONSUMIBLE';
+        detalleCosteoNesting?: {
+          strategy: string;
+          totalCost: number;
+          unitPrice: number;
+          pricePerM2: number;
+          fullUnits: number;
+          fullUnitsCost: number;
+          lastUnit: {
+            occupationPct: number;
+            segmentApplied: number | null;
+            cost: number;
+          } | null;
+        };
+      }>;
       cargosDirectosPaso?: Array<{
         cargoCodigo: string;
         cargoNombre: string;

@@ -1,7 +1,11 @@
 import type { UnitCode } from './unidades-canonicas';
 
 const FLEXIBLE_ROLL_SUBFAMILY = 'sustrato_rollo_flexible';
-const FLEXIBLE_ROLL_SUPPORTED_UNITS = new Set<UnitCode>(['rollo', 'm2', 'metro_lineal']);
+const FLEXIBLE_ROLL_SUPPORTED_UNITS = new Set<UnitCode>([
+  'rollo',
+  'm2',
+  'metro_lineal',
+]);
 
 type FlexibleRollMetrics = {
   widthM: number;
@@ -45,19 +49,26 @@ function normalizeLengthMeters(raw: number | null) {
   return raw > 500 ? raw / 1000 : raw;
 }
 
-export function resolveFlexibleRollMetrics(attributes: unknown): FlexibleRollMetrics | null {
+export function resolveFlexibleRollMetrics(
+  attributes: unknown,
+): FlexibleRollMetrics | null {
   const attrs = asRecord(attributes);
   if (!attrs) {
     return null;
   }
 
   const widthRaw = readNumber(
-    attrs.ancho ?? attrs.anchoRollo ?? attrs.anchoRolloM ?? attrs.anchoMm ?? attrs.anchoRolloMm,
+    attrs.ancho ??
+      attrs.anchoRollo ??
+      attrs.anchoRolloM ??
+      attrs.anchoMm ??
+      attrs.anchoRolloMm,
   );
   const lengthRaw = readNumber(
     attrs.largo ??
       attrs.largoRollo ??
       attrs.largoRolloM ??
+      attrs.largoRolloMm ??
       attrs.longitud ??
       attrs.longitudRollo ??
       attrs.largoMm,
@@ -82,7 +93,11 @@ export function canUseFlexibleRollDerivedUnits(input: {
   to?: UnitCode | null;
   attributes?: unknown;
 }) {
-  if (String(input.subfamilia ?? '').trim().toLowerCase() !== FLEXIBLE_ROLL_SUBFAMILY) {
+  if (
+    String(input.subfamilia ?? '')
+      .trim()
+      .toLowerCase() !== FLEXIBLE_ROLL_SUBFAMILY
+  ) {
     return false;
   }
   if (!input.from || !input.to) {

@@ -12,7 +12,11 @@
  * usar los tipos universales directamente (Fase 2).
  */
 
-import type { Piece, SheetSubstrate, NestingResult as UniversalNestingResult } from '../types';
+import type {
+  Piece,
+  SheetSubstrate,
+  NestingResult as UniversalNestingResult,
+} from '../types';
 import { nestGrid2DSingle } from '../algorithms/grid-2d-single';
 import { nestGrid2DMulti } from '../algorithms/grid-2d-multi';
 import { applyCostingStrategy } from '../costing';
@@ -106,7 +110,9 @@ function toUniversalSubstrate(input: LegacyNestingInput): SheetSubstrate {
   };
 }
 
-function fromUniversalNestingResult(universal: UniversalNestingResult): LegacyNestingResult {
+function fromUniversalNestingResult(
+  universal: UniversalNestingResult,
+): LegacyNestingResult {
   return {
     piezasPorPlaca: universal.metrics.piezasPorSustrato ?? 0,
     columnas: universal.metrics.columnas ?? 0,
@@ -126,13 +132,19 @@ function fromUniversalNestingResult(universal: UniversalNestingResult): LegacyNe
   };
 }
 
-const LEGACY_TO_UNIVERSAL_STRATEGY: Record<LegacyCosteoInput['estrategia'], CostingStrategyKind> = {
+const LEGACY_TO_UNIVERSAL_STRATEGY: Record<
+  LegacyCosteoInput['estrategia'],
+  CostingStrategyKind
+> = {
   m2_exacto: 'm2-exact',
   largo_consumido: 'consumed-length',
   segmentos_placa: 'plate-segments',
 };
 
-const UNIVERSAL_TO_LEGACY_STRATEGY: Record<CostingStrategyKind, LegacyCosteoInput['estrategia']> = {
+const UNIVERSAL_TO_LEGACY_STRATEGY: Record<
+  CostingStrategyKind,
+  LegacyCosteoInput['estrategia']
+> = {
   'm2-exact': 'm2_exacto',
   'consumed-length': 'largo_consumido',
   'plate-segments': 'segmentos_placa',
@@ -207,7 +219,9 @@ function fromUniversalCostingResult(
 // ─── API pública del adapter ─────────────────────────────────────
 
 /** Wrapper que devuelve resultado en shape legacy de rigid-printed. */
-export function nestRectangularGridV2(input: LegacyNestingInput): LegacyNestingResult {
+export function nestRectangularGridV2(
+  input: LegacyNestingInput,
+): LegacyNestingResult {
   const piece = toUniversalPiece(input);
   const substrate = toUniversalSubstrate(input);
   const result = nestGrid2DSingle(piece, substrate, {
@@ -219,7 +233,9 @@ export function nestRectangularGridV2(input: LegacyNestingInput): LegacyNestingR
 }
 
 /** Wrapper que devuelve resultado de costeo en shape legacy de rigid-printed. */
-export function calcularCosteoMaterialV2(input: LegacyCosteoInput): LegacyCosteoResult {
+export function calcularCosteoMaterialV2(
+  input: LegacyCosteoInput,
+): LegacyCosteoResult {
   const universalInput = toUniversalCostingInput(input);
   const universalResult = applyCostingStrategy(universalInput);
   return fromUniversalCostingResult(universalResult);

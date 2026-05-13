@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
@@ -24,12 +28,18 @@ export class PreciosEspecialesClientesService {
     await this.assertProductoExiste(tenantId, productoId);
     return this.prisma.productoPrecioEspecialClienteV2.findMany({
       where: { tenantId, productoId },
-      include: { cliente: { select: { id: true, nombre: true, razonSocial: true } } },
+      include: {
+        cliente: { select: { id: true, nombre: true, razonSocial: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async crear(tenantId: string, productoId: string, dto: CrearPrecioEspecialClienteDto) {
+  async crear(
+    tenantId: string,
+    productoId: string,
+    dto: CrearPrecioEspecialClienteDto,
+  ) {
     await this.assertProductoExiste(tenantId, productoId);
     await this.assertClienteExiste(tenantId, dto.clienteId);
 
@@ -42,10 +52,15 @@ export class PreciosEspecialesClientesService {
           configJson: dto.configJson as Prisma.InputJsonValue,
           activo: true,
         },
-        include: { cliente: { select: { id: true, nombre: true, razonSocial: true } } },
+        include: {
+          cliente: { select: { id: true, nombre: true, razonSocial: true } },
+        },
       });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
         throw new BadRequestException(
           'Ya existe un precio especial para este cliente en este producto',
         );
@@ -54,29 +69,42 @@ export class PreciosEspecialesClientesService {
     }
   }
 
-  async actualizar(tenantId: string, id: string, dto: ActualizarPrecioEspecialClienteDto) {
-    const existente = await this.prisma.productoPrecioEspecialClienteV2.findFirst({
-      where: { id, tenantId },
-    });
-    if (!existente) throw new NotFoundException(`Precio especial ${id} no encontrado`);
+  async actualizar(
+    tenantId: string,
+    id: string,
+    dto: ActualizarPrecioEspecialClienteDto,
+  ) {
+    const existente =
+      await this.prisma.productoPrecioEspecialClienteV2.findFirst({
+        where: { id, tenantId },
+      });
+    if (!existente)
+      throw new NotFoundException(`Precio especial ${id} no encontrado`);
 
     const data: Prisma.ProductoPrecioEspecialClienteV2UpdateInput = {};
-    if (dto.configJson !== undefined) data.configJson = dto.configJson as Prisma.InputJsonValue;
+    if (dto.configJson !== undefined)
+      data.configJson = dto.configJson as Prisma.InputJsonValue;
     if (dto.activo !== undefined) data.activo = dto.activo;
 
     return this.prisma.productoPrecioEspecialClienteV2.update({
       where: { id },
       data,
-      include: { cliente: { select: { id: true, nombre: true, razonSocial: true } } },
+      include: {
+        cliente: { select: { id: true, nombre: true, razonSocial: true } },
+      },
     });
   }
 
   async eliminar(tenantId: string, id: string) {
-    const existente = await this.prisma.productoPrecioEspecialClienteV2.findFirst({
-      where: { id, tenantId },
+    const existente =
+      await this.prisma.productoPrecioEspecialClienteV2.findFirst({
+        where: { id, tenantId },
+      });
+    if (!existente)
+      throw new NotFoundException(`Precio especial ${id} no encontrado`);
+    return this.prisma.productoPrecioEspecialClienteV2.delete({
+      where: { id },
     });
-    if (!existente) throw new NotFoundException(`Precio especial ${id} no encontrado`);
-    return this.prisma.productoPrecioEspecialClienteV2.delete({ where: { id } });
   }
 
   /**

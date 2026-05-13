@@ -18,7 +18,10 @@
 
 import type { NestingResult } from '../types';
 
-export type CostingStrategyKind = 'm2-exact' | 'consumed-length' | 'plate-segments';
+export type CostingStrategyKind =
+  | 'm2-exact'
+  | 'consumed-length'
+  | 'plate-segments';
 
 export interface CostingInput<T = unknown> {
   strategy: CostingStrategyKind;

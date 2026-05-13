@@ -1,4 +1,11 @@
-import { IsArray, IsInt, IsOptional, IsUUID, Min, ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsInt,
+  IsOptional,
+  IsUUID,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 /**

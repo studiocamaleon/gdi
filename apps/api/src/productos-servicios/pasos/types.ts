@@ -99,23 +99,29 @@ export type ModoTiempo = 'T-1' | 'T-2' | 'T-3' | 'T-4';
 
 /** Cómo se decide la cantidad a producir en el paso. Ver D.3. */
 export type MecanismoCantidad =
-  | 'DIRECT_FROM_JOBCONTEXT'   // lee directo un campo del JobContext
+  | 'DIRECT_FROM_JOBCONTEXT' // lee directo un campo del JobContext
   | 'HEREDAR_DEL_OUTPUT_CANONICO' // lee output que escribió un paso anterior
-  | 'CALCULADO_POR_PASO'        // el paso ejecuta su propio cálculo (típicamente nesting)
-  | 'CONVERSION';                // aplica fórmula a otro valor
+  | 'CALCULADO_POR_PASO' // el paso ejecuta su propio cálculo (típicamente nesting)
+  | 'CONVERSION'; // aplica fórmula a otro valor
 
 /** Modos de activación. Ver D.1. */
 export type ModoActivacion = 'OBLIGATORIO' | 'OPCIONAL' | 'CONDICIONAL';
+
+export const MODOS_ACTIVACION_UNIVERSALES: ModoActivacion[] = [
+  'OBLIGATORIO',
+  'OPCIONAL',
+  'CONDICIONAL',
+];
 
 // ============================================================================
 // Slots de materiales (declarados por la familia)
 // ============================================================================
 
 export type TipoSlot =
-  | 'SUSTRATO'           // sustrato principal (papel, vinilo, MDF, etc.)
+  | 'SUSTRATO' // sustrato principal (papel, vinilo, MDF, etc.)
   | 'CONSUMIBLE_MAQUINA' // consumible vinculado a la máquina (tinta, tóner, film)
-  | 'INSUMO_PASO'        // insumo específico del paso (cola, broches, anillos)
-  | 'TAPA'               // tapas / cubiertas
+  | 'INSUMO_PASO' // insumo específico del paso (cola, broches, anillos)
+  | 'TAPA' // tapas / cubiertas
   | 'OTRO';
 
 export interface SlotDeclarado {
@@ -134,11 +140,11 @@ export interface SlotDeclarado {
 // ============================================================================
 
 export type TipoValidacion =
-  | 'REQUIRES_INPUT'   // el JobContext debe tener un campo no-null
-  | 'COMPARE'          // compara dos valores (operador <=, >=, ==, etc.)
-  | 'IN_RANGE'         // un valor debe estar entre min y max
-  | 'ONE_OF'           // un valor debe pertenecer a una lista
-  | 'EXISTS_OUTPUT';   // un output canónico debe haber sido escrito por algún paso anterior
+  | 'REQUIRES_INPUT' // el JobContext debe tener un campo no-null
+  | 'COMPARE' // compara dos valores (operador <=, >=, ==, etc.)
+  | 'IN_RANGE' // un valor debe estar entre min y max
+  | 'ONE_OF' // un valor debe pertenecer a una lista
+  | 'EXISTS_OUTPUT'; // un output canónico debe haber sido escrito por algún paso anterior
 
 export interface ValidacionDeclaradaBase {
   /** Código único de la validación. */

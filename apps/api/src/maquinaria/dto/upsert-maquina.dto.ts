@@ -359,6 +359,11 @@ export class UpsertMaquinaDto {
   pesoMaximo?: number;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  gramajeMaxGr?: number;
+
+  @IsOptional()
   @IsDateString()
   fechaAlta?: string;
 

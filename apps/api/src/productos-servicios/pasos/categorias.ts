@@ -31,13 +31,15 @@ export const CATEGORIAS: Record<CategoriaFamiliaCodigo, DefinicionCategoria> = {
   corte_y_formado: {
     codigo: 'corte_y_formado',
     nombre: 'Corte y formado',
-    descripcion: 'Recortar o moldear: guillotina, plotter, troquelado, CNC, plegado, perforado.',
+    descripcion:
+      'Recortar o moldear: guillotina, plotter, troquelado, CNC, plegado, perforado.',
     orden: 3,
   },
   terminaciones: {
     codigo: 'terminaciones',
     nombre: 'Terminaciones',
-    descripcion: 'Acabados después de imprimir: laminado, barniz, dorado, hotstamping, lijado.',
+    descripcion:
+      'Acabados después de imprimir: laminado, barniz, dorado, hotstamping, lijado.',
     orden: 4,
   },
   encuadernacion_armado: {
@@ -55,7 +57,8 @@ export const CATEGORIAS: Record<CategoriaFamiliaCodigo, DefinicionCategoria> = {
   operaciones_manuales: {
     codigo: 'operaciones_manuales',
     nombre: 'Operaciones manuales',
-    descripcion: 'Sin máquina industrial: control, embalaje, conteo, atado, etiquetado, modificaciones físicas.',
+    descripcion:
+      'Sin máquina industrial: control, embalaje, conteo, atado, etiquetado, modificaciones físicas.',
     orden: 7,
   },
   logistica_instalacion: {
@@ -67,7 +70,8 @@ export const CATEGORIAS: Record<CategoriaFamiliaCodigo, DefinicionCategoria> = {
   servicios_profesionales: {
     codigo: 'servicios_profesionales',
     nombre: 'Servicios profesionales',
-    descripcion: 'Servicios humanos sin producción física: diseño, copywriting, traducciones, asesoría.',
+    descripcion:
+      'Servicios humanos sin producción física: diseño, copywriting, traducciones, asesoría.',
     orden: 9,
   },
 };

@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 
 import { ConfigPasosEditorView } from "@/components/productos-servicios/config-pasos-editor-view";
-import { ApiError } from "@/lib/api";
 import {
   getCatalogoFamilias,
   getLookupsConfigPaso,
@@ -10,32 +9,32 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function ConfigPasosPage({
+export default async function ConfigPasosFocusedPage({
   params,
 }: {
   params: Promise<{ productoId: string; rutaAltId: string }>;
 }) {
   const { productoId, rutaAltId } = await params;
-  try {
-    const [producto, catalogo, lookups] = await Promise.all([
-      getProductoById(productoId),
-      getCatalogoFamilias(),
-      getLookupsConfigPaso(),
-    ]);
-    const rutaAlt = producto.rutasAlternativas.find((r) => r.id === rutaAltId);
-    if (!rutaAlt) notFound();
-    return (
+  const [producto, catalogoFamilias, lookups] = await Promise.all([
+    getProductoById(productoId),
+    getCatalogoFamilias(),
+    getLookupsConfigPaso(),
+  ]);
+  const rutaAlternativa = producto.rutasAlternativas.find((ruta) => ruta.id === rutaAltId);
+
+  if (!rutaAlternativa) {
+    notFound();
+  }
+
+  return (
+    <div className="pasos-editor-page">
       <ConfigPasosEditorView
         producto={producto}
-        rutaAlternativa={rutaAlt}
-        catalogoFamilias={catalogo}
+        rutaAlternativa={rutaAlternativa}
+        catalogoFamilias={catalogoFamilias}
         lookups={lookups}
+        embedded
       />
-    );
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 404) {
-      notFound();
-    }
-    throw err;
-  }
+    </div>
+  );
 }

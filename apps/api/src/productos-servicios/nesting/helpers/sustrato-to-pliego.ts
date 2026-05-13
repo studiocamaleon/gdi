@@ -31,7 +31,9 @@ export function approxEqualMm(a: number, b: number): boolean {
   return Math.abs(a - b) <= TOLERANCE_MM;
 }
 
-export function calculateSustratoToPliegoConversion(input: SustratoToPliegoInput): SustratoToPliegoResult {
+export function calculateSustratoToPliegoConversion(
+  input: SustratoToPliegoInput,
+): SustratoToPliegoResult {
   const direct =
     approxEqualMm(input.sustrato.anchoMm, input.pliegoImpresion.anchoMm) &&
     approxEqualMm(input.sustrato.altoMm, input.pliegoImpresion.altoMm);
@@ -47,12 +49,20 @@ export function calculateSustratoToPliegoConversion(input: SustratoToPliegoInput
     };
   }
 
-  const normalCols = Math.floor(input.sustrato.anchoMm / input.pliegoImpresion.anchoMm);
-  const normalRows = Math.floor(input.sustrato.altoMm / input.pliegoImpresion.altoMm);
+  const normalCols = Math.floor(
+    input.sustrato.anchoMm / input.pliegoImpresion.anchoMm,
+  );
+  const normalRows = Math.floor(
+    input.sustrato.altoMm / input.pliegoImpresion.altoMm,
+  );
   const normal = Math.max(0, normalCols) * Math.max(0, normalRows);
 
-  const rotCols = Math.floor(input.sustrato.anchoMm / input.pliegoImpresion.altoMm);
-  const rotRows = Math.floor(input.sustrato.altoMm / input.pliegoImpresion.anchoMm);
+  const rotCols = Math.floor(
+    input.sustrato.anchoMm / input.pliegoImpresion.altoMm,
+  );
+  const rotRows = Math.floor(
+    input.sustrato.altoMm / input.pliegoImpresion.anchoMm,
+  );
   const rotada = Math.max(0, rotCols) * Math.max(0, rotRows);
 
   const pliegosPorSustrato = Math.max(normal, rotada);

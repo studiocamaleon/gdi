@@ -8,9 +8,9 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { HumanSelect, optionFromLabel } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -204,21 +204,14 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
                 htmlFor="unidad"
                 tooltip={getLabel(unidadComercialLabels, unidadComercial).descripcion}
               />
-              <Select value={unidadComercial} onValueChange={(v) => setUnidadComercial(v ?? "unidad")}>
-                <SelectTrigger id="unidad">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {unidadComercialProductoItems.map((it) => {
-                    const lbl = getLabel(unidadComercialLabels, it.value);
-                    return (
-                      <SelectItem key={it.value} value={it.value}>
-                        {lbl.label}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              <HumanSelect
+                id="unidad"
+                value={unidadComercial}
+                onValueChange={(v) => setUnidadComercial(v || "unidad")}
+                options={unidadComercialProductoItems.map((it) =>
+                  optionFromLabel(it.value, unidadComercialLabels),
+                )}
+              />
             </div>
             <div className="space-y-2">
               <LabelConTooltip
@@ -227,21 +220,12 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
                 tooltip={getLabel(modoMedidasLabels, modoMedidas).descripcion}
                 ejemplo={getLabel(modoMedidasLabels, modoMedidas).ejemplo}
               />
-              <Select value={modoMedidas} onValueChange={(v) => setModoMedidas(v ?? "FIJA")}>
-                <SelectTrigger id="modoMedidas">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MODOS_MEDIDAS.map((it) => {
-                    const lbl = getLabel(modoMedidasLabels, it.value);
-                    return (
-                      <SelectItem key={it.value} value={it.value}>
-                        {lbl.label}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              <HumanSelect
+                id="modoMedidas"
+                value={modoMedidas}
+                onValueChange={(v) => setModoMedidas(v || "FIJA")}
+                options={MODOS_MEDIDAS.map((it) => optionFromLabel(it.value, modoMedidasLabels))}
+              />
             </div>
             {modoMedidas !== "LIBRE" && (
               <div className="grid grid-cols-2 gap-4">

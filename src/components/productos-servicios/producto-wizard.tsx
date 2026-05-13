@@ -45,16 +45,10 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { HumanSelect, optionFromLabel } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ProductoValidacionPanel } from "@/components/productos-servicios/producto-validacion-panel";
@@ -284,7 +278,7 @@ export function ProductoWizard({
       if (modo === "crear") {
         const creado = (await crearProducto({ ...payload, codigo })) as { id: string };
         toast.success("Producto creado · seguí con las rutas");
-        router.push(`/productos-servicios/${creado.id}/wizard?step=${avanzar ? "rutas" : "identidad"}`);
+        router.push(`/productos-servicios/${creado.id}?tab=${avanzar ? "rutas" : "identidad"}`);
         router.refresh();
       } else if (productoExistente) {
         await actualizarProducto(productoExistente.id, { ...payload, activo });
@@ -485,7 +479,7 @@ export function ProductoWizard({
           {stepActivo !== "identidad" && !productoExistente && (
             <Card>
               <CardContent className="pt-6 text-center text-sm text-muted-foreground">
-                Necesitás crear primero el producto en el step "Identidad".
+                Necesitás crear primero el producto en el step &quot;Identidad&quot;.
               </CardContent>
             </Card>
           )}
@@ -628,24 +622,14 @@ function StepIdentidad(props: StepIdentidadProps) {
               htmlFor="unidad"
               tooltip={getLabel(unidadComercialLabels, props.unidadComercial).descripcion}
             />
-            <Select
+            <HumanSelect
               value={props.unidadComercial}
-              onValueChange={(v) => props.setUnidadComercial(v ?? "unidad")}
-            >
-              <SelectTrigger id="unidad">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {unidadComercialProductoItems.map((it) => {
-                  const lbl = getLabel(unidadComercialLabels, it.value);
-                  return (
-                    <SelectItem key={it.value} value={it.value}>
-                      {lbl.label}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
+              onValueChange={(v) => props.setUnidadComercial(v || "unidad")}
+              options={unidadComercialProductoItems.map((it) =>
+                optionFromLabel(it.value, unidadComercialLabels),
+              )}
+              id="unidad"
+            />
           </div>
           <div className="space-y-2">
             <LabelConTooltip
@@ -654,24 +638,12 @@ function StepIdentidad(props: StepIdentidadProps) {
               tooltip={getLabel(modoMedidasLabels, props.modoMedidas).descripcion}
               ejemplo={getLabel(modoMedidasLabels, props.modoMedidas).ejemplo}
             />
-            <Select
+            <HumanSelect
               value={props.modoMedidas}
-              onValueChange={(v) => props.setModoMedidas(v ?? "FIJA")}
-            >
-              <SelectTrigger id="modoMedidas">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MODOS_MEDIDAS.map((it) => {
-                  const lbl = getLabel(modoMedidasLabels, it.value);
-                  return (
-                    <SelectItem key={it.value} value={it.value}>
-                      {lbl.label}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
+              onValueChange={(v) => props.setModoMedidas(v || "FIJA")}
+              options={MODOS_MEDIDAS.map((it) => optionFromLabel(it.value, modoMedidasLabels))}
+              id="modoMedidas"
+            />
           </div>
           {props.modoMedidas !== "LIBRE" && (
             <div className="grid grid-cols-2 gap-4">
@@ -836,18 +808,17 @@ function StepRutas({ producto, rutasDisponibles, validacion }: StepRutasProps) {
             <div className="space-y-2 rounded border p-3">
               <div className="text-sm font-medium">Agregar ruta del catálogo</div>
               <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                <Select value={nuevaRutaId} onValueChange={(v) => setNuevaRutaId(v ?? "")}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Elegí ruta" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {disponibles.map((r) => (
-                      <SelectItem key={r.id} value={r.id}>
-                        {r.nombre} ({r.pasos.length} pasos)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <HumanSelect
+                  value={nuevaRutaId}
+                  onValueChange={(v) => setNuevaRutaId(v || "")}
+                  options={disponibles.map((r) => ({
+                    value: r.id,
+                    label: r.nombre,
+                    code: r.codigo,
+                    description: `v${r.versionActual} · ${r.pasos.length} pasos`,
+                  }))}
+                  placeholder="Elegí ruta"
+                />
                 <Input
                   value={nuevoNombre}
                   onChange={(e) => setNuevoNombre(e.target.value)}
@@ -1064,36 +1035,27 @@ function StepCargos({
             <div className="space-y-2 rounded border p-3">
               <div className="text-sm font-medium">Asociar cargo del catálogo</div>
               <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                <Select value={cargoSel} onValueChange={(v) => setCargoSel(v ?? "")}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Elegí cargo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {disponibles.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
+                <HumanSelect
+                  value={cargoSel}
+                  onValueChange={(v) => setCargoSel(v || "")}
+                  options={disponibles.map((c) => {
+                    const lblCalc = getLabel(modoCalculoCargoLabels, c.modoCalculo);
+                    return {
+                      value: c.id,
+                      label: c.nombre,
+                      code: c.codigo,
+                      description: lblCalc.label,
+                    };
+                  })}
+                  placeholder="Elegí cargo"
+                />
+                <HumanSelect
                   value={modoActivacion}
-                  onValueChange={(v) => setModoActivacion(v ?? "OPCIONAL")}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {["OBLIGATORIO", "OPCIONAL", "CONDICIONAL"].map((m) => {
-                      const lbl = getLabel(modoActivacionLabels, m);
-                      return (
-                        <SelectItem key={m} value={m}>
-                          {lbl.label}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                  onValueChange={(v) => setModoActivacion(v || "OPCIONAL")}
+                  options={["OBLIGATORIO", "OPCIONAL", "CONDICIONAL"].map((m) =>
+                    optionFromLabel(m, modoActivacionLabels),
+                  )}
+                />
               </div>
               <Button size="sm" onClick={asociar} disabled={agregando || !cargoSel}>
                 {agregando ? "Asociando..." : "Asociar"}

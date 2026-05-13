@@ -20,13 +20,17 @@ export type GuillotinaCutsInput = {
   demasiaCorteMm?: number;
 };
 
-export function calculateGuillotinaCutsFromImposicion(input: GuillotinaCutsInput): number {
+export function calculateGuillotinaCutsFromImposicion(
+  input: GuillotinaCutsInput,
+): number {
   const cols = Math.max(0, Math.floor(input.cols));
   const rows = Math.max(0, Math.floor(input.rows));
   if (cols <= 0 || rows <= 0) {
     return 0;
   }
-  const rawTipoCorte = String(input.tipoCorte ?? 'guillotina').trim().toLowerCase();
+  const rawTipoCorte = String(input.tipoCorte ?? 'guillotina')
+    .trim()
+    .toLowerCase();
   if (rawTipoCorte === 'sin_corte' || rawTipoCorte === 'troquelado') {
     return 0;
   }

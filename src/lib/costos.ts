@@ -35,6 +35,7 @@ export type UnidadBaseCentroCosto =
 export type EstadoConfiguracionCentroCosto =
   | "sin_configurar"
   | "borrador"
+  | "borrador_pendiente"
   | "publicado";
 
 export type TipoRecursoCentroCosto =
@@ -264,6 +265,7 @@ export type CentroCostoRecursoPayload = {
 
 export type CentroCostoRecursoMaquinariaPayload = {
   centroCostoRecursoId: string;
+  maquinaId?: string;
   metodoDepreciacion: MetodoDepreciacionMaquina;
   valorCompra: number;
   valorResidual: number;
@@ -294,14 +296,15 @@ export type CentroCostoCapacidadPayload = {
   overrideManualCapacidad?: number;
 };
 
-export const tipoCentroItems: Array<{ label: string; value: TipoCentroCosto }> = [
-  { label: "Productivo", value: "productivo" },
-  { label: "Apoyo", value: "apoyo" },
-  { label: "Administrativo", value: "administrativo" },
-  { label: "Comercial", value: "comercial" },
-  { label: "Logistico", value: "logistico" },
-  { label: "Tercerizado", value: "tercerizado" },
-];
+export const tipoCentroItems: Array<{ label: string; value: TipoCentroCosto }> =
+  [
+    { label: "Productivo", value: "productivo" },
+    { label: "Apoyo", value: "apoyo" },
+    { label: "Administrativo", value: "administrativo" },
+    { label: "Comercial", value: "comercial" },
+    { label: "Logistico", value: "logistico" },
+    { label: "Tercerizado", value: "tercerizado" },
+  ];
 
 export const categoriaGraficaItems: Array<{
   label: string;
@@ -328,7 +331,10 @@ export const imputacionPreferidaItems: Array<{
   { label: "Reparto", value: "reparto" },
 ];
 
-export const unidadBaseItems: Array<{ label: string; value: UnidadBaseCentroCosto }> = [
+export const unidadBaseItems: Array<{
+  label: string;
+  value: UnidadBaseCentroCosto;
+}> = [
   { label: "Ninguna", value: "ninguna" },
   { label: "Hora maquina", value: "hora_maquina" },
   { label: "Hora hombre", value: "hora_hombre" },
@@ -388,6 +394,7 @@ export const estadoConfiguracionItems: Array<{
 }> = [
   { label: "Sin configurar", value: "sin_configurar" },
   { label: "Borrador", value: "borrador" },
+  { label: "Borrador pendiente", value: "borrador_pendiente" },
   { label: "Publicado", value: "publicado" },
 ];
 
@@ -416,7 +423,9 @@ const tipoGastoGeneralLabels = new Map(
 );
 
 const categoriaComponenteCostoLabels = new Map(
-  categoriaComponenteCostoItems.map((item) => [item.value, item.label] as const),
+  categoriaComponenteCostoItems.map(
+    (item) => [item.value, item.label] as const,
+  ),
 );
 
 const estadoConfiguracionLabels = new Map(
@@ -449,7 +458,9 @@ export function getTipoRecursoLabel(value: TipoRecursoCentroCosto) {
   return tipoRecursoLabels.get(value) ?? value;
 }
 
-export function getTipoGastoGeneralLabel(value: TipoGastoGeneralCentroCosto | "") {
+export function getTipoGastoGeneralLabel(
+  value: TipoGastoGeneralCentroCosto | "",
+) {
   if (!value) {
     return "";
   }

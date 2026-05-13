@@ -2,8 +2,10 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
+  IsEnum,
   IsInt,
   IsNotEmpty,
+  IsNumber,
   IsObject,
   IsOptional,
   IsString,
@@ -12,6 +14,26 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+
+export enum ModoActivacionPasoDto {
+  OBLIGATORIO = 'OBLIGATORIO',
+  OPCIONAL = 'OPCIONAL',
+  CONDICIONAL = 'CONDICIONAL',
+}
+
+export enum ModoTiempoPasoDto {
+  T1 = 'T-1',
+  T2 = 'T-2',
+  T3 = 'T-3',
+  T4 = 'T-4',
+}
+
+export enum MecanismoCantidadPasoDto {
+  DIRECT_FROM_JOBCONTEXT = 'DIRECT_FROM_JOBCONTEXT',
+  HEREDAR_DEL_OUTPUT_CANONICO = 'HEREDAR_DEL_OUTPUT_CANONICO',
+  CALCULADO_POR_PASO = 'CALCULADO_POR_PASO',
+  CONVERSION = 'CONVERSION',
+}
 
 /**
  * DTO para asociar una RUTA ALTERNATIVA a un producto.
@@ -72,20 +94,20 @@ export class UpsertProductoConfigPasoDto {
   rutaPasoId!: string;
 
   @IsOptional()
-  @IsString()
-  modoActivacion?: string | null;
+  @IsEnum(ModoActivacionPasoDto)
+  modoActivacion?: ModoActivacionPasoDto | null;
 
   @IsOptional()
   @IsObject()
   condicionActivacionJson?: Record<string, unknown> | null;
 
   @IsOptional()
-  @IsString()
-  modoTiempo?: string | null;
+  @IsEnum(ModoTiempoPasoDto)
+  modoTiempo?: ModoTiempoPasoDto | null;
 
   @IsOptional()
-  @IsString()
-  mecanismoCantidad?: string | null;
+  @IsEnum(MecanismoCantidadPasoDto)
+  mecanismoCantidad?: MecanismoCantidadPasoDto | null;
 
   @IsOptional()
   @IsObject()
@@ -109,12 +131,25 @@ export class UpsertProductoConfigPasoDto {
   perfilM1Id?: string | null;
 
   @IsOptional()
+  @IsUUID()
+  centroCostoId?: string | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
   setupOverrideMin?: number | null;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
   cleanupOverrideMin?: number | null;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
   tiempoFijoOverrideMin?: number | null;
 
   @IsOptional()

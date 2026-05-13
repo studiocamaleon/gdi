@@ -250,7 +250,7 @@ export const geometriaTrabajoMaquinaItems: Array<{
   { label: "Pliego", value: "pliego" },
   { label: "Rollo", value: "rollo" },
   { label: "Plano", value: "plano" },
-  { label: "Cilindrico", value: "cilindrico" },
+  { label: "Cilíndrico", value: "cilindrico" },
   { label: "Volumen", value: "volumen" },
 ];
 
@@ -508,6 +508,7 @@ export type MaquinaConsumible = {
   unidad: UnidadConsumoMaquina;
   rendimientoEstimado: number | null;
   consumoBase: number | null;
+  perfilOperativoId: string | null;
   perfilOperativoNombre: string;
   activo: boolean;
   detalle: Record<string, unknown> | null;
@@ -584,6 +585,7 @@ export type MaquinaPayload = {
   altoUtil?: number;
   espesorMaximo?: number;
   pesoMaximo?: number;
+  gramajeMaxGr?: number;
   fechaAlta?: string;
   activo: boolean;
   observaciones?: string;

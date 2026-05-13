@@ -2,288 +2,220 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
-import {
-  ArrowLeftRightIcon,
-  BriefcaseBusinessIcon,
-  Building2Icon,
-  CalendarClockIcon,
-  CircleDollarSignIcon,
-  ChevronRightIcon,
-  WarehouseIcon,
-  BoxesIcon,
-  FileTextIcon,
-  FactoryIcon,
-  GemIcon,
-  FolderTreeIcon,
-  IdCardIcon,
-  ClipboardListIcon,
-  LayoutDashboardIcon,
-  PercentIcon,
-  PrinterIcon,
-  ReceiptIcon,
-  UsersIcon,
-  WorkflowIcon,
-  WrenchIcon,
-} from "lucide-react";
 import { toast } from "sonner";
 
 import { type CurrentUser } from "@/lib/auth";
 import { NavLink } from "@/components/navigation/nav-link";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
-  SidebarRail,
-  SidebarSeparator,
-} from "@/components/ui/sidebar";
 
-const comercial = [
-  {
-    title: "Crear cotización",
-    href: "/comercial/cotizar",
-    icon: FileTextIcon,
-  },
-];
-
-const registros = [
-  {
-    title: "Clientes",
-    href: "/clientes",
-    icon: UsersIcon,
-  },
-  {
-    title: "Proveedores",
-    href: "/proveedores",
-    icon: Building2Icon,
-  },
-  {
-    title: "Empleados",
-    href: "/empleados",
-    icon: IdCardIcon,
-  },
-];
-
-const costos = [
-  {
-    title: "Centros de costo",
-    href: "/costos/centros-de-costo",
-    icon: FolderTreeIcon,
-  },
-  {
-    title: "Maquinaria",
-    href: "/costos/maquinaria",
-    icon: PrinterIcon,
-  },
-  {
-    title: "Rutas de produccion",
-    href: "/productos-servicios/rutas",
-    icon: WorkflowIcon,
-  },
-  {
-    title: "Catalogo de productos",
-    href: "/productos-servicios",
-    icon: BoxesIcon,
-  },
-  {
-    title: "Cargos directos",
-    href: "/productos-servicios/cargos-directos",
-    icon: WrenchIcon,
-  },
-  {
-    title: "Impuestos",
-    href: "/productos-servicios/impuestos-catalogo",
-    icon: ReceiptIcon,
-  },
-  {
-    title: "Comisiones",
-    href: "/productos-servicios/comisiones-catalogo",
-    icon: PercentIcon,
-  },
-];
-
-const produccion = [
-  {
-    title: "Estaciones",
-    href: "/produccion/estaciones",
-    icon: ClipboardListIcon,
-  },
-];
-
-const inventario = [
-  {
-    title: "Materias primas",
-    href: "/inventario/materias-primas",
-    icon: BoxesIcon,
-  },
-  {
-    title: "Centro de stock",
-    href: "/inventario/centro-stock",
-    icon: WarehouseIcon,
-  },
-  {
-    title: "Movimientos",
-    href: "/inventario/movimientos",
-    icon: ArrowLeftRightIcon,
-  },
-];
-
-type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
+type AppSidebarProps = {
   currentUser: CurrentUser;
 };
 
-function SidebarBrandLogo({
-  className,
-}: {
-  className?: string;
-}) {
-  return (
-    <svg
-      width="677"
-      height="369"
-      viewBox="0 0 677 369"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-    >
-      <defs>
-        <linearGradient id="gdi-cyan-inline" x1="124" y1="57" x2="192" y2="153" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#28B8F2" />
-          <stop offset="1" stopColor="#1295D0" />
-        </linearGradient>
-        <linearGradient id="gdi-magenta-inline" x1="218" y1="56" x2="290" y2="151" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#FF0D96" />
-          <stop offset="1" stopColor="#DD007D" />
-        </linearGradient>
-        <linearGradient id="gdi-yellow-inline" x1="123" y1="151" x2="189" y2="252" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#FFF100" />
-          <stop offset="1" stopColor="#F5DD00" />
-        </linearGradient>
-        <linearGradient id="gdi-black-inline" x1="219" y1="153" x2="286" y2="247" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#1D1D1B" />
-          <stop offset="1" stopColor="#000000" />
-        </linearGradient>
-        <filter id="soft-shadow-inline" x="92" y="28" width="232" height="254" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB">
-          <feDropShadow dx="0" dy="4" stdDeviation="10" floodColor="#000000" floodOpacity="0.18" />
-        </filter>
-      </defs>
+type IconProps = React.SVGProps<SVGSVGElement>;
+type IconComponent = (props: IconProps) => React.ReactElement;
 
-      <g filter="url(#soft-shadow-inline)">
-        <g className="cmyk-bubbles">
-          <circle className="cmyk-bubble" cx="152.5" cy="96.5" r="49.5" fill="url(#gdi-cyan-inline)" />
-          <circle className="cmyk-bubble" cx="247.5" cy="96.5" r="49.5" fill="url(#gdi-magenta-inline)" />
-          <circle className="cmyk-bubble" cx="152.5" cy="191.5" r="49.5" fill="url(#gdi-yellow-inline)" />
-          <circle className="cmyk-bubble" cx="247.5" cy="191.5" r="49.5" fill="url(#gdi-black-inline)" />
-        </g>
-
-        <g className="core-bubbles">
-          <circle className="core-bubble" cx="200" cy="96.5" r="16" fill="#5F5F78" fillOpacity="0.26" />
-          <circle className="core-bubble" cx="200" cy="191.5" r="16" fill="#5F5F78" fillOpacity="0.26" />
-          <circle className="core-bubble" cx="152.5" cy="144" r="16" fill="#5F5F78" fillOpacity="0.18" />
-          <circle className="core-bubble" cx="247.5" cy="144" r="16" fill="#5F5F78" fillOpacity="0.18" />
-          <circle className="core-bubble" cx="200" cy="144" r="20" fill="#4A4A57" fillOpacity="0.18" />
-        </g>
-      </g>
-
-      <g fill="#FAFAF8">
-        <text
-          x="332"
-          y="161"
-          fontFamily="Montserrat, Avenir Next, Poppins, Arial, sans-serif"
-          fontSize="126"
-          fontWeight="700"
-          letterSpacing="0.5"
-        >
-          GDI
-        </text>
-        <text
-          x="334"
-          y="206"
-          fontFamily="Montserrat, Avenir Next, Poppins, Arial, sans-serif"
-          fontSize="40"
-          fontWeight="500"
-          letterSpacing="-0.2"
-        >
-          grafica digital
-        </text>
-        <text
-          x="334"
-          y="244"
-          fontFamily="Montserrat, Avenir Next, Poppins, Arial, sans-serif"
-          fontSize="40"
-          fontWeight="500"
-          letterSpacing="-0.2"
-        >
-          inteligente
-        </text>
-      </g>
+const Ico = {
+  Grid: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
     </svg>
+  ),
+  Briefcase: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <rect x="2" y="7" width="20" height="14" rx="2" />
+      <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+  ),
+  Users: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  ),
+  Coin: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M14.5 9.5h-3.75a1.75 1.75 0 0 0 0 3.5h2.5a1.75 1.75 0 0 1 0 3.5H9" />
+      <path d="M12 7v1.5M12 15.5V17" />
+    </svg>
+  ),
+  Factory: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M3 20V10l5 3V10l5 3V10l5 3v7Z" />
+      <path d="M3 20h18" />
+      <path d="M7 16h2M11 16h2M15 16h2" />
+    </svg>
+  ),
+  Cube: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M12 3 21 7.5v9L12 21 3 16.5v-9Z" />
+      <path d="M3 7.5 12 12l9-4.5" />
+      <path d="M12 12v9" />
+    </svg>
+  ),
+  Chev: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="m9 6 6 6-6 6" />
+    </svg>
+  ),
+  Search: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3-3" />
+    </svg>
+  ),
+} satisfies Record<string, IconComponent>;
+
+const LogoNodes = ({ size = 22 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none" aria-hidden="true">
+    <path d="M5.5 6.5 L18 6.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    <path d="M5.5 6.5 L12 17.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    <path d="M18 6.5 L12 17.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    <path d="M18 6.5 L18 14.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity="0.55" />
+    <circle cx="5.5" cy="6.5" r="2.2" fill="currentColor" />
+    <circle cx="18" cy="6.5" r="2.2" fill="currentColor" />
+    <circle cx="12" cy="17.5" r="2.2" fill="currentColor" />
+    <circle cx="18" cy="14.5" r="1.4" fill="currentColor" opacity="0.55" />
+  </svg>
+);
+
+function Brand() {
+  return (
+    <div className="side-brand">
+      <div className="mark">
+        <LogoNodes size={31} />
+      </div>
+      <div>
+        <div className="wordmark">grafoprint</div>
+        <div className="org">motor de cotización</div>
+      </div>
+    </div>
   );
 }
+
+type NavChild = {
+  key: string;
+  label: string;
+  href: string;
+};
+
+type NavItem =
+  | {
+      key: string;
+      label: string;
+      icon: keyof typeof Ico;
+      href: string;
+      children?: never;
+    }
+  | {
+      key: string;
+      label: string;
+      icon: keyof typeof Ico;
+      children: NavChild[];
+      href?: never;
+    };
+
+const NAV: NavItem[] = [
+  { key: "panel", label: "Panel general", icon: "Grid", href: "/" },
+  {
+    key: "comercial",
+    label: "Comercial",
+    icon: "Briefcase",
+    children: [
+      { key: "crear-cotizacion", label: "Crear cotización", href: "/comercial/cotizar" },
+    ],
+  },
+  {
+    key: "registros",
+    label: "Registros",
+    icon: "Users",
+    children: [
+      { key: "clientes", label: "Clientes", href: "/clientes" },
+      { key: "proveedores", label: "Proveedores", href: "/proveedores" },
+      { key: "empleados", label: "Empleados", href: "/empleados" },
+    ],
+  },
+  {
+    key: "costos",
+    label: "Costos",
+    icon: "Coin",
+    children: [
+      { key: "centros", label: "Centros de costo", href: "/costos/centros-de-costo" },
+      { key: "maquinaria", label: "Maquinaria", href: "/costos/maquinaria" },
+      { key: "rutas", label: "Rutas de producción", href: "/productos-servicios/rutas" },
+      { key: "catalogo", label: "Catálogo de productos", href: "/productos-servicios" },
+      { key: "cargos", label: "Cargos directos", href: "/productos-servicios/cargos-directos" },
+      { key: "impuestos", label: "Impuestos", href: "/productos-servicios/impuestos-catalogo" },
+      { key: "comisiones", label: "Comisiones", href: "/productos-servicios/comisiones-catalogo" },
+    ],
+  },
+  {
+    key: "produccion",
+    label: "Producción",
+    icon: "Factory",
+    children: [
+      { key: "estaciones", label: "Estaciones", href: "/produccion/estaciones" },
+    ],
+  },
+  {
+    key: "inventario",
+    label: "Inventario",
+    icon: "Cube",
+    children: [
+      { key: "materiales", label: "Materiales", href: "/inventario/materias-primas" },
+      { key: "movimientos", label: "Movimientos", href: "/inventario/movimientos" },
+    ],
+  },
+];
 
 function matchesRoute(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function formatDiasSuscripcion(diasRestantes: number | null | undefined) {
+function hasChildren(item: NavItem): item is Extract<NavItem, { children: NavChild[] }> {
+  return Array.isArray(item.children);
+}
+
+function getActiveKey(pathname: string) {
+  const entries = NAV.flatMap((item) => {
+    if (hasChildren(item)) {
+      return item.children.map((child) => ({
+        key: child.key,
+        href: child.href,
+      }));
+    }
+
+    return [{ key: item.key, href: item.href }];
+  });
+
+  return entries
+    .sort((a, b) => b.href.length - a.href.length)
+    .find((entry) => matchesRoute(pathname, entry.href))?.key;
+}
+
+function getParentKey(activeKey: string | undefined) {
+  if (!activeKey) {
+    return undefined;
+  }
+
+  return NAV.find((item) => hasChildren(item) && item.children.some((child) => child.key === activeKey))?.key;
+}
+
+function formatPlanTier(diasRestantes: number | null | undefined) {
   if (diasRestantes == null) {
     return "Sin vencimiento";
   }
 
-  if (diasRestantes < 0) {
+  if (diasRestantes <= 0) {
     return "Vencida";
   }
 
-  if (diasRestantes === 0) {
-    return "Vence hoy";
-  }
-
-  if (diasRestantes === 1) {
-    return "1 dia restante";
-  }
-
-  return `${diasRestantes} dias restantes`;
-}
-
-function getSuscripcionTone(diasRestantes: number | null | undefined) {
-  if (diasRestantes == null) {
-    return "outline";
-  }
-
-  if (diasRestantes <= 0) {
-    return "destructive";
-  }
-
-  if (diasRestantes <= 7) {
-    return "secondary";
-  }
-
-  return "outline";
+  return `${diasRestantes} / 30 dias restantes`;
 }
 
 function getSuscripcionProgress(diasRestantes: number | null | undefined) {
@@ -298,434 +230,124 @@ function getSuscripcionProgress(diasRestantes: number | null | undefined) {
   return Math.min(100, Math.max(8, Math.round((diasRestantes / 30) * 100)));
 }
 
-export function AppSidebar({ currentUser, ...props }: AppSidebarProps) {
+export function AppSidebar({ currentUser }: AppSidebarProps) {
   const pathname = usePathname();
-  const isDashboard = pathname === "/";
-  const isComercialRoute = comercial.some((item) =>
-    matchesRoute(pathname, item.href),
-  );
-  const isRegistrosRoute = registros.some((item) =>
-    matchesRoute(pathname, item.href),
-  );
-  const isCostosRoute = costos.some((item) => matchesRoute(pathname, item.href));
-  const isProduccionRoute = produccion.some((item) =>
-    matchesRoute(pathname, item.href),
-  );
-  const isInventarioRoute = inventario.some((item) =>
-    matchesRoute(pathname, item.href),
-  );
-  const [isComercialOpen, setIsComercialOpen] = React.useState(isComercialRoute);
-  const [isRegistrosOpen, setIsRegistrosOpen] = React.useState(isRegistrosRoute);
-  const [isCostosOpen, setIsCostosOpen] = React.useState(isCostosRoute);
-  const [isProduccionOpen, setIsProduccionOpen] = React.useState(isProduccionRoute);
-  const [isInventarioOpen, setIsInventarioOpen] = React.useState(isInventarioRoute);
+  const activeKey = getActiveKey(pathname);
+  const parentKey = getParentKey(activeKey);
+  const [expanded, setExpanded] = React.useState(() => new Set(["costos"]));
   const planNombre = currentUser.tenantActual.suscripcion?.planNombre?.trim() || "Plan diamante";
-  const diasRestantes = currentUser.tenantActual.suscripcion?.diasRestantes ?? 18;
-  const suscripcionEstado = formatDiasSuscripcion(diasRestantes);
+  const diasRestantes = currentUser.tenantActual.suscripcion?.diasRestantes ?? 14;
   const suscripcionProgress = getSuscripcionProgress(diasRestantes);
 
   React.useEffect(() => {
-    setIsComercialOpen(isComercialRoute);
-  }, [isComercialRoute]);
+    if (!parentKey) {
+      return;
+    }
 
-  React.useEffect(() => {
-    setIsRegistrosOpen(isRegistrosRoute);
-  }, [isRegistrosRoute]);
+    setExpanded((prev) => {
+      if (prev.has(parentKey)) {
+        return prev;
+      }
 
-  React.useEffect(() => {
-    setIsCostosOpen(isCostosRoute);
-  }, [isCostosRoute]);
+      const next = new Set(prev);
+      next.add(parentKey);
+      return next;
+    });
+  }, [parentKey]);
 
-  React.useEffect(() => {
-    setIsProduccionOpen(isProduccionRoute);
-  }, [isProduccionRoute]);
-
-  React.useEffect(() => {
-    setIsInventarioOpen(isInventarioRoute);
-  }, [isInventarioRoute]);
+  const toggle = (key: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
 
   return (
-    <Sidebar collapsible="icon" variant="inset" {...props}>
-      <SidebarHeader className="gap-1 border-b border-sidebar-border/70 px-2 py-2">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              render={<NavLink href="/" />}
-              size="lg"
-              tooltip="GDI ERP"
-              className="logo-hover-target h-auto min-h-32 justify-center bg-transparent px-1 py-0.5 hover:bg-transparent"
-            >
-              <SidebarBrandLogo
-                className="sidebar-logo !block !h-34 !w-full max-w-[460px] object-contain object-center transition-transform duration-300 ease-out group-data-[collapsible=icon]:!h-16 group-data-[collapsible=icon]:!w-auto"
-              />
-              <span className="sr-only">Inicio</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-        <style jsx global>{`
-          .sidebar-logo .cmyk-bubble {
-            transform-box: fill-box;
-            transform-origin: center;
-          }
-          .sidebar-logo .core-bubbles {
-            transform-origin: 200px 144px;
-          }
-          .sidebar-logo .core-bubble {
-            transform-box: fill-box;
-            transform-origin: center;
-          }
-          .logo-hover-target:hover .sidebar-logo {
-            transform: translateY(-2px) scale(1.03);
-          }
-          .logo-hover-target:hover .sidebar-logo .cmyk-bubble {
-            animation-name: sidebar-cmyk-pulse;
-            animation-duration: 1.8s;
-            animation-timing-function: ease-in-out;
-            animation-iteration-count: infinite;
-          }
-          .logo-hover-target:hover .sidebar-logo .cmyk-bubble:nth-child(1) {
-            animation-delay: 0s;
-          }
-          .logo-hover-target:hover .sidebar-logo .cmyk-bubble:nth-child(2) {
-            animation-delay: 0.2s;
-          }
-          .logo-hover-target:hover .sidebar-logo .cmyk-bubble:nth-child(3) {
-            animation-delay: 0.35s;
-          }
-          .logo-hover-target:hover .sidebar-logo .cmyk-bubble:nth-child(4) {
-            animation-delay: 0.5s;
-          }
-          .logo-hover-target:hover .sidebar-logo .core-bubbles {
-            animation-name: sidebar-core-orbit-hover;
-            animation-duration: 1.4s;
-            animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-            animation-iteration-count: infinite;
-          }
-          .logo-hover-target:hover .sidebar-logo .core-bubble {
-            animation-name: sidebar-core-pulse;
-            animation-duration: 1.1s;
-            animation-timing-function: ease-in-out;
-            animation-iteration-count: infinite;
-          }
-          .logo-hover-target:hover .sidebar-logo .core-bubble:nth-child(1) {
-            animation-delay: 0s;
-          }
-          .logo-hover-target:hover .sidebar-logo .core-bubble:nth-child(2) {
-            animation-delay: 0.2s;
-          }
-          .logo-hover-target:hover .sidebar-logo .core-bubble:nth-child(3) {
-            animation-delay: 0.35s;
-          }
-          .logo-hover-target:hover .sidebar-logo .core-bubble:nth-child(4) {
-            animation-delay: 0.5s;
-          }
-          .logo-hover-target:hover .sidebar-logo .core-bubble:nth-child(5) {
-            animation-delay: 0.7s;
-          }
-          @keyframes sidebar-core-orbit-hover {
-            0% {
-              transform: rotate(0deg);
-            }
-            40% {
-              transform: rotate(16deg);
-            }
-            100% {
-              transform: rotate(0deg);
-            }
-          }
-          @keyframes sidebar-core-pulse {
-            0%,
-            100% {
-              opacity: 0.88;
-              transform: scale(1);
-            }
-            50% {
-              opacity: 1;
-              transform: scale(1.08);
-            }
-          }
-          @keyframes sidebar-cmyk-pulse {
-            0%,
-            100% {
-              transform: scale(1) translateY(0px);
-              filter: saturate(1);
-            }
-            50% {
-              transform: scale(1.1) translateY(-3px);
-              filter: saturate(1.2);
-            }
-          }
-        `}</style>
-      </SidebarHeader>
+    <aside className="side">
+      <Brand />
 
-      <SidebarContent className="gap-1 px-2 py-4">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              render={<NavLink href="/" />}
-              isActive={isDashboard}
-              tooltip="Panel general"
-              className="font-medium"
-            >
-              <LayoutDashboardIcon />
-              <span>Panel general</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+      <button
+        type="button"
+        className="side-search"
+        onClick={() => toast.info("Búsqueda global disponible próximamente.")}
+      >
+        <Ico.Search />
+        <span>Buscar…</span>
+        <span className="kbd">⌘K</span>
+      </button>
 
-        <SidebarSeparator className="mx-2 my-2 w-auto" />
+      <nav className="side-nav">
+        {NAV.map((item) => {
+          const IconCmp = Ico[item.icon];
+          const itemHasChildren = hasChildren(item);
+          const open = itemHasChildren && expanded.has(item.key);
+          const isDirectActive = !itemHasChildren && activeKey === item.key;
 
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <Collapsible
-              open={isComercialOpen}
-              onOpenChange={setIsComercialOpen}
-              className="group/collapsible"
-            >
-              <CollapsibleTrigger
-                render={
-                  <SidebarMenuButton
-                    tooltip="Comercial"
-                    className="font-medium"
-                    isActive={isComercialRoute}
-                  />
-                }
+          if (!itemHasChildren) {
+            return (
+              <NavLink
+                key={item.key}
+                href={item.href}
+                className={`nav-item ${isDirectActive ? "active" : ""}`}
               >
-                <BriefcaseBusinessIcon />
-                <span>Comercial</span>
-                <ChevronRightIcon className="ml-auto transition-transform group-data-[state=open]/menu-button:rotate-90" />
-              </CollapsibleTrigger>
+                <span className="ico"><IconCmp /></span>
+                <span className="label">{item.label}</span>
+              </NavLink>
+            );
+          }
 
-              <CollapsibleContent className="mt-1">
-                <SidebarMenuSub>
-                  {comercial.map((item) => (
-                    <SidebarMenuSubItem key={item.title}>
-                      <SidebarMenuSubButton
-                        render={<NavLink href={item.href} />}
-                        isActive={matchesRoute(pathname, item.href)}
-                      >
-                        <item.icon />
-                        <span>{item.title}</span>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                  ))}
-                </SidebarMenuSub>
-              </CollapsibleContent>
-            </Collapsible>
-          </SidebarMenuItem>
-        </SidebarMenu>
-
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <Collapsible
-              open={isRegistrosOpen}
-              onOpenChange={setIsRegistrosOpen}
-              className="group/collapsible"
-            >
-              <CollapsibleTrigger
-                render={
-                  <SidebarMenuButton
-                    tooltip="Registros"
-                    className="font-medium"
-                    isActive={isRegistrosRoute}
-                  />
-                }
+          return (
+            <React.Fragment key={item.key}>
+              <button
+                type="button"
+                className={`nav-item ${open ? "expanded" : ""}`}
+                onClick={() => toggle(item.key)}
               >
-                <UsersIcon />
-                <span>Registros</span>
-                <ChevronRightIcon className="ml-auto transition-transform group-data-[state=open]/menu-button:rotate-90" />
-              </CollapsibleTrigger>
+                <span className="ico"><IconCmp /></span>
+                <span className="label">{item.label}</span>
+                <Ico.Chev className="chev" />
+              </button>
 
-              <CollapsibleContent className="mt-1">
-                <SidebarMenuSub>
-                  {registros.map((item) => (
-                    <SidebarMenuSubItem key={item.title}>
-                      <SidebarMenuSubButton
-                        render={<NavLink href={item.href} />}
-                        isActive={matchesRoute(pathname, item.href)}
-                      >
-                        <item.icon />
-                        <span>{item.title}</span>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
+              {open ? (
+                <div className="nav-children">
+                  {item.children.map((child) => (
+                    <NavLink
+                      key={child.key}
+                      href={child.href}
+                      className={`nav-child ${activeKey === child.key ? "active" : ""}`}
+                    >
+                      <span>{child.label}</span>
+                    </NavLink>
                   ))}
-                </SidebarMenuSub>
-              </CollapsibleContent>
-            </Collapsible>
-          </SidebarMenuItem>
-        </SidebarMenu>
+                </div>
+              ) : null}
+            </React.Fragment>
+          );
+        })}
+      </nav>
 
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <Collapsible
-              open={isCostosOpen}
-              onOpenChange={setIsCostosOpen}
-              className="group/collapsible"
-            >
-              <CollapsibleTrigger
-                render={
-                  <SidebarMenuButton
-                    tooltip="Costos"
-                    className="font-medium"
-                    isActive={isCostosRoute}
-                  />
-                }
-              >
-                <CircleDollarSignIcon />
-                <span>Costos</span>
-                <ChevronRightIcon className="ml-auto transition-transform group-data-[state=open]/menu-button:rotate-90" />
-              </CollapsibleTrigger>
-
-              <CollapsibleContent className="mt-1">
-                <SidebarMenuSub>
-                  {costos.map((item) => (
-                    <SidebarMenuSubItem key={item.title}>
-                      <SidebarMenuSubButton
-                        render={<NavLink href={item.href} />}
-                        isActive={matchesRoute(pathname, item.href)}
-                      >
-                        <item.icon />
-                        <span>{item.title}</span>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                  ))}
-                </SidebarMenuSub>
-              </CollapsibleContent>
-            </Collapsible>
-          </SidebarMenuItem>
-        </SidebarMenu>
-
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <Collapsible
-              open={isProduccionOpen}
-              onOpenChange={setIsProduccionOpen}
-              className="group/collapsible"
-            >
-              <CollapsibleTrigger
-                render={
-                  <SidebarMenuButton
-                    tooltip="Produccion"
-                    className="font-medium"
-                    isActive={isProduccionRoute}
-                  />
-                }
-              >
-                <FactoryIcon />
-                <span>Produccion</span>
-                <ChevronRightIcon className="ml-auto transition-transform group-data-[state=open]/menu-button:rotate-90" />
-              </CollapsibleTrigger>
-
-              <CollapsibleContent className="mt-1">
-                <SidebarMenuSub>
-                  {produccion.map((item) => (
-                    <SidebarMenuSubItem key={item.title}>
-                      <SidebarMenuSubButton
-                        render={<NavLink href={item.href} />}
-                        isActive={matchesRoute(pathname, item.href)}
-                      >
-                        <item.icon />
-                        <span>{item.title}</span>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                  ))}
-                </SidebarMenuSub>
-              </CollapsibleContent>
-            </Collapsible>
-          </SidebarMenuItem>
-        </SidebarMenu>
-
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <Collapsible
-              open={isInventarioOpen}
-              onOpenChange={setIsInventarioOpen}
-              className="group/collapsible"
-            >
-              <CollapsibleTrigger
-                render={
-                  <SidebarMenuButton
-                    tooltip="Inventario"
-                    className="font-medium"
-                    isActive={isInventarioRoute}
-                  />
-                }
-              >
-                <BoxesIcon />
-                <span>Inventario</span>
-                <ChevronRightIcon className="ml-auto transition-transform group-data-[state=open]/menu-button:rotate-90" />
-              </CollapsibleTrigger>
-
-              <CollapsibleContent className="mt-1">
-                <SidebarMenuSub>
-                  {inventario.map((item) => (
-                    <SidebarMenuSubItem key={item.title}>
-                      <SidebarMenuSubButton
-                        render={<NavLink href={item.href} />}
-                        isActive={matchesRoute(pathname, item.href)}
-                      >
-                        <item.icon />
-                        <span>{item.title}</span>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                  ))}
-                </SidebarMenuSub>
-              </CollapsibleContent>
-            </Collapsible>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarContent>
-
-      <SidebarFooter className="gap-3 border-t border-sidebar-border/70 p-3">
-        <button
-          type="button"
-          onClick={() => toast.info("Administración de suscripción disponible próximamente.")}
-          className="group relative cursor-pointer rounded-2xl text-left outline-none transition-transform duration-200 hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary/40 group-data-[collapsible=icon]:hidden"
-        >
-          <Card
-            size="sm"
-            className="relative overflow-hidden rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.18),_transparent_32%),linear-gradient(145deg,_rgba(33,33,37,0.98)_0%,_rgba(11,11,12,0.98)_42%,_rgba(22,22,25,0.98)_100%)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_18px_40px_rgba(0,0,0,0.24)] ring-0 transition-all duration-300 group-hover:border-white/18 group-hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_22px_44px_rgba(0,0,0,0.28)]"
-          >
-            <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-              <div className="absolute -left-1/3 top-0 h-full w-1/3 bg-gradient-to-r from-cyan-400/0 via-cyan-400/22 to-cyan-400/0 blur-xl transition-transform duration-500 group-hover:translate-x-[260%]" />
-              <div className="absolute -left-1/3 top-0 h-full w-1/3 bg-gradient-to-r from-fuchsia-500/0 via-fuchsia-500/18 to-fuchsia-500/0 blur-xl transition-transform delay-75 duration-500 group-hover:translate-x-[290%]" />
-              <div className="absolute -left-1/3 top-0 h-full w-1/3 bg-gradient-to-r from-amber-300/0 via-amber-300/20 to-amber-300/0 blur-xl transition-transform delay-150 duration-500 group-hover:translate-x-[320%]" />
+      <button
+        type="button"
+        className="plan-card"
+        onClick={() => toast.info("Administración de suscripción disponible próximamente.")}
+      >
+        <div className="plan-row">
+          <div className="plan-title">
+            <span className="dot" />
+            <div>
+              <div className="name">{planNombre}</div>
+              <div className="tier">{formatPlanTier(diasRestantes)}</div>
             </div>
-            <CardHeader className="relative gap-3 p-4">
-              <div className="space-y-0.5">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">
-                  Plan actual
-                </p>
-                <div className="flex items-center gap-2">
-                  <GemIcon className="size-4 text-cyan-300 transition-transform duration-300 group-hover:scale-110" />
-                  <CardTitle className="truncate text-lg font-semibold tracking-[-0.03em] text-white">
-                    {planNombre}
-                  </CardTitle>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-300 transition-[width] duration-500"
-                    style={{ width: `${suscripcionProgress}%` }}
-                  />
-                </div>
-                <div className="flex items-center gap-2 text-sm text-white/72">
-                  <CalendarClockIcon className="size-3.5 text-white/42" />
-                  <span>{suscripcionEstado}</span>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="relative border-t border-white/8 bg-white/[0.03] px-4 py-2.5">
-              <p className="text-center text-[10px] uppercase tracking-[0.18em] text-white/38 transition-colors duration-300 group-hover:text-white/60">
-                Administrar
-              </p>
-            </CardContent>
-          </Card>
-        </button>
-      </SidebarFooter>
-
-      <SidebarRail />
-    </Sidebar>
+          </div>
+        </div>
+        <div className="plan-meter"><span style={{ width: `${suscripcionProgress}%` }} /></div>
+        <div className="plan-admin">Administrar suscripción</div>
+      </button>
+    </aside>
   );
 }

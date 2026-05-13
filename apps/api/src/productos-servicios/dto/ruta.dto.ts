@@ -27,7 +27,7 @@ export class CrearRutaDto {
   @IsString()
   @IsNotEmpty()
   @Length(3, 100)
-  @Matches(/^[A-Za-z0-9_\-]+$/)
+  @Matches(/^[A-Za-z0-9_-]+$/)
   codigo!: string;
 
   @IsString()

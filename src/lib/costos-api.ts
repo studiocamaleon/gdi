@@ -77,7 +77,10 @@ export async function createCentroCosto(payload: CentroCostoPayload) {
   });
 }
 
-export async function updateCentroCosto(id: string, payload: CentroCostoPayload) {
+export async function updateCentroCosto(
+  id: string,
+  payload: CentroCostoPayload,
+) {
   return apiRequest<CentroCosto>(`/costos/centros-costo/${id}`, {
     method: "PUT",
     body: JSON.stringify(payload),
@@ -100,10 +103,39 @@ export async function updateCentroCostoConfiguracionBase(
   id: string,
   payload: CentroCostoPayload,
 ) {
-  return apiRequest<CentroCosto>(`/costos/centros-costo/${id}/configuracion-base`, {
-    method: "PUT",
-    body: JSON.stringify(payload),
-  });
+  return apiRequest<CentroCosto>(
+    `/costos/centros-costo/${id}/configuracion-base`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function upsertCentroCostoConfiguracionPeriodo(
+  id: string,
+  periodo: string,
+  payload: {
+    centro: CentroCostoPayload;
+    recursos: CentroCostoRecursoPayload[];
+    recursosMaquinaria: CentroCostoRecursoMaquinariaPayload[];
+    componentesCosto: CentroCostoComponenteCostoPayload[];
+    capacidad: CentroCostoCapacidadPayload;
+  },
+) {
+  return apiRequest<CentroCostoConfiguracionDetalle>(
+    `/costos/centros-costo/${id}/configuracion-periodo?periodo=${encodeURIComponent(periodo)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        centro: payload.centro,
+        recursos: { recursos: payload.recursos },
+        recursosMaquinaria: { recursos: payload.recursosMaquinaria },
+        componentesCosto: { componentes: payload.componentesCosto },
+        capacidad: payload.capacidad,
+      }),
+    },
+  );
 }
 
 export async function replaceCentroCostoRecursos(
@@ -148,7 +180,10 @@ export async function upsertCentroCostoCapacidad(
   );
 }
 
-export async function getCentroCostoRecursosMaquinaria(id: string, periodo: string) {
+export async function getCentroCostoRecursosMaquinaria(
+  id: string,
+  periodo: string,
+) {
   return apiRequest<CentroCostoRecursoMaquinariaPeriodo[]>(
     `/costos/centros-costo/${id}/recursos-maquinaria?periodo=${encodeURIComponent(periodo)}`,
   );
@@ -172,9 +207,12 @@ export async function calcularTarifaCentroCosto(id: string, periodo: string) {
   return apiRequest<{
     tarifaBorrador: CentroCostoTarifaPeriodo;
     advertencias: string[];
-  }>(`/costos/centros-costo/${id}/calcular-tarifa?periodo=${encodeURIComponent(periodo)}`, {
-    method: "POST",
-  });
+  }>(
+    `/costos/centros-costo/${id}/calcular-tarifa?periodo=${encodeURIComponent(periodo)}`,
+    {
+      method: "POST",
+    },
+  );
 }
 
 export async function publicarTarifaCentroCosto(id: string, periodo: string) {

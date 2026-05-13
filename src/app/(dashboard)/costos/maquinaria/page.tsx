@@ -33,12 +33,10 @@ async function MaquinariaPageContent() {
   ]);
 
   return (
-    <section className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-      <MaquinariaPanel
-        initialMaquinas={maquinas}
-        plantas={plantas}
-        centrosCosto={centrosCosto}
-      />
-    </section>
+    <MaquinariaPanel
+      initialMaquinas={maquinas}
+      plantas={plantas}
+      centrosCosto={centrosCosto}
+    />
   );
 }

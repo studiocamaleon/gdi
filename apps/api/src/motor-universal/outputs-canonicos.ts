@@ -25,7 +25,12 @@
  */
 
 import type { DefinicionFamilia } from '../productos-servicios/pasos/types';
-import type { PasoCargado, JobContext, MaterialEjecutado, PasoEjecutado } from './tipos';
+import type {
+  PasoCargado,
+  JobContext,
+  MaterialEjecutado,
+  PasoEjecutado,
+} from './tipos';
 import type { NestingDispatchResult } from './nesting-dispatcher';
 
 export interface OutputContext {
@@ -75,10 +80,20 @@ function computeOutput(
   familia: DefinicionFamilia,
   ctx: OutputContext,
 ): unknown {
-  const { paso, jobContext, tiempo, materiales, nestingDispatch, cantidadEfectiva } = ctx;
+  const {
+    paso,
+    jobContext,
+    tiempo,
+    materiales,
+    nestingDispatch,
+    cantidadEfectiva,
+  } = ctx;
 
   // ─── Outputs estructurados del nesting de imposición ──────────────
-  if (key === 'imposicion_calculada' && nestingDispatch?.algorithm === 'grid-2d-single') {
+  if (
+    key === 'imposicion_calculada' &&
+    nestingDispatch?.algorithm === 'grid-2d-single'
+  ) {
     return {
       algorithm: nestingDispatch.algorithm,
       piezasPorPliego: nestingDispatch.piezasPorPliego,
@@ -89,7 +104,10 @@ function computeOutput(
     };
   }
 
-  if (key === 'cortes_calculados' && nestingDispatch?.algorithm === 'grid-2d-single') {
+  if (
+    key === 'cortes_calculados' &&
+    nestingDispatch?.algorithm === 'grid-2d-single'
+  ) {
     // Cortes derivados del grid: filas + columnas - 1 cortes en cada eje.
     const m = nestingDispatch.metricasRaw;
     const filas = m.filas ?? 0;
@@ -103,7 +121,11 @@ function computeOutput(
 
   // ─── Outputs numéricos del nesting de imposición ──────────────────
   if (key === 'pliegos_calculados') {
-    if (nestingDispatch?.algorithm === 'grid-2d-single') {
+    if (
+      nestingDispatch?.algorithm === 'grid-2d-single' ||
+      nestingDispatch?.algorithm === 'grid-2d-multi' ||
+      nestingDispatch?.algorithm === 'packingsolver-rectangle'
+    ) {
       return nestingDispatch.cantidadCalculada;
     }
     // Fallback: no se pudo calcular nesting → null para que EXISTS_OUTPUT
@@ -125,6 +147,22 @@ function computeOutput(
     return cantidadEfectiva || null;
   }
 
+  if (key === 'pliego_impresion_ancho_mm') {
+    const sheet = nestingDispatch?.substrates.find((sub) => sub.kind === 'sheet');
+    return sheet?.kind === 'sheet' ? sheet.widthMm : null;
+  }
+
+  if (key === 'pliego_impresion_alto_mm') {
+    const sheet = nestingDispatch?.substrates.find((sub) => sub.kind === 'sheet');
+    return sheet?.kind === 'sheet' ? sheet.heightMm : null;
+  }
+
+  if (key === 'pliego_impresion_area_m2') {
+    const sheet = nestingDispatch?.substrates.find((sub) => sub.kind === 'sheet');
+    if (sheet?.kind !== 'sheet') return null;
+    return (sheet.widthMm * sheet.heightMm) / 1_000_000;
+  }
+
   if (key === 'm2_calculados') {
     if (nestingDispatch?.algorithm === 'shelf-rollo') {
       // m² REALES consumidos del rollo (incluye desperdicio).
@@ -132,6 +170,15 @@ function computeOutput(
       if (sub?.kind === 'roll') {
         return (sub.lengthMm * sub.widthMm) / 1_000_000;
       }
+    }
+    if (
+      nestingDispatch?.algorithm === 'grid-2d-multi' ||
+      nestingDispatch?.algorithm === 'packingsolver-rectangle'
+    ) {
+      return nestingDispatch.substrates.reduce((acc, sub) => {
+        if (sub.kind !== 'sheet') return acc;
+        return acc + (sub.count * sub.widthMm * sub.heightMm) / 1_000_000;
+      }, 0);
     }
     return null;
   }
@@ -141,16 +188,15 @@ function computeOutput(
   }
 
   // ─── Outputs derivados del tiempo ─────────────────────────────────
-  if (
-    key === 'tiempo_real_impresion' ||
-    key === 'tiempo_real_corte'
-  ) {
+  if (key === 'tiempo_real_impresion' || key === 'tiempo_real_corte') {
     return tiempo?.totalMin ?? null;
   }
 
   // ─── Outputs derivados de materiales ──────────────────────────────
   if (key === 'metros_lineales_film' && materiales) {
-    const film = materiales.find((m) => m.slotCodigo === 'film' || /film/i.test(m.materialNombre));
+    const film = materiales.find(
+      (m) => m.slotCodigo === 'film' || /film/i.test(m.materialNombre),
+    );
     return film?.cantidad ?? null;
   }
 

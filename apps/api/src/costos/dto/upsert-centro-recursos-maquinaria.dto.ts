@@ -3,7 +3,9 @@ import {
   IsArray,
   IsEnum,
   IsNumber,
+  IsOptional,
   IsUUID,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -15,6 +17,10 @@ export enum MetodoDepreciacionMaquinaDto {
 export class CentroCostoRecursoMaquinaPeriodoItemDto {
   @IsUUID()
   centroCostoRecursoId: string;
+
+  @IsOptional()
+  @IsUUID()
+  maquinaId?: string;
 
   @IsEnum(MetodoDepreciacionMaquinaDto)
   metodoDepreciacion: MetodoDepreciacionMaquinaDto;
@@ -42,6 +48,7 @@ export class CentroCostoRecursoMaquinaPeriodoItemDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(100)
   factorCargaPct: number;
 
   @Type(() => Number)
@@ -57,11 +64,13 @@ export class CentroCostoRecursoMaquinaPeriodoItemDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(100)
   disponibilidadPct: number;
 
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(100)
   eficienciaPct: number;
 
   @Type(() => Number)

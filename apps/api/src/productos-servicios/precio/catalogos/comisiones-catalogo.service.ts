@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
@@ -41,19 +45,29 @@ export class ComisionesCatalogoService {
           codigo: dto.codigo,
           nombre: dto.nombre,
           porcentaje: dto.porcentaje,
-          detalleJson: (dto.detalleJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+          detalleJson: (dto.detalleJson ??
+            Prisma.JsonNull) as Prisma.InputJsonValue,
           activo: true,
         },
       });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new BadRequestException(`Ya existe una comisión con código "${dto.codigo}"`);
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new BadRequestException(
+          `Ya existe una comisión con código "${dto.codigo}"`,
+        );
       }
       throw err;
     }
   }
 
-  async actualizar(tenantId: string, id: string, dto: ActualizarComisionCatalogoDto) {
+  async actualizar(
+    tenantId: string,
+    id: string,
+    dto: ActualizarComisionCatalogoDto,
+  ) {
     const existente = await this.prisma.productoComisionCatalogo.findFirst({
       where: { id, tenantId },
     });
@@ -62,7 +76,8 @@ export class ComisionesCatalogoService {
     const data: Prisma.ProductoComisionCatalogoUpdateInput = {};
     if (dto.nombre !== undefined) data.nombre = dto.nombre;
     if (dto.porcentaje !== undefined) data.porcentaje = dto.porcentaje;
-    if (dto.detalleJson !== undefined) data.detalleJson = dto.detalleJson as Prisma.InputJsonValue;
+    if (dto.detalleJson !== undefined)
+      data.detalleJson = dto.detalleJson as Prisma.InputJsonValue;
     if (dto.activo !== undefined) data.activo = dto.activo;
 
     return this.prisma.productoComisionCatalogo.update({ where: { id }, data });
@@ -83,7 +98,9 @@ export class ComisionesCatalogoService {
       return { tipo: 'soft' as const, item };
     }
 
-    const item = await this.prisma.productoComisionCatalogo.delete({ where: { id } });
+    const item = await this.prisma.productoComisionCatalogo.delete({
+      where: { id },
+    });
     return { tipo: 'hard' as const, item };
   }
 }

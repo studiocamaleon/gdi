@@ -1,7 +1,20 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import type { UpsertEstacionDto } from './dto/upsert-estacion.dto';
+
+function isUniqueConstraintError(error: unknown) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'P2002'
+  );
+}
 
 @Injectable()
 export class ProduccionService {
@@ -40,15 +53,19 @@ export class ProduccionService {
         createdAt: created.createdAt.toISOString(),
         updatedAt: created.updatedAt.toISOString(),
       };
-    } catch (error: any) {
-      if (error?.code === 'P2002') {
+    } catch (error: unknown) {
+      if (isUniqueConstraintError(error)) {
         throw new ConflictException('Ya existe una estación con ese nombre.');
       }
       throw error;
     }
   }
 
-  async updateEstacion(auth: CurrentAuth, id: string, payload: UpsertEstacionDto) {
+  async updateEstacion(
+    auth: CurrentAuth,
+    id: string,
+    payload: UpsertEstacionDto,
+  ) {
     const existing = await this.prisma.estacion.findFirst({
       where: { id, tenantId: auth.tenantId },
     });
@@ -73,8 +90,8 @@ export class ProduccionService {
         createdAt: updated.createdAt.toISOString(),
         updatedAt: updated.updatedAt.toISOString(),
       };
-    } catch (error: any) {
-      if (error?.code === 'P2002') {
+    } catch (error: unknown) {
+      if (isUniqueConstraintError(error)) {
         throw new ConflictException('Ya existe una estación con ese nombre.');
       }
       throw error;

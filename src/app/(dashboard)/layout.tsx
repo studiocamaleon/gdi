@@ -6,7 +6,6 @@ import { getSessionToken } from "@/lib/session";
 import { AppSidebar } from "@/components/app-sidebar";
 import { NavigationFeedbackProvider } from "@/components/navigation/navigation-feedback";
 import { UserTenantMenu } from "@/components/user-tenant-menu";
-import { Separator } from "@/components/ui/separator";
 import {
   SidebarInset,
   SidebarProvider,
@@ -40,16 +39,15 @@ export default async function DashboardLayout({
     <NavigationFeedbackProvider>
       <SidebarProvider defaultOpen>
         <AppSidebar currentUser={currentUser} />
-        <SidebarInset>
-          <header className="flex h-16 shrink-0 items-center gap-3 border-b px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="h-5" />
+        <SidebarInset className="main">
+          <header className="topbar">
+            <SidebarTrigger className="icon-btn" />
             <div className="ml-auto">
               <UserTenantMenu currentUser={currentUser} />
             </div>
           </header>
 
-          <main className="flex flex-1 bg-background">{children}</main>
+          <main className="gp-main flex flex-1">{children}</main>
         </SidebarInset>
       </SidebarProvider>
     </NavigationFeedbackProvider>

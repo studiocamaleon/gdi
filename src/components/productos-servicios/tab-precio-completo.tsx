@@ -32,16 +32,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { EstadoVacio } from "@/components/ui/estado-vacio";
-import { Input } from "@/components/ui/input";
+import { HumanSelect } from "@/components/ui/human-select";
 import { Label } from "@/components/ui/label";
 import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
   Table,
@@ -86,11 +79,11 @@ export function TabPrecioCompleto({
   onChangePrecioConfig,
 }: Props) {
   return (
-    <div className="space-y-4">
+    <div className="pricing-flow">
       {/* Sección 1 — Método de cálculo (siempre visible, no requiere productoId) */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Método de cálculo</CardTitle>
+      <Card className="wiz-section pricing-section">
+        <CardHeader className="wiz-section-head">
+          <CardTitle>Método de cálculo</CardTitle>
           <CardDescription>
             Cómo se calcula el precio de venta a partir del costo del motor.
           </CardDescription>
@@ -108,7 +101,7 @@ export function TabPrecioCompleto({
               <div className="font-medium">Guardá el producto para configurar el resto.</div>
               <p className="text-muted-foreground mt-1 text-xs">
                 Las secciones de impuestos, comisiones y precios especiales por cliente requieren
-                que el producto exista primero. Volvé al step 1 y tocá "Crear producto".
+                que el producto exista primero. Volvé al step 1 y tocá &quot;Crear producto&quot;.
               </p>
             </div>
           </CardContent>
@@ -188,25 +181,25 @@ function SeccionImpuestos({ productoId }: { productoId: string }) {
   };
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="wiz-section pricing-section">
+      <CardHeader className="wiz-section-head">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <CardTitle className="text-base">Impuestos</CardTitle>
+            <CardTitle>Impuestos</CardTitle>
             <CardDescription>
               Esquemas impositivos del catálogo del tenant que se aplican al cotizar este
               producto.
             </CardDescription>
           </div>
           <Link href="/productos-servicios/impuestos-catalogo">
-            <Button variant="outline" size="sm">
+            <Button className="btn" variant="outline" size="sm">
               <ExternalLinkIcon className="mr-2 size-3" />
               Administrar catálogo
             </Button>
           </Link>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="pricing-section-content">
         {cargando ? (
           <p className="text-muted-foreground text-sm italic">Cargando...</p>
         ) : catalogo.length === 0 ? (
@@ -222,39 +215,30 @@ function SeccionImpuestos({ productoId }: { productoId: string }) {
           />
         ) : (
           <>
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+            <div className="checkpill-row">
               {catalogo.map((c) => {
                 const checked = seleccionados.includes(c.id);
                 return (
-                  <label
-                    key={c.id}
-                    className={`hover:bg-accent flex cursor-pointer items-center gap-2 rounded border p-2 text-sm ${
-                      checked ? "border-primary bg-primary/5" : ""
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggle(c.id)}
-                      className="cursor-pointer"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium">{c.nombre}</div>
-                      <div className="text-muted-foreground font-mono text-xs">{c.codigo}</div>
+                  <label key={c.id} className={`checkpill ${checked ? "on" : ""}`}>
+                    <span className="cb">{checked ? "✓" : ""}</span>
+                    <input type="checkbox" checked={checked} onChange={() => toggle(c.id)} />
+                    <div className="body">
+                      <div className="name">{c.nombre}</div>
+                      <div className="sub">{c.codigo}</div>
                     </div>
-                    <Badge variant="outline" className="font-mono">
+                    <Badge variant="outline" className="pct">
                       {c.porcentaje.toFixed(2)}%
                     </Badge>
                   </label>
                 );
               })}
             </div>
-            <div className="flex items-center justify-between gap-2 border-t pt-3">
+            <div className="pricing-total-row">
               <div className="text-sm">
                 <span className="text-muted-foreground">Total impuestos seleccionados:</span>{" "}
                 <span className="font-mono font-semibold">{totalPct.toFixed(2)}%</span>
               </div>
-              <Button onClick={guardar} disabled={!dirty || guardando} size="sm">
+              <Button className="btn btn-primary" onClick={guardar} disabled={!dirty || guardando} size="sm">
                 {guardando ? "Guardando..." : "Guardar selección"}
               </Button>
             </div>
@@ -329,25 +313,25 @@ function SeccionComisiones({ productoId }: { productoId: string }) {
   };
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="wiz-section pricing-section">
+      <CardHeader className="wiz-section-head">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <CardTitle className="text-base">Comisiones</CardTitle>
+            <CardTitle>Comisiones</CardTitle>
             <CardDescription>
               Esquemas reusables de comisiones (vendedor, financiera, etc.) que se cobran al
               cotizar este producto.
             </CardDescription>
           </div>
           <Link href="/productos-servicios/comisiones-catalogo">
-            <Button variant="outline" size="sm">
+            <Button className="btn" variant="outline" size="sm">
               <ExternalLinkIcon className="mr-2 size-3" />
               Administrar catálogo
             </Button>
           </Link>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="pricing-section-content">
         {cargando ? (
           <p className="text-muted-foreground text-sm italic">Cargando...</p>
         ) : catalogo.length === 0 ? (
@@ -363,39 +347,30 @@ function SeccionComisiones({ productoId }: { productoId: string }) {
           />
         ) : (
           <>
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+            <div className="checkpill-row">
               {catalogo.map((c) => {
                 const checked = seleccionadas.includes(c.id);
                 return (
-                  <label
-                    key={c.id}
-                    className={`hover:bg-accent flex cursor-pointer items-center gap-2 rounded border p-2 text-sm ${
-                      checked ? "border-primary bg-primary/5" : ""
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggle(c.id)}
-                      className="cursor-pointer"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium">{c.nombre}</div>
-                      <div className="text-muted-foreground font-mono text-xs">{c.codigo}</div>
+                  <label key={c.id} className={`checkpill ${checked ? "on" : ""}`}>
+                    <span className="cb">{checked ? "✓" : ""}</span>
+                    <input type="checkbox" checked={checked} onChange={() => toggle(c.id)} />
+                    <div className="body">
+                      <div className="name">{c.nombre}</div>
+                      <div className="sub">{c.codigo}</div>
                     </div>
-                    <Badge variant="outline" className="font-mono">
+                    <Badge variant="outline" className="pct">
                       {c.porcentaje.toFixed(2)}%
                     </Badge>
                   </label>
                 );
               })}
             </div>
-            <div className="flex items-center justify-between gap-2 border-t pt-3">
+            <div className="pricing-total-row">
               <div className="text-sm">
                 <span className="text-muted-foreground">Total comisiones seleccionadas:</span>{" "}
                 <span className="font-mono font-semibold">{totalPct.toFixed(2)}%</span>
               </div>
-              <Button onClick={guardar} disabled={!dirty || guardando} size="sm">
+              <Button className="btn btn-primary" onClick={guardar} disabled={!dirty || guardando} size="sm">
                 {guardando ? "Guardando..." : "Guardar selección"}
               </Button>
             </div>
@@ -515,11 +490,11 @@ function SeccionPreciosEspeciales({ productoId }: { productoId: string }) {
   const clientesDisponibles = clientes.filter((c) => !clientesUsadosIds.has(c.id));
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="wiz-section pricing-section">
+      <CardHeader className="wiz-section-head">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <CardTitle className="text-base">Precios especiales por cliente</CardTitle>
+            <CardTitle>Precios especiales por cliente</CardTitle>
             <CardDescription>
               Override del precio standard cuando el cliente X compra este producto. Cada
               precio especial usa su propio método de cálculo.
@@ -535,7 +510,7 @@ function SeccionPreciosEspeciales({ productoId }: { productoId: string }) {
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="pricing-section-content">
         {cargando ? (
           <p className="text-muted-foreground text-sm italic">Cargando...</p>
         ) : items.length === 0 && !creandoNuevo ? (
@@ -612,26 +587,19 @@ function SeccionPreciosEspeciales({ productoId }: { productoId: string }) {
                   required
                   tooltip="El cliente que va a recibir este precio especial cuando se le cotice este producto."
                 />
-                <Select
+                <HumanSelect
                   value={clienteId}
                   onValueChange={(v) => setClienteId(v ?? "")}
                   disabled={!!editando}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Elegí un cliente" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-80">
-                    {(editando
-                      ? clientes
-                      : clientesDisponibles
-                    ).map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.nombre}
-                        {c.razonSocial ? ` — ${c.razonSocial}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  options={(editando ? clientes : clientesDisponibles).map((c) => ({
+                    value: c.id,
+                    label: c.nombre,
+                    code: c.razonSocial,
+                    description: [c.email, c.ciudad].filter(Boolean).join(" · ") || undefined,
+                  }))}
+                  placeholder="Elegí un cliente"
+                  contentClassName="max-h-80"
+                />
                 {editando && (
                   <p className="text-muted-foreground text-xs">
                     El cliente no se puede cambiar. Si querés cambiarlo, eliminá este y creá otro.

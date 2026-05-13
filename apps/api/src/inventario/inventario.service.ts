@@ -19,18 +19,19 @@ import { PrismaService } from '../prisma/prisma.service';
 import { GetKardexQueryDto } from './dto/get-kardex-query.dto';
 import { GetStockQueryDto } from './dto/get-stock-query.dto';
 import {
-  OrigenMovimientoStockMateriaPrimaDto,
   RegistrarMovimientoStockDto,
   TipoMovimientoStockMateriaPrimaDto,
 } from './dto/registrar-movimiento-stock.dto';
 import { RegistrarTransferenciaStockDto } from './dto/registrar-transferencia-stock.dto';
 import { UpdateVariantePrecioReferenciaDto } from './dto/update-variante-precio-referencia.dto';
 import { UpsertAlmacenDto } from './dto/upsert-almacen.dto';
-import {
-  UpsertMateriaPrimaDto,
-} from './dto/upsert-materia-prima.dto';
+import { UpsertMateriaPrimaDto } from './dto/upsert-materia-prima.dto';
 import { UpsertUbicacionDto } from './dto/upsert-ubicacion.dto';
-import { convertUnitPrice, unitsAreCompatible, type UnitCode } from './unidades-canonicas';
+import {
+  convertUnitPrice,
+  unitsAreCompatible,
+  type UnitCode,
+} from './unidades-canonicas';
 import {
   canUseFlexibleRollDerivedUnits,
   convertFlexibleRollUnitPrice,
@@ -103,7 +104,9 @@ export class InventarioService {
             esConsumible: normalized.esConsumible,
             esRepuesto: normalized.esRepuesto,
             activo: normalized.activo,
-            atributosTecnicosJson: this.toInputJson(normalized.atributosTecnicos),
+            atributosTecnicosJson: this.toInputJson(
+              normalized.atributosTecnicos,
+            ),
           },
           select: { id: true },
         });
@@ -118,12 +121,18 @@ export class InventarioService {
                   sku: variante.sku,
                   nombreVariante: variante.nombreVariante,
                   activo: variante.activo,
-                  atributosVarianteJson: this.toInputJson(variante.atributosVariante),
+                  atributosVarianteJson: this.toInputJson(
+                    variante.atributosVariante,
+                  ),
                   unidadStock: variante.unidadStock
-                    ? this.toPrismaEnum<UnidadMateriaPrima>(variante.unidadStock)
+                    ? this.toPrismaEnum<UnidadMateriaPrima>(
+                        variante.unidadStock,
+                      )
                     : null,
                   unidadCompra: variante.unidadCompra
-                    ? this.toPrismaEnum<UnidadMateriaPrima>(variante.unidadCompra)
+                    ? this.toPrismaEnum<UnidadMateriaPrima>(
+                        variante.unidadCompra,
+                      )
                     : null,
                   precioReferencia: variante.precioReferencia,
                   moneda: variante.moneda,
@@ -137,7 +146,11 @@ export class InventarioService {
         return materiaPrima.id;
       });
 
-      const item = await this.findMateriaPrimaOrThrow(auth, created, this.prisma);
+      const item = await this.findMateriaPrimaOrThrow(
+        auth,
+        created,
+        this.prisma,
+      );
       return this.toResponse(item);
     } catch (error) {
       this.handleWriteError(error);
@@ -175,7 +188,9 @@ export class InventarioService {
             esConsumible: normalized.esConsumible,
             esRepuesto: normalized.esRepuesto,
             activo: normalized.activo,
-            atributosTecnicosJson: this.toInputJson(normalized.atributosTecnicos),
+            atributosTecnicosJson: this.toInputJson(
+              normalized.atributosTecnicos,
+            ),
           },
         });
         const existentes = await tx.materiaPrimaVariante.findMany({
@@ -192,7 +207,9 @@ export class InventarioService {
         const existenteBySku = new Map(
           existentes.map((variante) => [variante.sku, variante]),
         );
-        const incomingSkus = new Set(normalized.variantes.map((item) => item.sku));
+        const incomingSkus = new Set(
+          normalized.variantes.map((item) => item.sku),
+        );
 
         if (normalized.variantes.length > 0) {
           await Promise.all(
@@ -203,7 +220,9 @@ export class InventarioService {
                 sku: variante.sku,
                 nombreVariante: variante.nombreVariante,
                 activo: variante.activo,
-                atributosVarianteJson: this.toInputJson(variante.atributosVariante),
+                atributosVarianteJson: this.toInputJson(
+                  variante.atributosVariante,
+                ),
                 unidadStock: variante.unidadStock
                   ? this.toPrismaEnum<UnidadMateriaPrima>(variante.unidadStock)
                   : null,
@@ -240,7 +259,6 @@ export class InventarioService {
             },
           });
         }
-
       });
 
       const item = await this.findMateriaPrimaOrThrow(auth, id, this.prisma);
@@ -275,7 +293,9 @@ export class InventarioService {
       const updated = await this.prisma.materiaPrimaVariante.update({
         where: { id: varianteId },
         data: {
-          precioReferencia: this.toDecimal(this.roundToScale(payload.precioReferencia)),
+          precioReferencia: this.toDecimal(
+            this.roundToScale(payload.precioReferencia),
+          ),
           ...(payload.moneda?.trim()
             ? { moneda: payload.moneda.trim().toUpperCase() }
             : {}),
@@ -365,7 +385,11 @@ export class InventarioService {
     }
   }
 
-  async updateAlmacen(auth: CurrentAuth, id: string, payload: UpsertAlmacenDto) {
+  async updateAlmacen(
+    auth: CurrentAuth,
+    id: string,
+    payload: UpsertAlmacenDto,
+  ) {
     await this.findAlmacenOrThrow(auth, id, this.prisma);
     const normalized = this.normalizeAlmacenPayload(payload);
 
@@ -475,7 +499,10 @@ export class InventarioService {
     });
   }
 
-  async registrarMovimiento(auth: CurrentAuth, payload: RegistrarMovimientoStockDto) {
+  async registrarMovimiento(
+    auth: CurrentAuth,
+    payload: RegistrarMovimientoStockDto,
+  ) {
     if (!this.isSupportedSimpleMovement(payload.tipo)) {
       throw new BadRequestException(
         'Tipo de movimiento no soportado por este endpoint.',
@@ -485,9 +512,22 @@ export class InventarioService {
     return this.prisma.$transaction(async (tx) => {
       const cantidadNumber = this.roundToScale(payload.cantidad);
       const cantidad = this.toDecimal(cantidadNumber);
-      const variante = await this.findVarianteOrThrow(auth, payload.varianteId, tx);
-      const ubicacion = await this.findUbicacionOrThrow(auth, payload.ubicacionId, tx);
-      const stockActual = await this.findStockRow(auth, payload.varianteId, payload.ubicacionId, tx);
+      const variante = await this.findVarianteOrThrow(
+        auth,
+        payload.varianteId,
+        tx,
+      );
+      const ubicacion = await this.findUbicacionOrThrow(
+        auth,
+        payload.ubicacionId,
+        tx,
+      );
+      const stockActual = await this.findStockRow(
+        auth,
+        payload.varianteId,
+        payload.ubicacionId,
+        tx,
+      );
 
       let saldoPosterior = stockActual
         ? this.decimalToNumber(stockActual.cantidadDisponible)
@@ -496,28 +536,44 @@ export class InventarioService {
         ? this.decimalToNumber(stockActual.costoPromedio)
         : 0;
 
-      const tipo = this.toPrismaEnum<TipoMovimientoStockMateriaPrima>(payload.tipo);
-      const origen = this.toPrismaEnum<OrigenMovimientoStockMateriaPrima>(payload.origen);
-      let unitCost = payload.costoUnitario === undefined || payload.costoUnitario === null
-        ? null
-        : this.roundToScale(payload.costoUnitario);
-      const stockPrevio = stockActual ? this.decimalToNumber(stockActual.cantidadDisponible) : 0;
-      const costoPromedioPrevio = stockActual ? this.decimalToNumber(stockActual.costoPromedio) : 0;
+      const tipo = this.toPrismaEnum<TipoMovimientoStockMateriaPrima>(
+        payload.tipo,
+      );
+      const origen = this.toPrismaEnum<OrigenMovimientoStockMateriaPrima>(
+        payload.origen,
+      );
+      let unitCost =
+        payload.costoUnitario === undefined || payload.costoUnitario === null
+          ? null
+          : this.roundToScale(payload.costoUnitario);
+      const stockPrevio = stockActual
+        ? this.decimalToNumber(stockActual.cantidadDisponible)
+        : 0;
+      const costoPromedioPrevio = stockActual
+        ? this.decimalToNumber(stockActual.costoPromedio)
+        : 0;
 
       if (
         tipo === TipoMovimientoStockMateriaPrima.INGRESO ||
         tipo === TipoMovimientoStockMateriaPrima.AJUSTE_ENTRADA
       ) {
-        const precioReferenciaVariante = this.resolvePrecioReferenciaPorUnidadStock(variante);
-        if ((unitCost === null || unitCost <= 0) && precioReferenciaVariante && precioReferenciaVariante > 0) {
+        const precioReferenciaVariante =
+          this.resolvePrecioReferenciaPorUnidadStock(variante);
+        if (
+          (unitCost === null || unitCost <= 0) &&
+          precioReferenciaVariante &&
+          precioReferenciaVariante > 0
+        ) {
           unitCost = precioReferenciaVariante;
         }
 
         const nextQty = stockPrevio + cantidadNumber;
         const costIn = unitCost ?? costoPromedioPrevio ?? 0;
-        const newAvg = nextQty > 0
-          ? ((stockPrevio * costoPromedioPrevio) + (cantidadNumber * costIn)) / nextQty
-          : 0;
+        const newAvg =
+          nextQty > 0
+            ? (stockPrevio * costoPromedioPrevio + cantidadNumber * costIn) /
+              nextQty
+            : 0;
 
         saldoPosterior = this.roundToScale(nextQty);
         costoPromedioPosterior = this.roundToScale(newAvg);
@@ -587,7 +643,11 @@ export class InventarioService {
       const qtyTransfer = this.roundToScale(payload.cantidad);
       const cantidad = this.toDecimal(qtyTransfer);
       const transferenciaId = randomUUID();
-      const variante = await this.findVarianteOrThrow(auth, payload.varianteId, tx);
+      const variante = await this.findVarianteOrThrow(
+        auth,
+        payload.varianteId,
+        tx,
+      );
       await this.findUbicacionOrThrow(auth, payload.ubicacionOrigenId, tx);
       await this.findUbicacionOrThrow(auth, payload.ubicacionDestinoId, tx);
 
@@ -963,7 +1023,9 @@ export class InventarioService {
       'kg',
       'gramo',
     ];
-    return supported.includes(normalized as UnitCode) ? (normalized as UnitCode) : null;
+    return supported.includes(normalized as UnitCode)
+      ? (normalized as UnitCode)
+      : null;
   }
 
   private resolvePrecioReferenciaPorUnidadStock(variante: {
@@ -972,7 +1034,7 @@ export class InventarioService {
     unidadStock: UnidadMateriaPrima | null;
     unidadCompra: UnidadMateriaPrima | null;
     materiaPrima: {
-      subfamilia?: SubfamiliaMateriaPrima | string | null;
+      subfamilia?: string | null;
       templateId?: string | null;
       unidadStock: UnidadMateriaPrima;
       unidadCompra: UnidadMateriaPrima;
@@ -998,7 +1060,10 @@ export class InventarioService {
     }
 
     if (unitsAreCompatible(sourceUnit, targetUnit)) {
-      return this.roundToScale(convertUnitPrice(precio, sourceUnit, targetUnit), 6);
+      return this.roundToScale(
+        convertUnitPrice(precio, sourceUnit, targetUnit),
+        6,
+      );
     }
 
     const derived = convertFlexibleRollUnitPrice({
@@ -1044,8 +1109,12 @@ export class InventarioService {
       costoUnitario: item.costoUnitario
         ? this.roundToScale(this.decimalToNumber(item.costoUnitario))
         : null,
-      saldoPosterior: this.roundToScale(this.decimalToNumber(item.saldoPosterior)),
-      costoPromedioPost: this.roundToScale(this.decimalToNumber(item.costoPromedioPost)),
+      saldoPosterior: this.roundToScale(
+        this.decimalToNumber(item.saldoPosterior),
+      ),
+      costoPromedioPost: this.roundToScale(
+        this.decimalToNumber(item.costoPromedioPost),
+      ),
       referenciaTipo: item.referenciaTipo,
       referenciaId: item.referenciaId,
       transferenciaId: item.transferenciaId,
@@ -1082,7 +1151,10 @@ export class InventarioService {
   }
 
   private normalizePayload(payload: UpsertMateriaPrimaDto) {
-    const canUseCanonicalUnits = unitsAreCompatible(payload.unidadStock, payload.unidadCompra);
+    const canUseCanonicalUnits = unitsAreCompatible(
+      payload.unidadStock,
+      payload.unidadCompra,
+    );
     const canUseDerivedUnits =
       canUseFlexibleRollDerivedUnits({
         subfamilia: payload.subfamilia,
@@ -1112,7 +1184,8 @@ export class InventarioService {
       unidadStock: null,
       unidadCompra: null,
       precioReferencia:
-        variante.precioReferencia === undefined || variante.precioReferencia === null
+        variante.precioReferencia === undefined ||
+        variante.precioReferencia === null
           ? null
           : this.toDecimal(this.roundToScale(variante.precioReferencia, 6)),
       moneda: variante.moneda?.trim().toUpperCase() || null,

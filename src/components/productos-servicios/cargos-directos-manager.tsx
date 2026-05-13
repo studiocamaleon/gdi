@@ -8,15 +8,9 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { HumanSelect, optionFromLabel } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -213,21 +207,12 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
                   htmlFor="modoCalculo"
                   tooltip="Cómo se calcula el monto del cargo: monto fijo, porcentaje sobre subtotal, o precio por unidad de input."
                 />
-                <Select value={modoCalculo} onValueChange={(v) => setModoCalculo(v ?? "MONTO_FIJO_PLANO")}>
-                  <SelectTrigger id="modoCalculo">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MODOS_CALCULO.map((m) => {
-                      const lbl = getLabel(modoCalculoCargoLabels, m);
-                      return (
-                        <SelectItem key={m} value={m}>
-                          {lbl.label}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                <HumanSelect
+                  id="modoCalculo"
+                  value={modoCalculo}
+                  onValueChange={(v) => setModoCalculo(v || "MONTO_FIJO_PLANO")}
+                  options={MODOS_CALCULO.map((m) => optionFromLabel(m, modoCalculoCargoLabels))}
+                />
                 <p className="text-muted-foreground text-xs">
                   {getLabel(modoCalculoCargoLabels, modoCalculo).descripcion}
                 </p>

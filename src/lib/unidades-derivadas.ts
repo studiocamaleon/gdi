@@ -58,6 +58,7 @@ export function resolveFlexibleRollMetrics(attributes: unknown): FlexibleRollMet
     attrs.largo ??
       attrs.largoRollo ??
       attrs.largoRolloM ??
+      attrs.largoRolloMm ??
       attrs.longitud ??
       attrs.longitudRollo ??
       attrs.largoMm,

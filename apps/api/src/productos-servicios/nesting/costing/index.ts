@@ -5,12 +5,14 @@ export { costingM2Exact } from './strategies/m2-exact';
 export { costingConsumedLength } from './strategies/consumed-length';
 export { costingPlateSegments } from './strategies/plate-segments';
 
-import type { CostingInput, CostingResult, CostingStrategyKind } from './types';
+import type { CostingInput, CostingResult } from './types';
 import { costingM2Exact } from './strategies/m2-exact';
 import { costingConsumedLength } from './strategies/consumed-length';
 import { costingPlateSegments } from './strategies/plate-segments';
 
-export function applyCostingStrategy<T = unknown>(input: CostingInput<T>): CostingResult {
+export function applyCostingStrategy<T = unknown>(
+  input: CostingInput<T>,
+): CostingResult {
   switch (input.strategy) {
     case 'm2-exact':
       return costingM2Exact(input);
@@ -20,7 +22,8 @@ export function applyCostingStrategy<T = unknown>(input: CostingInput<T>): Costi
       return costingPlateSegments(input);
     default: {
       const exhaustive: never = input.strategy;
-      throw new Error(`Unknown costing strategy: ${exhaustive}`);
+      void exhaustive;
+      throw new Error('Unknown costing strategy');
     }
   }
 }

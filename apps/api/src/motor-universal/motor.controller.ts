@@ -1,4 +1,10 @@
-import { Body, Controller, Post, Req, UnauthorizedException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  Req,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { MotorUniversalService } from './motor.service';
 import { CotizarDto } from './cotizar.dto';
@@ -19,10 +25,15 @@ export class MotorUniversalController {
    * Equivalente al "Cotizar" del modelo viejo, pero usando el motor universal.
    */
   @Post('cotizar')
-  async cotizar(@Body() dto: CotizarDto, @Req() req: RequestWithAuth): Promise<CotizarOutput> {
+  async cotizar(
+    @Body() dto: CotizarDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<CotizarOutput> {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) {
-      throw new UnauthorizedException('Falta tenant en el contexto de autenticación');
+      throw new UnauthorizedException(
+        'Falta tenant en el contexto de autenticación',
+      );
     }
 
     return this.motor.cotizar({
@@ -48,7 +59,9 @@ export class MotorUniversalController {
   ) {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) {
-      throw new UnauthorizedException('Falta tenant en el contexto de autenticación');
+      throw new UnauthorizedException(
+        'Falta tenant en el contexto de autenticación',
+      );
     }
 
     return this.motor.cotizarYGuardar({

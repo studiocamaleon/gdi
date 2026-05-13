@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
@@ -42,19 +46,29 @@ export class ImpuestosCatalogoService {
           codigo: dto.codigo,
           nombre: dto.nombre,
           porcentaje: dto.porcentaje,
-          detalleJson: (dto.detalleJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+          detalleJson: (dto.detalleJson ??
+            Prisma.JsonNull) as Prisma.InputJsonValue,
           activo: true,
         },
       });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new BadRequestException(`Ya existe un impuesto con código "${dto.codigo}"`);
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new BadRequestException(
+          `Ya existe un impuesto con código "${dto.codigo}"`,
+        );
       }
       throw err;
     }
   }
 
-  async actualizar(tenantId: string, id: string, dto: ActualizarImpuestoCatalogoDto) {
+  async actualizar(
+    tenantId: string,
+    id: string,
+    dto: ActualizarImpuestoCatalogoDto,
+  ) {
     const existente = await this.prisma.productoImpuestoCatalogo.findFirst({
       where: { id, tenantId },
     });
@@ -63,7 +77,8 @@ export class ImpuestosCatalogoService {
     const data: Prisma.ProductoImpuestoCatalogoUpdateInput = {};
     if (dto.nombre !== undefined) data.nombre = dto.nombre;
     if (dto.porcentaje !== undefined) data.porcentaje = dto.porcentaje;
-    if (dto.detalleJson !== undefined) data.detalleJson = dto.detalleJson as Prisma.InputJsonValue;
+    if (dto.detalleJson !== undefined)
+      data.detalleJson = dto.detalleJson as Prisma.InputJsonValue;
     if (dto.activo !== undefined) data.activo = dto.activo;
 
     return this.prisma.productoImpuestoCatalogo.update({ where: { id }, data });
@@ -90,7 +105,9 @@ export class ImpuestosCatalogoService {
       return { tipo: 'soft' as const, item };
     }
 
-    const item = await this.prisma.productoImpuestoCatalogo.delete({ where: { id } });
+    const item = await this.prisma.productoImpuestoCatalogo.delete({
+      where: { id },
+    });
     return { tipo: 'hard' as const, item };
   }
 }

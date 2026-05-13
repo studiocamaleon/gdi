@@ -130,7 +130,7 @@ export class MateriaPrimaVarianteItemDto {
       }
       return Number(normalized);
     }
-    return value;
+    return value as unknown;
   })
   @Type(() => Number)
   @IsNumber()

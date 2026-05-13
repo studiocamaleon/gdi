@@ -23,7 +23,12 @@ export interface CalculateImposicionInput {
   varianteAltoMm: number;
   sheetAnchoMm: number;
   sheetAltoMm: number;
-  machineMargins: { leftMm: number; rightMm: number; topMm: number; bottomMm: number };
+  machineMargins: {
+    leftMm: number;
+    rightMm: number;
+    topMm: number;
+    bottomMm: number;
+  };
   config: Record<string, unknown>;
 }
 
@@ -47,47 +52,70 @@ export interface CalculateImposicionResult {
   rows: number;
   sheetAnchoMm: number;
   sheetAltoMm: number;
-  machineMargins: { leftMm: number; rightMm: number; topMm: number; bottomMm: number };
+  machineMargins: {
+    leftMm: number;
+    rightMm: number;
+    topMm: number;
+    bottomMm: number;
+  };
 }
 
 /**
  * Reemplazo bit-exacto de service.ts:calculateImposicion (privado).
  */
-export function calculateImposicionV2(input: CalculateImposicionInput): CalculateImposicionResult {
+export function calculateImposicionV2(
+  input: CalculateImposicionInput,
+): CalculateImposicionResult {
   // ─── 1. Resolver tipo de corte (compat legacy) ─────────────────
-  const rawTipoCorte = String(input.config.tipoCorte ?? 'sin_demasia');
-  const tipoCorte = (rawTipoCorte === 'sin_corte'
-    || rawTipoCorte === 'guillotina'
-    || rawTipoCorte === 'corte_manual'
-    || rawTipoCorte === 'troquelado')
-    ? rawTipoCorte
-    : 'guillotina';
+  const tipoCorteValue = input.config.tipoCorte;
+  const rawTipoCorte =
+    typeof tipoCorteValue === 'string' || typeof tipoCorteValue === 'number'
+      ? String(tipoCorteValue)
+      : 'sin_demasia';
+  const tipoCorte =
+    rawTipoCorte === 'sin_corte' ||
+    rawTipoCorte === 'guillotina' ||
+    rawTipoCorte === 'corte_manual' ||
+    rawTipoCorte === 'troquelado'
+      ? rawTipoCorte
+      : 'guillotina';
 
   // ─── 2. Demasía y separación entre piezas (config-aware) ───────
-  const troquelado = (input.config.troquelado
-    && typeof input.config.troquelado === 'object'
-    && !Array.isArray(input.config.troquelado))
-    ? input.config.troquelado as Record<string, unknown>
-    : {};
+  const troquelado =
+    input.config.troquelado &&
+    typeof input.config.troquelado === 'object' &&
+    !Array.isArray(input.config.troquelado)
+      ? (input.config.troquelado as Record<string, unknown>)
+      : {};
 
-  const demasiaRaw = tipoCorte === 'troquelado'
-    ? Number(troquelado.sangriadoTroquelMm ?? 3)
-    : Number(input.config.demasiaCorteMm ?? 0);
-  const demasiaCorteMm = (tipoCorte !== 'sin_corte') && Number.isFinite(demasiaRaw)
-    ? Math.max(0, demasiaRaw)
-    : 0;
+  const demasiaRaw =
+    tipoCorte === 'troquelado'
+      ? Number(troquelado.sangriadoTroquelMm ?? 3)
+      : Number(input.config.demasiaCorteMm ?? 0);
+  const demasiaCorteMm =
+    tipoCorte !== 'sin_corte' && Number.isFinite(demasiaRaw)
+      ? Math.max(0, demasiaRaw)
+      : 0;
 
-  const lineaCorteRaw = tipoCorte === 'troquelado'
-    ? 0
-    : (tipoCorte === 'sin_corte' ? 0 : Number(input.config.lineaCorteMm ?? 3));
-  const lineaCorteMm = Number.isFinite(lineaCorteRaw) ? Math.max(0, lineaCorteRaw) : 3;
+  const lineaCorteRaw =
+    tipoCorte === 'troquelado'
+      ? 0
+      : tipoCorte === 'sin_corte'
+        ? 0
+        : Number(input.config.lineaCorteMm ?? 3);
+  const lineaCorteMm = Number.isFinite(lineaCorteRaw)
+    ? Math.max(0, lineaCorteRaw)
+    : 3;
 
-  const separacionEntrePiezasMm = tipoCorte === 'troquelado'
-    ? Math.max(0, Number(troquelado.separacionEntreContornosMm ?? 3))
-    : 0;
+  const separacionEntrePiezasMm =
+    tipoCorte === 'troquelado'
+      ? Math.max(0, Number(troquelado.separacionEntreContornosMm ?? 3))
+      : 0;
 
-  const piezaAnchoEfectivoMm = input.varianteAnchoMm + 2 * demasiaCorteMm + separacionEntrePiezasMm;
-  const piezaAltoEfectivoMm = input.varianteAltoMm + 2 * demasiaCorteMm + separacionEntrePiezasMm;
+  const piezaAnchoEfectivoMm =
+    input.varianteAnchoMm + 2 * demasiaCorteMm + separacionEntrePiezasMm;
+  const piezaAltoEfectivoMm =
+    input.varianteAltoMm + 2 * demasiaCorteMm + separacionEntrePiezasMm;
 
   // ─── 3. Márgenes (con plotter para troquelado) ─────────────────
   let marginLeftMm = input.machineMargins.leftMm;
@@ -97,14 +125,26 @@ export function calculateImposicionV2(input: CalculateImposicionInput): Calculat
   if (tipoCorte === 'troquelado') {
     const anchoUtilPlotter = Math.min(
       input.sheetAnchoMm,
-      Math.max(0, Number(troquelado.anchoUtilPlotterMm ?? input.sheetAnchoMm - 20)),
+      Math.max(
+        0,
+        Number(troquelado.anchoUtilPlotterMm ?? input.sheetAnchoMm - 20),
+      ),
     );
     const altoUtilPlotter = Math.min(
       input.sheetAltoMm,
-      Math.max(0, Number(troquelado.altoUtilPlotterMm ?? input.sheetAltoMm - 20)),
+      Math.max(
+        0,
+        Number(troquelado.altoUtilPlotterMm ?? input.sheetAltoMm - 20),
+      ),
     );
-    const plotterMarginH = Math.max(0, (input.sheetAnchoMm - anchoUtilPlotter) / 2);
-    const plotterMarginV = Math.max(0, (input.sheetAltoMm - altoUtilPlotter) / 2);
+    const plotterMarginH = Math.max(
+      0,
+      (input.sheetAnchoMm - anchoUtilPlotter) / 2,
+    );
+    const plotterMarginV = Math.max(
+      0,
+      (input.sheetAltoMm - altoUtilPlotter) / 2,
+    );
     marginLeftMm = Math.max(marginLeftMm, plotterMarginH);
     marginRightMm = Math.max(marginRightMm, plotterMarginH);
     marginTopMm = Math.max(marginTopMm, plotterMarginV);
@@ -142,7 +182,7 @@ export function calculateImposicionV2(input: CalculateImposicionInput): Calculat
     separationVMm: 0,
     allowRotation: false,
   });
-  const normal = (normalResult.metrics.piezasPorSustrato ?? 0);
+  const normal = normalResult.metrics.piezasPorSustrato ?? 0;
   const normalCols = normalResult.metrics.columnas ?? 0;
   const normalRows = normalResult.metrics.filas ?? 0;
 
@@ -157,12 +197,13 @@ export function calculateImposicionV2(input: CalculateImposicionInput): Calculat
     separationVMm: 0,
     allowRotation: false,
   });
-  const rotada = (rotatedResult.metrics.piezasPorSustrato ?? 0);
+  const rotada = rotatedResult.metrics.piezasPorSustrato ?? 0;
   const rotCols = rotatedResult.metrics.columnas ?? 0;
   const rotRows = rotatedResult.metrics.filas ?? 0;
 
   const piezasPorPliego = Math.max(normal, rotada);
-  const orientacion: 'normal' | 'rotada' = rotada > normal ? 'rotada' : 'normal';
+  const orientacion: 'normal' | 'rotada' =
+    rotada > normal ? 'rotada' : 'normal';
   const cols = orientacion === 'rotada' ? rotCols : normalCols;
   const rows = orientacion === 'rotada' ? rotRows : normalRows;
 

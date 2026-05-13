@@ -23,7 +23,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 function buildDisplayName(currentUser: CurrentUser) {
@@ -107,22 +106,22 @@ export function UserTenantMenu({ currentUser }: UserTenantMenuProps) {
         render={
           <Button
             variant="ghost"
-            className="h-11 rounded-2xl border border-border/70 bg-background/80 px-2.5 hover:bg-accent/60"
+            className="user-pill h-auto"
           />
         }
       >
-        <Avatar size="default">
-          <AvatarFallback className="bg-[#ff7a00] text-white ring-1 ring-[#ff9a3d]/55 shadow-[0_8px_18px_rgba(255,122,0,0.35)]">
+        <Avatar className="av">
+          <AvatarFallback className="bg-transparent text-inherit">
             {initials}
           </AvatarFallback>
         </Avatar>
-        <div className="grid min-w-0 text-left leading-tight">
-          <span className="truncate text-sm font-semibold">{displayName}</span>
-          <span className="truncate text-xs text-muted-foreground">
+        <div className="meta">
+          <div className="nm">{displayName}</div>
+          <div className="org">
             {currentUser.tenantActual.nombre}
-          </span>
+          </div>
         </div>
-        <ChevronDownIcon className="ml-1 size-4 text-muted-foreground" />
+        <ChevronDownIcon className="size-3.5 text-muted-foreground" />
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" sideOffset={10} className="min-w-80">

@@ -5,16 +5,10 @@ import { PlusIcon, XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { HumanSelect, optionFromLabel } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { getLabel, metodoPrecioLabels } from "@/lib/labels-humanos";
 
 export type MetodoPrecio =
@@ -175,21 +169,11 @@ export function TabPrecioEditor({ value, onChange }: Props) {
           tooltip={metodoLabel.descripcion}
           ejemplo={metodoLabel.ejemplo}
         />
-        <Select value={metodo} onValueChange={(v) => setMetodo((v ?? "por_margen") as MetodoPrecio)}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {METODOS.map((m) => {
-              const lbl = getLabel(metodoPrecioLabels, m.value);
-              return (
-                <SelectItem key={m.value} value={m.value}>
-                  {lbl.label}
-                </SelectItem>
-              );
-            })}
-          </SelectContent>
-        </Select>
+        <HumanSelect
+          value={metodo}
+          onValueChange={(v) => setMetodo((v || "por_margen") as MetodoPrecio)}
+          options={METODOS.map((m) => optionFromLabel(m.value, metodoPrecioLabels))}
+        />
         <p className="text-muted-foreground text-xs">{metodoLabel.descripcion}</p>
       </div>
 

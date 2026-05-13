@@ -35,7 +35,11 @@ export const CANONICAL_UNITS: Record<
   rollo: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
   pieza: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
   par: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
-  metro_lineal: { dimension: 'length', baseCode: 'metro_lineal', factorToBase: 1 },
+  metro_lineal: {
+    dimension: 'length',
+    baseCode: 'metro_lineal',
+    factorToBase: 1,
+  },
   mm: { dimension: 'length', baseCode: 'metro_lineal', factorToBase: 0.001 },
   cm: { dimension: 'length', baseCode: 'metro_lineal', factorToBase: 0.01 },
   m2: { dimension: 'area', baseCode: 'm2', factorToBase: 1 },
@@ -61,7 +65,11 @@ export function convertUnitValue(value: number, from: UnitCode, to: UnitCode) {
   return (value * fromFactor) / toFactor;
 }
 
-export function convertUnitPrice(pricePerFromUnit: number, from: UnitCode, to: UnitCode) {
+export function convertUnitPrice(
+  pricePerFromUnit: number,
+  from: UnitCode,
+  to: UnitCode,
+) {
   if (!unitsAreCompatible(from, to)) {
     throw new Error(`Units ${from} and ${to} are not compatible.`);
   }

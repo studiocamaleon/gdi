@@ -2,28 +2,35 @@
 
 import * as React from "react";
 import Link from "next/link";
-import {
-  ExternalLinkIcon,
-  GitBranchIcon,
-  PlusIcon,
-  WorkflowIcon,
-} from "lucide-react";
+import { GitBranchIcon, PlusIcon, SearchIcon } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EstadoVacio } from "@/components/ui/estado-vacio";
-import { TableFilters } from "@/components/ui/table-filters";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import type { FamiliaListItem, RutaListItem } from "@/lib/productos-servicios";
 import { getCatalogoFamilias } from "@/lib/productos-servicios-api";
+
+function StepChain({
+  pasos,
+  familiaLabel,
+}: {
+  pasos: RutaListItem["pasos"];
+  familiaLabel: (codigo: string) => string;
+}) {
+  return (
+    <div className="step-chain">
+      {pasos.map((paso, index) => (
+        <React.Fragment key={paso.id}>
+          <span className="step-chip" title={paso.familiaCodigo}>
+            <span className="ix">{index + 1}.</span>
+            <span className="truncate">{familiaLabel(paso.familiaCodigo)}</span>
+          </span>
+          {index < pasos.length - 1 ? (
+            <span className="step-arrow" aria-hidden="true">→</span>
+          ) : null}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
 
 export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
   const rutas = initialRutas;
@@ -55,118 +62,100 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
   }, [rutas, search, familiaLabel]);
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Rutas de producción</h1>
-          <p className="text-muted-foreground text-sm">
-            {rutas.length} rutas reusables. Cada ruta es un esqueleto de pasos que los productos
-            pueden referenciar.
-          </p>
+    <div className="content">
+      <div className="page-head">
+        <div className="title-block">
+          <h1>Rutas de producción</h1>
+          <div className="sub">
+            {rutas.length} rutas reusables. Cada ruta es un esqueleto de pasos que los productos pueden referenciar.
+          </div>
         </div>
-        <Link href="/productos-servicios/rutas/nueva">
-          <Button>
-            <PlusIcon className="mr-2 size-4" />
-            Nueva ruta
-          </Button>
+        <button className="btn">Importar</button>
+        <Link href="/productos-servicios/rutas/nueva" className="btn btn-primary">
+          <PlusIcon size={14} />
+          Nueva ruta
         </Link>
       </div>
 
       {rutas.length === 0 ? (
         <EstadoVacio
-          icon={<WorkflowIcon />}
           titulo="Sin rutas cargadas"
-          descripcion="Las rutas son los caminos de producción reusables (ej: 'Tarjeta digital', 'Vinilo eco-solvente'). Empezá creando una desde cero o ejecutá el seed."
+          descripcion="Las rutas son los caminos de producción reusables. Empezá creando una desde cero o ejecutá el seed."
           cta={{ label: "Crear ruta", href: "/productos-servicios/rutas/nueva", icon: PlusIcon }}
         />
       ) : (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <WorkflowIcon className="size-5" />
-                <CardTitle>Rutas</CardTitle>
-              </div>
+        <div className="card">
+          <div className="search-card-head">
+            <div className="ttl-block">
+              <span className="title">Rutas</span>
+              <span className="count">{rutasFiltradas.length} de {rutas.length}</span>
             </div>
-            <TableFilters
-              search={search}
-              onSearchChange={setSearch}
-              searchPlaceholder="Buscar por código, nombre o pasos..."
-              resumen={`${rutasFiltradas.length} de ${rutas.length}`}
-            />
-          </CardHeader>
-          <CardContent>
-            {rutasFiltradas.length === 0 ? (
+            <label className="search-inline">
+              <SearchIcon size={14} />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar ruta o paso..."
+              />
+              <span className="kbd">/</span>
+            </label>
+          </div>
+
+          {rutasFiltradas.length === 0 ? (
+            <div className="p-8">
               <EstadoVacio
                 variant="compacto"
                 titulo="Ninguna ruta coincide"
                 descripcion="Probá con otros términos de búsqueda."
               />
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Código</TableHead>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead className="w-1/3">Pasos</TableHead>
-                    <TableHead className="text-center">Versión</TableHead>
-                    <TableHead className="text-center">Productos que la usan</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rutasFiltradas.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="font-mono text-xs">{r.codigo}</TableCell>
-                      <TableCell>
-                        <div className="font-medium">{r.nombre}</div>
-                        {r.descripcion && (
-                          <div className="text-muted-foreground text-xs">{r.descripcion}</div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap items-center gap-1 text-xs">
-                          {r.pasos.map((p, i) => (
-                            <React.Fragment key={p.id}>
-                              <Badge
-                                variant="outline"
-                                className="text-[10px]"
-                                title={p.familiaCodigo}
-                              >
-                                {i + 1}. {familiaLabel(p.familiaCodigo)}
-                              </Badge>
-                              {i < r.pasos.length - 1 && (
-                                <span className="text-muted-foreground">→</span>
-                              )}
-                            </React.Fragment>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="secondary">v{r.versionActual}</Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="default" className="gap-1">
-                          <GitBranchIcon className="size-3" />
-                          {r._count.productosAlternativas}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Link
-                          href={`/productos-servicios/rutas/${r.id}`}
-                          className="text-primary inline-flex items-center text-sm hover:underline"
-                        >
-                          Ver / editar
-                          <ExternalLinkIcon className="ml-1 size-3" />
-                        </Link>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          ) : (
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th style={{ width: 170 }}>Código</th>
+                  <th>Nombre</th>
+                  <th style={{ width: "38%" }}>Pasos</th>
+                  <th className="right" style={{ width: 90 }}>Versión</th>
+                  <th className="right" style={{ width: 150 }}>Productos que la usan</th>
+                  <th className="right" style={{ width: 110 }}>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rutasFiltradas.map((ruta) => (
+                  <tr key={ruta.id}>
+                    <td><span className="code">{ruta.codigo}</span></td>
+                    <td>
+                      <div className="name">{ruta.nombre}</div>
+                      {ruta.descripcion ? <div className="desc">{ruta.descripcion}</div> : null}
+                    </td>
+                    <td>
+                      <StepChain pasos={ruta.pasos} familiaLabel={familiaLabel} />
+                    </td>
+                    <td className="right">
+                      <span className="tag version">v{ruta.versionActual}</span>
+                    </td>
+                    <td className="right">
+                      <span className={`tag usage ${ruta._count.productosAlternativas === 0 ? "zero" : ""}`}>
+                        <GitBranchIcon size={12} />
+                        {ruta._count.productosAlternativas}
+                      </span>
+                    </td>
+                    <td className="right">
+                      <Link
+                        href={`/productos-servicios/rutas/${ruta.id}`}
+                        className="inline-flex items-center gap-2 text-[12.5px] font-medium text-[var(--ink)]"
+                      >
+                        Ver / editar
+                        <span aria-hidden="true">→</span>
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       )}
     </div>
   );

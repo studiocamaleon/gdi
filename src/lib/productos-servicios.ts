@@ -93,8 +93,26 @@ export interface ConfigPasoDetalle {
   mecanismoCantidadConfigJson?: unknown;
   multiplicadoresActivos: string[];
   paramsPasoJson: unknown;
-  maquinaM1: { id: string; codigo: string; nombre: string; plantilla: string } | null;
+  maquinaM1: {
+    id: string;
+    codigo: string;
+    nombre: string;
+    plantilla: string;
+    parametrosTecnicosJson?: Record<string, unknown> | null;
+    centroCostoPrincipalId?: string | null;
+    centroCostoPrincipal?: {
+      id: string;
+      codigo: string;
+      nombre: string;
+    } | null;
+  } | null;
   perfilM1: { id: string; nombre: string } | null;
+  centroCosto: {
+    id: string;
+    codigo: string;
+    nombre: string;
+    unidadBaseFutura: string;
+  } | null;
   setupOverrideMin?: number | null;
   cleanupOverrideMin?: number | null;
   tiempoFijoOverrideMin?: number | null;
@@ -105,7 +123,18 @@ export interface ConfigPasoDetalle {
     maquinaId: string;
     esPreferida: boolean;
     orden: number;
-    maquina: { id: string; codigo: string; nombre: string; plantilla: string };
+    maquina: {
+      id: string;
+      codigo: string;
+      nombre: string;
+      plantilla: string;
+      centroCostoPrincipalId?: string | null;
+      centroCostoPrincipal?: {
+        id: string;
+        codigo: string;
+        nombre: string;
+      } | null;
+    };
   }>;
   cargosDirectosPaso: Array<CargoPasoDetalle>;
 }
@@ -171,6 +200,7 @@ export interface FamiliaListItem {
   categoria: string;
   descripcion?: string;
   relacionMaquinaSoportada: string[];
+  modoActivacionDefault: string;
   modosTiempoSoportados: string[];
   mecanismosCantidadSoportados: string[];
   modosActivacionSoportados: string[];

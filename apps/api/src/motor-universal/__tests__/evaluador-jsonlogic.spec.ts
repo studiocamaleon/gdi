@@ -20,17 +20,26 @@ describe('evaluarRegla — JsonLogic wrapper', () => {
 
   describe('reglas básicas de comparación', () => {
     it('">=": [{var: tipoCopia}, 2] con tipoCopia=2 → true', () => {
-      const r = evaluarRegla({ '>=': [{ var: 'tipoCopia' }, 2] }, { tipoCopia: 2 });
+      const r = evaluarRegla(
+        { '>=': [{ var: 'tipoCopia' }, 2] },
+        { tipoCopia: 2 },
+      );
       expect(r.resultado).toBe(true);
     });
 
     it('">=": [{var: tipoCopia}, 3] con tipoCopia=2 → false', () => {
-      const r = evaluarRegla({ '>=': [{ var: 'tipoCopia' }, 3] }, { tipoCopia: 2 });
+      const r = evaluarRegla(
+        { '>=': [{ var: 'tipoCopia' }, 3] },
+        { tipoCopia: 2 },
+      );
       expect(r.resultado).toBe(false);
     });
 
     it('"==": comparación de igualdad', () => {
-      const r = evaluarRegla({ '==': [{ var: 'tecnologia' }, 'latex'] }, { tecnologia: 'latex' });
+      const r = evaluarRegla(
+        { '==': [{ var: 'tecnologia' }, 'latex'] },
+        { tecnologia: 'latex' },
+      );
       expect(r.resultado).toBe(true);
     });
 
@@ -58,14 +67,20 @@ describe('evaluarRegla — JsonLogic wrapper', () => {
 
   describe('contexto faltante', () => {
     it('var de campo inexistente devuelve null → false en >=', () => {
-      const r = evaluarRegla({ '>=': [{ var: 'campo_que_no_existe' }, 1] }, { otro: 5 });
+      const r = evaluarRegla(
+        { '>=': [{ var: 'campo_que_no_existe' }, 1] },
+        { otro: 5 },
+      );
       expect(r.resultado).toBe(false);
     });
   });
 
   describe('detalles del resultado', () => {
     it('devuelve detalle con valor crudo cuando aplica', () => {
-      const r = evaluarRegla({ '>': [{ var: 'cantidad' }, 50] }, { cantidad: 100 });
+      const r = evaluarRegla(
+        { '>': [{ var: 'cantidad' }, 50] },
+        { cantidad: 100 },
+      );
       expect(r.detalle).toBeDefined();
       expect(r.detalle!.valorCrudo).toBe(true);
     });
@@ -73,10 +88,14 @@ describe('evaluarRegla — JsonLogic wrapper', () => {
 
   describe('evaluarReglaBoolean — wrapper simple', () => {
     it('devuelve true para regla que se cumple', () => {
-      expect(evaluarReglaBoolean({ '>': [{ var: 'x' }, 0] }, { x: 5 })).toBe(true);
+      expect(evaluarReglaBoolean({ '>': [{ var: 'x' }, 0] }, { x: 5 })).toBe(
+        true,
+      );
     });
     it('devuelve false para regla que no se cumple', () => {
-      expect(evaluarReglaBoolean({ '>': [{ var: 'x' }, 0] }, { x: -1 })).toBe(false);
+      expect(evaluarReglaBoolean({ '>': [{ var: 'x' }, 0] }, { x: -1 })).toBe(
+        false,
+      );
     });
     it('devuelve true para regla null', () => {
       expect(evaluarReglaBoolean(null, {})).toBe(true);

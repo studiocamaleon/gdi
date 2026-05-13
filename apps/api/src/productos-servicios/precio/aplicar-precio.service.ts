@@ -51,13 +51,21 @@ export class AplicarPrecioService {
     );
 
     // 2) Comisiones (% sobre precio base)
-    const totalComisionesPct = input.comisiones.reduce((acc, c) => acc + c.porcentaje, 0);
+    const totalComisionesPct = input.comisiones.reduce(
+      (acc, c) => acc + c.porcentaje,
+      0,
+    );
     const totalComisiones = redondear((precioBase * totalComisionesPct) / 100);
     const precioConComisiones = precioBase + totalComisiones;
 
     // 3) Impuestos (% sobre precio + comisiones)
-    const totalImpuestosPct = input.impuestos.reduce((acc, i) => acc + i.porcentaje, 0);
-    const totalImpuestos = redondear((precioConComisiones * totalImpuestosPct) / 100);
+    const totalImpuestosPct = input.impuestos.reduce(
+      (acc, i) => acc + i.porcentaje,
+      0,
+    );
+    const totalImpuestos = redondear(
+      (precioConComisiones * totalImpuestosPct) / 100,
+    );
 
     // 4) Aplicar margen mínimo si el método lo declara
     const precioBaseConMinimo = this.aplicarMargenMinimo(
@@ -70,7 +78,9 @@ export class AplicarPrecioService {
     let brutoUnitario = netoUnitario + totalImpuestos;
 
     if (precioBaseConMinimo !== precioBase) {
-      const nuevoTotComis = redondear((precioBaseConMinimo * totalComisionesPct) / 100);
+      const nuevoTotComis = redondear(
+        (precioBaseConMinimo * totalComisionesPct) / 100,
+      );
       const nuevoConComis = precioBaseConMinimo + nuevoTotComis;
       const nuevoTotImp = redondear((nuevoConComis * totalImpuestosPct) / 100);
       netoUnitario = redondear(nuevoConComis);
@@ -83,9 +93,15 @@ export class AplicarPrecioService {
     const precioNetoTotal = redondear(netoUnitario * input.cantidad);
     const precioBrutoTotal = redondear(brutoUnitario * input.cantidad);
 
-    const margenEfectivoPct = input.costoUnitario > 0
-      ? redondear(((precioBaseConMinimo - input.costoUnitario) / input.costoUnitario) * 100, 2)
-      : 0;
+    const margenEfectivoPct =
+      input.costoUnitario > 0
+        ? redondear(
+            ((precioBaseConMinimo - input.costoUnitario) /
+              input.costoUnitario) *
+              100,
+            2,
+          )
+        : 0;
 
     return {
       precioNetoUnitario: netoUnitario,
@@ -97,9 +113,12 @@ export class AplicarPrecioService {
         totalImpuestos:
           precioBaseConMinimo === precioBase
             ? totalImpuestos
-            : redondear(((precioBaseConMinimo + (precioBaseConMinimo * totalComisionesPct) / 100) *
-                totalImpuestosPct) /
-                100),
+            : redondear(
+                ((precioBaseConMinimo +
+                  (precioBaseConMinimo * totalComisionesPct) / 100) *
+                  totalImpuestosPct) /
+                  100,
+              ),
         totalComisiones:
           precioBaseConMinimo === precioBase
             ? totalComisiones
@@ -117,10 +136,17 @@ export class AplicarPrecioService {
 
   // ── Métodos de cálculo del precio base ──────────────────────────────
 
-  private calcularPrecioBase(config: PrecioConfig, costo: number, cantidad: number): number {
+  private calcularPrecioBase(
+    config: PrecioConfig,
+    costo: number,
+    cantidad: number,
+  ): number {
     switch (config.metodoCalculo) {
       case 'por_margen':
-        return this.porMargen(config.detalle as unknown as DetallePorMargen, costo);
+        return this.porMargen(
+          config.detalle as unknown as DetallePorMargen,
+          costo,
+        );
 
       case 'precio_fijo':
         return this.precioFijo(config.detalle as unknown as DetallePrecioFijo);
@@ -185,7 +211,10 @@ export class AplicarPrecioService {
     detalle: DetallePrecioFijoParaMargenMinimo,
     costo: number,
   ): number {
-    if (typeof detalle.price !== 'number' || typeof detalle.minimumMarginPct !== 'number') {
+    if (
+      typeof detalle.price !== 'number' ||
+      typeof detalle.minimumMarginPct !== 'number'
+    ) {
       throw new BadRequestException(
         'precio_fijo_para_margen_minimo requiere `price` y `minimumMarginPct`',
       );
@@ -195,30 +224,52 @@ export class AplicarPrecioService {
   }
 
   /** Tramos por rango: el primer `quantityUntil >= cantidad` define el margen. */
-  private margenVariable(detalle: DetalleMargenVariable, costo: number, cantidad: number): number {
+  private margenVariable(
+    detalle: DetalleMargenVariable,
+    costo: number,
+    cantidad: number,
+  ): number {
     if (!Array.isArray(detalle.tiers) || detalle.tiers.length === 0) {
-      throw new BadRequestException('margen_variable requiere `tiers` no vacío');
+      throw new BadRequestException(
+        'margen_variable requiere `tiers` no vacío',
+      );
     }
     // Ordenar por quantityUntil ascendente, defensivo
-    const tiers = [...detalle.tiers].sort((a, b) => a.quantityUntil - b.quantityUntil);
-    const tramo = tiers.find((t) => cantidad <= t.quantityUntil) ?? tiers[tiers.length - 1];
+    const tiers = [...detalle.tiers].sort(
+      (a, b) => a.quantityUntil - b.quantityUntil,
+    );
+    const tramo =
+      tiers.find((t) => cantidad <= t.quantityUntil) ?? tiers[tiers.length - 1];
     return redondear(costo * (1 + tramo.marginPct / 100));
   }
 
   /** Tramos por rango con precio fijo. */
-  private variablePorCantidad(detalle: DetalleVariablePorCantidad, cantidad: number): number {
+  private variablePorCantidad(
+    detalle: DetalleVariablePorCantidad,
+    cantidad: number,
+  ): number {
     if (!Array.isArray(detalle.tiers) || detalle.tiers.length === 0) {
-      throw new BadRequestException('variable_por_cantidad requiere `tiers` no vacío');
+      throw new BadRequestException(
+        'variable_por_cantidad requiere `tiers` no vacío',
+      );
     }
-    const tiers = [...detalle.tiers].sort((a, b) => a.quantityUntil - b.quantityUntil);
-    const tramo = tiers.find((t) => cantidad <= t.quantityUntil) ?? tiers[tiers.length - 1];
+    const tiers = [...detalle.tiers].sort(
+      (a, b) => a.quantityUntil - b.quantityUntil,
+    );
+    const tramo =
+      tiers.find((t) => cantidad <= t.quantityUntil) ?? tiers[tiers.length - 1];
     return redondear(tramo.price);
   }
 
   /** Cantidades exactas: la cantidad pedida debe coincidir con uno de los tramos. */
-  private fijadoPorCantidad(detalle: DetalleFijadoPorCantidad, cantidad: number): number {
+  private fijadoPorCantidad(
+    detalle: DetalleFijadoPorCantidad,
+    cantidad: number,
+  ): number {
     if (!Array.isArray(detalle.tiers) || detalle.tiers.length === 0) {
-      throw new BadRequestException('fijado_por_cantidad requiere `tiers` no vacío');
+      throw new BadRequestException(
+        'fijado_por_cantidad requiere `tiers` no vacío',
+      );
     }
     const tramo = detalle.tiers.find((t) => t.quantity === cantidad);
     if (!tramo) {
@@ -237,7 +288,9 @@ export class AplicarPrecioService {
     cantidad: number,
   ): number {
     if (!Array.isArray(detalle.tiers) || detalle.tiers.length === 0) {
-      throw new BadRequestException('fijo_con_margen_variable requiere `tiers` no vacío');
+      throw new BadRequestException(
+        'fijo_con_margen_variable requiere `tiers` no vacío',
+      );
     }
     const tramo = detalle.tiers.find((t) => t.quantity === cantidad);
     if (!tramo) {
@@ -256,7 +309,8 @@ export class AplicarPrecioService {
     costo: number,
     precioBase: number,
   ): number {
-    const min = (config.detalle as { minimumMarginPct?: unknown }).minimumMarginPct;
+    const min = (config.detalle as { minimumMarginPct?: unknown })
+      .minimumMarginPct;
     if (typeof min !== 'number') return precioBase;
     const piso = costo * (1 + min / 100);
     return precioBase < piso ? piso : precioBase;
@@ -291,12 +345,16 @@ export class AplicarPrecioService {
     // Porcentajes razonables
     for (const i of input.impuestos) {
       if (i.porcentaje < 0 || i.porcentaje > 100) {
-        throw new BadRequestException(`Impuesto "${i.codigo}" con porcentaje fuera de [0,100]`);
+        throw new BadRequestException(
+          `Impuesto "${i.codigo}" con porcentaje fuera de [0,100]`,
+        );
       }
     }
     for (const c of input.comisiones) {
       if (c.porcentaje < 0 || c.porcentaje > 100) {
-        throw new BadRequestException(`Comisión "${c.codigo}" con porcentaje fuera de [0,100]`);
+        throw new BadRequestException(
+          `Comisión "${c.codigo}" con porcentaje fuera de [0,100]`,
+        );
       }
     }
   }

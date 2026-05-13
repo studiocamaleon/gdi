@@ -41,12 +41,16 @@ export function evaluarRegla(
   if (regla === null || regla === undefined) {
     return { resultado: true };
   }
-  if (typeof regla === 'object' && regla !== null && Object.keys(regla).length === 0) {
+  if (
+    typeof regla === 'object' &&
+    regla !== null &&
+    Object.keys(regla).length === 0
+  ) {
     return { resultado: true };
   }
 
   try {
-    const valor = jsonLogic.apply(regla as never, contexto);
+    const valor = jsonLogic.apply(regla as never, contexto) as unknown;
     return {
       resultado: Boolean(valor),
       detalle: { regla, contexto, valorCrudo: valor },

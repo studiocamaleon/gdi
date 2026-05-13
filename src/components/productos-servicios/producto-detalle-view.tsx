@@ -32,6 +32,15 @@ import {
   unidadComercialLabels,
 } from "@/lib/labels-humanos";
 
+function humanizeCode(code: string) {
+  if (code === "sustrato_principal") return "Sustrato principal";
+  return code
+    .split("_")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 export function ProductoDetalleView({ producto }: { producto: ProductoDetalle }) {
   const [rutaActiva, setRutaActiva] = React.useState<string>(
     producto.rutasAlternativas.find((r) => r.esPreferida)?.id ?? producto.rutasAlternativas[0]?.id ?? "",
@@ -48,6 +57,14 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
     (codigo: string): string => {
       const f = familias.find((x) => x.codigo === codigo);
       return f?.nombre ?? codigo;
+    },
+    [familias],
+  );
+  const slotLabel = React.useCallback(
+    (familiaCodigo: string, slotCodigo: string): string => {
+      const familia = familias.find((x) => x.codigo === familiaCodigo);
+      const slot = familia?.slotsRequeridos.find((s) => s.codigo === slotCodigo);
+      return slot?.nombre ?? humanizeCode(slotCodigo);
     },
     [familias],
   );
@@ -186,7 +203,7 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
             </TabsList>
             {producto.rutasAlternativas.map((r) => (
               <TabsContent key={r.id} value={r.id} className="mt-4">
-                <RutaAlternativaContent ruta={r} familiaLabel={familiaLabel} />
+                <RutaAlternativaContent ruta={r} familiaLabel={familiaLabel} slotLabel={slotLabel} />
               </TabsContent>
             ))}
           </Tabs>
@@ -199,9 +216,11 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
 function RutaAlternativaContent({
   ruta,
   familiaLabel,
+  slotLabel,
 }: {
   ruta: RutaAlternativaDetalle;
   familiaLabel: (codigo: string) => string;
+  slotLabel: (familiaCodigo: string, slotCodigo: string) => string;
 }) {
   const pasosOrdenados = ruta.ruta.pasos;
   const configByPasoId = new Map(ruta.configPasos.map((c) => [c.rutaPasoId, c]));
@@ -280,7 +299,9 @@ function RutaAlternativaContent({
                             >
                               <PackageIcon className="text-muted-foreground size-3" />
                               <div className="flex-1">
-                                <div className="font-medium">{slot.slotCodigo}</div>
+                                <div className="font-medium" title={slot.slotCodigo}>
+                                  {slotLabel(paso.familiaCodigo, slot.slotCodigo)}
+                                </div>
                                 <div className="text-muted-foreground">
                                   {lblSel.label}
                                   {slot.materialVariante && (

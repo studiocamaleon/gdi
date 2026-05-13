@@ -719,6 +719,7 @@ model CentroCosto {
   capacidadesPeriodo      CentroCostoCapacidadPeriodo[]
   tarifasPeriodo          CentroCostoTarifaPeriodo[]
   maquinasPrincipales     Maquina[]                           @relation("MaquinaCentroCostoPrincipal")
+  productoConfigPasos      ProductoConfigPaso[]                 @relation("ProductoConfigPasoCentroCostoManual")
 
   @@unique([tenantId, codigo])
   @@index([tenantId, plantaId, areaCostoId])
@@ -1240,6 +1241,7 @@ model RutaPaso {
   id              String               @id @default(uuid()) @db.Uuid
   tenantId        String               @db.Uuid
   rutaId          String               @db.Uuid
+  version         Int                  @default(1)
   orden           Int
   /// Referencia a FamiliaCodigo de apps/api/src/productos-servicios/pasos/familias.ts (no FK por ser hardcoded en código).
   familiaCodigo   String
@@ -1250,8 +1252,8 @@ model RutaPaso {
   ruta            Ruta                 @relation(fields: [rutaId], references: [id], onDelete: Cascade)
   productoConfigs ProductoConfigPaso[]
 
-  @@unique([tenantId, rutaId, orden])
-  @@index([tenantId, rutaId, activo])
+  @@unique([tenantId, rutaId, version, orden])
+  @@index([tenantId, rutaId, version, activo])
 }
 
 model RutaVersion {
@@ -1349,6 +1351,7 @@ model ProductoConfigPaso {
   paramsPasoJson              Json?
   maquinaM1Id                 String?                              @db.Uuid
   perfilM1Id                  String?                              @db.Uuid
+  centroCostoId               String?                              @db.Uuid
   setupOverrideMin            Decimal?                             @db.Decimal(12, 2)
   cleanupOverrideMin          Decimal?                             @db.Decimal(12, 2)
   tiempoFijoOverrideMin       Decimal?                             @db.Decimal(12, 2)
@@ -1360,12 +1363,14 @@ model ProductoConfigPaso {
   rutaPaso                    RutaPaso                             @relation(fields: [rutaPasoId], references: [id])
   maquinaM1                   Maquina?                             @relation("ProductoConfigPasoMaquinaM1", fields: [maquinaM1Id], references: [id])
   perfilM1                    MaquinaPerfilOperativo?              @relation("ProductoConfigPasoPerfilM1", fields: [perfilM1Id], references: [id])
+  centroCosto                 CentroCosto?                         @relation("ProductoConfigPasoCentroCostoManual", fields: [centroCostoId], references: [id], onDelete: SetNull)
   slotsMateriales             ProductoConfigPasoSlotMaterial[]
   maquinasCandidatas          ProductoConfigPasoMaquinaCandidata[]
   cargosDirectosPaso          ProductoCargoDirectoPaso[]
 
   @@unique([tenantId, productoRutaAlternativaId, rutaPasoId])
   @@index([tenantId, productoRutaAlternativaId])
+  @@index([tenantId, centroCostoId])
 }
 
 model ProductoConfigPasoSlotMaterial {

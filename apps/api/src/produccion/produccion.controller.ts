@@ -31,10 +31,7 @@ export class ProduccionController {
   }
 
   @Patch('estaciones/:id/toggle')
-  toggleEstacion(
-    @CurrentSession() auth: CurrentAuth,
-    @Param('id') id: string,
-  ) {
+  toggleEstacion(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.service.toggleEstacion(auth, id);
   }
 }

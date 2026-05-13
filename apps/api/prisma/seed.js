@@ -596,15 +596,57 @@ async function main() {
     ],
   });
 
+  const centroPreprensa = await prisma.centroCosto.findFirstOrThrow({
+    where: {
+      tenantId: tenant.id,
+      codigo: "PRE-001",
+    },
+  });
+  const resumenTarifaPreprensa = {
+    periodo: periodoDemo,
+    centroCodigo: "PRE-001",
+    centroNombre: "CTP principal",
+    unidadBase: "hora_hombre",
+    costoMensualTotal: 900000,
+    capacidadPractica: 150,
+    tarifaCalculada: 6000,
+    advertencias: [],
+  };
+
+  await prisma.centroCostoTarifaPeriodo.createMany({
+    data: [
+      {
+        tenantId: tenant.id,
+        centroCostoId: centroPreprensa.id,
+        periodo: periodoDemo,
+        costoMensualTotal: "900000.00",
+        capacidadPractica: "150.00",
+        tarifaCalculada: "6000.00",
+        estado: EstadoTarifaCentroCostoPeriodo.BORRADOR,
+        resumenJson: resumenTarifaPreprensa,
+      },
+      {
+        tenantId: tenant.id,
+        centroCostoId: centroPreprensa.id,
+        periodo: periodoDemo,
+        costoMensualTotal: "900000.00",
+        capacidadPractica: "150.00",
+        tarifaCalculada: "6000.00",
+        estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
+        resumenJson: resumenTarifaPreprensa,
+      },
+    ],
+  });
+
   // ============================================================================
   // MODELO UNIVERSAL V2 — Bloques nuevos de F.1.5
   // ============================================================================
 
   await seedCargosDirectosCatalogo(prisma, tenant.id);
 
-  const maquinasCreadas = await seedMaquinas(prisma, tenant.id, planta.id);
-
   const materialesCreados = await seedMateriales(prisma, tenant.id);
+
+  const maquinasCreadas = await seedMaquinas(prisma, tenant.id, planta.id);
 
   await seedRutasYProductos(prisma, tenant.id, maquinasCreadas, materialesCreados);
 
@@ -617,7 +659,7 @@ async function main() {
   console.info("");
   console.info("Modelo Universal V2 cargado:");
   console.info("  • 7 máquinas + perfiles operativos");
-  console.info("  • 9 materias primas + variantes");
+  console.info("  • 11 materias primas + variantes");
   console.info("  • 5 cargos directos catálogo");
   console.info("  • 5 rutas de producción");
   console.info("  • 4 productos validados (Tarjetas, Vinilo, Talonarios, Rígidos)");

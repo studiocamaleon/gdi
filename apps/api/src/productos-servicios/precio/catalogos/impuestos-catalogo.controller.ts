@@ -37,7 +37,10 @@ export class ImpuestosCatalogoController {
   constructor(private readonly service: ImpuestosCatalogoService) {}
 
   @Get()
-  async listar(@Req() req: RequestWithAuth, @Query('soloActivos') soloActivos?: string) {
+  async listar(
+    @Req() req: RequestWithAuth,
+    @Query('soloActivos') soloActivos?: string,
+  ) {
     const filtro = soloActivos !== 'false';
     return this.service.listar(tenantId(req), filtro);
   }
@@ -48,7 +51,10 @@ export class ImpuestosCatalogoController {
   }
 
   @Post()
-  async crear(@Req() req: RequestWithAuth, @Body() dto: CrearImpuestoCatalogoDto) {
+  async crear(
+    @Req() req: RequestWithAuth,
+    @Body() dto: CrearImpuestoCatalogoDto,
+  ) {
     return this.service.crear(tenantId(req), dto);
   }
 

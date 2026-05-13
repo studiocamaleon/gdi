@@ -22,9 +22,9 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { HumanSelect, optionFromLabel, type HumanSelectOption } from "@/components/ui/human-select";
 import { Label } from "@/components/ui/label";
 import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { agregarPasoExtra, eliminarPasoExtra } from "@/lib/productos-servicios-api";
 import type { CatalogoFamilias, PasoExtra } from "@/lib/productos-servicios";
 import {
@@ -43,8 +43,10 @@ interface Props {
 export function PasosExtrasPanel({ productoId, pasosExtras, catalogoFamilias }: Props) {
   const router = useRouter();
   const [familiaCodigo, setFamiliaCodigo] = React.useState("");
-  const [modoActivacion, setModoActivacion] = React.useState<"OBLIGATORIO" | "OPCIONAL">("OBLIGATORIO");
-  const [modoTiempo, setModoTiempo] = React.useState<"T-1" | "T-2">("T-2");
+  const [modoActivacion, setModoActivacion] = React.useState<
+    "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL"
+  >("OBLIGATORIO");
+  const [modoTiempo, setModoTiempo] = React.useState<"T-1" | "T-2" | "T-3" | "T-4">("T-2");
   const [agregando, setAgregando] = React.useState(false);
 
   const familias = catalogoFamilias.familias;
@@ -57,6 +59,25 @@ export function PasosExtrasPanel({ productoId, pasosExtras, catalogoFamilias }: 
     }
     return map;
   }, [familias]);
+  const familiaSeleccionada = familias.find((f) => f.codigo === familiaCodigo);
+  const familiaOptions = React.useMemo<HumanSelectOption[]>(() => {
+    return Array.from(familiasPorCategoria.entries()).flatMap(([categoria, fams]) => {
+      const lblCat = getLabel(categoriaFamiliaLabels, categoria);
+      return fams.map((f) => ({
+        value: f.codigo,
+        label: f.nombre,
+        code: f.codigo,
+        description: f.descripcion,
+        group: lblCat.label,
+      }));
+    });
+  }, [familiasPorCategoria]);
+  const modoActivacionOptions = (
+    familiaSeleccionada?.modosActivacionSoportados ?? ["OBLIGATORIO", "OPCIONAL", "CONDICIONAL"]
+  ).map((m) => optionFromLabel(m, modoActivacionLabels));
+  const modoTiempoOptions = (
+    familiaSeleccionada?.modosTiempoSoportados ?? ["T-1", "T-2", "T-3", "T-4"]
+  ).map((m) => optionFromLabel(m, modoTiempoLabels));
 
   const handleAgregar = async () => {
     if (!familiaCodigo) {
@@ -155,34 +176,22 @@ export function PasosExtrasPanel({ productoId, pasosExtras, catalogoFamilias }: 
                 htmlFor="familia"
                 tooltip="Tipo de operación (impresión, corte, laminado, encuadernación, etc.). Definí qué hace el paso, no qué máquina lo ejecuta."
               />
-              <Select
+              <HumanSelect
                 value={familiaCodigo}
-                onValueChange={(v) => setFamiliaCodigo(v ?? "")}
-              >
-                <SelectTrigger id="familia">
-                  <SelectValue placeholder="Elegí familia" />
-                </SelectTrigger>
-                <SelectContent className="max-h-80">
-                  {Array.from(familiasPorCategoria.entries()).map(([categoria, fams]) => {
-                    const lblCat = getLabel(categoriaFamiliaLabels, categoria);
-                    return (
-                      <React.Fragment key={categoria}>
-                        <div
-                          className="text-muted-foreground px-2 py-1 text-xs uppercase"
-                          title={lblCat.descripcion}
-                        >
-                          {lblCat.label}
-                        </div>
-                        {fams.map((f) => (
-                          <SelectItem key={f.codigo} value={f.codigo} title={f.descripcion}>
-                            {f.nombre}
-                          </SelectItem>
-                        ))}
-                      </React.Fragment>
+                onValueChange={(v) => {
+                  setFamiliaCodigo(v || "");
+                  const fam = familias.find((f) => f.codigo === v);
+                  if (fam?.modoActivacionDefault) {
+                    setModoActivacion(
+                      fam.modoActivacionDefault as "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL",
                     );
-                  })}
-                </SelectContent>
-              </Select>
+                  }
+                }}
+                options={familiaOptions}
+                placeholder="Elegí familia"
+                id="familia"
+                contentClassName="max-h-80"
+              />
             </div>
             <div className="space-y-1">
               <LabelConTooltip
@@ -190,24 +199,16 @@ export function PasosExtrasPanel({ productoId, pasosExtras, catalogoFamilias }: 
                 htmlFor="modoact"
                 tooltip={getLabel(modoActivacionLabels, modoActivacion).descripcion}
               />
-              <Select
+              <HumanSelect
                 value={modoActivacion}
                 onValueChange={(v) =>
-                  setModoActivacion((v ?? "OBLIGATORIO") as "OBLIGATORIO" | "OPCIONAL")
+                  setModoActivacion(
+                    (v || "OBLIGATORIO") as "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL",
+                  )
                 }
-              >
-                <SelectTrigger id="modoact">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="OBLIGATORIO">
-                    {getLabel(modoActivacionLabels, "OBLIGATORIO").label}
-                  </SelectItem>
-                  <SelectItem value="OPCIONAL">
-                    {getLabel(modoActivacionLabels, "OPCIONAL").label}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                options={modoActivacionOptions}
+                id="modoact"
+              />
             </div>
             <div className="space-y-1">
               <LabelConTooltip
@@ -216,22 +217,14 @@ export function PasosExtrasPanel({ productoId, pasosExtras, catalogoFamilias }: 
                 tooltip={getLabel(modoTiempoLabels, modoTiempo).descripcion}
                 ejemplo={getLabel(modoTiempoLabels, modoTiempo).ejemplo}
               />
-              <Select
+              <HumanSelect
                 value={modoTiempo}
-                onValueChange={(v) => setModoTiempo((v ?? "T-2") as "T-1" | "T-2")}
-              >
-                <SelectTrigger id="modot">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="T-1">
-                    {getLabel(modoTiempoLabels, "T-1").label}
-                  </SelectItem>
-                  <SelectItem value="T-2">
-                    {getLabel(modoTiempoLabels, "T-2").label}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                onValueChange={(v) =>
+                  setModoTiempo((v || "T-2") as "T-1" | "T-2" | "T-3" | "T-4")
+                }
+                options={modoTiempoOptions}
+                id="modot"
+              />
             </div>
           </div>
           <Button onClick={handleAgregar} disabled={agregando || !familiaCodigo} size="sm">

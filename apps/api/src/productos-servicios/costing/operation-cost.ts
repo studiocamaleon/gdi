@@ -33,6 +33,7 @@ export function calculateOperationCost(
   tarifaHora: TarifaHora | null | undefined,
 ): number {
   if (tarifaHora == null) return 0;
-  const tarifaNumber = typeof tarifaHora === 'number' ? tarifaHora : Number(tarifaHora);
+  const tarifaNumber =
+    typeof tarifaHora === 'number' ? tarifaHora : Number(tarifaHora);
   return (totalMin / 60) * tarifaNumber;
 }

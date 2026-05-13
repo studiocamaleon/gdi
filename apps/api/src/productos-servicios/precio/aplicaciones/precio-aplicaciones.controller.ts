@@ -43,7 +43,10 @@ export class PrecioAplicacionesController {
   // ── Impuestos ───────────────────────────────────────────────────────
 
   @Get('impuestos')
-  async listarImpuestos(@Req() req: RequestWithAuth, @Param('productoId') productoId: string) {
+  async listarImpuestos(
+    @Req() req: RequestWithAuth,
+    @Param('productoId') productoId: string,
+  ) {
     return this.service.listarImpuestosAplicados(tenantId(req), productoId);
   }
 
@@ -63,13 +66,20 @@ export class PrecioAplicacionesController {
     @Param('productoId') productoId: string,
     @Param('impuestoCatalogoId') impuestoCatalogoId: string,
   ) {
-    return this.service.quitarImpuesto(tenantId(req), productoId, impuestoCatalogoId);
+    return this.service.quitarImpuesto(
+      tenantId(req),
+      productoId,
+      impuestoCatalogoId,
+    );
   }
 
   // ── Comisiones ──────────────────────────────────────────────────────
 
   @Get('comisiones')
-  async listarComisiones(@Req() req: RequestWithAuth, @Param('productoId') productoId: string) {
+  async listarComisiones(
+    @Req() req: RequestWithAuth,
+    @Param('productoId') productoId: string,
+  ) {
     return this.service.listarComisionesAplicadas(tenantId(req), productoId);
   }
 
@@ -89,6 +99,10 @@ export class PrecioAplicacionesController {
     @Param('productoId') productoId: string,
     @Param('comisionCatalogoId') comisionCatalogoId: string,
   ) {
-    return this.service.quitarComision(tenantId(req), productoId, comisionCatalogoId);
+    return this.service.quitarComision(
+      tenantId(req),
+      productoId,
+      comisionCatalogoId,
+    );
   }
 }

@@ -21,7 +21,9 @@ describe('Catálogo de familias', () => {
   });
 
   it('todas las familias tienen categoría válida', () => {
-    const categoriasValidas = Object.keys(CATEGORIAS) as CategoriaFamiliaCodigo[];
+    const categoriasValidas = Object.keys(
+      CATEGORIAS,
+    ) as CategoriaFamiliaCodigo[];
     for (const familia of Object.values(FAMILIAS)) {
       expect(categoriasValidas).toContain(familia.categoria);
     }
@@ -59,7 +61,9 @@ describe('Catálogo de familias', () => {
 
   it('modoActivacionDefault está en modosActivacionSoportados', () => {
     for (const familia of Object.values(FAMILIAS)) {
-      expect(familia.modosActivacionSoportados).toContain(familia.modoActivacionDefault);
+      expect(familia.modosActivacionSoportados).toContain(
+        familia.modoActivacionDefault,
+      );
     }
   });
 
@@ -104,7 +108,9 @@ describe('Categorías', () => {
   });
 
   it('cada categoría tiene al menos 1 familia', () => {
-    for (const categoriaCodigo of Object.keys(CATEGORIAS) as CategoriaFamiliaCodigo[]) {
+    for (const categoriaCodigo of Object.keys(
+      CATEGORIAS,
+    ) as CategoriaFamiliaCodigo[]) {
       const familias = listarFamiliasPorCategoria(categoriaCodigo);
       expect(familias.length).toBeGreaterThan(0);
     }

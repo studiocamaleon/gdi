@@ -45,8 +45,15 @@ export type TalonarioGroupingResult = {
   modoIncompleto: string;
 };
 
-export function calculateTalonarioGrouping(input: TalonarioGroupingInput): TalonarioGroupingResult {
-  const { cantidadTalonarios, posesXPliego, numerosXTalonario, modoTalonarioIncompleto } = input;
+export function calculateTalonarioGrouping(
+  input: TalonarioGroupingInput,
+): TalonarioGroupingResult {
+  const {
+    cantidadTalonarios,
+    posesXPliego,
+    numerosXTalonario,
+    modoTalonarioIncompleto,
+  } = input;
 
   if (posesXPliego <= 0 || numerosXTalonario <= 0) {
     return {

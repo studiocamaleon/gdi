@@ -20,11 +20,7 @@ import {
   getCentroCostoConfiguracion,
   getCentroCostoTarifas,
   publicarTarifaCentroCosto,
-  replaceCentroCostoComponentes,
-  replaceCentroCostoRecursos,
-  upsertCentroCostoRecursosMaquinaria,
-  updateCentroCostoConfiguracionBase,
-  upsertCentroCostoCapacidad,
+  upsertCentroCostoConfiguracionPeriodo,
 } from "@/lib/costos-api";
 import {
   AreaCosto,
@@ -64,7 +60,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import {
   Field,
   FieldDescription,
@@ -91,7 +92,11 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 type CentroCostoConfiguratorProps = {
   open: boolean;
@@ -103,7 +108,12 @@ type CentroCostoConfiguratorProps = {
   onConfigured: () => Promise<void> | void;
 };
 
-type WizardStep = "identidad" | "recursos" | "costos" | "capacidad" | "resultado";
+type WizardStep =
+  | "identidad"
+  | "recursos"
+  | "costos"
+  | "capacidad"
+  | "resultado";
 
 type RepartoAbsorbidoItem = {
   desdeCentroCostoId: string;
@@ -212,8 +222,8 @@ const additionalCostCategories = new Set<LocalComponente["categoria"]>([
   "otros",
 ]);
 
-const additionalCostCategoryItems = categoriaComponenteCostoItems.filter((item) =>
-  additionalCostCategories.has(item.value),
+const additionalCostCategoryItems = categoriaComponenteCostoItems.filter(
+  (item) => additionalCostCategories.has(item.value),
 );
 
 function createEmployeeDerivedComponent(params: {
@@ -223,7 +233,9 @@ function createEmployeeDerivedComponent(params: {
   porcentajeAsignacion: number;
   current?: LocalComponente;
 }) {
-  const sueldoNeto = normalizeNumber(getDetailValue(params.current ?? createComponent(), "sueldoNeto"));
+  const sueldoNeto = normalizeNumber(
+    getDetailValue(params.current ?? createComponent(), "sueldoNeto"),
+  );
   const cargasSociales = normalizeNumber(
     getDetailValue(params.current ?? createComponent(), "cargasSociales"),
   );
@@ -257,9 +269,14 @@ function createEmployeeDerivedComponent(params: {
   } satisfies LocalComponente;
 }
 
-function calculateMachineCostPreview(item: CentroCostoRecursoMaquinariaPeriodo) {
+function calculateMachineCostPreview(
+  item: CentroCostoRecursoMaquinariaPeriodo,
+) {
   const amortizacionMensual = Number(
-    (Math.max(0, item.valorCompra - item.valorResidual) / Math.max(1, item.vidaUtilMeses)).toFixed(2),
+    (
+      Math.max(0, item.valorCompra - item.valorResidual) /
+      Math.max(1, item.vidaUtilMeses)
+    ).toFixed(2),
   );
   const horasProductivas = Number(
     (
@@ -286,7 +303,9 @@ function calculateMachineCostPreview(item: CentroCostoRecursoMaquinariaPeriodo) 
     ).toFixed(2),
   );
   const tarifaHora = Number(
-    (horasProductivas > 0 ? costoMensualTotal / horasProductivas : 0).toFixed(2),
+    (horasProductivas > 0 ? costoMensualTotal / horasProductivas : 0).toFixed(
+      2,
+    ),
   );
 
   return {
@@ -340,10 +359,14 @@ function syncDerivedComponents(params: {
   current: LocalComponente[];
   empleadoLabelById: Map<string, string>;
 }) {
-  const manualComponents = params.current.filter((component) => !isDerivedComponent(component));
+  const manualComponents = params.current.filter(
+    (component) => !isDerivedComponent(component),
+  );
   const existingDerived = new Map(
     params.current
-      .map((component) => [getDerivedComponentKey(component), component] as const)
+      .map(
+        (component) => [getDerivedComponentKey(component), component] as const,
+      )
       .filter((entry): entry is [string, LocalComponente] => Boolean(entry[0])),
   );
   const derivedComponents: LocalComponente[] = [];
@@ -355,7 +378,8 @@ function syncDerivedComponents(params: {
 
     if (resource.tipoRecurso === "empleado" && resource.empleadoId) {
       const empleadoNombre =
-        params.empleadoLabelById.get(resource.empleadoId) ?? "Persona sin nombre";
+        params.empleadoLabelById.get(resource.empleadoId) ??
+        "Persona sin nombre";
       const porcentajeAsignacion = resource.porcentajeAsignacion ?? 0;
       const sueldoKey = `empleado:${resource.empleadoId}:sueldos`;
       const cargasKey = `empleado:${resource.empleadoId}:cargas`;
@@ -378,7 +402,6 @@ function syncDerivedComponents(params: {
       );
       continue;
     }
-
   }
 
   return [...derivedComponents, ...manualComponents];
@@ -409,7 +432,9 @@ function formatPeriodo(periodo: string) {
   return `${month}/${year}`;
 }
 
-function extractRepartoAbsorbido(resumen: Record<string, unknown> | null | undefined) {
+function extractRepartoAbsorbido(
+  resumen: Record<string, unknown> | null | undefined,
+) {
   const total =
     typeof resumen?.costoMensualAbsorbidoReparto === "number"
       ? resumen.costoMensualAbsorbidoReparto
@@ -446,7 +471,13 @@ function extractRepartoAbsorbido(resumen: Record<string, unknown> | null | undef
   };
 }
 
-function FieldLabelWithTooltip({ label, help }: { label: string; help: string }) {
+function FieldLabelWithTooltip({
+  label,
+  help,
+}: {
+  label: string;
+  help: string;
+}) {
   return (
     <div className="flex min-h-6 items-center gap-1">
       <FieldLabel>{label}</FieldLabel>
@@ -483,23 +514,29 @@ export function CentroCostoConfigurator({
   const [activeStep, setActiveStep] = React.useState<WizardStep>("identidad");
   const [isLoading, startLoading] = React.useTransition();
   const [isSaving, startSaving] = React.useTransition();
-  const [baseForm, setBaseForm] = React.useState<CentroCostoPayload | null>(null);
+  const [baseForm, setBaseForm] = React.useState<CentroCostoPayload | null>(
+    null,
+  );
   const [resourcesForm, setResourcesForm] = React.useState<LocalRecurso[]>([]);
-  const [componentsForm, setComponentsForm] = React.useState<LocalComponente[]>([]);
+  const [componentsForm, setComponentsForm] = React.useState<LocalComponente[]>(
+    [],
+  );
   const [machineCostsForm, setMachineCostsForm] = React.useState<
     CentroCostoRecursoMaquinariaPeriodo[]
   >([]);
-  const [capacityForm, setCapacityForm] = React.useState<CentroCostoCapacidadPayload>({
-    diasPorMes: 22,
-    horasPorDia: 8,
-    overrideManualCapacidad: undefined,
-  });
+  const [capacityForm, setCapacityForm] =
+    React.useState<CentroCostoCapacidadPayload>({
+      diasPorMes: 22,
+      horasPorDia: 8,
+      overrideManualCapacidad: undefined,
+    });
   const [draftTariff, setDraftTariff] = React.useState<number | null>(null);
-  const [publishedTariff, setPublishedTariff] = React.useState<number | null>(null);
+  const [publishedTariff, setPublishedTariff] = React.useState<number | null>(
+    null,
+  );
   const [repartoAbsorbidoTotal, setRepartoAbsorbidoTotal] = React.useState(0);
-  const [repartoAbsorbidoDesglose, setRepartoAbsorbidoDesglose] = React.useState<
-    RepartoAbsorbidoItem[]
-  >([]);
+  const [repartoAbsorbidoDesglose, setRepartoAbsorbidoDesglose] =
+    React.useState<RepartoAbsorbidoItem[]>([]);
   const [, setWarnings] = React.useState<string[]>([]);
   const [empleadosDisponibilidad, setEmpleadosDisponibilidad] = React.useState<
     EmpleadoDisponibilidadCentroCosto[]
@@ -515,7 +552,10 @@ export function CentroCostoConfigurator({
     [areas],
   );
   const empleadoLabelById = React.useMemo(
-    () => new Map(empleados.map((empleado) => [empleado.id, empleado.nombreCompleto])),
+    () =>
+      new Map(
+        empleados.map((empleado) => [empleado.id, empleado.nombreCompleto]),
+      ),
     [empleados],
   );
   const maquinaById = React.useMemo(
@@ -566,7 +606,8 @@ export function CentroCostoConfigurator({
 
     for (const empleado of empleados) {
       const disponibilidadBase =
-        disponibilidadEmpleadoById.get(empleado.id)?.porcentajeDisponible ?? 100;
+        disponibilidadEmpleadoById.get(empleado.id)?.porcentajeDisponible ??
+        100;
       const porcentajeAsignado =
         porcentajeAsignadoEnFormularioByEmpleado.get(empleado.id) ?? 0;
 
@@ -599,13 +640,20 @@ export function CentroCostoConfigurator({
     [],
   );
 
-  const capacidadTeorica = (capacityForm.diasPorMes || 0) * (capacityForm.horasPorDia || 0);
+  const capacidadTeorica =
+    (capacityForm.diasPorMes || 0) * (capacityForm.horasPorDia || 0);
   const capacidadAutoHoraMaquina = resourcesForm
-    .filter((resource) => resource.activo && resource.tipoRecurso === "maquinaria")
+    .filter(
+      (resource) => resource.activo && resource.tipoRecurso === "maquinaria",
+    )
     .reduce((total, resource) => {
       const item =
-        machineCostsForm.find((current) => current.centroCostoRecursoId === resource.id) ??
-        machineCostsForm.find((current) => current.maquinaId === resource.maquinaId);
+        machineCostsForm.find(
+          (current) => current.centroCostoRecursoId === resource.id,
+        ) ??
+        machineCostsForm.find(
+          (current) => current.maquinaId === resource.maquinaId,
+        );
       if (!item) {
         return total;
       }
@@ -617,7 +665,9 @@ export function CentroCostoConfigurator({
       );
     }, 0);
   const capacidadAutoHoraHombre = resourcesForm
-    .filter((resource) => resource.activo && resource.tipoRecurso === "empleado")
+    .filter(
+      (resource) => resource.activo && resource.tipoRecurso === "empleado",
+    )
     .reduce(
       (total, resource) =>
         total + capacidadTeorica * ((resource.porcentajeAsignacion ?? 0) / 100),
@@ -680,8 +730,8 @@ export function CentroCostoConfigurator({
         }
 
         const disponibilidadBase =
-          disponibilidadEmpleadoById.get(resource.empleadoId)?.porcentajeDisponible ??
-          100;
+          disponibilidadEmpleadoById.get(resource.empleadoId)
+            ?.porcentajeDisponible ?? 100;
 
         return (
           Boolean(resource.porcentajeAsignacion) &&
@@ -690,18 +740,23 @@ export function CentroCostoConfigurator({
         );
       });
     const maquinariaLista = resourcesForm
-      .filter((resource) => resource.tipoRecurso === "maquinaria" && resource.activo)
+      .filter(
+        (resource) => resource.tipoRecurso === "maquinaria" && resource.activo,
+      )
       .every(
         (resource) =>
           Boolean(resource.maquinaId) &&
-          machineCostsForm.some((item) => item.centroCostoRecursoId === resource.id),
+          machineCostsForm.some(
+            (item) => item.centroCostoRecursoId === resource.id,
+          ),
       );
 
     return [
       {
         id: "unidad",
         label: "Unidad de costeo definida",
-        description: "El centro ya sabe si se va a medir por hora, unidad, m2 o kg.",
+        description:
+          "El centro ya sabe si se va a medir por hora, unidad, m2 o kg.",
         done: baseForm.unidadBaseFutura !== "ninguna",
       },
       {
@@ -816,8 +871,14 @@ export function CentroCostoConfigurator({
       setDraftTariff(detail.tarifaBorrador?.tarifaCalculada ?? null);
       setPublishedTariff(detail.tarifaPublicada?.tarifaCalculada ?? null);
       const reparto = extractRepartoAbsorbido(
-        (detail.tarifaBorrador?.resumen as Record<string, unknown> | null | undefined) ??
-          (detail.tarifaPublicada?.resumen as Record<string, unknown> | null | undefined),
+        (detail.tarifaBorrador?.resumen as
+          | Record<string, unknown>
+          | null
+          | undefined) ??
+          (detail.tarifaPublicada?.resumen as
+            | Record<string, unknown>
+            | null
+            | undefined),
       );
       setRepartoAbsorbidoTotal(reparto.total);
       setRepartoAbsorbidoDesglose(reparto.desglose);
@@ -928,7 +989,10 @@ export function CentroCostoConfigurator({
                 centroCostoRecursoId: resource.id,
                 maquinaId: resource.maquinaId ?? currentItem.maquinaId,
                 maquinaNombre:
-                  maquina?.nombre ?? currentItem.maquinaNombre ?? resource.nombreRecurso ?? "",
+                  maquina?.nombre ??
+                  currentItem.maquinaNombre ??
+                  resource.nombreRecurso ??
+                  "",
               }
             : createMachineCostDefault(
                 resource,
@@ -965,7 +1029,10 @@ export function CentroCostoConfigurator({
           return;
         }
 
-        const detail = await getCentroCostoConfiguracion(centro.id, referencia.periodo);
+        const detail = await getCentroCostoConfiguracion(
+          centro.id,
+          referencia.periodo,
+        );
         const copiedResources = detail.recursos.map((item) => ({
           id: createLocalId(),
           tipoRecurso: item.tipoRecurso,
@@ -984,7 +1051,10 @@ export function CentroCostoConfigurator({
         setResourcesForm(copiedResources);
         const resourceIdByMaquinaId = new Map(
           copiedResources
-            .filter((resource) => resource.tipoRecurso === "maquinaria" && resource.maquinaId)
+            .filter(
+              (resource) =>
+                resource.tipoRecurso === "maquinaria" && resource.maquinaId,
+            )
             .map((resource) => [resource.maquinaId as string, resource.id]),
         );
         setMachineCostsForm(
@@ -1000,9 +1070,8 @@ export function CentroCostoConfigurator({
                 centroCostoRecursoId: nextResourceId,
               };
             })
-            .filter(
-              (item): item is CentroCostoRecursoMaquinariaPeriodo =>
-                Boolean(item),
+            .filter((item): item is CentroCostoRecursoMaquinariaPeriodo =>
+              Boolean(item),
             ),
         );
         setComponentsForm(
@@ -1024,7 +1093,9 @@ export function CentroCostoConfigurator({
               detail.capacidad.overrideManualCapacidad ?? undefined,
           });
         }
-        toast.success(`Copiamos la configuración de ${formatPeriodo(referencia.periodo)}.`);
+        toast.success(
+          `Copiamos la configuración de ${formatPeriodo(referencia.periodo)}.`,
+        );
       } catch (error) {
         toast.error(
           error instanceof Error
@@ -1040,81 +1111,78 @@ export function CentroCostoConfigurator({
       return;
     }
 
-    await updateCentroCostoConfiguracionBase(centro.id, baseForm);
-    await replaceCentroCostoRecursos(
-      centro.id,
-      periodo,
-      resourcesForm.map((item) => ({
-        tipoRecurso: item.tipoRecurso,
-        empleadoId: item.empleadoId,
-        maquinaId: item.maquinaId,
-        nombreRecurso: item.nombreRecurso,
-        tipoGastoGeneral: item.tipoGastoGeneral,
-        valorMensual: item.valorMensual,
-        vidaUtilRestanteMeses: item.vidaUtilRestanteMeses,
-        valorActual: item.valorActual,
-        valorFinalVida: item.valorFinalVida,
-        descripcion: item.descripcion,
-        porcentajeAsignacion: item.porcentajeAsignacion,
-        activo: item.activo,
-      })),
-    );
-    const recursosActualizados = await getCentroCostoConfiguracion(centro.id, periodo);
-    const maquinariaPayload: CentroCostoRecursoMaquinariaPayload[] = recursosActualizados.recursos
-      .filter(
-        (resource) =>
-          resource.tipoRecurso === "maquinaria" &&
-          resource.activo &&
-          Boolean(resource.maquinaId),
-      )
-      .map((resource) => {
-        const currentItem = machineCostsForm.find(
-          (item) => item.centroCostoRecursoId === resource.id,
-        ) ??
-          machineCostsForm.find(
-            (item) => item.maquinaId === resource.maquinaId,
-          );
-        const maquinaNombre = resource.maquinaNombre || resource.nombreRecurso || "Máquina";
-        const merged = currentItem
-          ? {
-              ...currentItem,
-              centroCostoRecursoId: resource.id,
-              maquinaId: resource.maquinaId,
-              maquinaNombre,
-            }
-          : createMachineCostDefault(
-              {
-                id: resource.id,
-                tipoRecurso: resource.tipoRecurso,
-                maquinaId: resource.maquinaId || undefined,
-                nombreRecurso: maquinaNombre,
-                descripcion: resource.descripcion,
-                activo: resource.activo,
-              },
-              maquinaNombre,
+    const recursosPayload = resourcesForm.map((item) => ({
+      tipoRecurso: item.tipoRecurso,
+      empleadoId: item.empleadoId,
+      maquinaId: item.maquinaId,
+      nombreRecurso: item.nombreRecurso,
+      tipoGastoGeneral: item.tipoGastoGeneral,
+      valorMensual: item.valorMensual,
+      vidaUtilRestanteMeses: item.vidaUtilRestanteMeses,
+      valorActual: item.valorActual,
+      valorFinalVida: item.valorFinalVida,
+      descripcion: item.descripcion,
+      porcentajeAsignacion: item.porcentajeAsignacion,
+      activo: item.activo,
+    }));
+    const maquinariaPayload: CentroCostoRecursoMaquinariaPayload[] =
+      resourcesForm
+        .filter(
+          (resource) =>
+            resource.tipoRecurso === "maquinaria" &&
+            resource.activo &&
+            Boolean(resource.maquinaId),
+        )
+        .map((resource) => {
+          const currentItem =
+            machineCostsForm.find(
+              (item) => item.centroCostoRecursoId === resource.id,
+            ) ??
+            machineCostsForm.find(
+              (item) => item.maquinaId === resource.maquinaId,
             );
-        return {
-          centroCostoRecursoId: merged.centroCostoRecursoId,
-          metodoDepreciacion: merged.metodoDepreciacion,
-          valorCompra: merged.valorCompra,
-          valorResidual: merged.valorResidual,
-          vidaUtilMeses: merged.vidaUtilMeses,
-          potenciaNominalKw: merged.potenciaNominalKw,
-          factorCargaPct: merged.factorCargaPct,
-          tarifaEnergiaKwh: merged.tarifaEnergiaKwh,
-          horasProgramadasMes: merged.horasProgramadasMes,
-          disponibilidadPct: merged.disponibilidadPct,
-          eficienciaPct: merged.eficienciaPct,
-          mantenimientoMensual: merged.mantenimientoMensual,
-          segurosMensual: merged.segurosMensual,
-          otrosFijosMensual: merged.otrosFijosMensual,
-        };
-      });
-    await upsertCentroCostoRecursosMaquinaria(centro.id, periodo, maquinariaPayload);
-    await replaceCentroCostoComponentes(
-      centro.id,
-      periodo,
-      componentsForm.map((item) => ({
+          const maquinaNombre = resource.nombreRecurso || "Máquina";
+          const merged = currentItem
+            ? {
+                ...currentItem,
+                centroCostoRecursoId: resource.id,
+                maquinaId: resource.maquinaId,
+                maquinaNombre,
+              }
+            : createMachineCostDefault(
+                {
+                  id: resource.id,
+                  tipoRecurso: resource.tipoRecurso,
+                  maquinaId: resource.maquinaId || undefined,
+                  nombreRecurso: maquinaNombre,
+                  descripcion: resource.descripcion,
+                  activo: resource.activo,
+                },
+                maquinaNombre,
+              );
+          return {
+            centroCostoRecursoId: merged.centroCostoRecursoId,
+            maquinaId: merged.maquinaId,
+            metodoDepreciacion: merged.metodoDepreciacion,
+            valorCompra: merged.valorCompra,
+            valorResidual: merged.valorResidual,
+            vidaUtilMeses: merged.vidaUtilMeses,
+            potenciaNominalKw: merged.potenciaNominalKw,
+            factorCargaPct: merged.factorCargaPct,
+            tarifaEnergiaKwh: merged.tarifaEnergiaKwh,
+            horasProgramadasMes: merged.horasProgramadasMes,
+            disponibilidadPct: merged.disponibilidadPct,
+            eficienciaPct: merged.eficienciaPct,
+            mantenimientoMensual: merged.mantenimientoMensual,
+            segurosMensual: merged.segurosMensual,
+            otrosFijosMensual: merged.otrosFijosMensual,
+          };
+        });
+    await upsertCentroCostoConfiguracionPeriodo(centro.id, periodo, {
+      centro: baseForm,
+      recursos: recursosPayload,
+      recursosMaquinaria: maquinariaPayload,
+      componentesCosto: componentsForm.map((item) => ({
         categoria: item.categoria,
         nombre: item.nombre,
         origen: item.origen,
@@ -1122,8 +1190,8 @@ export function CentroCostoConfigurator({
         notas: item.notas,
         detalle: item.detalle,
       })),
-    );
-    await upsertCentroCostoCapacidad(centro.id, periodo, capacityForm);
+      capacidad: capacityForm,
+    });
   };
 
   const handleSaveDraft = () => {
@@ -1137,7 +1205,10 @@ export function CentroCostoConfigurator({
         const result = await calcularTarifaCentroCosto(centro.id, periodo);
         setDraftTariff(result.tarifaBorrador.tarifaCalculada);
         const reparto = extractRepartoAbsorbido(
-          result.tarifaBorrador.resumen as Record<string, unknown> | null | undefined,
+          result.tarifaBorrador.resumen as
+            | Record<string, unknown>
+            | null
+            | undefined,
         );
         setRepartoAbsorbidoTotal(reparto.total);
         setRepartoAbsorbidoDesglose(reparto.desglose);
@@ -1147,7 +1218,9 @@ export function CentroCostoConfigurator({
         await loadConfiguracion(centro.id, periodo);
       } catch (error) {
         toast.error(
-          error instanceof Error ? error.message : "No se pudo guardar el borrador.",
+          error instanceof Error
+            ? error.message
+            : "No se pudo guardar el borrador.",
         );
       }
     });
@@ -1173,7 +1246,9 @@ export function CentroCostoConfigurator({
         onOpenChange(false);
       } catch (error) {
         toast.error(
-          error instanceof Error ? error.message : "No se pudo publicar la tarifa.",
+          error instanceof Error
+            ? error.message
+            : "No se pudo publicar la tarifa.",
         );
       }
     });
@@ -1189,7 +1264,10 @@ export function CentroCostoConfigurator({
   );
 
   const updateComponent = React.useCallback(
-    (componentId: string, updater: (current: LocalComponente) => LocalComponente) => {
+    (
+      componentId: string,
+      updater: (current: LocalComponente) => LocalComponente,
+    ) => {
       setComponentsForm((current) =>
         current.map((item) => (item.id === componentId ? updater(item) : item)),
       );
@@ -1202,17 +1280,21 @@ export function CentroCostoConfigurator({
       resourcesForm
         .filter(
           (resource) =>
-            resource.tipoRecurso === "empleado" && resource.empleadoId && resource.activo,
+            resource.tipoRecurso === "empleado" &&
+            resource.empleadoId &&
+            resource.activo,
         )
         .map((resource) => {
           const empleadoId = resource.empleadoId as string;
           const sueldo = componentsForm.find(
             (component) =>
-              getDerivedComponentKey(component) === `empleado:${empleadoId}:sueldos`,
+              getDerivedComponentKey(component) ===
+              `empleado:${empleadoId}:sueldos`,
           );
           const cargas = componentsForm.find(
             (component) =>
-              getDerivedComponentKey(component) === `empleado:${empleadoId}:cargas`,
+              getDerivedComponentKey(component) ===
+              `empleado:${empleadoId}:cargas`,
           );
 
           return {
@@ -1223,7 +1305,12 @@ export function CentroCostoConfigurator({
             cargas,
           };
         }),
-    [componentsForm, disponibilidadEmpleadoById, empleadoLabelById, resourcesForm],
+    [
+      componentsForm,
+      disponibilidadEmpleadoById,
+      empleadoLabelById,
+      resourcesForm,
+    ],
   );
 
   const machineCostGroups = React.useMemo(
@@ -1247,7 +1334,10 @@ export function CentroCostoConfigurator({
                 ...costItem,
                 maquinaId: resource.maquinaId ?? costItem.maquinaId,
                 maquinaNombre:
-                  maquina?.nombre ?? costItem.maquinaNombre ?? resource.nombreRecurso ?? "",
+                  maquina?.nombre ??
+                  costItem.maquinaNombre ??
+                  resource.nombreRecurso ??
+                  "",
               }
             : createMachineCostDefault(
                 resource,
@@ -1287,7 +1377,9 @@ export function CentroCostoConfigurator({
     () =>
       employeeCostGroups.reduce(
         (total, group) =>
-          total + (group.sueldo?.importeMensual ?? 0) + (group.cargas?.importeMensual ?? 0),
+          total +
+          (group.sueldo?.importeMensual ?? 0) +
+          (group.cargas?.importeMensual ?? 0),
         0,
       ),
     [employeeCostGroups],
@@ -1303,14 +1395,20 @@ export function CentroCostoConfigurator({
   const gastosGeneralesTotales = React.useMemo(
     () =>
       resourcesForm
-        .filter((resource) => resource.tipoRecurso === "gasto_general" && resource.activo)
+        .filter(
+          (resource) =>
+            resource.tipoRecurso === "gasto_general" && resource.activo,
+        )
         .reduce((total, resource) => total + (resource.valorMensual ?? 0), 0),
     [resourcesForm],
   );
   const activosFijosTotales = React.useMemo(
     () =>
       resourcesForm
-        .filter((resource) => resource.tipoRecurso === "activo_fijo" && resource.activo)
+        .filter(
+          (resource) =>
+            resource.tipoRecurso === "activo_fijo" && resource.activo,
+        )
         .reduce((total, resource) => {
           const valorActual = resource.valorActual ?? 0;
           const valorFinalVida = resource.valorFinalVida ?? 0;
@@ -1321,7 +1419,10 @@ export function CentroCostoConfigurator({
   );
   const adicionalesCosteadosTotal = React.useMemo(
     () =>
-      manualComponents.reduce((total, component) => total + (component.importeMensual ?? 0), 0),
+      manualComponents.reduce(
+        (total, component) => total + (component.importeMensual ?? 0),
+        0,
+      ),
     [manualComponents],
   );
 
@@ -1350,34 +1451,49 @@ export function CentroCostoConfigurator({
               <CardTitle>Ajustes de costeo</CardTitle>
               <CardDescription>
                 Acá solo ajustás cómo querés usar este centro en el costeo. La
-                identidad del centro ya viene definida desde la pantalla anterior.
+                identidad del centro ya viene definida desde la pantalla
+                anterior.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
               <div className="grid gap-3 rounded-2xl border border-border/70 bg-muted/20 p-4 lg:grid-cols-4">
                 <Field>
-                  <p className="text-xs uppercase text-muted-foreground">Centro</p>
+                  <p className="text-xs uppercase text-muted-foreground">
+                    Centro
+                  </p>
                   <p className="font-medium">{baseForm.codigo}</p>
-                  <p className="text-sm text-muted-foreground">{baseForm.nombre}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {baseForm.nombre}
+                  </p>
                 </Field>
                 <Field>
-                  <p className="text-xs uppercase text-muted-foreground">Ubicación</p>
+                  <p className="text-xs uppercase text-muted-foreground">
+                    Ubicación
+                  </p>
                   <p className="font-medium">
-                    {plantaLabelById.get(baseForm.plantaId) ?? centro.plantaNombre}
+                    {plantaLabelById.get(baseForm.plantaId) ??
+                      centro.plantaNombre}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {areaLabelById.get(baseForm.areaCostoId) ?? centro.areaCostoNombre}
+                    {areaLabelById.get(baseForm.areaCostoId) ??
+                      centro.areaCostoNombre}
                   </p>
                 </Field>
                 <Field>
-                  <p className="text-xs uppercase text-muted-foreground">Clasificación</p>
-                  <p className="font-medium">{getTipoCentroLabel(baseForm.tipoCentro)}</p>
+                  <p className="text-xs uppercase text-muted-foreground">
+                    Clasificación
+                  </p>
+                  <p className="font-medium">
+                    {getTipoCentroLabel(baseForm.tipoCentro)}
+                  </p>
                   <p className="text-sm text-muted-foreground">
                     {getCategoriaGraficaLabel(baseForm.categoriaGrafica)}
                   </p>
                 </Field>
                 <div>
-                  <p className="text-xs uppercase text-muted-foreground">Sugerencia</p>
+                  <p className="text-xs uppercase text-muted-foreground">
+                    Sugerencia
+                  </p>
                   <p className="font-medium">
                     {getUnidadBaseLabel(
                       getSuggestedUnidadBase(
@@ -1395,7 +1511,9 @@ export function CentroCostoConfigurator({
               <FieldGroup className="grid gap-4 lg:grid-cols-2">
                 <div>
                   <Field>
-                    <FieldLabel htmlFor="wizard-unidad">Cómo querés medirlo</FieldLabel>
+                    <FieldLabel htmlFor="wizard-unidad">
+                      Cómo querés medirlo
+                    </FieldLabel>
                     <Select
                       value={baseForm.unidadBaseFutura}
                       onValueChange={(value) => {
@@ -1439,7 +1557,9 @@ export function CentroCostoConfigurator({
                 </div>
                 <div>
                   <Field>
-                    <FieldLabel htmlFor="wizard-imputacion">Tipo de costo</FieldLabel>
+                    <FieldLabel htmlFor="wizard-imputacion">
+                      Tipo de costo
+                    </FieldLabel>
                     <Select
                       value={baseForm.imputacionPreferida}
                       onValueChange={(value) => {
@@ -1481,7 +1601,9 @@ export function CentroCostoConfigurator({
 
               <FieldGroup className="grid gap-4">
                 <Field>
-                  <FieldLabel htmlFor="wizard-descripcion">Descripción útil</FieldLabel>
+                  <FieldLabel htmlFor="wizard-descripcion">
+                    Descripción útil
+                  </FieldLabel>
                   <Textarea
                     id="wizard-descripcion"
                     value={baseForm.descripcion ?? ""}
@@ -1505,28 +1627,36 @@ export function CentroCostoConfigurator({
             <CardHeader>
               <CardTitle>¿Qué usa este sector para trabajar?</CardTitle>
               <CardDescription>
-                Acá definís los recursos del mes. Las personas llevan porcentaje de
-                dedicación y el sistema después toma eso para pedir su costo del
-                centro sin duplicar asignaciones.
+                Acá definís los recursos del mes. Las personas llevan porcentaje
+                de dedicación y el sistema después toma eso para pedir su costo
+                del centro sin duplicar asignaciones.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
               <div className="flex flex-wrap gap-2">
-                {(["empleado", "maquinaria", "gasto_general", "activo_fijo"] as const).map(
-                  (tipo) => (
-                    <Button
-                      key={tipo}
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        setResourcesForm((current) => [...current, createResource(tipo)])
-                      }
-                    >
-                      <PlusIcon />
-                      Agregar {getTipoRecursoLabel(tipo)}
-                    </Button>
-                  ),
-                )}
+                {(
+                  [
+                    "empleado",
+                    "maquinaria",
+                    "gasto_general",
+                    "activo_fijo",
+                  ] as const
+                ).map((tipo) => (
+                  <Button
+                    key={tipo}
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setResourcesForm((current) => [
+                        ...current,
+                        createResource(tipo),
+                      ])
+                    }
+                  >
+                    <PlusIcon />
+                    Agregar {getTipoRecursoLabel(tipo)}
+                  </Button>
+                ))}
               </div>
 
               {resourcesForm.length === 0 ? (
@@ -1534,14 +1664,18 @@ export function CentroCostoConfigurator({
                   <EmptyHeader>
                     <EmptyTitle>Sin recursos cargados</EmptyTitle>
                     <EmptyDescription>
-                      Empezá por las personas, maquinaria, gastos generales o activos fijos.
+                      Empezá por las personas, maquinaria, gastos generales o
+                      activos fijos.
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>
               ) : (
                 <div className="flex flex-col gap-4">
                   {resourcesForm.map((resource) => (
-                    <Card key={resource.id} className="rounded-2xl border-border/70 shadow-none">
+                    <Card
+                      key={resource.id}
+                      className="rounded-2xl border-border/70 shadow-none"
+                    >
                       <CardContent className="flex flex-col gap-4 p-4">
                         <div className="flex items-start justify-between gap-3">
                           <Badge variant="outline">
@@ -1553,7 +1687,9 @@ export function CentroCostoConfigurator({
                             size="sm"
                             onClick={() =>
                               setResourcesForm((current) =>
-                                current.filter((item) => item.id !== resource.id),
+                                current.filter(
+                                  (item) => item.id !== resource.id,
+                                ),
                               )
                             }
                           >
@@ -1608,7 +1744,10 @@ export function CentroCostoConfigurator({
                               <SelectContent>
                                 <SelectGroup>
                                   {tipoRecursoItems.map((item) => (
-                                    <SelectItem key={item.value} value={item.value}>
+                                    <SelectItem
+                                      key={item.value}
+                                      value={item.value}
+                                    >
                                       {item.label}
                                     </SelectItem>
                                   ))}
@@ -1634,8 +1773,9 @@ export function CentroCostoConfigurator({
                                       current.porcentajeAsignacion !== undefined
                                         ? Math.min(
                                             current.porcentajeAsignacion,
-                                            disponibilidadEmpleadoById.get(value)
-                                              ?.porcentajeDisponible ?? 100,
+                                            disponibilidadEmpleadoById.get(
+                                              value,
+                                            )?.porcentajeDisponible ?? 100,
                                           )
                                         : undefined,
                                   }));
@@ -1645,7 +1785,8 @@ export function CentroCostoConfigurator({
                                   <SelectValue placeholder="Selecciona una persona">
                                     {(value) =>
                                       typeof value === "string"
-                                        ? empleadoLabelById.get(value) ?? value
+                                        ? (empleadoLabelById.get(value) ??
+                                          value)
                                         : "Selecciona una persona"
                                     }
                                   </SelectValue>
@@ -1656,18 +1797,20 @@ export function CentroCostoConfigurator({
                                       <SelectItem
                                         key={empleado.id}
                                         value={empleado.id}
-                                        disabled={
-                                          Boolean(
-                                            (disponibilidadEmpleadoById.get(empleado.id) &&
-                                              disponibilidadEmpleadoById.get(empleado.id)!
-                                                .porcentajeDisponible <= 0 &&
-                                              resource.empleadoId !== empleado.id) ||
-                                              empleadoSeleccionadoEnOtraFila(
-                                                empleado.id,
-                                                resource.id,
-                                              ),
-                                          )
-                                        }
+                                        disabled={Boolean(
+                                          (disponibilidadEmpleadoById.get(
+                                            empleado.id,
+                                          ) &&
+                                            disponibilidadEmpleadoById.get(
+                                              empleado.id,
+                                            )!.porcentajeDisponible <= 0 &&
+                                            resource.empleadoId !==
+                                              empleado.id) ||
+                                          empleadoSeleccionadoEnOtraFila(
+                                            empleado.id,
+                                            resource.id,
+                                          ),
+                                        )}
                                       >
                                         {empleado.nombreCompleto}
                                       </SelectItem>
@@ -1677,8 +1820,9 @@ export function CentroCostoConfigurator({
                               </Select>
                               {resource.empleadoId ? (
                                 <FieldDescription>
-                                  Elegí la persona y después definí qué parte de su
-                                  tiempo real se dedica a este centro durante el mes.
+                                  Elegí la persona y después definí qué parte de
+                                  su tiempo real se dedica a este centro durante
+                                  el mes.
                                 </FieldDescription>
                               ) : null}
                             </Field>
@@ -1702,7 +1846,8 @@ export function CentroCostoConfigurator({
                                         ? {
                                             ...item,
                                             maquinaId: value,
-                                            nombreRecurso: maquina?.nombre ?? "",
+                                            nombreRecurso:
+                                              maquina?.nombre ?? "",
                                           }
                                         : item,
                                     ),
@@ -1713,9 +1858,9 @@ export function CentroCostoConfigurator({
                                   <SelectValue placeholder="Selecciona una máquina">
                                     {(value) =>
                                       typeof value === "string"
-                                        ? maquinariaDisponibles.find(
+                                        ? (maquinariaDisponibles.find(
                                             (item) => item.id === value,
-                                          )?.nombre ?? "Selecciona una máquina"
+                                          )?.nombre ?? "Selecciona una máquina")
                                         : "Selecciona una máquina"
                                     }
                                   </SelectValue>
@@ -1723,7 +1868,10 @@ export function CentroCostoConfigurator({
                                 <SelectContent>
                                   <SelectGroup>
                                     {maquinariaDisponibles.map((maquina) => (
-                                      <SelectItem key={maquina.id} value={maquina.id}>
+                                      <SelectItem
+                                        key={maquina.id}
+                                        value={maquina.id}
+                                      >
                                         {maquina.nombre} ({maquina.codigo})
                                       </SelectItem>
                                     ))}
@@ -1731,7 +1879,8 @@ export function CentroCostoConfigurator({
                                 </SelectContent>
                               </Select>
                               <FieldDescription>
-                                Solo se listan máquinas activas de la planta del centro.
+                                Solo se listan máquinas activas de la planta del
+                                centro.
                               </FieldDescription>
                             </Field>
                           ) : null}
@@ -1781,7 +1930,10 @@ export function CentroCostoConfigurator({
                                   <SelectContent>
                                     <SelectGroup>
                                       {tipoGastoGeneralItems.map((item) => (
-                                        <SelectItem key={item.value} value={item.value}>
+                                        <SelectItem
+                                          key={item.value}
+                                          value={item.value}
+                                        >
                                           {item.label}
                                         </SelectItem>
                                       ))}
@@ -1790,7 +1942,9 @@ export function CentroCostoConfigurator({
                                 </Select>
                               </Field>
                               <Field>
-                                <FieldLabel>Valor mensual ({systemCurrencyCode})</FieldLabel>
+                                <FieldLabel>
+                                  Valor mensual ({systemCurrencyCode})
+                                </FieldLabel>
                                 <Input
                                   inputMode="decimal"
                                   value={
@@ -1828,27 +1982,39 @@ export function CentroCostoConfigurator({
                                 />
                               </Field>
                               <Field className="lg:col-span-2">
-                                <FieldLabel>Detalle de depreciación mensual</FieldLabel>
+                                <FieldLabel>
+                                  Detalle de depreciación mensual
+                                </FieldLabel>
                                 <div className="grid gap-3 rounded-xl border border-border/70 bg-muted/10 p-3 lg:grid-cols-4">
                                   <div className="flex flex-col gap-1.5">
-                                    <span className="text-xs text-muted-foreground">Vida útil restante</span>
+                                    <span className="text-xs text-muted-foreground">
+                                      Vida útil restante
+                                    </span>
                                     <div className="relative">
                                       <Input
                                         className="pr-16"
                                         inputMode="numeric"
                                         value={
-                                          resource.vidaUtilRestanteMeses === undefined
+                                          resource.vidaUtilRestanteMeses ===
+                                          undefined
                                             ? ""
-                                            : String(resource.vidaUtilRestanteMeses)
+                                            : String(
+                                                resource.vidaUtilRestanteMeses,
+                                              )
                                         }
                                         onChange={(event) =>
-                                          updateResource(resource.id, (current) => ({
-                                            ...current,
-                                            vidaUtilRestanteMeses:
-                                              event.target.value === ""
-                                                ? undefined
-                                                : Number(event.target.value) || 1,
-                                          }))
+                                          updateResource(
+                                            resource.id,
+                                            (current) => ({
+                                              ...current,
+                                              vidaUtilRestanteMeses:
+                                                event.target.value === ""
+                                                  ? undefined
+                                                  : Number(
+                                                      event.target.value,
+                                                    ) || 1,
+                                            }),
+                                          )
                                         }
                                       />
                                       <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
@@ -1863,18 +2029,23 @@ export function CentroCostoConfigurator({
                                     <Input
                                       inputMode="decimal"
                                       value={
-                                        resource.valorActual === undefined || resource.valorActual === 0
+                                        resource.valorActual === undefined ||
+                                        resource.valorActual === 0
                                           ? ""
                                           : String(resource.valorActual)
                                       }
                                       onChange={(event) =>
-                                        updateResource(resource.id, (current) => ({
-                                          ...current,
-                                          valorActual:
-                                            event.target.value === ""
-                                              ? undefined
-                                              : Number(event.target.value) || 0,
-                                        }))
+                                        updateResource(
+                                          resource.id,
+                                          (current) => ({
+                                            ...current,
+                                            valorActual:
+                                              event.target.value === ""
+                                                ? undefined
+                                                : Number(event.target.value) ||
+                                                  0,
+                                          }),
+                                        )
                                       }
                                     />
                                   </div>
@@ -1891,19 +2062,24 @@ export function CentroCostoConfigurator({
                                           : String(resource.valorFinalVida)
                                       }
                                       onChange={(event) =>
-                                        updateResource(resource.id, (current) => ({
-                                          ...current,
-                                          valorFinalVida:
-                                            event.target.value === ""
-                                              ? undefined
-                                              : Number(event.target.value) || 0,
-                                        }))
+                                        updateResource(
+                                          resource.id,
+                                          (current) => ({
+                                            ...current,
+                                            valorFinalVida:
+                                              event.target.value === ""
+                                                ? undefined
+                                                : Number(event.target.value) ||
+                                                  0,
+                                          }),
+                                        )
                                       }
                                     />
                                   </div>
                                   <div className="flex flex-col gap-1.5">
                                     <span className="text-xs text-muted-foreground">
-                                      Depreciación mensual ({systemCurrencyCode})
+                                      Depreciación mensual ({systemCurrencyCode}
+                                      )
                                     </span>
                                     <div className="flex h-10 items-center rounded-md border border-border bg-background px-3 text-sm font-medium">
                                       {formatMoney(
@@ -1911,7 +2087,11 @@ export function CentroCostoConfigurator({
                                           0,
                                           (resource.valorActual ?? 0) -
                                             (resource.valorFinalVida ?? 0),
-                                        ) / Math.max(1, resource.vidaUtilRestanteMeses ?? 1),
+                                        ) /
+                                          Math.max(
+                                            1,
+                                            resource.vidaUtilRestanteMeses ?? 1,
+                                          ),
                                       )}
                                     </div>
                                   </div>
@@ -1929,15 +2109,17 @@ export function CentroCostoConfigurator({
                                 inputMode="decimal"
                                 max={
                                   resource.empleadoId
-                                    ? (disponibilidadEmpleadoById.get(resource.empleadoId)
-                                        ?.porcentajeDisponible ?? 100)
+                                    ? (disponibilidadEmpleadoById.get(
+                                        resource.empleadoId,
+                                      )?.porcentajeDisponible ?? 100)
                                     : 100
                                 }
                                 placeholder={
                                   resource.empleadoId
                                     ? String(
-                                        disponibilidadEmpleadoById.get(resource.empleadoId)
-                                          ?.porcentajeDisponible ?? 100,
+                                        disponibilidadEmpleadoById.get(
+                                          resource.empleadoId,
+                                        )?.porcentajeDisponible ?? 100,
                                       )
                                     : "100"
                                 }
@@ -1956,16 +2138,24 @@ export function CentroCostoConfigurator({
                                       };
                                     }
 
-                                    const parsedValue = Number(event.target.value);
+                                    const parsedValue = Number(
+                                      event.target.value,
+                                    );
                                     const maxAllowed = current.empleadoId
-                                      ? (disponibilidadEmpleadoById.get(current.empleadoId)
-                                          ?.porcentajeDisponible ?? 100)
+                                      ? (disponibilidadEmpleadoById.get(
+                                          current.empleadoId,
+                                        )?.porcentajeDisponible ?? 100)
                                       : 100;
 
                                     return {
                                       ...current,
-                                      porcentajeAsignacion: Number.isFinite(parsedValue)
-                                        ? Math.min(Math.max(parsedValue, 0), maxAllowed)
+                                      porcentajeAsignacion: Number.isFinite(
+                                        parsedValue,
+                                      )
+                                        ? Math.min(
+                                            Math.max(parsedValue, 0),
+                                            maxAllowed,
+                                          )
                                         : undefined,
                                     };
                                   })
@@ -1982,19 +2172,23 @@ export function CentroCostoConfigurator({
                               <div className="flex min-h-10 items-center gap-2 rounded-xl border border-border/70 px-3 py-2">
                                 {resource.empleadoId ? (
                                   (() => {
-                                    const disponibilidad = disponibilidadEmpleadoById.get(
-                                      resource.empleadoId,
-                                    );
+                                    const disponibilidad =
+                                      disponibilidadEmpleadoById.get(
+                                        resource.empleadoId,
+                                      );
                                     const disponibilidadRestante =
                                       disponibilidadRestanteEmpleadoById.get(
                                         resource.empleadoId,
                                       ) ??
-                                      (disponibilidad?.porcentajeDisponible ?? 100);
+                                      disponibilidad?.porcentajeDisponible ??
+                                      100;
 
                                     if (!disponibilidad) {
                                       return (
                                         <Badge variant="outline">
-                                          Disponible {formatNumber(disponibilidadRestante)}%
+                                          Disponible{" "}
+                                          {formatNumber(disponibilidadRestante)}
+                                          %
                                         </Badge>
                                       );
                                     }
@@ -2017,7 +2211,9 @@ export function CentroCostoConfigurator({
                                             >
                                               <Badge variant={colorVariant}>
                                                 Disponible{" "}
-                                                {formatNumber(disponibilidadRestante)}
+                                                {formatNumber(
+                                                  disponibilidadRestante,
+                                                )}
                                                 %
                                               </Badge>
                                             </button>
@@ -2027,7 +2223,8 @@ export function CentroCostoConfigurator({
                                           className="max-w-sm text-pretty"
                                           side="left"
                                         >
-                                          {disponibilidad.asignacionesOtrosCentros.length ===
+                                          {disponibilidad
+                                            .asignacionesOtrosCentros.length ===
                                           0 ? (
                                             <p>
                                               Esta persona no tiene otras
@@ -2041,7 +2238,11 @@ export function CentroCostoConfigurator({
                                               </p>
                                               {disponibilidad.asignacionesOtrosCentros.map(
                                                 (asignacion) => (
-                                                  <p key={asignacion.centroCostoId}>
+                                                  <p
+                                                    key={
+                                                      asignacion.centroCostoId
+                                                    }
+                                                  >
                                                     {asignacion.centroCodigo} ·{" "}
                                                     {asignacion.centroNombre}:{" "}
                                                     {formatNumber(
@@ -2054,7 +2255,10 @@ export function CentroCostoConfigurator({
                                               <p className="pt-1 text-xs">
                                                 Restante para este centro en{" "}
                                                 {formatPeriodo(periodo)}:{" "}
-                                                {formatNumber(disponibilidadRestante)}%
+                                                {formatNumber(
+                                                  disponibilidadRestante,
+                                                )}
+                                                %
                                               </p>
                                             </div>
                                           )}
@@ -2074,9 +2278,12 @@ export function CentroCostoConfigurator({
 
                         <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-muted/20 px-4 py-3">
                           <div>
-                            <p className="text-sm font-medium">Recurso activo</p>
+                            <p className="text-sm font-medium">
+                              Recurso activo
+                            </p>
                             <p className="text-xs text-muted-foreground">
-                              Se tendrá en cuenta al calcular y explicar el centro.
+                              Se tendrá en cuenta al calcular y explicar el
+                              centro.
                             </p>
                           </div>
                           <Switch
@@ -2104,7 +2311,9 @@ export function CentroCostoConfigurator({
         return (
           <Card className="rounded-2xl border-border/70 shadow-none">
             <CardHeader>
-              <CardTitle>¿Cuánto te cuesta por mes mantenerlo funcionando?</CardTitle>
+              <CardTitle>
+                ¿Cuánto te cuesta por mes mantenerlo funcionando?
+              </CardTitle>
               <CardDescription>
                 El sistema armó esta pantalla según los recursos del paso 2. Los
                 importes se cargan en {systemCurrencyCode} y se recalculan solos
@@ -2133,175 +2342,204 @@ export function CentroCostoConfigurator({
                   {employeeCostGroups.length > 0 ? (
                     <Card className="rounded-2xl border-border/70 shadow-none">
                       <CardHeader>
-                        <CardTitle className="text-base">Personas asignadas</CardTitle>
+                        <CardTitle className="text-base">
+                          Personas asignadas
+                        </CardTitle>
                         <CardDescription>
                           Pedimos sueldo neto y cargas sociales por persona. El
-                          sistema prorratea cada monto según el porcentaje del paso
-                          2.
+                          sistema prorratea cada monto según el porcentaje del
+                          paso 2.
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="flex flex-col gap-3">
-                        {employeeCostGroups.map(({ resource, empleadoNombre, sueldo, cargas }) => (
-                          <div
-                            key={resource.id}
-                            className="flex flex-col gap-4 rounded-2xl border border-border/70 p-4"
-                          >
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="font-medium">{empleadoNombre}</p>
-                                <Badge variant="outline">
-                                  {formatNumber(resource.porcentajeAsignacion ?? 0)}%
-                                  imputado al centro
-                                </Badge>
+                        {employeeCostGroups.map(
+                          ({ resource, empleadoNombre, sueldo, cargas }) => (
+                            <div
+                              key={resource.id}
+                              className="flex flex-col gap-4 rounded-2xl border border-border/70 p-4"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="font-medium">
+                                    {empleadoNombre}
+                                  </p>
+                                  <Badge variant="outline">
+                                    {formatNumber(
+                                      resource.porcentajeAsignacion ?? 0,
+                                    )}
+                                    % imputado al centro
+                                  </Badge>
+                                </div>
+                                <Tooltip>
+                                  <TooltipTrigger
+                                    render={
+                                      <button
+                                        type="button"
+                                        className="inline-flex items-center text-muted-foreground transition-colors hover:text-foreground"
+                                        aria-label="Ver explicación sobre costo laboral"
+                                      >
+                                        <InfoIcon className="size-4" />
+                                      </button>
+                                    }
+                                  />
+                                  <TooltipContent
+                                    className="max-w-sm text-pretty"
+                                    side="left"
+                                  >
+                                    Cargá el sueldo neto y las cargas sociales
+                                    del mes. El sistema toma solo la parte
+                                    proporcional a este centro según la
+                                    dedicación configurada.
+                                  </TooltipContent>
+                                </Tooltip>
                               </div>
-                              <Tooltip>
-                                <TooltipTrigger
-                                  render={
-                                    <button
-                                      type="button"
-                                      className="inline-flex items-center text-muted-foreground transition-colors hover:text-foreground"
-                                      aria-label="Ver explicación sobre costo laboral"
-                                    >
-                                      <InfoIcon className="size-4" />
-                                    </button>
-                                  }
-                                />
-                                <TooltipContent className="max-w-sm text-pretty" side="left">
-                                  Cargá el sueldo neto y las cargas sociales del
-                                  mes. El sistema toma solo la parte proporcional
-                                  a este centro según la dedicación configurada.
-                                </TooltipContent>
-                              </Tooltip>
-                            </div>
 
-                            <FieldGroup className="grid gap-4 lg:grid-cols-2">
-                              <Field>
-                                <FieldLabel>Sueldo neto ({systemCurrencyCode})</FieldLabel>
-                                <Input
-                                  inputMode="decimal"
-                                  placeholder="0"
-                                  value={
-                                    normalizeNumber(
-                                      getDetailValue(sueldo ?? createComponent(), "sueldoNeto"),
-                                    ) === 0
-                                      ? ""
-                                      : String(
-                                          normalizeNumber(
-                                            getDetailValue(
-                                              sueldo ?? createComponent(),
-                                              "sueldoNeto",
+                              <FieldGroup className="grid gap-4 lg:grid-cols-2">
+                                <Field>
+                                  <FieldLabel>
+                                    Sueldo neto ({systemCurrencyCode})
+                                  </FieldLabel>
+                                  <Input
+                                    inputMode="decimal"
+                                    placeholder="0"
+                                    value={
+                                      normalizeNumber(
+                                        getDetailValue(
+                                          sueldo ?? createComponent(),
+                                          "sueldoNeto",
+                                        ),
+                                      ) === 0
+                                        ? ""
+                                        : String(
+                                            normalizeNumber(
+                                              getDetailValue(
+                                                sueldo ?? createComponent(),
+                                                "sueldoNeto",
+                                              ),
                                             ),
-                                          ),
-                                        )
-                                  }
-                                  onChange={(event) =>
-                                    sueldo
-                                      ? updateComponent(sueldo.id, (current) =>
-                                          createEmployeeDerivedComponent({
-                                            part: "sueldos",
-                                            empleadoId: resource.empleadoId ?? "",
-                                            empleadoNombre,
-                                            porcentajeAsignacion:
-                                              resource.porcentajeAsignacion ?? 0,
-                                            current: {
-                                              ...current,
-                                              detalle: {
-                                                ...(current.detalle ?? {}),
-                                                sueldoNeto:
-                                                  event.target.value === ""
-                                                    ? undefined
-                                                    : Number(event.target.value) || 0,
-                                              },
-                                            },
-                                          }),
-                                        )
-                                      : undefined
-                                  }
-                                />
-                              </Field>
-                              <Field>
-                                <FieldLabel>
-                                  Cargas sociales ({systemCurrencyCode})
-                                </FieldLabel>
-                                <Input
-                                  inputMode="decimal"
-                                  placeholder="0"
-                                  value={
-                                    normalizeNumber(
-                                      getDetailValue(
-                                        cargas ?? createComponent(),
-                                        "cargasSociales",
-                                      ),
-                                    ) === 0
-                                      ? ""
-                                      : String(
-                                          normalizeNumber(
-                                            getDetailValue(
-                                              cargas ?? createComponent(),
-                                              "cargasSociales",
-                                            ),
-                                          ),
-                                        )
-                                  }
-                                  onChange={(event) =>
-                                    cargas
-                                      ? updateComponent(cargas.id, (current) =>
-                                          createEmployeeDerivedComponent({
-                                            part: "cargas",
-                                            empleadoId: resource.empleadoId ?? "",
-                                            empleadoNombre,
-                                            porcentajeAsignacion:
-                                              resource.porcentajeAsignacion ?? 0,
-                                            current: {
-                                              ...current,
-                                              detalle: {
-                                                ...(current.detalle ?? {}),
-                                                cargasSociales:
-                                                  event.target.value === ""
-                                                    ? undefined
-                                                    : Number(event.target.value) || 0,
-                                              },
-                                            },
-                                          }),
-                                        )
-                                      : undefined
-                                  }
-                                />
-                              </Field>
-                            </FieldGroup>
-
-                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted/10 px-4 py-3 text-sm">
-                              <span className="text-muted-foreground">
-                                Base mensual:{" "}
-                                <span className="font-medium text-foreground">
-                                  {formatMoney(
-                                    normalizeNumber(
-                                      getDetailValue(
-                                        sueldo ?? createComponent(),
-                                        "sueldoNeto",
-                                      ),
-                                    ) +
+                                          )
+                                    }
+                                    onChange={(event) =>
+                                      sueldo
+                                        ? updateComponent(
+                                            sueldo.id,
+                                            (current) =>
+                                              createEmployeeDerivedComponent({
+                                                part: "sueldos",
+                                                empleadoId:
+                                                  resource.empleadoId ?? "",
+                                                empleadoNombre,
+                                                porcentajeAsignacion:
+                                                  resource.porcentajeAsignacion ??
+                                                  0,
+                                                current: {
+                                                  ...current,
+                                                  detalle: {
+                                                    ...(current.detalle ?? {}),
+                                                    sueldoNeto:
+                                                      event.target.value === ""
+                                                        ? undefined
+                                                        : Number(
+                                                            event.target.value,
+                                                          ) || 0,
+                                                  },
+                                                },
+                                              }),
+                                          )
+                                        : undefined
+                                    }
+                                  />
+                                </Field>
+                                <Field>
+                                  <FieldLabel>
+                                    Cargas sociales ({systemCurrencyCode})
+                                  </FieldLabel>
+                                  <Input
+                                    inputMode="decimal"
+                                    placeholder="0"
+                                    value={
                                       normalizeNumber(
                                         getDetailValue(
                                           cargas ?? createComponent(),
                                           "cargasSociales",
                                         ),
-                                      ),
-                                  )}
+                                      ) === 0
+                                        ? ""
+                                        : String(
+                                            normalizeNumber(
+                                              getDetailValue(
+                                                cargas ?? createComponent(),
+                                                "cargasSociales",
+                                              ),
+                                            ),
+                                          )
+                                    }
+                                    onChange={(event) =>
+                                      cargas
+                                        ? updateComponent(
+                                            cargas.id,
+                                            (current) =>
+                                              createEmployeeDerivedComponent({
+                                                part: "cargas",
+                                                empleadoId:
+                                                  resource.empleadoId ?? "",
+                                                empleadoNombre,
+                                                porcentajeAsignacion:
+                                                  resource.porcentajeAsignacion ??
+                                                  0,
+                                                current: {
+                                                  ...current,
+                                                  detalle: {
+                                                    ...(current.detalle ?? {}),
+                                                    cargasSociales:
+                                                      event.target.value === ""
+                                                        ? undefined
+                                                        : Number(
+                                                            event.target.value,
+                                                          ) || 0,
+                                                  },
+                                                },
+                                              }),
+                                          )
+                                        : undefined
+                                    }
+                                  />
+                                </Field>
+                              </FieldGroup>
+
+                              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted/10 px-4 py-3 text-sm">
+                                <span className="text-muted-foreground">
+                                  Base mensual:{" "}
+                                  <span className="font-medium text-foreground">
+                                    {formatMoney(
+                                      normalizeNumber(
+                                        getDetailValue(
+                                          sueldo ?? createComponent(),
+                                          "sueldoNeto",
+                                        ),
+                                      ) +
+                                        normalizeNumber(
+                                          getDetailValue(
+                                            cargas ?? createComponent(),
+                                            "cargasSociales",
+                                          ),
+                                        ),
+                                    )}
+                                  </span>
                                 </span>
-                              </span>
-                              <span className="text-muted-foreground">
-                                Costo imputado:{" "}
-                                <span className="font-medium text-foreground">
-                                  {formatMoney(
-                                    (sueldo?.importeMensual ?? 0) +
-                                      (cargas?.importeMensual ?? 0),
-                                  )}
+                                <span className="text-muted-foreground">
+                                  Costo imputado:{" "}
+                                  <span className="font-medium text-foreground">
+                                    {formatMoney(
+                                      (sueldo?.importeMensual ?? 0) +
+                                        (cargas?.importeMensual ?? 0),
+                                    )}
+                                  </span>
                                 </span>
-                              </span>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          ),
+                        )}
                       </CardContent>
                     </Card>
                   ) : null}
@@ -2309,10 +2547,13 @@ export function CentroCostoConfigurator({
                   {machineCostGroups.length > 0 ? (
                     <Card className="rounded-2xl border-border/70 shadow-none">
                       <CardHeader>
-                        <CardTitle className="text-base">Maquinaria del centro</CardTitle>
+                        <CardTitle className="text-base">
+                          Maquinaria del centro
+                        </CardTitle>
                         <CardDescription>
-                          Definí amortización y costo operativo para cada máquina.
-                          El sistema calcula costo mensual y tarifa por hora.
+                          Definí amortización y costo operativo para cada
+                          máquina. El sistema calcula costo mensual y tarifa por
+                          hora.
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="flex flex-col gap-4">
@@ -2324,7 +2565,9 @@ export function CentroCostoConfigurator({
                             >
                               <div className="flex items-center justify-between gap-2">
                                 <p className="text-sm font-semibold">
-                                  {item.maquinaNombre || resource.nombreRecurso || "Máquina"}
+                                  {item.maquinaNombre ||
+                                    resource.nombreRecurso ||
+                                    "Máquina"}
                                 </p>
                                 <span className="rounded-md border border-border/70 bg-muted/20 px-2 py-1 text-[11px] text-muted-foreground">
                                   Carga guiada por secciones
@@ -2346,17 +2589,26 @@ export function CentroCostoConfigurator({
                                         <Input
                                           inputMode="decimal"
                                           placeholder="0"
-                                          value={item.valorCompra === 0 ? "" : String(item.valorCompra)}
+                                          value={
+                                            item.valorCompra === 0
+                                              ? ""
+                                              : String(item.valorCompra)
+                                          }
                                           onChange={(event) =>
                                             setMachineCostsForm((current) =>
                                               current.map((cost) =>
-                                                cost.centroCostoRecursoId === resource.id
+                                                cost.centroCostoRecursoId ===
+                                                resource.id
                                                   ? {
                                                       ...cost,
                                                       valorCompra:
-                                                        event.target.value === ""
+                                                        event.target.value ===
+                                                        ""
                                                           ? 0
-                                                          : Number(event.target.value) || 0,
+                                                          : Number(
+                                                              event.target
+                                                                .value,
+                                                            ) || 0,
                                                     }
                                                   : cost,
                                               ),
@@ -2372,17 +2624,26 @@ export function CentroCostoConfigurator({
                                         <Input
                                           inputMode="decimal"
                                           placeholder="0"
-                                          value={item.valorResidual === 0 ? "" : String(item.valorResidual)}
+                                          value={
+                                            item.valorResidual === 0
+                                              ? ""
+                                              : String(item.valorResidual)
+                                          }
                                           onChange={(event) =>
                                             setMachineCostsForm((current) =>
                                               current.map((cost) =>
-                                                cost.centroCostoRecursoId === resource.id
+                                                cost.centroCostoRecursoId ===
+                                                resource.id
                                                   ? {
                                                       ...cost,
                                                       valorResidual:
-                                                        event.target.value === ""
+                                                        event.target.value ===
+                                                        ""
                                                           ? 0
-                                                          : Number(event.target.value) || 0,
+                                                          : Number(
+                                                              event.target
+                                                                .value,
+                                                            ) || 0,
                                                     }
                                                   : cost,
                                               ),
@@ -2398,17 +2659,29 @@ export function CentroCostoConfigurator({
                                         <Input
                                           inputMode="numeric"
                                           placeholder="60"
-                                          value={item.vidaUtilMeses === 0 ? "" : String(item.vidaUtilMeses)}
+                                          value={
+                                            item.vidaUtilMeses === 0
+                                              ? ""
+                                              : String(item.vidaUtilMeses)
+                                          }
                                           onChange={(event) =>
                                             setMachineCostsForm((current) =>
                                               current.map((cost) =>
-                                                cost.centroCostoRecursoId === resource.id
+                                                cost.centroCostoRecursoId ===
+                                                resource.id
                                                   ? {
                                                       ...cost,
                                                       vidaUtilMeses:
-                                                        event.target.value === ""
+                                                        event.target.value ===
+                                                        ""
                                                           ? 1
-                                                          : Math.max(1, Number(event.target.value) || 1),
+                                                          : Math.max(
+                                                              1,
+                                                              Number(
+                                                                event.target
+                                                                  .value,
+                                                              ) || 1,
+                                                            ),
                                                     }
                                                   : cost,
                                               ),
@@ -2431,17 +2704,26 @@ export function CentroCostoConfigurator({
                                         />
                                         <Input
                                           inputMode="decimal"
-                                          value={item.potenciaNominalKw === 0 ? "" : String(item.potenciaNominalKw)}
+                                          value={
+                                            item.potenciaNominalKw === 0
+                                              ? ""
+                                              : String(item.potenciaNominalKw)
+                                          }
                                           onChange={(event) =>
                                             setMachineCostsForm((current) =>
                                               current.map((cost) =>
-                                                cost.centroCostoRecursoId === resource.id
+                                                cost.centroCostoRecursoId ===
+                                                resource.id
                                                   ? {
                                                       ...cost,
                                                       potenciaNominalKw:
-                                                        event.target.value === ""
+                                                        event.target.value ===
+                                                        ""
                                                           ? 0
-                                                          : Number(event.target.value) || 0,
+                                                          : Number(
+                                                              event.target
+                                                                .value,
+                                                            ) || 0,
                                                     }
                                                   : cost,
                                               ),
@@ -2456,17 +2738,26 @@ export function CentroCostoConfigurator({
                                         />
                                         <Input
                                           inputMode="decimal"
-                                          value={item.factorCargaPct === 0 ? "" : String(item.factorCargaPct)}
+                                          value={
+                                            item.factorCargaPct === 0
+                                              ? ""
+                                              : String(item.factorCargaPct)
+                                          }
                                           onChange={(event) =>
                                             setMachineCostsForm((current) =>
                                               current.map((cost) =>
-                                                cost.centroCostoRecursoId === resource.id
+                                                cost.centroCostoRecursoId ===
+                                                resource.id
                                                   ? {
                                                       ...cost,
                                                       factorCargaPct:
-                                                        event.target.value === ""
+                                                        event.target.value ===
+                                                        ""
                                                           ? 0
-                                                          : Number(event.target.value) || 0,
+                                                          : Number(
+                                                              event.target
+                                                                .value,
+                                                            ) || 0,
                                                     }
                                                   : cost,
                                               ),
@@ -2481,17 +2772,26 @@ export function CentroCostoConfigurator({
                                         />
                                         <Input
                                           inputMode="decimal"
-                                          value={item.tarifaEnergiaKwh === 0 ? "" : String(item.tarifaEnergiaKwh)}
+                                          value={
+                                            item.tarifaEnergiaKwh === 0
+                                              ? ""
+                                              : String(item.tarifaEnergiaKwh)
+                                          }
                                           onChange={(event) =>
                                             setMachineCostsForm((current) =>
                                               current.map((cost) =>
-                                                cost.centroCostoRecursoId === resource.id
+                                                cost.centroCostoRecursoId ===
+                                                resource.id
                                                   ? {
                                                       ...cost,
                                                       tarifaEnergiaKwh:
-                                                        event.target.value === ""
+                                                        event.target.value ===
+                                                        ""
                                                           ? 0
-                                                          : Number(event.target.value) || 0,
+                                                          : Number(
+                                                              event.target
+                                                                .value,
+                                                            ) || 0,
                                                     }
                                                   : cost,
                                               ),
@@ -2506,17 +2806,26 @@ export function CentroCostoConfigurator({
                                         />
                                         <Input
                                           inputMode="decimal"
-                                          value={item.horasProgramadasMes === 0 ? "" : String(item.horasProgramadasMes)}
+                                          value={
+                                            item.horasProgramadasMes === 0
+                                              ? ""
+                                              : String(item.horasProgramadasMes)
+                                          }
                                           onChange={(event) =>
                                             setMachineCostsForm((current) =>
                                               current.map((cost) =>
-                                                cost.centroCostoRecursoId === resource.id
+                                                cost.centroCostoRecursoId ===
+                                                resource.id
                                                   ? {
                                                       ...cost,
                                                       horasProgramadasMes:
-                                                        event.target.value === ""
+                                                        event.target.value ===
+                                                        ""
                                                           ? 0
-                                                          : Number(event.target.value) || 0,
+                                                          : Number(
+                                                              event.target
+                                                                .value,
+                                                            ) || 0,
                                                     }
                                                   : cost,
                                               ),
@@ -2541,17 +2850,26 @@ export function CentroCostoConfigurator({
                                         />
                                         <Input
                                           inputMode="decimal"
-                                          value={item.disponibilidadPct === 0 ? "" : String(item.disponibilidadPct)}
+                                          value={
+                                            item.disponibilidadPct === 0
+                                              ? ""
+                                              : String(item.disponibilidadPct)
+                                          }
                                           onChange={(event) =>
                                             setMachineCostsForm((current) =>
                                               current.map((cost) =>
-                                                cost.centroCostoRecursoId === resource.id
+                                                cost.centroCostoRecursoId ===
+                                                resource.id
                                                   ? {
                                                       ...cost,
                                                       disponibilidadPct:
-                                                        event.target.value === ""
+                                                        event.target.value ===
+                                                        ""
                                                           ? 0
-                                                          : Number(event.target.value) || 0,
+                                                          : Number(
+                                                              event.target
+                                                                .value,
+                                                            ) || 0,
                                                     }
                                                   : cost,
                                               ),
@@ -2566,17 +2884,26 @@ export function CentroCostoConfigurator({
                                         />
                                         <Input
                                           inputMode="decimal"
-                                          value={item.eficienciaPct === 0 ? "" : String(item.eficienciaPct)}
+                                          value={
+                                            item.eficienciaPct === 0
+                                              ? ""
+                                              : String(item.eficienciaPct)
+                                          }
                                           onChange={(event) =>
                                             setMachineCostsForm((current) =>
                                               current.map((cost) =>
-                                                cost.centroCostoRecursoId === resource.id
+                                                cost.centroCostoRecursoId ===
+                                                resource.id
                                                   ? {
                                                       ...cost,
                                                       eficienciaPct:
-                                                        event.target.value === ""
+                                                        event.target.value ===
+                                                        ""
                                                           ? 0
-                                                          : Number(event.target.value) || 0,
+                                                          : Number(
+                                                              event.target
+                                                                .value,
+                                                            ) || 0,
                                                     }
                                                   : cost,
                                               ),
@@ -2608,17 +2935,28 @@ export function CentroCostoConfigurator({
                                         />
                                         <Input
                                           inputMode="decimal"
-                                          value={item.mantenimientoMensual === 0 ? "" : String(item.mantenimientoMensual)}
+                                          value={
+                                            item.mantenimientoMensual === 0
+                                              ? ""
+                                              : String(
+                                                  item.mantenimientoMensual,
+                                                )
+                                          }
                                           onChange={(event) =>
                                             setMachineCostsForm((current) =>
                                               current.map((cost) =>
-                                                cost.centroCostoRecursoId === resource.id
+                                                cost.centroCostoRecursoId ===
+                                                resource.id
                                                   ? {
                                                       ...cost,
                                                       mantenimientoMensual:
-                                                        event.target.value === ""
+                                                        event.target.value ===
+                                                        ""
                                                           ? 0
-                                                          : Number(event.target.value) || 0,
+                                                          : Number(
+                                                              event.target
+                                                                .value,
+                                                            ) || 0,
                                                     }
                                                   : cost,
                                               ),
@@ -2633,17 +2971,26 @@ export function CentroCostoConfigurator({
                                         />
                                         <Input
                                           inputMode="decimal"
-                                          value={item.segurosMensual === 0 ? "" : String(item.segurosMensual)}
+                                          value={
+                                            item.segurosMensual === 0
+                                              ? ""
+                                              : String(item.segurosMensual)
+                                          }
                                           onChange={(event) =>
                                             setMachineCostsForm((current) =>
                                               current.map((cost) =>
-                                                cost.centroCostoRecursoId === resource.id
+                                                cost.centroCostoRecursoId ===
+                                                resource.id
                                                   ? {
                                                       ...cost,
                                                       segurosMensual:
-                                                        event.target.value === ""
+                                                        event.target.value ===
+                                                        ""
                                                           ? 0
-                                                          : Number(event.target.value) || 0,
+                                                          : Number(
+                                                              event.target
+                                                                .value,
+                                                            ) || 0,
                                                     }
                                                   : cost,
                                               ),
@@ -2658,17 +3005,26 @@ export function CentroCostoConfigurator({
                                         />
                                         <Input
                                           inputMode="decimal"
-                                          value={item.otrosFijosMensual === 0 ? "" : String(item.otrosFijosMensual)}
+                                          value={
+                                            item.otrosFijosMensual === 0
+                                              ? ""
+                                              : String(item.otrosFijosMensual)
+                                          }
                                           onChange={(event) =>
                                             setMachineCostsForm((current) =>
                                               current.map((cost) =>
-                                                cost.centroCostoRecursoId === resource.id
+                                                cost.centroCostoRecursoId ===
+                                                resource.id
                                                   ? {
                                                       ...cost,
                                                       otrosFijosMensual:
-                                                        event.target.value === ""
+                                                        event.target.value ===
+                                                        ""
                                                           ? 0
-                                                          : Number(event.target.value) || 0,
+                                                          : Number(
+                                                              event.target
+                                                                .value,
+                                                            ) || 0,
                                                     }
                                                   : cost,
                                               ),
@@ -2683,25 +3039,33 @@ export function CentroCostoConfigurator({
 
                               <div className="grid gap-2 rounded-xl border border-border/70 bg-muted/10 p-3 text-xs md:grid-cols-2 lg:grid-cols-4">
                                 <div className="flex flex-col">
-                                  <span className="text-muted-foreground">Amortización</span>
+                                  <span className="text-muted-foreground">
+                                    Amortización
+                                  </span>
                                   <span className="font-medium text-foreground">
                                     {formatMoney(item.amortizacionMensual)}
                                   </span>
                                 </div>
                                 <div className="flex flex-col">
-                                  <span className="text-muted-foreground">Energía</span>
+                                  <span className="text-muted-foreground">
+                                    Energía
+                                  </span>
                                   <span className="font-medium text-foreground">
                                     {formatMoney(item.energiaMensual)}
                                   </span>
                                 </div>
                                 <div className="flex flex-col">
-                                  <span className="text-muted-foreground">Total mensual</span>
+                                  <span className="text-muted-foreground">
+                                    Total mensual
+                                  </span>
                                   <span className="font-medium text-foreground">
                                     {formatMoney(item.costoMensualTotal)}
                                   </span>
                                 </div>
                                 <div className="flex flex-col">
-                                  <span className="text-muted-foreground">Tarifa hora</span>
+                                  <span className="text-muted-foreground">
+                                    Tarifa hora
+                                  </span>
                                   <span className="font-medium text-foreground">
                                     {formatMoney(item.tarifaHora)} / h
                                   </span>
@@ -2716,7 +3080,9 @@ export function CentroCostoConfigurator({
 
                   <Card className="rounded-2xl border-border/70 shadow-none">
                     <CardHeader>
-                      <CardTitle className="text-base">Otros costos del centro</CardTitle>
+                      <CardTitle className="text-base">
+                        Otros costos del centro
+                      </CardTitle>
                       <CardDescription>
                         Acá solo van costos adicionales que no surgen de los
                         recursos seleccionados en el paso 2.
@@ -2744,7 +3110,8 @@ export function CentroCostoConfigurator({
                           <EmptyHeader>
                             <EmptyTitle>Sin costos manuales</EmptyTitle>
                             <EmptyDescription>
-                              Si el centro tiene gastos adicionales, sumalos acá.
+                              Si el centro tiene gastos adicionales, sumalos
+                              acá.
                             </EmptyDescription>
                           </EmptyHeader>
                         </Empty>
@@ -2763,7 +3130,9 @@ export function CentroCostoConfigurator({
                                       : "outline"
                                   }
                                 >
-                                  {getCategoriaComponenteCostoLabel(component.categoria)}
+                                  {getCategoriaComponenteCostoLabel(
+                                    component.categoria,
+                                  )}
                                 </Badge>
                                 <Button
                                   type="button"
@@ -2771,7 +3140,9 @@ export function CentroCostoConfigurator({
                                   size="sm"
                                   onClick={() =>
                                     setComponentsForm((current) =>
-                                      current.filter((item) => item.id !== component.id),
+                                      current.filter(
+                                        (item) => item.id !== component.id,
+                                      ),
                                     )
                                   }
                                 >
@@ -2790,10 +3161,14 @@ export function CentroCostoConfigurator({
                                         return;
                                       }
 
-                                      updateComponent(component.id, (current) => ({
-                                        ...current,
-                                        categoria: value as LocalComponente["categoria"],
-                                      }));
+                                      updateComponent(
+                                        component.id,
+                                        (current) => ({
+                                          ...current,
+                                          categoria:
+                                            value as LocalComponente["categoria"],
+                                        }),
+                                      );
                                     }}
                                   >
                                     <SelectTrigger className="w-full">
@@ -2809,11 +3184,16 @@ export function CentroCostoConfigurator({
                                     </SelectTrigger>
                                     <SelectContent>
                                       <SelectGroup>
-                                        {additionalCostCategoryItems.map((item) => (
-                                          <SelectItem key={item.value} value={item.value}>
-                                            {item.label}
-                                          </SelectItem>
-                                        ))}
+                                        {additionalCostCategoryItems.map(
+                                          (item) => (
+                                            <SelectItem
+                                              key={item.value}
+                                              value={item.value}
+                                            >
+                                              {item.label}
+                                            </SelectItem>
+                                          ),
+                                        )}
                                       </SelectGroup>
                                     </SelectContent>
                                   </Select>
@@ -2823,10 +3203,13 @@ export function CentroCostoConfigurator({
                                   <Input
                                     value={component.nombre}
                                     onChange={(event) =>
-                                      updateComponent(component.id, (current) => ({
-                                        ...current,
-                                        nombre: event.target.value,
-                                      }))
+                                      updateComponent(
+                                        component.id,
+                                        (current) => ({
+                                          ...current,
+                                          nombre: event.target.value,
+                                        }),
+                                      )
                                     }
                                   />
                                 </Field>
@@ -2846,13 +3229,16 @@ export function CentroCostoConfigurator({
                                         : String(component.importeMensual)
                                     }
                                     onChange={(event) =>
-                                      updateComponent(component.id, (current) => ({
-                                        ...current,
-                                        importeMensual:
-                                          event.target.value === ""
-                                            ? 0
-                                            : Number(event.target.value) || 0,
-                                      }))
+                                      updateComponent(
+                                        component.id,
+                                        (current) => ({
+                                          ...current,
+                                          importeMensual:
+                                            event.target.value === ""
+                                              ? 0
+                                              : Number(event.target.value) || 0,
+                                        }),
+                                      )
                                     }
                                   />
                                 </Field>
@@ -2862,10 +3248,13 @@ export function CentroCostoConfigurator({
                                   <Input
                                     value={component.notas ?? ""}
                                     onChange={(event) =>
-                                      updateComponent(component.id, (current) => ({
-                                        ...current,
-                                        notas: event.target.value,
-                                      }))
+                                      updateComponent(
+                                        component.id,
+                                        (current) => ({
+                                          ...current,
+                                          notas: event.target.value,
+                                        }),
+                                      )
                                     }
                                     placeholder="Opcional"
                                   />
@@ -2880,20 +3269,26 @@ export function CentroCostoConfigurator({
 
                   <Card className="rounded-2xl border-border/70 shadow-none">
                     <CardHeader>
-                      <CardTitle className="text-base">Totales del mes</CardTitle>
+                      <CardTitle className="text-base">
+                        Totales del mes
+                      </CardTitle>
                       <CardDescription>
                         Resumen del costo armado hasta ahora.
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-3 lg:grid-cols-2">
                       <div className="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
-                        <span className="text-sm text-muted-foreground">Empleados</span>
+                        <span className="text-sm text-muted-foreground">
+                          Empleados
+                        </span>
                         <span className="font-medium">
                           {formatMoney(empleadosCosteadosTotal)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
-                        <span className="text-sm text-muted-foreground">Maquinaria</span>
+                        <span className="text-sm text-muted-foreground">
+                          Maquinaria
+                        </span>
                         <span className="font-medium">
                           {formatMoney(maquinariaCosteadaTotal)}
                         </span>
@@ -2943,8 +3338,9 @@ export function CentroCostoConfigurator({
             <CardHeader>
               <CardTitle>¿Cuántas horas reales trabaja al mes?</CardTitle>
               <CardDescription>
-                La capacidad práctica se calcula automáticamente según los recursos
-                del paso 2. Podés ajustar días/horas base o usar una capacidad manual.
+                La capacidad práctica se calcula automáticamente según los
+                recursos del paso 2. Podés ajustar días/horas base o usar una
+                capacidad manual.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
@@ -3027,7 +3423,9 @@ export function CentroCostoConfigurator({
                 </Card>
                 <Card className="rounded-2xl border-border/70 shadow-none">
                   <CardHeader>
-                    <CardTitle className="text-base">Capacidad automática</CardTitle>
+                    <CardTitle className="text-base">
+                      Capacidad automática
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className="text-3xl font-semibold">
@@ -3121,7 +3519,8 @@ export function CentroCostoConfigurator({
               <CardHeader>
                 <CardTitle>Desglose de reparto absorbido</CardTitle>
                 <CardDescription>
-                  Costos trasladados desde centros con imputación por reparto al centro actual.
+                  Costos trasladados desde centros con imputación por reparto al
+                  centro actual.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-3">
@@ -3143,7 +3542,9 @@ export function CentroCostoConfigurator({
                           Centro origen del reparto
                         </span>
                       </div>
-                      <span className="font-medium">{formatMoney(item.monto)}</span>
+                      <span className="font-medium">
+                        {formatMoney(item.monto)}
+                      </span>
                     </div>
                   ))
                 )}
@@ -3154,8 +3555,8 @@ export function CentroCostoConfigurator({
               <CardHeader>
                 <CardTitle>Checklist</CardTitle>
                 <CardDescription>
-                  Verificación rápida de lo necesario para guardar y publicar este
-                  período.
+                  Verificación rápida de lo necesario para guardar y publicar
+                  este período.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-3">
@@ -3205,7 +3606,9 @@ export function CentroCostoConfigurator({
                     Último borrador del período
                   </p>
                   <p className="text-2xl font-semibold">
-                    {draftTariff === null ? "Sin calcular" : formatMoney(draftTariff)}
+                    {draftTariff === null
+                      ? "Sin calcular"
+                      : formatMoney(draftTariff)}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-border/70 p-4">
@@ -3231,8 +3634,8 @@ export function CentroCostoConfigurator({
         <SheetHeader className="border-b border-border/70">
           <SheetTitle>Configurar costo de {centro.nombre}</SheetTitle>
           <SheetDescription>
-            Vamos a ayudarte a estimar el costo del sector {centro.codigo} para un
-            mes de vigencia concreto, sin pedirte que pienses como contador.
+            Vamos a ayudarte a estimar el costo del sector {centro.codigo} para
+            un mes de vigencia concreto, sin pedirte que pienses como contador.
           </SheetDescription>
         </SheetHeader>
 
@@ -3254,11 +3657,15 @@ export function CentroCostoConfigurator({
                         </button>
                       }
                     />
-                    <TooltipContent className="max-w-sm text-pretty" side="left">
-                      Es una foto mensual de costos. Si después no publicás un mes más
-                      nuevo, el sistema sigue usando la última tarifa publicada como
-                      referencia. Solo necesitás crear otro mes cuando cambian los
-                      costos o querés guardar un histórico distinto.
+                    <TooltipContent
+                      className="max-w-sm text-pretty"
+                      side="left"
+                    >
+                      Es una foto mensual de costos. Si después no publicás un
+                      mes más nuevo, el sistema sigue usando la última tarifa
+                      publicada como referencia. Solo necesitás crear otro mes
+                      cuando cambian los costos o querés guardar un histórico
+                      distinto.
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -3270,7 +3677,11 @@ export function CentroCostoConfigurator({
                     onChange={(event) => setPeriodo(event.target.value)}
                     aria-label="Mes de vigencia"
                   />
-                  <Button type="button" variant="outline" onClick={handleCopyLastPeriod}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleCopyLastPeriod}
+                  >
                     <CopyIcon />
                     Copiar mes anterior
                   </Button>
@@ -3279,7 +3690,10 @@ export function CentroCostoConfigurator({
               <Badge variant="outline">Activo {formatPeriodo(periodo)}</Badge>
             </div>
 
-            <Tabs value={activeStep} onValueChange={(value) => setActiveStep(value as WizardStep)}>
+            <Tabs
+              value={activeStep}
+              onValueChange={(value) => setActiveStep(value as WizardStep)}
+            >
               <TabsList className="h-auto w-full flex-wrap justify-start gap-1 rounded-xl border border-sidebar-border/20 bg-sidebar/8 p-1">
                 <TabsTrigger value="identidad">1. Ajustes</TabsTrigger>
                 <TabsTrigger value="recursos">2. Recursos</TabsTrigger>
@@ -3334,7 +3748,9 @@ export function CentroCostoConfigurator({
                       "resultado",
                     ];
                     const currentIndex = steps.indexOf(activeStep);
-                    setActiveStep(steps[Math.min(currentIndex + 1, steps.length - 1)]);
+                    setActiveStep(
+                      steps[Math.min(currentIndex + 1, steps.length - 1)],
+                    );
                   }}
                 >
                   Siguiente paso
@@ -3376,7 +3792,10 @@ export function CentroCostoConfigurator({
                   startSaving(async () => {
                     try {
                       await persistConfiguration();
-                      const result = await calcularTarifaCentroCosto(centro.id, periodo);
+                      const result = await calcularTarifaCentroCosto(
+                        centro.id,
+                        periodo,
+                      );
                       setDraftTariff(result.tarifaBorrador.tarifaCalculada);
                       const reparto = extractRepartoAbsorbido(
                         result.tarifaBorrador.resumen as

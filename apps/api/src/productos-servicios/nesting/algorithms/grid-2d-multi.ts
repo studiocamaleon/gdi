@@ -53,15 +53,19 @@ export function nestGrid2DMulti<T = unknown>(
   const sepVMm = options.separationVMm ?? 0;
   const allowRotation = options.allowRotation ?? false;
   const m = substrate.margins ?? {};
-  const marginUniformMm = m.leftMm ?? m.topMm ?? 0;
+  const marginLeftMm = m.leftMm ?? 0;
+  const marginRightMm = m.rightMm ?? marginLeftMm;
+  const marginTopMm = m.topMm ?? 0;
+  const marginBottomMm = m.bottomMm ?? marginTopMm;
 
-  const areaWidthMm = substrate.widthMm - 2 * marginUniformMm;
-  const areaHeightMm = substrate.heightMm - 2 * marginUniformMm;
+  const areaWidthMm = substrate.widthMm - marginLeftMm - marginRightMm;
+  const areaHeightMm = substrate.heightMm - marginTopMm - marginBottomMm;
 
   // Expandir piezas a instancias individuales (1 por cantidad)
   const pendientes: PendingPiece[] = [];
   for (const piece of pieces) {
-    if (piece.widthMm <= 0 || piece.heightMm <= 0 || piece.quantity <= 0) continue;
+    if (piece.widthMm <= 0 || piece.heightMm <= 0 || piece.quantity <= 0)
+      continue;
     for (let i = 0; i < piece.quantity; i++) {
       pendientes.push({
         origW: piece.widthMm,
@@ -72,7 +76,7 @@ export function nestGrid2DMulti<T = unknown>(
     }
   }
   // Ordenar por área descendente (heurística estándar de bin-packing)
-  pendientes.sort((a, b) => (b.origW * b.origH) - (a.origW * a.origH));
+  pendientes.sort((a, b) => b.origW * b.origH - a.origW * a.origH);
 
   if (pendientes.length === 0) {
     return {
@@ -88,12 +92,17 @@ export function nestGrid2DMulti<T = unknown>(
     };
   }
 
-  const packer = new MaxRectsPacker(areaWidthMm + sepHMm, areaHeightMm + sepVMm, 0, {
-    smart: false,
-    pot: false,
-    square: false,
-    allowRotation,
-  });
+  const packer = new MaxRectsPacker(
+    areaWidthMm + sepHMm,
+    areaHeightMm + sepVMm,
+    0,
+    {
+      smart: false,
+      pot: false,
+      square: false,
+      allowRotation,
+    },
+  );
 
   for (const p of pendientes) {
     packer.add(p.origW + sepHMm, p.origH + sepVMm, {
@@ -106,29 +115,29 @@ export function nestGrid2DMulti<T = unknown>(
 
   const placements: Placement<T>[] = [];
   const substrates: SubstrateUsage[] = [];
-  const perSubstrate: Array<{ areaUtilMm2: number; consumedLengthMm: number }> = [];
+  const perSubstrate: Array<{ areaUtilMm2: number; consumedLengthMm: number }> =
+    [];
   let totalAreaUtil = 0;
 
   packer.bins.forEach((bin, binIndex) => {
     let maxYLocal = 0;
     let areaUtil = 0;
     for (const rect of bin.rects) {
-      const data = (rect as any).data as {
-        origW: number;
-        origH: number;
-        pieceId: string;
-        meta?: T;
+      const packedRect = rect as unknown as {
+        data: PendingPiece & { meta?: T };
+        rot?: boolean;
       };
-      const rotated: boolean = (rect as any).rot ?? false;
+      const data = packedRect.data;
+      const rotated = packedRect.rot ?? false;
       const placedW = rotated ? data.origH : data.origW;
       const placedH = rotated ? data.origW : data.origH;
-      const bottom = rect.y + placedH + marginUniformMm;
+      const bottom = rect.y + placedH + marginTopMm;
       if (bottom > maxYLocal) maxYLocal = bottom;
       placements.push({
         pieceId: data.pieceId,
         substrateIndex: binIndex,
-        xMm: marginUniformMm + rect.x,
-        yMm: marginUniformMm + rect.y,
+        xMm: marginLeftMm + rect.x,
+        yMm: marginTopMm + rect.y,
         widthMm: placedW,
         heightMm: placedH,
         rotated,
@@ -144,15 +153,17 @@ export function nestGrid2DMulti<T = unknown>(
     });
     perSubstrate.push({
       areaUtilMm2: areaUtil,
-      consumedLengthMm: maxYLocal > 0 ? marginUniformMm + maxYLocal : 0,
+      consumedLengthMm: maxYLocal > 0 ? maxYLocal + marginBottomMm : 0,
     });
     totalAreaUtil += areaUtil;
   });
 
-  const areaTotalMm2 = substrate.widthMm * substrate.heightMm * substrates.length;
-  const aprovechamientoPct = areaTotalMm2 > 0
-    ? Math.round((totalAreaUtil / areaTotalMm2) * 10000) / 100
-    : 0;
+  const areaTotalMm2 =
+    substrate.widthMm * substrate.heightMm * substrates.length;
+  const aprovechamientoPct =
+    areaTotalMm2 > 0
+      ? Math.round((totalAreaUtil / areaTotalMm2) * 10000) / 100
+      : 0;
 
   return {
     algorithm: 'grid-2d-multi',

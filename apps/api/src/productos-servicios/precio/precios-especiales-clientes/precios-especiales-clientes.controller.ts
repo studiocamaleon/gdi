@@ -43,7 +43,10 @@ export class PreciosEspecialesClientesController {
   constructor(private readonly service: PreciosEspecialesClientesService) {}
 
   @Get('productos-servicios/productos/:productoId/precios-especiales')
-  async listar(@Req() req: RequestWithAuth, @Param('productoId') productoId: string) {
+  async listar(
+    @Req() req: RequestWithAuth,
+    @Param('productoId') productoId: string,
+  ) {
     return this.service.listarPorProducto(tenantId(req), productoId);
   }
 

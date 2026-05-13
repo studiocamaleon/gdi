@@ -76,6 +76,7 @@ export type EvaluateGranFormatoMixedShelfLayoutInput = {
     widthInterpretation: 'total' | 'util';
     manualLayout?: Record<string, unknown> | null;
   };
+  beamWidth?: number;
 };
 
 export type GranFormatoMixedShelfLayoutResult = {
@@ -120,7 +121,8 @@ export function countGranFormatoRowsAndPiecesPerRow(
   }
   const rows: Array<{ topMm: number; bottomMm: number; count: number }> = [];
   const sorted = [...placements].sort((a, b) => {
-    const topDiff = a.centerYMm - a.heightMm / 2 - (b.centerYMm - b.heightMm / 2);
+    const topDiff =
+      a.centerYMm - a.heightMm / 2 - (b.centerYMm - b.heightMm / 2);
     if (Math.abs(topDiff) > toleranceMm) {
       return topDiff;
     }
@@ -132,7 +134,8 @@ export function countGranFormatoRowsAndPiecesPerRow(
     const existing = rows.find(
       (row) =>
         Math.abs(row.topMm - topMm) <= toleranceMm ||
-        (topMm <= row.bottomMm - toleranceMm && bottomMm >= row.topMm + toleranceMm),
+        (topMm <= row.bottomMm - toleranceMm &&
+          bottomMm >= row.topMm + toleranceMm),
     );
     if (existing) {
       existing.topMm = Math.min(existing.topMm, topMm);
@@ -148,13 +151,25 @@ export function countGranFormatoRowsAndPiecesPerRow(
   };
 }
 
+function uniquePieceOrders(orders: GranFormatoPiece[][]): GranFormatoPiece[][] {
+  const seen = new Set<string>();
+  const unique: GranFormatoPiece[][] = [];
+  for (const order of orders) {
+    const key = order.map((piece) => piece.id).join('|');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(order);
+  }
+  return unique;
+}
+
 // ─── Algoritmo principal ────────────────────────────────────────────
 
 export function evaluateGranFormatoMixedShelfLayout(
   input: EvaluateGranFormatoMixedShelfLayoutInput,
 ): GranFormatoMixedShelfLayoutResult | null {
   const manualLayout = normalizeGranFormatoPanelManualLayout(
-    (input.panelizado?.manualLayout as Record<string, unknown> | null | undefined) ?? null,
+    input.panelizado?.manualLayout ?? null,
   );
   const pieces: GranFormatoPiece[] | null = input.panelizado?.activo
     ? input.panelizado.mode === 'manual' && manualLayout
@@ -198,62 +213,121 @@ export function evaluateGranFormatoMixedShelfLayout(
   };
 
   const measureState = (state: State) => {
-    const contentHeightMm = state.rows.reduce((acc, row) => acc + row.heightMm, 0);
-    const verticalGapsMm =
-      state.rows.length > 1 ? (state.rows.length - 1) * input.separacionVerticalMm : 0;
-    const consumedContentLengthMm = contentHeightMm + verticalGapsMm;
-    const placedAreaMm2 = state.placements.reduce(
-      (acc, placement) => acc + placement.originalWidthMm * placement.originalHeightMm,
+    const contentHeightMm = state.rows.reduce(
+      (acc, row) => acc + row.heightMm,
       0,
     );
-    const wasteProxyMm2 = input.printableWidthMm * consumedContentLengthMm - placedAreaMm2;
+    const verticalGapsMm =
+      state.rows.length > 1
+        ? (state.rows.length - 1) * input.separacionVerticalMm
+        : 0;
+    const consumedContentLengthMm = contentHeightMm + verticalGapsMm;
+    const placedAreaMm2 = state.placements.reduce(
+      (acc, placement) =>
+        acc + placement.originalWidthMm * placement.originalHeightMm,
+      0,
+    );
+    const wasteProxyMm2 =
+      input.printableWidthMm * consumedContentLengthMm - placedAreaMm2;
     return { consumedContentLengthMm, wasteProxyMm2 };
   };
 
-  let states: State[] = [{ rows: [], placements: [] }];
+  const rankStates = (a: State, b: State) => {
+    const left = measureState(a);
+    const right = measureState(b);
+    return (
+      left.consumedContentLengthMm - right.consumedContentLengthMm ||
+      left.wasteProxyMm2 - right.wasteProxyMm2 ||
+      a.rows.length - b.rows.length
+    );
+  };
 
-  for (const piece of pieces) {
-    const orientations = [
-      {
-        widthMm: piece.widthMm,
-        heightMm: piece.heightMm,
-        rotated: false,
-      },
-      ...(input.permitirRotacion && piece.widthMm !== piece.heightMm
-        ? [
-            {
-              widthMm: piece.heightMm,
-              heightMm: piece.widthMm,
-              rotated: true,
-            },
-          ]
-        : []),
-    ];
-    const nextStates: State[] = [];
+  const solveOrder = (orderedPieces: GranFormatoPiece[]): State | null => {
+    let states: State[] = [{ rows: [], placements: [] }];
 
-    for (const state of states) {
-      for (const option of orientations) {
-        if (option.widthMm > input.printableWidthMm) {
-          continue;
-        }
+    for (const piece of orderedPieces) {
+      const orientations = [
+        {
+          widthMm: piece.widthMm,
+          heightMm: piece.heightMm,
+          rotated: false,
+        },
+        ...(input.permitirRotacion && piece.widthMm !== piece.heightMm
+          ? [
+              {
+                widthMm: piece.heightMm,
+                heightMm: piece.widthMm,
+                rotated: true,
+              },
+            ]
+          : []),
+      ];
+      const nextStates: State[] = [];
 
-        for (const [rowIndex, row] of state.rows.entries()) {
-          const nextWidth =
-            row.usedWidthMm === 0
-              ? option.widthMm
-              : row.usedWidthMm + input.separacionHorizontalMm + option.widthMm;
-          if (nextWidth > input.printableWidthMm) {
+      for (const state of states) {
+        for (const option of orientations) {
+          if (option.widthMm > input.printableWidthMm) {
             continue;
           }
+
+          for (const [rowIndex, row] of state.rows.entries()) {
+            const nextWidth =
+              row.usedWidthMm === 0
+                ? option.widthMm
+                : row.usedWidthMm +
+                  input.separacionHorizontalMm +
+                  option.widthMm;
+            if (nextWidth > input.printableWidthMm) {
+              continue;
+            }
+            const rows = state.rows.map((item) => ({ ...item }));
+            const targetRow = rows[rowIndex];
+            const xMm =
+              targetRow.usedWidthMm === 0
+                ? input.marginLeftMm
+                : input.marginLeftMm +
+                  targetRow.usedWidthMm +
+                  input.separacionHorizontalMm;
+            targetRow.usedWidthMm = nextWidth;
+            targetRow.heightMm = Math.max(targetRow.heightMm, option.heightMm);
+            targetRow.count += 1;
+            nextStates.push({
+              rows,
+              placements: [
+                ...state.placements,
+                {
+                  id: piece.id,
+                  widthMm: option.widthMm,
+                  heightMm: option.heightMm,
+                  centerXMm: xMm + option.widthMm / 2,
+                  centerYMm: targetRow.yMm + option.heightMm / 2,
+                  label: `${Math.round(piece.originalWidthMm / 10)}x${Math.round(
+                    piece.originalHeightMm / 10,
+                  )} cm`,
+                  rotated: option.rotated,
+                  originalWidthMm: piece.originalWidthMm,
+                  originalHeightMm: piece.originalHeightMm,
+                  panelIndex: piece.panelIndex,
+                  panelCount: piece.panelCount,
+                  panelAxis: piece.panelAxis,
+                  sourcePieceId: piece.sourcePieceId,
+                  usefulWidthMm: piece.usefulWidthMm ?? piece.widthMm,
+                  usefulHeightMm: piece.usefulHeightMm ?? piece.heightMm,
+                  overlapStartMm: piece.overlapStartMm ?? 0,
+                  overlapEndMm: piece.overlapEndMm ?? 0,
+                },
+              ],
+            });
+          }
+
           const rows = state.rows.map((item) => ({ ...item }));
-          const targetRow = rows[rowIndex];
-          const xMm =
-            targetRow.usedWidthMm === 0
-              ? input.marginLeftMm
-              : input.marginLeftMm + targetRow.usedWidthMm + input.separacionHorizontalMm;
-          targetRow.usedWidthMm = nextWidth;
-          targetRow.heightMm = Math.max(targetRow.heightMm, option.heightMm);
-          targetRow.count += 1;
+          const newRow: Row = {
+            yMm: resolveNextRowY(rows),
+            usedWidthMm: option.widthMm,
+            heightMm: option.heightMm,
+            count: 1,
+          };
+          rows.push(newRow);
           nextStates.push({
             rows,
             placements: [
@@ -262,8 +336,8 @@ export function evaluateGranFormatoMixedShelfLayout(
                 id: piece.id,
                 widthMm: option.widthMm,
                 heightMm: option.heightMm,
-                centerXMm: xMm + option.widthMm / 2,
-                centerYMm: targetRow.yMm + option.heightMm / 2,
+                centerXMm: input.marginLeftMm + option.widthMm / 2,
+                centerYMm: newRow.yMm + option.heightMm / 2,
                 label: `${Math.round(piece.originalWidthMm / 10)}x${Math.round(
                   piece.originalHeightMm / 10,
                 )} cm`,
@@ -282,78 +356,49 @@ export function evaluateGranFormatoMixedShelfLayout(
             ],
           });
         }
-
-        const rows = state.rows.map((item) => ({ ...item }));
-        const newRow: Row = {
-          yMm: resolveNextRowY(rows),
-          usedWidthMm: option.widthMm,
-          heightMm: option.heightMm,
-          count: 1,
-        };
-        rows.push(newRow);
-        nextStates.push({
-          rows,
-          placements: [
-            ...state.placements,
-            {
-              id: piece.id,
-              widthMm: option.widthMm,
-              heightMm: option.heightMm,
-              centerXMm: input.marginLeftMm + option.widthMm / 2,
-              centerYMm: newRow.yMm + option.heightMm / 2,
-              label: `${Math.round(piece.originalWidthMm / 10)}x${Math.round(
-                piece.originalHeightMm / 10,
-              )} cm`,
-              rotated: option.rotated,
-              originalWidthMm: piece.originalWidthMm,
-              originalHeightMm: piece.originalHeightMm,
-              panelIndex: piece.panelIndex,
-              panelCount: piece.panelCount,
-              panelAxis: piece.panelAxis,
-              sourcePieceId: piece.sourcePieceId,
-              usefulWidthMm: piece.usefulWidthMm ?? piece.widthMm,
-              usefulHeightMm: piece.usefulHeightMm ?? piece.heightMm,
-              overlapStartMm: piece.overlapStartMm ?? 0,
-              overlapEndMm: piece.overlapEndMm ?? 0,
-            },
-          ],
-        });
       }
+
+      if (!nextStates.length) {
+        return null;
+      }
+
+      states = nextStates
+        .sort(rankStates)
+        .slice(0, Math.max(12, input.beamWidth ?? 64));
     }
 
-    if (!nextStates.length) {
-      return null;
-    }
+    return [...states].sort(rankStates)[0] ?? null;
+  };
 
-    states = nextStates
-      .sort((a, b) => {
-        const left = measureState(a);
-        const right = measureState(b);
-        return (
-          left.consumedContentLengthMm - right.consumedContentLengthMm ||
-          left.wasteProxyMm2 - right.wasteProxyMm2 ||
-          a.rows.length - b.rows.length
-        );
-      })
-      .slice(0, 12);
+  const pieceOrders = uniquePieceOrders([
+    pieces,
+    [...pieces].sort((a, b) => b.area - a.area),
+    [...pieces].sort((a, b) => b.widthMm - a.widthMm || b.heightMm - a.heightMm),
+    [...pieces].sort((a, b) => b.heightMm - a.heightMm || b.widthMm - a.widthMm),
+    [...pieces].sort((a, b) => b.shortestSide - a.shortestSide || b.area - a.area),
+  ]);
+  const bestState = pieceOrders
+    .map((order) => solveOrder(order))
+    .filter((state): state is State => state != null)
+    .sort(rankStates)[0];
+
+  if (!bestState) {
+    return null;
   }
 
-  const bestState = [...states].sort((a, b) => {
-    const left = measureState(a);
-    const right = measureState(b);
-    return (
-      left.consumedContentLengthMm - right.consumedContentLengthMm ||
-      left.wasteProxyMm2 - right.wasteProxyMm2 ||
-      a.rows.length - b.rows.length
-    );
-  })[0];
-
-  const contentHeightMm = bestState.rows.reduce((acc, row) => acc + row.heightMm, 0);
+  const contentHeightMm = bestState.rows.reduce(
+    (acc, row) => acc + row.heightMm,
+    0,
+  );
   const verticalGapsMm =
-    bestState.rows.length > 1 ? (bestState.rows.length - 1) * input.separacionVerticalMm : 0;
-  const consumedLengthMm = input.marginStartMm + input.marginEndMm + contentHeightMm + verticalGapsMm;
+    bestState.rows.length > 1
+      ? (bestState.rows.length - 1) * input.separacionVerticalMm
+      : 0;
+  const consumedLengthMm =
+    input.marginStartMm + input.marginEndMm + contentHeightMm + verticalGapsMm;
   const usefulAreaM2 = input.medidas.reduce(
-    (acc, item) => acc + ((item.anchoMm * item.altoMm) / 1_000_000) * item.cantidad,
+    (acc, item) =>
+      acc + ((item.anchoMm * item.altoMm) / 1_000_000) * item.cantidad,
     0,
   );
   const { rows: rowCount, piecesPerRow } = countGranFormatoRowsAndPiecesPerRow(
@@ -365,12 +410,22 @@ export function evaluateGranFormatoMixedShelfLayout(
     orientacion: buildGranFormatoNestingOrientacion(bestState.placements),
     panelizado: input.panelizado?.activo === true,
     panelAxis: input.panelizado?.activo ? input.panelizado.axis : null,
-    panelCount:
-      bestState.placements.reduce((max, item) => Math.max(max, item.panelCount ?? 1), 1),
-    panelOverlapMm: input.panelizado?.activo ? input.panelizado.overlapMm : null,
-    panelMaxWidthMm: input.panelizado?.activo ? input.panelizado.maxPanelWidthMm : null,
-    panelDistribution: input.panelizado?.activo ? input.panelizado.distribution : null,
-    panelWidthInterpretation: input.panelizado?.activo ? input.panelizado.widthInterpretation : null,
+    panelCount: bestState.placements.reduce(
+      (max, item) => Math.max(max, item.panelCount ?? 1),
+      1,
+    ),
+    panelOverlapMm: input.panelizado?.activo
+      ? input.panelizado.overlapMm
+      : null,
+    panelMaxWidthMm: input.panelizado?.activo
+      ? input.panelizado.maxPanelWidthMm
+      : null,
+    panelDistribution: input.panelizado?.activo
+      ? input.panelizado.distribution
+      : null,
+    panelWidthInterpretation: input.panelizado?.activo
+      ? input.panelizado.widthInterpretation
+      : null,
     panelMode: input.panelizado?.activo ? input.panelizado.mode : null,
     piecesPerRow,
     rows: rowCount,

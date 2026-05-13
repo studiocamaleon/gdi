@@ -118,7 +118,8 @@ export function calcularPrecio(
 
   if (config.metodoCalculo === 'margen_variable') {
     const tiers = (detalle.tiers ?? []) as TierRangoMargen[];
-    const tier = tiers.find((t) => cantidad <= t.quantityUntil) ?? tiers[tiers.length - 1];
+    const tier =
+      tiers.find((t) => cantidad <= t.quantityUntil) ?? tiers[tiers.length - 1];
     const marginPct = tier ? tier.marginPct : 0;
     const precioUnitario = costoUnitario * (1 + marginPct / 100);
     return {
@@ -174,7 +175,8 @@ export function calcularPrecio(
 
   if (config.metodoCalculo === 'variable_por_cantidad') {
     const tiers = (detalle.tiers ?? []) as TierRangoPrecio[];
-    const tier = tiers.find((t) => cantidad <= t.quantityUntil) ?? tiers[tiers.length - 1];
+    const tier =
+      tiers.find((t) => cantidad <= t.quantityUntil) ?? tiers[tiers.length - 1];
     const precioUnitario = tier ? tier.price : 0;
     return {
       metodoUsado: 'variable_por_cantidad',
@@ -189,6 +191,6 @@ export function calcularPrecio(
     precioUnitario: costoUnitario,
     precioTotal: costoUnitario * cantidad,
     margenNegativo: false,
-    mensaje: `Método ${config.metodoCalculo} no implementado`,
+    mensaje: 'Método de cálculo no implementado',
   };
 }

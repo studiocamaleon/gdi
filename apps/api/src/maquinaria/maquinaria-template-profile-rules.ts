@@ -60,7 +60,10 @@ function buildRule(params: {
   modeSourceKeys?: string[];
 }): PerfilTemplateRule {
   return {
-    allowedProfileKeys: new Set([...COMMON_PROFILE_KEYS, ...params.detalleKeys]),
+    allowedProfileKeys: new Set([
+      ...COMMON_PROFILE_KEYS,
+      ...params.detalleKeys,
+    ]),
     requiredProfileKeys: new Set(params.requiredFieldKeys),
     modeSourceKeys: new Set(params.modeSourceKeys ?? []),
   };
@@ -71,8 +74,19 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // Discriminantes (detalle): caras, colores, formatoSoportado, gramajeMinGr,
   // gramajeMaxGr.
   [PlantillaMaquinariaDto.impresora_laser]: buildRule({
-    detalleKeys: ['caras', 'colores', 'formatoSoportado', 'gramajeMinGr', 'gramajeMaxGr'],
-    requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit', 'caras'],
+    detalleKeys: [
+      'caras',
+      'colores',
+      'formatoSoportado',
+      'gramajeMinGr',
+      'gramajeMaxGr',
+    ],
+    requiredFieldKeys: [
+      'nombre',
+      'productivityValue',
+      'productivityUnit',
+      'caras',
+    ],
     modeSourceKeys: ['caras', 'colores'],
   }),
 
@@ -99,7 +113,12 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // paramsPerfilJson (detalle): factorComplejidad {SIMPLE,INTERMEDIO,COMPLEJO}.
   [PlantillaMaquinariaDto.plotter_de_corte]: buildRule({
     detalleKeys: ['tipoCorte', 'modoOperacion', 'factorComplejidad'],
-    requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit', 'tipoCorte'],
+    requiredFieldKeys: [
+      'nombre',
+      'productivityValue',
+      'productivityUnit',
+      'tipoCorte',
+    ],
     modeSourceKeys: ['tipoCorte', 'modoOperacion'],
   }),
 
@@ -107,7 +126,13 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // Discriminantes (detalle): tipoTrabajo (CAD|FOTO), calidad (DRAFT|NORMAL|ALTA).
   [PlantillaMaquinariaDto.plotter_cad]: buildRule({
     detalleKeys: ['tipoTrabajo', 'calidad'],
-    requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit', 'tipoTrabajo', 'calidad'],
+    requiredFieldKeys: [
+      'nombre',
+      'productivityValue',
+      'productivityUnit',
+      'tipoTrabajo',
+      'calidad',
+    ],
     modeSourceKeys: ['tipoTrabajo', 'calidad'],
   }),
 
@@ -137,7 +162,12 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // paramsPerfilJson (detalle): diametrosSoportadosMm.
   [PlantillaMaquinariaDto.anilladora]: buildRule({
     detalleKeys: ['tipoAnillo', 'diametrosSoportadosMm'],
-    requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit', 'tipoAnillo'],
+    requiredFieldKeys: [
+      'nombre',
+      'productivityValue',
+      'productivityUnit',
+      'tipoAnillo',
+    ],
     modeSourceKeys: ['tipoAnillo'],
   }),
 
@@ -181,7 +211,10 @@ function getPerfilFieldValue(
   fieldKey: string,
 ) {
   const directRecord = perfil as unknown as Record<string, unknown>;
-  if (DIRECT_PROFILE_FIELD_KEYS.has(fieldKey) && directRecord[fieldKey] !== undefined) {
+  if (
+    DIRECT_PROFILE_FIELD_KEYS.has(fieldKey) &&
+    directRecord[fieldKey] !== undefined
+  ) {
     return directRecord[fieldKey];
   }
 

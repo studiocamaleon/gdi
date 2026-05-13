@@ -108,4 +108,3 @@ export class AsociarCargoPasoDto {
   @IsObject()
   configOverrideJson?: Record<string, unknown>;
 }
-

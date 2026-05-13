@@ -2,27 +2,11 @@
 
 import * as React from "react";
 import Link from "next/link";
-import {
-  BoxesIcon,
-  ExternalLinkIcon,
-  GitBranchIcon,
-  PackageIcon,
-  PlusIcon,
-} from "lucide-react";
+import { useRouter } from "next/navigation";
+import type { CSSProperties } from "react";
+import { PlusIcon } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EstadoVacio } from "@/components/ui/estado-vacio";
-import { TableFilters, type FiltroSelect } from "@/components/ui/table-filters";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import type { ProductoListItem } from "@/lib/productos-servicios";
 import {
   getLabel,
@@ -30,11 +14,86 @@ import {
   unidadComercialLabels,
 } from "@/lib/labels-humanos";
 
+const Ico = {
+  Search: (props: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3-3" />
+    </svg>
+  ),
+  Chev: (props: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="m9 6 6 6-6 6" />
+    </svg>
+  ),
+  Route: (props: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="6" cy="19" r="2.5" />
+      <circle cx="18" cy="5" r="2.5" />
+      <path d="M8.5 19H14a4 4 0 0 0 0-8h-4a4 4 0 0 1 0-8h5.5" />
+    </svg>
+  ),
+  Arrow: (props: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
+  ),
+};
+
+function CatalogSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const selected = options.find((option) => option.value === value) ?? options[0];
+
+  return (
+    <div className="catalog-select">
+      <button
+        type="button"
+        className="select"
+        onClick={() => setOpen((current) => !current)}
+        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+      >
+        <span className="lbl">{label}</span>
+        {selected.label}
+        <Ico.Chev style={{ transform: "rotate(90deg)" }} />
+      </button>
+      {open ? (
+        <div className="catalog-select-menu">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={option.value === value ? "active" : ""}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function ProductosServiciosTable({
   initialProductos,
 }: {
   initialProductos: ProductoListItem[];
 }) {
+  const router = useRouter();
   const productos = initialProductos;
   const [search, setSearch] = React.useState("");
   const [filtroUnidad, setFiltroUnidad] = React.useState("");
@@ -54,153 +113,168 @@ export function ProductosServiciosTable({
     });
   }, [productos, search, filtroUnidad, filtroEstado]);
 
-  const filtros: FiltroSelect[] = [
-    {
-      id: "unidad",
-      label: "Unidad",
-      value: filtroUnidad,
-      onChange: setFiltroUnidad,
-      opciones: [
-        { value: "unidad", label: getLabel(unidadComercialLabels, "unidad").label },
-        { value: "m2", label: getLabel(unidadComercialLabels, "m2").label },
-        { value: "metro_lineal", label: getLabel(unidadComercialLabels, "metro_lineal").label },
-      ],
-    },
-    {
-      id: "estado",
-      label: "Estado",
-      value: filtroEstado,
-      onChange: setFiltroEstado,
-      opciones: [
-        { value: "activo", label: "Activos" },
-        { value: "inactivo", label: "Inactivos" },
-      ],
-    },
-  ];
+  const openProduct = (id: string) => {
+    router.push(`/productos-servicios/${id}?tab=identidad`);
+  };
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Catálogo de productos</h1>
-          <p className="text-muted-foreground text-sm">
+    <div className="content">
+      <div className="page-head">
+        <div className="title-block">
+          <h1>Catálogo de productos</h1>
+          <div className="sub">
             {productos.length} productos cargados en el modelo universal por pasos.
-          </p>
+          </div>
         </div>
-        <Link href="/productos-servicios/nuevo">
-          <Button>
-            <PlusIcon className="mr-2 size-4" />
-            Nuevo producto
-          </Button>
+        <button className="btn">Importar</button>
+        <Link href="/productos-servicios/nuevo" className="btn btn-primary">
+          <PlusIcon size={14} />
+          Nuevo producto
         </Link>
       </div>
 
       {productos.length === 0 ? (
         <EstadoVacio
-          icon={<PackageIcon />}
           titulo="Sin productos cargados"
-          descripcion="Empezá creando tu primer producto desde el wizard, o ejecutá el seed para cargar los productos validados de fase E (Tarjetas, Vinilo, Talonarios, Rígidos)."
+          descripcion="Empezá creando tu primer producto desde el wizard, o ejecutá el seed para cargar los productos validados."
           cta={{ label: "Crear producto", href: "/productos-servicios/nuevo", icon: PlusIcon }}
         />
       ) : (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <BoxesIcon className="size-5" />
-                <CardTitle>Productos</CardTitle>
+        <>
+          <div className="toolbar">
+            <div className="search">
+              <Ico.Search />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar por código, nombre o descripción…"
+              />
+              <span className="kbd">/</span>
+            </div>
+            <CatalogSelect
+              label="Cobro"
+              value={filtroUnidad}
+              onChange={setFiltroUnidad}
+              options={[
+                { value: "", label: "todos" },
+                { value: "unidad", label: "Por unidad" },
+                { value: "m2", label: "Por metro cuadrado" },
+                { value: "metro_lineal", label: "Por metro lineal" },
+              ]}
+            />
+            <CatalogSelect
+              label="Estado"
+              value={filtroEstado}
+              onChange={setFiltroEstado}
+              options={[
+                { value: "", label: "todos" },
+                { value: "activo", label: "activos" },
+                { value: "inactivo", label: "inactivos" },
+              ]}
+            />
+          </div>
+
+          <div className="card">
+            <div className="card-head">
+              <span className="title">Productos</span>
+              <span className="count">{productosFiltrados.length} de {productos.length}</span>
+              <div style={{ marginLeft: "auto", display: "flex", gap: 8, color: "var(--muted-text)" } as CSSProperties}>
+                <span style={{ fontSize: 12 }}>Ordenar por</span>
+                <div className="select" style={{ height: 28 } as CSSProperties}>
+                  Recientes
+                  <Ico.Chev style={{ transform: "rotate(90deg)" }} />
+                </div>
               </div>
             </div>
-            <TableFilters
-              search={search}
-              onSearchChange={setSearch}
-              searchPlaceholder="Buscar por código, nombre o descripción..."
-              filtros={filtros}
-              resumen={`${productosFiltrados.length} de ${productos.length}`}
-            />
-          </CardHeader>
-          <CardContent>
             {productosFiltrados.length === 0 ? (
-              <EstadoVacio
-                variant="compacto"
-                titulo="No hay productos que coincidan"
-                descripcion="Probá ajustar la búsqueda o limpiar los filtros."
-              />
+              <div className="p-8">
+                <EstadoVacio
+                  variant="compacto"
+                  titulo="No hay productos que coincidan"
+                  descripcion="Probá ajustar la búsqueda o limpiar los filtros."
+                />
+              </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Código</TableHead>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>¿Cómo se cobra?</TableHead>
-                    <TableHead>Manejo de medidas</TableHead>
-                    <TableHead>Rutas</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th style={{ width: 180 }}>Código</th>
+                    <th>Nombre</th>
+                    <th>¿Cómo se cobra?</th>
+                    <th>Manejo de medidas</th>
+                    <th>Rutas</th>
+                    <th>Estado</th>
+                    <th className="right" style={{ width: 110 }}>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {productosFiltrados.map((p) => {
                     const lblUnidad = getLabel(unidadComercialLabels, p.unidadComercial);
                     const lblMedidas = getLabel(modoMedidasLabels, p.modoMedidas);
                     return (
-                      <TableRow key={p.id}>
-                        <TableCell className="font-mono text-xs">{p.codigo}</TableCell>
-                        <TableCell>
-                          <div className="font-medium">{p.nombre}</div>
-                          {p.descripcion && (
-                            <div className="text-muted-foreground text-xs">{p.descripcion}</div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" title={lblUnidad.descripcion}>
+                      <tr key={p.id} onClick={() => openProduct(p.id)}>
+                        <td><span className="code">{p.codigo}</span></td>
+                        <td>
+                          <div className="name">{p.nombre}</div>
+                          <div className="desc">{p.descripcion ?? ""}</div>
+                        </td>
+                        <td>
+                          <span className="tag muted" title={lblUnidad.descripcion}>
+                            <span className="d" />
                             {lblUnidad.label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={p.modoMedidas === "FIJA" ? "secondary" : "default"}
+                          </span>
+                        </td>
+                        <td>
+                          <span
+                            className={`tag ${p.modoMedidas === "FIJA" ? "" : "warm"}`}
                             title={lblMedidas.descripcion}
                           >
+                            <span className="d" />
                             {lblMedidas.label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
+                          </span>
+                        </td>
+                        <td>
+                          <span className="inline-flex flex-wrap gap-1.5">
                             {p.rutasAlternativas.map((ra) => (
-                              <Badge
-                                key={ra.id}
-                                variant={ra.esPreferida ? "default" : "outline"}
-                                className="gap-1"
-                              >
-                                <GitBranchIcon className="size-3" />
+                              <span key={ra.id} className="tag route">
+                                <Ico.Route />
                                 {ra.nombre}
-                              </Badge>
+                              </span>
                             ))}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={p.activo ? "default" : "secondary"}>
+                          </span>
+                        </td>
+                        <td>
+                          <span className={p.activo ? "tag ok" : "tag muted"}>
+                            <span className="d" />
                             {p.activo ? "Activo" : "Inactivo"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Link
-                            href={`/productos-servicios/${p.id}`}
-                            className="text-primary inline-flex items-center text-sm hover:underline"
-                          >
-                            Ver detalle
-                            <ExternalLinkIcon className="ml-1 size-3" />
-                          </Link>
-                        </TableCell>
-                      </TableRow>
+                          </span>
+                        </td>
+                        <td className="right">
+                          <span className="actions">
+                            <a
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openProduct(p.id);
+                              }}
+                            >
+                              Ver detalle
+                            </a>
+                            <Ico.Arrow />
+                          </span>
+                        </td>
+                      </tr>
                     );
                   })}
-                </TableBody>
-              </Table>
+                </tbody>
+              </table>
             )}
-          </CardContent>
-        </Card>
+          </div>
+
+          <div style={{ marginTop: 14, color: "var(--muted-text)", fontSize: 12, display: "flex", justifyContent: "space-between" } as CSSProperties}>
+            <span>Mostrando {productosFiltrados.length} de {productos.length} productos</span>
+            <span>Última sincronización · hace 2 min</span>
+          </div>
+        </>
       )}
     </div>
   );

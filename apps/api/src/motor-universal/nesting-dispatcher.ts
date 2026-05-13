@@ -13,6 +13,8 @@
  * Ahora:
  *   - `impresion_por_area` con sustrato rollo → `evaluateGranFormatoMixedShelfLayout`.
  *     Devuelve `consumedLengthMm` real con desperdicio.
+ *   - `impresion_por_area` con mesa/placa → `nestGrid2DMulti`.
+ *     Devuelve placas/pliegos consumidos para rígidos y mesa extensora.
  *   - `impresion_por_hoja` con sustrato sheet → `nestGrid2DSingle`.
  *     Devuelve `piezasPorSustrato`, motor calcula `pliegos = ceil(cantidad / piezasPorSustrato)`.
  *   - Familias no cubiertas → `null` (motor mantiene fallback de m² crudos).
@@ -21,13 +23,12 @@
  *   - Talonarios: requiere `posesXPliego` desde paso `pre_prensa` previo,
  *     que solo está disponible cuando G-M2 (outputs canónicos al JobContext)
  *     esté implementado. Por ahora devuelve null para esta familia.
- *   - Multi-medida en grid 2D (placas rígidas): requiere `nestGrid2DMulti`,
- *     se agrega cuando aparezca el caso real.
  */
 
 import { evaluateGranFormatoMixedShelfLayout } from '../productos-servicios/nesting/algorithms/shelf-rollo';
 import { nestGrid2DSingle } from '../productos-servicios/nesting/algorithms/grid-2d-single';
 import { nestGrid2DMulti } from '../productos-servicios/nesting/algorithms/grid-2d-multi';
+import { nestPackingSolverRectangle } from '../productos-servicios/nesting/algorithms/packingsolver-rectangle';
 import {
   calculateTalonarioGrouping,
   type TalonarioGroupingResult,
@@ -37,13 +38,21 @@ import type {
   Placement,
   SubstrateUsage,
 } from '../productos-servicios/nesting/types';
-import type { PasoCargado, JobContext } from './tipos';
+import {
+  resolveNestingConfig,
+  type NestingConfigResolved,
+} from './nesting-config';
+import type { PasoCargado, JobContext, NestingVisualConfig } from './tipos';
 
 /**
  * Resultado del dispatcher con TODO lo que el motor + viewer necesitan.
  */
 export interface NestingDispatchResult {
-  algorithm: 'shelf-rollo' | 'grid-2d-single' | 'grid-2d-multi';
+  algorithm:
+    | 'shelf-rollo'
+    | 'grid-2d-single'
+    | 'grid-2d-multi'
+    | 'packingsolver-rectangle';
   /**
    * Cantidad CALCULADA del paso, en la unidad correcta:
    *  - Para shelf-rollo: metros lineales consumidos del rollo.
@@ -65,6 +74,8 @@ export interface NestingDispatchResult {
   consumedLengthMm?: number;
   /** Cantidad de instancias de pieza efectivamente acomodadas. */
   piezasAcomodadas: number;
+  /** Datos normalizados para que el SVG muestre márgenes, área útil y separación. */
+  visualConfig?: NestingVisualConfig;
   /**
    * Solo cuando se aplicó talonario-grouping (post-nesting):
    * info sobre tandas/pliegos efectivos vs pedidos según el modo
@@ -95,14 +106,28 @@ export function runNestingForPaso(
   jobContext: JobContext,
   materialResuelto: MaterialResueltoParaNesting | null,
 ): NestingDispatchResult | null {
-  // ─── Caso 1: shelf-rollo (gran formato sobre rollo) ──────────────
-  if (paso.familiaCodigo === 'impresion_por_area' || paso.familiaCodigo === 'plotter_corte') {
-    return runShelfRollo(paso, jobContext, materialResuelto);
+  const config = resolveNestingConfig(paso, jobContext, materialResuelto);
+  // ─── Caso 1: gran formato por área ──────────────────────────────
+  // Si la máquina/material trabajan en rollo usa shelf-rollo; si trabajan
+  // sobre mesa/placa usa grid 2D multi. Esto permite que rígidos impresos
+  // generen nesting en el paso productivo sin depender de pre-prensa.
+  if (paso.familiaCodigo === 'impresion_por_area') {
+    return runImpresionPorArea(paso, jobContext, materialResuelto, config);
   }
 
-  // ─── Caso 2: grid 2D single (digital sobre pliego) ───────────────
+  // ─── Caso 2: shelf-rollo (corte sobre rollo) ─────────────────────
+  if (paso.familiaCodigo === 'plotter_corte') {
+    return runShelfRollo(paso, jobContext, materialResuelto, config);
+  }
+
+  // ─── Caso 3: laminado en rollo sobre pliegos ya impresos ─────────
+  if (paso.familiaCodigo === 'laminado') {
+    return runLaminadoRollo(paso, jobContext, materialResuelto, config);
+  }
+
+  // ─── Caso 4: grid 2D single/multi (digital sobre pliego) ─────────
   if (paso.familiaCodigo === 'impresion_por_hoja') {
-    return runGrid2DSingle(paso, jobContext, materialResuelto);
+    return runGrid2DSingle(paso, jobContext, materialResuelto, config);
   }
 
   // No cubierto: caller sigue con fallback.
@@ -113,25 +138,96 @@ export function runNestingForPaso(
 // Implementaciones
 // ────────────────────────────────────────────────────────────────────
 
+function runImpresionPorArea(
+  paso: PasoCargado,
+  jobContext: JobContext,
+  materialResuelto: MaterialResueltoParaNesting | null,
+  config: NestingConfigResolved,
+): NestingDispatchResult | null {
+  if (config.algorithm === 'shelf-rollo') {
+    return runShelfRollo(paso, jobContext, materialResuelto, config);
+  }
+  if (config.algorithm === 'grid-2d-single') {
+    return runGrid2DSingle(paso, jobContext, materialResuelto, config);
+  }
+  if (config.algorithm === 'grid-2d-multi') {
+    return runGrid2DMultiForArea(paso, jobContext, config);
+  }
+  if (config.algorithm === 'packingsolver-rectangle') {
+    return runPackingSolverRectangleForArea(paso, jobContext, config);
+  }
+
+  if (config.machineGeometry === 'ROLLO') {
+    return runShelfRollo(paso, jobContext, materialResuelto, config);
+  }
+
+  if (config.machineGeometry === 'MESA_EXTENSORA') {
+    return runPackingSolverRectangleForArea(paso, jobContext, config);
+  }
+
+  if (readNumber(materialResuelto?.atributosVarianteJson, 'largoRolloMm')) {
+    return runShelfRollo(paso, jobContext, materialResuelto, config);
+  }
+
+  if (config.sheetWidthMm && config.sheetHeightMm && !config.rollWidthMm) {
+    return runPackingSolverRectangleForArea(paso, jobContext, config);
+  }
+
+  return runShelfRollo(paso, jobContext, materialResuelto, config);
+}
+
+function runLaminadoRollo(
+  paso: PasoCargado,
+  jobContext: JobContext,
+  materialResuelto: MaterialResueltoParaNesting | null,
+  config: NestingConfigResolved,
+): NestingDispatchResult | null {
+  const ctx = jobContext as Record<string, unknown>;
+  const pliegosImpresos = Number(ctx.pliegos_impresos ?? 0);
+  const anchoPliegoMm = Number(ctx.pliego_impresion_ancho_mm ?? 0);
+  const altoPliegoMm = Number(ctx.pliego_impresion_alto_mm ?? 0);
+  if (
+    !Number.isFinite(pliegosImpresos) ||
+    pliegosImpresos <= 0 ||
+    !Number.isFinite(anchoPliegoMm) ||
+    anchoPliegoMm <= 0 ||
+    !Number.isFinite(altoPliegoMm) ||
+    altoPliegoMm <= 0
+  ) {
+    return null;
+  }
+
+  return runShelfRollo(
+    paso,
+    {
+      ...jobContext,
+      cantidad: Math.ceil(pliegosImpresos),
+      piezas: [
+        {
+          cantidad: Math.ceil(pliegosImpresos),
+          anchoMm: anchoPliegoMm,
+          altoMm: altoPliegoMm,
+        },
+      ],
+    },
+    materialResuelto,
+    config,
+  );
+}
+
 function runShelfRollo(
   paso: PasoCargado,
   jobContext: JobContext,
   materialResuelto: MaterialResueltoParaNesting | null,
+  config: NestingConfigResolved,
 ): NestingDispatchResult | null {
   const piezas = jobContext.piezas ?? [];
   if (piezas.length === 0) return null;
 
-  // v3.0: ancho útil viene del paramsTecnicos de la máquina.
-  // Para IMPRESORA_GRAN_FORMATO_POR_AREA con geometria=ROLLO: `anchoMaxRolloMm`.
-  // Compat retro: `anchoMaxMm` (nombre legacy).
-  // Fallback: ancho declarado en la variante de material.
-  const maqParams = (paso.maquina?.parametrosTecnicosJson ?? {}) as Record<string, unknown>;
-  const anchoMaquinaMm =
-    readNumber(maqParams, 'anchoMaxRolloMm') ??
-    readNumber(maqParams, 'anchoMaxMm');
-  const anchoMaterialMm = readNumber(materialResuelto?.atributosVarianteJson, 'anchoMm');
-  let printableWidthMm = anchoMaquinaMm ?? anchoMaterialMm;
-  if (!printableWidthMm || printableWidthMm <= 0) return null;
+  void paso;
+  void materialResuelto;
+  const rollWidthMm = config.rollWidthMm;
+  if (!rollWidthMm || rollWidthMm <= 0) return null;
 
   // v3.0 (doc §6): márgenes no imprimibles de la MÁQUINA reducen el ancho útil.
   // `margenesNoImprimiblesMm = { sup, inf, izq, der }`. Para shelf-rollo:
@@ -139,31 +235,31 @@ function runShelfRollo(
   //   - sup → marginStartMm (inicio del rollo).
   //   - inf → marginEndMm (fin de cada trabajo).
   // El paso puede sobrescribir vía `paramsPasoJson`.
-  const margenesMaquina = (maqParams.margenesNoImprimiblesMm ?? {}) as Record<string, unknown>;
-  const margenIzqMaq = Number(margenesMaquina.izq ?? 0);
-  const margenDerMaq = Number(margenesMaquina.der ?? 0);
-  const margenSupMaq = Number(margenesMaquina.sup ?? 0);
-  const margenInfMaq = Number(margenesMaquina.inf ?? 0);
-  printableWidthMm = printableWidthMm - margenIzqMaq - margenDerMaq;
+  const printableWidthMm =
+    rollWidthMm - config.margins.leftMm - config.margins.rightMm;
   if (printableWidthMm <= 0) return null;
-
-  // Overrides del paso > márgenes de máquina > defaults.
-  const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
-  const marginLeftMm = Number(params.marginLeftMm ?? margenIzqMaq) || 0;
-  const marginStartMm = Number(params.marginStartMm ?? margenSupMaq ?? 10);
-  const marginEndMm = Number(params.marginEndMm ?? margenInfMaq ?? 10);
-  const separacionHorizontalMm = Number(params.separacionHorizontalMm ?? 5);
-  const separacionVerticalMm = Number(params.separacionVerticalMm ?? 5);
-  const permitirRotacion = Boolean(params.permitirRotacion ?? true);
 
   const result = evaluateGranFormatoMixedShelfLayout({
     printableWidthMm,
-    marginLeftMm,
-    marginStartMm,
-    marginEndMm,
-    separacionHorizontalMm,
-    separacionVerticalMm,
-    permitirRotacion,
+    marginLeftMm: config.margins.leftMm,
+    marginStartMm: config.margins.startMm,
+    marginEndMm: config.margins.endMm,
+    separacionHorizontalMm: config.separationHMm,
+    separacionVerticalMm: config.separationVMm,
+    permitirRotacion: config.allowRotation,
+    panelizado: config.panelizado.enabled
+      ? {
+          activo: true,
+          mode:
+            config.panelizado.mode === 'manual' ? 'manual' : 'automatico',
+          axis: config.panelizado.axis,
+          overlapMm: config.panelizado.overlapMm,
+          maxPanelWidthMm: config.panelizado.maxPanelWidthMm,
+          distribution: config.panelizado.distribution,
+          widthInterpretation: config.panelizado.widthInterpretation,
+          manualLayout: config.panelizado.manualLayout,
+        }
+      : undefined,
     medidas: piezas.map((p, idx) => ({
       id: `pieza_${idx}`,
       cantidad: p.cantidad,
@@ -176,10 +272,12 @@ function runShelfRollo(
 
   const consumedLengthMm = result.consumedLengthMm;
   const consumedLengthM = consumedLengthMm / 1000;
-  const areaTotalMm2 = printableWidthMm * consumedLengthMm;
-  const aprovechamientoPct = areaTotalMm2 > 0
-    ? Math.round((result.usefulAreaM2 * 1_000_000 / areaTotalMm2) * 10000) / 100
-    : 0;
+  const areaTotalMm2 = rollWidthMm * consumedLengthMm;
+  const aprovechamientoPct =
+    areaTotalMm2 > 0
+      ? Math.round(((result.usefulAreaM2 * 1_000_000) / areaTotalMm2) * 10000) /
+        100
+      : 0;
 
   // Mapear placements del shape legacy → universal Placement
   const placements: Placement[] = result.placements.map((p) => ({
@@ -192,7 +290,10 @@ function runShelfRollo(
     rotated: p.rotated,
     panelIndex: p.panelIndex ?? undefined,
     panelCount: p.panelCount ?? undefined,
-    panelAxis: (p.panelAxis ?? undefined) as 'vertical' | 'horizontal' | undefined,
+    panelAxis: (p.panelAxis ?? undefined) as
+      | 'vertical'
+      | 'horizontal'
+      | undefined,
     usefulWidthMm: p.usefulWidthMm,
     usefulHeightMm: p.usefulHeightMm,
     overlapStartMm: p.overlapStartMm,
@@ -201,7 +302,7 @@ function runShelfRollo(
   }));
 
   const substrates: SubstrateUsage[] = [
-    { kind: 'roll', lengthMm: consumedLengthMm, widthMm: printableWidthMm },
+    { kind: 'roll', lengthMm: consumedLengthMm, widthMm: rollWidthMm },
   ];
 
   return {
@@ -216,10 +317,424 @@ function runShelfRollo(
       areaUtilMm2: result.usefulAreaM2 * 1_000_000,
       areaTotalMm2,
       consumedLengthMm,
-      wasteAreaM2: Math.max(0, (areaTotalMm2 - result.usefulAreaM2 * 1_000_000) / 1_000_000),
+      wasteAreaM2: Math.max(
+        0,
+        (areaTotalMm2 - result.usefulAreaM2 * 1_000_000) / 1_000_000,
+      ),
     },
     consumedLengthMm,
     piezasAcomodadas: result.placements.length,
+    visualConfig: buildVisualConfig({
+      kind: 'roll',
+      widthMm: rollWidthMm,
+      heightMm: consumedLengthMm,
+      margins: {
+        leftMm: config.margins.leftMm,
+        rightMm: config.margins.rightMm,
+        topMm: config.margins.startMm,
+        bottomMm: config.margins.endMm,
+      },
+      separationHMm: config.separationHMm,
+      separationVMm: config.separationVMm,
+      allowRotation: config.allowRotation,
+      substrateLabel: 'Rollo',
+      panelizado: {
+        enabled: result.panelizado,
+        mode: result.panelMode === 'manual' ? 'manual' : 'automatic',
+        axis: result.panelAxis,
+        overlapMm: result.panelOverlapMm,
+        maxPanelWidthMm: result.panelMaxWidthMm,
+        distribution: result.panelDistribution,
+        widthInterpretation: result.panelWidthInterpretation,
+        panelCount: result.panelCount,
+      },
+    }),
+  };
+}
+
+function runGrid2DMultiForArea(
+  paso: PasoCargado,
+  jobContext: JobContext,
+  config: NestingConfigResolved,
+): NestingDispatchResult | null {
+  const piezas = getPiezasParaNesting(jobContext);
+  if (piezas.length === 0) return null;
+  void paso;
+  if (!config.sheetWidthMm || !config.sheetHeightMm) return null;
+
+  const medidasDistintas = new Set(
+    piezas.map((p) => `${p.anchoMm}x${p.altoMm}`),
+  );
+  if (medidasDistintas.size <= 1) {
+    return runGrid2DSingleForArea(jobContext, config);
+  }
+
+  const result = nestGrid2DMulti(
+    piezas.map((p, idx) => ({
+      id: `pieza_${idx}`,
+      widthMm: p.anchoMm,
+      heightMm: p.altoMm,
+      quantity: p.cantidad,
+    })),
+    {
+      kind: 'sheet',
+      widthMm: config.sheetWidthMm,
+      heightMm: config.sheetHeightMm,
+      margins: {
+        leftMm: config.margins.leftMm,
+        rightMm: config.margins.rightMm,
+        topMm: config.margins.topMm,
+        bottomMm: config.margins.bottomMm,
+      },
+    },
+    {
+      separationHMm: config.separationHMm,
+      separationVMm: config.separationVMm,
+      allowRotation: config.allowRotation,
+    },
+  );
+
+  if (result.placements.length === 0) return null;
+
+  return {
+    algorithm: 'grid-2d-multi',
+    cantidadCalculada: result.substrates.length,
+    unidad: 'pliegos',
+    aprovechamientoPct: result.metrics.aprovechamientoPct,
+    substrates: result.substrates,
+    placements: result.placements,
+    metricasRaw: result.metrics,
+    piezasAcomodadas: result.placements.length,
+    visualConfig: buildVisualConfig({
+      kind: 'sheet',
+      widthMm: config.sheetWidthMm,
+      heightMm: config.sheetHeightMm,
+      margins: {
+        leftMm: config.margins.leftMm,
+        rightMm: config.margins.rightMm,
+        topMm: config.margins.topMm,
+        bottomMm: config.margins.bottomMm,
+      },
+      separationHMm: config.separationHMm,
+      separationVMm: config.separationVMm,
+      allowRotation: config.allowRotation,
+      substrateLabel: 'Placa',
+    }),
+  };
+}
+
+function runPackingSolverRectangleForArea(
+  paso: PasoCargado,
+  jobContext: JobContext,
+  config: NestingConfigResolved,
+): NestingDispatchResult | null {
+  const piezas = getPiezasParaNesting(jobContext);
+  if (piezas.length === 0) return null;
+  void paso;
+  if (!config.sheetWidthMm || !config.sheetHeightMm) return null;
+
+  const result = nestPackingSolverRectangle(
+    piezas.map((p, idx) => ({
+      id: `pieza_${idx}`,
+      widthMm: p.anchoMm,
+      heightMm: p.altoMm,
+      quantity: p.cantidad,
+    })),
+    {
+      kind: 'sheet',
+      widthMm: config.sheetWidthMm,
+      heightMm: config.sheetHeightMm,
+      margins: {
+        leftMm: config.margins.leftMm,
+        rightMm: config.margins.rightMm,
+        topMm: config.margins.topMm,
+        bottomMm: config.margins.bottomMm,
+      },
+    },
+    {
+      separationHMm: config.separationHMm,
+      separationVMm: config.separationVMm,
+      allowRotation: config.allowRotation,
+      binHeightSegmentsPct:
+        config.costing.strategy === 'plate-segments'
+          ? config.costing.segmentSteps
+          : [100],
+    },
+  );
+
+  if (!result) {
+    return runGrid2DMultiForArea(paso, jobContext, {
+      ...config,
+      algorithm: 'grid-2d-multi',
+    });
+  }
+
+  return {
+    algorithm: 'packingsolver-rectangle',
+    cantidadCalculada: result.substrates.length,
+    unidad: 'pliegos',
+    aprovechamientoPct: result.metrics.aprovechamientoPct,
+    substrates: result.substrates,
+    placements: result.placements,
+    metricasRaw: {
+      ...result.metrics,
+      perSubstrate: result.perSubstrate,
+    },
+    piezasAcomodadas: result.placements.length,
+    visualConfig: buildVisualConfig({
+      kind: 'sheet',
+      widthMm: config.sheetWidthMm,
+      heightMm: config.sheetHeightMm,
+      margins: {
+        leftMm: config.margins.leftMm,
+        rightMm: config.margins.rightMm,
+        topMm: config.margins.topMm,
+        bottomMm: config.margins.bottomMm,
+      },
+      separationHMm: config.separationHMm,
+      separationVMm: config.separationVMm,
+      allowRotation: config.allowRotation,
+      substrateLabel: 'Placa',
+    }),
+  };
+}
+
+function runGrid2DSingleForArea(
+  jobContext: JobContext,
+  config: NestingConfigResolved,
+): NestingDispatchResult | null {
+  const piezas = getPiezasParaNesting(jobContext);
+  const pieza = piezas[0];
+  if (!pieza || !config.sheetWidthMm || !config.sheetHeightMm) return null;
+
+  const sustrato = {
+    kind: 'sheet' as const,
+    widthMm: config.sheetWidthMm,
+    heightMm: config.sheetHeightMm,
+    margins: {
+      leftMm: config.margins.leftMm,
+      rightMm: config.margins.rightMm,
+      topMm: config.margins.topMm,
+      bottomMm: config.margins.bottomMm,
+    },
+  };
+  const result = nestGrid2DSingle(
+    {
+      id: 'pieza_0',
+      widthMm: pieza.anchoMm,
+      heightMm: pieza.altoMm,
+      quantity: 1,
+    },
+    sustrato,
+    {
+      separationHMm: config.separationHMm,
+      separationVMm: config.separationVMm,
+      allowRotation: config.allowRotation,
+    },
+  );
+
+  const piezasPorPliego = result.metrics.piezasPorSustrato ?? 0;
+  if (piezasPorPliego <= 0) return null;
+
+  const totalPiezas = piezas.reduce((acc, item) => acc + item.cantidad, 0);
+  const pliegosNecesarios = Math.ceil(totalPiezas / piezasPorPliego);
+  const mixedLayout = buildSingleSizeMixedLayout({
+    pieceId: 'pieza_0',
+    pieceWidthMm: pieza.anchoMm,
+    pieceHeightMm: pieza.altoMm,
+    quantity: Math.min(totalPiezas, piezasPorPliego),
+    substrateWidthMm: config.sheetWidthMm,
+    substrateHeightMm: config.sheetHeightMm,
+    margins: sustrato.margins,
+    separationHMm: config.separationHMm,
+    separationVMm: config.separationVMm,
+    allowRotation: config.allowRotation,
+  });
+  const placements = mixedLayout?.placements ?? result.placements
+    .slice(0, Math.min(totalPiezas, piezasPorPliego))
+    .map((placement) => ({
+      ...placement,
+      substrateIndex: 0,
+    }));
+  const previewConsumedLengthMm =
+    mixedLayout?.consumedLengthMm ?? result.metrics.largoConsumidoMm ?? 0;
+
+  return {
+    algorithm: 'grid-2d-single',
+    cantidadCalculada: pliegosNecesarios,
+    unidad: 'pliegos',
+    aprovechamientoPct:
+      result.metrics.areaTotalMm2 > 0
+        ? Math.round(
+            ((totalPiezas * pieza.anchoMm * pieza.altoMm) /
+              (result.metrics.areaTotalMm2 * pliegosNecesarios)) *
+              10000,
+          ) / 100
+        : result.metrics.aprovechamientoPct,
+    substrates: [
+      {
+        kind: 'sheet' as const,
+        count: pliegosNecesarios,
+        widthMm: config.sheetWidthMm,
+        heightMm: config.sheetHeightMm,
+      },
+    ],
+    placements,
+    metricasRaw: {
+      ...result.metrics,
+      areaUtilMm2: totalPiezas * pieza.anchoMm * pieza.altoMm,
+      areaTotalMm2: result.metrics.areaTotalMm2 * pliegosNecesarios,
+      largoConsumidoMm: previewConsumedLengthMm,
+      columnas: undefined,
+      filas: undefined,
+      piezasPorSustrato: undefined,
+    },
+    piezasPorPliego,
+    piezasAcomodadas: totalPiezas,
+    visualConfig: buildVisualConfig({
+      kind: 'sheet',
+      widthMm: config.sheetWidthMm,
+      heightMm: config.sheetHeightMm,
+      margins: sustrato.margins,
+      separationHMm: config.separationHMm,
+      separationVMm: config.separationVMm,
+      allowRotation: config.allowRotation,
+      substrateLabel: 'Placa',
+    }),
+  };
+}
+
+function buildSingleSizeMixedLayout(input: {
+  pieceId: string;
+  pieceWidthMm: number;
+  pieceHeightMm: number;
+  quantity: number;
+  substrateWidthMm: number;
+  substrateHeightMm: number;
+  margins: {
+    leftMm: number;
+    rightMm: number;
+    topMm: number;
+    bottomMm: number;
+  };
+  separationHMm: number;
+  separationVMm: number;
+  allowRotation: boolean;
+}): { placements: Placement[]; consumedLengthMm: number } | null {
+  if (input.quantity <= 0) return null;
+  const usableWidthMm =
+    input.substrateWidthMm - input.margins.leftMm - input.margins.rightMm;
+  const usableHeightMm =
+    input.substrateHeightMm - input.margins.topMm - input.margins.bottomMm;
+
+  const rowTypes = [
+    buildRowType(input.pieceWidthMm, input.pieceHeightMm, false, usableWidthMm, input.separationHMm),
+    ...(input.allowRotation && input.pieceWidthMm !== input.pieceHeightMm
+      ? [
+          buildRowType(
+            input.pieceHeightMm,
+            input.pieceWidthMm,
+            true,
+            usableWidthMm,
+            input.separationHMm,
+          ),
+        ]
+      : []),
+  ].filter((row): row is RowType => row !== null);
+  if (rowTypes.length === 0) return null;
+
+  const maxRows = rowTypes.map((row) =>
+    Math.floor((usableHeightMm + input.separationVMm) / (row.heightMm + input.separationVMm)),
+  );
+  let best: { counts: number[]; heightMm: number; capacity: number } | null =
+    null;
+
+  for (let a = 0; a <= (maxRows[0] ?? 0); a++) {
+    const secondMax = maxRows[1] ?? 0;
+    for (let b = 0; b <= secondMax; b++) {
+      const counts = rowTypes.length === 1 ? [a] : [a, b];
+      const rows = counts.reduce((acc, count) => acc + count, 0);
+      if (rows <= 0) continue;
+      const height =
+        counts.reduce(
+          (acc, count, idx) => acc + count * rowTypes[idx].heightMm,
+          0,
+        ) +
+        (rows - 1) * input.separationVMm;
+      if (height > usableHeightMm) continue;
+      const capacity = counts.reduce(
+        (acc, count, idx) => acc + count * rowTypes[idx].columns,
+        0,
+      );
+      if (capacity < input.quantity) continue;
+      if (
+        !best ||
+        height < best.heightMm ||
+        (height === best.heightMm && capacity > best.capacity)
+      ) {
+        best = { counts, heightMm: height, capacity };
+      }
+    }
+  }
+  if (!best) return null;
+
+  const rows: RowType[] = [];
+  best.counts.forEach((count, idx) => {
+    for (let i = 0; i < count; i++) rows.push(rowTypes[idx]);
+  });
+  rows.sort((a, b) => b.columns - a.columns || b.heightMm - a.heightMm);
+
+  const placements: Placement[] = [];
+  let remaining = input.quantity;
+  let yMm = input.margins.topMm;
+  for (const row of rows) {
+    if (remaining <= 0) break;
+    const inRow = Math.min(remaining, row.columns);
+    for (let col = 0; col < inRow; col++) {
+      placements.push({
+        pieceId: input.pieceId,
+        substrateIndex: 0,
+        xMm: input.margins.leftMm + col * (row.widthMm + input.separationHMm),
+        yMm,
+        widthMm: row.widthMm,
+        heightMm: row.heightMm,
+        rotated: row.rotated,
+      });
+    }
+    remaining -= inRow;
+    yMm += row.heightMm + input.separationVMm;
+  }
+
+  const maxBottomMm = placements.reduce(
+    (max, placement) => Math.max(max, placement.yMm + placement.heightMm),
+    0,
+  );
+  return {
+    placements,
+    consumedLengthMm: maxBottomMm + input.margins.bottomMm,
+  };
+}
+
+interface RowType {
+  widthMm: number;
+  heightMm: number;
+  rotated: boolean;
+  columns: number;
+}
+
+function buildRowType(
+  widthMm: number,
+  heightMm: number,
+  rotated: boolean,
+  usableWidthMm: number,
+  separationHMm: number,
+): RowType | null {
+  if (usableWidthMm < widthMm) return null;
+  return {
+    widthMm,
+    heightMm,
+    rotated,
+    columns: Math.floor((usableWidthMm + separationHMm) / (widthMm + separationHMm)),
   };
 }
 
@@ -234,34 +749,23 @@ function runGrid2DSingle(
   paso: PasoCargado,
   jobContext: JobContext,
   materialResuelto: MaterialResueltoParaNesting | null,
+  config: NestingConfigResolved,
 ): NestingDispatchResult | null {
   // Sustrato común a ambos modos.
-  const sheetWidthMm = readNumber(materialResuelto?.atributosVarianteJson, 'anchoMm');
-  const sheetHeightMm = readNumber(materialResuelto?.atributosVarianteJson, 'largoMm');
+  void materialResuelto;
+  const sheetWidthMm = config.sheetWidthMm;
+  const sheetHeightMm = config.sheetHeightMm;
   if (!sheetWidthMm || !sheetHeightMm) return null;
-
-  // Márgenes de la máquina (alineado al doc §5: paramsTecnicos.margenesNoImprimiblesMm).
-  const maqParams = (paso.maquina?.parametrosTecnicosJson ?? {}) as Record<string, unknown>;
-  const margins = (maqParams.margenesNoImprimiblesMm ?? {}) as Record<string, unknown>;
-  const marginLeftMm = Number(margins.izq ?? margins.leftMm ?? 5);
-  const marginRightMm = Number(margins.der ?? margins.rightMm ?? 5);
-  const marginTopMm = Number(margins.sup ?? margins.topMm ?? 5);
-  const marginBottomMm = Number(margins.inf ?? margins.bottomMm ?? 5);
-
-  const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
-  const sepHMm = Number(params.separacionHorizontalMm ?? 0);
-  const sepVMm = Number(params.separacionVerticalMm ?? 0);
-  const allowRotation = Boolean(params.permitirRotacion ?? true);
 
   const sustrato = {
     kind: 'sheet' as const,
     widthMm: sheetWidthMm,
     heightMm: sheetHeightMm,
     margins: {
-      leftMm: marginLeftMm,
-      rightMm: marginRightMm,
-      topMm: marginTopMm,
-      bottomMm: marginBottomMm,
+      leftMm: config.margins.leftMm,
+      rightMm: config.margins.rightMm,
+      topMm: config.margins.topMm,
+      bottomMm: config.margins.bottomMm,
     },
   };
 
@@ -273,11 +777,14 @@ function runGrid2DSingle(
     const medidasDistintas = new Set(
       jobContext.piezas.map((p) => `${p.anchoMm}x${p.altoMm}`),
     );
-    if (medidasDistintas.size > 1) {
+    if (
+      config.algorithm === 'grid-2d-multi' ||
+      (config.algorithm === 'auto' && medidasDistintas.size > 1)
+    ) {
       return runGrid2DMulti(jobContext, sustrato, {
-        separationHMm: sepHMm,
-        separationVMm: sepVMm,
-        allowRotation,
+        separationHMm: config.separationHMm,
+        separationVMm: config.separationVMm,
+        allowRotation: config.allowRotation,
       });
     }
   }
@@ -292,6 +799,7 @@ function runGrid2DSingle(
     widthMm = jobContext.piezas[0].anchoMm;
     heightMm = jobContext.piezas[0].altoMm;
   } else {
+    const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
     widthMm = Number(params.piezaAnchoMm ?? 0);
     heightMm = Number(params.piezaAltoMm ?? 0);
   }
@@ -300,7 +808,11 @@ function runGrid2DSingle(
   const result = nestGrid2DSingle(
     { id: 'pieza_principal', widthMm, heightMm, quantity: 1 },
     sustrato,
-    { separationHMm: sepHMm, separationVMm: sepVMm, allowRotation },
+    {
+      separationHMm: config.separationHMm,
+      separationVMm: config.separationVMm,
+      allowRotation: config.allowRotation,
+    },
   );
 
   const piezasPorPliego = result.metrics.piezasPorSustrato ?? 0;
@@ -319,6 +831,16 @@ function runGrid2DSingle(
     metricasRaw: result.metrics,
     piezasPorPliego,
     piezasAcomodadas: piezasPorPliego,
+    visualConfig: buildVisualConfig({
+      kind: 'sheet',
+      widthMm: sheetWidthMm,
+      heightMm: sheetHeightMm,
+      margins: sustrato.margins,
+      separationHMm: config.separationHMm,
+      separationVMm: config.separationVMm,
+      allowRotation: config.allowRotation,
+      substrateLabel: 'Pliego',
+    }),
   };
 }
 
@@ -336,11 +858,20 @@ function runGrid2DMulti(
     kind: 'sheet';
     widthMm: number;
     heightMm: number;
-    margins: { leftMm: number; rightMm: number; topMm: number; bottomMm: number };
+    margins: {
+      leftMm: number;
+      rightMm: number;
+      topMm: number;
+      bottomMm: number;
+    };
   },
-  options: { separationHMm: number; separationVMm: number; allowRotation: boolean },
+  options: {
+    separationHMm: number;
+    separationVMm: number;
+    allowRotation: boolean;
+  },
 ): NestingDispatchResult | null {
-  const piezas = jobContext.piezas ?? [];
+  const piezas = getPiezasParaNesting(jobContext);
   if (piezas.length === 0) return null;
 
   const result = nestGrid2DMulti(
@@ -367,7 +898,75 @@ function runGrid2DMulti(
     placements: result.placements,
     metricasRaw: result.metrics,
     piezasAcomodadas: result.placements.length,
+    visualConfig: buildVisualConfig({
+      kind: 'sheet',
+      widthMm: sustrato.widthMm,
+      heightMm: sustrato.heightMm,
+      margins: sustrato.margins,
+      separationHMm: options.separationHMm,
+      separationVMm: options.separationVMm,
+      allowRotation: options.allowRotation,
+      substrateLabel: 'Placa',
+    }),
   };
+}
+
+function buildVisualConfig(input: {
+  kind: 'roll' | 'sheet';
+  widthMm: number;
+  heightMm: number;
+  margins: {
+    leftMm: number;
+    rightMm: number;
+    topMm: number;
+    bottomMm: number;
+  };
+  separationHMm: number;
+  separationVMm: number;
+  allowRotation: boolean;
+  substrateLabel: string;
+  panelizado?: NestingVisualConfig['panelizado'];
+}): NestingVisualConfig {
+  const usableWidthMm = Math.max(
+    0,
+    input.widthMm - input.margins.leftMm - input.margins.rightMm,
+  );
+  const usableHeightMm = Math.max(
+    0,
+    input.heightMm - input.margins.topMm - input.margins.bottomMm,
+  );
+  return {
+    margins: input.margins,
+    spacing: {
+      horizontalMm: input.separationHMm,
+      verticalMm: input.separationVMm,
+    },
+    allowRotation: input.allowRotation,
+    substrateLabel: input.substrateLabel,
+    panelizado: input.panelizado,
+    usableArea: {
+      xMm: input.margins.leftMm,
+      yMm: input.margins.topMm,
+      widthMm: usableWidthMm,
+      heightMm: usableHeightMm,
+    },
+  };
+}
+
+function getPiezasParaNesting(jobContext: JobContext) {
+  if (jobContext.piezas && jobContext.piezas.length > 0) {
+    return jobContext.piezas;
+  }
+  if (jobContext.medidaCustomMm) {
+    return [
+      {
+        cantidad: Number(jobContext.cantidad ?? 0),
+        anchoMm: jobContext.medidaCustomMm.anchoMm,
+        altoMm: jobContext.medidaCustomMm.altoMm,
+      },
+    ];
+  }
+  return [];
 }
 
 /**
@@ -388,7 +987,10 @@ export async function runNestingForPrePrensa(
   paso: PasoCargado,
   jobContext: JobContext,
   pasosSiguientes: PasoCargado[],
-  resolveMaterialFn: (slot: PasoCargado['slots'][number], jc: JobContext) => Promise<MaterialResueltoParaNesting | null>,
+  resolveMaterialFn: (
+    slot: PasoCargado['slots'][number],
+    jc: JobContext,
+  ) => Promise<MaterialResueltoParaNesting | null>,
 ): Promise<NestingDispatchResult | null> {
   if (paso.familiaCodigo !== 'pre_prensa') return null;
 
@@ -407,7 +1009,6 @@ export async function runNestingForPrePrensa(
   // adjudica luego a pre_prensa para que escriba sus outputs canónicos.
   const pasoSintetico: PasoCargado = {
     ...proximoImpresionPorHoja,
-    paramsPasoJson: paso.paramsPasoJson, // mantener overrides locales de pre_prensa
   };
 
   const baseResult = runNestingForPaso(pasoSintetico, jobContext, material);
@@ -457,7 +1058,7 @@ function aplicarTalonarioGroupingSiCorresponde(
     cantidadTalonarios,
     posesXPliego: piezasPorPliego,
     numerosXTalonario,
-    modoTalonarioIncompleto: modo as 'aprovechar_pliego' | 'pose_completa',
+    modoTalonarioIncompleto: modo,
   });
 
   // Sobrescribir la cantidad por la real con grouping (pliegosXCapa).
@@ -474,7 +1075,10 @@ function aplicarTalonarioGroupingSiCorresponde(
 // Helpers
 // ────────────────────────────────────────────────────────────────────
 
-function readNumber(json: Record<string, unknown> | null | undefined, key: string): number | null {
+function readNumber(
+  json: Record<string, unknown> | null | undefined,
+  key: string,
+): number | null {
   if (!json) return null;
   const v = json[key];
   if (typeof v === 'number' && Number.isFinite(v) && v > 0) return v;
