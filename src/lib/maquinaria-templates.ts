@@ -43,12 +43,6 @@ function template(definition: MaquinariaTemplateDefinition): MaquinariaTemplateD
 
 // ─── Opciones reutilizables (alineadas al doc) ────────────────────
 
-const formatosPliegoOptions = [
-  option("A4", "A4"),
-  option("A3", "A3"),
-  option("SRA3", "SRA3"),
-];
-
 const coloresImpresorLaserOptions = [
   option("BN", "Blanco y Negro"),
   option("CMYK", "CMYK"),
@@ -276,7 +270,6 @@ function buildLaserSections(): MaquinariaTemplateSection[] {
       fields: [
         field({ key: "margenesNoImprimiblesMm", label: "Márgenes no imprimibles", scope: "maquina", kind: "textarea", required: true, description: "Distancia que la máquina no puede imprimir en cada borde." }),
         field({ key: "soporteDobleFaz", label: "Soporta doble faz", scope: "maquina", kind: "boolean", description: "Si la máquina puede imprimir ambas caras." }),
-        field({ key: "formatosPliegoSoportados", label: "Formatos soportados", scope: "maquina", kind: "multiselect", options: formatosPliegoOptions, description: "Lista de formatos que la máquina puede manejar." }),
         field({ key: "coloresSoportados", label: "Colores soportados", scope: "maquina", kind: "multiselect", options: coloresImpresorLaserOptions, description: "Modos de color disponibles." }),
       ],
     }),
@@ -291,8 +284,7 @@ function buildLaserSections(): MaquinariaTemplateSection[] {
         field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza al terminar." }),
         field({ key: "feedReloadMin", label: "Recarga papel", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de recarga entre tandas." }),
         field({ key: "caras", label: "Caras", scope: "perfil_operativo", kind: "select", required: true, options: carasOptions, description: "Discriminante: simple o doble faz." }),
-        field({ key: "colores", label: "Colores", scope: "perfil_operativo", kind: "select", options: coloresImpresorLaserOptions, description: "Modo de color del perfil." }),
-        field({ key: "formatoSoportado", label: "Formato", scope: "perfil_operativo", kind: "select", options: formatosPliegoOptions, description: "Formato máximo del perfil." }),
+        field({ key: "colores", label: "Modos de color admitidos", scope: "perfil_operativo", kind: "multiselect", options: coloresImpresorLaserOptions, description: "Modos comerciales que puede imprimir este perfil." }),
         field({ key: "gramajeMinGr", label: "Gramaje mínimo", scope: "perfil_operativo", kind: "number", unit: "g_m2", description: "Gramaje mínimo del rango." }),
         field({ key: "gramajeMaxGr", label: "Gramaje máximo", scope: "perfil_operativo", kind: "number", unit: "g_m2", description: "Gramaje máximo del rango." }),
       ],

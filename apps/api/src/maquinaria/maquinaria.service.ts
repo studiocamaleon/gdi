@@ -51,6 +51,7 @@ import {
   getPerfilConsumableChannels,
   isConsumableChannel,
   PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES,
+  requiredConsumableChannelsFromColorMode,
 } from './consumibles-impresion';
 
 type MaquinaCompleta = Prisma.MaquinaGetPayload<{
@@ -271,7 +272,6 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
   'anchoMesaMm',
   'anchoMinRolloMm',
   'coloresSoportados',
-  'formatosPliegoSoportados',
   'geometria',
   'largoMesaMm',
   'margenEntrePliegosMm',
@@ -904,6 +904,44 @@ export class MaquinariaService {
       (item) => item.activo,
     );
     if (consumiblesActivos.length === 0) return false;
+
+    if (payload.plantilla === 'impresora_laser') {
+      const channelsFromMachine = requiredConsumableChannelsFromColorMode(
+        payload.parametrosTecnicos?.coloresSoportados ??
+          payload.parametrosTecnicos?.configuracionColor ??
+          payload.parametrosTecnicos?.configuracionCanales,
+      );
+      const channels =
+        channelsFromMachine.length > 0
+          ? channelsFromMachine
+          : Array.from(
+              new Set(
+                payload.perfilesOperativos
+                  .filter((item) => item.activo)
+                  .flatMap((perfil) =>
+                    getPerfilConsumableChannels(
+                      perfil.detalle ?? {},
+                      payload.parametrosTecnicos ?? {},
+                    ),
+                  ),
+              ),
+            );
+
+      if (channels.length === 0) return false;
+      return channels.every((channel) =>
+        consumiblesActivos.some((consumible) => {
+          const detalle = consumible.detalle ?? {};
+          const channelMatches =
+            getConsumableChannelFromDetail(detalle) === channel;
+          const hasConsumableData =
+            Boolean(consumible.materiaPrimaVarianteId) &&
+            Boolean(consumible.tipo) &&
+            Boolean(consumible.unidad) &&
+            Number(consumible.consumoBase ?? 0) > 0;
+          return channelMatches && hasConsumableData;
+        }),
+      );
+    }
 
     for (const perfil of payload.perfilesOperativos.filter(
       (item) => item.activo,

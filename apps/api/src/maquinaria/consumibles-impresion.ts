@@ -60,9 +60,12 @@ export function requiredConsumableChannelsFromColorMode(
   rawMode: unknown,
 ): ConsumableChannel[] {
   if (Array.isArray(rawMode)) {
-    const channels = rawMode
-      .map((item) => normalizeConsumableChannel(item))
-      .filter((item): item is ConsumableChannel => item !== null);
+    const channels = rawMode.flatMap((item) => {
+      const fromMode = requiredConsumableChannelsFromColorMode(item);
+      if (fromMode.length > 0) return fromMode;
+      const channel = normalizeConsumableChannel(item);
+      return channel ? [channel] : [];
+    });
     return Array.from(new Set(channels));
   }
 
@@ -94,7 +97,13 @@ export function requiredConsumableChannelsFromColorMode(
 export function getPerfilConsumableChannels(
   perfilDetalle: Record<string, unknown> | null | undefined,
   maquinaParametros?: Record<string, unknown> | null,
+  modoColorSeleccionado?: unknown,
 ): ConsumableChannel[] {
+  const bySelectedMode = requiredConsumableChannelsFromColorMode(
+    modoColorSeleccionado,
+  );
+  if (bySelectedMode.length > 0) return bySelectedMode;
+
   const perfilMode = perfilDetalle?.colores ?? perfilDetalle?.modoColor;
   const byPerfil = requiredConsumableChannelsFromColorMode(perfilMode);
   if (byPerfil.length > 0) return byPerfil;

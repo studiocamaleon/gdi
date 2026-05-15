@@ -59,6 +59,14 @@ export class JobContextDto {
 
   @IsOptional()
   @IsString()
+  modoColor?: string;
+
+  @IsOptional()
+  @IsObject()
+  modoColorPorPaso?: Record<string, string>;
+
+  @IsOptional()
+  @IsString()
   tecnologia?: string;
 
   @IsOptional()

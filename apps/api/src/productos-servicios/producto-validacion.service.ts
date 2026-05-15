@@ -72,6 +72,35 @@ export class ProductoValidacionService {
           continue;
         }
 
+        const params =
+          config.paramsPasoJson &&
+          typeof config.paramsPasoJson === 'object' &&
+          !Array.isArray(config.paramsPasoJson)
+            ? (config.paramsPasoJson as Record<string, unknown>)
+            : {};
+        const modoColorConfig =
+          params.modoColorConfig &&
+          typeof params.modoColorConfig === 'object' &&
+          !Array.isArray(params.modoColorConfig)
+            ? (params.modoColorConfig as Record<string, unknown>)
+            : {};
+        const configConModoColor = config as typeof config & {
+          modoColorOptions?: unknown[];
+        };
+        if (
+          modoColorConfig.enabled === true &&
+          modoColorConfig.comercialElige === true &&
+          Array.isArray(configConModoColor.modoColorOptions) &&
+          configConModoColor.modoColorOptions.length === 0
+        ) {
+          errores.push({
+            severidad: 'ERROR',
+            codigo: 'modo_color_sin_opciones',
+            mensaje: `Paso ${paso.orden} (${familia.nombre}): modo de color comercial activo sin perfiles compatibles.`,
+            ubicacion: { rutaAltId: ra.id, rutaPasoId: paso.id },
+          });
+        }
+
         if (
           familia.relacionMaquinaSoportada.includes('M-1') &&
           !familia.relacionMaquinaSoportada.includes('M-0') &&

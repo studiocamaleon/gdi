@@ -47,12 +47,12 @@ describe('resolveNestingConfig', () => {
     );
 
     expect(config.margins).toMatchObject({
-      leftMm: 4,
-      rightMm: 5,
-      topMm: 6,
-      bottomMm: 7,
-      startMm: 6,
-      endMm: 7,
+      leftMm: 6.5,
+      rightMm: 7.5,
+      topMm: 8.5,
+      bottomMm: 9.5,
+      startMm: 8.5,
+      endMm: 9.5,
     });
   });
 
@@ -80,8 +80,10 @@ describe('resolveNestingConfig', () => {
       null,
     );
 
-    expect(config.margins.leftMm).toBe(12);
+    expect(config.pieceBleedMm).toBe(4);
     expect(config.separationHMm).toBe(8);
+    expect(config.separationVMm).toBe(8);
+    expect(config.margins.leftMm).toBe(16);
     expect(config.allowRotation).toBe(false);
   });
 
@@ -108,13 +110,86 @@ describe('resolveNestingConfig', () => {
     );
 
     expect(config.margins).toMatchObject({
-      leftMm: 7,
-      rightMm: 9,
-      topMm: 11,
-      bottomMm: 13,
-      startMm: 11,
-      endMm: 13,
+      leftMm: 9.5,
+      rightMm: 11.5,
+      topMm: 13.5,
+      bottomMm: 15.5,
+      startMm: 13.5,
+      endMm: 15.5,
     });
+  });
+
+  it('usa demasía por lado para derivar separación interna y margen exterior', () => {
+    const config = resolveNestingConfig(
+      paso({
+        paramsPasoJson: {
+          nestingConfig: {
+            pieceBleedMm: 2,
+          },
+        },
+        maquina: {
+          id: 'maq-1',
+          codigo: 'M1',
+          nombre: 'Máquina',
+          plantilla: 'impresora_laser',
+          parametrosTecnicosJson: {
+            margenesNoImprimiblesMm: { izq: 4, der: 5, sup: 6, inf: 7 },
+          },
+        },
+      }),
+      jobContext,
+      null,
+    );
+
+    expect(config.pieceBleedMm).toBe(2);
+    expect(config.separationHMm).toBe(4);
+    expect(config.separationVMm).toBe(4);
+    expect(config.margins).toMatchObject({
+      leftMm: 6,
+      rightMm: 7,
+      topMm: 8,
+      bottomMm: 9,
+      startMm: 8,
+      endMm: 9,
+    });
+  });
+
+  it('convierte separación legacy simétrica a demasía por lado', () => {
+    const config = resolveNestingConfig(
+      paso({
+        paramsPasoJson: {
+          nestingConfig: {
+            separationHMm: 4,
+            separationVMm: 4,
+          },
+        },
+      }),
+      jobContext,
+      null,
+    );
+
+    expect(config.pieceBleedMm).toBe(2);
+    expect(config.separationHMm).toBe(4);
+    expect(config.separationVMm).toBe(4);
+  });
+
+  it('convierte separación legacy desigual usando el mayor valor', () => {
+    const config = resolveNestingConfig(
+      paso({
+        paramsPasoJson: {
+          nestingConfig: {
+            separationHMm: 4,
+            separationVMm: 6,
+          },
+        },
+      }),
+      jobContext,
+      null,
+    );
+
+    expect(config.pieceBleedMm).toBe(3);
+    expect(config.separationHMm).toBe(6);
+    expect(config.separationVMm).toBe(6);
   });
 
   it('toma tamaño de placa desde el material antes que desde la mesa', () => {
@@ -260,7 +335,7 @@ describe('resolveNestingConfig', () => {
       mode: 'automatic',
       axis: 'vertical',
       overlapMm: 20,
-      maxPanelWidthMm: 1360,
+      maxPanelWidthMm: 1355,
       distribution: 'equilibrada',
       widthInterpretation: 'total',
     });

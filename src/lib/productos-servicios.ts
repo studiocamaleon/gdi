@@ -133,6 +133,12 @@ export interface ConfigPasoDetalle {
     nombre: string;
     plantilla: string;
     parametrosTecnicosJson?: Record<string, unknown> | null;
+    perfilesOperativos?: Array<{
+      id: string;
+      activo?: boolean;
+      tipoPerfil?: string | null;
+      detalleJson?: Record<string, unknown> | null;
+    }>;
     centroCostoPrincipalId?: string | null;
     centroCostoPrincipal?: {
       id: string;
@@ -140,7 +146,17 @@ export interface ConfigPasoDetalle {
       nombre: string;
     } | null;
   } | null;
-  perfilM1: { id: string; nombre: string; tipoPerfil?: string | null } | null;
+  perfilM1: {
+    id: string;
+    nombre: string;
+    tipoPerfil?: string | null;
+    detalleJson?: Record<string, unknown> | null;
+  } | null;
+  modoColorOptions?: Array<{
+    value: string;
+    label: string;
+    perfilIds: string[];
+  }>;
   centroCosto: {
     id: string;
     codigo: string;
@@ -162,6 +178,12 @@ export interface ConfigPasoDetalle {
       codigo: string;
       nombre: string;
       plantilla: string;
+      perfilesOperativos?: Array<{
+        id: string;
+        activo?: boolean;
+        tipoPerfil?: string | null;
+        detalleJson?: Record<string, unknown> | null;
+      }>;
       centroCostoPrincipalId?: string | null;
       centroCostoPrincipal?: {
         id: string;

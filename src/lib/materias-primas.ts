@@ -65,6 +65,7 @@ export type UnidadMateriaPrima =
   | "caja"
   | "kit"
   | "hoja"
+  /** Alias legado aceptado desde datos antiguos; las altas nuevas usan "hoja". */
   | "pliego"
   | "resma"
   | "rollo"
@@ -179,7 +180,6 @@ export const unidadMateriaPrimaItems: Array<{
   { value: "caja", label: "Caja" },
   { value: "kit", label: "Kit" },
   { value: "hoja", label: "Hoja" },
-  { value: "pliego", label: "Pliego" },
   { value: "resma", label: "Resma" },
   { value: "rollo", label: "Rollo" },
   { value: "metro_lineal", label: "Metro lineal" },

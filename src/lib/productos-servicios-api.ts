@@ -366,9 +366,10 @@ export interface LookupsConfigPaso {
       id: string;
       nombre: string;
       tipoPerfil?: string | null;
-      productivityValue: string | null;
-      productivityUnit: string | null;
-    }>;
+	      productivityValue: string | null;
+	      productivityUnit: string | null;
+	      detalleJson?: Record<string, unknown> | null;
+	    }>;
   }>;
   centrosCosto: Array<{
     id: string;
@@ -443,6 +444,7 @@ export interface NestingViewerInput {
   piezasPorPliego?: number;
   consumedLengthMm?: number;
   piezasAcomodadas: number;
+  outputsCanonicos?: Record<string, unknown>;
   visualConfig?: {
     margins: {
       leftMm: number;
@@ -454,9 +456,16 @@ export interface NestingViewerInput {
       horizontalMm: number;
       verticalMm: number;
     };
+    pieceBleedMm?: number;
     allowRotation: boolean;
     substrateLabel?: string;
     usableArea: {
+      xMm: number;
+      yMm: number;
+      widthMm: number;
+      heightMm: number;
+    };
+    printableArea?: {
       xMm: number;
       yMm: number;
       widthMm: number;
@@ -515,6 +524,7 @@ export interface CotizarRequest {
     medidaCustomMm?: { anchoMm: number; altoMm: number };
     tecnologia?: string;
     tintasAdicionales?: string[];
+    modoColor?: string;
     distanciaKm?: number;
     m2_instalados?: number;
     zonaInstalacion?: string;

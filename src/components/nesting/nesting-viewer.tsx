@@ -195,25 +195,25 @@ export function NestingViewer({
   }
 
   return (
-    <section className={cn("overflow-hidden rounded-xl border border-[#e7e5e2] bg-white shadow-sm", className)}>
-      <div className="flex flex-wrap items-center gap-3 border-b border-[#efece8] px-4 py-3">
-        <div className="inline-flex items-center gap-2 border-b-2 border-foreground pb-3 pt-2 -mb-3">
-          <span className="rounded bg-foreground px-1.5 py-0.5 font-mono text-[10px] font-medium text-background">
+    <section className={cn("nesting-viewer", className)}>
+      <div className="nesting-strat-row">
+        <div className="nesting-strat on">
+          <span className="ix">
             01
           </span>
-          <span className="text-sm font-semibold">{algorithmLabel(result.algorithm)}</span>
-          <span className="font-mono text-xs font-semibold text-emerald-700">
+          <span>{algorithmLabel(result.algorithm)}</span>
+          <span className="yield">
             {formatNumber(result.aprovechamientoPct, 1)}%
           </span>
         </div>
         {result.costingPreview ? (
-          <div className="ml-auto text-xs text-muted-foreground">
+          <div className="right">
             Costeo: <strong className="font-semibold text-foreground">{result.costingPreview.label}</strong>
           </div>
         ) : null}
       </div>
 
-      <div className="grid border-b border-[#efece8] sm:grid-cols-2 xl:grid-cols-5">
+      <div className="nesting-stats">
         <StatBlock
           featured
           label="Aprovechamiento"
@@ -257,7 +257,7 @@ export function NestingViewer({
         costingPreview={result.costingPreview}
       />
 
-      <div className="space-y-4 bg-[#fafaf9] p-4">
+      <div className="nesting-canvas-list">
         {result.substrates.map((sub, idx) => (
           <SubstrateView
             key={idx}
@@ -274,6 +274,7 @@ export function NestingViewer({
       </div>
 
       <NestingFooter result={result} />
+      <NestingOutputsSummary outputs={result.outputsCanonicos} />
       <TalonarioGrouping grouping={result.talonarioGrouping} />
     </section>
   );
@@ -291,10 +292,10 @@ function StatBlock({
   featured?: boolean;
 }) {
   return (
-    <div className={cn("min-w-0 border-r border-[#efece8] px-4 py-3 last:border-r-0", featured && "bg-[#fafaf9]")}>
-      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</div>
-      <div className={cn("mt-1 text-xl font-semibold tabular-nums", featured && "text-emerald-700")}>{value}</div>
-      {hint ? <div className="mt-1 truncate text-xs text-muted-foreground" title={hint}>{hint}</div> : null}
+    <div className={cn("nesting-stat", featured && "featured")}>
+      <div className="lbl">{label}</div>
+      <div className="val">{value}</div>
+      {hint ? <div className="sub" title={hint}>{hint}</div> : null}
     </div>
   );
 }
@@ -320,8 +321,8 @@ function NestingConfigStrip({
       : null,
     visualConfig
       ? [
-          "Separación",
-          `H ${formatMm(visualConfig.spacing.horizontalMm)} · V ${formatMm(visualConfig.spacing.verticalMm)}`,
+          "Demasía",
+          `${formatMm(getPieceBleedMm(visualConfig))} por lado`,
         ]
       : null,
     visualConfig ? ["Rotación", visualConfig.allowRotation ? "permitida" : "bloqueada"] : null,
@@ -335,11 +336,11 @@ function NestingConfigStrip({
   ].filter(Boolean) as Array<[string, string]>;
 
   return (
-    <div className="flex flex-wrap gap-x-6 gap-y-2 border-b border-[#efece8] bg-[#fafaf9] px-4 py-3">
+    <div className="nesting-config">
       {configItems.map(([key, value]) => (
-        <div key={key} className="inline-flex items-center gap-2 text-xs">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{key}</span>
-          <span className="font-mono text-[11px] font-medium text-foreground">{value}</span>
+        <div key={key} className="grp">
+          <span className="k">{key}</span>
+          <span className="v">{value}</span>
         </div>
       ))}
     </div>
@@ -355,11 +356,11 @@ function NestingCostingSummary({
   if (items.length === 0) return null;
 
   return (
-    <div className="border-b border-[#efece8] bg-orange-50/70 px-4 py-2 text-xs text-orange-950">
+    <div className="nesting-costing">
       {items.map((item) => {
         const detalle = item.detalleCosteoNesting!;
         return (
-          <div key={`${item.materialNombre}-${detalle.strategy}`} className="flex flex-wrap gap-x-4 gap-y-1">
+          <div key={`${item.materialNombre}-${detalle.strategy}`}>
             <span className="font-semibold">Costeo del sustrato</span>
             <span>{item.materialNombre}</span>
             <span>{costingLabel(detalle.strategy)}</span>
@@ -374,6 +375,90 @@ function NestingCostingSummary({
   );
 }
 
+function NestingOutputsSummary({
+  outputs,
+}: {
+  outputs?: NestingViewerInput["outputsCanonicos"];
+}) {
+  const items = getDisplayableOutputs(outputs);
+  if (items.length === 0) return null;
+
+  return (
+    <div className="nesting-outputs">
+      <div className="lbl">
+        Outputs del nesting
+      </div>
+      <div className="items">
+        {items.map(([key, value]) => (
+          <div key={key} className="out">
+            <span className="k" title={key}>
+              {humanOutputLabel(key)}
+            </span>
+            <span className="v" title={value}>
+              {value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function getDisplayableOutputs(outputs?: NestingViewerInput["outputsCanonicos"]) {
+  if (!outputs) return [];
+  const preferred = [
+    "pliegos_calculados",
+    "poses_por_pliego",
+    "cortes_calculados",
+    "pliego_impresion_ancho_mm",
+    "pliego_impresion_alto_mm",
+    "pliego_impresion_area_m2",
+  ];
+  return preferred
+    .filter((key) => outputs[key] != null)
+    .map((key) => [key, formatOutputValue(key, outputs[key])] as [string, string])
+    .filter(([, value]) => value.length > 0);
+}
+
+function formatOutputValue(key: string, value: unknown) {
+  if (typeof value === "number") {
+    if (key.endsWith("_mm")) return formatMm(value);
+    if (key.endsWith("_m2")) return formatM2(value * 1_000_000);
+    return formatNumber(value, 2);
+  }
+  if (typeof value === "string") return value;
+  if (typeof value === "object" && value !== null && key === "cortes_calculados") {
+    const cuts = value as {
+      cortesTotales?: unknown;
+      columnas?: unknown;
+      filas?: unknown;
+      demasiaMm?: unknown;
+      formula?: unknown;
+    };
+    const total = Number(cuts.cortesTotales ?? 0);
+    const columnas = Number(cuts.columnas ?? 0);
+    const filas = Number(cuts.filas ?? 0);
+    const demasia = Number(cuts.demasiaMm ?? 0);
+    const base = `${formatNumber(total, 0)} cortes`;
+    const grid = columnas > 0 && filas > 0 ? ` · ${columnas} col × ${filas} filas` : "";
+    const bleed = demasia > 0 ? ` · demasía ${formatMm(demasia)}` : " · sin demasía";
+    return `${base}${grid}${bleed}`;
+  }
+  return "";
+}
+
+function humanOutputLabel(key: string) {
+  const labels: Record<string, string> = {
+    pliegos_calculados: "Pliegos",
+    poses_por_pliego: "Poses por pliego",
+    cortes_calculados: "Cortes",
+    pliego_impresion_ancho_mm: "Ancho pliego",
+    pliego_impresion_alto_mm: "Alto pliego",
+    pliego_impresion_area_m2: "Área pliego",
+  };
+  return labels[key] ?? key.replaceAll("_", " ");
+}
+
 function NestingLegend({
   pieceGroups,
   visualConfig,
@@ -384,33 +469,30 @@ function NestingLegend({
   costingPreview?: NestingViewerInput["costingPreview"];
 }) {
   const hasMargins = visualConfig && Object.values(visualConfig.margins).some((value) => value > 0);
-  const hasSpacing =
-    visualConfig && (visualConfig.spacing.horizontalMm > 0 || visualConfig.spacing.verticalMm > 0);
+  const hasBleed = visualConfig && getPieceBleedMm(visualConfig) > 0;
   const showCosting = costingPreview && costingPreview.strategy !== "simple";
   const hasPanelizado = visualConfig?.panelizado?.enabled === true;
 
-  if (pieceGroups.length === 0 && !hasMargins && !hasSpacing && !showCosting && !hasPanelizado) return null;
+  if (pieceGroups.length === 0 && !hasMargins && !hasBleed && !showCosting && !hasPanelizado) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-[#efece8] px-4 py-3 text-xs">
-      <span className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">Referencia</span>
+    <div className="nesting-legend">
+      <span className="lbl">Referencias</span>
       <LegendChip color="#ffffff" border="#b8d8c2" label="Área útil" dashed />
       {hasMargins ? <LegendChip color="#fff4df" border="#e9b978" label="Márgenes" /> : null}
       {showCosting ? <LegendChip color="#fff1c8" border="#e7be58" label="Área costeada" /> : null}
       {costingPreview?.wasteAreaMm2 ? <LegendChip color="#fef3ed" border="#f4b9a0" label="Desperdicio" dashed /> : null}
-      {hasSpacing ? <LegendChip color="#e7e5e4" border="#bdb9b4" label="Separación" /> : null}
+      {hasBleed ? <LegendChip color="#e7e5e4" border="#bdb9b4" label="Demasía" /> : null}
       {hasPanelizado ? <LegendChip color="#fef3c7" border="#d97706" label="Solape" /> : null}
       {pieceGroups.map((piece) => (
-        <span key={piece.key} className="inline-flex items-center gap-2 rounded px-1 py-0.5 text-foreground">
+        <span key={piece.key} className="lg-item">
           <span
-            className="size-3.5 rounded-sm border"
+            className="sw"
             style={{ backgroundColor: piece.style.fill, borderColor: piece.style.stroke }}
             aria-hidden
           />
-          <span className="font-medium">{piece.label}</span>
-          <span className="rounded border bg-[#fafaf9] px-1.5 font-mono text-[10px] text-muted-foreground">
-            ×{piece.count}
-          </span>
+          <span className="nm">{piece.label}</span>
+          <span className="ct">{piece.count}</span>
         </span>
       ))}
     </div>
@@ -429,13 +511,13 @@ function LegendChip({
   dashed?: boolean;
 }) {
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span className="lg-item">
       <span
-        className={cn("size-3.5 rounded-sm border", dashed && "border-dashed")}
+        className={cn("sw", dashed && "dashed")}
         style={{ backgroundColor: color, borderColor: border }}
         aria-hidden
       />
-      <span>{label}</span>
+      <span className="nm">{label}</span>
     </span>
   );
 }
@@ -472,27 +554,25 @@ function SubstrateView({
   const viewBoxW = wPx + padPx * 2;
   const viewBoxH = hPx + padPx * 2;
   const hasMargins = Object.values(effectiveVisualConfig.margins).some((value) => value > 0);
+  const canvasMaxWidth = Math.min(
+    Math.max(viewBoxW, substrate.kind === "sheet" ? 520 : 680),
+    substrate.kind === "sheet" ? 760 : 980,
+  );
 
   return (
-    <div className="overflow-hidden rounded-lg border border-[#e7e5e2] bg-white shadow-sm">
+    <div className="nesting-substrate">
       {totalSubstrates > 1 ? (
-        <div className="border-b border-[#efece8] px-3 py-2 text-xs font-medium text-muted-foreground">
+        <div className="substrate-head">
           Sustrato {substrateIndex + 1} / {totalSubstrates}
         </div>
       ) : null}
-      <div
-        className="relative overflow-auto bg-[#d7d7d9] p-5"
-        style={{
-          backgroundImage:
-            "repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(20,20,26,.035) 19px, rgba(20,20,26,.035) 20px), repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(20,20,26,.035) 19px, rgba(20,20,26,.035) 20px)",
-        }}
-      >
+      <div className="nesting-canvas-wrap">
         <svg
-          className="relative block"
+          className="nesting-canvas-svg"
           viewBox={`0 0 ${viewBoxW} ${viewBoxH}`}
           width="100%"
-          style={{ maxWidth: Math.max(viewBoxW, 760), minWidth: Math.min(viewBoxW, 760) }}
-          preserveAspectRatio="xMinYMin meet"
+          style={{ maxWidth: `${canvasMaxWidth}px` }}
+          preserveAspectRatio="xMidYMin meet"
         >
           <defs>
             <pattern
@@ -504,6 +584,19 @@ function SubstrateView({
             >
               <line x1="0" y1="0" x2="0" y2="7" stroke="#8b8277" strokeWidth="1" opacity="0.2" />
             </pattern>
+            <clipPath id={`printable-clip-${substrateIndex}`}>
+              {(() => {
+                const printableArea = getPrintableArea(effectiveVisualConfig, widthMm, heightMm);
+                return (
+                  <rect
+                    x={padPx + printableArea.xMm * scale}
+                    y={padPx + printableArea.yMm * scale}
+                    width={printableArea.widthMm * scale}
+                    height={printableArea.heightMm * scale}
+                  />
+                );
+              })()}
+            </clipPath>
           </defs>
           <rect
             x={padPx}
@@ -539,18 +632,20 @@ function SubstrateView({
               patternId={`margin-pattern-${substrateIndex}`}
             />
           ) : null}
-          <rect
-            x={padPx + effectiveVisualConfig.usableArea.xMm * scale}
-            y={padPx + effectiveVisualConfig.usableArea.yMm * scale}
-            width={effectiveVisualConfig.usableArea.widthMm * scale}
-            height={effectiveVisualConfig.usableArea.heightMm * scale}
-            fill="#ffffff"
-            fillOpacity={0.18}
-            stroke="#9fd6b1"
-            strokeWidth={0.9}
-            strokeDasharray="4 3"
+          <PrintableAreaLayer
+            visualConfig={effectiveVisualConfig}
+            padPx={padPx}
+            scale={scale}
+            substrateWidthMm={widthMm}
+            substrateHeightMm={heightMm}
           />
-          <SpacingLayer visualConfig={effectiveVisualConfig} placements={placements} padPx={padPx} scale={scale} />
+          <SpacingLayer
+            visualConfig={effectiveVisualConfig}
+            placements={placements}
+            padPx={padPx}
+            scale={scale}
+            clipPathId={`printable-clip-${substrateIndex}`}
+          />
           <DimensionLabels
             padPx={padPx}
             widthPx={wPx}
@@ -685,21 +780,22 @@ function NestingFooter({ result }: { result: NestingViewerInput }) {
   const chargedLength = result.costingPreview?.chargedLengthMm;
 
   return (
-    <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t border-[#efece8] px-4 py-3 text-xs text-muted-foreground">
+    <div className="nesting-footer">
+      <span className="grow" />
       <span>
-        <span className="mr-1 text-[10px] font-semibold uppercase tracking-[0.07em]">Área piezas</span>
-        <strong className="font-mono font-semibold text-foreground">{formatM2(placedAreaMm2)}</strong>
+        <span className="k">Área piezas</span>
+        <strong className="v">{formatM2(placedAreaMm2)}</strong>
       </span>
       {chargedArea ? (
         <span>
-          <span className="mr-1 text-[10px] font-semibold uppercase tracking-[0.07em]">Área costeada</span>
-          <strong className="font-mono font-semibold text-foreground">{formatM2(chargedArea)}</strong>
+          <span className="k">Área costeada</span>
+          <strong className="v">{formatM2(chargedArea)}</strong>
         </span>
       ) : null}
       {chargedLength ? (
         <span>
-          <span className="mr-1 text-[10px] font-semibold uppercase tracking-[0.07em]">Largo costeado</span>
-          <strong className="font-mono font-semibold text-foreground">{formatMm(chargedLength)}</strong>
+          <span className="k">Largo costeado</span>
+          <strong className="v">{formatMm(chargedLength)}</strong>
         </span>
       ) : null}
     </div>
@@ -762,9 +858,57 @@ function getEffectiveVisualConfig(
     visualConfig ?? {
       margins: { leftMm: 0, rightMm: 0, topMm: 0, bottomMm: 0 },
       spacing: { horizontalMm: 0, verticalMm: 0 },
+      pieceBleedMm: 0,
       allowRotation: true,
       usableArea: { xMm: 0, yMm: 0, widthMm, heightMm },
+      printableArea: { xMm: 0, yMm: 0, widthMm, heightMm },
     }
+  );
+}
+
+function getPrintableArea(visualConfig: VisualConfig, widthMm: number, heightMm: number) {
+  return visualConfig.printableArea ?? {
+    xMm: visualConfig.margins.leftMm,
+    yMm: visualConfig.margins.topMm,
+    widthMm: Math.max(0, widthMm - visualConfig.margins.leftMm - visualConfig.margins.rightMm),
+    heightMm: Math.max(0, heightMm - visualConfig.margins.topMm - visualConfig.margins.bottomMm),
+  };
+}
+
+function getPieceBleedMm(visualConfig: VisualConfig) {
+  const explicit = visualConfig.pieceBleedMm;
+  if (Number.isFinite(explicit) && explicit != null) {
+    return Math.max(0, explicit);
+  }
+  return Math.max(visualConfig.spacing.horizontalMm, visualConfig.spacing.verticalMm) / 2;
+}
+
+function PrintableAreaLayer({
+  visualConfig,
+  padPx,
+  scale,
+  substrateWidthMm,
+  substrateHeightMm,
+}: {
+  visualConfig: VisualConfig;
+  padPx: number;
+  scale: number;
+  substrateWidthMm: number;
+  substrateHeightMm: number;
+}) {
+  const printableArea = getPrintableArea(visualConfig, substrateWidthMm, substrateHeightMm);
+  return (
+    <rect
+      x={padPx + printableArea.xMm * scale}
+      y={padPx + printableArea.yMm * scale}
+      width={printableArea.widthMm * scale}
+      height={printableArea.heightMm * scale}
+      fill="#ffffff"
+      fillOpacity={0.18}
+      stroke="#9fd6b1"
+      strokeWidth={0.9}
+      strokeDasharray="4 3"
+    />
   );
 }
 
@@ -877,30 +1021,47 @@ function SpacingLayer({
   placements,
   padPx,
   scale,
+  clipPathId,
 }: {
   visualConfig: VisualConfig;
   placements: NestingViewerInput["placements"];
   padPx: number;
   scale: number;
+  clipPathId: string;
 }) {
   const sepH = visualConfig.spacing.horizontalMm;
   const sepV = visualConfig.spacing.verticalMm;
-  if (sepH <= 0 && sepV <= 0) return null;
+  const pieceBleedMm = getPieceBleedMm(visualConfig);
+  if (sepH <= 0 && sepV <= 0 && pieceBleedMm <= 0) return null;
 
   return (
-    <g opacity={0.34}>
+    <g opacity={0.34} clipPath={`url(#${clipPathId})`}>
       {placements.map((placement, idx) => {
+        const leftGapX = placement.xMm - pieceBleedMm;
+        const topGapY = placement.yMm - pieceBleedMm;
         const rightGapX = placement.xMm + placement.widthMm;
         const bottomGapY = placement.yMm + placement.heightMm;
+        const hasLeftNeighbor = sepH > 0 && hasAdjacentPlacement(placement, placements, "left", sepH);
         const hasRightNeighbor = sepH > 0 && hasAdjacentPlacement(placement, placements, "right", sepH);
+        const hasTopNeighbor = sepV > 0 && hasAdjacentPlacement(placement, placements, "top", sepV);
         const hasBottomNeighbor = sepV > 0 && hasAdjacentPlacement(placement, placements, "bottom", sepV);
         return (
           <React.Fragment key={`spacing-${placement.pieceId}-${idx}`}>
+            {pieceBleedMm > 0 && !hasLeftNeighbor ? (
+              <rect x={padPx + leftGapX * scale} y={padPx + placement.yMm * scale} width={Math.max(1, pieceBleedMm * scale)} height={placement.heightMm * scale} fill="#a8a29e" />
+            ) : null}
             {hasRightNeighbor ? (
               <rect x={padPx + rightGapX * scale} y={padPx + placement.yMm * scale} width={Math.max(1, sepH * scale)} height={placement.heightMm * scale} fill="#a8a29e" />
+            ) : pieceBleedMm > 0 ? (
+              <rect x={padPx + rightGapX * scale} y={padPx + placement.yMm * scale} width={Math.max(1, pieceBleedMm * scale)} height={placement.heightMm * scale} fill="#a8a29e" />
+            ) : null}
+            {pieceBleedMm > 0 && !hasTopNeighbor ? (
+              <rect x={padPx + placement.xMm * scale} y={padPx + topGapY * scale} width={placement.widthMm * scale} height={Math.max(1, pieceBleedMm * scale)} fill="#a8a29e" />
             ) : null}
             {hasBottomNeighbor ? (
               <rect x={padPx + placement.xMm * scale} y={padPx + bottomGapY * scale} width={placement.widthMm * scale} height={Math.max(1, sepV * scale)} fill="#a8a29e" />
+            ) : pieceBleedMm > 0 ? (
+              <rect x={padPx + placement.xMm * scale} y={padPx + bottomGapY * scale} width={placement.widthMm * scale} height={Math.max(1, pieceBleedMm * scale)} fill="#a8a29e" />
             ) : null}
           </React.Fragment>
         );
@@ -912,11 +1073,21 @@ function SpacingLayer({
 function hasAdjacentPlacement(
   placement: Placement,
   placements: NestingViewerInput["placements"],
-  direction: "right" | "bottom",
+  direction: "left" | "right" | "top" | "bottom",
   separationMm: number,
 ) {
-  const expectedX = direction === "right" ? placement.xMm + placement.widthMm + separationMm : placement.xMm;
-  const expectedY = direction === "bottom" ? placement.yMm + placement.heightMm + separationMm : placement.yMm;
+  const expectedX =
+    direction === "right"
+      ? placement.xMm + placement.widthMm + separationMm
+      : direction === "left"
+        ? placement.xMm - separationMm
+        : placement.xMm;
+  const expectedY =
+    direction === "bottom"
+      ? placement.yMm + placement.heightMm + separationMm
+      : direction === "top"
+        ? placement.yMm - separationMm
+        : placement.yMm;
   const toleranceMm = 0.01;
 
   return placements.some((other) => {
@@ -926,6 +1097,18 @@ function hasAdjacentPlacement(
       return (
         nearlyEqual(other.xMm, expectedX, toleranceMm) &&
         rangesOverlap(placement.yMm, placement.yMm + placement.heightMm, other.yMm, other.yMm + other.heightMm, toleranceMm)
+      );
+    }
+    if (direction === "left") {
+      return (
+        nearlyEqual(other.xMm + other.widthMm, expectedX, toleranceMm) &&
+        rangesOverlap(placement.yMm, placement.yMm + placement.heightMm, other.yMm, other.yMm + other.heightMm, toleranceMm)
+      );
+    }
+    if (direction === "top") {
+      return (
+        nearlyEqual(other.yMm + other.heightMm, expectedY, toleranceMm) &&
+        rangesOverlap(placement.xMm, placement.xMm + placement.widthMm, other.xMm, other.xMm + other.widthMm, toleranceMm)
       );
     }
     return (

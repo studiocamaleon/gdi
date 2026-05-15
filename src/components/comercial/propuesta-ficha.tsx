@@ -20,6 +20,7 @@ import {
   SaveIcon,
   SquareIcon,
   Trash2Icon,
+  TriangleAlertIcon,
   UserIcon,
 } from "lucide-react";
 
@@ -191,15 +192,28 @@ function formatCantidadItem(item: PropuestaItem) {
 }
 
 function formatCantidadCosto(value: number, unidad: string) {
-  const unidadLabel = formatUnidadCosto(unidad);
+  const unidadLabel = formatUnidadCosto(unidad, value);
   return `${value.toLocaleString("es-AR", {
     maximumFractionDigits: 2,
     minimumFractionDigits: value % 1 === 0 ? 0 : 2,
   })} ${unidadLabel}`;
 }
 
-function formatUnidadCosto(unidad: string) {
+function formatUnidadCosto(unidad: string, cantidad = 1) {
   const normalized = unidad.trim().toLowerCase();
+  const isSingular = Math.abs(cantidad) === 1;
+  const pluralizable: Record<string, { singular: string; plural: string }> = {
+    gramo: { singular: "gramo", plural: "gramos" },
+    hoja: { singular: "hoja", plural: "hojas" },
+    pliego: { singular: "hoja", plural: "hojas" },
+    rollo: { singular: "rollo", plural: "rollos" },
+    caja: { singular: "caja", plural: "cajas" },
+    pack: { singular: "pack", plural: "packs" },
+    pieza: { singular: "pieza", plural: "piezas" },
+  };
+  const pluralized = pluralizable[normalized];
+  if (pluralized) return isSingular ? pluralized.singular : pluralized.plural;
+
   const labels: Record<string, string> = {
     m_lineales: "ml",
     metro_lineal: "ml",
@@ -378,6 +392,18 @@ function ProduccionItemView({
 
   return (
     <div className="op-production">
+      {item.notaProduccion ? (
+        <div className="production-note">
+          <span className="production-note-icon" aria-hidden="true">
+            <TriangleAlertIcon />
+          </span>
+          <div>
+            <strong>Nota para producción</strong>
+            <p>{item.notaProduccion}</p>
+          </div>
+        </div>
+      ) : null}
+
       <div className="cost-section">
         <div className="cost-title">Ruta de producción</div>
         <div className="production-route">
@@ -406,27 +432,28 @@ function ProduccionItemView({
 
       {pasosConNesting.length > 0 ? (
         <div className="cost-section">
-          <div className="cost-title">Nesting del item</div>
+          <div className="mb-[18px] flex flex-wrap items-end gap-4">
+            <div className="min-w-0 flex-1 basis-80">
+              <div className="cost-title mb-1">Nesting del item</div>
+              <h1 className="m-0 text-[22px] font-semibold leading-[1.2] tracking-[-0.018em] text-[var(--ink)]">
+                Disposición de piezas
+              </h1>
+              <div className="mt-1 text-[13px] text-[var(--muted)]">
+                Acomodo calculado por la ruta activa para controlar consumo,
+                demasía y cortes.
+              </div>
+            </div>
+          </div>
           <div className="production-nestings">
-            {pasosConNesting.map((paso, index) => (
+            {pasosConNesting.map((paso) => (
               <div
                 className="production-nesting"
                 key={`${paso.rutaPasoOrden}-${paso.familiaCodigo}`}
               >
-                <div className="production-nesting-head">
-                  <strong>
-                    {index + 1}. {humanizeCodigo(paso.familiaCodigo)}
-                  </strong>
-                  <span>
-                    {paso.nestingResult?.aprovechamientoPct != null
-                      ? `${paso.nestingResult.aprovechamientoPct.toFixed(1)}% aprovechamiento`
-                      : "Nesting calculado"}
-                  </span>
-                </div>
                 <NestingViewer
                   result={paso.nestingResult!}
                   costingDetails={paso.materiales ?? []}
-                  maxPx={420}
+                  maxPx={paso.nestingResult?.substrates[0]?.kind === "sheet" ? 420 : 560}
                 />
               </div>
             ))}

@@ -30,6 +30,7 @@ export const CANONICAL_UNITS: Record<
   caja: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
   kit: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
   hoja: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
+  // Alias legado: inventario debe guardar y mostrar "hoja"; se conserva para convertir datos antiguos.
   pliego: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
   resma: { dimension: 'count', baseCode: 'unidad', factorToBase: 500 },
   rollo: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },

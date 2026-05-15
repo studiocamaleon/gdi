@@ -27,14 +27,13 @@ const DIRECT_MACHINE_FIELD_KEYS = new Set([
 const RULES: Record<PlantillaMaquinariaDto, MachineTemplateRule> = {
   // ─── §5 IMPRESORA_LASER ─────────────────────────────────────────
   // paramsTecnicos: margenesNoImprimiblesMm{sup,inf,izq,der}, soporteDobleFaz,
-  //   formatosPliegoSoportados[], coloresSoportados[].
+  //   coloresSoportados[].
   [PlantillaMaquinariaDto.impresora_laser]: {
     requiredMachineKeys: [
       'anchoUtil',
       'largoUtil',
       'gramajeMaxGr',
       'margenesNoImprimiblesMm',
-      'formatosPliegoSoportados',
     ],
   },
 

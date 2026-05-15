@@ -46,6 +46,10 @@ export interface JobContext {
   numerosXTalonario?: number;
   /** Tintas adicionales para impresión rígida (barniz, blanco). */
   tintasAdicionales?: string[];
+  /** Modo de color comercial global de compatibilidad (preferir modoColor_<configPasoId>). */
+  modoColor?: string;
+  /** Modo de color comercial por configPasoId/rutaPasoId. Sobrevive al ValidationPipe. */
+  modoColorPorPaso?: Record<string, string>;
   /** Tecnología elegida (M-2): ecosolvente, latex, uv. */
   tecnologia?: string;
   /** Distancia para cargo directo combustible (km). */
@@ -233,6 +237,8 @@ export interface NestingEjecutado {
   piezasAcomodadas: number;
   /** Datos normalizados para que el SVG muestre cómo pensó el motor. */
   visualConfig?: NestingVisualConfig;
+  /** Outputs canónicos publicados por el paso que generó este nesting. */
+  outputsCanonicos?: Record<string, unknown>;
   /** Overlay/resumen del costeo de sustrato asociado al nesting. */
   costingPreview?: NestingCostingPreview;
   /** v3.1: solo cuando se aplicó talonario-grouping (post-nesting). */
@@ -261,9 +267,16 @@ export interface NestingVisualConfig {
     horizontalMm: number;
     verticalMm: number;
   };
+  pieceBleedMm?: number;
   allowRotation: boolean;
   substrateLabel?: string;
   usableArea: {
+    xMm: number;
+    yMm: number;
+    widthMm: number;
+    heightMm: number;
+  };
+  printableArea?: {
     xMm: number;
     yMm: number;
     widthMm: number;

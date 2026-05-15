@@ -82,6 +82,12 @@ const NESTING_ALGORITHMS = [
   "packingsolver-rectangle",
 ];
 const COSTING_STRATEGIES = ["simple", "m2-exact", "consumed-length", "plate-segments"];
+const MODO_COLOR_LABELS: Record<string, string> = {
+  BN: "Blanco y negro",
+  CMYK: "CMYK",
+  "CMYK+blanco": "CMYK + Blanco",
+  "CMYK+blanco+barniz": "CMYK + Blanco + Barniz",
+};
 const PLIEGO_IMPRESION_PRESETS = [
   { value: "materia_prima", label: "Tamaño materia prima", description: "Usa el ancho y alto del sustrato comprado.", anchoMm: null, altoMm: null },
   { value: "A5", label: "A5", description: "148 × 210 mm", anchoMm: 148, altoMm: 210 },
@@ -365,6 +371,79 @@ function getExtraMarginsConfig(params: Record<string, unknown> | null | undefine
   return asRecord(getNestingConfig(params).extraMargins);
 }
 
+function getModoColorConfig(params: Record<string, unknown> | null | undefined) {
+  return asRecord(asRecord(params).modoColorConfig);
+}
+
+function normalizeModoColor(value: unknown) {
+  if (typeof value !== "string") return null;
+  const normalized = value
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .replace(/WHITE/g, "BLANCO")
+    .replace(/W/g, "BLANCO")
+    .replace(/BARNIZ|VARNISH|VERNIS/g, "BARNIZ");
+  if (!normalized) return null;
+  if (["BN", "B/N", "NEGRO", "K"].includes(normalized)) return "BN";
+  if (normalized === "CMYK") return "CMYK";
+  if (["CMYK+BLANCO", "CMYKBLANCO"].includes(normalized)) return "CMYK+blanco";
+  if (
+    [
+      "CMYK+BLANCO+BARNIZ",
+      "CMYK+BARNIZ+BLANCO",
+      "CMYKBLANCOBARNIZ",
+      "CMYKBARNIZBLANCO",
+    ].includes(normalized)
+  ) {
+    return "CMYK+blanco+barniz";
+  }
+  return value.trim();
+}
+
+function modosColorFromPerfil(perfil: { detalleJson?: Record<string, unknown> | null }) {
+  const detalle = asRecord(perfil.detalleJson);
+  const raw = detalle.colores ?? detalle.modoColor;
+  const values = Array.isArray(raw) ? raw : [raw];
+  return Array.from(
+    new Set(
+      values
+        .map((value) => normalizeModoColor(value))
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+}
+
+function modoColorAplica(familiaCodigo: string | undefined, cfg: UpsertConfigPasoPayload) {
+  if (!familiaCodigo || !cfg.maquinaM1Id) return false;
+  return ["impresion_por_hoja", "impresion_por_area"].includes(familiaCodigo);
+}
+
+function buildModoColorOptions(
+  maquina: MaquinaLookup | null | undefined,
+  configExistente: { modoColorOptions?: Array<{ value: string; label: string; perfilIds: string[] }> } | null | undefined,
+) {
+  const backendOptions = configExistente?.modoColorOptions ?? [];
+  if (backendOptions.length > 0) {
+    return backendOptions.map((option) => ({
+      value: option.value,
+      label: option.label,
+      code: `${option.perfilIds.length} perfil${option.perfilIds.length === 1 ? "" : "es"}`,
+    }));
+  }
+  const modes = new Map<string, number>();
+  for (const perfil of maquina?.perfilesOperativos ?? []) {
+    for (const mode of modosColorFromPerfil(perfil)) {
+      modes.set(mode, (modes.get(mode) ?? 0) + 1);
+    }
+  }
+  return Array.from(modes.entries()).map(([mode, count]) => ({
+    value: mode,
+    label: MODO_COLOR_LABELS[mode] ?? mode,
+    code: `${count} perfil${count === 1 ? "" : "es"}`,
+  }));
+}
+
 function nestingAplica(familiaCodigo: string | undefined, cfg: UpsertConfigPasoPayload) {
   if (!familiaCodigo) return false;
   if (familiaCodigo === "pre_prensa") return false;
@@ -384,6 +463,10 @@ function panelizadoAplica(
   if (algorithm !== "auto" && algorithm !== "shelf-rollo" && algorithm !== "maxrects-rollo") return false;
   const geometria = String(asRecord(maquina?.parametrosTecnicosJson).geometria ?? "").toUpperCase();
   return familiaCodigo === "plotter_corte" || geometria === "ROLLO" || geometria === "";
+}
+
+function defaultNestingSeparationForFamily(familiaCodigo: string | undefined) {
+  return familiaCodigo === "impresion_por_area" || familiaCodigo === "plotter_corte" ? 5 : 0;
 }
 
 function getMachineMargins(maquina: { parametrosTecnicosJson?: Record<string, unknown> | null } | null | undefined) {
@@ -689,6 +772,20 @@ export function ConfigPasosEditorView({
     });
   };
 
+  const updateNestingPieceBleed = (rutaPasoId: string, value: number) => {
+    setConfigs((prev) => {
+      const cfg = prev[rutaPasoId];
+      const params = asRecord(cfg.paramsPasoJson);
+      const current = getNestingConfig(params);
+      const nextNesting = { ...current, pieceBleedMm: value };
+      delete nextNesting.separationHMm;
+      delete nextNesting.separationVMm;
+      delete nextNesting.exteriorMarginFromSpacing;
+      const nextParams = { ...params, nestingConfig: nextNesting };
+      return { ...prev, [rutaPasoId]: { ...cfg, paramsPasoJson: nextParams } };
+    });
+  };
+
   const updateNestingMargins = (
     rutaPasoId: string,
     patch: Record<string, number | null>,
@@ -804,6 +901,36 @@ export function ConfigPasosEditorView({
       preset: preset.value,
       anchoMm: preset.anchoMm,
       altoMm: preset.altoMm,
+    });
+  };
+
+  const updateModoColorConfig = (
+    rutaPasoId: string,
+    patch: Record<string, unknown>,
+  ) => {
+    setConfigs((prev) => {
+      const cfg = prev[rutaPasoId];
+      const params = asRecord(cfg.paramsPasoJson);
+      const current = getModoColorConfig(params);
+      const nextConfig = { ...current, ...patch };
+      for (const key of Object.keys(nextConfig)) {
+        const value = nextConfig[key];
+        if (
+          value === "" ||
+          value === null ||
+          value === undefined ||
+          (Array.isArray(value) && value.length === 0)
+        ) {
+          delete nextConfig[key];
+        }
+      }
+      const nextParams =
+        Object.keys(nextConfig).length > 0
+          ? { ...params, modoColorConfig: nextConfig }
+          : Object.fromEntries(
+              Object.entries(params).filter(([key]) => key !== "modoColorConfig"),
+            );
+      return { ...prev, [rutaPasoId]: { ...cfg, paramsPasoJson: nextParams } };
     });
   };
 
@@ -1137,8 +1264,9 @@ export function ConfigPasosEditorView({
           const mostrarSetupCleanupOverrides = Boolean(cfg.maquinaM1Id);
           const mostrarTiempoFijoOverride = cfg.modoTiempo === "T-1" && !cfg.maquinaM1Id;
           const mostrarOverridesTiempo = mostrarSetupCleanupOverrides || mostrarTiempoFijoOverride;
-          const nestingConfig = getNestingConfig(cfg.paramsPasoJson);
-          const panelizadoConfig = getPanelizadoConfig(cfg.paramsPasoJson);
+	          const nestingConfig = getNestingConfig(cfg.paramsPasoJson);
+	          const modoColorConfig = getModoColorConfig(cfg.paramsPasoJson);
+	          const panelizadoConfig = getPanelizadoConfig(cfg.paramsPasoJson);
           const pliegoImpresionConfig = getPliegoImpresionConfig(cfg.paramsPasoJson);
           const nestingExtraMargins = getExtraMarginsConfig(cfg.paramsPasoJson);
           const pliegoImpresionPreset = getPliegoPresetValue(pliegoImpresionConfig);
@@ -1163,9 +1291,23 @@ export function ConfigPasosEditorView({
                   configExistente?.maquinaM1?.parametrosTecnicosJson
                 ? configExistente.maquinaM1
                 : maquinaSel ?? configExistente?.maquinaM1;
-          const machineMargins = getMachineMargins(maquinaParaDefaults);
-          const resolvedSeparationH = getResolvedNestingNumber(nestingConfig.separationHMm, undefined, 0);
-          const resolvedSeparationV = getResolvedNestingNumber(nestingConfig.separationVMm, undefined, 0);
+	          const machineMargins = getMachineMargins(maquinaParaDefaults);
+	          const mostrarModoColor = modoColorAplica(familia?.codigo, cfg);
+	          const modoColorOptions = buildModoColorOptions(maquinaSel, configExistente);
+	          const modoColorAllowed = Array.isArray(modoColorConfig.allowedModes)
+	            ? modoColorConfig.allowedModes
+	                .map((item) => normalizeModoColor(item))
+	                .filter((item): item is string => item !== null)
+	            : [];
+	          const modoColorDefault = normalizeModoColor(modoColorConfig.defaultMode) ?? "";
+	          const defaultSeparation = defaultNestingSeparationForFamily(familia?.codigo);
+          const legacySeparationH = getResolvedNestingNumber(nestingConfig.separationHMm, undefined, defaultSeparation);
+          const legacySeparationV = getResolvedNestingNumber(nestingConfig.separationVMm, undefined, defaultSeparation);
+          const resolvedPieceBleed = getResolvedNestingNumber(
+            nestingConfig.pieceBleedMm,
+            Math.max(legacySeparationH, legacySeparationV) / 2,
+            0,
+          );
           const mostrarPanelizado = panelizadoAplica(familia?.codigo, nestingConfig, maquinaParaDefaults);
           const resolvedPanelMaxWidth = getResolvedNestingNumber(panelizadoConfig.maxPanelWidthMm, undefined, 0);
           const resolvedPanelOverlap = getResolvedNestingNumber(panelizadoConfig.overlapMm, undefined, 20);
@@ -1424,8 +1566,8 @@ export function ConfigPasosEditorView({
                           }
                         />
                       </div>
-                      {maquinaSel || perfilGuardado ? (
-                        <div className="field">
+	                      {maquinaSel || perfilGuardado ? (
+	                        <div className="field">
                           <LabelConTooltip
                             label="Perfil de la máquina"
                             tooltip="Configuración operativa específica. Define la productividad."
@@ -1437,11 +1579,110 @@ export function ConfigPasosEditorView({
                             options={perfilOptions}
                             placeholder={maquinaSel ? "Elegir" : "Elegí máquina primero"}
                           />
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </section>
+	                        </div>
+	                      ) : null}
+	                      {mostrarModoColor ? (
+	                        <div className="field md:col-span-full">
+	                          <LabelConTooltip
+	                            label="Modo de color comercial"
+	                            tooltip="Permite que el comercial elija el modo de color para este paso. El motor selecciona un perfil compatible y costea los consumibles correspondientes."
+	                          />
+	                          <div className="space-y-3 rounded border bg-background/70 p-3">
+	                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+	                              <label className="flex items-center gap-2 text-xs">
+	                                <input
+	                                  type="checkbox"
+	                                  checked={modoColorConfig.enabled === true}
+	                                  onChange={(e) =>
+	                                    updateModoColorConfig(paso.id, {
+	                                      enabled: e.target.checked,
+	                                      comercialElige: e.target.checked ? true : null,
+	                                    })
+	                                  }
+	                                />
+	                                <span>Habilitar modo de color</span>
+	                              </label>
+	                              <label className="flex items-center gap-2 text-xs">
+	                                <input
+	                                  type="checkbox"
+	                                  checked={modoColorConfig.comercialElige === true}
+	                                  disabled={modoColorConfig.enabled !== true}
+	                                  onChange={(e) =>
+	                                    updateModoColorConfig(paso.id, {
+	                                      comercialElige: e.target.checked,
+	                                    })
+	                                  }
+	                                />
+	                                <span>El comercial elige</span>
+	                              </label>
+	                              <div className="space-y-1">
+	                                <LabelConTooltip
+	                                  label="Default"
+	                                  tooltip="Se usa como valor inicial si el comercial no eligió todavía."
+	                                  iconSize="sm"
+	                                />
+	                                <HumanSelect
+	                                  value={modoColorDefault}
+	                                  onValueChange={(v) => updateModoColorConfig(paso.id, { defaultMode: v || null })}
+	                                  options={modoColorOptions}
+	                                  disabled={modoColorConfig.enabled !== true || modoColorOptions.length === 0}
+	                                  placeholder={modoColorOptions.length === 0 ? "Sin perfiles con color" : "Sin default"}
+	                                  triggerClassName="min-h-9 text-xs"
+	                                />
+	                              </div>
+	                            </div>
+	                            <div className="space-y-2">
+	                              <div className="text-xs font-medium text-muted-foreground">
+	                                Opciones permitidas
+	                              </div>
+	                              {modoColorOptions.length === 0 ? (
+	                                <p className="text-xs text-muted-foreground">
+	                                  La máquina/perfil todavía no declara modos de color.
+	                                </p>
+	                              ) : (
+	                                <div className="flex flex-wrap gap-2">
+	                                  {modoColorOptions.map((option) => {
+	                                    const checked =
+	                                      modoColorAllowed.length === 0 ||
+	                                      modoColorAllowed.includes(option.value);
+	                                    return (
+	                                      <label
+	                                        key={option.value}
+	                                        className="inline-flex items-center gap-2 rounded border bg-white px-2 py-1 text-xs"
+	                                      >
+	                                        <input
+	                                          type="checkbox"
+	                                          checked={checked}
+	                                          disabled={modoColorConfig.enabled !== true}
+	                                          onChange={(e) => {
+	                                            const current =
+	                                              modoColorAllowed.length > 0
+	                                                ? modoColorAllowed
+	                                                : modoColorOptions.map((item) => item.value);
+	                                            const next = e.target.checked
+	                                              ? Array.from(new Set([...current, option.value]))
+	                                              : current.filter((item) => item !== option.value);
+	                                            updateModoColorConfig(paso.id, {
+	                                              allowedModes:
+	                                                next.length === modoColorOptions.length
+	                                                  ? null
+	                                                  : next,
+	                                            });
+	                                          }}
+	                                        />
+	                                        <span>{option.label}</span>
+	                                      </label>
+	                                    );
+	                                  })}
+	                                </div>
+	                              )}
+	                            </div>
+	                          </div>
+	                        </div>
+	                      ) : null}
+	                    </div>
+	                  </div>
+	                </section>
               )}
 
               {/* ── TAB MATERIALES ───────────────────────────────────── */}
@@ -1750,7 +1991,7 @@ export function ConfigPasosEditorView({
                           }
                           tooltip="Configuración del acomodo de piezas para este paso. Se guarda como nestingConfig, pero se edita desde controles visuales."
                         />
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                           <div className="space-y-1">
                             <LabelConTooltip
                               label="Algoritmo"
@@ -1766,38 +2007,17 @@ export function ConfigPasosEditorView({
                           </div>
                           <div className="space-y-1">
                             <LabelConTooltip
-                              label="Separación horizontal"
-                              tooltip="Espacio entre piezas en el eje horizontal."
+                              label="Demasía por lado"
+                              tooltip="Margen extra alrededor de cada pieza. Entre dos piezas se acumulan ambos lados."
                               iconSize="sm"
                             />
                             <Input
                               type="number"
                               min={0}
                               step={0.5}
-                              value={String(resolvedSeparationH)}
+                              value={String(resolvedPieceBleed)}
                               onChange={(e) =>
-                                updateNestingConfig(paso.id, {
-                                  separationHMm: e.target.value === "" ? 0 : Number(e.target.value),
-                                })
-                              }
-                              className="h-8 text-xs"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <LabelConTooltip
-                              label="Separación vertical"
-                              tooltip="Espacio entre filas o piezas en el eje vertical."
-                              iconSize="sm"
-                            />
-                            <Input
-                              type="number"
-                              min={0}
-                              step={0.5}
-                              value={String(resolvedSeparationV)}
-                              onChange={(e) =>
-                                updateNestingConfig(paso.id, {
-                                  separationVMm: e.target.value === "" ? 0 : Number(e.target.value),
-                                })
+                                updateNestingPieceBleed(paso.id, e.target.value === "" ? 0 : Number(e.target.value))
                               }
                               className="h-8 text-xs"
                             />

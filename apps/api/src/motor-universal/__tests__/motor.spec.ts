@@ -220,6 +220,36 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(opcionales.length).toBe(3); // diseño, laminado, redondeo
   });
 
+  it('Tarjetas: modoColor global BN sólo afecta impresión, no pre-prensa', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      jobContext: { cantidad: 500, caras: 1, modoColor: 'BN' },
+    });
+
+    expect(result.exitoso).toBe(true);
+    expect(result.errores).toEqual([]);
+    const prePrensa = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'pre_prensa',
+    );
+    expect(prePrensa?.materiales ?? []).toEqual([]);
+
+    const impresion = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'impresion_por_hoja',
+    );
+    const consumibles = impresion!.materiales!.filter(
+      (m) => m.tipoLineaCosto === 'CONSUMIBLE_MAQUINA',
+    );
+    expect(consumibles.map((m) => m.slotCodigo)).toEqual([
+      'consumible_maquina:negro',
+    ]);
+  });
+
   it('Tarjetas: con laminado activado por comercial, se ejecuta', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({
@@ -671,9 +701,10 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(impresion!.nestingResult!.consumedLengthMm).toBeLessThan(6500);
     expect(impresion!.nestingResult!.placements.length).toBe(3);
     expect(impresion!.nestingResult!.visualConfig).toMatchObject({
-      margins: { leftMm: 5, rightMm: 5, topMm: 10, bottomMm: 10 },
+      margins: { leftMm: 7.5, rightMm: 7.5, topMm: 12.5, bottomMm: 12.5 },
       spacing: { horizontalMm: 5, verticalMm: 5 },
-      usableArea: { xMm: 5, widthMm: 1360 },
+      pieceBleedMm: 2.5,
+      usableArea: { xMm: 7.5, widthMm: 1355 },
     });
     expect(impresion!.nestingResult!.costingPreview).toMatchObject({
       strategy: 'consumed-length',
@@ -778,7 +809,7 @@ describe('MotorUniversalService — smoke tests', () => {
       widthMm: 1370,
     });
     expect(impresion!.nestingResult?.visualConfig?.usableArea.widthMm).toBe(
-      1360,
+      1355,
     );
   });
 
@@ -808,7 +839,7 @@ describe('MotorUniversalService — smoke tests', () => {
       widthMm: 1370,
     });
     expect(impresion!.nestingResult?.visualConfig?.usableArea.widthMm).toBe(
-      1360,
+      1355,
     );
   });
 
@@ -987,19 +1018,20 @@ describe('MotorUniversalService — smoke tests', () => {
     const nesting = pasoLaminado.nestingResult!;
     expect(nesting.algorithm).toBe('shelf-rollo');
     expect(nesting.unidad).toBe('m_lineales');
-    expect(nesting.consumedLengthMm).toBeCloseTo(1170, 0);
-    expect(film.cantidad).toBeCloseTo(1.17, 2);
+    expect(nesting.consumedLengthMm).toBeCloseTo(1175, 0);
+    expect(film.cantidad).toBeCloseTo(1.18, 2);
     expect(film.cantidad).toBeLessThan((10 * 297) / 1000);
     expect(nesting.visualConfig?.margins).toMatchObject({
-      leftMm: 10,
-      rightMm: 10,
-      topMm: 50,
-      bottomMm: 50,
+      leftMm: 12.5,
+      rightMm: 12.5,
+      topMm: 52.5,
+      bottomMm: 52.5,
     });
     expect(nesting.visualConfig?.spacing).toMatchObject({
       horizontalMm: 5,
       verticalMm: 5,
     });
+    expect(nesting.visualConfig?.pieceBleedMm).toBe(2.5);
   });
 
   it('Laminado: respeta allowRotation=false y mantiene multiplicador por caras', async () => {
@@ -1043,8 +1075,8 @@ describe('MotorUniversalService — smoke tests', () => {
       (p) => p.familiaCodigo === 'laminado',
     )!;
     const film = pasoLaminado.materiales![0];
-    expect(pasoLaminado.nestingResult!.consumedLengthMm).toBeCloseTo(1605, 0);
-    expect(film.cantidad).toBeCloseTo(3.21, 2);
+    expect(pasoLaminado.nestingResult!.consumedLengthMm).toBeCloseTo(1610, 0);
+    expect(film.cantidad).toBeCloseTo(3.22, 2);
   });
 
   it('F.2.5: clave legacy de material por slot sigue funcionando temporalmente', async () => {
@@ -2074,13 +2106,14 @@ describe('MotorUniversalService — smoke tests', () => {
       heightMm: 2750,
     });
     expect(r!.visualConfig).toMatchObject({
-      margins: { leftMm: 5, rightMm: 5, topMm: 5, bottomMm: 5 },
+      margins: { leftMm: 7.5, rightMm: 7.5, topMm: 7.5, bottomMm: 7.5 },
       spacing: { horizontalMm: 5, verticalMm: 5 },
+      pieceBleedMm: 2.5,
       usableArea: {
-        xMm: 5,
-        yMm: 5,
-        widthMm: 1820,
-        heightMm: 2740,
+        xMm: 7.5,
+        yMm: 7.5,
+        widthMm: 1815,
+        heightMm: 2735,
       },
     });
     expect(r!.aprovechamientoPct).toBeLessThan(10);

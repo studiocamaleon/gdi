@@ -182,8 +182,8 @@ export class MaquinaPerfilOperativoItemDto {
 
   /**
    * v3.0: discriminantes específicos por plantilla viven en `detalle`.
-   * Ej. IMPRESORA_LASER: { caras, colores, formatoSoportado, gramajeMinGr,
-   * gramajeMaxGr }. GUILLOTINA: { gramajeMinGr, gramajeMaxGr,
+   * Ej. IMPRESORA_LASER: { caras, colores, gramajeMinGr, gramajeMaxGr }.
+   * GUILLOTINA: { gramajeMinGr, gramajeMaxGr,
    * pliegosMaxPorTanda }. Etc.
    */
   @IsOptional()

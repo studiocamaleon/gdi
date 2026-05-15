@@ -1001,14 +1001,13 @@ export class InventarioService {
     if (typeof value !== 'string' || !value.trim()) {
       return null;
     }
-    const normalized = value.trim().toLowerCase();
+    const normalized = this.normalizeInventoryUnit(value.trim().toLowerCase());
     const supported: UnitCode[] = [
       'unidad',
       'pack',
       'caja',
       'kit',
       'hoja',
-      'pliego',
       'resma',
       'rollo',
       'pieza',
@@ -1026,6 +1025,14 @@ export class InventarioService {
     return supported.includes(normalized as UnitCode)
       ? (normalized as UnitCode)
       : null;
+  }
+
+  private normalizeInventoryUnit(value: string): UnitCode {
+    const normalized = value.trim().toLowerCase();
+    const canonical = normalized === 'pliego' || normalized === 'pliegos'
+      ? 'hoja'
+      : normalized;
+    return canonical as UnitCode;
   }
 
   private resolvePrecioReferenciaPorUnidadStock(variante: {
@@ -1151,22 +1158,28 @@ export class InventarioService {
   }
 
   private normalizePayload(payload: UpsertMateriaPrimaDto) {
+    const unidadStock = this.normalizeInventoryUnit(payload.unidadStock);
+    const unidadCompra = this.normalizeInventoryUnit(payload.unidadCompra);
     const canUseCanonicalUnits = unitsAreCompatible(
-      payload.unidadStock,
-      payload.unidadCompra,
+      unidadStock,
+      unidadCompra,
     );
     const canUseDerivedUnits =
       canUseFlexibleRollDerivedUnits({
         subfamilia: payload.subfamilia,
-        from: payload.unidadCompra,
-        to: payload.unidadStock,
+        from: unidadCompra,
+        to: unidadStock,
         attributes: payload.variantes[0]?.atributosVariante,
       }) &&
       payload.variantes.every((variante) =>
         canUseFlexibleRollDerivedUnits({
           subfamilia: payload.subfamilia,
-          from: variante.unidadCompra ?? payload.unidadCompra,
-          to: variante.unidadStock ?? payload.unidadStock,
+          from: this.normalizeInventoryUnit(
+            variante.unidadCompra ?? payload.unidadCompra,
+          ),
+          to: this.normalizeInventoryUnit(
+            variante.unidadStock ?? payload.unidadStock,
+          ),
           attributes: variante.atributosVariante,
         }),
       );
@@ -1200,8 +1213,8 @@ export class InventarioService {
       subfamilia: payload.subfamilia,
       tipoTecnico: payload.tipoTecnico.trim(),
       templateId: payload.templateId.trim(),
-      unidadStock: payload.unidadStock,
-      unidadCompra: payload.unidadCompra,
+      unidadStock,
+      unidadCompra,
       esConsumible: payload.esConsumible,
       esRepuesto: payload.esRepuesto,
       activo: payload.activo,
@@ -1220,8 +1233,8 @@ export class InventarioService {
       subfamilia: this.toApiEnum(item.subfamilia),
       tipoTecnico: item.tipoTecnico,
       templateId: item.templateId,
-      unidadStock: this.toApiEnum(item.unidadStock),
-      unidadCompra: this.toApiEnum(item.unidadCompra),
+      unidadStock: this.normalizeInventoryUnit(this.toApiEnum(item.unidadStock)),
+      unidadCompra: this.normalizeInventoryUnit(this.toApiEnum(item.unidadCompra)),
       esConsumible: item.esConsumible,
       esRepuesto: item.esRepuesto,
       activo: item.activo,

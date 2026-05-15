@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { buildModoColorOptionsFromProfiles } from './modo-color-comercial';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
   ActualizarProductoDto,
@@ -200,6 +201,15 @@ export class ProductosService {
                         },
                       },
                     },
+                    perfilesOperativos: {
+                      where: { activo: true },
+                      select: {
+                        id: true,
+                        activo: true,
+                        tipoPerfil: true,
+                        detalleJson: true,
+                      },
+                    },
                   },
                 },
                 perfilM1: {
@@ -243,6 +253,15 @@ export class ProductosService {
                             nombre: true,
                           },
                         },
+                        perfilesOperativos: {
+                          where: { activo: true },
+                          select: {
+                            id: true,
+                            activo: true,
+                            tipoPerfil: true,
+                            detalleJson: true,
+                          },
+                        },
                       },
                     },
                   },
@@ -263,19 +282,68 @@ export class ProductosService {
       },
     });
     if (!producto) throw new NotFoundException(`Producto ${id} no encontrado`);
-    return {
-      ...producto,
-      rutasAlternativas: producto.rutasAlternativas.map((rutaAlt) => ({
-        ...rutaAlt,
+	    return {
+	      ...producto,
+	      rutasAlternativas: producto.rutasAlternativas.map((rutaAlt) => ({
+	        ...rutaAlt,
         ruta: {
           ...rutaAlt.ruta,
           pasos: rutaAlt.ruta.pasos.filter(
-            (paso) => paso.version === rutaAlt.rutaVersion,
-          ),
-        },
-      })),
-    };
-  }
+	            (paso) => paso.version === rutaAlt.rutaVersion,
+	          ),
+	        },
+	        configPasos: rutaAlt.configPasos.map((configPaso) => ({
+	          ...configPaso,
+	          modoColorOptions: this.buildModoColorOptions(configPaso),
+	        })),
+	      })),
+	    };
+	  }
+
+	  private buildModoColorOptions(configPaso: {
+	    paramsPasoJson?: Prisma.JsonValue | null;
+	    maquinaM1?: {
+	      perfilesOperativos?: Array<{
+	        id: string;
+	        activo?: boolean;
+	        tipoPerfil?: string | null;
+	        detalleJson?: Prisma.JsonValue | null;
+	      }>;
+	    } | null;
+	    maquinasCandidatas?: Array<{
+	      maquina?: {
+	        perfilesOperativos?: Array<{
+	          id: string;
+	          activo?: boolean;
+	          tipoPerfil?: string | null;
+	          detalleJson?: Prisma.JsonValue | null;
+	        }>;
+	      } | null;
+	    }>;
+	  }) {
+	    const params =
+	      configPaso.paramsPasoJson &&
+	      typeof configPaso.paramsPasoJson === 'object' &&
+	      !Array.isArray(configPaso.paramsPasoJson)
+	        ? (configPaso.paramsPasoJson as Record<string, unknown>)
+	        : {};
+	    const modoColorConfig =
+	      params.modoColorConfig &&
+	      typeof params.modoColorConfig === 'object' &&
+	      !Array.isArray(params.modoColorConfig)
+	        ? (params.modoColorConfig as Record<string, unknown>)
+	        : {};
+	    const profiles = [
+	      ...(configPaso.maquinaM1?.perfilesOperativos ?? []),
+	      ...(configPaso.maquinasCandidatas ?? []).flatMap(
+	        (candidate) => candidate.maquina?.perfilesOperativos ?? [],
+	      ),
+	    ];
+	    return buildModoColorOptionsFromProfiles(
+	      profiles,
+	      modoColorConfig.allowedModes,
+	    );
+	  }
 
   listarCatalogoComercial() {
     return this.prisma.productoCategoriaComercial.findMany({

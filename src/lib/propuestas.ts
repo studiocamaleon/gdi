@@ -55,6 +55,7 @@ export type PropuestaItem = {
   costos: CostoPropuesta;
   costeo?: CosteoPropuestaSnapshot;
   adicionales: string[];
+  notaProduccion?: string;
   rutaAlternativaId?: string | null;
   jobContext?: Record<string, unknown>;
   atributosSchema: Array<{

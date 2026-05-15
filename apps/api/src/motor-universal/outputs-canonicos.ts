@@ -25,6 +25,7 @@
  */
 
 import type { DefinicionFamilia } from '../productos-servicios/pasos/types';
+import { calculateGuillotinaCutsFromImposicion } from '../productos-servicios/nesting/helpers/guillotina-cuts';
 import type {
   PasoCargado,
   JobContext,
@@ -108,14 +109,27 @@ function computeOutput(
     key === 'cortes_calculados' &&
     nestingDispatch?.algorithm === 'grid-2d-single'
   ) {
-    // Cortes derivados del grid: filas + columnas - 1 cortes en cada eje.
+    // Cortes de guillotina derivados de la imposición:
+    // - sin demasía: columnas + filas + 2
+    // - con demasía: 2 * columnas + 2 * filas
     const m = nestingDispatch.metricasRaw;
     const filas = m.filas ?? 0;
     const columnas = m.columnas ?? 0;
+    const demasiaMm = nestingDispatch.visualConfig?.pieceBleedMm ?? 0;
+    const cortesTotales = calculateGuillotinaCutsFromImposicion({
+      cols: columnas,
+      rows: filas,
+      demasiaCorteMm: demasiaMm,
+    });
     return {
-      cortesHorizontales: Math.max(0, filas - 1),
-      cortesVerticales: Math.max(0, columnas - 1),
-      cortesTotales: Math.max(0, filas - 1 + columnas - 1),
+      columnas,
+      filas,
+      demasiaMm,
+      cortesTotales,
+      formula:
+        demasiaMm > 0
+          ? '2 * columnas + 2 * filas'
+          : 'columnas + filas + 2',
     };
   }
 

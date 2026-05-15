@@ -105,8 +105,99 @@ interface SlotComercialElige {
   }>;
 }
 
+interface ModoColorComercial {
+  configPasoId: string;
+  familiaCodigo: string;
+  modoActivacion: string | null;
+  label: string;
+  options: Array<{
+    value: string;
+    label: string;
+    perfilIds: string[];
+  }>;
+  defaultMode?: string;
+}
+
 function materialSelectionKey(configPasoId: string, slotCodigo: string) {
   return `${configPasoId}_${slotCodigo}`;
+}
+
+function getModoColorConfig(params: unknown): {
+  enabled?: boolean;
+  comercialElige?: boolean;
+  defaultMode?: string;
+  allowedModes?: string[];
+} {
+  if (!params || typeof params !== "object") return {};
+  const config = (params as { modoColorConfig?: unknown }).modoColorConfig;
+  if (!config || typeof config !== "object") return {};
+  return config as {
+    enabled?: boolean;
+    comercialElige?: boolean;
+    defaultMode?: string;
+    allowedModes?: string[];
+  };
+}
+
+function normalizeModoColor(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .replace(/WHITE/g, "BLANCO")
+    .replace(/W/g, "BLANCO")
+    .replace(/BARNIZ|VARNISH|VERNIS/g, "BARNIZ");
+  if (!normalized) return undefined;
+  if (["BN", "B/N", "K", "NEGRO", "BLACK"].includes(normalized)) return "BN";
+  if (normalized === "CMYK") return "CMYK";
+  if (["CMYK+BLANCO", "CMYKBLANCO"].includes(normalized)) {
+    return "CMYK+blanco";
+  }
+  if (
+    [
+      "CMYK+BLANCO+BARNIZ",
+      "CMYK+BARNIZ+BLANCO",
+      "CMYKBLANCOBARNIZ",
+      "CMYKBARNIZBLANCO",
+    ].includes(normalized)
+  ) {
+    return "CMYK+blanco+barniz";
+  }
+  return value.trim();
+}
+
+function getModosColorComercial(
+  rutaSel: ProductoDetalle["rutasAlternativas"][number] | undefined,
+): ModoColorComercial[] {
+  return (
+    rutaSel?.configPasos
+      .map((cp) => {
+        const config = getModoColorConfig(cp.paramsPasoJson);
+        const allowedModes = Array.isArray(config.allowedModes)
+          ? config.allowedModes.map(normalizeModoColor).filter(Boolean)
+          : [];
+        const options = (cp.modoColorOptions ?? []).filter(
+          (option) =>
+            allowedModes.length === 0 ||
+            allowedModes.includes(normalizeModoColor(option.value) ?? ""),
+        );
+        if (options.length === 0) return null;
+        const comercialElige =
+          config.comercialElige === true ||
+          (config.enabled !== false && options.length > 1);
+        if (!comercialElige) return null;
+        return {
+          configPasoId: cp.id,
+          familiaCodigo: cp.rutaPaso.familiaCodigo,
+          modoActivacion: cp.modoActivacion,
+          label: "Modo de color",
+          options,
+          defaultMode: normalizeModoColor(config.defaultMode),
+        };
+      })
+      .filter((modo): modo is ModoColorComercial => modo !== null) ?? []
+  );
 }
 
 const ZONAS_VIATICO = [
@@ -155,6 +246,9 @@ export function CotizadorView({
   const [seleccionMaquina, setSeleccionMaquina] = React.useState<
     Record<string, string>
   >({});
+  const [seleccionModoColor, setSeleccionModoColor] = React.useState<
+    Record<string, string>
+  >({});
   const [zonaInstalacion, setZonaInstalacion] = React.useState<string>("CABA");
   const [m2Instalados, setM2Instalados] = React.useState<number>(0);
   const [piezas, setPiezas] = React.useState<PiezaInput[]>([]);
@@ -171,6 +265,7 @@ export function CotizadorView({
     setOpcionalesActivados({});
     setSeleccionMaterial({});
     setSeleccionMaquina({});
+    setSeleccionModoColor({});
     setPiezas([]);
     void getProductoById(productoId).then((d) => {
       setProductoDetalle(d);
@@ -211,8 +306,9 @@ export function CotizadorView({
     ) ?? [];
 
   // Slots COMERCIAL_ELIGE: extraer de los configPasos de la ruta seleccionada
-  const slotsComercialElige =
-    rutaSel?.configPasos.flatMap((cp) =>
+  const slotsComercialElige = React.useMemo(
+    () =>
+      rutaSel?.configPasos.flatMap((cp) =>
       cp.slotsMateriales
         .filter((s) => s.modoSeleccion === "COMERCIAL_ELIGE")
         .map((s) => ({
@@ -227,7 +323,9 @@ export function CotizadorView({
               default?: boolean;
             }>) ?? [],
         })),
-    ) ?? [];
+      ) ?? [],
+    [rutaSel],
+  );
   const slotsMaterialesPrincipales = slotsComercialElige.filter(
     (slot) => slot.modoActivacion !== "OPCIONAL",
   );
@@ -249,6 +347,14 @@ export function CotizadorView({
         familiaCodigo: cp.rutaPaso.familiaCodigo,
         candidatas: cp.maquinasCandidatas ?? [],
       })) ?? [];
+  const modosColorComercial = getModosColorComercial(rutaSel).filter(
+    (modo) =>
+      modo.modoActivacion !== "OPCIONAL" ||
+      Boolean(opcionalesActivados[modo.configPasoId]),
+  );
+  const modosColorVisibles = modosColorComercial.filter(
+    (modo) => modo.options.length > 1,
+  );
 
   const necesitaInstalacion = productoDetalle?.cargosDirectosCotizacion.some(
     (c) => c.cargoDirectoCatalogo.codigo === "viatico",
@@ -311,6 +417,20 @@ export function CotizadorView({
     // G-F2: inyectar override de máquina M-2 por configPasoId.
     for (const [configPasoId, maquinaId] of Object.entries(seleccionMaquina)) {
       if (maquinaId) ctx[`maquinaSeleccionada_${configPasoId}`] = maquinaId;
+    }
+    const modoColorPorPaso: Record<string, string> = {};
+    for (const modo of modosColorComercial) {
+      const selected =
+        normalizeModoColor(seleccionModoColor[modo.configPasoId]) ??
+        modo.defaultMode ??
+        normalizeModoColor(modo.options[0]?.value);
+      if (!selected) continue;
+      modoColorPorPaso[modo.configPasoId] = selected;
+      ctx[`modoColor_${modo.configPasoId}`] = selected;
+      if (modosColorComercial.length === 1) ctx.modoColor = selected;
+    }
+    if (Object.keys(modoColorPorPaso).length > 0) {
+      ctx.modoColorPorPaso = modoColorPorPaso;
     }
     return ctx;
   };
@@ -507,6 +627,7 @@ export function CotizadorView({
                       setRutaAlternativaId(v ?? "");
                       setSeleccionMaterial({});
                       setSeleccionMaquina({});
+                      setSeleccionModoColor({});
                       setOpcionalesActivados({});
                     }}
                   >
@@ -582,6 +703,74 @@ export function CotizadorView({
                 </div>
               )}
             </div>
+
+            {modosColorVisibles.length > 0 && (
+              <div className="space-y-2">
+                <LabelConTooltip
+                  label={
+                    modosColorVisibles.length === 1
+                      ? "Modo de color"
+                      : "Modo de color por paso"
+                  }
+                  tooltip="Modo comercial admitido por el paso de impresión. Define el perfil de máquina y los consumibles costeados."
+                />
+                {modosColorVisibles.map((modo) => {
+                  const selectedValue =
+                    normalizeModoColor(seleccionModoColor[modo.configPasoId]) ??
+                    modo.defaultMode ??
+                    normalizeModoColor(modo.options[0]?.value) ??
+                    "";
+                  const selectedOption =
+                    modo.options.find(
+                      (option) =>
+                        normalizeModoColor(option.value) === selectedValue,
+                    ) ?? null;
+                  const label =
+                    modosColorVisibles.length === 1
+                      ? "Modo de color"
+                      : familiaLabel(modo.familiaCodigo);
+
+                  return (
+                    <div key={modo.configPasoId} className="space-y-1">
+                      <Label
+                        htmlFor={`modo-color-${modo.configPasoId}`}
+                        className="text-muted-foreground text-xs"
+                      >
+                        {label}
+                      </Label>
+                      <Select
+                        value={selectedValue}
+                        onValueChange={(v) => {
+                          setResultado(null);
+                          setSeleccionModoColor((prev) => ({
+                            ...prev,
+                            [modo.configPasoId]: normalizeModoColor(v) ?? v,
+                          }));
+                        }}
+                      >
+                        <SelectTrigger id={`modo-color-${modo.configPasoId}`}>
+                          <SelectDisplay
+                            label={selectedOption?.label ?? selectedValue}
+                            placeholder="Elegí un modo"
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {modo.options.map((option) => {
+                            const value =
+                              normalizeModoColor(option.value) ?? option.value;
+                            return (
+                              <SelectItem key={value} value={value}>
+                                {option.label}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* PIEZAS multi-medida (solo si modoMedidas LIBRE) */}
             {productoDetalle?.modoMedidas === "LIBRE" && (

@@ -82,7 +82,7 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
   // ============================================================================
   // 1. IMPRESORA_LASER (Ricoh PRO C5100) — Tarjetas, Talonarios
   //    Doc §5: gramajeMaxGr (columna), margenesNoImprimiblesMm (paramsTecnicos),
-  //    soporteDobleFaz, formatosPliegoSoportados, coloresSoportados.
+  //    soporteDobleFaz, coloresSoportados.
   // ============================================================================
   const ricoh = await prisma.maquina.create({
     data: {
@@ -107,7 +107,6 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
       parametrosTecnicosJson: {
         margenesNoImprimiblesMm: { sup: 5, inf: 5, izq: 5, der: 5 },
         soporteDobleFaz: true,
-        formatosPliegoSoportados: ["A4", "A3", "SRA3"],
         coloresSoportados: ["BN", "CMYK"],
       },
     },
@@ -124,11 +123,10 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
       productivityUnit: UnidadProduccionMaquina.PPM,
       setupMin: "5",
       cleanupMin: "2",
-      // Discriminantes según doc §5: caras + colores + formato + gramajeRango.
+      // Discriminantes según doc §5: caras + colores + gramajeRango.
       detalleJson: {
         caras: "SIMPLE_FAZ",
-        colores: "CMYK",
-        formatoSoportado: "SRA3",
+        colores: ["CMYK", "BN"],
         gramajeMinGr: 200,
         gramajeMaxGr: 350,
       },
@@ -148,8 +146,7 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
       cleanupMin: "2",
       detalleJson: {
         caras: "DOBLE_FAZ",
-        colores: "CMYK",
-        formatoSoportado: "SRA3",
+        colores: ["CMYK", "BN"],
         gramajeMinGr: 200,
         gramajeMaxGr: 350,
       },

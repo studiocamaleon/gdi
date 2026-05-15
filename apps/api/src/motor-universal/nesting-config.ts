@@ -28,6 +28,7 @@ export interface NestingPanelizadoConfig {
 export interface NestingConfigResolved {
   algorithm: NestingAlgorithmPolicy;
   allowRotation: boolean;
+  pieceBleedMm: number;
   separationHMm: number;
   separationVMm: number;
   margins: {
@@ -103,6 +104,32 @@ export function resolveNestingConfig(
     paso.familiaCodigo === 'laminado'
       ? readNumber(maqParams.margenEntrePliegosMm)
       : null;
+  const legacySeparationHMm =
+    readNumber(
+      runtimeNestingConfig.separationHMm,
+      nestingConfig.separationHMm,
+      params.separacionHorizontalMm,
+      machineSheetGapMm,
+      defaultSeparationForFamily(paso.familiaCodigo),
+    ) ?? defaultSeparationForFamily(paso.familiaCodigo);
+  const legacySeparationVMm =
+    readNumber(
+      runtimeNestingConfig.separationVMm,
+      nestingConfig.separationVMm,
+      params.separacionVerticalMm,
+      machineSheetGapMm,
+      defaultSeparationForFamily(paso.familiaCodigo),
+    ) ?? defaultSeparationForFamily(paso.familiaCodigo);
+  const pieceBleedMm = Math.max(
+    0,
+    readNumber(
+      runtimeNestingConfig.pieceBleedMm,
+      nestingConfig.pieceBleedMm,
+      Math.max(legacySeparationHMm, legacySeparationVMm) / 2,
+    ) ?? 0,
+  );
+  const separationHMm = pieceBleedMm * 2;
+  const separationVMm = pieceBleedMm * 2;
   const baseMargins = {
     leftMm: readNumber(
       runtimeMargins.leftMm,
@@ -150,16 +177,20 @@ export function resolveNestingConfig(
   const margins = {
     leftMm:
       baseMargins.leftMm +
-      (readNumber(runtimeExtraMargins.leftMm, extraMargins.leftMm, 0) ?? 0),
+      (readNumber(runtimeExtraMargins.leftMm, extraMargins.leftMm, 0) ?? 0) +
+      pieceBleedMm,
     rightMm:
       baseMargins.rightMm +
-      (readNumber(runtimeExtraMargins.rightMm, extraMargins.rightMm, 0) ?? 0),
+      (readNumber(runtimeExtraMargins.rightMm, extraMargins.rightMm, 0) ?? 0) +
+      pieceBleedMm,
     topMm:
       baseMargins.topMm +
-      (readNumber(runtimeExtraMargins.topMm, extraMargins.topMm, 0) ?? 0),
+      (readNumber(runtimeExtraMargins.topMm, extraMargins.topMm, 0) ?? 0) +
+      pieceBleedMm,
     bottomMm:
       baseMargins.bottomMm +
-      (readNumber(runtimeExtraMargins.bottomMm, extraMargins.bottomMm, 0) ?? 0),
+      (readNumber(runtimeExtraMargins.bottomMm, extraMargins.bottomMm, 0) ?? 0) +
+      pieceBleedMm,
     startMm:
       baseMargins.startMm +
       (readNumber(
@@ -168,7 +199,8 @@ export function resolveNestingConfig(
         extraMargins.startMm,
         extraMargins.topMm,
         0,
-      ) ?? 0),
+      ) ?? 0) +
+      pieceBleedMm,
     endMm:
       baseMargins.endMm +
       (readNumber(
@@ -177,7 +209,8 @@ export function resolveNestingConfig(
         extraMargins.endMm,
         extraMargins.bottomMm,
         0,
-      ) ?? 0),
+      ) ?? 0) +
+      pieceBleedMm,
   };
   const materialRollWidthMm = readNumber(materialAttrs.anchoMm);
   const machineMaxRollWidthMm = readNumber(
@@ -229,20 +262,9 @@ export function resolveNestingConfig(
       params.permitirRotacion,
       true,
     ),
-    separationHMm: readNumber(
-      runtimeNestingConfig.separationHMm,
-      nestingConfig.separationHMm,
-      params.separacionHorizontalMm,
-      machineSheetGapMm,
-      defaultSeparationForFamily(paso.familiaCodigo),
-    ) ?? defaultSeparationForFamily(paso.familiaCodigo),
-    separationVMm: readNumber(
-      runtimeNestingConfig.separationVMm,
-      nestingConfig.separationVMm,
-      params.separacionVerticalMm,
-      machineSheetGapMm,
-      defaultSeparationForFamily(paso.familiaCodigo),
-    ) ?? defaultSeparationForFamily(paso.familiaCodigo),
+    pieceBleedMm,
+    separationHMm,
+    separationVMm,
     margins,
     rollWidthMm,
     sheetWidthMm:

@@ -923,8 +923,7 @@ model MaquinaPerfilOperativo {
   feedReloadMin         Decimal?                       @db.Decimal(12, 2)
   /// Discriminantes y params específicos de la plantilla.
   /// Ej. IMPRESORA_LASER: { caras: 'SIMPLE_FAZ' | 'DOBLE_FAZ',
-  ///   colores: 'BN' | 'CMYK', formatoSoportado: 'A4' | 'A3' | 'SRA3',
-  ///   gramajeMinGr, gramajeMaxGr }
+  ///   colores: 'BN' | 'CMYK', gramajeMinGr, gramajeMaxGr }
   /// Ej. GUILLOTINA: { gramajeMinGr, gramajeMaxGr, pliegosMaxPorTanda }
   /// Ej. PLOTTER_DE_CORTE: { tipoCorte: 'COMPLETO' | 'KISS_CUT',
   ///   modoOperacion: 'ROLLO' | 'HOJAS', factorComplejidad: {...} }

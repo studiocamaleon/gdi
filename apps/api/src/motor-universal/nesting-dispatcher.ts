@@ -360,6 +360,7 @@ function runShelfRollo(
         topMm: config.margins.startMm,
         bottomMm: config.margins.endMm,
       },
+      pieceBleedMm: config.pieceBleedMm,
       separationHMm: config.separationHMm,
       separationVMm: config.separationVMm,
       allowRotation: config.allowRotation,
@@ -456,6 +457,7 @@ function runGrid2DMultiForArea(
         topMm: config.margins.topMm,
         bottomMm: config.margins.bottomMm,
       },
+      pieceBleedMm: config.pieceBleedMm,
       separationHMm: config.separationHMm,
       separationVMm: config.separationVMm,
       allowRotation: config.allowRotation,
@@ -532,6 +534,7 @@ function runPackingSolverRectangleForArea(
         topMm: config.margins.topMm,
         bottomMm: config.margins.bottomMm,
       },
+      pieceBleedMm: config.pieceBleedMm,
       separationHMm: config.separationHMm,
       separationVMm: config.separationVMm,
       allowRotation: config.allowRotation,
@@ -637,6 +640,7 @@ function runGrid2DSingleForArea(
       widthMm: config.sheetWidthMm,
       heightMm: config.sheetHeightMm,
       margins: sustrato.margins,
+      pieceBleedMm: config.pieceBleedMm,
       separationHMm: config.separationHMm,
       separationVMm: config.separationVMm,
       allowRotation: config.allowRotation,
@@ -823,6 +827,7 @@ function runGrid2DSingle(
       (config.algorithm === 'auto' && medidasDistintas.size > 1)
     ) {
       return runGrid2DMulti(jobContext, sustrato, {
+        pieceBleedMm: config.pieceBleedMm,
         separationHMm: config.separationHMm,
         separationVMm: config.separationVMm,
         allowRotation: config.allowRotation,
@@ -877,6 +882,7 @@ function runGrid2DSingle(
       widthMm: sheetWidthMm,
       heightMm: sheetHeightMm,
       margins: sustrato.margins,
+      pieceBleedMm: config.pieceBleedMm,
       separationHMm: config.separationHMm,
       separationVMm: config.separationVMm,
       allowRotation: config.allowRotation,
@@ -907,6 +913,7 @@ function runGrid2DMulti(
     };
   },
   options: {
+    pieceBleedMm: number;
     separationHMm: number;
     separationVMm: number;
     allowRotation: boolean;
@@ -944,6 +951,7 @@ function runGrid2DMulti(
       widthMm: sustrato.widthMm,
       heightMm: sustrato.heightMm,
       margins: sustrato.margins,
+      pieceBleedMm: options.pieceBleedMm,
       separationHMm: options.separationHMm,
       separationVMm: options.separationVMm,
       allowRotation: options.allowRotation,
@@ -962,12 +970,19 @@ function buildVisualConfig(input: {
     topMm: number;
     bottomMm: number;
   };
+  pieceBleedMm: number;
   separationHMm: number;
   separationVMm: number;
   allowRotation: boolean;
   substrateLabel: string;
   panelizado?: NestingVisualConfig['panelizado'];
 }): NestingVisualConfig {
+  const displayMargins = {
+    leftMm: Math.max(0, input.margins.leftMm - input.pieceBleedMm),
+    rightMm: Math.max(0, input.margins.rightMm - input.pieceBleedMm),
+    topMm: Math.max(0, input.margins.topMm - input.pieceBleedMm),
+    bottomMm: Math.max(0, input.margins.bottomMm - input.pieceBleedMm),
+  };
   const usableWidthMm = Math.max(
     0,
     input.widthMm - input.margins.leftMm - input.margins.rightMm,
@@ -976,12 +991,21 @@ function buildVisualConfig(input: {
     0,
     input.heightMm - input.margins.topMm - input.margins.bottomMm,
   );
+  const printableWidthMm = Math.max(
+    0,
+    input.widthMm - displayMargins.leftMm - displayMargins.rightMm,
+  );
+  const printableHeightMm = Math.max(
+    0,
+    input.heightMm - displayMargins.topMm - displayMargins.bottomMm,
+  );
   return {
-    margins: input.margins,
+    margins: displayMargins,
     spacing: {
       horizontalMm: input.separationHMm,
       verticalMm: input.separationVMm,
     },
+    pieceBleedMm: input.pieceBleedMm,
     allowRotation: input.allowRotation,
     substrateLabel: input.substrateLabel,
     panelizado: input.panelizado,
@@ -990,6 +1014,12 @@ function buildVisualConfig(input: {
       yMm: input.margins.topMm,
       widthMm: usableWidthMm,
       heightMm: usableHeightMm,
+    },
+    printableArea: {
+      xMm: displayMargins.leftMm,
+      yMm: displayMargins.topMm,
+      widthMm: printableWidthMm,
+      heightMm: printableHeightMm,
     },
   };
 }

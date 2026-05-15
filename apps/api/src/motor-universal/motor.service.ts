@@ -44,6 +44,11 @@ import {
   type CostingStrategyKind,
 } from '../productos-servicios/nesting/costing';
 import { calculateSustratoToPliegoConversion } from '../productos-servicios/nesting/helpers/sustrato-to-pliego';
+import {
+  getModoColorsFromPerfil,
+  modoColorMatchesPerfil,
+  normalizeModoColor,
+} from '../productos-servicios/modo-color-comercial';
 
 /**
  * G-M9 — Resuelve la unidad efectiva de un material consumido. Cuando la
@@ -894,6 +899,37 @@ export class MotorUniversalService {
     const pasoConMaquina = this.resolverMaquinaM2(paso, jobContext);
 
     // c) RESOLVER PERFIL automáticamente si aplica (F.2.4 — D.2)
+    const modoColorElegido = this.resolverModoColorComercial(
+      pasoConMaquina,
+      jobContext,
+    );
+    if (
+      modoColorElegido &&
+      !this.findPerfilCompatiblePorModoColor(pasoConMaquina, modoColorElegido)
+    ) {
+      errores.push({
+        codigo: 'perfil_modo_color_no_compatible',
+        severidad: 'ERROR',
+        mensaje: `El paso ${pasoConMaquina.rutaPasoOrden} no tiene perfil compatible con el modo de color seleccionado (${modoColorElegido}).`,
+        rutaPasoId: pasoConMaquina.rutaPasoId,
+        rutaPasoOrden: pasoConMaquina.rutaPasoOrden,
+        familiaCodigo: pasoConMaquina.familiaCodigo,
+        contexto: {
+          configPasoId: pasoConMaquina.configPasoId,
+          modoColor: modoColorElegido,
+        },
+        sugerencia:
+          'Configurá un perfil operativo con ese modo de color o restringí las opciones comerciales del paso.',
+      });
+      return {
+        rutaPasoId: pasoConMaquina.rutaPasoId,
+        rutaPasoOrden: pasoConMaquina.rutaPasoOrden,
+        familiaCodigo: pasoConMaquina.familiaCodigo,
+        configPasoId: pasoConMaquina.configPasoId,
+        activado: true,
+        costoTotal: 0,
+      };
+    }
     const perfilResuelto = this.resolverPerfil(pasoConMaquina, jobContext);
     paso = pasoConMaquina; // todo lo siguiente usa el paso con máquina resuelta
 
@@ -1027,26 +1063,6 @@ export class MotorUniversalService {
       0,
     );
 
-    const nestingResult: NestingEjecutado | undefined = nestingDispatch
-      ? {
-          algorithm: nestingDispatch.algorithm,
-          cantidadCalculada: nestingDispatch.cantidadCalculada,
-          unidad: nestingDispatch.unidad,
-          aprovechamientoPct: nestingDispatch.aprovechamientoPct,
-          substrates: nestingDispatch.substrates,
-          placements: nestingDispatch.placements,
-          piezasPorPliego: nestingDispatch.piezasPorPliego,
-          consumedLengthMm: nestingDispatch.consumedLengthMm,
-          piezasAcomodadas: nestingDispatch.piezasAcomodadas,
-          visualConfig: nestingDispatch.visualConfig,
-          costingPreview: this.buildNestingCostingPreview(
-            nestingDispatch,
-            materiales,
-          ),
-          talonarioGrouping: nestingDispatch.talonarioGrouping,
-        }
-      : undefined;
-
     // h) G-M2 — Outputs canónicos: la familia declara qué publica al jobContext.
     //    Cantidad efectiva del paso depende del mecanismo:
     //      - DIRECT_FROM_JOBCONTEXT: jobContext.cantidad
@@ -1065,6 +1081,27 @@ export class MotorUniversalService {
       nestingDispatch,
       cantidadEfectiva,
     });
+
+    const nestingResult: NestingEjecutado | undefined = nestingDispatch
+      ? {
+          algorithm: nestingDispatch.algorithm,
+          cantidadCalculada: nestingDispatch.cantidadCalculada,
+          unidad: nestingDispatch.unidad,
+          aprovechamientoPct: nestingDispatch.aprovechamientoPct,
+          substrates: nestingDispatch.substrates,
+          placements: nestingDispatch.placements,
+          piezasPorPliego: nestingDispatch.piezasPorPliego,
+          consumedLengthMm: nestingDispatch.consumedLengthMm,
+          piezasAcomodadas: nestingDispatch.piezasAcomodadas,
+          visualConfig: nestingDispatch.visualConfig,
+          outputsCanonicos,
+          costingPreview: this.buildNestingCostingPreview(
+            nestingDispatch,
+            materiales,
+          ),
+          talonarioGrouping: nestingDispatch.talonarioGrouping,
+        }
+      : undefined;
 
     return {
       rutaPasoId: paso.rutaPasoId,
@@ -2015,9 +2052,12 @@ export class MotorUniversalService {
       (paso.perfil?.detalleJson as Record<string, unknown> | null) ??
       ((paso.perfilesDisponibles?.find((p) => p.id === paso.perfilM1Id)
         ?.detalleJson ?? null) as Record<string, unknown> | null);
+    const modoColorEfectivo =
+      this.resolverModoColorEfectivoConsumibles(paso, jobContext);
     const channels = getPerfilConsumableChannels(
       perfilDetalle,
       maquina.parametrosTecnicosJson ?? null,
+      modoColorEfectivo,
     );
 
     if (channels.length === 0) {
@@ -2063,6 +2103,8 @@ export class MotorUniversalService {
         consumibles,
         paso.perfil?.id ?? paso.perfilM1Id,
         channel,
+        maquina.plantilla === 'impresora_laser' ||
+          maquina.plantilla === 'IMPRESORA_LASER',
       );
 
       if (!consumible) {
@@ -2152,6 +2194,7 @@ export class MotorUniversalService {
     >,
     perfilId: string | null | undefined,
     channel: ConsumableChannel,
+    preferGlobal = false,
   ) {
     const matchesChannel = (consumible: (typeof consumibles)[number]) =>
       consumible.activo &&
@@ -2159,18 +2202,16 @@ export class MotorUniversalService {
         (consumible.detalleJson as Record<string, unknown> | null) ?? null,
       ) === channel;
 
-    return (
-      consumibles.find(
-        (consumible) =>
-          matchesChannel(consumible) &&
-          consumible.perfilOperativoId === perfilId,
-      ) ??
-      consumibles.find(
-        (consumible) =>
-          matchesChannel(consumible) && consumible.perfilOperativoId === null,
-      ) ??
-      null
+    const global = consumibles.find(
+      (consumible) =>
+        matchesChannel(consumible) && consumible.perfilOperativoId === null,
     );
+    const scoped = consumibles.find(
+      (consumible) =>
+        matchesChannel(consumible) && consumible.perfilOperativoId === perfilId,
+    );
+
+    return (preferGlobal ? global ?? scoped : scoped ?? global) ?? null;
   }
 
   private calcularAreaImpresaConsumiblesM2(
@@ -2902,6 +2943,81 @@ export class MotorUniversalService {
     );
   }
 
+  private resolverModoColorComercial(paso: PasoCargado, jobContext: JobContext) {
+    const ctx = jobContext as Record<string, unknown>;
+    const scopedByConfig = ctx[`modoColor_${paso.configPasoId}`];
+    const scopedByPaso = ctx[`modoColor_${paso.rutaPasoId}`];
+    const scopedMap =
+      ctx.modoColorPorPaso &&
+      typeof ctx.modoColorPorPaso === 'object' &&
+      !Array.isArray(ctx.modoColorPorPaso)
+        ? (ctx.modoColorPorPaso as Record<string, unknown>)
+        : {};
+    const mappedByConfig = scopedMap[paso.configPasoId];
+    const mappedByPaso = scopedMap[paso.rutaPasoId];
+    const scoped = normalizeModoColor(
+      scopedByConfig ?? scopedByPaso ?? mappedByConfig ?? mappedByPaso,
+    );
+    if (scoped) return scoped;
+
+    if (!this.pasoAdmiteModoColorComercial(paso)) return null;
+    return normalizeModoColor(ctx.modoColor);
+  }
+
+  private pasoAdmiteModoColorComercial(paso: PasoCargado) {
+    const perfilesDisponibles = this.filtrarPerfilesCompatibles(
+      paso.familiaCodigo,
+      paso.perfilesDisponibles,
+    );
+    return perfilesDisponibles.some(
+      (perfil) => getModoColorsFromPerfil(perfil).length > 0,
+    );
+  }
+
+  private resolverModoColorEfectivoConsumibles(
+    paso: PasoCargado,
+    jobContext: JobContext,
+  ) {
+    const elegido = this.resolverModoColorComercial(paso, jobContext);
+    if (elegido) return elegido;
+
+    const params =
+      paso.paramsPasoJson &&
+      typeof paso.paramsPasoJson === 'object' &&
+      !Array.isArray(paso.paramsPasoJson)
+        ? (paso.paramsPasoJson as Record<string, unknown>)
+        : {};
+    const modoColorConfig =
+      params.modoColorConfig &&
+      typeof params.modoColorConfig === 'object' &&
+      !Array.isArray(params.modoColorConfig)
+        ? (params.modoColorConfig as Record<string, unknown>)
+        : {};
+    const defaultMode = normalizeModoColor(modoColorConfig.defaultMode);
+    if (defaultMode) return defaultMode;
+
+    const perfil =
+      paso.perfil ??
+      paso.perfilesDisponibles?.find((item) => item.id === paso.perfilM1Id);
+    const modos = getModoColorsFromPerfil(perfil);
+    if (modos.length === 1) return modos[0];
+    if (modos.includes('CMYK')) return 'CMYK';
+    return modos[0] ?? null;
+  }
+
+  private findPerfilCompatiblePorModoColor(
+    paso: PasoCargado,
+    modoColor: string,
+  ) {
+    const perfilesDisponibles = this.filtrarPerfilesCompatibles(
+      paso.familiaCodigo,
+      paso.perfilesDisponibles,
+    );
+    return perfilesDisponibles.find((perfil) =>
+      modoColorMatchesPerfil(perfil, modoColor),
+    );
+  }
+
   /**
    * F.2.4 / G-M8 — Selección automática de perfil dentro de la máquina M-1.
    *
@@ -2933,7 +3049,34 @@ export class MotorUniversalService {
 
     const ctx = jobContext as unknown as Record<string, unknown>;
 
-    // ─── 1. G-M8 — Regla declarativa por perfil ──────────────────────
+    // ─── 1. Modo de color comercial por paso ────────────────────────
+    const modoColor = this.resolverModoColorComercial(paso, jobContext);
+    if (modoColor) {
+      const perfilActual =
+        perfilesDisponibles.find((perfil) => perfil.id === paso.perfilM1Id) ??
+        paso.perfil;
+      if (modoColorMatchesPerfil(perfilActual, modoColor)) {
+        return null;
+      }
+      const candidato = perfilesDisponibles.find((perfil) =>
+        modoColorMatchesPerfil(perfil, modoColor),
+      );
+      if (candidato && candidato.id !== paso.perfilM1Id) {
+        return {
+          id: candidato.id,
+          nombre: candidato.nombre,
+          tipoPerfil: candidato.tipoPerfil,
+          productivityValue: candidato.productivityValue,
+          productivityUnit: candidato.productivityUnit ?? null,
+          setupMin: candidato.setupMin,
+          cleanupMin: candidato.cleanupMin,
+          detalleJson: candidato.detalleJson,
+        };
+      }
+      return null;
+    }
+
+	    // ─── 2. G-M8 — Regla declarativa por perfil ──────────────────────
     for (const perfil of perfilesDisponibles) {
       if (!perfil.activo) continue;
       const detalle = (perfil.detalleJson ?? {}) as Record<string, unknown>;
@@ -2955,7 +3098,7 @@ export class MotorUniversalService {
       }
     }
 
-    // ─── 2. Heurística legacy: impresión por hoja según caras ────────
+	    // ─── 3. Heurística legacy: impresión por hoja según caras ────────
     // v3.0 (doc §5): el discriminante canónico es `detalle.caras`
     // ('SIMPLE_FAZ' | 'DOBLE_FAZ'). Heurística retro-compat: también
     // detecta el legacy `detalle.dobleFaz === true` y nombre del perfil.
