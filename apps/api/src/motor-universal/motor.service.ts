@@ -403,6 +403,12 @@ export class MotorUniversalService {
       cargosDirectosPasoTotal + cargosDirectosCotizacionTotal;
     const total = tiempoTotal + materialesTotal + cargosDirectosTotal;
     const cantidadEfectiva = jobContext.cantidad ?? 1;
+    const cantidadComercialPricing = this.resolverCantidadComercialPricing(
+      producto,
+      jobContext,
+    );
+    const costoUnitarioComercial =
+      cantidadComercialPricing > 0 ? total / cantidadComercialPricing : 0;
 
     const cotizacion: CotizacionResultado = {
       productoId: producto.productoId,
@@ -411,36 +417,63 @@ export class MotorUniversalService {
       rutaNombre: producto.rutaAlternativaNombre,
       cantidadEfectiva,
       cantidadPedida: input.jobContext.cantidad,
+      cantidadComercialPricing,
+      unidadComercialPricing: producto.unidadComercial,
       costos: {
         tiempoTotal,
         materialesTotal,
         cargosDirectosTotal,
         total,
-        unitario: cantidadEfectiva > 0 ? total / cantidadEfectiva : 0,
+        unitario: costoUnitarioComercial,
       },
       pasos: pasosEjecutados,
       cargosDirectosCotizacion,
     };
 
-    // F.2.12 — Calcular precio a partir del costo + Tab Precio del producto
-    if (producto.precioConfigJson) {
-      cotizacion.precio = calcularPrecio(
-        cotizacion.costos.unitario,
-        cantidadEfectiva,
-        producto.precioConfigJson as PrecioConfig,
-      );
-    }
+    let desglose: Awaited<ReturnType<typeof this.calcularPrecioConSnapshots>>;
+    try {
+      // F.2.12 — Calcular precio a partir del costo + Tab Precio del producto
+      if (producto.precioConfigJson) {
+        cotizacion.precio = calcularPrecio(
+          cotizacion.costos.unitario,
+          cantidadComercialPricing,
+          producto.precioConfigJson as PrecioConfig,
+        );
+      }
 
-    // Sprint 5.a — Desglose completo (impuestos + comisiones + override cliente).
-    // Se calcula en cualquier caso (no sólo al guardar) para que el cotizador en
-    // preview muestre el precio bruto real.
-    const desglose = await this.calcularPrecioConSnapshots({
-      tenantId: input.tenantId,
-      productoId: input.productoId,
-      clienteId: input.clienteId ?? undefined,
-      costoUnitario: cotizacion.costos.unitario,
-      cantidad: cantidadEfectiva,
-    });
+      // Sprint 5.a — Desglose completo (impuestos + comisiones + override cliente).
+      // Se calcula en cualquier caso (no sólo al guardar) para que el cotizador en
+      // preview muestre el precio bruto real.
+      desglose = await this.calcularPrecioConSnapshots({
+        tenantId: input.tenantId,
+        productoId: input.productoId,
+        clienteId: input.clienteId ?? undefined,
+        costoUnitario: cotizacion.costos.unitario,
+        cantidad: cantidadComercialPricing,
+      });
+    } catch (error) {
+      return {
+        exitoso: false,
+        errores: [
+          {
+            codigo: 'PRECIO_NO_CALCULABLE',
+            severidad: 'ERROR',
+            mensaje:
+              error instanceof Error
+                ? error.message
+                : 'No se pudo calcular el precio comercial del producto.',
+            contexto: {
+              productoId: producto.productoId,
+              unidadComercial: producto.unidadComercial,
+              cantidadComercialPricing,
+              costoUnitario: cotizacion.costos.unitario,
+            },
+            sugerencia:
+              'Revisá el margen objetivo, impuestos y comisiones configurados en Pricing.',
+          },
+        ],
+      };
+    }
     if (desglose) {
       cotizacion.desglosePrecio = {
         precioConfig: desglose.snapshots.precioConfig as never,
@@ -537,7 +570,7 @@ export class MotorUniversalService {
         cotizacionId,
         productoId: input.productoId,
         rutaAlternativaId: result.cotizacion.rutaAlternativaId,
-        cantidad: result.cotizacion.cantidadEfectiva.toString(),
+        cantidad: result.cotizacion.cantidadComercialPricing.toString(),
         jobContextJson: input.jobContext as never,
         snapshotJson: {
           producto: {
@@ -567,6 +600,9 @@ export class MotorUniversalService {
           ejecucion: {
             cantidadEfectiva: result.cotizacion.cantidadEfectiva,
             cantidadPedida: result.cotizacion.cantidadPedida,
+            cantidadComercialPricing:
+              result.cotizacion.cantidadComercialPricing,
+            unidadComercialPricing: result.cotizacion.unidadComercialPricing,
             costos: result.cotizacion.costos,
           },
         } as never,
@@ -717,6 +753,80 @@ export class MotorUniversalService {
     };
   }
 
+  private resolverCantidadComercialPricing(
+    producto: ProductoCargado,
+    jobContext: JobContext,
+  ): number {
+    const unidad = producto.unidadComercial?.toLowerCase();
+    const cantidadFallback = this.numeroPositivo(jobContext.cantidad) ?? 1;
+
+    if (unidad === 'm2' || unidad === 'm²') {
+      return (
+        this.numeroPositivo(jobContext.cantidadComercial) ??
+        this.numeroPositivo(jobContext.cantidadComercialPricing) ??
+        this.numeroPositivo(jobContext.piezaAreaTotalM2) ??
+        this.calcularM2ComercialDesdePiezas(jobContext.piezas) ??
+        this.calcularM2DesdeMedida(jobContext, producto) ??
+        cantidadFallback
+      );
+    }
+
+    if (
+      unidad === 'metro_lineal' ||
+      unidad === 'ml' ||
+      unidad === 'metro lineal'
+    ) {
+      return (
+        this.numeroPositivo(jobContext.cantidadComercial) ??
+        this.numeroPositivo(jobContext.cantidadComercialPricing) ??
+        this.numeroPositivo(jobContext.metrosLineales) ??
+        this.numeroPositivo(jobContext.metroLineal) ??
+        this.numeroPositivo(jobContext.ml) ??
+        cantidadFallback
+      );
+    }
+
+    return (
+      this.numeroPositivo(jobContext.cantidadComercial) ??
+      this.numeroPositivo(jobContext.cantidadComercialPricing) ??
+      cantidadFallback
+    );
+  }
+
+  private calcularM2ComercialDesdePiezas(
+    piezas: JobContext['piezas'],
+  ): number | undefined {
+    if (!Array.isArray(piezas) || piezas.length === 0) return undefined;
+    const total = piezas.reduce((acc, pieza) => {
+      const cantidad = this.numeroPositivo(pieza.cantidad) ?? 0;
+      const anchoMm = this.numeroPositivo(pieza.anchoMm) ?? 0;
+      const altoMm = this.numeroPositivo(pieza.altoMm) ?? 0;
+      return acc + (cantidad * anchoMm * altoMm) / 1_000_000;
+    }, 0);
+    return total > 0 ? total : undefined;
+  }
+
+  private calcularM2DesdeMedida(
+    jobContext: JobContext,
+    producto: ProductoCargado,
+  ): number | undefined {
+    const medida = jobContext.medidaCustomMm;
+    const anchoMm =
+      this.numeroPositivo(medida?.anchoMm) ??
+      this.numeroPositivo(producto.medidaDefaultAnchoMm);
+    const altoMm =
+      this.numeroPositivo(medida?.altoMm) ??
+      this.numeroPositivo(producto.medidaDefaultAltoMm);
+    const cantidad = this.numeroPositivo(jobContext.cantidad) ?? 0;
+    if (!anchoMm || !altoMm || !cantidad) return undefined;
+    return (cantidad * anchoMm * altoMm) / 1_000_000;
+  }
+
+  private numeroPositivo(value: unknown): number | undefined {
+    const n = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  }
+
   // ============================================================================
   // EJECUCIÓN DE UN PASO (sub-tareas a-i — versión MVP)
   // ============================================================================
@@ -849,6 +959,36 @@ export class MotorUniversalService {
     const pasoConPerfil: PasoCargado = perfilResuelto
       ? { ...paso, perfil: perfilResuelto }
       : paso;
+    if (
+      pasoConPerfil.perfil &&
+      !this.esTipoPerfilCompatibleConFamilia(
+        pasoConPerfil.familiaCodigo,
+        pasoConPerfil.perfil.tipoPerfil,
+      )
+    ) {
+      errores.push({
+        codigo: 'perfil_maquina_incompatible_con_familia',
+        severidad: 'ERROR',
+        mensaje: `El perfil ${pasoConPerfil.perfil.nombre} no es compatible con la familia ${pasoConPerfil.familiaCodigo}.`,
+        rutaPasoId: pasoConPerfil.rutaPasoId,
+        rutaPasoOrden: pasoConPerfil.rutaPasoOrden,
+        familiaCodigo: pasoConPerfil.familiaCodigo,
+        contexto: {
+          perfilId: pasoConPerfil.perfil.id,
+          tipoPerfil: pasoConPerfil.perfil.tipoPerfil ?? null,
+        },
+        sugerencia:
+          'Seleccionar un perfil operativo compatible con el tipo de operación del paso.',
+      });
+      return {
+        rutaPasoId: pasoConPerfil.rutaPasoId,
+        rutaPasoOrden: pasoConPerfil.rutaPasoOrden,
+        familiaCodigo: pasoConPerfil.familiaCodigo,
+        configPasoId: pasoConPerfil.configPasoId,
+        activado: true,
+        costoTotal: 0,
+      };
+    }
     const tiempo = this.calcularTiempo(
       pasoConPerfil,
       jobContext,
@@ -1142,7 +1282,8 @@ export class MotorUniversalService {
         // cantidadCalculada del nesting está en metros lineales. Convertimos a m²
         // multiplicando por el ancho útil del rollo (que viene en el sustrato).
         if (
-          nestingDispatch?.algorithm === 'shelf-rollo' &&
+          (nestingDispatch?.algorithm === 'shelf-rollo' ||
+            nestingDispatch?.algorithm === 'maxrects-rollo') &&
           paso.perfil?.productivityUnit === 'M2_H'
         ) {
           const ancho =
@@ -1211,6 +1352,8 @@ export class MotorUniversalService {
       cleanupMin,
       tiempoFijoMin,
       totalMin,
+      centroCostoId: centroCosto.id,
+      centroCostoNombre: centroCosto.nombre,
       tarifaHora,
       costo,
     };
@@ -1223,7 +1366,7 @@ export class MotorUniversalService {
     if (paso.maquina?.centroCostoPrincipalId) {
       return {
         id: paso.maquina.centroCostoPrincipalId,
-        nombre: null,
+        nombre: paso.maquina.centroCostoPrincipalNombre ?? null,
       };
     }
     return {
@@ -1250,7 +1393,8 @@ export class MotorUniversalService {
     const detail = materialConCosteo?.detalleCosteoNesting;
     const strategy =
       detail?.strategy ??
-      (nestingDispatch.algorithm === 'shelf-rollo'
+      (nestingDispatch.algorithm === 'shelf-rollo' ||
+      nestingDispatch.algorithm === 'maxrects-rollo'
         ? 'consumed-length'
         : materialPrincipal?.estrategiaCosto === 'simple'
           ? 'simple'
@@ -1517,7 +1661,8 @@ export class MotorUniversalService {
         }
       } else if (slot.formula === 'por_metro_lineal') {
         if (
-          nestingDispatch?.algorithm === 'shelf-rollo' &&
+          (nestingDispatch?.algorithm === 'shelf-rollo' ||
+            nestingDispatch?.algorithm === 'maxrects-rollo') &&
           nestingDispatch.consumedLengthMm
         ) {
           cantidad = nestingDispatch.consumedLengthMm / 1000;
@@ -1856,6 +2001,12 @@ export class MotorUniversalService {
     if (
       !maquina ||
       !PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES.has(maquina.plantilla)
+    ) {
+      return [];
+    }
+    if (
+      paso.familiaCodigo === 'plotter_corte' ||
+      paso.perfil?.tipoPerfil === 'CORTE'
     ) {
       return [];
     }
@@ -2670,43 +2821,85 @@ export class MotorUniversalService {
           ? ctx[keyByPasoId]
           : null;
 
+    const candidatasCompatibles = paso.maquinasCandidatas.filter(
+      (candidata) =>
+        this.filtrarPerfilesCompatibles(
+          paso.familiaCodigo,
+          candidata.perfilesOperativos,
+        ).length > 0,
+    );
+
     let elegida = eleccion
-      ? paso.maquinasCandidatas.find(
+      ? candidatasCompatibles.find(
           (c) => c.maquinaId === eleccion || c.id === eleccion,
         )
       : null;
     if (!elegida) {
-      elegida = paso.maquinasCandidatas[0]; // ya viene ordenada (preferida primero)
+      elegida = candidatasCompatibles[0] ?? paso.maquinasCandidatas[0]; // ya viene ordenada (preferida primero)
     }
+    const perfilesCompatibles = this.filtrarPerfilesCompatibles(
+      paso.familiaCodigo,
+      elegida.perfilesOperativos,
+    );
+    const perfilesElegibles =
+      perfilesCompatibles.length > 0
+        ? perfilesCompatibles
+        : elegida.perfilesOperativos;
 
     return {
       ...paso,
       maquinaM1Id: elegida.maquinaId,
       maquina: elegida.maquina,
-      perfilesDisponibles: elegida.perfilesOperativos.map((p) => ({
+      perfilesDisponibles: perfilesElegibles.map((p) => ({
         id: p.id,
         nombre: p.nombre,
+        tipoPerfil: p.tipoPerfil,
         activo: p.activo,
         productivityValue: p.productivityValue,
+        productivityUnit: p.productivityUnit,
         setupMin: p.setupMin,
         cleanupMin: p.cleanupMin,
         detalleJson: p.detalleJson,
       })),
       // Reset perfil M-1 (se vuelve a resolver con resolverPerfil sobre los
       // perfiles de la nueva máquina).
-      perfil: elegida.perfilesOperativos[0]
+      perfil: perfilesElegibles[0]
         ? {
-            id: elegida.perfilesOperativos[0].id,
-            nombre: elegida.perfilesOperativos[0].nombre,
-            productivityValue: elegida.perfilesOperativos[0].productivityValue,
-            productivityUnit: elegida.perfilesOperativos[0].productivityUnit,
-            setupMin: elegida.perfilesOperativos[0].setupMin,
-            cleanupMin: elegida.perfilesOperativos[0].cleanupMin,
-            detalleJson: elegida.perfilesOperativos[0].detalleJson,
+            id: perfilesElegibles[0].id,
+            nombre: perfilesElegibles[0].nombre,
+            tipoPerfil: perfilesElegibles[0].tipoPerfil,
+            productivityValue: perfilesElegibles[0].productivityValue,
+            productivityUnit: perfilesElegibles[0].productivityUnit,
+            setupMin: perfilesElegibles[0].setupMin,
+            cleanupMin: perfilesElegibles[0].cleanupMin,
+            detalleJson: perfilesElegibles[0].detalleJson,
           }
         : paso.perfil,
-      perfilM1Id: elegida.perfilesOperativos[0]?.id ?? paso.perfilM1Id,
+      perfilM1Id: perfilesElegibles[0]?.id ?? paso.perfilM1Id,
     };
+  }
+
+  private esTipoPerfilCompatibleConFamilia(
+    familiaCodigo: string,
+    tipoPerfil?: string | null,
+  ) {
+    if (familiaCodigo === 'plotter_corte') {
+      return tipoPerfil === 'CORTE' || tipoPerfil === 'MIXTO';
+    }
+    if (familiaCodigo === 'impresion_por_area') {
+      return tipoPerfil === 'IMPRESION' || tipoPerfil === 'MIXTO';
+    }
+    return true;
+  }
+
+  private filtrarPerfilesCompatibles<
+    T extends { activo: boolean; tipoPerfil?: string | null },
+  >(familiaCodigo: string, perfiles: T[] | undefined | null): T[] {
+    return (perfiles ?? []).filter(
+      (perfil) =>
+        perfil.activo &&
+        this.esTipoPerfilCompatibleConFamilia(familiaCodigo, perfil.tipoPerfil),
+    );
   }
 
   /**
@@ -2730,14 +2923,18 @@ export class MotorUniversalService {
     paso: PasoCargado,
     jobContext: JobContext,
   ): NonNullable<PasoCargado['perfil']> | null {
-    if (!paso.perfilesDisponibles || paso.perfilesDisponibles.length <= 1) {
+    const perfilesDisponibles = this.filtrarPerfilesCompatibles(
+      paso.familiaCodigo,
+      paso.perfilesDisponibles,
+    );
+    if (perfilesDisponibles.length <= 1) {
       return null; // no hay alternativas, mantener default
     }
 
     const ctx = jobContext as unknown as Record<string, unknown>;
 
     // ─── 1. G-M8 — Regla declarativa por perfil ──────────────────────
-    for (const perfil of paso.perfilesDisponibles) {
+    for (const perfil of perfilesDisponibles) {
       if (!perfil.activo) continue;
       const detalle = (perfil.detalleJson ?? {}) as Record<string, unknown>;
       const regla = detalle.reglaSeleccion ?? detalle.condicion ?? null;
@@ -2748,8 +2945,9 @@ export class MotorUniversalService {
         return {
           id: perfil.id,
           nombre: perfil.nombre,
+          tipoPerfil: perfil.tipoPerfil,
           productivityValue: perfil.productivityValue,
-          productivityUnit: null,
+          productivityUnit: perfil.productivityUnit ?? null,
           setupMin: perfil.setupMin,
           cleanupMin: perfil.cleanupMin,
           detalleJson: perfil.detalleJson,
@@ -2766,7 +2964,7 @@ export class MotorUniversalService {
       typeof jobContext.caras === 'number'
     ) {
       const buscarDoble = jobContext.caras === 2;
-      const candidato = paso.perfilesDisponibles.find((p) => {
+      const candidato = perfilesDisponibles.find((p) => {
         if (!p.activo) return false;
         const detalle = (p.detalleJson ?? {}) as Record<string, unknown>;
         const esDobleFaz =
@@ -2779,8 +2977,9 @@ export class MotorUniversalService {
         return {
           id: candidato.id,
           nombre: candidato.nombre,
+          tipoPerfil: candidato.tipoPerfil,
           productivityValue: candidato.productivityValue,
-          productivityUnit: null,
+          productivityUnit: candidato.productivityUnit ?? null,
           setupMin: candidato.setupMin,
           cleanupMin: candidato.cleanupMin,
           detalleJson: candidato.detalleJson,
@@ -3011,6 +3210,9 @@ export class MotorUniversalService {
                 rutaPaso: true,
                 maquinaM1: {
                   include: {
+                    centroCostoPrincipal: {
+                      select: { id: true, nombre: true },
+                    },
                     perfilesOperativos: true,
                     consumibles: {
                       where: { activo: true },
@@ -3045,6 +3247,9 @@ export class MotorUniversalService {
                   include: {
                     maquina: {
                       include: {
+                        centroCostoPrincipal: {
+                          select: { id: true, nombre: true },
+                        },
                         perfilesOperativos: true,
                         consumibles: {
                           where: { activo: true },
@@ -3166,6 +3371,8 @@ export class MotorUniversalService {
                 ? Number(cp.maquinaM1.anchoUtil)
                 : null,
               centroCostoPrincipalId: cp.maquinaM1.centroCostoPrincipalId,
+              centroCostoPrincipalNombre:
+                cp.maquinaM1.centroCostoPrincipal?.nombre ?? null,
               parametrosTecnicosJson: cp.maquinaM1
                 .parametrosTecnicosJson as Record<string, unknown> | null,
               consumibles: cp.maquinaM1.consumibles.map((c) =>
@@ -3177,6 +3384,7 @@ export class MotorUniversalService {
           ? {
               id: cp.perfilM1.id,
               nombre: cp.perfilM1.nombre,
+              tipoPerfil: cp.perfilM1.tipoPerfil,
               productivityValue: cp.perfilM1.productivityValue
                 ? Number(cp.perfilM1.productivityValue)
                 : null,
@@ -3201,10 +3409,12 @@ export class MotorUniversalService {
         perfilesDisponibles: cp.maquinaM1?.perfilesOperativos.map((p) => ({
           id: p.id,
           nombre: p.nombre,
+          tipoPerfil: p.tipoPerfil,
           activo: p.activo,
           productivityValue: p.productivityValue
             ? Number(p.productivityValue)
             : null,
+          productivityUnit: p.productivityUnit,
           setupMin: p.setupMin ? Number(p.setupMin) : null,
           cleanupMin: p.cleanupMin ? Number(p.cleanupMin) : null,
           detalleJson: p.detalleJson,
@@ -3223,6 +3433,8 @@ export class MotorUniversalService {
               ? Number(mc.maquina.anchoUtil)
               : null,
             centroCostoPrincipalId: mc.maquina.centroCostoPrincipalId,
+            centroCostoPrincipalNombre:
+              mc.maquina.centroCostoPrincipal?.nombre ?? null,
             parametrosTecnicosJson: mc.maquina.parametrosTecnicosJson as Record<
               string,
               unknown
@@ -3234,6 +3446,7 @@ export class MotorUniversalService {
           perfilesOperativos: mc.maquina.perfilesOperativos.map((p) => ({
             id: p.id,
             nombre: p.nombre,
+            tipoPerfil: p.tipoPerfil,
             activo: p.activo,
             productivityValue: p.productivityValue
               ? Number(p.productivityValue)

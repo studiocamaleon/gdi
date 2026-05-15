@@ -121,7 +121,20 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
       <ProductoValidacionPanel productoId={producto.id} />
 
       {/* Atributos comerciales */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <Card title="Agrupación comercial para reportes y propuestas">
+          <CardHeader className="pb-2">
+            <CardDescription className="flex items-center gap-1 text-xs">
+              <PackageIcon className="size-3" /> Categoría comercial
+            </CardDescription>
+            <CardTitle className="text-base">
+              {producto.subcategoriaComercial.nombre}
+              <span className="text-muted-foreground block text-sm font-normal">
+                {producto.subcategoriaComercial.categoria.nombre}
+              </span>
+            </CardTitle>
+          </CardHeader>
+        </Card>
         <Card title={unidadLbl.descripcion}>
           <CardHeader className="pb-2">
             <CardDescription className="flex items-center gap-1 text-xs">

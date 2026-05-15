@@ -1,0 +1,704 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Grafoprint · Nesting del item</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;450;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f6f6f4;
+    --surface: #ffffff;
+    --surface-2: #fafaf9;
+    --border: #e7e5e2;
+    --border-strong: #d4d2cd;
+    --hairline: #efece8;
+    --ink: #14141a;
+    --ink-2: #2c2c33;
+    --muted: #6e6e76;
+    --muted-2: #92929b;
+    --signal: #c2410c;
+    --signal-bg: #fef3ed;
+    --ok: #16794a;
+    --ok-bg: #e9f4ee;
+    --blue: #1d4ed8;
+    --paper: #f9f6ef;
+    --waste: #fef3ed;
+    --waste-stroke: #f4d3c0;
+    --piece-a: #1a1a1d;   /* 40×30 — solid dark */
+    --piece-a-fg: #ffffff;
+    --piece-b: #ece8de;   /* 20×30 — light paper */
+    --piece-b-fg: #2c2c33;
+    --font-sans: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+    --r-2: 6px;
+    --r-3: 8px;
+    --r-4: 12px;
+    --shadow-card: 0 1px 0 rgba(20,20,26,.04), 0 1px 2px rgba(20,20,26,.04);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    line-height: 1.45;
+    letter-spacing: -0.005em;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01", "cv11";
+    padding: 32px 28px 56px;
+  }
+
+  .wrap {
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+
+  /* ─── Page header ─── */
+  .page-head {
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+  .page-head .ttl { flex: 1 1 320px; min-width: 0; }
+  .page-head .eyebrow {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+  .page-head h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.018em;
+    color: var(--ink);
+  }
+  .page-head .sub {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .page-head .actions { display: flex; gap: 6px; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: var(--r-2);
+    font-size: 12.5px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink);
+    letter-spacing: -0.005em;
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color .12s ease, background .12s ease;
+  }
+  .btn:hover { background: var(--surface-2); border-color: var(--border-strong); }
+  .btn.primary {
+    background: var(--ink);
+    color: #fff;
+    border-color: var(--ink);
+  }
+  .btn.primary:hover { background: #000; }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .btn.ghost:hover { background: var(--surface); color: var(--ink); border-color: var(--border); }
+
+  /* ─── Card ─── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-4);
+    overflow: hidden;
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Strategy tabs (top of card) */
+  .strat-row {
+    display: flex;
+    align-items: center;
+    padding: 6px 14px 0;
+    border-bottom: 1px solid var(--hairline);
+    gap: 2px;
+    overflow-x: auto;
+  }
+  .strat {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    white-space: nowrap;
+    transition: color .12s ease, border-color .12s ease;
+  }
+  .strat:hover { color: var(--ink-2); }
+  .strat .ix {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--muted-2);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-weight: 500;
+  }
+  .strat.on {
+    color: var(--ink);
+    border-bottom-color: var(--ink);
+  }
+  .strat.on .ix { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .strat .yield {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .strat.on .yield { color: var(--ok); font-weight: 600; }
+  .strat .spacer { flex: 1; }
+  .strat-row .right {
+    margin-left: auto;
+    padding: 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .strat-row .info {
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-right: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .strat-row .info strong { color: var(--ink); font-weight: 600; }
+
+  /* Stats strip */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    border-bottom: 1px solid var(--hairline);
+  }
+  @media (max-width: 880px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  .stat {
+    padding: 14px 18px;
+    border-right: 1px solid var(--hairline);
+    min-width: 0;
+  }
+  .stat:last-child { border-right: none; }
+  .stat .lbl {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .stat .val {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--ink);
+    margin-top: 4px;
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: baseline;
+    gap: 3px;
+  }
+  .stat .val .u {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 500;
+    letter-spacing: 0;
+  }
+  .stat .sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat.featured { background: var(--surface-2); }
+  .stat.featured .val { color: var(--ok); }
+  .stat.featured .ind {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--ok);
+    font-weight: 500;
+  }
+  .stat.featured .ind .dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--ok);
+  }
+  .stat.warn .val { color: var(--ink); }
+  .stat.warn .ind {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--signal);
+    font-weight: 500;
+  }
+  .stat.warn .ind .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--signal); }
+
+  /* Config strip */
+  .config {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 22px;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--hairline);
+    background: var(--surface-2);
+    font-size: 12px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .config .grp {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .config .k {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted-2);
+    font-weight: 500;
+  }
+  .config .v {
+    color: var(--ink-2);
+    font-weight: 500;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+  }
+
+  /* Legend strip */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 18px;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--hairline);
+    font-size: 12px;
+  }
+  .legend .lbl {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    font-weight: 500;
+    margin-right: 4px;
+  }
+  .lg-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink-2);
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: background .12s ease;
+  }
+  .lg-item:hover { background: var(--surface-2); }
+  .lg-item .sw {
+    width: 14px; height: 14px;
+    border-radius: 3px;
+    background: var(--ink);
+    border: 1px solid rgba(20,20,26,.18);
+    flex: 0 0 auto;
+  }
+  .lg-item .sw.b { background: var(--piece-b); border-color: rgba(20,20,26,.12); }
+  .lg-item .sw.waste { background: var(--waste); border: 1px dashed var(--waste-stroke); }
+  .lg-item .sw.margin { background: repeating-linear-gradient(45deg, transparent 0 3px, rgba(20,20,26,.10) 3px 4px); border: 1px solid var(--border); }
+  .lg-item .sw.useful { background: transparent; border: 1.5px dashed var(--border-strong); }
+  .lg-item .sw.sep { background: var(--surface-2); border: 1px solid var(--border-strong); position: relative; }
+  .lg-item .sw.sep::before {
+    content: "";
+    position: absolute; left: 0; right: 0; top: 50%;
+    height: 1px;
+    background: var(--border-strong);
+  }
+  .lg-item .nm { font-weight: 500; }
+  .lg-item .ct {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    padding: 0 5px;
+    border-radius: 3px;
+    font-weight: 500;
+  }
+
+  /* ─── Canvas (SVG) ─── */
+  .canvas-wrap {
+    background:
+      radial-gradient(circle at 20% 0%, rgba(20,20,26,.02), transparent 50%),
+      var(--surface-2);
+    position: relative;
+    padding: 36px 40px 24px 56px;
+    overflow: hidden;
+  }
+  .canvas-wrap::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(20,20,26,.025) 19px, rgba(20,20,26,.025) 20px),
+      repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(20,20,26,.025) 19px, rgba(20,20,26,.025) 20px);
+    pointer-events: none;
+  }
+  .canvas-wrap::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 99px, rgba(20,20,26,.06) 99px, rgba(20,20,26,.06) 100px),
+      repeating-linear-gradient(90deg, transparent, transparent 99px, rgba(20,20,26,.06) 99px, rgba(20,20,26,.06) 100px);
+    pointer-events: none;
+  }
+
+  .canvas-svg {
+    width: 100%;
+    height: auto;
+    position: relative;
+    z-index: 1;
+    display: block;
+  }
+
+  .canvas-foot {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--hairline);
+    background: var(--surface);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .canvas-foot .grow { flex: 1; }
+  .canvas-foot .totals {
+    display: flex;
+    gap: 20px;
+    font-variant-numeric: tabular-nums;
+  }
+  .canvas-foot .totals .v {
+    color: var(--ink);
+    font-weight: 600;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .canvas-foot .totals .k {
+    font-size: 10.5px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+    margin-right: 4px;
+  }
+
+  /* SVG hover state */
+  .pc { transition: stroke-width .12s ease, filter .12s ease; }
+  .pc:hover { filter: brightness(1.1); }
+  .pc.b:hover { fill: #e2dccb; }
+
+  /* Dimension callouts */
+  .dim {
+    fill: var(--blue);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+  }
+  .dim-tick { stroke: var(--blue); stroke-width: 1; }
+  .dim-line { stroke: var(--blue); stroke-width: 1; stroke-dasharray: 3 3; opacity: .55; }
+
+  .piece-label {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.005em;
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+  }
+  .piece-code {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    fill-opacity: .55;
+    letter-spacing: 0.04em;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="page-head">
+    <div class="ttl">
+      <div class="eyebrow">Cotización COT-1287 · Item 02</div>
+      <h1>Nesting del item</h1>
+      <div class="sub">Disposición óptima de las piezas en el sustrato para minimizar desperdicio costeado.</div>
+    </div>
+    <div class="actions">
+      <button class="btn ghost">Comparar estrategias</button>
+      <button class="btn">Editar parámetros</button>
+      <button class="btn primary">Aplicar al costeo</button>
+    </div>
+  </div>
+
+  <div class="card">
+
+    <!-- Strategy tabs -->
+    <div class="strat-row">
+      <button class="strat on">
+        <span class="ix">01</span>
+        <span>Impresión por área</span>
+        <span class="yield">73,9%</span>
+      </button>
+      <button class="strat">
+        <span class="ix">02</span>
+        <span>Acomodo en hoja A3+</span>
+        <span class="yield">68,1%</span>
+      </button>
+      <button class="strat">
+        <span class="ix">03</span>
+        <span>Por largo lineal del rollo</span>
+        <span class="yield">61,4%</span>
+      </button>
+      <div class="right">
+        <span class="info">Estrategia recomendada · ahorro <strong>$18.420</strong></span>
+        <button class="btn ghost" style="height:28px;font-size:11.5px;">Recalcular</button>
+      </div>
+    </div>
+
+    <!-- KPI stats -->
+    <div class="stats">
+      <div class="stat featured">
+        <div class="lbl">Aprovechamiento</div>
+        <div class="val">73,9<span class="u">%</span></div>
+        <div class="ind"><span class="dot"></span>óptimo para esta estrategia</div>
+      </div>
+      <div class="stat">
+        <div class="lbl">Piezas acomodadas</div>
+        <div class="val">11</div>
+        <div class="sub">3 × 40×30 cm · 8 × 20×30 cm</div>
+      </div>
+      <div class="stat">
+        <div class="lbl">Largo consumido</div>
+        <div class="val">0,83<span class="u">m</span></div>
+        <div class="sub">en rollo de 1,37 m de ancho</div>
+      </div>
+      <div class="stat">
+        <div class="lbl">Área útil</div>
+        <div class="val">1,10<span class="u">m²</span></div>
+        <div class="sub">1,36 × 0,81 m efectivo</div>
+      </div>
+      <div class="stat warn">
+        <div class="lbl">Desperdicio costeado</div>
+        <div class="val">0,30<span class="u">m²</span></div>
+        <div class="ind"><span class="dot"></span>26,1% del consumo</div>
+      </div>
+    </div>
+
+    <!-- Config strip -->
+    <div class="config">
+      <span class="grp"><span class="k">Sustrato</span><span class="v">Vinilo blanco · rollo 1,37 m</span></span>
+      <span class="grp"><span class="k">Márgenes</span><span class="v">I 5 · D 5 · S 10 · Inf 10 mm</span></span>
+      <span class="grp"><span class="k">Separación</span><span class="v">H 5 · V 5 mm</span></span>
+      <span class="grp"><span class="k">Rotación</span><span class="v">permitida</span></span>
+      <span class="grp"><span class="k">Costeo</span><span class="v">largo consumido del rollo</span></span>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend">
+      <span class="lbl">Referencias</span>
+      <span class="lg-item"><span class="sw"></span><span class="nm">Pieza A · 40×30 cm</span><span class="ct">3</span></span>
+      <span class="lg-item"><span class="sw b"></span><span class="nm">Pieza B · 20×30 cm</span><span class="ct">8</span></span>
+      <span class="lg-item"><span class="sw useful"></span><span class="nm">Área útil</span></span>
+      <span class="lg-item"><span class="sw margin"></span><span class="nm">Márgenes</span></span>
+      <span class="lg-item"><span class="sw sep"></span><span class="nm">Separación</span></span>
+      <span class="lg-item"><span class="sw waste"></span><span class="nm">Desperdicio costeado</span></span>
+    </div>
+
+    <!-- Canvas -->
+    <div class="canvas-wrap">
+      <svg class="canvas-svg" viewBox="-50 -36 1490 920" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <!-- Margin hatch pattern -->
+          <pattern id="hatch-margin" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="6" stroke="rgba(20,20,26,.10)" stroke-width="1.2"/>
+          </pattern>
+          <!-- Waste pattern (subtle dot) -->
+          <pattern id="waste-dots" patternUnits="userSpaceOnUse" width="14" height="14">
+            <circle cx="7" cy="7" r="1" fill="rgba(194,65,12,.22)"/>
+          </pattern>
+        </defs>
+
+        <!-- ─── Roll outer rectangle (full width 1370mm × 830mm consumed) ─── -->
+        <rect x="0" y="0" width="1370" height="830" fill="var(--paper)" stroke="var(--border-strong)" stroke-width="1.5"/>
+        <!-- Roll edge indicators (rolled paper hint, thin lines top and bottom) -->
+        <line x1="0" y1="0" x2="1370" y2="0" stroke="var(--ink-2)" stroke-width="1" stroke-dasharray="2 6" opacity=".4"/>
+        <line x1="0" y1="830" x2="1370" y2="830" stroke="var(--ink-2)" stroke-width="1" stroke-dasharray="2 6" opacity=".4"/>
+
+        <!-- ─── Margin area (subtle hatch on the 4 sides) ─── -->
+        <!-- top margin 10mm -->
+        <rect x="0" y="0" width="1370" height="10" fill="url(#hatch-margin)"/>
+        <!-- bottom margin 10mm -->
+        <rect x="0" y="820" width="1370" height="10" fill="url(#hatch-margin)"/>
+        <!-- left margin 5mm -->
+        <rect x="0" y="0" width="5" height="830" fill="url(#hatch-margin)"/>
+        <!-- right margin 5mm -->
+        <rect x="1365" y="0" width="5" height="830" fill="url(#hatch-margin)"/>
+
+        <!-- ─── Usable area outline (dashed) ─── -->
+        <rect x="5" y="10" width="1360" height="810" fill="none" stroke="var(--border-strong)" stroke-width="1.5" stroke-dasharray="6 4"/>
+
+        <!-- ─── Waste areas (cream/warm tint) ─── -->
+        <!-- Below pieces 4 & 5 in row 1 (200mm × 100mm × 2) -->
+        <rect x="920" y="310" width="200" height="100" fill="url(#waste-dots)" stroke="var(--waste-stroke)" stroke-width="1" stroke-dasharray="3 3"/>
+        <rect x="1125" y="310" width="200" height="100" fill="url(#waste-dots)" stroke="var(--waste-stroke)" stroke-width="1" stroke-dasharray="3 3"/>
+        <!-- Right of row 1 (40mm × 400mm) -->
+        <rect x="1325" y="10" width="40" height="400" fill="url(#waste-dots)" stroke="var(--waste-stroke)" stroke-width="1" stroke-dasharray="3 3"/>
+        <!-- Right of row 2 (145mm × 200mm) -->
+        <rect x="1225" y="415" width="140" height="200" fill="url(#waste-dots)" stroke="var(--waste-stroke)" stroke-width="1" stroke-dasharray="3 3"/>
+        <!-- Right of row 3 (755mm × 200mm) -->
+        <rect x="615" y="620" width="750" height="200" fill="url(#waste-dots)" stroke="var(--waste-stroke)" stroke-width="1" stroke-dasharray="3 3"/>
+
+        <!-- ═══ PIECES ═══ -->
+        <!-- Row 1: 3 × 40×30 portrait (300×400) + 2 × 20×30 portrait (200×300) -->
+        <g>
+          <!-- P1 -->
+          <rect class="pc" x="5"    y="10"  width="300" height="400" fill="var(--piece-a)" stroke="var(--ink)" stroke-width="0.5"/>
+          <text class="piece-code" x="15"   y="26"  fill="var(--piece-a-fg)">P-01</text>
+          <text class="piece-label" x="155"  y="210" fill="var(--piece-a-fg)">40 × 30</text>
+          <!-- P2 -->
+          <rect class="pc" x="310"  y="10"  width="300" height="400" fill="var(--piece-a)" stroke="var(--ink)" stroke-width="0.5"/>
+          <text class="piece-code" x="320"  y="26"  fill="var(--piece-a-fg)">P-02</text>
+          <text class="piece-label" x="460"  y="210" fill="var(--piece-a-fg)">40 × 30</text>
+          <!-- P3 -->
+          <rect class="pc" x="615"  y="10"  width="300" height="400" fill="var(--piece-a)" stroke="var(--ink)" stroke-width="0.5"/>
+          <text class="piece-code" x="625"  y="26"  fill="var(--piece-a-fg)">P-03</text>
+          <text class="piece-label" x="765"  y="210" fill="var(--piece-a-fg)">40 × 30</text>
+          <!-- P4 (20×30 portrait) -->
+          <rect class="pc b" x="920" y="10" width="200" height="300" fill="var(--piece-b)" stroke="var(--ink)" stroke-width="1.2"/>
+          <text class="piece-code" x="930"  y="26"  fill="var(--piece-b-fg)">P-04</text>
+          <text class="piece-label" x="1020" y="160" fill="var(--piece-b-fg)">20 × 30</text>
+          <!-- P5 -->
+          <rect class="pc b" x="1125" y="10" width="200" height="300" fill="var(--piece-b)" stroke="var(--ink)" stroke-width="1.2"/>
+          <text class="piece-code" x="1135" y="26"  fill="var(--piece-b-fg)">P-05</text>
+          <text class="piece-label" x="1225" y="160" fill="var(--piece-b-fg)">20 × 30</text>
+        </g>
+
+        <!-- Row 2: 4 × 20×30 landscape (300×200) -->
+        <g>
+          <rect class="pc b" x="5"    y="415" width="300" height="200" fill="var(--piece-b)" stroke="var(--ink)" stroke-width="1.2"/>
+          <text class="piece-code" x="15"   y="431" fill="var(--piece-b-fg)">P-06</text>
+          <text class="piece-label" x="155"  y="515" fill="var(--piece-b-fg)">30 × 20</text>
+
+          <rect class="pc b" x="310"  y="415" width="300" height="200" fill="var(--piece-b)" stroke="var(--ink)" stroke-width="1.2"/>
+          <text class="piece-code" x="320"  y="431" fill="var(--piece-b-fg)">P-07</text>
+          <text class="piece-label" x="460"  y="515" fill="var(--piece-b-fg)">30 × 20</text>
+
+          <rect class="pc b" x="615"  y="415" width="300" height="200" fill="var(--piece-b)" stroke="var(--ink)" stroke-width="1.2"/>
+          <text class="piece-code" x="625"  y="431" fill="var(--piece-b-fg)">P-08</text>
+          <text class="piece-label" x="765"  y="515" fill="var(--piece-b-fg)">30 × 20</text>
+
+          <rect class="pc b" x="920"  y="415" width="300" height="200" fill="var(--piece-b)" stroke="var(--ink)" stroke-width="1.2"/>
+          <text class="piece-code" x="930"  y="431" fill="var(--piece-b-fg)">P-09</text>
+          <text class="piece-label" x="1070" y="515" fill="var(--piece-b-fg)">30 × 20</text>
+        </g>
+
+        <!-- Row 3: 2 × 20×30 landscape (300×200) -->
+        <g>
+          <rect class="pc b" x="5"   y="620" width="300" height="200" fill="var(--piece-b)" stroke="var(--ink)" stroke-width="1.2"/>
+          <text class="piece-code" x="15"  y="636" fill="var(--piece-b-fg)">P-10</text>
+          <text class="piece-label" x="155" y="720" fill="var(--piece-b-fg)">30 × 20</text>
+
+          <rect class="pc b" x="310" y="620" width="300" height="200" fill="var(--piece-b)" stroke="var(--ink)" stroke-width="1.2"/>
+          <text class="piece-code" x="320" y="636" fill="var(--piece-b-fg)">P-11</text>
+          <text class="piece-label" x="460" y="720" fill="var(--piece-b-fg)">30 × 20</text>
+        </g>
+
+        <!-- ═══ DIMENSION CALLOUTS (CAD style) ═══ -->
+        <!-- Top width: "1370 mm (ancho de rollo)" -->
+        <line class="dim-tick" x1="0"    y1="-22" x2="0"    y2="-12"/>
+        <line class="dim-tick" x1="1370" y1="-22" x2="1370" y2="-12"/>
+        <line class="dim-line" x1="0"    y1="-17" x2="1370" y2="-17"/>
+        <rect x="600" y="-32" width="170" height="20" fill="var(--surface-2)" rx="2"/>
+        <text class="dim" x="685" y="-17" text-anchor="middle" dominant-baseline="central">1.370 mm · ancho rollo</text>
+
+        <!-- Top useful width: "1360 mm" inside the roll -->
+        <line class="dim-tick" x1="5"    y1="828" x2="5"    y2="846"/>
+        <line class="dim-tick" x1="1365" y1="828" x2="1365" y2="846"/>
+        <line class="dim-line" x1="5"    y1="838" x2="1365" y2="838"/>
+        <rect x="610" y="844" width="150" height="18" fill="var(--surface-2)" rx="2"/>
+        <text class="dim" x="685" y="855" text-anchor="middle">1.360 mm · útil</text>
+
+        <!-- Left height "830 mm (largo consumido)" -->
+        <g transform="translate(-30, 415)">
+          <line class="dim-tick" x1="-10" y1="-415" x2="10" y2="-415"/>
+          <line class="dim-tick" x1="-10" y1="415"  x2="10" y2="415"/>
+          <line class="dim-line" x1="0"   y1="-415" x2="0"  y2="415"/>
+          <text class="dim" x="0" y="0" text-anchor="middle" dominant-baseline="central" transform="rotate(-90)">830 mm · largo consumido</text>
+        </g>
+
+        <!-- Inner usable height "810 mm" -->
+        <g transform="translate(1395, 415)">
+          <line class="dim-tick" x1="-10" y1="-405" x2="10" y2="-405"/>
+          <line class="dim-tick" x1="-10" y1="405"  x2="10" y2="405"/>
+          <line class="dim-line" x1="0"   y1="-405" x2="0"  y2="405"/>
+          <text class="dim" x="0" y="0" text-anchor="middle" dominant-baseline="central" transform="rotate(-90)">810 mm · útil</text>
+        </g>
+
+        <!-- Row height micro-labels -->
+        <text class="dim" x="-44" y="210" text-anchor="middle" dominant-baseline="central" font-size="10" opacity=".7" transform="rotate(-90 -44 210)">400</text>
+        <text class="dim" x="-44" y="515" text-anchor="middle" dominant-baseline="central" font-size="10" opacity=".7" transform="rotate(-90 -44 515)">200</text>
+        <text class="dim" x="-44" y="720" text-anchor="middle" dominant-baseline="central" font-size="10" opacity=".7" transform="rotate(-90 -44 720)">200</text>
+      </svg>
+    </div>
+
+    <!-- Canvas footer -->
+    <div class="canvas-foot">
+      <div class="totals">
+        <span><span class="k">Área impresa</span><span class="v">0,84 m²</span></span>
+        <span><span class="k">Área costeada</span><span class="v">1,14 m²</span></span>
+        <span><span class="k">Costo de sustrato</span><span class="v">$3.420</span></span>
+      </div>
+      <div class="grow"></div>
+      <div style="display:flex; gap:6px;">
+        <button class="btn ghost">Exportar layout</button>
+        <button class="btn">Optimizar manualmente</button>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+</body>
+</html>

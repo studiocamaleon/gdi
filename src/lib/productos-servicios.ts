@@ -18,6 +18,36 @@ export const unidadComercialProductoItems: Array<{
 
 export type ModoMedidasProducto = 'FIJA' | 'LIBRE' | 'COMERCIAL_ELIGE';
 
+export interface AtributoComercialSchema {
+  key: string;
+  label: string;
+  tipo: string;
+  visible: boolean;
+  orden: number;
+}
+
+export interface ProductoCategoriaComercial {
+  id: string;
+  codigo: string;
+  nombre: string;
+  descripcion: string | null;
+  orden: number;
+  activo: boolean;
+  subcategorias: ProductoSubcategoriaComercial[];
+}
+
+export interface ProductoSubcategoriaComercial {
+  id: string;
+  categoriaId: string;
+  codigo: string;
+  nombre: string;
+  descripcion: string | null;
+  atributosSchemaJson: AtributoComercialSchema[];
+  orden: number;
+  activo: boolean;
+  categoria?: Omit<ProductoCategoriaComercial, "subcategorias">;
+}
+
 // ============================================================================
 // MÉTODOS DE CÁLCULO DE PRECIO (Tab Precio preservado)
 // ============================================================================
@@ -40,9 +70,16 @@ export interface ProductoListItem {
   codigo: string;
   nombre: string;
   descripcion: string | null;
+  atributosComercialesJson: Record<string, unknown> | null;
+  medidaDefaultAnchoMm: string | null;
+  medidaDefaultAltoMm: string | null;
+  precioConfigJson: unknown;
   unidadComercial: string;
   modoMedidas: string;
   activo: boolean;
+  subcategoriaComercial: ProductoSubcategoriaComercial & {
+    categoria: Omit<ProductoCategoriaComercial, "subcategorias">;
+  };
   rutasAlternativas: Array<{
     id: string;
     nombre: string;
@@ -52,9 +89,6 @@ export interface ProductoListItem {
 }
 
 export interface ProductoDetalle extends Omit<ProductoListItem, "rutasAlternativas"> {
-  medidaDefaultAnchoMm: string | null;
-  medidaDefaultAltoMm: string | null;
-  precioConfigJson: unknown;
   rutasAlternativas: RutaAlternativaDetalle[];
   pasosExtras: PasoExtra[];
   cargosDirectosCotizacion: CargoCotizacionDetalle[];
@@ -106,7 +140,7 @@ export interface ConfigPasoDetalle {
       nombre: string;
     } | null;
   } | null;
-  perfilM1: { id: string; nombre: string } | null;
+  perfilM1: { id: string; nombre: string; tipoPerfil?: string | null } | null;
   centroCosto: {
     id: string;
     codigo: string;
@@ -204,8 +238,26 @@ export interface FamiliaListItem {
   modosTiempoSoportados: string[];
   mecanismosCantidadSoportados: string[];
   modosActivacionSoportados: string[];
+  multiplicadoresSoportados: string[];
   slotsRequeridos: Array<{ codigo: string; nombre: string; tipo: string; requerido: boolean }>;
   plantillasCompatibles: string[];
+  inputsRequeridos: string[];
+  outputsCanonicos: string[];
+  validaciones: Array<{
+    codigo: string;
+    tipo: string;
+    mensaje: string;
+    [key: string]: unknown;
+  }>;
+  paramsPasoSchema: Array<{
+    campo: string;
+    etiqueta: string;
+    tipo: string;
+    valoresPermitidos?: string[];
+    default?: unknown;
+    requerido?: boolean;
+    descripcion?: string;
+  }>;
   productosTipicos?: string[];
 }
 

@@ -1268,8 +1268,10 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(result.exitoso).toBe(true);
     expect(result.cotizacion!.precio).toBeDefined();
     expect(result.cotizacion!.precio!.metodoUsado).toBe('margen_variable');
-    // cantidad=1 cae en primer tier (≤5) con margen 100%
-    expect(result.cotizacion!.precio!.margenAplicadoPct).toBe(100);
+    // Producto vendido por m²: 1u de 1000×500mm = 0.5m², cae en primer tier.
+    expect(result.cotizacion!.cantidadComercialPricing).toBe(0.5);
+    expect(result.cotizacion!.unidadComercialPricing).toBe('m2');
+    expect(result.cotizacion!.precio!.margenAplicadoPct).toBe(50);
   });
 
   it('G-M1: dispatcher grid-2d-single funciona cuando se invoca directamente (unit test)', () => {

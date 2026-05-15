@@ -104,9 +104,9 @@ export interface PrecioEspecialClienteSnapshot {
 }
 
 export interface AplicarPrecioInput {
-  /** Costo unitario del producto, ya devuelto por el motor universal. */
+  /** Costo unitario comercial del producto, ya devuelto por el motor universal. */
   costoUnitario: number;
-  /** Cantidad pedida — necesaria para los métodos escalonados. */
+  /** Cantidad comercial — necesaria para los métodos escalonados. */
   cantidad: number;
   /** Configuración de precio del producto (o del override de cliente, si aplica). */
   precioConfig: PrecioConfig;
@@ -124,13 +124,13 @@ export interface AplicarPrecioInput {
 }
 
 export interface DesglosePrecio {
-  /** Precio base salido del método de cálculo (sin impuestos ni comisiones). */
+  /** Precio base neto: costo + margen objetivo, sin impuestos ni comisiones. */
   precioBase: number;
   /** Suma de impuestos aplicados (en unidades monetarias). */
   totalImpuestos: number;
   /** Suma de comisiones aplicadas. */
   totalComisiones: number;
-  /** Margen efectivo logrado (% sobre el costo). */
+  /** Margen bruto logrado (% sobre precio final antes de impuestos). */
   margenEfectivoPct: number;
 }
 

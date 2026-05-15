@@ -2,14 +2,14 @@ import { calcularPrecio } from '../calculador-precio';
 
 describe('calcularPrecio — Tab Precio en backend', () => {
   describe('por_margen', () => {
-    it('costo $100 + margen 100% → precio $200', () => {
+    it('costo $100 + margen objetivo 50% → precio $200', () => {
       const r = calcularPrecio(100, 10, {
         metodoCalculo: 'por_margen',
-        detalle: { marginPct: 100 },
+        detalle: { marginPct: 50 },
       });
       expect(r.precioUnitario).toBe(200);
       expect(r.precioTotal).toBe(2000);
-      expect(r.margenAplicadoPct).toBe(100);
+      expect(r.margenAplicadoPct).toBe(50);
       expect(r.margenNegativo).toBe(false);
     });
 
@@ -53,7 +53,7 @@ describe('calcularPrecio — Tab Precio en backend', () => {
     it('precio base supera margen mínimo → usa precio base', () => {
       const r = calcularPrecio(50, 1, {
         metodoCalculo: 'precio_fijo_para_margen_minimo',
-        detalle: { price: 200, minimumMarginPct: 100 }, // mín = $100
+        detalle: { price: 200, minimumMarginPct: 50 },
       });
       expect(r.precioUnitario).toBe(200);
     });
@@ -61,27 +61,27 @@ describe('calcularPrecio — Tab Precio en backend', () => {
     it('precio base NO alcanza margen mínimo → ajusta hacia arriba', () => {
       const r = calcularPrecio(100, 1, {
         metodoCalculo: 'precio_fijo_para_margen_minimo',
-        detalle: { price: 110, minimumMarginPct: 50 }, // mín = $150
+        detalle: { price: 110, minimumMarginPct: 50 },
       });
-      expect(r.precioUnitario).toBe(150);
+      expect(r.precioUnitario).toBe(200);
       expect(r.mensaje).toContain('margen mínimo');
     });
   });
 
   describe('margen_variable (por tramos)', () => {
-    it('cantidad 50 cae en primer tramo (≤100) con margen 80%', () => {
+    it('cantidad 50 cae en primer tramo (≤100) con margen objetivo 50%', () => {
       const r = calcularPrecio(10, 50, {
         metodoCalculo: 'margen_variable',
         detalle: {
           tiers: [
-            { quantityUntil: 100, marginPct: 80 },
-            { quantityUntil: 1000, marginPct: 50 },
+            { quantityUntil: 100, marginPct: 50 },
+            { quantityUntil: 1000, marginPct: 40 },
             { quantityUntil: 99999, marginPct: 30 },
           ],
         },
       });
-      expect(r.margenAplicadoPct).toBe(80);
-      expect(r.precioUnitario).toBe(18);
+      expect(r.margenAplicadoPct).toBe(50);
+      expect(r.precioUnitario).toBe(20);
     });
 
     it('cantidad 5000 cae en último tramo con margen 30%', () => {
@@ -89,14 +89,14 @@ describe('calcularPrecio — Tab Precio en backend', () => {
         metodoCalculo: 'margen_variable',
         detalle: {
           tiers: [
-            { quantityUntil: 100, marginPct: 80 },
-            { quantityUntil: 1000, marginPct: 50 },
+            { quantityUntil: 100, marginPct: 50 },
+            { quantityUntil: 1000, marginPct: 40 },
             { quantityUntil: 99999, marginPct: 30 },
           ],
         },
       });
       expect(r.margenAplicadoPct).toBe(30);
-      expect(r.precioUnitario).toBe(13);
+      expect(r.precioUnitario).toBeCloseTo(14.286, 3);
     });
   });
 

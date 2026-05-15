@@ -221,6 +221,7 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
   'sistemaCurado',
   'sistemaSecadoCurado',
   'sistemaLaminacionTransferencia',
+  'soportaCorteIntegrado',
   'tecnologia',
   'tipoFilm',
   'tipoLaser',

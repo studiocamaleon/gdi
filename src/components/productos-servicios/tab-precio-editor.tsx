@@ -28,6 +28,7 @@ export interface TabPrecioConfig {
 interface Props {
   value: TabPrecioConfig;
   onChange: (config: TabPrecioConfig) => void;
+  unidadComercial?: string;
 }
 
 const METODOS: ReadonlyArray<{ value: MetodoPrecio }> = [
@@ -82,9 +83,23 @@ function tiersToPayload(metodo: MetodoPrecio, tiers: TierBase[]): Array<Record<s
   });
 }
 
-export function TabPrecioEditor({ value, onChange }: Props) {
+function labelUnidad(unidadComercial?: string) {
+  if (unidadComercial === "m2") return "m²";
+  if (unidadComercial === "metro_lineal") return "metros lineales";
+  return "unidades";
+}
+
+function labelPrecioPorUnidad(unidadComercial?: string) {
+  if (unidadComercial === "m2") return "por m²";
+  if (unidadComercial === "metro_lineal") return "por metro lineal";
+  return "por unidad";
+}
+
+export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
   const metodo = value.metodoCalculo;
   const detalle = value.detalle ?? {};
+  const unidadLabel = labelUnidad(unidadComercial);
+  const precioPorUnidadLabel = labelPrecioPorUnidad(unidadComercial);
 
   const usaTiers =
     metodo === "margen_variable" ||
@@ -116,18 +131,18 @@ export function TabPrecioEditor({ value, onChange }: Props) {
 
   const setMetodo = (m: MetodoPrecio) => {
     let newDetalle: Record<string, unknown> = {};
-    if (m === "por_margen") newDetalle = { marginPct: 100, minimumMarginPct: 50 };
+    if (m === "por_margen") newDetalle = { marginPct: 40, minimumMarginPct: 25 };
     else if (m === "precio_fijo") newDetalle = { price: 0, minimumPrice: 0 };
     else if (m === "precio_fijo_para_margen_minimo")
-      newDetalle = { price: 0, minimumPrice: 0, minimumMarginPct: 50 };
+      newDetalle = { price: 0, minimumPrice: 0, minimumMarginPct: 25 };
     else if (m === "margen_variable")
-      newDetalle = { tiers: [{ quantityUntil: 100, marginPct: 100 }] };
+      newDetalle = { tiers: [{ quantityUntil: 100, marginPct: 40 }] };
     else if (m === "variable_por_cantidad")
       newDetalle = { tiers: [{ quantityUntil: 100, price: 0 }] };
     else if (m === "fijado_por_cantidad")
       newDetalle = { tiers: [{ quantity: 100, price: 0 }] };
     else if (m === "fijo_con_margen_variable")
-      newDetalle = { tiers: [{ quantity: 100, marginPct: 100 }] };
+      newDetalle = { tiers: [{ quantity: 100, marginPct: 40 }] };
     onChange({ metodoCalculo: m, detalle: newDetalle });
   };
 
@@ -180,21 +195,21 @@ export function TabPrecioEditor({ value, onChange }: Props) {
       {/* MÉTODOS SIMPLES */}
       {metodo === "por_margen" && (
         <div className="space-y-2">
-          <Label>Margen (%)</Label>
+          <Label>Margen objetivo (%)</Label>
           <Input
             type="number"
             value={(detalle.marginPct as number) ?? 0}
             onChange={(e) => updateDetalleField("marginPct", Number(e.target.value))}
           />
           <p className="text-muted-foreground text-xs">
-            Precio = costo × (1 + margen/100). Margen 100% → precio = costo × 2.
+            Calcula el precio necesario para preservar ese margen sobre el precio final.
           </p>
         </div>
       )}
 
       {metodo === "precio_fijo" && (
         <div className="space-y-2">
-          <Label>Precio fijo (por unidad comercial)</Label>
+          <Label>Precio fijo ({precioPorUnidadLabel})</Label>
           <Input
             type="number"
             value={(detalle.price as number) ?? 0}
@@ -214,7 +229,7 @@ export function TabPrecioEditor({ value, onChange }: Props) {
             />
           </div>
           <div className="space-y-2">
-            <Label>Margen mínimo (%)</Label>
+            <Label>Margen mínimo objetivo (%)</Label>
             <Input
               type="number"
               value={(detalle.minimumMarginPct as number) ?? 0}
@@ -222,7 +237,7 @@ export function TabPrecioEditor({ value, onChange }: Props) {
             />
           </div>
           <p className="text-muted-foreground col-span-2 text-xs">
-            Si el precio base no alcanza el margen mínimo sobre el costo, se ajusta hacia arriba
+            Si el precio base no preserva el margen objetivo mínimo, se ajusta hacia arriba
             automáticamente.
           </p>
         </div>
@@ -262,7 +277,7 @@ export function TabPrecioEditor({ value, onChange }: Props) {
                         }
                         className="h-8 w-24 text-xs"
                       />
-                      <span className="text-xs">unidades →</span>
+                      <span className="text-xs">{unidadLabel} →</span>
                     </>
                   )}
 
@@ -287,7 +302,7 @@ export function TabPrecioEditor({ value, onChange }: Props) {
                         onChange={(e) => updateTier(idx, { marginPct: Number(e.target.value) })}
                         className="h-8 w-20 text-xs"
                       />
-                      <span className="text-xs">% margen</span>
+                      <span className="text-xs">% margen objetivo</span>
                     </>
                   )}
 
@@ -300,7 +315,7 @@ export function TabPrecioEditor({ value, onChange }: Props) {
                         onChange={(e) => updateTier(idx, { price: Number(e.target.value) })}
                         className="h-8 w-24 text-xs"
                       />
-                      <span className="text-xs">por unidad</span>
+                      <span className="text-xs">{precioPorUnidadLabel}</span>
                     </>
                   )}
 
@@ -319,13 +334,13 @@ export function TabPrecioEditor({ value, onChange }: Props) {
 
             <p className="text-muted-foreground mt-3 text-xs">
               {metodo === "margen_variable" &&
-                "Cada tramo aplica si la cantidad es ≤ al límite. El último tramo cubre cantidades mayores."}
+                `Cada tramo aplica si la cantidad comercial en ${unidadLabel} es ≤ al límite. El último tramo cubre cantidades mayores.`}
               {metodo === "variable_por_cantidad" &&
                 "Idem rangos por cantidad pero con precio fijo en vez de margen."}
               {metodo === "fijado_por_cantidad" &&
                 "Solo se permiten las cantidades exactas listadas. Si el comercial pide otra, error."}
               {metodo === "fijo_con_margen_variable" &&
-                "Cantidades exactas con su margen. Mismo comportamiento que fijado_por_cantidad pero el precio se calcula desde el costo."}
+                "Cantidades exactas con margen objetivo. Mismo comportamiento que fijado_por_cantidad pero el precio se calcula desde el costo."}
             </p>
           </CardContent>
         </Card>

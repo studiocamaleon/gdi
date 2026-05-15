@@ -4,6 +4,7 @@ import type { CostingStrategyKind } from '../productos-servicios/nesting/costing
 export type NestingAlgorithmPolicy =
   | 'auto'
   | 'shelf-rollo'
+  | 'maxrects-rollo'
   | 'grid-2d-single'
   | 'grid-2d-multi'
   | 'packingsolver-rectangle';
@@ -299,6 +300,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function normalizeAlgorithm(value: unknown): NestingAlgorithmPolicy {
   return value === 'shelf-rollo' ||
+    value === 'maxrects-rollo' ||
     value === 'grid-2d-single' ||
     value === 'grid-2d-multi' ||
     value === 'packingsolver-rectangle'

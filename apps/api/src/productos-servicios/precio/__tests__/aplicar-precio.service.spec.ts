@@ -37,7 +37,7 @@ describe('AplicarPrecioService', () => {
   ): AplicarPrecioInput => ({
     costoUnitario: 100,
     cantidad: 10,
-    precioConfig: { metodoCalculo: 'por_margen', detalle: { marginPct: 100 } },
+    precioConfig: { metodoCalculo: 'por_margen', detalle: { marginPct: 50 } },
     impuestos: sinImpuestos,
     comisiones: sinComisiones,
     ...overrides,
@@ -48,13 +48,13 @@ describe('AplicarPrecioService', () => {
   // ════════════════════════════════════════════════════════════════════
 
   describe('por_margen', () => {
-    it('aplica margen 100% sobre costo: 100 → 200', () => {
+    it('aplica margen objetivo 50% sobre precio final: costo 100 → precio 200', () => {
       const r = service.aplicar(baseInput());
       expect(r.desglose.precioBase).toBe(200);
       expect(r.precioNetoUnitario).toBe(200);
       expect(r.precioBrutoUnitario).toBe(200);
       expect(r.precioNetoTotal).toBe(2000);
-      expect(r.desglose.margenEfectivoPct).toBe(100);
+      expect(r.desglose.margenEfectivoPct).toBe(50);
     });
 
     it('margen 0% devuelve el costo', () => {
@@ -69,7 +69,7 @@ describe('AplicarPrecioService', () => {
       expect(r.desglose.precioBase).toBe(100);
     });
 
-    it('margen 50% sobre costo 100: 150', () => {
+    it('margen objetivo 50% sobre precio final: 200', () => {
       const r = service.aplicar(
         baseInput({
           precioConfig: {
@@ -78,7 +78,7 @@ describe('AplicarPrecioService', () => {
           },
         }),
       );
-      expect(r.desglose.precioBase).toBe(150);
+      expect(r.desglose.precioBase).toBe(200);
     });
 
     it('rechaza si falta marginPct', () => {
@@ -113,7 +113,7 @@ describe('AplicarPrecioService', () => {
       detalle: { price: 200, minimumMarginPct: 30 },
     };
 
-    it('si price > piso (costo × 1.3), usa price', () => {
+    it('si price supera el precio necesario para margen mínimo, usa price', () => {
       const r = service.aplicar(
         baseInput({ costoUnitario: 100, precioConfig: cfg }),
       );
@@ -121,12 +121,11 @@ describe('AplicarPrecioService', () => {
       expect(r.desglose.precioBase).toBe(200);
     });
 
-    it('si price < piso, usa piso', () => {
+    it('si price < piso, usa el precio necesario para el margen mínimo', () => {
       const r = service.aplicar(
         baseInput({ costoUnitario: 250, precioConfig: cfg }),
       );
-      // piso = 250 × 1.3 = 325, price = 200 → 325
-      expect(r.desglose.precioBase).toBe(325);
+      expect(r.desglose.precioBase).toBe(357.14);
     });
   });
 
@@ -135,37 +134,37 @@ describe('AplicarPrecioService', () => {
       metodoCalculo: 'margen_variable',
       detalle: {
         tiers: [
-          { quantityUntil: 50, marginPct: 100 },
-          { quantityUntil: 200, marginPct: 80 },
-          { quantityUntil: 99999, marginPct: 60 },
+          { quantityUntil: 50, marginPct: 50 },
+          { quantityUntil: 200, marginPct: 40 },
+          { quantityUntil: 99999, marginPct: 30 },
         ],
       },
     };
 
-    it('cantidad 30 → tramo 50, margen 100%', () => {
+    it('cantidad 30 → tramo 50, margen objetivo 50%', () => {
       const r = service.aplicar(baseInput({ cantidad: 30, precioConfig: cfg }));
       expect(r.desglose.precioBase).toBe(200);
     });
 
-    it('cantidad 100 → tramo 200, margen 80%', () => {
+    it('cantidad 100 → tramo 200, margen objetivo 40%', () => {
       const r = service.aplicar(
         baseInput({ cantidad: 100, precioConfig: cfg }),
       );
-      expect(r.desglose.precioBase).toBe(180);
+      expect(r.desglose.precioBase).toBe(166.67);
     });
 
-    it('cantidad 500 → último tramo, margen 60%', () => {
+    it('cantidad 500 → último tramo, margen objetivo 30%', () => {
       const r = service.aplicar(
         baseInput({ cantidad: 500, precioConfig: cfg }),
       );
-      expect(r.desglose.precioBase).toBe(160);
+      expect(r.desglose.precioBase).toBe(142.86);
     });
 
     it('cantidad por encima del último tramo cae al último', () => {
       const r = service.aplicar(
         baseInput({ cantidad: 100000, precioConfig: cfg }),
       );
-      expect(r.desglose.precioBase).toBe(160);
+      expect(r.desglose.precioBase).toBe(142.86);
     });
 
     it('rechaza si tiers vacío', () => {
@@ -234,24 +233,24 @@ describe('AplicarPrecioService', () => {
       metodoCalculo: 'fijo_con_margen_variable',
       detalle: {
         tiers: [
-          { quantity: 100, marginPct: 100 },
-          { quantity: 500, marginPct: 60 },
+          { quantity: 100, marginPct: 50 },
+          { quantity: 500, marginPct: 30 },
         ],
       },
     };
 
-    it('costo 100 + cantidad 100 → margen 100% → $200/unidad', () => {
+    it('costo 100 + cantidad 100 → margen objetivo 50% → $200/unidad', () => {
       const r = service.aplicar(
         baseInput({ cantidad: 100, precioConfig: cfg }),
       );
       expect(r.desglose.precioBase).toBe(200);
     });
 
-    it('cantidad 500 → margen 60% → $160/unidad', () => {
+    it('cantidad 500 → margen objetivo 30% → $142,86/unidad', () => {
       const r = service.aplicar(
         baseInput({ cantidad: 500, precioConfig: cfg }),
       );
-      expect(r.desglose.precioBase).toBe(160);
+      expect(r.desglose.precioBase).toBe(142.86);
     });
   });
 
@@ -260,31 +259,34 @@ describe('AplicarPrecioService', () => {
   // ════════════════════════════════════════════════════════════════════
 
   describe('comisiones e impuestos', () => {
-    it('precio base 200 + IVA 21% (sin comisiones)', () => {
+    it('margen objetivo 50% + IVA 21% preserva el margen sobre precio final', () => {
       const r = service.aplicar(baseInput({ impuestos: [iva21] }));
-      // 200 + 21% = 242
-      expect(r.precioNetoUnitario).toBe(200);
-      expect(r.precioBrutoUnitario).toBe(242);
-      expect(r.desglose.totalImpuestos).toBe(42);
+      expect(r.desglose.precioBase).toBe(272.42);
+      expect(r.precioNetoUnitario).toBe(272.42);
+      expect(r.precioBrutoUnitario).toBe(344.83);
+      expect(r.desglose.totalImpuestos).toBe(72.41);
+      expect(r.desglose.margenEfectivoPct).toBe(50);
     });
 
-    it('precio base 200 + comisión vendedor 5% (sin impuestos)', () => {
+    it('margen objetivo 50% + comisión vendedor 5% preserva margen', () => {
       const r = service.aplicar(baseInput({ comisiones: [comisVend5] }));
-      // 200 + 5% comisión = 210, sin impuestos = bruto 210
-      expect(r.desglose.totalComisiones).toBe(10);
-      expect(r.precioNetoUnitario).toBe(210);
-      expect(r.precioBrutoUnitario).toBe(210);
+      expect(r.desglose.totalComisiones).toBe(11.11);
+      expect(r.desglose.precioBase).toBe(211.11);
+      expect(r.precioNetoUnitario).toBe(222.22);
+      expect(r.precioBrutoUnitario).toBe(222.22);
+      expect(r.desglose.margenEfectivoPct).toBe(50);
     });
 
-    it('precio base 200 + IVA 21% + comisión 5%: impuesto se aplica sobre (precio+comisión)', () => {
+    it('margen objetivo 50% + IVA 21% + comisión 5% preserva margen', () => {
       const r = service.aplicar(
         baseInput({ impuestos: [iva21], comisiones: [comisVend5] }),
       );
-      // base 200 → +5% comisión = 210 → +21% impuesto sobre 210 = 254.10
-      expect(r.desglose.totalComisiones).toBe(10);
-      expect(r.desglose.totalImpuestos).toBe(44.1);
-      expect(r.precioNetoUnitario).toBe(210);
-      expect(r.precioBrutoUnitario).toBe(254.1);
+      expect(r.desglose.totalComisiones).toBe(20.83);
+      expect(r.desglose.totalImpuestos).toBe(87.5);
+      expect(r.desglose.precioBase).toBe(308.34);
+      expect(r.precioNetoUnitario).toBe(329.17);
+      expect(r.precioBrutoUnitario).toBe(416.67);
+      expect(r.desglose.margenEfectivoPct).toBe(50);
     });
 
     it('múltiples impuestos suman su porcentaje', () => {
@@ -297,9 +299,8 @@ describe('AplicarPrecioService', () => {
       const r = service.aplicar(
         baseInput({ impuestos: [iva21, ingresosBrutos] }),
       );
-      // 200 + (21+3)% = 200 + 48 = 248
-      expect(r.desglose.totalImpuestos).toBe(48);
-      expect(r.precioBrutoUnitario).toBe(248);
+      expect(r.desglose.totalImpuestos).toBe(92.31);
+      expect(r.precioBrutoUnitario).toBe(384.62);
     });
   });
 
@@ -317,20 +318,20 @@ describe('AplicarPrecioService', () => {
           },
         }),
       );
-      // Con margen 10% sería 110; piso es 150 → debe usar 150
-      expect(r.desglose.precioBase).toBe(150);
+      expect(r.desglose.precioBase).toBe(111.11);
     });
 
-    it('por_margen con marginPct=100 y minimumMarginPct=50: el margen explícito gana', () => {
-      const r = service.aplicar(
-        baseInput({
-          precioConfig: {
-            metodoCalculo: 'por_margen',
-            detalle: { marginPct: 100, minimumMarginPct: 50 },
-          },
-        }),
-      );
-      expect(r.desglose.precioBase).toBe(200);
+    it('por_margen rechaza marginPct=100 porque no es calculable', () => {
+      expect(() =>
+        service.aplicar(
+          baseInput({
+            precioConfig: {
+              metodoCalculo: 'por_margen',
+              detalle: { marginPct: 100, minimumMarginPct: 50 },
+            },
+          }),
+        ),
+      ).toThrow(BadRequestException);
     });
   });
 
@@ -342,7 +343,7 @@ describe('AplicarPrecioService', () => {
     it('devuelve precioConfig + impuestos + comisiones intactos', () => {
       const cfg: PrecioConfig = {
         metodoCalculo: 'por_margen',
-        detalle: { marginPct: 75 },
+        detalle: { marginPct: 40 },
       };
       const r = service.aplicar(
         baseInput({

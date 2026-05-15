@@ -32,11 +32,13 @@ import {
   crearProductoRutaAlt,
   desasociarCargoCotizacion,
   eliminarProductoRutaAlt,
+  getCatalogoComercial,
   type LookupsConfigPaso,
 } from "@/lib/productos-servicios-api";
 import type {
   CargoDirectoCatalogo,
   CatalogoFamilias,
+  ProductoCategoriaComercial,
   ProductoDetalle,
   RutaListItem,
 } from "@/lib/productos-servicios";
@@ -241,12 +243,38 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
   const router = useRouter();
   const [nombre, setNombre] = React.useState(producto.nombre);
   const [descripcion, setDescripcion] = React.useState(producto.descripcion ?? "");
+  const [catalogoComercial, setCatalogoComercial] = React.useState<ProductoCategoriaComercial[]>([]);
+  const [subcategoriaComercialCodigo, setSubcategoriaComercialCodigo] = React.useState(
+    producto.subcategoriaComercial?.codigo ?? "producto_a_medida",
+  );
   const [unidadComercial, setUnidadComercial] = React.useState(producto.unidadComercial);
   const [modoMedidas, setModoMedidas] = React.useState(producto.modoMedidas);
   const [anchoDefault, setAnchoDefault] = React.useState(String(producto.medidaDefaultAnchoMm ?? ""));
   const [altoDefault, setAltoDefault] = React.useState(String(producto.medidaDefaultAltoMm ?? ""));
   const [activo, setActivo] = React.useState(producto.activo);
   const [guardando, setGuardando] = React.useState(false);
+
+  React.useEffect(() => {
+    getCatalogoComercial()
+      .then((catalogo) => {
+        setCatalogoComercial(catalogo);
+        setSubcategoriaComercialCodigo((current) =>
+          catalogo.some((categoria) =>
+            categoria.subcategorias.some((subcategoria) => subcategoria.codigo === current),
+          )
+            ? current
+            : (catalogo[0]?.subcategorias[0]?.codigo ?? "producto_a_medida"),
+        );
+      })
+      .catch(() => setCatalogoComercial([]));
+  }, []);
+
+  const subcategoriaOptions = catalogoComercial.flatMap((categoria) =>
+    categoria.subcategorias.map((subcategoria) => ({
+      value: subcategoria.codigo,
+      label: `${categoria.nombre} · ${subcategoria.nombre}`,
+    })),
+  );
 
   const guardar = async () => {
     if (!nombre.trim()) {
@@ -258,6 +286,9 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
       await actualizarProducto(producto.id, {
         nombre,
         descripcion: descripcion || undefined,
+        subcategoriaComercialCodigo,
+        atributosComercialesJson:
+          (producto.atributosComercialesJson as Record<string, unknown> | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
         modoMedidas: modoMedidas as "FIJA" | "LIBRE" | "COMERCIAL_ELIGE",
         medidaDefaultAnchoMm: anchoDefault ? Number(anchoDefault) : null,
@@ -298,6 +329,17 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
               value={descripcion}
               onChange={(event) => setDescripcion(event.target.value)}
             />
+          </div>
+          <div className="field">
+            <label>Categoría comercial</label>
+            <HumanSelect
+              value={subcategoriaComercialCodigo}
+              onValueChange={(value) =>
+                setSubcategoriaComercialCodigo(value || "producto_a_medida")
+              }
+              options={subcategoriaOptions}
+            />
+            <span className="help">Agrupa reportes y define specs visibles en propuestas.</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 6, borderTop: "1px solid var(--hairline)" }}>
             <div>
@@ -848,7 +890,7 @@ function PricingTab({ producto }: { producto: ProductoDetalle }) {
     () =>
       (producto.precioConfigJson as TabPrecioConfig | null) ?? {
         metodoCalculo: "por_margen",
-        detalle: { marginPct: 100, minimumMarginPct: 50 },
+        detalle: { marginPct: 40, minimumMarginPct: 25 },
       },
   );
   const [guardando, setGuardando] = React.useState(false);
@@ -874,6 +916,7 @@ function PricingTab({ producto }: { producto: ProductoDetalle }) {
         productoId={producto.id}
         precioConfig={precioConfig}
         onChangePrecioConfig={setPrecioConfig}
+        unidadComercial={producto.unidadComercial}
       />
       <div className="flex justify-end">
         <Button onClick={guardar} disabled={guardando}>

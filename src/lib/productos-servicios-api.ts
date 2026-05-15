@@ -8,6 +8,7 @@ import { apiRequest } from '@/lib/api';
 import type {
   CargoDirectoCatalogo,
   CatalogoFamilias,
+  ProductoCategoriaComercial,
   ProductoDetalle,
   ProductoListItem,
   RutaListItem,
@@ -20,6 +21,10 @@ export async function getProductos(activo?: boolean): Promise<ProductoListItem[]
 
 export async function getProductoById(id: string): Promise<ProductoDetalle> {
   return apiRequest<ProductoDetalle>(`/productos-servicios/productos/${id}`);
+}
+
+export async function getCatalogoComercial(): Promise<ProductoCategoriaComercial[]> {
+  return apiRequest<ProductoCategoriaComercial[]>('/productos-servicios/catalogo-comercial');
 }
 
 export interface ValidacionProducto {
@@ -40,6 +45,8 @@ export interface CrearProductoPayload {
   codigo: string;
   nombre: string;
   descripcion?: string;
+  subcategoriaComercialCodigo: string;
+  atributosComercialesJson?: Record<string, unknown>;
   unidadComercial: 'unidad' | 'm2' | 'metro_lineal';
   modoMedidas: 'FIJA' | 'LIBRE' | 'COMERCIAL_ELIGE';
   medidaDefaultAnchoMm?: number;
@@ -58,6 +65,8 @@ export async function crearProducto(payload: CrearProductoPayload) {
 export interface ActualizarProductoPayload {
   nombre?: string;
   descripcion?: string;
+  subcategoriaComercialCodigo?: string;
+  atributosComercialesJson?: Record<string, unknown>;
   unidadComercial?: 'unidad' | 'm2' | 'metro_lineal';
   modoMedidas?: 'FIJA' | 'LIBRE' | 'COMERCIAL_ELIGE';
   medidaDefaultAnchoMm?: number | null;
@@ -356,6 +365,7 @@ export interface LookupsConfigPaso {
     perfilesOperativos: Array<{
       id: string;
       nombre: string;
+      tipoPerfil?: string | null;
       productivityValue: string | null;
       productivityUnit: string | null;
     }>;
@@ -402,6 +412,7 @@ export async function getLookupsConfigPaso(): Promise<LookupsConfigPaso> {
 export interface NestingViewerInput {
   algorithm:
     | 'shelf-rollo'
+    | 'maxrects-rollo'
     | 'grid-2d-single'
     | 'grid-2d-multi'
     | 'packingsolver-rectangle';
@@ -530,6 +541,8 @@ export interface CotizarResponse {
     rutaNombre: string;
     cantidadEfectiva: number;
     cantidadPedida: number;
+    cantidadComercialPricing?: number;
+    unidadComercialPricing?: string;
     costos: {
       tiempoTotal: number;
       materialesTotal: number;
@@ -576,7 +589,13 @@ export interface CotizarResponse {
       familiaCodigo: string;
       activado: boolean;
       razonNoActivado?: string;
-      tiempo?: { totalMin: number; tarifaHora: number; costo: number };
+      tiempo?: {
+        totalMin: number;
+        centroCostoId?: string | null;
+        centroCostoNombre?: string | null;
+        tarifaHora: number;
+        costo: number;
+      };
       materiales?: Array<{
         slotCodigo: string;
         materialVarianteId: string;

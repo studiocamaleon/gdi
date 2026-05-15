@@ -17,8 +17,9 @@ import {
   actualizarProducto,
   crearProducto,
   eliminarProducto,
+  getCatalogoComercial,
 } from "@/lib/productos-servicios-api";
-import type { ProductoDetalle } from "@/lib/productos-servicios";
+import type { ProductoCategoriaComercial, ProductoDetalle } from "@/lib/productos-servicios";
 import { unidadComercialProductoItems } from "@/lib/productos-servicios";
 import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
 import {
@@ -52,6 +53,10 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
   const [codigo, setCodigo] = React.useState(productoExistente?.codigo ?? "");
   const [nombre, setNombre] = React.useState(productoExistente?.nombre ?? "");
   const [descripcion, setDescripcion] = React.useState(productoExistente?.descripcion ?? "");
+  const [catalogoComercial, setCatalogoComercial] = React.useState<ProductoCategoriaComercial[]>([]);
+  const [subcategoriaComercialCodigo, setSubcategoriaComercialCodigo] = React.useState(
+    productoExistente?.subcategoriaComercial?.codigo ?? "producto_a_medida",
+  );
   const [unidadComercial, setUnidadComercial] = React.useState(
     productoExistente?.unidadComercial ?? "unidad",
   );
@@ -69,9 +74,31 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
     | TabPrecioConfig
     | null) ?? {
     metodoCalculo: "por_margen",
-    detalle: { marginPct: 100, minimumMarginPct: 50 },
+    detalle: { marginPct: 40, minimumMarginPct: 25 },
   };
   const [precioConfig, setPrecioConfig] = React.useState<TabPrecioConfig>(precioConfigInicial);
+
+  React.useEffect(() => {
+    getCatalogoComercial()
+      .then((catalogo) => {
+        setCatalogoComercial(catalogo);
+        setSubcategoriaComercialCodigo((current) =>
+          catalogo.some((categoria) =>
+            categoria.subcategorias.some((subcategoria) => subcategoria.codigo === current),
+          )
+            ? current
+            : (catalogo[0]?.subcategorias[0]?.codigo ?? "producto_a_medida"),
+        );
+      })
+      .catch(() => setCatalogoComercial([]));
+  }, []);
+
+  const subcategoriaOptions = catalogoComercial.flatMap((categoria) =>
+    categoria.subcategorias.map((subcategoria) => ({
+      value: subcategoria.codigo,
+      label: `${categoria.nombre} · ${subcategoria.nombre}`,
+    })),
+  );
 
   const handleGuardar = async () => {
     setGuardando(true);
@@ -81,6 +108,9 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
       const payload = {
         nombre,
         descripcion: descripcion || undefined,
+        subcategoriaComercialCodigo,
+        atributosComercialesJson:
+          (productoExistente?.atributosComercialesJson as Record<string, unknown> | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
         modoMedidas: modoMedidas as "FIJA" | "LIBRE" | "COMERCIAL_ELIGE",
         medidaDefaultAnchoMm: anchoDefault ? Number(anchoDefault) : undefined,
@@ -180,6 +210,20 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
                 rows={3}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="subcategoriaComercial">Categoría comercial *</Label>
+              <HumanSelect
+                id="subcategoriaComercial"
+                value={subcategoriaComercialCodigo}
+                onValueChange={(value) =>
+                  setSubcategoriaComercialCodigo(value || "producto_a_medida")
+                }
+                options={subcategoriaOptions}
+              />
+              <p className="text-muted-foreground text-xs">
+                Define agrupación para reportes y campos visibles en propuestas.
+              </p>
+            </div>
             {modo === "editar" && (
               <div className="flex items-center justify-between">
                 <div>
@@ -262,7 +306,11 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <TabPrecioEditor value={precioConfig} onChange={setPrecioConfig} />
+            <TabPrecioEditor
+              value={precioConfig}
+              onChange={setPrecioConfig}
+              unidadComercial={unidadComercial}
+            />
           </CardContent>
         </Card>
       </div>

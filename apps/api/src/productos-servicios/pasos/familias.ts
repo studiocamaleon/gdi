@@ -395,7 +395,10 @@ const plotter_corte: DefinicionFamilia = {
   multiplicadoresSoportados: [],
   slotsRequeridos: [],
   permiteSlotsAdicionales: false,
-  plantillasCompatibles: ['PLOTTER_DE_CORTE'],
+  plantillasCompatibles: [
+    'PLOTTER_DE_CORTE',
+    'IMPRESORA_GRAN_FORMATO_POR_AREA',
+  ],
   inputsRequeridos: ['piezas'],
   outputsCanonicos: ['piezas_cortadas', 'metros_lineales_corte'],
   validaciones: [],

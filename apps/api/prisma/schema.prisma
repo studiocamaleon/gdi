@@ -1274,9 +1274,42 @@ model RutaVersion {
 
 // === PRODUCTOS V2 ===
 
+model ProductoCategoriaComercial {
+  id            String                          @id @default(uuid()) @db.Uuid
+  codigo        String                          @unique
+  nombre        String
+  descripcion   String?
+  orden         Int                             @default(0)
+  activo        Boolean                         @default(true)
+  subcategorias ProductoSubcategoriaComercial[]
+  createdAt     DateTime                        @default(now())
+  updatedAt     DateTime                        @updatedAt
+
+  @@index([activo, orden])
+}
+
+model ProductoSubcategoriaComercial {
+  id                   String                     @id @default(uuid()) @db.Uuid
+  categoriaId          String                     @db.Uuid
+  codigo               String                     @unique
+  nombre               String
+  descripcion          String?
+  atributosSchemaJson  Json
+  orden                Int                        @default(0)
+  activo               Boolean                    @default(true)
+  categoria            ProductoCategoriaComercial @relation(fields: [categoriaId], references: [id], onDelete: Restrict)
+  productos            Producto[]
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  @@unique([categoriaId, codigo])
+  @@index([categoriaId, activo, orden])
+}
+
 model Producto {
   id                        String                            @id @default(uuid()) @db.Uuid
   tenantId                  String                            @db.Uuid
+  subcategoriaComercialId   String                            @db.Uuid
   codigo                    String
   nombre                    String
   descripcion               String?
@@ -1288,10 +1321,12 @@ model Producto {
   medidaDefaultAltoMm       Decimal?                          @db.Decimal(12, 2)
   /// Configuración del Tab Precio (preservado del modelo viejo).
   precioConfigJson          Json?
+  atributosComercialesJson  Json?
   activo                    Boolean                           @default(true)
   createdAt                 DateTime                          @default(now())
   updatedAt                 DateTime                          @updatedAt
   tenant                    Tenant                            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subcategoriaComercial     ProductoSubcategoriaComercial     @relation(fields: [subcategoriaComercialId], references: [id], onDelete: Restrict)
   rutasAlternativas         ProductoRutaAlternativa[]
   pasosExtras               ProductoPasoExtra[]
   cargosDirectosCotizacion  ProductoCargoDirectoCotizacion[]
@@ -1302,6 +1337,7 @@ model Producto {
 
   @@unique([tenantId, codigo])
   @@index([tenantId, activo])
+  @@index([subcategoriaComercialId])
 }
 
 model ProductoRutaAlternativa {

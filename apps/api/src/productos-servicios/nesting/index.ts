@@ -2,6 +2,7 @@
 
 export * from './types';
 export { nestGrid2DSingle } from './algorithms/grid-2d-single';
+export { evaluateGranFormatoMaxRectsRollLayout } from './algorithms/maxrects-rollo';
 export {
   applyCostingStrategy,
   costingM2Exact,

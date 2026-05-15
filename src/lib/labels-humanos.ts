@@ -255,9 +255,9 @@ export const scopeCargoLabels: DiccionarioLabels = {
 /** Métodos de cálculo de precio del Tab Precio. */
 export const metodoPrecioLabels: DiccionarioLabels = {
   por_margen: {
-    label: "Margen fijo sobre el costo",
-    descripcion: "Aplica un porcentaje de margen único sobre el costo unitario.",
-    ejemplo: "Costo $10 + margen 100% = precio $20.",
+    label: "Margen objetivo fijo",
+    descripcion: "Calcula el precio necesario para preservar un margen sobre el precio final.",
+    ejemplo: "Costo $100 + margen objetivo 50% = precio $200.",
   },
   precio_fijo: {
     label: "Precio fijo (sin importar costo)",
@@ -268,13 +268,13 @@ export const metodoPrecioLabels: DiccionarioLabels = {
     label: "Precio fijo si margen ≥ mínimo",
     descripcion:
       "Usa precio fijo solo si garantiza el margen mínimo configurado; sino aplica el margen mínimo.",
-    ejemplo: "Precio $50, margen mín 30%; si costo > $35 → precio = costo × 1.3.",
+    ejemplo: "Precio $50, margen mín 30%; si no alcanza, se recalcula al precio necesario.",
   },
   margen_variable: {
     label: "Margen variable por cantidad (escalonado)",
     descripcion:
-      "Margen distinto según el rango de cantidad del pedido (descuento por volumen).",
-    ejemplo: "1-50u → 100%, 51-200u → 80%, 201+u → 60%.",
+      "Margen objetivo distinto según el rango de cantidad comercial del pedido.",
+    ejemplo: "Hasta 5 m² → 50%, hasta 20 m² → 40%, 20+ m² → 30%.",
   },
   fijado_por_cantidad: {
     label: "Precio fijo por cantidad (escalonado)",
@@ -282,9 +282,9 @@ export const metodoPrecioLabels: DiccionarioLabels = {
     ejemplo: "1-50u → $60/u, 51-200u → $50/u, 201+u → $40/u.",
   },
   fijo_con_margen_variable: {
-    label: "Precio fijo con piso de margen variable",
+    label: "Cantidades fijas con margen objetivo",
     descripcion:
-      "Combina precio fijo escalonado con margen mínimo escalonado: usa el mayor de los dos.",
+      "Define cantidades exactas habilitadas y un margen objetivo para cada una.",
   },
   variable_por_cantidad: {
     label: "Variable por cantidad",

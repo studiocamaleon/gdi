@@ -25,7 +25,12 @@
  *     esté implementado. Por ahora devuelve null para esta familia.
  */
 
-import { evaluateGranFormatoMixedShelfLayout } from '../productos-servicios/nesting/algorithms/shelf-rollo';
+import {
+  evaluateGranFormatoMixedShelfLayout,
+  type EvaluateGranFormatoMixedShelfLayoutInput,
+  type GranFormatoMixedShelfLayoutResult,
+} from '../productos-servicios/nesting/algorithms/shelf-rollo';
+import { evaluateGranFormatoMaxRectsRollLayout } from '../productos-servicios/nesting/algorithms/maxrects-rollo';
 import { nestGrid2DSingle } from '../productos-servicios/nesting/algorithms/grid-2d-single';
 import { nestGrid2DMulti } from '../productos-servicios/nesting/algorithms/grid-2d-multi';
 import { nestPackingSolverRectangle } from '../productos-servicios/nesting/algorithms/packingsolver-rectangle';
@@ -50,6 +55,7 @@ import type { PasoCargado, JobContext, NestingVisualConfig } from './tipos';
 export interface NestingDispatchResult {
   algorithm:
     | 'shelf-rollo'
+    | 'maxrects-rollo'
     | 'grid-2d-single'
     | 'grid-2d-multi'
     | 'packingsolver-rectangle';
@@ -239,7 +245,7 @@ function runShelfRollo(
     rollWidthMm - config.margins.leftMm - config.margins.rightMm;
   if (printableWidthMm <= 0) return null;
 
-  const result = evaluateGranFormatoMixedShelfLayout({
+  const shelfInput: EvaluateGranFormatoMixedShelfLayoutInput = {
     printableWidthMm,
     marginLeftMm: config.margins.leftMm,
     marginStartMm: config.margins.startMm,
@@ -266,7 +272,27 @@ function runShelfRollo(
       anchoMm: p.anchoMm,
       altoMm: p.altoMm,
     })),
-  });
+  };
+
+  const shelfResult =
+    config.algorithm === 'maxrects-rollo'
+      ? null
+      : evaluateGranFormatoMixedShelfLayout(shelfInput);
+  const maxRectsResult =
+    config.algorithm === 'shelf-rollo'
+      ? null
+      : evaluateGranFormatoMaxRectsRollLayout({
+          ...shelfInput,
+          upperBoundConsumedLengthMm: shelfResult?.consumedLengthMm ?? null,
+        });
+  const result =
+    config.algorithm === 'maxrects-rollo'
+      ? maxRectsResult
+      : config.algorithm === 'shelf-rollo'
+        ? shelfResult
+        : chooseBestRollLayout(shelfResult, maxRectsResult);
+  const algorithm =
+    result === maxRectsResult ? 'maxrects-rollo' : 'shelf-rollo';
 
   if (!result) return null;
 
@@ -306,7 +332,7 @@ function runShelfRollo(
   ];
 
   return {
-    algorithm: 'shelf-rollo',
+    algorithm,
     cantidadCalculada: consumedLengthM,
     unidad: 'm_lineales',
     aprovechamientoPct,
@@ -350,6 +376,21 @@ function runShelfRollo(
       },
     }),
   };
+}
+
+function chooseBestRollLayout(
+  shelfResult: GranFormatoMixedShelfLayoutResult | null,
+  maxRectsResult: GranFormatoMixedShelfLayoutResult | null,
+): GranFormatoMixedShelfLayoutResult | null {
+  if (!shelfResult) return maxRectsResult;
+  if (!maxRectsResult) return shelfResult;
+  const lengthDiff = shelfResult.consumedLengthMm - maxRectsResult.consumedLengthMm;
+  if (Math.abs(lengthDiff) > 1) {
+    return lengthDiff > 0 ? maxRectsResult : shelfResult;
+  }
+  return maxRectsResult.usefulAreaM2 >= shelfResult.usefulAreaM2
+    ? maxRectsResult
+    : shelfResult;
 }
 
 function runGrid2DMultiForArea(

@@ -128,6 +128,7 @@ const NAV: NavItem[] = [
     icon: "Briefcase",
     children: [
       { key: "crear-cotizacion", label: "Crear cotización", href: "/comercial/cotizar" },
+      { key: "crear-propuesta", label: "Crear propuesta", href: "/comercial/crear-propuesta" },
     ],
   },
   {

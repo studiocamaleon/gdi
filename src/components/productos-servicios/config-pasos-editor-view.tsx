@@ -61,6 +61,7 @@ interface Props {
 }
 
 type ConfigState = Record<string, UpsertConfigPasoPayload>;
+type SavedConfigSnapshots = Record<string, string>;
 
 const MODOS_ACTIVACION = ["OBLIGATORIO", "OPCIONAL", "CONDICIONAL"];
 const MODOS_SELECCION = ["HARDCODED", "COMERCIAL_ELIGE", "MOTOR_ELIGE_AUTO"];
@@ -75,6 +76,7 @@ const FORMULAS = [
 const NESTING_ALGORITHMS = [
   "auto",
   "shelf-rollo",
+  "maxrects-rollo",
   "grid-2d-single",
   "grid-2d-multi",
   "packingsolver-rectangle",
@@ -113,6 +115,7 @@ const PANEL_WIDTH_INTERPRETATION_OPTIONS = optionsFromLabels(["total", "util"], 
 const NESTING_ALGORITHM_OPTIONS = optionsFromLabels(NESTING_ALGORITHMS, {
   auto: { label: "Automático", descripcion: "El motor elige según la geometría y las piezas." },
   "shelf-rollo": { label: "Rollo", descripcion: "Acomoda piezas sobre rollo de ancho fijo." },
+  "maxrects-rollo": { label: "Rollo optimizado", descripcion: "Acomoda piezas mixtas en rollo minimizando el largo consumido." },
   "grid-2d-single": { label: "Grilla simple", descripcion: "Una medida repetida sobre pliego o placa." },
   "grid-2d-multi": { label: "Grilla multi", descripcion: "Varias medidas sobre una o más placas." },
   "packingsolver-rectangle": { label: "PackingSolver Rectangle", descripcion: "Motor profesional para rígidos sobre placa." },
@@ -123,6 +126,25 @@ const COSTING_STRATEGY_OPTIONS = optionsFromLabels(COSTING_STRATEGIES, {
   "consumed-length": { label: "Largo consumido", descripcion: "Cobra placa completa y último tramo proporcional." },
   "plate-segments": { label: "Segmentos de placa", descripcion: "Cobra por escalones de ocupación de la placa." },
 });
+
+function normalizeForSnapshot(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(normalizeForSnapshot);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, entryValue]) => entryValue !== undefined)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entryValue]) => [key, normalizeForSnapshot(entryValue)]),
+    );
+  }
+  return value;
+}
+
+function configSnapshot(config: UpsertConfigPasoPayload | undefined): string {
+  return JSON.stringify(normalizeForSnapshot(config ?? null));
+}
 
 type MaquinaLookup = LookupsConfigPaso["maquinas"][number];
 type PerfilLookup = MaquinaLookup["perfilesOperativos"][number];
@@ -160,6 +182,29 @@ function profileOption(
     code: null,
     badge,
   };
+}
+
+function perfilCompatibleConFamilia(familiaCodigo: string | undefined, perfil: PerfilLookup | null | undefined) {
+  if (!familiaCodigo || !perfil) return true;
+  const tipoPerfil = String(perfil.tipoPerfil ?? "").toLowerCase();
+  if (familiaCodigo === "plotter_corte") return tipoPerfil === "corte" || tipoPerfil === "mixto";
+  if (familiaCodigo === "impresion_por_area") return tipoPerfil === "impresion" || tipoPerfil === "mixto";
+  return true;
+}
+
+function maquinaCompatibleConFamilia(
+  familiaCodigo: string | undefined,
+  plantillasCompatibles: string[] | undefined,
+  maquina: MaquinaLookup,
+) {
+  if (!(plantillasCompatibles ?? []).includes(maquina.plantilla)) return false;
+  if (familiaCodigo !== "plotter_corte") return true;
+  if (String(maquina.plantilla).toUpperCase() !== "IMPRESORA_GRAN_FORMATO_POR_AREA") return true;
+  const params = maquina.parametrosTecnicosJson ?? {};
+  return (
+    params.soportaCorteIntegrado === true &&
+    maquina.perfilesOperativos.some((perfil) => perfilCompatibleConFamilia("plotter_corte", perfil))
+  );
 }
 
 function centroCostoOption(centro: Pick<CentroCostoLookup, "id" | "codigo" | "nombre">): HumanSelectOption {
@@ -336,7 +381,7 @@ function panelizadoAplica(
     return false;
   }
   const algorithm = String(nestingConfig.algorithm ?? "auto");
-  if (algorithm !== "auto" && algorithm !== "shelf-rollo") return false;
+  if (algorithm !== "auto" && algorithm !== "shelf-rollo" && algorithm !== "maxrects-rollo") return false;
   const geometria = String(asRecord(maquina?.parametrosTecnicosJson).geometria ?? "").toUpperCase();
   return familiaCodigo === "plotter_corte" || geometria === "ROLLO" || geometria === "";
 }
@@ -570,6 +615,19 @@ export function ConfigPasosEditorView({
       return map;
     },
   );
+  const [savedConfigSnapshots, setSavedConfigSnapshots] =
+    React.useState<SavedConfigSnapshots>(() => {
+      const snapshots: SavedConfigSnapshots = {};
+      for (const paso of rutaAlternativa.ruta.pasos) {
+        const existente = rutaAlternativa.configPasos.find(
+          (cp) => cp.rutaPasoId === paso.id,
+        );
+        if (existente) {
+          snapshots[paso.id] = configSnapshot(configs[paso.id]);
+        }
+      }
+      return snapshots;
+    });
 
   const [guardando, setGuardando] = React.useState<string | null>(null);
   const [activePasoId, setActivePasoId] = React.useState(
@@ -605,6 +663,17 @@ export function ConfigPasosEditorView({
   const updateConfig = (rutaPasoId: string, patch: Partial<UpsertConfigPasoPayload>) => {
     setConfigs((prev) => ({ ...prev, [rutaPasoId]: { ...prev[rutaPasoId], ...patch } }));
   };
+
+  const hasUnsavedChanges = React.useCallback(
+    (rutaPasoId: string) => {
+      const savedSnapshot = savedConfigSnapshots[rutaPasoId];
+      if (!savedSnapshot) {
+        return true;
+      }
+      return savedSnapshot !== configSnapshot(configs[rutaPasoId]);
+    },
+    [configs, savedConfigSnapshots],
+  );
 
   const updateNestingConfig = (
     rutaPasoId: string,
@@ -835,6 +904,10 @@ export function ConfigPasosEditorView({
         paramsPasoJson: Object.keys(paramsPasoJson).length > 0 ? paramsPasoJson : null,
         mecanismoCantidadConfigJson: mecanismoRes.value,
       });
+      setSavedConfigSnapshots((prev) => ({
+        ...prev,
+        [rutaPasoId]: configSnapshot(configs[rutaPasoId]),
+      }));
       toast.success("Configuración guardada");
       router.refresh();
     } catch (err) {
@@ -1008,7 +1081,7 @@ export function ConfigPasosEditorView({
             (cp) => cp.rutaPasoId === paso.id,
           );
           const maquinasCompatibles = lookups.maquinas.filter((m) =>
-            (familia?.plantillasCompatibles ?? []).includes(m.plantilla),
+            maquinaCompatibleConFamilia(paso.familiaCodigo, familia?.plantillasCompatibles, m),
           );
           const maquinaSel = lookups.maquinas.find((m) => m.id === cfg.maquinaM1Id);
           const maquinaGuardada = maquinaSel ?? configExistente?.maquinaM1 ?? null;
@@ -1024,7 +1097,9 @@ export function ConfigPasosEditorView({
             configExistente?.perfilM1 ??
             null;
           const perfilOptions = ensureSelectedOption(
-            (maquinaSel?.perfilesOperativos ?? []).map((p) => profileOption(p)),
+            (maquinaSel?.perfilesOperativos ?? [])
+              .filter((p) => perfilCompatibleConFamilia(paso.familiaCodigo, p))
+              .map((p) => profileOption(p)),
             cfg.perfilM1Id,
             perfilGuardado
               ? profileOption(perfilGuardado, "guardado/no disponible")
@@ -1106,6 +1181,7 @@ export function ConfigPasosEditorView({
             valBasico.errores.length + valMateriales.errores.length + valAvanzado.errores.length;
           const totalWarnings =
             valBasico.warnings.length + valMateriales.warnings.length + valAvanzado.warnings.length;
+          const pasoTieneCambios = hasUnsavedChanges(paso.id);
 
           return (
             <React.Fragment key={paso.id}>
@@ -1158,10 +1234,18 @@ export function ConfigPasosEditorView({
                   className="btn btn-primary"
                   type="button"
                   onClick={() => guardarPaso(paso.id)}
-                  disabled={guardando === paso.id || totalErrores > 0}
+                  disabled={guardando === paso.id || totalErrores > 0 || !pasoTieneCambios}
                 >
-                  <SaveIcon className="size-4" />
-                  {guardando === paso.id ? "Guardando..." : "Guardar paso"}
+                  {pasoTieneCambios ? (
+                    <SaveIcon className="size-4" />
+                  ) : (
+                    <CheckIcon className="size-4" />
+                  )}
+                  {guardando === paso.id
+                    ? "Guardando..."
+                    : pasoTieneCambios
+                      ? "Guardar paso"
+                      : "Guardado"}
                 </button>
               </div>
             </div>

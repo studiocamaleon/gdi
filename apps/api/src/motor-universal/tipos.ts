@@ -87,6 +87,10 @@ export interface CotizacionResultado {
   /** Cantidad efectivamente producida (puede diferir de pedida en talonarios pose_completa). */
   cantidadEfectiva: number;
   cantidadPedida: number;
+  /** Cantidad comercial usada para precio y costo unitario comercial. */
+  cantidadComercialPricing: number;
+  /** Unidad comercial fuente de la cantidad de pricing. */
+  unidadComercialPricing: string;
   /** Costos por bucket (a-g del molde). */
   costos: {
     tiempoTotal: number;
@@ -165,6 +169,9 @@ export interface PasoEjecutado {
     cleanupMin: number;
     tiempoFijoMin: number;
     totalMin: number;
+    /** Centro de costo usado para tarifar este tiempo. */
+    centroCostoId?: string | null;
+    centroCostoNombre?: string | null;
     /** Tarifa horaria del centro de costo aplicada. */
     tarifaHora?: number;
     costo: number;
@@ -190,6 +197,7 @@ export interface PasoEjecutado {
 export interface NestingEjecutado {
   algorithm:
     | 'shelf-rollo'
+    | 'maxrects-rollo'
     | 'grid-2d-single'
     | 'grid-2d-multi'
     | 'packingsolver-rectangle';
@@ -417,6 +425,7 @@ export interface PasoCargado {
     plantilla: string;
     anchoUtil?: number | null;
     centroCostoPrincipalId?: string | null;
+    centroCostoPrincipalNombre?: string | null;
     parametrosTecnicosJson?: Record<string, unknown> | null;
     consumibles?: ConsumibleMaquinaCargado[];
   };
@@ -424,6 +433,7 @@ export interface PasoCargado {
   perfil?: {
     id: string;
     nombre: string;
+    tipoPerfil?: string | null;
     productivityValue: number | null;
     productivityUnit: string | null;
     setupMin: number | null;
@@ -455,12 +465,14 @@ export interface PasoCargado {
       plantilla: string;
       anchoUtil?: number | null;
       centroCostoPrincipalId?: string | null;
+      centroCostoPrincipalNombre?: string | null;
       parametrosTecnicosJson?: Record<string, unknown> | null;
       consumibles?: ConsumibleMaquinaCargado[];
     };
     perfilesOperativos: Array<{
       id: string;
       nombre: string;
+      tipoPerfil?: string | null;
       activo: boolean;
       productivityValue: number | null;
       productivityUnit: string | null;
@@ -473,8 +485,10 @@ export interface PasoCargado {
   perfilesDisponibles?: Array<{
     id: string;
     nombre: string;
+    tipoPerfil?: string | null;
     activo: boolean;
     productivityValue: number | null;
+    productivityUnit?: string | null;
     setupMin: number | null;
     cleanupMin: number | null;
     detalleJson: unknown;

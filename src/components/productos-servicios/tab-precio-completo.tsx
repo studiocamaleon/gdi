@@ -71,12 +71,14 @@ interface Props {
   /** Config del método de cálculo (sección 1). */
   precioConfig: TabPrecioConfig;
   onChangePrecioConfig: (cfg: TabPrecioConfig) => void;
+  unidadComercial?: string;
 }
 
 export function TabPrecioCompleto({
   productoId,
   precioConfig,
   onChangePrecioConfig,
+  unidadComercial,
 }: Props) {
   return (
     <div className="pricing-flow">
@@ -89,7 +91,11 @@ export function TabPrecioCompleto({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <TabPrecioEditor value={precioConfig} onChange={onChangePrecioConfig} />
+          <TabPrecioEditor
+            value={precioConfig}
+            onChange={onChangePrecioConfig}
+            unidadComercial={unidadComercial}
+          />
         </CardContent>
       </Card>
 
@@ -110,7 +116,10 @@ export function TabPrecioCompleto({
         <>
           <SeccionImpuestos productoId={productoId} />
           <SeccionComisiones productoId={productoId} />
-          <SeccionPreciosEspeciales productoId={productoId} />
+          <SeccionPreciosEspeciales
+            productoId={productoId}
+            unidadComercial={unidadComercial}
+          />
         </>
       )}
     </div>
@@ -385,7 +394,13 @@ function SeccionComisiones({ productoId }: { productoId: string }) {
 // SECCIÓN 4 — Precios especiales por cliente
 // ════════════════════════════════════════════════════════════════════════
 
-function SeccionPreciosEspeciales({ productoId }: { productoId: string }) {
+function SeccionPreciosEspeciales({
+  productoId,
+  unidadComercial,
+}: {
+  productoId: string;
+  unidadComercial?: string;
+}) {
   const [items, setItems] = React.useState<PrecioEspecialClienteItem[]>([]);
   const [clientes, setClientes] = React.useState<ClienteDetalle[]>([]);
   const [cargando, setCargando] = React.useState(true);
@@ -397,7 +412,7 @@ function SeccionPreciosEspeciales({ productoId }: { productoId: string }) {
   const [clienteId, setClienteId] = React.useState("");
   const [config, setConfig] = React.useState<TabPrecioConfig>({
     metodoCalculo: "por_margen",
-    detalle: { marginPct: 100 },
+    detalle: { marginPct: 40 },
   });
   const [guardando, setGuardando] = React.useState(false);
 
@@ -419,7 +434,7 @@ function SeccionPreciosEspeciales({ productoId }: { productoId: string }) {
   const abrirNuevo = () => {
     setEditando(null);
     setClienteId("");
-    setConfig({ metodoCalculo: "por_margen", detalle: { marginPct: 100 } });
+    setConfig({ metodoCalculo: "por_margen", detalle: { marginPct: 40 } });
     setCreandoNuevo(true);
   };
 
@@ -609,7 +624,11 @@ function SeccionPreciosEspeciales({ productoId }: { productoId: string }) {
 
               <div className="space-y-2">
                 <Label>Método de cálculo del precio especial</Label>
-                <TabPrecioEditor value={config} onChange={setConfig} />
+                <TabPrecioEditor
+                  value={config}
+                  onChange={setConfig}
+                  unidadComercial={unidadComercial}
+                />
               </div>
 
               <div className="flex items-center justify-end gap-2 border-t pt-3">

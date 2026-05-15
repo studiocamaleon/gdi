@@ -39,8 +39,13 @@ export class FamiliasPasosService {
           modosTiempoSoportados: f.modosTiempoSoportados,
           mecanismosCantidadSoportados: f.mecanismosCantidadSoportados,
           modosActivacionSoportados: MODOS_ACTIVACION_UNIVERSALES,
+          multiplicadoresSoportados: f.multiplicadoresSoportados,
           slotsRequeridos: f.slotsRequeridos,
           plantillasCompatibles: f.plantillasCompatibles,
+          inputsRequeridos: f.inputsRequeridos,
+          outputsCanonicos: f.outputsCanonicos,
+          validaciones: f.validaciones,
+          paramsPasoSchema: f.paramsPasoSchema,
           productosTipicos: f.productosTipicos,
         };
       }),
@@ -70,6 +75,7 @@ export class FamiliasPasosService {
             select: {
               id: true,
               nombre: true,
+              tipoPerfil: true,
               productivityValue: true,
               productivityUnit: true,
             },

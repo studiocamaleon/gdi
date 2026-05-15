@@ -88,6 +88,7 @@ const modoCalidadOptions = [
 const modoOperacionMesaOptions = [
   option("ROLLO", "Rollo"),
   option("RIGIDO", "Rígido"),
+  option("HOJAS", "Hojas"),
 ];
 
 const tipoCorteOptions = [
@@ -326,6 +327,7 @@ function buildGranFormatoSections(): MaquinariaTemplateSection[] {
         field({ key: "anchoMesaMm", label: "Ancho de mesa", scope: "maquina", kind: "number", unit: "mm", description: "Se usa cuando la geometría es Mesa extensora." }),
         field({ key: "largoMesaMm", label: "Largo de mesa", scope: "maquina", kind: "number", unit: "mm", description: "Se usa cuando la geometría es Mesa extensora." }),
         field({ key: "alturaMaxCabezalMm", label: "Altura máxima del cabezal", scope: "maquina", kind: "number", unit: "mm", description: "Se usa cuando la geometría es Mesa extensora." }),
+        field({ key: "soportaCorteIntegrado", label: "Soporta corte integrado", scope: "maquina", kind: "boolean", description: "Permite usar perfiles de corte en esta impresora para trabajos tipo plotter." }),
         field({ key: "margenesNoImprimiblesMm", label: "Márgenes no imprimibles", scope: "maquina", kind: "textarea", required: true, description: "Distancia que la máquina no puede imprimir en cada borde." }),
         field({ key: "coloresSoportados", label: "Colores soportados", scope: "maquina", kind: "multiselect", options: coloresGranFormatoOptions, description: "Modos de color (CMYK, +blanco, +barniz)." }),
       ],
@@ -344,6 +346,8 @@ function buildGranFormatoSections(): MaquinariaTemplateSection[] {
         field({ key: "colores", label: "Colores", scope: "perfil_operativo", kind: "select", options: coloresGranFormatoOptions, description: "Modo de color del perfil." }),
         field({ key: "modoCalidad", label: "Calidad", scope: "perfil_operativo", kind: "select", options: modoCalidadOptions, description: "Borrador, normal o alta." }),
         field({ key: "modoOperacion", label: "Modo de operación", scope: "perfil_operativo", kind: "select", options: modoOperacionMesaOptions, description: "Se usa cuando la geometría es Mesa extensora." }),
+        field({ key: "tipoCorte", label: "Tipo de corte", scope: "perfil_operativo", kind: "select", options: tipoCorteOptions, description: "Se usa en perfiles de corte integrado." }),
+        field({ key: "factorComplejidad", label: "Factor complejidad (JSON)", scope: "perfil_operativo", kind: "textarea", description: "Se usa en perfiles de corte integrado. Ej: { SIMPLE: 1.0, INTERMEDIO: 1.5, COMPLEJO: 3.0 }." }),
       ],
     }),
     section({ id: "consumibles", title: "Consumibles", description: "Tinta CMYK, blanca, barniz por perfil.", fields: genericConsumableFields }),

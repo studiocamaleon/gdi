@@ -97,21 +97,35 @@ export function ProductosServiciosTable({
   const productos = initialProductos;
   const [search, setSearch] = React.useState("");
   const [filtroUnidad, setFiltroUnidad] = React.useState("");
+  const [filtroSubcategoria, setFiltroSubcategoria] = React.useState("");
   const [filtroEstado, setFiltroEstado] = React.useState("");
+  const subcategoriaOptions = React.useMemo(() => {
+    const byCodigo = new Map<string, { value: string; label: string }>();
+    for (const producto of productos) {
+      const subcategoria = producto.subcategoriaComercial;
+      if (!subcategoria) continue;
+      byCodigo.set(subcategoria.codigo, {
+        value: subcategoria.codigo,
+        label: `${subcategoria.categoria.nombre} · ${subcategoria.nombre}`,
+      });
+    }
+    return [{ value: "", label: "todas" }, ...Array.from(byCodigo.values())];
+  }, [productos]);
 
   const productosFiltrados = React.useMemo(() => {
     const term = search.trim().toLowerCase();
     return productos.filter((p) => {
       if (term) {
-        const haystack = `${p.codigo} ${p.nombre} ${p.descripcion ?? ""}`.toLowerCase();
+        const haystack = `${p.codigo} ${p.nombre} ${p.descripcion ?? ""} ${p.subcategoriaComercial?.nombre ?? ""} ${p.subcategoriaComercial?.categoria.nombre ?? ""}`.toLowerCase();
         if (!haystack.includes(term)) return false;
       }
       if (filtroUnidad && p.unidadComercial !== filtroUnidad) return false;
+      if (filtroSubcategoria && p.subcategoriaComercial?.codigo !== filtroSubcategoria) return false;
       if (filtroEstado === "activo" && !p.activo) return false;
       if (filtroEstado === "inactivo" && p.activo) return false;
       return true;
     });
-  }, [productos, search, filtroUnidad, filtroEstado]);
+  }, [productos, search, filtroUnidad, filtroSubcategoria, filtroEstado]);
 
   const openProduct = (id: string) => {
     router.push(`/productos-servicios/${id}?tab=identidad`);
@@ -163,6 +177,12 @@ export function ProductosServiciosTable({
               ]}
             />
             <CatalogSelect
+              label="Categoría"
+              value={filtroSubcategoria}
+              onChange={setFiltroSubcategoria}
+              options={subcategoriaOptions}
+            />
+            <CatalogSelect
               label="Estado"
               value={filtroEstado}
               onChange={setFiltroEstado}
@@ -199,6 +219,7 @@ export function ProductosServiciosTable({
                 <thead>
                   <tr>
                     <th>Nombre</th>
+                    <th>Categoría</th>
                     <th>¿Cómo se cobra?</th>
                     <th>Manejo de medidas</th>
                     <th>Rutas</th>
@@ -215,6 +236,12 @@ export function ProductosServiciosTable({
                         <td>
                           <div className="name">{p.nombre}</div>
                           <div className="desc">{p.descripcion ?? ""}</div>
+                        </td>
+                        <td>
+                          <span className="tag muted">
+                            <span className="d" />
+                            {p.subcategoriaComercial?.nombre ?? "Sin categoría"}
+                          </span>
                         </td>
                         <td>
                           <span className="tag muted" title={lblUnidad.descripcion}>

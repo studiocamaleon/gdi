@@ -57,6 +57,7 @@ describe('Ruta de producción versionada', () => {
     const producto = await service.crearProducto(tenantId, {
       codigo: PRODUCT_CODE,
       nombre: 'Producto test versioning',
+      subcategoriaComercialCodigo: 'producto_a_medida',
       unidadComercial: 'unidad',
       modoMedidas: 'FIJA',
     });
@@ -133,6 +134,7 @@ describe('Ruta de producción versionada', () => {
     const producto = await service.crearProducto(tenantId, {
       codigo: `${PRODUCT_CODE}-INPLACE`,
       nombre: 'Producto test versioning in-place',
+      subcategoriaComercialCodigo: 'producto_a_medida',
       unidadComercial: 'unidad',
       modoMedidas: 'FIJA',
     });

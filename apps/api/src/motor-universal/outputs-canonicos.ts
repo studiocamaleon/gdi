@@ -164,7 +164,10 @@ function computeOutput(
   }
 
   if (key === 'm2_calculados') {
-    if (nestingDispatch?.algorithm === 'shelf-rollo') {
+    if (
+      nestingDispatch?.algorithm === 'shelf-rollo' ||
+      nestingDispatch?.algorithm === 'maxrects-rollo'
+    ) {
       // m² REALES consumidos del rollo (incluye desperdicio).
       const sub = nestingDispatch.substrates[0];
       if (sub?.kind === 'roll') {
@@ -201,7 +204,10 @@ function computeOutput(
   }
 
   if (key === 'metros_lineales_corte') {
-    if (nestingDispatch?.algorithm === 'shelf-rollo') {
+    if (
+      nestingDispatch?.algorithm === 'shelf-rollo' ||
+      nestingDispatch?.algorithm === 'maxrects-rollo'
+    ) {
       return (nestingDispatch.consumedLengthMm ?? 0) / 1000;
     }
     return null;

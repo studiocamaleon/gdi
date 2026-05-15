@@ -929,7 +929,7 @@ function ResultadoCotizacion({
               {formatARS(c.desglosePrecio.precioBrutoTotal)}
             </div>
             <div className="text-muted-foreground mt-1 text-xs">
-              margen efectivo: {c.desglosePrecio.margenEfectivoPct.toFixed(1)}%
+              margen bruto: {c.desglosePrecio.margenEfectivoPct.toFixed(1)}%
               {c.desglosePrecio.precioEspecialCliente && (
                 <span className="text-amber-700 ml-1">
                   · precio especial aplicado

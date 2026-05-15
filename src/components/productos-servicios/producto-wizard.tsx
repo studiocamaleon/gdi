@@ -62,9 +62,11 @@ import {
   crearProductoRutaAlt,
   desasociarCargoCotizacion,
   eliminarProductoRutaAlt,
+  getCatalogoComercial,
 } from "@/lib/productos-servicios-api";
 import type {
   CargoDirectoCatalogo,
+  ProductoCategoriaComercial,
   ProductoDetalle,
   RutaListItem,
 } from "@/lib/productos-servicios";
@@ -206,6 +208,10 @@ export function ProductoWizard({
   const [codigo, setCodigo] = React.useState(productoExistente?.codigo ?? "");
   const [nombre, setNombre] = React.useState(productoExistente?.nombre ?? "");
   const [descripcion, setDescripcion] = React.useState(productoExistente?.descripcion ?? "");
+  const [catalogoComercial, setCatalogoComercial] = React.useState<ProductoCategoriaComercial[]>([]);
+  const [subcategoriaComercialCodigo, setSubcategoriaComercialCodigo] = React.useState(
+    productoExistente?.subcategoriaComercial?.codigo ?? "producto_a_medida",
+  );
   const [unidadComercial, setUnidadComercial] = React.useState(
     productoExistente?.unidadComercial ?? "unidad",
   );
@@ -223,11 +229,26 @@ export function ProductoWizard({
     () =>
       (productoExistente?.precioConfigJson as TabPrecioConfig | null) ?? {
         metodoCalculo: "por_margen",
-        detalle: { marginPct: 100, minimumMarginPct: 50 },
+        detalle: { marginPct: 40, minimumMarginPct: 25 },
       },
   );
 
   const [guardandoStep, setGuardandoStep] = React.useState(false);
+
+  React.useEffect(() => {
+    getCatalogoComercial()
+      .then((catalogo) => {
+        setCatalogoComercial(catalogo);
+        setSubcategoriaComercialCodigo((current) =>
+          catalogo.some((categoria) =>
+            categoria.subcategorias.some((subcategoria) => subcategoria.codigo === current),
+          )
+            ? current
+            : (catalogo[0]?.subcategorias[0]?.codigo ?? "producto_a_medida"),
+        );
+      })
+      .catch(() => setCatalogoComercial([]));
+  }, []);
 
   // Validaciones por step (tiempo real)
   const valIdentidad = validarIdentidad({ codigo, nombre });
@@ -269,6 +290,9 @@ export function ProductoWizard({
       const payload = {
         nombre,
         descripcion: descripcion || undefined,
+        subcategoriaComercialCodigo,
+        atributosComercialesJson:
+          (productoExistente?.atributosComercialesJson as Record<string, unknown> | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
         modoMedidas: modoMedidas as "FIJA" | "LIBRE" | "COMERCIAL_ELIGE",
         medidaDefaultAnchoMm: anchoDefault ? Number(anchoDefault) : undefined,
@@ -301,6 +325,9 @@ export function ProductoWizard({
       await actualizarProducto(productoExistente.id, {
         nombre,
         descripcion: descripcion || undefined,
+        subcategoriaComercialCodigo,
+        atributosComercialesJson:
+          (productoExistente?.atributosComercialesJson as Record<string, unknown> | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
         modoMedidas: modoMedidas as "FIJA" | "LIBRE" | "COMERCIAL_ELIGE",
         medidaDefaultAnchoMm: anchoDefault ? Number(anchoDefault) : undefined,
@@ -429,6 +456,9 @@ export function ProductoWizard({
               setNombre={setNombre}
               descripcion={descripcion}
               setDescripcion={setDescripcion}
+              catalogoComercial={catalogoComercial}
+              subcategoriaComercialCodigo={subcategoriaComercialCodigo}
+              setSubcategoriaComercialCodigo={setSubcategoriaComercialCodigo}
               unidadComercial={unidadComercial}
               setUnidadComercial={setUnidadComercial}
               modoMedidas={modoMedidas}
@@ -472,6 +502,7 @@ export function ProductoWizard({
               guardandoStep={guardandoStep}
               guardarPrecio={guardarPrecio}
               validacion={valPrecio}
+              unidadComercial={unidadComercial}
             />
           )}
 
@@ -538,6 +569,9 @@ interface StepIdentidadProps {
   setNombre: (v: string) => void;
   descripcion: string;
   setDescripcion: (v: string) => void;
+  catalogoComercial: ProductoCategoriaComercial[];
+  subcategoriaComercialCodigo: string;
+  setSubcategoriaComercialCodigo: (v: string) => void;
   unidadComercial: string;
   setUnidadComercial: (v: string) => void;
   modoMedidas: string;
@@ -553,6 +587,13 @@ interface StepIdentidadProps {
 }
 
 function StepIdentidad(props: StepIdentidadProps) {
+  const subcategoriaOptions = props.catalogoComercial.flatMap((categoria) =>
+    categoria.subcategorias.map((subcategoria) => ({
+      value: subcategoria.codigo,
+      label: `${categoria.nombre} · ${subcategoria.nombre}`,
+    })),
+  );
+
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Card>
@@ -595,6 +636,20 @@ function StepIdentidad(props: StepIdentidadProps) {
               onChange={(e) => props.setDescripcion(e.target.value)}
               rows={3}
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="subcategoriaComercial">Categoría comercial *</Label>
+            <HumanSelect
+              id="subcategoriaComercial"
+              value={props.subcategoriaComercialCodigo}
+              onValueChange={(value) =>
+                props.setSubcategoriaComercialCodigo(value || "producto_a_medida")
+              }
+              options={subcategoriaOptions}
+            />
+            <p className="text-muted-foreground text-xs">
+              Se usa para reportes y para definir las especificaciones visibles en propuestas.
+            </p>
           </div>
           {props.modo === "editar" && (
             <div className="flex items-center justify-between">
@@ -1094,6 +1149,7 @@ function StepPrecio({
   guardandoStep,
   guardarPrecio,
   validacion,
+  unidadComercial,
 }: {
   producto: ProductoDetalle | undefined;
   precioConfig: TabPrecioConfig;
@@ -1101,6 +1157,7 @@ function StepPrecio({
   guardandoStep: boolean;
   guardarPrecio: () => void;
   validacion: ValidacionStep;
+  unidadComercial: string;
 }) {
   return (
     <div className="space-y-4">
@@ -1108,6 +1165,7 @@ function StepPrecio({
         productoId={producto?.id ?? null}
         precioConfig={precioConfig}
         onChangePrecioConfig={setPrecioConfig}
+        unidadComercial={producto?.unidadComercial ?? unidadComercial}
       />
 
       {producto && (

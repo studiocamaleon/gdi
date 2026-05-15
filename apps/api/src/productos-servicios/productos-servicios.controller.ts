@@ -42,6 +42,11 @@ interface RequestWithAuth extends Request {
 export class ProductosServiciosController {
   constructor(private readonly service: ProductosServiciosService) {}
 
+  @Get('catalogo-comercial')
+  listarCatalogoComercial() {
+    return this.service.listarCatalogoComercial();
+  }
+
   @Get('productos')
   async listarProductos(
     @Req() req: RequestWithAuth,

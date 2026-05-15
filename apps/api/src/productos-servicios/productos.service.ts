@@ -19,6 +19,9 @@ export class ProductosService {
       where: { tenantId, ...(activo !== undefined ? { activo } : {}) },
       orderBy: { nombre: 'asc' },
       include: {
+        subcategoriaComercial: {
+          include: { categoria: true },
+        },
         rutasAlternativas: {
           where: { activo: true },
           select: {
@@ -34,10 +37,15 @@ export class ProductosService {
   }
 
   async crearProducto(tenantId: string, dto: CrearProductoDto) {
+    const subcategoriaComercial = await this.assertSubcategoriaComercial(
+      dto.subcategoriaComercialCodigo,
+    );
+
     try {
       return await this.prisma.producto.create({
         data: {
           tenantId,
+          subcategoriaComercialId: subcategoriaComercial.id,
           codigo: dto.codigo,
           nombre: dto.nombre,
           descripcion: dto.descripcion ?? null,
@@ -51,7 +59,12 @@ export class ProductosService {
             : null,
           precioConfigJson: (dto.precioConfigJson ??
             Prisma.JsonNull) as Prisma.InputJsonValue,
+          atributosComercialesJson: (dto.atributosComercialesJson ??
+            Prisma.JsonNull) as Prisma.InputJsonValue,
           activo: true,
+        },
+        include: {
+          subcategoriaComercial: { include: { categoria: true } },
         },
       });
     } catch (err) {
@@ -78,6 +91,12 @@ export class ProductosService {
     if (!existente) throw new NotFoundException(`Producto ${id} no encontrado`);
 
     const data: Prisma.ProductoUpdateInput = {};
+    if (dto.subcategoriaComercialCodigo !== undefined) {
+      await this.assertSubcategoriaComercial(dto.subcategoriaComercialCodigo);
+      data.subcategoriaComercial = {
+        connect: { codigo: dto.subcategoriaComercialCodigo },
+      };
+    }
     if (dto.nombre !== undefined) data.nombre = dto.nombre;
     if (dto.descripcion !== undefined) data.descripcion = dto.descripcion;
     if (dto.unidadComercial !== undefined) {
@@ -99,9 +118,19 @@ export class ProductosService {
     if (dto.precioConfigJson !== undefined) {
       data.precioConfigJson = dto.precioConfigJson as Prisma.InputJsonValue;
     }
+    if (dto.atributosComercialesJson !== undefined) {
+      data.atributosComercialesJson =
+        dto.atributosComercialesJson as Prisma.InputJsonValue;
+    }
     if (dto.activo !== undefined) data.activo = dto.activo;
 
-    return this.prisma.producto.update({ where: { id }, data });
+    return this.prisma.producto.update({
+      where: { id },
+      data,
+      include: {
+        subcategoriaComercial: { include: { categoria: true } },
+      },
+    });
   }
 
   async eliminarProducto(tenantId: string, id: string) {
@@ -127,6 +156,9 @@ export class ProductosService {
     const producto = await this.prisma.producto.findFirst({
       where: { id, tenantId },
       include: {
+        subcategoriaComercial: {
+          include: { categoria: true },
+        },
         rutasAlternativas: {
           where: { activo: true },
           include: {
@@ -171,7 +203,7 @@ export class ProductosService {
                   },
                 },
                 perfilM1: {
-                  select: { id: true, nombre: true, detalleJson: true },
+                  select: { id: true, nombre: true, tipoPerfil: true, detalleJson: true },
                 },
                 centroCosto: {
                   select: {
@@ -243,5 +275,32 @@ export class ProductosService {
         },
       })),
     };
+  }
+
+  listarCatalogoComercial() {
+    return this.prisma.productoCategoriaComercial.findMany({
+      where: { activo: true },
+      orderBy: { orden: 'asc' },
+      include: {
+        subcategorias: {
+          where: { activo: true },
+          orderBy: { orden: 'asc' },
+        },
+      },
+    });
+  }
+
+  private async assertSubcategoriaComercial(codigo: string) {
+    const subcategoria =
+      await this.prisma.productoSubcategoriaComercial.findUnique({
+        where: { codigo },
+        select: { id: true, activo: true },
+      });
+    if (!subcategoria || !subcategoria.activo) {
+      throw new BadRequestException(
+        `Subcategoría comercial inválida: ${codigo}`,
+      );
+    }
+    return subcategoria;
   }
 }

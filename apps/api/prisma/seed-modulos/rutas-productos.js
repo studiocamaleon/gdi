@@ -17,7 +17,21 @@ async function fetchVarianteId(prisma, tenantId, sku) {
   return v.id;
 }
 
-async function seedRutasYProductos(prisma, tenantId, maquinas, materiales) {
+async function seedRutasYProductos(
+  prisma,
+  tenantId,
+  maquinas,
+  materiales,
+  catalogoComercial,
+) {
+  const subcategoriaId = (codigo) => {
+    const subcategoria = catalogoComercial?.subcategoriasPorCodigo?.get(codigo);
+    if (!subcategoria) {
+      throw new Error(`Subcategoría comercial no encontrada: ${codigo}`);
+    }
+    return subcategoria.id;
+  };
+
   const centroTrabajoManual = await prisma.centroCosto.findFirstOrThrow({
     where: { tenantId, codigo: 'PRE-001' },
   });
@@ -449,13 +463,20 @@ async function seedRutasYProductos(prisma, tenantId, maquinas, materiales) {
       codigo: 'TARJ-PREMIUM-300',
       nombre: 'Tarjetas de Visita Premium 300gr',
       descripcion: 'Tarjetas de visita en papel opalina 300gr, 9x5cm',
+      subcategoriaComercialId: subcategoriaId('tarjetas'),
       unidadComercial: 'unidad',
       modoMedidas: 'FIJA',
       medidaDefaultAnchoMm: '90',
       medidaDefaultAltoMm: '50',
+      atributosComercialesJson: {
+        material: 'Opalina 300gr',
+        medidas: '90 x 50 mm',
+        impresion: 'CMYK',
+        caras: 'Simple faz',
+      },
       precioConfigJson: {
         metodoCalculo: 'por_margen',
-        detalle: { marginPct: 100, minimumMarginPct: 50 },
+        detalle: { marginPct: 40, minimumMarginPct: 25 },
       },
       activo: true,
     },
@@ -604,15 +625,22 @@ async function seedRutasYProductos(prisma, tenantId, maquinas, materiales) {
       nombre: 'Vinilo blanco impreso',
       descripcion:
         'Vinilo adhesivo blanco impreso, gran formato, medidas libres',
+      subcategoriaComercialId: subcategoriaId('vinilos_impresos'),
       unidadComercial: 'm2',
       modoMedidas: 'LIBRE',
+      atributosComercialesJson: {
+        material: 'Vinilo blanco brillante',
+        medidas: 'Medidas libres',
+        tecnologia: 'Látex',
+        uso_aplicacion: 'Interior / exterior',
+      },
       precioConfigJson: {
         metodoCalculo: 'margen_variable',
         detalle: {
           tiers: [
-            { quantityUntil: 5, marginPct: 100 },
-            { quantityUntil: 20, marginPct: 80 },
-            { quantityUntil: 999, marginPct: 60 },
+            { quantityUntil: 5, marginPct: 50 },
+            { quantityUntil: 20, marginPct: 40 },
+            { quantityUntil: 999, marginPct: 30 },
           ],
         },
       },
@@ -767,13 +795,20 @@ async function seedRutasYProductos(prisma, tenantId, maquinas, materiales) {
       codigo: 'TALON-DUPL-A4',
       nombre: 'Talonario duplicado A4',
       descripcion: 'Talonario A4 duplicado en papel autocopiativo (CB+CFB)',
+      subcategoriaComercialId: subcategoriaId('talonarios'),
       unidadComercial: 'unidad',
       modoMedidas: 'FIJA',
       medidaDefaultAnchoMm: '210',
       medidaDefaultAltoMm: '297',
+      atributosComercialesJson: {
+        formato_medidas: 'A4',
+        tipo_copia: 'Duplicado',
+        hojas_por_talonario: '50 hojas',
+        encuadernacion_base: 'Emblocado',
+      },
       precioConfigJson: {
         metodoCalculo: 'por_margen',
-        detalle: { marginPct: 80, minimumMarginPct: 40 },
+        detalle: { marginPct: 40, minimumMarginPct: 25 },
       },
       activo: true,
     },
@@ -937,11 +972,19 @@ async function seedRutasYProductos(prisma, tenantId, maquinas, materiales) {
       nombre: 'Rígido impreso custom (señalética/letras)',
       descripcion:
         'Producto genérico para señalética y letras corpóreas en rígidos impresos',
+      subcategoriaComercialId: subcategoriaId('rigidos_impresos'),
       unidadComercial: 'unidad',
       modoMedidas: 'LIBRE',
+      atributosComercialesJson: {
+        material: 'Rígido a definir',
+        espesor: 'Según material',
+        medidas: 'Medidas libres',
+        tecnologia: 'UV rígido / CNC',
+        tipo_pieza: 'Cartel / letra / placa',
+      },
       precioConfigJson: {
         metodoCalculo: 'por_margen',
-        detalle: { marginPct: 120, minimumMarginPct: 60 },
+        detalle: { marginPct: 45, minimumMarginPct: 30 },
       },
       activo: true,
     },

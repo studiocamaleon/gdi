@@ -41,6 +41,10 @@ export class CrearProductoDto {
   @IsString()
   descripcion?: string;
 
+  @IsString()
+  @IsNotEmpty()
+  subcategoriaComercialCodigo!: string;
+
   @IsEnum(UnidadComercialDto)
   unidadComercial!: UnidadComercialDto;
 
@@ -60,6 +64,10 @@ export class CrearProductoDto {
   @IsOptional()
   @IsObject()
   precioConfigJson?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsObject()
+  atributosComercialesJson?: Record<string, unknown>;
 }
 
 export class ActualizarProductoDto {
@@ -71,6 +79,11 @@ export class ActualizarProductoDto {
   @IsOptional()
   @IsString()
   descripcion?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  subcategoriaComercialCodigo?: string;
 
   @IsOptional()
   @IsEnum(UnidadComercialDto)
@@ -93,6 +106,10 @@ export class ActualizarProductoDto {
   @IsOptional()
   @IsObject()
   precioConfigJson?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsObject()
+  atributosComercialesJson?: Record<string, unknown>;
 
   @IsOptional()
   @IsBoolean()

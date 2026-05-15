@@ -7,11 +7,26 @@ import { Prisma, UnidadBaseCentroCosto } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { UpsertProductoConfigPasoDto } from './dto/producto-ruta.dto';
 import { FamiliasPasosService } from './familias-pasos.service';
+import { FAMILIAS } from './pasos/familias';
+import type { FamiliaCodigo } from './pasos/types';
 
 const UNIDADES_CENTRO_COSTO_HORARIAS = [
   UnidadBaseCentroCosto.HORA_HOMBRE,
   UnidadBaseCentroCosto.HORA_MAQUINA,
 ];
+
+function tipoPerfilCompatibleConFamilia(
+  familiaCodigo: string,
+  tipoPerfil: string,
+) {
+  if (familiaCodigo === 'plotter_corte') {
+    return tipoPerfil === 'CORTE' || tipoPerfil === 'MIXTO';
+  }
+  if (familiaCodigo === 'impresion_por_area') {
+    return tipoPerfil === 'IMPRESION' || tipoPerfil === 'MIXTO';
+  }
+  return true;
+}
 
 @Injectable()
 export class ConfigPasosService {
@@ -47,6 +62,75 @@ export class ConfigPasosService {
       );
     }
     this.familias.validarConfigPasoContraFamilia(rutaPaso.familiaCodigo, dto);
+
+    if (dto.maquinaM1Id) {
+      const maquina = await this.prisma.maquina.findFirst({
+        where: { id: dto.maquinaM1Id, tenantId, activo: true },
+        include: {
+          perfilesOperativos: {
+            where: { activo: true },
+            select: { id: true, tipoPerfil: true },
+          },
+        },
+      });
+      if (!maquina) {
+        throw new BadRequestException(
+          'La máquina M-1 seleccionada no existe o no está activa.',
+        );
+      }
+
+      const familia = FAMILIAS[rutaPaso.familiaCodigo as FamiliaCodigo];
+      if (
+        familia?.plantillasCompatibles.length &&
+        !familia.plantillasCompatibles.includes(maquina.plantilla)
+      ) {
+        throw new BadRequestException(
+          `La máquina ${maquina.nombre} no es compatible con la familia ${rutaPaso.familiaCodigo}.`,
+        );
+      }
+
+      if (
+        rutaPaso.familiaCodigo === 'plotter_corte' &&
+        maquina.plantilla === 'IMPRESORA_GRAN_FORMATO_POR_AREA'
+      ) {
+        const params = (maquina.parametrosTecnicosJson ?? {}) as Record<
+          string,
+          unknown
+        >;
+        const tienePerfilCorte = maquina.perfilesOperativos.some((perfil) =>
+          tipoPerfilCompatibleConFamilia(
+            rutaPaso.familiaCodigo,
+            perfil.tipoPerfil,
+          ),
+        );
+        if (params.soportaCorteIntegrado !== true || !tienePerfilCorte) {
+          throw new BadRequestException(
+            'La impresora gran formato seleccionada debe tener corte integrado activo y al menos un perfil operativo de corte.',
+          );
+        }
+      }
+
+      if (dto.perfilM1Id) {
+        const perfil = maquina.perfilesOperativos.find(
+          (item) => item.id === dto.perfilM1Id,
+        );
+        if (!perfil) {
+          throw new BadRequestException(
+            'El perfil M-1 seleccionado no pertenece a la máquina o no está activo.',
+          );
+        }
+        if (
+          !tipoPerfilCompatibleConFamilia(
+            rutaPaso.familiaCodigo,
+            perfil.tipoPerfil,
+          )
+        ) {
+          throw new BadRequestException(
+            `El perfil M-1 seleccionado no es compatible con la familia ${rutaPaso.familiaCodigo}.`,
+          );
+        }
+      }
+    }
 
     const centroCostoId = dto.maquinaM1Id ? null : (dto.centroCostoId ?? null);
     if (centroCostoId) {

@@ -17,6 +17,7 @@ const {
 const bcrypt = require("bcryptjs");
 
 const { seedCargosDirectosCatalogo } = require("./seed-modulos/cargos");
+const { seedCatalogoComercial } = require("./seed-modulos/catalogo-comercial");
 const { seedMaquinas } = require("./seed-modulos/maquinas");
 const { seedMateriales } = require("./seed-modulos/materiales");
 const { seedRutasYProductos } = require("./seed-modulos/rutas-productos");
@@ -644,11 +645,18 @@ async function main() {
 
   await seedCargosDirectosCatalogo(prisma, tenant.id);
 
+  const catalogoComercial = await seedCatalogoComercial(prisma);
   const materialesCreados = await seedMateriales(prisma, tenant.id);
 
   const maquinasCreadas = await seedMaquinas(prisma, tenant.id, planta.id);
 
-  await seedRutasYProductos(prisma, tenant.id, maquinasCreadas, materialesCreados);
+  await seedRutasYProductos(
+    prisma,
+    tenant.id,
+    maquinasCreadas,
+    materialesCreados,
+    catalogoComercial,
+  );
 
   console.info("");
   console.info("✅ Seed COMPLETADO.");

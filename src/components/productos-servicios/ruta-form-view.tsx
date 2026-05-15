@@ -8,6 +8,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   HistoryIcon,
+  ListChecksIcon,
   PlusIcon,
   SaveIcon,
   Trash2Icon,
@@ -23,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import { FamiliasCapacidadesSheet } from "@/components/productos-servicios/familias-capacidades-sheet";
 import {
   actualizarRuta,
   crearRuta,
@@ -64,6 +66,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
   const router = useRouter();
   const [guardando, setGuardando] = React.useState(false);
   const [eliminando, setEliminando] = React.useState(false);
+  const [familiasOpen, setFamiliasOpen] = React.useState(false);
 
   const [codigo, setCodigo] = React.useState(rutaExistente?.codigo ?? "");
   const [nombre, setNombre] = React.useState(rutaExistente?.nombre ?? "");
@@ -398,10 +401,16 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                   materiales después.
                 </CardDescription>
               </div>
-              <Button onClick={agregarPaso} variant="outline" size="sm">
-                <PlusIcon className="mr-2 size-4" />
-                Agregar paso
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button onClick={() => setFamiliasOpen(true)} variant="outline" size="sm">
+                  <ListChecksIcon className="mr-2 size-4" />
+                  Ver familias
+                </Button>
+                <Button onClick={agregarPaso} variant="outline" size="sm">
+                  <PlusIcon className="mr-2 size-4" />
+                  Agregar paso
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -537,6 +546,12 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
           onConfirmar={ejecutarEliminar}
         />
       )}
+
+      <FamiliasCapacidadesSheet
+        catalogoFamilias={catalogoFamilias}
+        open={familiasOpen}
+        onOpenChange={setFamiliasOpen}
+      />
     </div>
   );
 }

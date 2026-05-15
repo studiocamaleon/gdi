@@ -129,6 +129,7 @@ export type NestingAlgorithm =
   | 'grid-2d-single'
   | 'grid-2d-multi'
   | 'packingsolver-rectangle'
+  | 'maxrects-rollo'
   | 'shelf-rollo';
 
 export interface NestingMetrics {

@@ -1,6 +1,7 @@
 import {
   type MaquinaPerfilOperativoItemDto,
   PlantillaMaquinariaDto,
+  TipoPerfilOperativoMaquinaDto,
 } from './dto/upsert-maquina.dto';
 
 /**
@@ -94,9 +95,16 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // Discriminantes (detalle): numeroPasadas, colores, modoCalidad, modoOperacion
   // (solo si plantilla geometria=MESA_EXTENSORA).
   [PlantillaMaquinariaDto.impresora_gran_formato_por_area]: buildRule({
-    detalleKeys: ['numeroPasadas', 'colores', 'modoCalidad', 'modoOperacion'],
+    detalleKeys: [
+      'numeroPasadas',
+      'colores',
+      'modoCalidad',
+      'modoOperacion',
+      'tipoCorte',
+      'factorComplejidad',
+    ],
     requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit'],
-    modeSourceKeys: ['modoCalidad', 'colores'],
+    modeSourceKeys: ['modoCalidad', 'colores', 'tipoCorte'],
   }),
 
   // ─── §7 GUILLOTINA ──────────────────────────────────────────────
@@ -248,6 +256,16 @@ export function validatePerfilOperativoByTemplate(
         `El perfil operativo ${perfilName} debe completar el campo ${requiredKey} para la plantilla ${plantilla}.`,
       );
     }
+  }
+
+  if (
+    plantilla === PlantillaMaquinariaDto.impresora_gran_formato_por_area &&
+    perfil.tipoPerfil === TipoPerfilOperativoMaquinaDto.corte &&
+    !hasValue(getPerfilFieldValue(perfil, 'tipoCorte'))
+  ) {
+    throw new Error(
+      `El perfil operativo ${perfilName} debe completar el campo tipoCorte para usar corte integrado.`,
+    );
   }
 
   if (rule.modeSourceKeys.size > 0) {

@@ -5,8 +5,8 @@
  * backend, para poder devolver `precio` además de `costo` en el motor.
  *
  * Soporta los 7 métodos de cálculo:
- * - margen_variable: tramos por cantidad con margen variable
- * - por_margen: precio = costo × (1 + margen / 100)
+ * - margen_variable: tramos por cantidad con margen objetivo variable
+ * - por_margen: precio = costo / (1 - margen / 100)
  * - precio_fijo: precio definido manualmente
  * - fijado_por_cantidad: cantidades exactas con precio fijo
  * - fijo_con_margen_variable: cantidades exactas con margen variable
@@ -79,7 +79,7 @@ export function calcularPrecio(
 
   if (config.metodoCalculo === 'por_margen') {
     const marginPct = Number(detalle.marginPct ?? 0);
-    const precioUnitario = costoUnitario * (1 + marginPct / 100);
+    const precioUnitario = precioDesdeMargenObjetivo(costoUnitario, marginPct);
     return {
       metodoUsado: 'por_margen',
       precioUnitario,
@@ -102,7 +102,7 @@ export function calcularPrecio(
   if (config.metodoCalculo === 'precio_fijo_para_margen_minimo') {
     const precioBase = Number(detalle.price ?? 0);
     const marginMinPct = Number(detalle.minimumMarginPct ?? 0);
-    const precioMin = costoUnitario * (1 + marginMinPct / 100);
+    const precioMin = precioDesdeMargenObjetivo(costoUnitario, marginMinPct);
     const precioUnitario = Math.max(precioBase, precioMin);
     return {
       metodoUsado: 'precio_fijo_para_margen_minimo',
@@ -121,7 +121,7 @@ export function calcularPrecio(
     const tier =
       tiers.find((t) => cantidad <= t.quantityUntil) ?? tiers[tiers.length - 1];
     const marginPct = tier ? tier.marginPct : 0;
-    const precioUnitario = costoUnitario * (1 + marginPct / 100);
+    const precioUnitario = precioDesdeMargenObjetivo(costoUnitario, marginPct);
     return {
       metodoUsado: 'margen_variable',
       precioUnitario,
@@ -163,7 +163,10 @@ export function calcularPrecio(
         mensaje: `Cantidad ${cantidad} no está en las opciones`,
       };
     }
-    const precioUnitario = costoUnitario * (1 + tier.marginPct / 100);
+    const precioUnitario = precioDesdeMargenObjetivo(
+      costoUnitario,
+      tier.marginPct,
+    );
     return {
       metodoUsado: 'fijo_con_margen_variable',
       precioUnitario,
@@ -193,4 +196,11 @@ export function calcularPrecio(
     margenNegativo: false,
     mensaje: 'Método de cálculo no implementado',
   };
+}
+
+function precioDesdeMargenObjetivo(costoUnitario: number, marginPct: number) {
+  if (!Number.isFinite(marginPct) || marginPct < 0 || marginPct >= 100) {
+    return 0;
+  }
+  return costoUnitario / (1 - marginPct / 100);
 }

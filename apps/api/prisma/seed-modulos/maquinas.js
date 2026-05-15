@@ -225,6 +225,26 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
     },
   });
 
+  await prisma.maquinaPerfilOperativo.create({
+    data: {
+      tenantId,
+      maquinaId: roland.id,
+      nombre: "Corte integrado kiss-cut rollo",
+      tipoPerfil: TipoPerfilOperativoMaquina.CORTE,
+      activo: true,
+      productivityValue: "8.0",
+      productivityUnit: UnidadProduccionMaquina.M2_H,
+      setupMin: "8",
+      cleanupMin: "2",
+      feedReloadMin: "5",
+      detalleJson: {
+        tipoCorte: "KISS_CUT",
+        modoOperacion: "ROLLO",
+        factorComplejidad: { SIMPLE: 1.0, INTERMEDIO: 1.5, COMPLEJO: 3.0 },
+      },
+    },
+  });
+
   await createPrinterConsumibles(prisma, tenantId, roland.id, [rolandNormal], {
     tipo: TipoConsumibleMaquina.TINTA,
     unidad: UnidadConsumoMaquina.ML,

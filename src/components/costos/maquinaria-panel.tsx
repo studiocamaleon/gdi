@@ -380,9 +380,21 @@ function shouldShowMaquinaField(field: MaquinariaTemplateField, form: MaquinaPay
   return true;
 }
 
-function shouldShowPerfilField(field: MaquinariaTemplateField, form: MaquinaPayload) {
+function shouldShowPerfilField(
+  field: MaquinariaTemplateField,
+  form: MaquinaPayload,
+  perfil?: MaquinaPayload["perfilesOperativos"][number],
+) {
   if (form.plantilla !== "impresora_gran_formato_por_area") return true;
+  const corteFieldKeys = new Set(["tipoCorte", "factorComplejidad"]);
+  const impresionFieldKeys = new Set(["numeroPasadas", "colores", "modoCalidad"]);
+  const isCorte = perfil?.tipoPerfil === "corte";
+  const isMixto = perfil?.tipoPerfil === "mixto";
+
+  if (corteFieldKeys.has(field.key)) return isCorte || isMixto;
+  if (impresionFieldKeys.has(field.key)) return !isCorte || isMixto;
   if (field.key !== "modoOperacion") return true;
+  if (isCorte || isMixto) return true;
   return getGranFormatoGeometria(form) === "MESA_EXTENSORA";
 }
 
@@ -1602,7 +1614,7 @@ function PerfilesOperativosEditor({
                   </SelectContent>
                 </Select>
               </div>
-              {sectionFields.filter((field) => shouldShowPerfilField(field, form)).map((field) => (
+              {sectionFields.filter((field) => shouldShowPerfilField(field, form, perfil)).map((field) => (
                 <div key={field.key} className="min-w-0 space-y-1">
                   <Label
                     htmlFor={`p-${perfil.uiKey}-${field.key}`}

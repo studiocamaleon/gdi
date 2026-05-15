@@ -25,16 +25,13 @@ import {
  *     qué `precioConfig` usar). Acá sólo se persiste el snapshot.
  *
  * Convenciones de cálculo:
- *   - **Comisiones** se aplican como % sobre el precio base (no sobre el
- *     costo). Esto preserva semántica del modelo viejo: comisiones son
- *     parte del costo financiero/comercial que el cliente paga.
- *   - **Impuestos** se aplican como % sobre (precio base + comisiones).
- *     IVA argentino: 21% sobre el subtotal con todo cargado.
- *   - Esto produce: bruto = base × (1 + comisiones%) × (1 + impuestos%).
- *     Si querés cambiar a régimen de impuestos sobre base sin comisiones,
- *     ajustar `aplicarImpuestos` (es 1 línea).
- *   - Margen mínimo se aplica al final: si el precio resultante no supera
- *     `costo × (1 + minimumMarginPct/100)`, se ajusta hacia arriba.
+ *   - Los porcentajes de margen son margen objetivo sobre el precio final,
+ *     no recargo sobre costo.
+ *   - Impuestos y comisiones se tratan como porcentajes del precio final,
+ *     preservando la semántica comercial previa al refactor.
+ *   - Para un margen m, impuestos i y comisiones c:
+ *       precioFinal = costo / (1 - m - i - c)
+ *   - Si la suma de porcentajes llega a 100%, el precio no es calculable.
  */
 @Injectable()
 export class AplicarPrecioService {
@@ -43,64 +40,35 @@ export class AplicarPrecioService {
   aplicar(input: AplicarPrecioInput): AplicarPrecioOutput {
     this.validarInput(input);
 
-    // 1) Precio base = método de cálculo aplicado al costo
-    const precioBase = this.calcularPrecioBase(
+    const totalComisionesPct = this.sumarPorcentajes(
+      input.comisiones.map((c) => c.porcentaje),
+    );
+    const totalImpuestosPct = this.sumarPorcentajes(
+      input.impuestos.map((i) => i.porcentaje),
+    );
+
+    const precioFinal = this.calcularPrecioFinal(
       input.precioConfig,
       input.costoUnitario,
       input.cantidad,
+      totalImpuestosPct,
+      totalComisionesPct,
     );
 
-    // 2) Comisiones (% sobre precio base)
-    const totalComisionesPct = input.comisiones.reduce(
-      (acc, c) => acc + c.porcentaje,
-      0,
+    const totalComisiones = redondear((precioFinal * totalComisionesPct) / 100);
+    const totalImpuestos = redondear((precioFinal * totalImpuestosPct) / 100);
+    const precioBase = redondear(
+      precioFinal - totalComisiones - totalImpuestos,
     );
-    const totalComisiones = redondear((precioBase * totalComisionesPct) / 100);
-    const precioConComisiones = precioBase + totalComisiones;
-
-    // 3) Impuestos (% sobre precio + comisiones)
-    const totalImpuestosPct = input.impuestos.reduce(
-      (acc, i) => acc + i.porcentaje,
-      0,
-    );
-    const totalImpuestos = redondear(
-      (precioConComisiones * totalImpuestosPct) / 100,
-    );
-
-    // 4) Aplicar margen mínimo si el método lo declara
-    const precioBaseConMinimo = this.aplicarMargenMinimo(
-      input.precioConfig,
-      input.costoUnitario,
-      precioBase,
-    );
-    // Si margen mínimo elevó el base, recalcular comisiones/impuestos
-    let netoUnitario = precioBaseConMinimo + totalComisiones;
-    let brutoUnitario = netoUnitario + totalImpuestos;
-
-    if (precioBaseConMinimo !== precioBase) {
-      const nuevoTotComis = redondear(
-        (precioBaseConMinimo * totalComisionesPct) / 100,
-      );
-      const nuevoConComis = precioBaseConMinimo + nuevoTotComis;
-      const nuevoTotImp = redondear((nuevoConComis * totalImpuestosPct) / 100);
-      netoUnitario = redondear(nuevoConComis);
-      brutoUnitario = redondear(nuevoConComis + nuevoTotImp);
-    }
-
-    netoUnitario = redondear(netoUnitario);
-    brutoUnitario = redondear(brutoUnitario);
+    const netoUnitario = redondear(precioFinal - totalImpuestos);
+    const brutoUnitario = redondear(precioFinal);
 
     const precioNetoTotal = redondear(netoUnitario * input.cantidad);
     const precioBrutoTotal = redondear(brutoUnitario * input.cantidad);
 
     const margenEfectivoPct =
-      input.costoUnitario > 0
-        ? redondear(
-            ((precioBaseConMinimo - input.costoUnitario) /
-              input.costoUnitario) *
-              100,
-            2,
-          )
+      brutoUnitario > 0
+        ? redondear(((precioBase - input.costoUnitario) / brutoUnitario) * 100, 2)
         : 0;
 
     return {
@@ -109,20 +77,9 @@ export class AplicarPrecioService {
       precioNetoTotal,
       precioBrutoTotal,
       desglose: {
-        precioBase: redondear(precioBaseConMinimo),
-        totalImpuestos:
-          precioBaseConMinimo === precioBase
-            ? totalImpuestos
-            : redondear(
-                ((precioBaseConMinimo +
-                  (precioBaseConMinimo * totalComisionesPct) / 100) *
-                  totalImpuestosPct) /
-                  100,
-              ),
-        totalComisiones:
-          precioBaseConMinimo === precioBase
-            ? totalComisiones
-            : redondear((precioBaseConMinimo * totalComisionesPct) / 100),
+        precioBase,
+        totalImpuestos,
+        totalComisiones,
         margenEfectivoPct,
       },
       snapshots: {
@@ -136,16 +93,20 @@ export class AplicarPrecioService {
 
   // ── Métodos de cálculo del precio base ──────────────────────────────
 
-  private calcularPrecioBase(
+  private calcularPrecioFinal(
     config: PrecioConfig,
     costo: number,
     cantidad: number,
+    impuestosPct: number,
+    comisionesPct: number,
   ): number {
     switch (config.metodoCalculo) {
       case 'por_margen':
         return this.porMargen(
           config.detalle as unknown as DetallePorMargen,
           costo,
+          impuestosPct,
+          comisionesPct,
         );
 
       case 'precio_fijo':
@@ -155,6 +116,8 @@ export class AplicarPrecioService {
         return this.precioFijoParaMargenMinimo(
           config.detalle as unknown as DetallePrecioFijoParaMargenMinimo,
           costo,
+          impuestosPct,
+          comisionesPct,
         );
 
       case 'margen_variable':
@@ -162,6 +125,8 @@ export class AplicarPrecioService {
           config.detalle as unknown as DetalleMargenVariable,
           costo,
           cantidad,
+          impuestosPct,
+          comisionesPct,
         );
 
       case 'variable_por_cantidad':
@@ -181,6 +146,8 @@ export class AplicarPrecioService {
           config.detalle as unknown as DetalleFijoConMargenVariable,
           costo,
           cantidad,
+          impuestosPct,
+          comisionesPct,
         );
 
       default:
@@ -190,12 +157,22 @@ export class AplicarPrecioService {
     }
   }
 
-  /** precio = costo × (1 + margen/100). */
-  private porMargen(detalle: DetallePorMargen, costo: number): number {
+  /** Precio final necesario para preservar margen objetivo. */
+  private porMargen(
+    detalle: DetallePorMargen,
+    costo: number,
+    impuestosPct: number,
+    comisionesPct: number,
+  ): number {
     if (typeof detalle.marginPct !== 'number') {
       throw new BadRequestException('por_margen requiere `marginPct`');
     }
-    return redondear(costo * (1 + detalle.marginPct / 100));
+    return this.precioDesdeMargenObjetivo(
+      costo,
+      detalle.marginPct,
+      impuestosPct,
+      comisionesPct,
+    );
   }
 
   /** precio = price (config). */
@@ -206,10 +183,12 @@ export class AplicarPrecioService {
     return redondear(detalle.price);
   }
 
-  /** precio = max(price, costo × (1 + minimumMarginPct/100)). */
+  /** precio = max(price, precio necesario para preservar margen mínimo). */
   private precioFijoParaMargenMinimo(
     detalle: DetallePrecioFijoParaMargenMinimo,
     costo: number,
+    impuestosPct: number,
+    comisionesPct: number,
   ): number {
     if (
       typeof detalle.price !== 'number' ||
@@ -219,7 +198,12 @@ export class AplicarPrecioService {
         'precio_fijo_para_margen_minimo requiere `price` y `minimumMarginPct`',
       );
     }
-    const piso = costo * (1 + detalle.minimumMarginPct / 100);
+    const piso = this.precioDesdeMargenObjetivo(
+      costo,
+      detalle.minimumMarginPct,
+      impuestosPct,
+      comisionesPct,
+    );
     return redondear(Math.max(detalle.price, piso));
   }
 
@@ -228,6 +212,8 @@ export class AplicarPrecioService {
     detalle: DetalleMargenVariable,
     costo: number,
     cantidad: number,
+    impuestosPct: number,
+    comisionesPct: number,
   ): number {
     if (!Array.isArray(detalle.tiers) || detalle.tiers.length === 0) {
       throw new BadRequestException(
@@ -240,7 +226,12 @@ export class AplicarPrecioService {
     );
     const tramo =
       tiers.find((t) => cantidad <= t.quantityUntil) ?? tiers[tiers.length - 1];
-    return redondear(costo * (1 + tramo.marginPct / 100));
+    return this.precioDesdeMargenObjetivo(
+      costo,
+      tramo.marginPct,
+      impuestosPct,
+      comisionesPct,
+    );
   }
 
   /** Tramos por rango con precio fijo. */
@@ -281,11 +272,13 @@ export class AplicarPrecioService {
     return redondear(tramo.price);
   }
 
-  /** Cantidades exactas con margen sobre costo. */
+  /** Cantidades exactas con margen objetivo sobre precio final. */
   private fijoConMargenVariable(
     detalle: DetalleFijoConMargenVariable,
     costo: number,
     cantidad: number,
+    impuestosPct: number,
+    comisionesPct: number,
   ): number {
     if (!Array.isArray(detalle.tiers) || detalle.tiers.length === 0) {
       throw new BadRequestException(
@@ -299,21 +292,34 @@ export class AplicarPrecioService {
         `fijo_con_margen_variable: cantidad ${cantidad} no permitida. Válidas: ${cantidadesValidas}`,
       );
     }
-    return redondear(costo * (1 + tramo.marginPct / 100));
+    return this.precioDesdeMargenObjetivo(
+      costo,
+      tramo.marginPct,
+      impuestosPct,
+      comisionesPct,
+    );
   }
 
-  // ── Margen mínimo (post-cálculo) ────────────────────────────────────
-
-  private aplicarMargenMinimo(
-    config: PrecioConfig,
+  private precioDesdeMargenObjetivo(
     costo: number,
-    precioBase: number,
+    margenPct: number,
+    impuestosPct: number,
+    comisionesPct: number,
   ): number {
-    const min = (config.detalle as { minimumMarginPct?: unknown })
-      .minimumMarginPct;
-    if (typeof min !== 'number') return precioBase;
-    const piso = costo * (1 + min / 100);
-    return precioBase < piso ? piso : precioBase;
+    if (!Number.isFinite(margenPct) || margenPct < 0) {
+      throw new BadRequestException('marginPct debe ser número >= 0');
+    }
+    const tasaTotal = (margenPct + impuestosPct + comisionesPct) / 100;
+    if (tasaTotal >= 1) {
+      throw new BadRequestException(
+        'La suma de margen objetivo, impuestos y comisiones debe ser menor al 100% del precio final.',
+      );
+    }
+    return redondear(costo / (1 - tasaTotal));
+  }
+
+  private sumarPorcentajes(valores: number[]): number {
+    return valores.reduce((acc, val) => acc + val, 0);
   }
 
   // ── Validaciones ────────────────────────────────────────────────────
