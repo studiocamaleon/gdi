@@ -63,14 +63,6 @@ function fromOrdenTipo(value: "orden" | "presupuesto"): TipoPropuesta {
   return value === "orden" ? "orden_trabajo" : "presupuesto";
 }
 
-function formatDateForDesign(value: string) {
-  return new Date(`${value}T12:00:00`).toLocaleDateString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
 function parseLocalDate(value: string) {
   const date = new Date(`${value}T12:00:00`);
   return Number.isNaN(date.getTime()) ? null : date;
@@ -197,6 +189,11 @@ function formatCantidadCosto(value: number, unidad: string) {
     maximumFractionDigits: 2,
     minimumFractionDigits: value % 1 === 0 ? 0 : 2,
   })} ${unidadLabel}`;
+}
+
+function formatCostoUnitarioMaterial(value: number, unidad: string) {
+  const unidadLabel = formatUnidadCosto(unidad, 1);
+  return unidadLabel ? `${formatCurrency(value)} / ${unidadLabel}` : formatCurrency(value);
 }
 
 function formatUnidadCosto(unidad: string, cantidad = 1) {
@@ -333,7 +330,9 @@ function MaterialesPasoTable({ materiales }: { materiales: MaterialCosteo[] }) {
                 <span className="cost-chip">{formatModoSeleccion(material.modoSeleccion)}</span>
               </td>
               <td className="num">{formatCantidadCosto(material.cantidad, material.unidad)}</td>
-              <td className="num">{formatCurrency(material.precioUnitario)}</td>
+              <td className="num">
+                {formatCostoUnitarioMaterial(material.precioUnitario, material.unidad)}
+              </td>
               <td className="num strong">{formatCurrency(material.costoTotal)}</td>
             </tr>
           ))}
@@ -712,6 +711,7 @@ function ProductRow({
   onToggle,
   onRemove,
   onEdit,
+  onChangeFechaEntrega,
   fechaEstimada,
 }: {
   item: PropuestaItem;
@@ -720,14 +720,20 @@ function ProductRow({
   onToggle: () => void;
   onRemove: () => void;
   onEdit: () => void;
+  onChangeFechaEntrega: (fechaEntrega: string) => void;
   fechaEstimada: string;
 }) {
   const [innerTab, setInnerTab] = React.useState<InnerTab>("specs");
+  const fechaInputRef = React.useRef<HTMLInputElement | null>(null);
   const costo = calcularCostoTotal(item);
   const calculoPendiente = item.precioUnitario === 0 && item.total === 0;
   const margen = item.subtotal > 0 ? ((item.subtotal - costo) / item.subtotal) * 100 : 0;
   const specs = item.atributosSchema
-    .filter((attr) => attr.visible)
+    .filter(
+      (attr) =>
+        attr.visible &&
+        !["tipo_pieza", "tipoPieza", "tipo_de_pieza"].includes(attr.key),
+    )
     .sort((a, b) => a.orden - b.orden)
     .map((attr) => ({
       lbl: attr.label,
@@ -821,7 +827,9 @@ function ProductRow({
                 {specs.map((spec) => (
                   <div className="spec" key={spec.lbl}>
                     <div className="lbl">{spec.lbl}</div>
-                    <div className="val">{spec.val}</div>
+                    <div className={`val ${spec.lbl.toLowerCase().includes("medida") ? "multi" : ""}`}>
+                      {spec.val}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -843,34 +851,21 @@ function ProductRow({
                     ) : (
                       <span className="adi-chip">Sin opcionales activados</span>
                     )}
-                    <button type="button" className="adi-add">
-                      <PlusIcon />
-                      Activar opcional
-                    </button>
                   </div>
                 </div>
 
                 <div className="op-mini">
                   <div className="op-mini-row">
-                    <span className="mlbl">
-                      <CalendarIcon />
-                      Fecha estimada
-                    </span>
-                    <span className="mval mono">
-                      {formatDateForDesign(item.fechaEntrega ?? fechaEstimada)}
-                    </span>
-                  </div>
-                  <div className="op-mini-row">
-                    <span className="mlbl">Costo estimado</span>
-                    <span className="mval mono">
-                      {calculoPendiente ? "Pendiente" : formatCurrency(costo)}
-                    </span>
-                  </div>
-                  <div className="op-mini-row">
-                    <span className="mlbl">Margen bruto</span>
-                    <span className={`mval mono ${margen < 25 ? "warn" : ""}`}>
-                      {calculoPendiente ? "Pendiente" : `${margen.toFixed(0)}%`}
-                    </span>
+                    <span className="mlbl">Fecha estimada</span>
+                    <input
+                      ref={fechaInputRef}
+                      className="op-date-input"
+                      type="date"
+                      value={item.fechaEntrega ?? fechaEstimada}
+                      onClick={() => fechaInputRef.current?.showPicker?.()}
+                      onChange={(event) => onChangeFechaEntrega(event.target.value)}
+                      aria-label={`Fecha estimada de ${item.productoNombre}`}
+                    />
                   </div>
                 </div>
               </div>
@@ -1257,6 +1252,15 @@ export function PropuestaFicha({
                     setEditingItem(item);
                     setAddOpen(true);
                   }}
+                  onChangeFechaEntrega={(fechaEntrega) => {
+                    setItems((current) =>
+                      current.map((candidate) =>
+                        candidate.id === item.id
+                          ? { ...candidate, fechaEntrega: fechaEntrega || fechaEstimada }
+                          : candidate,
+                      ),
+                    );
+                  }}
                   fechaEstimada={fechaEstimada}
                 />
               ))}
@@ -1318,6 +1322,7 @@ export function PropuestaFicha({
           if (!open) setEditingItem(null);
         }}
         productos={initialProductos}
+        fechaEntregaDefault={fechaEstimada}
         editingItem={editingItem}
         onAddItem={(item) => {
           setItems((current) => [...current, item]);

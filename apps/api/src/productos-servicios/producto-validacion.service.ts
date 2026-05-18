@@ -71,6 +71,7 @@ export class ProductoValidacionService {
           });
           continue;
         }
+        if (config.modoActivacion === 'NO_EJECUTAR') continue;
 
         const params =
           config.paramsPasoJson &&
@@ -216,9 +217,7 @@ export class ProductoValidacionService {
           if (
             (slotConfig.modoSeleccion === 'COMERCIAL_ELIGE' ||
               slotConfig.modoSeleccion === 'MOTOR_ELIGE_AUTO') &&
-            (!slotConfig.materialesCandidatosJson ||
-              (Array.isArray(slotConfig.materialesCandidatosJson) &&
-                slotConfig.materialesCandidatosJson.length === 0))
+            slotConfig.candidatos.length === 0
           ) {
             errores.push({
               severidad: 'ERROR',

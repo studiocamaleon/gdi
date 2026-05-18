@@ -22,6 +22,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   CircleIcon,
+  CopyIcon,
   PlusIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -222,6 +223,10 @@ function consumibleTipoFor(plantilla: PlantillaMaquinaria, canal: ConsumibleCana
 
 function consumibleUnidadFor(plantilla: PlantillaMaquinaria): UnidadConsumoMaquina {
   return plantilla === "impresora_laser" ? "gramo" : "ml";
+}
+
+function cloneRecord(value: Record<string, unknown> | undefined | null) {
+  return value ? (structuredClone(value) as Record<string, unknown>) : undefined;
 }
 
 function defaultConsumoBase(plantilla: PlantillaMaquinaria, canal: ConsumibleCanal) {
@@ -826,6 +831,50 @@ export function MaquinariaPanel({
     });
   };
 
+  const handleDuplicarPerfil = (uiKey: string) => {
+    const source = perfiles.find((perfil) => perfil.uiKey === uiKey);
+    if (!source) return;
+
+    const newProfileId = crypto.randomUUID();
+    const duplicateName = `${source.nombre || "Perfil"} copia`;
+    const duplicatedPerfil: LocalPerfil = {
+      ...source,
+      uiKey: `p-${Date.now()}-${Math.random()}`,
+      id: newProfileId,
+      nombre: duplicateName,
+      detalle: cloneRecord(source.detalle) ?? {},
+      reglaSeleccionJson: cloneRecord(source.reglaSeleccionJson),
+    };
+
+    setPerfiles((prev) => {
+      const sourceIndex = prev.findIndex((perfil) => perfil.uiKey === uiKey);
+      const next = [...prev];
+      next.splice(sourceIndex + 1, 0, duplicatedPerfil);
+      return next;
+    });
+
+    if (source.id) {
+      setForm((current) => ({
+        ...current,
+        consumibles: [
+          ...current.consumibles,
+          ...current.consumibles
+            .filter((consumible) => consumible.perfilOperativoId === source.id)
+            .map((consumible) => ({
+              ...consumible,
+              id: crypto.randomUUID(),
+              perfilOperativoId: newProfileId,
+              perfilOperativoNombre: duplicateName,
+              nombre: consumible.nombre
+                ? `${consumible.nombre} copia`
+                : consumible.nombre,
+              detalle: cloneRecord(consumible.detalle),
+            })),
+        ],
+      }));
+    }
+  };
+
   const handleGuardar = async () => {
     if (!form.nombre.trim()) {
       toast.error("La máquina necesita un nombre");
@@ -1210,6 +1259,7 @@ export function MaquinariaPanel({
                         form={form}
                         onAgregar={handleAgregarPerfil}
                         onEliminar={handleEliminarPerfil}
+                        onDuplicar={handleDuplicarPerfil}
                       />
                     ) : sec.id === "consumibles" || sec.id === "desgaste_repuestos" ? (
                       sec.id === "consumibles" ? (
@@ -1734,6 +1784,7 @@ interface PerfilesProps {
   form: MaquinaPayload;
   onAgregar: () => void;
   onEliminar: (uiKey: string) => void;
+  onDuplicar: (uiKey: string) => void;
 }
 
 function PerfilesOperativosEditor({
@@ -1743,6 +1794,7 @@ function PerfilesOperativosEditor({
   form,
   onAgregar,
   onEliminar,
+  onDuplicar,
 }: PerfilesProps) {
   return (
     <div className="space-y-3">
@@ -1758,14 +1810,28 @@ function PerfilesOperativosEditor({
                   {perfil.nombre || "(sin nombre)"}
                 </span>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-destructive size-7"
-                onClick={() => onEliminar(perfil.uiKey)}
-              >
-                <Trash2Icon className="size-4" />
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  onClick={() => onDuplicar(perfil.uiKey)}
+                  title="Duplicar perfil"
+                  aria-label={`Duplicar perfil ${perfil.nombre || idx + 1}`}
+                >
+                  <CopyIcon className="size-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-destructive size-7"
+                  onClick={() => onEliminar(perfil.uiKey)}
+                  title="Eliminar perfil"
+                  aria-label={`Eliminar perfil ${perfil.nombre || idx + 1}`}
+                >
+                  <Trash2Icon className="size-4" />
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div className="min-w-0 space-y-1">

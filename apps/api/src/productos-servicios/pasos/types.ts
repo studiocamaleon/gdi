@@ -105,12 +105,17 @@ export type MecanismoCantidad =
   | 'CONVERSION'; // aplica fórmula a otro valor
 
 /** Modos de activación. Ver D.1. */
-export type ModoActivacion = 'OBLIGATORIO' | 'OPCIONAL' | 'CONDICIONAL';
+export type ModoActivacion =
+  | 'OBLIGATORIO'
+  | 'OPCIONAL'
+  | 'CONDICIONAL'
+  | 'NO_EJECUTAR';
 
 export const MODOS_ACTIVACION_UNIVERSALES: ModoActivacion[] = [
   'OBLIGATORIO',
   'OPCIONAL',
   'CONDICIONAL',
+  'NO_EJECUTAR',
 ];
 
 // ============================================================================
@@ -124,6 +129,74 @@ export type TipoSlot =
   | 'TAPA' // tapas / cubiertas
   | 'OTRO';
 
+export type FamiliaMateriaPrimaCompat =
+  | 'SUSTRATO'
+  | 'TINTA_COLORANTE'
+  | 'TRANSFERENCIA_LAMINACION'
+  | 'QUIMICO_AUXILIAR'
+  | 'ADITIVA_3D'
+  | 'ELECTRONICA_CARTELERIA'
+  | 'NEON_LUMINARIA'
+  | 'METAL_ESTRUCTURA'
+  | 'PINTURA_RECUBRIMIENTO'
+  | 'TERMINACION_EDITORIAL'
+  | 'MAGNETICO_FIJACION'
+  | 'POP_EXHIBIDOR'
+  | 'HERRAJE_ACCESORIO'
+  | 'ADHESIVO_TECNICO'
+  | 'PACKING_INSTALACION';
+
+export type SubfamiliaMateriaPrimaCompat =
+  | 'SUSTRATO_HOJA'
+  | 'SUSTRATO_ROLLO_FLEXIBLE'
+  | 'SUSTRATO_RIGIDO'
+  | 'OBJETO_PROMOCIONAL_BASE'
+  | 'TINTA_IMPRESION'
+  | 'TONER'
+  | 'FILM_TRANSFERENCIA'
+  | 'PAPEL_TRANSFERENCIA'
+  | 'LAMINADO_FILM'
+  | 'QUIMICO_ACABADO'
+  | 'AUXILIAR_PROCESO'
+  | 'POLVO_DTF'
+  | 'FILAMENTO_3D'
+  | 'RESINA_3D'
+  | 'MODULO_LED_CARTELERIA'
+  | 'FUENTE_ALIMENTACION_LED'
+  | 'CABLEADO_CONECTICA'
+  | 'CONTROLADOR_LED'
+  | 'NEON_FLEX_LED'
+  | 'ACCESORIO_NEON_LED'
+  | 'CHAPA_METALICA'
+  | 'PERFIL_ESTRUCTURAL'
+  | 'PINTURA_CARTELERIA'
+  | 'PRIMER_SELLADOR'
+  | 'ANILLADO_ENCUADERNACION'
+  | 'TAPA_ENCUADERNACION'
+  | 'IMAN_CERAMICO_FLEXIBLE'
+  | 'FIJACION_AUXILIAR'
+  | 'ACCESORIO_EXHIBIDOR_CARTON'
+  | 'ACCESORIO_MONTAJE_POP'
+  | 'SEMIELABORADO_POP'
+  | 'ARGOLLA_LLAVERO_ACCESORIO'
+  | 'OJAL_OJALILLO_REMACHE'
+  | 'PORTABANNER_ESTRUCTURA'
+  | 'SISTEMA_COLGADO_MONTAJE'
+  | 'PERFIL_BASTIDOR_TEXTIL'
+  | 'CINTA_DOBLE_FAZ_TECNICA'
+  | 'ADHESIVO_LIQUIDO_ESTRUCTURAL'
+  | 'VELCRO_CIERRE_TECNICO'
+  | 'EMBALAJE_PROTECCION'
+  | 'ETIQUETADO_IDENTIFICACION'
+  | 'CONSUMIBLE_INSTALACION';
+
+export interface CompatibilidadMaterialSlot {
+  familiasMateriaPrima?: FamiliaMateriaPrimaCompat[];
+  subfamiliasMateriaPrima?: SubfamiliaMateriaPrimaCompat[];
+  templateIds?: string[];
+  tipoTecnico?: string[];
+}
+
 export interface SlotDeclarado {
   /** Código único del slot dentro de la familia. */
   codigo: string;
@@ -133,6 +206,8 @@ export interface SlotDeclarado {
   tipo: TipoSlot;
   /** Si es true, el modelador DEBE llenar el slot. Si false, es opcional. */
   requerido: boolean;
+  /** Filtro técnico de materias primas permitidas para este slot. */
+  compatibilidadMaterial?: CompatibilidadMaterialSlot;
 }
 
 // ============================================================================

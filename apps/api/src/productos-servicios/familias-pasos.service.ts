@@ -53,7 +53,7 @@ export class FamiliasPasosService {
   }
 
   async listarLookupsConfigPaso(tenantId: string) {
-    const [maquinas, materiasPrimas, centrosCosto] = await Promise.all([
+    const [maquinas, centrosCosto] = await Promise.all([
       this.prisma.maquina.findMany({
         where: { tenantId, activo: true },
         select: {
@@ -84,28 +84,6 @@ export class FamiliasPasosService {
         },
         orderBy: { nombre: 'asc' },
       }),
-      this.prisma.materiaPrima.findMany({
-        where: { tenantId, activo: true },
-        select: {
-          id: true,
-          codigo: true,
-          nombre: true,
-          familia: true,
-          subfamilia: true,
-          templateId: true,
-          variantes: {
-            where: { activo: true },
-            select: {
-              id: true,
-              sku: true,
-              nombreVariante: true,
-              precioReferencia: true,
-              atributosVarianteJson: true,
-            },
-          },
-        },
-        orderBy: { nombre: 'asc' },
-      }),
       this.prisma.centroCosto.findMany({
         where: {
           tenantId,
@@ -121,7 +99,63 @@ export class FamiliasPasosService {
         orderBy: { nombre: 'asc' },
       }),
     ]);
-    return { maquinas, materiasPrimas, centrosCosto };
+    return { maquinas, materiasPrimas: [], centrosCosto };
+  }
+
+  async buscarMateriasPrimas(
+    tenantId: string,
+    query: {
+      q?: string;
+      familias?: string[];
+      subfamilias?: string[];
+      templateIds?: string[];
+      tipoTecnico?: string[];
+      limit?: number;
+    },
+  ) {
+    const limit = Math.min(Math.max(Number(query.limit ?? 25), 1), 50);
+    const text = query.q?.trim();
+    return this.prisma.materiaPrima.findMany({
+      where: {
+        tenantId,
+        activo: true,
+        ...(query.familias?.length ? { familia: { in: query.familias as never[] } } : {}),
+        ...(query.subfamilias?.length ? { subfamilia: { in: query.subfamilias as never[] } } : {}),
+        ...(query.templateIds?.length ? { templateId: { in: query.templateIds } } : {}),
+        ...(query.tipoTecnico?.length ? { tipoTecnico: { in: query.tipoTecnico } } : {}),
+        ...(text
+          ? {
+              OR: [
+                { codigo: { contains: text, mode: 'insensitive' } },
+                { nombre: { contains: text, mode: 'insensitive' } },
+                { tipoTecnico: { contains: text, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        codigo: true,
+        nombre: true,
+        familia: true,
+        subfamilia: true,
+        tipoTecnico: true,
+        templateId: true,
+        variantes: {
+          where: { activo: true },
+          select: {
+            id: true,
+            sku: true,
+            nombreVariante: true,
+            precioReferencia: true,
+            atributosVarianteJson: true,
+          },
+          orderBy: { sku: 'asc' },
+        },
+      },
+      orderBy: { nombre: 'asc' },
+      take: limit,
+    });
   }
 
   validarFamiliasDePasos(

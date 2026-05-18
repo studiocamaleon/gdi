@@ -15,6 +15,13 @@ describe('consumibles de impresión', () => {
   });
 
   it('resuelve blanco y barniz cuando el perfil los declara', () => {
+    expect(requiredConsumableChannelsFromColorMode('CMYK+barniz')).toEqual([
+      'cian',
+      'magenta',
+      'amarillo',
+      'negro',
+      'barniz',
+    ]);
     expect(
       requiredConsumableChannelsFromColorMode('CMYK+blanco+barniz'),
     ).toEqual(['cian', 'magenta', 'amarillo', 'negro', 'blanco', 'barniz']);

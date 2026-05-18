@@ -62,6 +62,11 @@ export class ConfigPasosService {
       );
     }
     this.familias.validarConfigPasoContraFamilia(rutaPaso.familiaCodigo, dto);
+    await this.validarSlotsMaterialesCompatibles(
+      tenantId,
+      rutaPaso.familiaCodigo,
+      dto,
+    );
 
     if (dto.maquinaM1Id) {
       const maquina = await this.prisma.maquina.findFirst({
@@ -204,9 +209,9 @@ export class ConfigPasosService {
         await tx.productoConfigPasoSlotMaterial.deleteMany({
           where: { productoConfigPasoId: configPaso.id },
         });
-        if (dto.slotsMateriales.length > 0) {
-          await tx.productoConfigPasoSlotMaterial.createMany({
-            data: dto.slotsMateriales.map((s) => ({
+        for (const s of dto.slotsMateriales) {
+          const slot = await tx.productoConfigPasoSlotMaterial.create({
+            data: {
               tenantId,
               productoConfigPasoId: configPaso.id,
               slotCodigo: s.slotCodigo,
@@ -215,18 +220,172 @@ export class ConfigPasosService {
               criterioInputCampo: s.criterioInputCampo ?? null,
               criterioMaterialCampo: s.criterioMaterialCampo ?? null,
               materialVarianteId: s.materialVarianteId ?? null,
-              materialesCandidatosJson: (s.materialesCandidatosJson ??
-                Prisma.JsonNull) as Prisma.InputJsonValue,
               estrategiaCosto: s.estrategiaCosto ?? 'simple',
               formula: s.formula ?? 'por_unidad_productiva',
               aplicaMultiCaras: s.aplicaMultiCaras ?? false,
               activo: true,
-            })),
+            },
           });
+          for (const [candidateIndex, candidate] of (
+            s.candidatos ?? []
+          ).entries()) {
+            const createdCandidate =
+              await tx.productoConfigPasoSlotMaterialCandidato.create({
+                data: {
+                  tenantId,
+                  slotMaterialId: slot.id,
+                  materiaPrimaId: candidate.materiaPrimaId,
+                  defaultVarianteId: candidate.defaultVarianteId ?? null,
+                  orden: candidate.orden ?? candidateIndex,
+                },
+              });
+            if (candidate.varianteIds.length > 0) {
+              await tx.productoConfigPasoSlotMaterialCandidatoVariante.createMany({
+                data: candidate.varianteIds.map((varianteId, index) => ({
+                  tenantId,
+                  candidatoId: createdCandidate.id,
+                  varianteId,
+                  orden: index,
+                })),
+              });
+            }
+          }
         }
       }
 
       return configPaso;
     });
+  }
+
+  private async validarSlotsMaterialesCompatibles(
+    tenantId: string,
+    familiaCodigo: string,
+    dto: UpsertProductoConfigPasoDto,
+  ) {
+    const familia = FAMILIAS[familiaCodigo as FamiliaCodigo];
+    if (!familia || !dto.slotsMateriales) return;
+    const variants = new Map<string, { materiaPrimaId: string }>();
+    const materialIds = new Set<string>();
+    for (const slot of dto.slotsMateriales) {
+      if (slot.materialVarianteId) variants.set(slot.materialVarianteId, { materiaPrimaId: '' });
+      for (const candidate of slot.candidatos ?? []) {
+        materialIds.add(candidate.materiaPrimaId);
+        for (const variantId of candidate.varianteIds) {
+          variants.set(variantId, { materiaPrimaId: candidate.materiaPrimaId });
+        }
+        if (candidate.defaultVarianteId) {
+          variants.set(candidate.defaultVarianteId, {
+            materiaPrimaId: candidate.materiaPrimaId,
+          });
+        }
+      }
+    }
+    const [materias, variantes] = await Promise.all([
+      this.prisma.materiaPrima.findMany({
+        where: { tenantId, id: { in: [...materialIds] } },
+        select: {
+          id: true,
+          familia: true,
+          subfamilia: true,
+          templateId: true,
+          tipoTecnico: true,
+        },
+      }),
+      this.prisma.materiaPrimaVariante.findMany({
+        where: { tenantId, id: { in: [...variants.keys()] } },
+        select: { id: true, materiaPrimaId: true },
+      }),
+    ]);
+    const materiaById = new Map(materias.map((m) => [m.id, m]));
+    const varianteById = new Map(variantes.map((v) => [v.id, v]));
+    const compatible = (
+      materia: {
+        familia: string;
+        subfamilia: string;
+        templateId: string;
+        tipoTecnico: string;
+      },
+      compat?: NonNullable<
+        (typeof familia.slotsRequeridos)[number]['compatibilidadMaterial']
+      >,
+    ) => {
+      if (!compat) return false;
+      if (
+        compat.familiasMateriaPrima?.length &&
+        !compat.familiasMateriaPrima.includes(materia.familia as never)
+      ) {
+        return false;
+      }
+      if (
+        compat.subfamiliasMateriaPrima?.length &&
+        !compat.subfamiliasMateriaPrima.includes(materia.subfamilia as never)
+      ) {
+        return false;
+      }
+      if (
+        compat.templateIds?.length &&
+        !compat.templateIds.includes(materia.templateId)
+      ) {
+        return false;
+      }
+      if (
+        compat.tipoTecnico?.length &&
+        !compat.tipoTecnico.includes(materia.tipoTecnico)
+      ) {
+        return false;
+      }
+      return true;
+    };
+    for (const slot of dto.slotsMateriales) {
+      const slotDecl = familia.slotsRequeridos.find(
+        (decl) => decl.codigo === slot.slotCodigo,
+      );
+      if (!slotDecl || slotDecl.tipo === 'CONSUMIBLE_MAQUINA') continue;
+      const assertMateria = (materiaId: string) => {
+        const materia = materiaById.get(materiaId);
+        if (!materia || !compatible(materia, slotDecl.compatibilidadMaterial)) {
+          throw new BadRequestException(
+            `El material configurado no es compatible con el slot ${slot.slotCodigo} de ${familiaCodigo}.`,
+          );
+        }
+      };
+      if (slot.materialVarianteId) {
+        const variante = varianteById.get(slot.materialVarianteId);
+        if (!variante) {
+          throw new BadRequestException(
+            `La variante fija del slot ${slot.slotCodigo} no existe.`,
+          );
+        }
+        const materia = await this.prisma.materiaPrima.findFirst({
+          where: { tenantId, id: variante.materiaPrimaId },
+          select: {
+            id: true,
+            familia: true,
+            subfamilia: true,
+            templateId: true,
+            tipoTecnico: true,
+          },
+        });
+        if (!materia || !compatible(materia, slotDecl.compatibilidadMaterial)) {
+          throw new BadRequestException(
+            `La variante fija no es compatible con el slot ${slot.slotCodigo}.`,
+          );
+        }
+      }
+      for (const candidate of slot.candidatos ?? []) {
+        assertMateria(candidate.materiaPrimaId);
+        for (const variantId of [
+          ...candidate.varianteIds,
+          candidate.defaultVarianteId,
+        ].filter((value): value is string => Boolean(value))) {
+          const variante = varianteById.get(variantId);
+          if (!variante || variante.materiaPrimaId !== candidate.materiaPrimaId) {
+            throw new BadRequestException(
+              `La variante candidata no pertenece a la materia prima configurada en ${slot.slotCodigo}.`,
+            );
+          }
+        }
+      }
+    }
   }
 }

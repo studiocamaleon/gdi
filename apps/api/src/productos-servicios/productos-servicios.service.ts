@@ -8,6 +8,7 @@ import type {
   ActualizarProductoRutaAlternativaDto,
   AgregarPasoExtraDto,
   CrearProductoRutaAlternativaDto,
+  DuplicarProductoRutaAlternativaDto,
   UpsertProductoConfigPasoDto,
 } from './dto/producto-ruta.dto';
 import type {
@@ -104,6 +105,18 @@ export class ProductosServiciosService {
     );
   }
 
+  duplicarProductoRutaAlternativa(
+    tenantId: string,
+    rutaAltId: string,
+    dto: DuplicarProductoRutaAlternativaDto,
+  ) {
+    return this.productoRutas.duplicarProductoRutaAlternativa(
+      tenantId,
+      rutaAltId,
+      dto,
+    );
+  }
+
   eliminarProductoRutaAlternativa(tenantId: string, rutaAltId: string) {
     return this.productoRutas.eliminarProductoRutaAlternativa(
       tenantId,
@@ -125,6 +138,20 @@ export class ProductosServiciosService {
 
   listarLookupsConfigPaso(tenantId: string) {
     return this.familias.listarLookupsConfigPaso(tenantId);
+  }
+
+  buscarMateriasPrimas(
+    tenantId: string,
+    query: {
+      q?: string;
+      familias?: string[];
+      subfamilias?: string[];
+      templateIds?: string[];
+      tipoTecnico?: string[];
+      limit?: number;
+    },
+  ) {
+    return this.familias.buscarMateriasPrimas(tenantId, query);
   }
 
   listarCargosDirectos(tenantId: string, soloActivos = true) {

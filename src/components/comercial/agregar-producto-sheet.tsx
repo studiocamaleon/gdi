@@ -11,6 +11,7 @@ import {
   MinusIcon,
   PlusIcon,
   SearchIcon,
+  StarIcon,
   XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -31,6 +32,16 @@ import type {
   ProductoListItem,
   RutaAlternativaDetalle,
 } from "@/lib/productos-servicios";
+import {
+  getMedidaDefault,
+  getMedidasPredefinidas,
+  medidaLabel,
+} from "@/lib/producto-medidas";
+import {
+  getSlotMaterialVariantDisplay,
+  getSlotMaterialVariantSortValue,
+  sortSlotMaterialVariantsByThickness,
+} from "@/lib/materiales-slot-display";
 
 type CatalogSpec = {
   key: string;
@@ -62,6 +73,7 @@ type CatalogProduct = {
   unidad: "u." | "m²" | "ml";
   medidasMode: "fija" | "calculada";
   precioBase: number;
+  precioConfigJson?: unknown;
   descripcion: string;
   specs: CatalogSpec[];
   adicionales: CatalogAdicional[];
@@ -82,10 +94,23 @@ type SlotComercialElige = {
   familiaCodigo: string;
   modoActivacion: string | null;
   slotCodigo: string;
-  candidatos: Array<{
+  candidatos: SlotMaterialCandidato[];
+};
+
+type SlotMaterialCandidato = {
+  materiaPrimaId: string;
+  label: string;
+  defaultVarianteId?: string | null;
+  variantes: Array<{
     variantId: string;
-    label?: string;
-    default?: boolean;
+    label: string;
+    description: string;
+    sku: string;
+    isFallbackLabel: boolean;
+    sortEspesor: number | null;
+    espesorLabel: string | null;
+    colorLabel: string | null;
+    missingPrice: boolean;
   }>;
 };
 
@@ -103,6 +128,7 @@ type ModoColorComercial = {
 
 type MotorConfigState = {
   rutaAlternativaId: string;
+  medidaPredefinidaId: string;
   caras: 1 | 2;
   tipoCopia: 1 | 2 | 3;
   numerosXTalonario: number;
@@ -121,6 +147,7 @@ type AgregarProductoSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   productos: ProductoListItem[];
+  fechaEntregaDefault: string;
   onAddItem: (item: PropuestaItem) => void;
   editingItem?: PropuestaItem | null;
   onSaveItem?: (item: PropuestaItem) => void;
@@ -140,6 +167,7 @@ const CATALOG_PRODUCTS: CatalogProduct[] = [
     unidad: "u.",
     medidasMode: "fija",
     precioBase: 68,
+    precioConfigJson: undefined,
     descripcion: "Tarjetas estándar 9 x 5 cm en papel ilustración.",
     specs: [
       {
@@ -198,6 +226,7 @@ const CATALOG_PRODUCTS: CatalogProduct[] = [
     unidad: "m²",
     medidasMode: "calculada",
     precioBase: 18500,
+    precioConfigJson: undefined,
     descripcion: "Vinilo impreso solvente con instalación incluida en CABA.",
     specs: [
       {
@@ -251,6 +280,7 @@ const CATALOG_PRODUCTS: CatalogProduct[] = [
     unidad: "u.",
     medidasMode: "fija",
     precioBase: 2800,
+    precioConfigJson: undefined,
     descripcion: "Talonarios numerados, hasta 3 copias por hoja.",
     specs: [
       {
@@ -302,6 +332,7 @@ const CATALOG_PRODUCTS: CatalogProduct[] = [
     unidad: "u.",
     medidasMode: "fija",
     precioBase: 95,
+    precioConfigJson: undefined,
     descripcion: "Folleto A4 doblado en 3 (tríptico).",
     specs: [
       {
@@ -354,6 +385,7 @@ const CATALOG_PRODUCTS: CatalogProduct[] = [
     unidad: "m²",
     medidasMode: "calculada",
     precioBase: 14200,
+    precioConfigJson: undefined,
     descripcion: "Lona front 13 oz con ojales perimetrales.",
     specs: [
       {
@@ -400,6 +432,7 @@ const CATALOG_PRODUCTS: CatalogProduct[] = [
     unidad: "u.",
     medidasMode: "fija",
     precioBase: 48000,
+    precioConfigJson: undefined,
     descripcion: "Banner roll-up 85 x 200 cm con bolsa de transporte.",
     specs: [
       {
@@ -458,6 +491,7 @@ const MATERIAL_BASE_SLOT_CODES = new Set([
 
 const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   rutaAlternativaId: "",
+  medidaPredefinidaId: "",
   caras: 1,
   tipoCopia: 1,
   numerosXTalonario: 50,
@@ -472,6 +506,15 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
 
 function materialSelectionKey(configPasoId: string, slotCodigo: string) {
   return `${configPasoId}_${slotCodigo}`;
+}
+
+function defaultSlotCandidateId(slot: SlotComercialElige) {
+  const firstWithDefault = slot.candidatos.find((candidate) => candidate.defaultVarianteId);
+  if (firstWithDefault?.defaultVarianteId) return firstWithDefault.defaultVarianteId;
+  if (slot.candidatos.length === 1 && slot.candidatos[0]?.variantes.length === 1) {
+    return slot.candidatos[0].variantes[0]?.variantId;
+  }
+  return undefined;
 }
 
 function familyColor(family: string) {
@@ -490,7 +533,45 @@ function ApAtomMode({ mode }: { mode: CatalogProduct["cobro"] }) {
   return mode === "Por m²" ? <Grid2X2Icon /> : <ListIcon />;
 }
 
+function getExactPricingQuantitiesFromConfig(precioConfigJson: unknown) {
+  if (!precioConfigJson || typeof precioConfigJson !== "object") return [];
+  const config = precioConfigJson as {
+    metodoCalculo?: unknown;
+    detalle?: { tiers?: unknown };
+  };
+  if (
+    config.metodoCalculo !== "fijado_por_cantidad" &&
+    config.metodoCalculo !== "fijo_con_margen_variable"
+  ) {
+    return [];
+  }
+  const tiers = Array.isArray(config.detalle?.tiers) ? config.detalle.tiers : [];
+  return Array.from(
+    new Set(
+      tiers
+        .map((tier) =>
+          tier && typeof tier === "object"
+            ? Number((tier as { quantity?: unknown }).quantity)
+            : NaN,
+        )
+        .filter((quantity) => Number.isFinite(quantity) && quantity > 0),
+    ),
+  ).sort((a, b) => a - b);
+}
+
+function getExactPricingQuantities(product: CatalogProduct | null) {
+  return product ? getExactPricingQuantitiesFromConfig(product.precioConfigJson) : [];
+}
+
+function coerceQtyToPricingOptions(qty: number, product: CatalogProduct | null) {
+  const exactQuantities = getExactPricingQuantities(product);
+  if (exactQuantities.length === 0) return qty;
+  return exactQuantities.includes(qty) ? qty : (exactQuantities[0] ?? qty);
+}
+
 function getCantidadDefault(producto: ProductoListItem) {
+  const exactQuantities = getExactPricingQuantitiesFromConfig(producto.precioConfigJson);
+  if (exactQuantities.length > 0) return exactQuantities[0] ?? 1;
   if (producto.unidadComercial === "m2") return 1;
   if (producto.unidadComercial === "metro_lineal") return 1;
   if (producto.subcategoriaComercial?.codigo === "tarjetas") return 500;
@@ -499,6 +580,10 @@ function getCantidadDefault(producto: ProductoListItem) {
 }
 
 function formatDefaultMedidas(producto: ProductoListItem) {
+  const medidaDefault = getMedidaDefault(producto);
+  if (medidaDefault) {
+    return `${Math.round(medidaDefault.anchoMm)} x ${Math.round(medidaDefault.altoMm)} mm`;
+  }
   if (producto.medidaDefaultAnchoMm && producto.medidaDefaultAltoMm) {
     const ancho = Number(producto.medidaDefaultAnchoMm);
     const alto = Number(producto.medidaDefaultAltoMm);
@@ -507,6 +592,29 @@ function formatDefaultMedidas(producto: ProductoListItem) {
     }
   }
   return producto.modoMedidas === "LIBRE" ? "Medidas libres" : "A definir";
+}
+
+function getSelectedPredefinedMeasure(
+  producto: ProductoDetalle | null,
+  medidaPredefinidaId: string,
+) {
+  if (!producto || producto.modoMedidas !== "FIJA") return null;
+  const medidas = getMedidasPredefinidas(producto);
+  return (
+    medidas.find((medida) => medida.id === medidaPredefinidaId) ??
+    medidas.find((medida) => medida.esDefault) ??
+    medidas[0] ??
+    null
+  );
+}
+
+function formatMedidaPredefinidaSpec(
+  medida: ReturnType<typeof getSelectedPredefinedMeasure>,
+) {
+  if (!medida) return "";
+  const size = `${medida.anchoMm} x ${medida.altoMm} mm`;
+  const label = medidaLabel(medida);
+  return label === size ? size : `${label} · ${size}`;
 }
 
 function stringFromAttribute(value: unknown, fallback: string) {
@@ -607,24 +715,60 @@ function getRutaSeleccionada(
   );
 }
 
+function isExecutableConfigPaso(
+  config: RutaAlternativaDetalle["configPasos"][number],
+) {
+  return config.rutaPaso.activo && config.modoActivacion !== "NO_EJECUTAR";
+}
+
 function getSlotsComercialElige(ruta: RutaAlternativaDetalle | null) {
   return (
-    ruta?.configPasos.flatMap((config) =>
-      config.slotsMateriales
-        .filter((slot) => slot.modoSeleccion === "COMERCIAL_ELIGE")
-        .map((slot) => ({
+    ruta?.configPasos
+      .filter(isExecutableConfigPaso)
+      .flatMap((config) =>
+        config.slotsMateriales
+          .filter((slot) => slot.modoSeleccion === "COMERCIAL_ELIGE")
+          .map((slot) => ({
           configPasoId: config.id,
           familiaCodigo: config.rutaPaso.familiaCodigo,
           modoActivacion: config.modoActivacion,
           slotCodigo: slot.slotCodigo,
-          candidatos:
-            (slot.materialesCandidatosJson as Array<{
-              variantId: string;
-              label?: string;
-              default?: boolean;
-            }>) ?? [],
-        })),
-    ) ?? []
+          candidatos: slot.candidatos.map((candidate) => ({
+            materiaPrimaId: candidate.materiaPrimaId,
+            label: candidate.materiaPrima.nombre,
+            defaultVarianteId: candidate.defaultVarianteId,
+            variantes: sortSlotMaterialVariantsByThickness(
+              candidate.variantes.map((item) => {
+                const variante = {
+                  sku: item.variante.sku,
+                  nombreVariante: item.variante.nombreVariante,
+                  precioReferencia: item.variante.precioReferencia,
+                  atributosVarianteJson: item.variante.atributosVarianteJson,
+                };
+                const display = getSlotMaterialVariantDisplay(
+                  candidate.materiaPrima,
+                  variante,
+                );
+                return {
+                  variantId: item.variante.id,
+                  label: display.label,
+                  description: display.description,
+                  sku: display.fallbackCode,
+                  isFallbackLabel: display.details.length === 0,
+                  sortEspesor: getSlotMaterialVariantSortValue(variante),
+                  espesorLabel: getVariantThicknessLabel(
+                    item.variante.atributosVarianteJson,
+                  ),
+                  colorLabel: getVariantColorLabel(
+                    item.variante.atributosVarianteJson,
+                  ),
+                  missingPrice: Number(item.variante.precioReferencia ?? 0) <= 0,
+                };
+              }),
+            ),
+          })),
+          })),
+      ) ?? []
   );
 }
 
@@ -658,6 +802,7 @@ function normalizeModoColor(value: unknown): string | undefined {
   if (["BN", "B/N", "K", "NEGRO", "BLACK"].includes(normalized)) return "BN";
   if (normalized === "CMYK") return "CMYK";
   if (["CMYK+BLANCO", "CMYKBLANCO"].includes(normalized)) return "CMYK+blanco";
+  if (["CMYK+BARNIZ", "CMYKBARNIZ"].includes(normalized)) return "CMYK+barniz";
   if (
     [
       "CMYK+BLANCO+BARNIZ",
@@ -674,6 +819,7 @@ function normalizeModoColor(value: unknown): string | undefined {
 function getModosColorComercial(ruta: RutaAlternativaDetalle | null) {
   return (
     ruta?.configPasos
+      .filter(isExecutableConfigPaso)
       .map((config) => {
         const modoConfig = getModoColorConfig(config.paramsPasoJson);
         const allowedModes = Array.isArray(modoConfig.allowedModes)
@@ -685,17 +831,19 @@ function getModosColorComercial(ruta: RutaAlternativaDetalle | null) {
             allowedModes.includes(normalizeModoColor(option.value) ?? ""),
         );
         if (options.length === 0) return null;
+        const enabled = modoConfig.enabled === true;
         const comercialElige =
           modoConfig.comercialElige === true ||
           (modoConfig.enabled !== false && options.length > 1);
-        if (!comercialElige) return null;
-        return {
+        if (!enabled && !comercialElige && options.length !== 1) return null;
+        const modo: ModoColorComercial = {
           configPasoId: config.id,
           familiaCodigo: config.rutaPaso.familiaCodigo,
           modoActivacion: config.modoActivacion,
           options,
           defaultMode: normalizeModoColor(modoConfig.defaultMode),
         };
+        return modo;
       })
       .filter((modo): modo is ModoColorComercial => modo !== null) ?? []
   );
@@ -704,6 +852,7 @@ function getModosColorComercial(ruta: RutaAlternativaDetalle | null) {
 function getPasosConCandidatas(ruta: RutaAlternativaDetalle | null) {
   return (
     ruta?.configPasos
+      .filter(isExecutableConfigPaso)
       .filter((config) => (config.maquinasCandidatas?.length ?? 0) > 1)
       .map((config) => ({
         configPasoId: config.id,
@@ -730,7 +879,154 @@ function getSlotsOpcionalesPorPaso(slots: SlotComercialElige[]) {
   return map;
 }
 
-function getOpcionales(producto: ProductoListItem | ProductoDetalle): CatalogAdicional[] {
+function isActiveConfigPaso(
+  config: RutaAlternativaDetalle["configPasos"][number],
+  motorConfig: MotorConfigState,
+) {
+  return (
+    isExecutableConfigPaso(config) &&
+    (config.modoActivacion !== "OPCIONAL" ||
+      Boolean(motorConfig.opcionalesActivados[config.id]))
+  );
+}
+
+function getActiveConfigPasos(
+  ruta: RutaAlternativaDetalle | null,
+  motorConfig: MotorConfigState,
+) {
+  return ruta?.configPasos.filter((config) => isActiveConfigPaso(config, motorConfig)) ?? [];
+}
+
+function formatNumberForSpec(value: number) {
+  return new Intl.NumberFormat("es-AR", {
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function getTextAttr(attrs: Record<string, unknown> | null | undefined, keys: string[]) {
+  for (const key of keys) {
+    const raw = attrs?.[key];
+    if (typeof raw === "string" && raw.trim()) return raw.trim();
+    if (typeof raw === "number" && Number.isFinite(raw)) return String(raw);
+  }
+  return null;
+}
+
+function getVariantThicknessLabel(attrs: Record<string, unknown> | null | undefined) {
+  const entries = [
+    { value: attrs?.espesor, unit: "mm" },
+    { value: attrs?.espesorMm, unit: "mm" },
+    { value: attrs?.espesor_mm, unit: "mm" },
+    { value: attrs?.espesorMicrones, unit: "mic" },
+  ];
+  const entry = entries.find(
+    ({ value }) => value !== undefined && value !== null && value !== "",
+  );
+  const raw = entry?.value;
+  const value =
+    typeof raw === "string" ? Number(raw.replace(",", ".")) : Number(raw);
+  if (!Number.isFinite(value)) return null;
+  return `${formatNumberForSpec(value)} ${entry?.unit ?? "mm"}`;
+}
+
+function getVariantColorLabel(attrs: Record<string, unknown> | null | undefined) {
+  return getTextAttr(attrs, ["colorBase", "color", "colorMaterial"]);
+}
+
+function candidateUsesColorThickness(candidate: SlotMaterialCandidato) {
+  return candidate.variantes.some((variant) => variant.colorLabel && variant.espesorLabel);
+}
+
+function getSelectedMaterialSummaries(
+  slotsComercialElige: SlotComercialElige[],
+  config: MotorConfigState,
+) {
+  const requiredSlots = slotsComercialElige.filter(
+    (slot) => slot.modoActivacion !== "OPCIONAL",
+  );
+  const baseSlots = requiredSlots.filter((slot) =>
+    MATERIAL_BASE_SLOT_CODES.has(slot.slotCodigo),
+  );
+  const slotsForSummary = baseSlots.length > 0 ? baseSlots : requiredSlots;
+
+  return slotsForSummary
+    .map((slot) => {
+      const selectedId =
+        config.seleccionMaterial[materialSelectionKey(slot.configPasoId, slot.slotCodigo)] ||
+        defaultSlotCandidateId(slot);
+      const selectedCandidate = slot.candidatos.find((candidate) =>
+        candidate.variantes.some((variant) => variant.variantId === selectedId),
+      );
+      const selectedVariant = selectedCandidate?.variantes.find(
+        (variant) => variant.variantId === selectedId,
+      );
+      if (!selectedCandidate && !selectedVariant) return null;
+      return {
+        material: selectedCandidate?.label,
+        espesor: selectedVariant?.espesorLabel ?? null,
+      };
+    })
+    .filter(
+      (
+        summary,
+      ): summary is { material: string | undefined; espesor: string | null } =>
+        summary !== null,
+    );
+}
+
+const IMPRESSION_TECH_LABELS: Record<string, string> = {
+  LATEX: "Látex",
+  SOLVENTE: "Solvente",
+  UV: "UV",
+  SUBLIMACION: "Sublimación",
+  DTF_UV: "DTF UV",
+  DTF_TEXTIL: "DTF textil",
+};
+
+function getMachineTemplate(config: RutaAlternativaDetalle["configPasos"][number]) {
+  return config.maquinaM1?.plantilla?.toUpperCase() ?? "";
+}
+
+function getImpressionProcessLabel(
+  config: RutaAlternativaDetalle["configPasos"][number],
+) {
+  const tecnologia = config.maquinaM1?.parametrosTecnicosJson?.tecnologia;
+  const normalizedTech =
+    typeof tecnologia === "string" ? tecnologia.trim().toUpperCase() : "";
+  const techLabel = IMPRESSION_TECH_LABELS[normalizedTech];
+  return techLabel ? `Impresión ${techLabel}` : "Impresión";
+}
+
+function getProcessLabels(
+  rutaSeleccionada: RutaAlternativaDetalle | null,
+  config: MotorConfigState,
+) {
+  const labels: string[] = [];
+  for (const paso of getActiveConfigPasos(rutaSeleccionada, config)) {
+    const familia = paso.rutaPaso.familiaCodigo;
+    const template = getMachineTemplate(paso);
+    if (
+      familia.startsWith("impresion_") ||
+      template.includes("IMPRESORA")
+    ) {
+      labels.push(getImpressionProcessLabel(paso));
+      continue;
+    }
+    if (familia.includes("laser") || template.includes("LASER")) {
+      labels.push("Láser");
+      continue;
+    }
+    if (familia === "cnc" || template.includes("CNC")) {
+      labels.push("CNC");
+    }
+  }
+  return Array.from(new Set(labels));
+}
+
+function getOpcionales(
+  producto: ProductoListItem | ProductoDetalle,
+  rutaSeleccionada?: RutaAlternativaDetalle | null,
+): CatalogAdicional[] {
   const opcionales = new Map<string, CatalogAdicional>();
 
   if ("cargosDirectosCotizacion" in producto) {
@@ -746,26 +1042,29 @@ function getOpcionales(producto: ProductoListItem | ProductoDetalle): CatalogAdi
   }
 
   if ("cargosDirectosCotizacion" in producto) {
-    const ruta =
-      producto.rutasAlternativas.find((item) => item.esPreferida) ??
-      producto.rutasAlternativas[0];
-    for (const config of ruta?.configPasos ?? []) {
-      if (config.modoActivacion === "OPCIONAL") {
-        opcionales.set(config.id, {
-          code: config.id,
-          name: humanizeCodigo(config.rutaPaso.familiaCodigo),
-          descripcion: "Paso productivo opcional.",
-          origen: "paso",
-        });
-      }
-      for (const cargo of config.cargosDirectosPaso) {
-        if (cargo.modoActivacion !== "OPCIONAL") continue;
-        opcionales.set(cargo.id, {
-          code: cargo.id,
-          name: cargo.cargoDirectoCatalogo.nombre,
-          descripcion: "Cargo directo opcional del paso.",
-          origen: "cargo",
-        });
+    const rutas = rutaSeleccionada
+      ? [rutaSeleccionada]
+      : producto.rutasAlternativas;
+    for (const ruta of rutas) {
+      for (const config of ruta.configPasos) {
+        if (!isExecutableConfigPaso(config)) continue;
+        if (config.modoActivacion === "OPCIONAL") {
+          opcionales.set(config.id, {
+            code: config.id,
+            name: humanizeCodigo(config.rutaPaso.familiaCodigo),
+            descripcion: "Paso productivo opcional.",
+            origen: "paso",
+          });
+        }
+        for (const cargo of config.cargosDirectosPaso) {
+          if (cargo.modoActivacion !== "OPCIONAL") continue;
+          opcionales.set(cargo.id, {
+            code: cargo.id,
+            name: cargo.cargoDirectoCatalogo.nombre,
+            descripcion: "Cargo directo opcional del paso.",
+            origen: "cargo",
+          });
+        }
       }
     }
   }
@@ -808,6 +1107,7 @@ function mapProductoReal(producto: ProductoListItem | ProductoDetalle): CatalogP
     unidad,
     medidasMode: producto.modoMedidas === "LIBRE" ? "calculada" : "fija",
     precioBase: 0,
+    precioConfigJson: producto.precioConfigJson,
     descripcion: producto.descripcion ?? categoria.nombre,
     specs: schema
       .filter((spec) => spec.visible)
@@ -925,6 +1225,10 @@ function buildJobContext(
   qty: number,
   slotsComercialElige: SlotComercialElige[],
 ) {
+  const medidaPredefinida = getSelectedPredefinedMeasure(
+    productoDetalle,
+    config.medidaPredefinidaId,
+  );
   const cantidadTrabajo =
     productoDetalle?.modoMedidas === "LIBRE"
       ? config.piezas.reduce(
@@ -941,24 +1245,42 @@ function buildJobContext(
     opcionalesActivados: config.opcionalesActivados,
   };
 
-  if (productoDetalle?.modoMedidas === "LIBRE" && config.piezas.length > 0) {
-    ctx.piezas = config.piezas.map((pieza) => ({
+  const piezasContexto =
+    productoDetalle?.modoMedidas === "LIBRE" && config.piezas.length > 0
+      ? config.piezas
+      : medidaPredefinida
+        ? [
+            {
+              uiKey: medidaPredefinida.id,
+              cantidad: cantidadTrabajo,
+              anchoMm: medidaPredefinida.anchoMm,
+              altoMm: medidaPredefinida.altoMm,
+            },
+          ]
+        : [];
+
+  if (piezasContexto.length > 0) {
+    ctx.piezas = piezasContexto.map((pieza) => ({
       cantidad: pieza.cantidad,
       anchoMm: pieza.anchoMm,
       altoMm: pieza.altoMm,
     }));
-    ctx.piezaAnchoMaxMm = Math.max(...config.piezas.map((pieza) => pieza.anchoMm));
-    ctx.piezaAltoMaxMm = Math.max(...config.piezas.map((pieza) => pieza.altoMm));
-    ctx.piezaAreaTotalM2 = config.piezas.reduce(
+    ctx.piezaAnchoMaxMm = Math.max(...piezasContexto.map((pieza) => pieza.anchoMm));
+    ctx.piezaAltoMaxMm = Math.max(...piezasContexto.map((pieza) => pieza.altoMm));
+    ctx.piezaAreaTotalM2 = piezasContexto.reduce(
       (total, pieza) =>
         total + (pieza.cantidad * pieza.anchoMm * pieza.altoMm) / 1_000_000,
       0,
     );
-    if (config.piezas.length === 1) {
+    if (piezasContexto.length === 1) {
       ctx.medidaCustomMm = {
-        anchoMm: config.piezas[0].anchoMm,
-        altoMm: config.piezas[0].altoMm,
+        anchoMm: piezasContexto[0].anchoMm,
+        altoMm: piezasContexto[0].altoMm,
       };
+    }
+    if (medidaPredefinida) {
+      ctx.medidaPredefinidaId = medidaPredefinida.id;
+      ctx.medidaPredefinidaNombre = medidaLabel(medidaPredefinida);
     }
   }
 
@@ -975,7 +1297,7 @@ function buildJobContext(
   const slotMateriales: Record<string, string> = {};
   for (const slot of slotsComercialElige) {
     const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
-    const variantId = config.seleccionMaterial[key];
+    const variantId = config.seleccionMaterial[key] || defaultSlotCandidateId(slot);
     if (!variantId) continue;
     slotMateriales[key] = variantId;
     ctx[`slotMaterial_${key}`] = variantId;
@@ -1020,11 +1342,16 @@ function calcularCantidadComercial(
   config: MotorConfigState | undefined,
   qty: number,
 ) {
-  if (
-    product.unidad === "m²" &&
-    productoDetalle?.modoMedidas === "LIBRE" &&
-    config?.piezas.length
-  ) {
+  if (productoDetalle?.modoMedidas === "LIBRE" && config?.piezas.length) {
+    const totalPiezas = config.piezas.reduce(
+      (total, pieza) =>
+        total + (Number.isFinite(pieza.cantidad) ? pieza.cantidad : 0),
+      0,
+    );
+    if (product.unidad !== "m²" && product.unidad !== "ml") {
+      return totalPiezas > 0 ? totalPiezas : qty;
+    }
+
     const areaTotalM2 = config.piezas.reduce(
       (total, pieza) =>
         total + (pieza.cantidad * pieza.anchoMm * pieza.altoMm) / 1_000_000,
@@ -1055,7 +1382,9 @@ function buildPresentableSpecs(
   const rutaSeleccionada = getRutaSeleccionada(productoDetalle, config.rutaAlternativaId);
   const hardcodedMaterials =
     rutaSeleccionada?.configPasos
-      .filter((paso) => paso.modoActivacion !== "OPCIONAL")
+      .filter(
+        (paso) => isExecutableConfigPaso(paso) && paso.modoActivacion !== "OPCIONAL",
+      )
       .flatMap((paso) => paso.slotsMateriales)
       .filter(
         (slot) =>
@@ -1064,13 +1393,15 @@ function buildPresentableSpecs(
       )
       .map((slot) => slot.materialVariante?.nombreVariante ?? slot.materialVariante?.sku)
       .filter((value): value is string => Boolean(value)) ?? [];
-  const selectedMaterials = slotsComercialElige
-    .filter((slot) => slot.modoActivacion !== "OPCIONAL")
-    .map((slot) => {
-      const selectedId =
-        config.seleccionMaterial[materialSelectionKey(slot.configPasoId, slot.slotCodigo)];
-      return slot.candidatos.find((candidate) => candidate.variantId === selectedId)?.label;
-    })
+  const selectedMaterialSummaries = getSelectedMaterialSummaries(
+    slotsComercialElige,
+    config,
+  );
+  const selectedMaterials = selectedMaterialSummaries
+    .map((summary) => summary.material)
+    .filter((value): value is string => Boolean(value));
+  const selectedThicknesses = selectedMaterialSummaries
+    .map((summary) => summary.espesor)
     .filter((value): value is string => Boolean(value));
 
   const baseMaterials = [...hardcodedMaterials, ...selectedMaterials];
@@ -1079,10 +1410,18 @@ function buildPresentableSpecs(
   } else if (!hasUsefulSpecValue(base.material) && baseMaterials.length > 0) {
     setSpec("material", Array.from(new Set(baseMaterials)).join(" · "));
   }
+  if (selectedThicknesses.length > 0) {
+    const espesor = Array.from(new Set(selectedThicknesses)).join(" · ");
+    setSpec("espesor", espesor);
+    setSpec("espesor_material", espesor);
+  }
   if (productoDetalle?.modoMedidas === "LIBRE" && config.piezas.length > 0) {
     const medidas = config.piezas
-      .map((pieza) => `${pieza.cantidad}u ${pieza.anchoMm} x ${pieza.altoMm} mm`)
-      .join(" · ");
+      .map((pieza) => {
+        const unidad = pieza.cantidad === 1 ? "unidad" : "unidades";
+        return `${pieza.cantidad} ${unidad} · ${pieza.anchoMm} x ${pieza.altoMm} mm`;
+      })
+      .join("\n");
     setSpec("medidas", medidas);
     setSpec("formato_medidas", medidas);
     setSpec("m2_medidas_instaladas", medidas);
@@ -1091,11 +1430,25 @@ function buildPresentableSpecs(
     setSpec("medidas", medidas);
     setSpec("formato_medidas", medidas);
   }
+  const medidaPredefinida = getSelectedPredefinedMeasure(
+    productoDetalle,
+    config.medidaPredefinidaId,
+  );
+  if (medidaPredefinida) {
+    const medidas = formatMedidaPredefinidaSpec(medidaPredefinida);
+    setSpec("medidas", medidas);
+    setSpec("formato_medidas", medidas);
+  }
   if (hasSpec("caras") || product.subcategoriaComercialCodigo === "tarjetas") {
     setSpec("caras", config.caras === 2 ? "Doble faz" : "Simple faz");
   }
   const modosColor = getModosColorComercial(rutaSeleccionada);
   const selectedModoColorLabels = modosColor
+    .filter(
+      (modo) =>
+        modo.modoActivacion !== "OPCIONAL" ||
+        Boolean(config.opcionalesActivados[modo.configPasoId]),
+    )
     .map((modo) => {
       const value =
         normalizeModoColor(config.seleccionModoColor[modo.configPasoId]) ??
@@ -1114,6 +1467,13 @@ function buildPresentableSpecs(
     setSpec("impresion", selectedModoColorLabels.join(" · "));
     setSpec("color", selectedModoColorLabels.join(" · "));
     base.modo_color = selectedModoColorLabels.join(" · ");
+  }
+  const processLabels = getProcessLabels(rutaSeleccionada, config);
+  if (processLabels.length > 0) {
+    const proceso = processLabels.join(" / ");
+    setSpec("tecnologia", proceso);
+    setSpec("tecnologia_proceso", proceso);
+    setSpec("proceso", proceso);
   }
   if (product.subcategoriaComercialCodigo === "talonarios") {
     const tipoCopia =
@@ -1147,6 +1507,16 @@ function hasUsefulSpecValue(value: string | undefined) {
   );
 }
 
+function shouldShowCommercialSpec(
+  spec: CatalogSpec,
+  value: string | undefined,
+  product: CatalogProduct,
+) {
+  const hiddenKeys = new Set(["tipo_pieza", "tipoPieza", "tipo_de_pieza"]);
+  if (hiddenKeys.has(spec.key)) return false;
+  return product.real ? hasUsefulSpecValue(value) : true;
+}
+
 function buildItem(
   product: CatalogProduct,
   qty: number,
@@ -1159,6 +1529,7 @@ function buildItem(
     cotizacion?: CotizarResponse | null;
     notaProduccion?: string;
     itemId?: string;
+    fechaEntrega?: string;
   },
 ) {
   const totals = getTotals(product, qty, adi);
@@ -1247,6 +1618,7 @@ function buildItem(
     impuestoPorcentaje,
     impuestoMonto,
     total,
+    fechaEntrega: options?.fechaEntrega || undefined,
     especificaciones,
     pasos,
     costos: {
@@ -1276,9 +1648,7 @@ function buildItem(
       key: spec.key,
       label: spec.label,
       tipo: spec.type,
-      visible: product.real
-        ? hasUsefulSpecValue(especificaciones[spec.key])
-        : true,
+      visible: shouldShowCommercialSpec(spec, especificaciones[spec.key], product),
       orden: (index + 1) * 10,
     })),
   } satisfies PropuestaItem;
@@ -1333,6 +1703,8 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
   return {
     ...DEFAULT_MOTOR_CONFIG,
     rutaAlternativaId: item.rutaAlternativaId ?? "",
+    medidaPredefinidaId:
+      typeof ctx.medidaPredefinidaId === "string" ? ctx.medidaPredefinidaId : "",
     caras: Number(ctx.caras) === 2 ? 2 : 1,
     tipoCopia:
       Number(ctx.tipoCopia) === 3 ? 3 : Number(ctx.tipoCopia) === 2 ? 2 : 1,
@@ -1593,6 +1965,13 @@ function ApConfigStep({
   const cotizacionExitosa = getCotizacionExitosa(cotizacion);
   const cotizacionErrores = cotizacion && !cotizacion.exitoso ? cotizacion.errores : [];
   const rutaSel = getRutaSeleccionada(productoDetalle, motorConfig.rutaAlternativaId);
+  const opcionalesRuta = React.useMemo(
+    () =>
+      product.real && productoDetalle
+        ? getOpcionales(productoDetalle, rutaSel)
+        : product.adicionales,
+    [product, productoDetalle, rutaSel],
+  );
   const slotsComercialElige = React.useMemo(
     () => getSlotsComercialElige(rutaSel),
     [rutaSel],
@@ -1610,10 +1989,17 @@ function ApConfigStep({
       modo.modoActivacion !== "OPCIONAL" ||
       Boolean(motorConfig.opcionalesActivados[modo.configPasoId]),
   );
-  const modosColorVisibles = modosColorComercial.filter(
-    (modo) => modo.options.length > 1,
-  );
+  const modosColorVisibles = modosColorComercial;
   const necesitaInstalacion = getProductoNecesitaInstalacion(productoDetalle);
+  const medidasPredefinidas = React.useMemo(
+    () =>
+      productoDetalle?.modoMedidas === "FIJA"
+        ? getMedidasPredefinidas(productoDetalle)
+        : [],
+    [productoDetalle],
+  );
+  const cantidadPiezaRefs = React.useRef<Record<string, HTMLInputElement | null>>({});
+  const focusPiezaCantidadKey = React.useRef<string | null>(null);
 
   const updateMotorConfig = React.useCallback(
     (patch: Partial<MotorConfigState>) => {
@@ -1635,12 +2021,14 @@ function ApConfigStep({
   );
 
   const addPieza = React.useCallback(() => {
+    const uiKey = `pz-${Date.now()}-${Math.random()}`;
+    focusPiezaCantidadKey.current = uiKey;
     setMotorConfig((current) => ({
       ...current,
       piezas: [
         ...current.piezas,
         {
-          uiKey: `pz-${Date.now()}-${current.piezas.length}`,
+          uiKey,
           cantidad: 1,
           anchoMm: 1000,
           altoMm: 500,
@@ -1648,6 +2036,16 @@ function ApConfigStep({
       ],
     }));
   }, [setMotorConfig]);
+
+  React.useEffect(() => {
+    const uiKey = focusPiezaCantidadKey.current;
+    if (!uiKey) return;
+    const input = cantidadPiezaRefs.current[uiKey];
+    if (!input) return;
+    input.focus();
+    input.select();
+    focusPiezaCantidadKey.current = null;
+  }, [motorConfig.piezas.length]);
 
   const removePieza = React.useCallback(
     (index: number) => {
@@ -1676,6 +2074,24 @@ function ApConfigStep({
     },
     [adi, setMotorConfig, toggleAdi],
   );
+
+  React.useEffect(() => {
+    if (!product.real) return;
+    const codigosValidos = new Set(opcionalesRuta.map((opcional) => opcional.code));
+    const codigosInvalidos = adi.filter((code) => !codigosValidos.has(code));
+    if (codigosInvalidos.length === 0) return;
+
+    setMotorConfig((current) => {
+      const opcionalesActivados = { ...current.opcionalesActivados };
+      for (const code of codigosInvalidos) {
+        delete opcionalesActivados[code];
+      }
+      return { ...current, opcionalesActivados };
+    });
+    for (const code of codigosInvalidos) {
+      toggleAdi(code);
+    }
+  }, [adi, opcionalesRuta, product.real, setMotorConfig, toggleAdi]);
 
   const setMaterial = React.useCallback(
     (key: string, value: string) => {
@@ -1744,28 +2160,173 @@ function ApConfigStep({
 
   const renderMaterialSelect = (slot: SlotComercialElige) => {
     const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
-    const selected = motorConfig.seleccionMaterial[key] ?? "";
+    const selected = motorConfig.seleccionMaterial[key] || defaultSlotCandidateId(slot) || "";
+    const selectedCandidate =
+      slot.candidatos.find((candidate) =>
+        candidate.variantes.some((variant) => variant.variantId === selected),
+      ) ?? slot.candidatos.find((candidate) => candidate.defaultVarianteId);
+    const selectedVariant = selectedCandidate?.variantes.find(
+      (variant) => variant.variantId === selected,
+    );
+    const useAttributePicker = selectedCandidate
+      ? selectedCandidate.variantes.length > 1 && candidateUsesColorThickness(selectedCandidate)
+      : false;
+    const colorOptions = useAttributePicker && selectedCandidate
+      ? Array.from(
+          new Set(
+            selectedCandidate.variantes.map((variant) => variant.colorLabel || "Sin color"),
+          ),
+        )
+      : [];
+    const selectedColor =
+      selectedVariant?.colorLabel ||
+      selectedCandidate?.variantes.find((variant) => variant.colorLabel)?.colorLabel ||
+      colorOptions[0] ||
+      "Sin color";
+    const variantsBySelectedColor = selectedCandidate?.variantes.filter(
+      (variant) => (variant.colorLabel || "Sin color") === selectedColor,
+    ) ?? [];
+    const selectMaterial = (materiaPrimaId: string) => {
+      const candidate = slot.candidatos.find((item) => item.materiaPrimaId === materiaPrimaId);
+      const variantId =
+        candidate?.defaultVarianteId ??
+        (candidate?.variantes.length === 1 ? candidate.variantes[0]?.variantId : undefined) ??
+        candidate?.variantes[0]?.variantId ??
+        "";
+      setMaterial(key, variantId);
+    };
     return (
-      <div className="ap-spec" key={key}>
+      <div
+        className={`ap-spec ${selectedCandidate && selectedCandidate.variantes.length > 1 ? "ap-spec-wide" : ""}`}
+        key={key}
+      >
         <label>{humanizeCodigo(slot.slotCodigo)}</label>
         <select
           className="ap-native-select"
-          value={selected}
-          onChange={(event) => setMaterial(key, event.target.value)}
+          value={selectedCandidate?.materiaPrimaId ?? ""}
+          onChange={(event) => selectMaterial(event.target.value)}
         >
-          <option value="">Motor elige / sin selección</option>
+          {slot.candidatos.length === 0 ? (
+            <option value="">Sin materiales candidatos configurados</option>
+          ) : !selectedCandidate ? (
+            <option value="">Elegí material</option>
+          ) : null}
           {slot.candidatos.map((candidate) => (
-            <option key={candidate.variantId} value={candidate.variantId}>
-              {candidate.label ?? candidate.variantId}
-              {candidate.default ? " · sugerido" : ""}
+            <option key={candidate.materiaPrimaId} value={candidate.materiaPrimaId}>
+              {candidate.label}
             </option>
           ))}
         </select>
+        {selectedCandidate && selectedCandidate.variantes.length > 1 ? (
+          useAttributePicker ? (
+            <div className="ap-material-attrs">
+              <div className="ap-material-attr-block">
+                <div className="ap-material-attr-label">Color</div>
+                <div className="ap-material-color-row">
+                  {colorOptions.map((color) => {
+                    const firstVariantForColor = selectedCandidate.variantes.find(
+                      (variant) => (variant.colorLabel || "Sin color") === color,
+                    );
+                    const active = selectedColor === color;
+                    const count = selectedCandidate.variantes.filter(
+                      (variant) => (variant.colorLabel || "Sin color") === color,
+                    ).length;
+                    return (
+                      <button
+                        key={color}
+                        type="button"
+                        className={`ap-material-color ${active ? "active" : ""}`}
+                        onClick={() => {
+                          if (firstVariantForColor) {
+                            setMaterial(key, firstVariantForColor.variantId);
+                          }
+                        }}
+                      >
+                        <span>{color}</span>
+                        <small>{count}</small>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="ap-material-attr-block">
+                <div className="ap-material-attr-label">Espesor</div>
+                <div className="ap-material-thickness-grid">
+                  {variantsBySelectedColor.map((variant) => {
+                    const active = variant.variantId === selected;
+                    const isDefault =
+                      variant.variantId === selectedCandidate.defaultVarianteId;
+                    return (
+                      <button
+                        key={variant.variantId}
+                        type="button"
+                        className={`ap-material-thickness ${active ? "active" : ""}`}
+                        onClick={() => setMaterial(key, variant.variantId)}
+                      >
+                        <span className="ap-material-thickness-title">
+                          {variant.espesorLabel ?? variant.label}
+                          {isDefault ? (
+                            <StarIcon className="ap-material-default-star" aria-label="Predeterminado" />
+                          ) : null}
+                        </span>
+                        {variant.missingPrice ? (
+                          <span className="ap-material-price-alert">
+                            Sin precio cargado
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ) : (
+          <div className="ap-variant-section">
+            <div className="ap-variant-head">
+              <span>Variante</span>
+              <small>{selectedCandidate.label}</small>
+            </div>
+            <div className="ap-variant-grid">
+              {selectedCandidate.variantes.map((variant) => {
+                const active = variant.variantId === selected;
+                const isDefault =
+                  variant.variantId === selectedCandidate.defaultVarianteId;
+                return (
+                  <button
+                    key={variant.variantId}
+                    type="button"
+                    className={`ap-variant-card ${active ? "active" : ""}`}
+                    onClick={() => setMaterial(key, variant.variantId)}
+                  >
+                    <span className="ap-variant-title">{variant.label}</span>
+                    <span className="ap-variant-meta">
+                      {variant.isFallbackLabel
+                        ? `Sin atributos descriptivos · ${variant.sku}`
+                        : variant.description}
+                    </span>
+                    {isDefault ? (
+                      <span className="ap-variant-badge">Predeterminada</span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          )
+        ) : null}
+        {!useAttributePicker && selectedVariant?.isFallbackLabel ? (
+          <p className="ap-spec-hint">
+            Esta variante no tiene atributos descriptivos cargados. Código interno:{" "}
+            {selectedVariant.sku}
+          </p>
+        ) : !useAttributePicker && selectedVariant?.description ? (
+          <p className="ap-spec-hint">{selectedVariant.description}</p>
+        ) : null}
       </div>
     );
   };
   const usaCaras =
-    rutaSel?.configPasos.some(
+    rutaSel?.configPasos.filter(isExecutableConfigPaso).some(
       (config) =>
         config.multiplicadoresActivos.includes("caras") ||
         config.slotsMateriales.some((slot) => slot.aplicaMultiCaras),
@@ -1775,7 +2336,76 @@ function ApConfigStep({
     );
   const esTalonario = product.subcategoriaComercialCodigo === "talonarios";
   const hasQuantityShortcuts = !["m²", "m2", "ml"].includes(product.unidad.toLowerCase());
-  const quantityShortcuts = hasQuantityShortcuts ? [100, 200, 300, 400] : [];
+  const exactPricingQuantities = getExactPricingQuantities(product);
+  const usesExactPricingQuantities = exactPricingQuantities.length > 0;
+  const quantityShortcuts = usesExactPricingQuantities
+    ? exactPricingQuantities
+    : hasQuantityShortcuts
+      ? [100, 200, 300, 400]
+      : [];
+  const isAllowedQuantity =
+    !usesExactPricingQuantities || exactPricingQuantities.includes(qty);
+
+  const renderQuantityControl = () => {
+    if (usesExactPricingQuantities) {
+      return (
+        <div className="ap-qty-line">
+          <div className="ap-qty-shortcuts ap-qty-options" aria-label="Cantidades permitidas">
+            {exactPricingQuantities.map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={qty === value ? "active" : ""}
+                onClick={() => setQty(value)}
+              >
+                {value.toLocaleString("es-AR")}
+              </button>
+            ))}
+          </div>
+          <span className="ap-qty-unit">{product.unidad}</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="ap-qty-line">
+        <div className="ap-qty compact">
+          <button
+            type="button"
+            className="ap-qty-btn"
+            onClick={() => setQty(Math.max(0, qty - 1))}
+          >
+            <MinusIcon />
+          </button>
+          <input
+            type="number"
+            value={qty}
+            step={product.unidad === "m²" ? 0.1 : 1}
+            min="0"
+            onChange={(event) => setQty(Number.parseFloat(event.target.value) || 0)}
+          />
+          <span className="ap-qty-unit">{product.unidad}</span>
+          <button type="button" className="ap-qty-btn" onClick={() => setQty(qty + 1)}>
+            <PlusIcon />
+          </button>
+        </div>
+        {hasQuantityShortcuts ? (
+          <div className="ap-qty-shortcuts" aria-label="Atajos de cantidad">
+            {quantityShortcuts.map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={qty === value ? "active" : ""}
+                onClick={() => setQty(value)}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   return (
     <>
@@ -1786,7 +2416,6 @@ function ApConfigStep({
         </button>
         <div className="ap-pb-body">
           <div className="ap-pb-head">
-            <span className="code">{product.code}</span>
             <span className={`tipo-chip tipo-${familyColor(product.family)}`}>
               <span className="d" />
               {product.family}
@@ -1804,47 +2433,51 @@ function ApConfigStep({
       <div className="ap-config-section">
         <div className="ap-cs-head">
           <div className="ttl">Datos para calcular</div>
-          <div className="sub">
-            Inputs reales que viajan al Motor Universal para cotizar y producir.
-          </div>
         </div>
 
         {product.real && productoDetalle?.rutasAlternativas.length ? (
           <div className="ap-specs">
             {productoDetalle.rutasAlternativas.length > 1 ? (
               <div className="ap-spec">
-                <label>Ruta alternativa</label>
-                <select
-                  className="ap-native-select"
-                  value={motorConfig.rutaAlternativaId}
-                  onChange={(event) =>
+                <label>Seleccionar ruta de producción</label>
+                {renderSegmentedControl(
+                  "Seleccionar ruta de producción",
+                  motorConfig.rutaAlternativaId,
+                  productoDetalle.rutasAlternativas.map((ruta) => ({
+                    value: ruta.id,
+                    label: ruta.nombre,
+                  })),
+                  (value) =>
                     setMotorConfig((current) => ({
                       ...current,
-                      rutaAlternativaId: event.target.value,
+                      rutaAlternativaId: value,
                       opcionalesActivados: {},
                       seleccionMaterial: {},
                       seleccionMaquina: {},
                       seleccionModoColor: {},
-                    }))
-                  }
-                >
-                  {productoDetalle.rutasAlternativas.map((ruta) => (
-                    <option key={ruta.id} value={ruta.id}>
-                      {ruta.nombre}
-                      {ruta.esPreferida ? " · preferida" : ""}
-                    </option>
-                  ))}
-                </select>
+                    })),
+                )}
               </div>
             ) : null}
 
             {productoDetalle.modoMedidas === "LIBRE" ? (
               <div className="ap-spec ap-spec-wide">
-                <label>Piezas / medidas libres</label>
                 <div className="ap-piezas">
+                  <div className="ap-pieza-head" aria-hidden="true">
+                    <span>Cantidad</span>
+                    <span />
+                    <span>Ancho</span>
+                    <span />
+                    <span>Alto</span>
+                    <span />
+                    <span />
+                  </div>
                   {motorConfig.piezas.map((pieza, index) => (
                     <div className="ap-pieza-row" key={pieza.uiKey}>
                       <input
+                        ref={(node) => {
+                          cantidadPiezaRefs.current[pieza.uiKey] = node;
+                        }}
                         type="number"
                         min="1"
                         value={pieza.cantidad}
@@ -1871,6 +2504,11 @@ function ApConfigStep({
                         onChange={(event) =>
                           updatePieza(index, { altoMm: Number(event.target.value) || 0 })
                         }
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter") return;
+                          event.preventDefault();
+                          addPieza();
+                        }}
                         aria-label="Alto en mm"
                       />
                       <span>mm</span>
@@ -1891,45 +2529,29 @@ function ApConfigStep({
                 </div>
               </div>
             ) : (
+              <>
+                {medidasPredefinidas.length > 1 ? (
+                  <div className="ap-spec ap-spec-wide">
+                    <label>Medida</label>
+                    {renderSegmentedControl(
+                      "Medida",
+                      getSelectedPredefinedMeasure(
+                        productoDetalle,
+                        motorConfig.medidaPredefinidaId,
+                      )?.id ?? "",
+                      medidasPredefinidas.map((medida) => ({
+                        value: medida.id,
+                        label: medidaLabel(medida),
+                      })),
+                      (value) => updateMotorConfig({ medidaPredefinidaId: value }),
+                    )}
+                  </div>
+                ) : null}
               <div className="ap-spec ap-spec-wide">
                 <label>Cantidad</label>
-                <div className="ap-qty-line">
-                  <div className="ap-qty compact">
-                    <button
-                      type="button"
-                      className="ap-qty-btn"
-                      onClick={() => setQty(Math.max(0, qty - 1))}
-                    >
-                      <MinusIcon />
-                    </button>
-                    <input
-                      type="number"
-                      value={qty}
-                      step={product.unidad === "m²" ? 0.1 : 1}
-                      min="0"
-                      onChange={(event) => setQty(Number.parseFloat(event.target.value) || 0)}
-                    />
-                    <span className="ap-qty-unit">{product.unidad}</span>
-                    <button type="button" className="ap-qty-btn" onClick={() => setQty(qty + 1)}>
-                      <PlusIcon />
-                    </button>
-                  </div>
-                  {hasQuantityShortcuts ? (
-                    <div className="ap-qty-shortcuts" aria-label="Atajos de cantidad">
-                      {quantityShortcuts.map((value) => (
-                        <button
-                          key={value}
-                          type="button"
-                          className={qty === value ? "active" : ""}
-                          onClick={() => setQty(value)}
-                        >
-                          {value}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
+                {renderQuantityControl()}
               </div>
+              </>
             )}
 
             {usaCaras ? (
@@ -1995,7 +2617,7 @@ function ApConfigStep({
                       ? "Modo de color"
                       : `${humanizeCodigo(modo.familiaCodigo)} · color`}
                   </label>
-                  {modo.options.length <= 3
+                  {modo.options.length <= 2
                     ? renderSegmentedControl(
                         "Modo de color",
                         value,
@@ -2082,25 +2704,9 @@ function ApConfigStep({
             ) : null}
           </div>
         ) : (
-          <div className="ap-qty">
-            <button
-              type="button"
-              className="ap-qty-btn"
-              onClick={() => setQty(Math.max(0, qty - 1))}
-            >
-              <MinusIcon />
-            </button>
-            <input
-              type="number"
-              value={qty}
-              step={product.unidad === "m²" ? 0.1 : 1}
-              min="0"
-              onChange={(event) => setQty(Number.parseFloat(event.target.value) || 0)}
-            />
-            <span className="ap-qty-unit">{product.unidad}</span>
-            <button type="button" className="ap-qty-btn" onClick={() => setQty(qty + 1)}>
-              <PlusIcon />
-            </button>
+          <div className="ap-spec ap-spec-wide">
+            <label>Cantidad</label>
+            {renderQuantityControl()}
           </div>
         )}
       </div>
@@ -2112,9 +2718,9 @@ function ApConfigStep({
             Pasos o cargos que el comercial puede activar para este producto.
           </div>
         </div>
-        {product.adicionales.length > 0 ? (
+        {opcionalesRuta.length > 0 ? (
           <div className="ap-adicionales">
-            {product.adicionales.map((adicional) => {
+            {opcionalesRuta.map((adicional) => {
               const selected = adi.includes(adicional.code);
               const slotsPaso = slotsMaterialesOpcionalesPorPaso.get(adicional.code) ?? [];
               return (
@@ -2131,13 +2737,11 @@ function ApConfigStep({
                   >
                     <span className="cb">{selected ? <CheckIcon /> : null}</span>
                     <span className="lb">{adicional.name}</span>
-                    <span className="mt mono">
-                      {product.real
-                        ? adicional.origen === "cargo"
-                          ? "cargo"
-                          : "paso"
-                        : `+ ${formatCurrency(adicional.monto ?? 0)}`}
-                    </span>
+                    {!product.real ? (
+                      <span className="mt mono">
+                        + {formatCurrency(adicional.monto ?? 0)}
+                      </span>
+                    ) : null}
                   </button>
                   {product.real && selected && slotsPaso.length > 0 ? (
                     <div className="ap-optional-slots">
@@ -2178,7 +2782,7 @@ function ApConfigStep({
             type="button"
             className="btn btn-primary"
             onClick={onCotizar}
-            disabled={cotizando || !productoDetalle}
+            disabled={cotizando || !productoDetalle || !isAllowedQuantity}
           >
             {cotizando ? "Cotizando..." : "Cotizar"}
           </button>
@@ -2195,7 +2799,12 @@ function ApConfigStep({
             {cotizando ? "Calculando" : cotizacionExitosa ? "Detalle del cálculo" : "Precio"}
           </div>
           {cotizando ? (
-            <div className="ap-empty">
+            <div className="ap-empty ap-calculating" aria-live="polite" aria-busy="true">
+              <div className="ap-calc-loader" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
               <div className="ttl">Calculando con el Motor Universal</div>
               <div className="sub">Estamos procesando cantidad, opciones y ruta seleccionada.</div>
             </div>
@@ -2321,6 +2930,7 @@ export function AgregarProductoSheet({
   open,
   onOpenChange,
   productos,
+  fechaEntregaDefault,
   onAddItem,
   editingItem = null,
   onSaveItem,
@@ -2352,6 +2962,12 @@ export function AgregarProductoSheet({
 
   const totals = product ? getTotals(product, qty, adi) : null;
   const cotizacionExitosa = getCotizacionExitosa(cotizacion);
+
+  React.useEffect(() => {
+    if (!product) return;
+    const coercedQty = coerceQtyToPricingOptions(qty, product);
+    if (coercedQty !== qty) setQty(coercedQty);
+  }, [product, qty]);
 
   React.useEffect(() => {
     if (!open || !editingItem) return;
@@ -2404,6 +3020,7 @@ export function AgregarProductoSheet({
                 : "u.",
           medidasMode: itemToEdit.jobContext?.piezas ? "calculada" : "fija",
           precioBase: itemToEdit.precioUnitario,
+          precioConfigJson: undefined,
           descripcion: itemToEdit.varianteNombre ?? itemToEdit.categoriaComercialNombre,
           specs: itemToEdit.atributosSchema.map((attr) => ({
             key: attr.key,
@@ -2439,7 +3056,7 @@ export function AgregarProductoSheet({
 
       setProduct(nextProduct);
       setProductoDetalle(detalle);
-      setQty(getQtyFromItem(itemToEdit));
+      setQty(coerceQtyToPricingOptions(getQtyFromItem(itemToEdit), nextProduct));
       setSpecs({
         ...defaultSpecs(nextProduct),
         ...itemToEdit.especificaciones,
@@ -2479,7 +3096,7 @@ export function AgregarProductoSheet({
 
     setProduct(next);
     setProductoDetalle(detalle);
-    setQty(next.qtyDefault);
+    setQty(coerceQtyToPricingOptions(next.qtyDefault, next));
     setSpecs(defaultSpecs(next));
     setAdi([]);
     setNotaProduccion("");
@@ -2489,9 +3106,11 @@ export function AgregarProductoSheet({
       detalle?.rutasAlternativas.find((ruta) => ruta.esPreferida) ??
       detalle?.rutasAlternativas[0] ??
       null;
+    const medidaDefault = detalle ? getMedidaDefault(detalle) : null;
     setMotorConfig({
       ...DEFAULT_MOTOR_CONFIG,
       rutaAlternativaId: rutaPreferida?.id ?? "",
+      medidaPredefinidaId: medidaDefault?.id ?? "",
       piezas:
         detalle?.modoMedidas === "LIBRE"
           ? [
@@ -2525,6 +3144,11 @@ export function AgregarProductoSheet({
 
   const cotizarActual = React.useCallback(async () => {
     if (!product?.real || !product.id || !productoDetalle) return;
+    const coercedQty = coerceQtyToPricingOptions(qty, product);
+    if (coercedQty !== qty) {
+      setQty(coercedQty);
+      return;
+    }
     const rutaSel = getRutaSeleccionada(productoDetalle, motorConfig.rutaAlternativaId);
     const slotsComercialElige = getSlotsComercialElige(rutaSel);
     setCotizando(true);
@@ -2570,6 +3194,7 @@ export function AgregarProductoSheet({
         cotizacion,
         notaProduccion,
         itemId: editingItem?.id,
+        fechaEntrega: editingItem?.fechaEntrega ?? fechaEntregaDefault,
       });
       if (editingItem) {
         onSaveItem?.(nextItem);
@@ -2600,6 +3225,7 @@ export function AgregarProductoSheet({
       cotizacion,
       cotizacionExitosa,
       editingItem,
+      fechaEntregaDefault,
       motorConfig,
       onAddItem,
       onSaveItem,

@@ -16,12 +16,14 @@ import {
   ruleGroupToJsonLogic,
   summarizeRuleGroup,
   type RuleConditionUI,
+  type RuleFieldDefinition,
   type RuleGroupUI,
 } from "@/lib/rule-builder";
 
 interface RuleBuilderProps {
   value: Record<string, unknown> | null | undefined;
   includeMeasureFields?: boolean;
+  extraFields?: RuleFieldDefinition[];
   onChange: (value: Record<string, unknown> | null) => void;
 }
 
@@ -41,11 +43,12 @@ const COMBINATOR_OPTIONS: HumanSelectOption[] = [
 export function RuleBuilder({
   value,
   includeMeasureFields,
+  extraFields,
   onChange,
 }: RuleBuilderProps) {
   const fields = React.useMemo(
-    () => getRuleFields({ includeMeasureFields }),
-    [includeMeasureFields],
+    () => getRuleFields({ includeMeasureFields, extraFields }),
+    [extraFields, includeMeasureFields],
   );
   const parsed = React.useMemo(() => jsonLogicToRuleGroup(value, fields), [fields, value]);
 

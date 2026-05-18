@@ -2,6 +2,7 @@ export const MODO_COLOR_LABELS: Record<string, string> = {
   BN: 'Blanco y negro',
   CMYK: 'CMYK',
   'CMYK+blanco': 'CMYK + Blanco',
+  'CMYK+barniz': 'CMYK + Barniz',
   'CMYK+blanco+barniz': 'CMYK + Blanco + Barniz',
 };
 
@@ -25,6 +26,9 @@ export function normalizeModoColor(value: unknown): string | null {
   if (normalized === 'CMYK') return 'CMYK';
   if (['CMYK+BLANCO', 'CMYKBLANCO'].includes(normalized)) {
     return 'CMYK+blanco';
+  }
+  if (['CMYK+BARNIZ', 'CMYKBARNIZ'].includes(normalized)) {
+    return 'CMYK+barniz';
   }
   if (
     [

@@ -900,6 +900,9 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                 Volver al catálogo
               </Link>
               <CardTitle className="text-2xl">{form.nombre || "Materia prima"}</CardTitle>
+              <div className="text-xs text-muted-foreground">
+                Canónico: {materiaPrima.canonicalMaterialName ?? "Personalizado por tenant"}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <Button

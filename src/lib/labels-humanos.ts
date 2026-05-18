@@ -76,10 +76,16 @@ export const modoActivacionLabels: DiccionarioLabels = {
     ejemplo: "Laminado de tarjetas — el cliente decide si lo quiere.",
   },
   CONDICIONAL: {
-    label: "Condicional (regla automática)",
+    label: "Condicional",
     descripcion:
       "El paso se activa solo cuando se cumple una regla evaluada contra los datos de la cotización.",
     ejemplo: "Capa 2 de talonario — se imprime solo si tipoCopia ≥ 2.",
+  },
+  NO_EJECUTAR: {
+    label: "No ejecutar",
+    descripcion:
+      "El paso queda apagado para esta ruta del producto. El motor lo saltea siempre al cotizar.",
+    ejemplo: "Una ruta reusable trae CNC, pero este producto solo necesita impresión.",
   },
 };
 

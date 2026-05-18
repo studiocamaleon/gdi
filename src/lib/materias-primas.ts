@@ -88,6 +88,7 @@ export type MateriaPrimaVariante = {
   id: string;
   sku: string;
   nombreVariante: string;
+  materialPresetVarianteId?: string | null;
   activo: boolean;
   atributosVariante: Record<string, unknown>;
   unidadStock: UnidadMateriaPrima | null;
@@ -103,6 +104,10 @@ export type MateriaPrima = {
   codigo: string;
   nombre: string;
   descripcion: string;
+  materialPresetId?: string | null;
+  canonicalMaterialKey?: string | null;
+  canonicalMaterialName?: string | null;
+  canonicalAliasUsado?: string | null;
   familia: FamiliaMateriaPrima;
   subfamilia: SubfamiliaMateriaPrima;
   tipoTecnico: string;

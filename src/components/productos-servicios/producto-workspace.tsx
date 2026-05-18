@@ -8,6 +8,8 @@ import {
   CheckIcon,
   CircleAlertIcon,
   CogIcon,
+  CopyIcon,
+  Edit3Icon,
   GitBranchIcon,
   PlusIcon,
   ReceiptIcon,
@@ -15,6 +17,7 @@ import {
   StarIcon,
   TagIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,6 +34,7 @@ import {
   asociarCargoCotizacion,
   crearProductoRutaAlt,
   desasociarCargoCotizacion,
+  duplicarProductoRutaAlt,
   eliminarProductoRutaAlt,
   getCatalogoComercial,
   type LookupsConfigPaso,
@@ -38,10 +42,16 @@ import {
 import type {
   CargoDirectoCatalogo,
   CatalogoFamilias,
+  MedidaPredefinidaProducto,
   ProductoCategoriaComercial,
   ProductoDetalle,
   RutaListItem,
 } from "@/lib/productos-servicios";
+import {
+  getMedidasPredefinidas,
+  medidaLabel,
+  normalizeMedidasDraft,
+} from "@/lib/producto-medidas";
 import {
   getLabel,
   modoActivacionLabels,
@@ -63,6 +73,119 @@ interface Props {
 interface ValidacionTab {
   estado: "ok" | "warning" | "error";
   label: string;
+}
+
+function nuevaMedidaPredefinida(index: number): MedidaPredefinidaProducto {
+  return {
+    id: `medida-${Date.now()}-${index}`,
+    nombre: "",
+    anchoMm: 0,
+    altoMm: 0,
+    esDefault: index === 0,
+  };
+}
+
+function MedidasPredefinidasEditor({
+  medidas,
+  onChange,
+}: {
+  medidas: MedidaPredefinidaProducto[];
+  onChange: (medidas: MedidaPredefinidaProducto[]) => void;
+}) {
+  const updateMedida = (
+    id: string,
+    patch: Partial<MedidaPredefinidaProducto>,
+  ) => {
+    onChange(medidas.map((medida) => (medida.id === id ? { ...medida, ...patch } : medida)));
+  };
+  const setDefault = (id: string) => {
+    onChange(medidas.map((medida) => ({ ...medida, esDefault: medida.id === id })));
+  };
+  const removeMedida = (id: string) => {
+    const next = medidas.filter((medida) => medida.id !== id);
+    onChange(
+      next.some((medida) => medida.esDefault)
+        ? next
+        : next.map((medida, index) => ({ ...medida, esDefault: index === 0 })),
+    );
+  };
+  return (
+    <div className="field">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <label>Medidas disponibles</label>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={() => onChange([...medidas, nuevaMedidaPredefinida(medidas.length)])}
+        >
+          <PlusIcon />
+          Agregar medida
+        </button>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {medidas.map((medida, index) => (
+          <div
+            key={medida.id}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1.4fr 0.8fr 0.8fr auto auto",
+              gap: 8,
+              alignItems: "center",
+            }}
+          >
+            <input
+              type="text"
+              value={medida.nombre}
+              onChange={(event) => updateMedida(medida.id, { nombre: event.target.value })}
+              placeholder={medidaLabel({ ...medida, nombre: "" })}
+              aria-label={`Nombre de medida ${index + 1}`}
+            />
+            <input
+              type="number"
+              min="0"
+              value={medida.anchoMm || ""}
+              onChange={(event) =>
+                updateMedida(medida.id, { anchoMm: Number(event.target.value) || 0 })
+              }
+              placeholder="Ancho mm"
+              aria-label={`Ancho de medida ${index + 1}`}
+            />
+            <input
+              type="number"
+              min="0"
+              value={medida.altoMm || ""}
+              onChange={(event) =>
+                updateMedida(medida.id, { altoMm: Number(event.target.value) || 0 })
+              }
+              placeholder="Alto mm"
+              aria-label={`Alto de medida ${index + 1}`}
+            />
+            <button
+              type="button"
+              className={`btn btn-ghost btn-sm ${medida.esDefault ? "on" : ""}`}
+              onClick={() => setDefault(medida.id)}
+              title="Marcar como predeterminada"
+            >
+              <StarIcon />
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm danger"
+              onClick={() => removeMedida(medida.id)}
+              disabled={medidas.length <= 1}
+              title="Eliminar medida"
+            >
+              <Trash2Icon />
+            </button>
+          </div>
+        ))}
+      </div>
+      <span className="help">
+        La medida con estrella se usa por defecto al cotizar y mantiene la compatibilidad
+        con el motor.
+      </span>
+    </div>
+  );
 }
 
 const TABS: Array<{
@@ -249,8 +372,9 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
   );
   const [unidadComercial, setUnidadComercial] = React.useState(producto.unidadComercial);
   const [modoMedidas, setModoMedidas] = React.useState(producto.modoMedidas);
-  const [anchoDefault, setAnchoDefault] = React.useState(String(producto.medidaDefaultAnchoMm ?? ""));
-  const [altoDefault, setAltoDefault] = React.useState(String(producto.medidaDefaultAltoMm ?? ""));
+  const [medidas, setMedidas] = React.useState<MedidaPredefinidaProducto[]>(() =>
+    getMedidasPredefinidas(producto),
+  );
   const [activo, setActivo] = React.useState(producto.activo);
   const [guardando, setGuardando] = React.useState(false);
 
@@ -281,6 +405,12 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
       toast.error("Falta nombre");
       return;
     }
+    const medidasNormalizadas = modoMedidas === "LIBRE" ? [] : normalizeMedidasDraft(medidas);
+    const medidaDefault = medidasNormalizadas.find((medida) => medida.esDefault);
+    if (modoMedidas === "FIJA" && !medidaDefault) {
+      toast.error("Agregá al menos una medida predefinida.");
+      return;
+    }
     setGuardando(true);
     try {
       await actualizarProducto(producto.id, {
@@ -291,8 +421,9 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
           (producto.atributosComercialesJson as Record<string, unknown> | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
         modoMedidas: modoMedidas as "FIJA" | "LIBRE" | "COMERCIAL_ELIGE",
-        medidaDefaultAnchoMm: anchoDefault ? Number(anchoDefault) : null,
-        medidaDefaultAltoMm: altoDefault ? Number(altoDefault) : null,
+        medidaDefaultAnchoMm: medidaDefault?.anchoMm ?? null,
+        medidaDefaultAltoMm: medidaDefault?.altoMm ?? null,
+        medidasPredefinidasJson: medidasNormalizadas,
         activo,
       });
       toast.success("Identidad guardada");
@@ -384,24 +515,7 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
             </div>
           </div>
           {modoMedidas !== "LIBRE" && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-              <div className="field">
-                <label>Ancho default <span className="hint">mm</span></label>
-                <input
-                  type="number"
-                  value={anchoDefault}
-                  onChange={(event) => setAnchoDefault(event.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label>Alto default <span className="hint">mm</span></label>
-                <input
-                  type="number"
-                  value={altoDefault}
-                  onChange={(event) => setAltoDefault(event.target.value)}
-                />
-              </div>
-            </div>
+            <MedidasPredefinidasEditor medidas={medidas} onChange={setMedidas} />
           )}
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
             <button type="button" className="btn btn-primary" onClick={guardar} disabled={guardando}>
@@ -426,6 +540,10 @@ function RutasTab({
 }) {
   const router = useRouter();
   const [agregando, setAgregando] = React.useState(false);
+  const [rutaEditandoId, setRutaEditandoId] = React.useState<string | null>(null);
+  const [nombreEditado, setNombreEditado] = React.useState("");
+  const [guardandoNombreId, setGuardandoNombreId] = React.useState<string | null>(null);
+  const [duplicandoRutaId, setDuplicandoRutaId] = React.useState<string | null>(null);
   const [nuevaRutaId, setNuevaRutaId] = React.useState("");
   const [nuevoNombre, setNuevoNombre] = React.useState("");
   const yaUsadas = new Set(producto.rutasAlternativas.map((ra) => ra.ruta.id));
@@ -467,6 +585,44 @@ function RutasTab({
     }
   };
 
+  const iniciarEdicionNombre = (rutaAltId: string, nombre: string) => {
+    setRutaEditandoId(rutaAltId);
+    setNombreEditado(nombre);
+  };
+
+  const guardarNombreRuta = async (rutaAltId: string) => {
+    const nombre = nombreEditado.trim();
+    if (!nombre) {
+      toast.error("El nombre no puede quedar vacío");
+      return;
+    }
+    setGuardandoNombreId(rutaAltId);
+    try {
+      await actualizarProductoRutaAlt(rutaAltId, { nombre });
+      toast.success("Nombre de ruta actualizado");
+      setRutaEditandoId(null);
+      setNombreEditado("");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error actualizando ruta");
+    } finally {
+      setGuardandoNombreId(null);
+    }
+  };
+
+  const duplicarRuta = async (rutaAltId: string, nombre: string) => {
+    setDuplicandoRutaId(rutaAltId);
+    try {
+      await duplicarProductoRutaAlt(rutaAltId, { nombre: `${nombre} copia` });
+      toast.success("Ruta duplicada");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error duplicando ruta");
+    } finally {
+      setDuplicandoRutaId(null);
+    }
+  };
+
   const quitarRuta = async (rutaAltId: string, nombre: string) => {
     if (!confirm(`¿Quitar la ruta "${nombre}" de este producto?`)) return;
     try {
@@ -499,7 +655,57 @@ function RutasTab({
             <span className="star">{ra.esPreferida ? "★" : "☆"}</span>
             <div className="body">
               <div className="ttl">
-                {ra.nombre}
+                {rutaEditandoId === ra.id ? (
+                  <>
+                    <input
+                      type="text"
+                      value={nombreEditado}
+                      onChange={(event) => setNombreEditado(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") guardarNombreRuta(ra.id);
+                        if (event.key === "Escape") {
+                          setRutaEditandoId(null);
+                          setNombreEditado("");
+                        }
+                      }}
+                      autoFocus
+                      className="route-name-input"
+                      aria-label={`Nombre de la ruta ${ra.nombre}`}
+                    />
+                    <button
+                      className="icon-btn"
+                      type="button"
+                      title="Guardar nombre"
+                      disabled={guardandoNombreId === ra.id}
+                      onClick={() => guardarNombreRuta(ra.id)}
+                    >
+                      <CheckIcon className="size-4" />
+                    </button>
+                    <button
+                      className="icon-btn"
+                      type="button"
+                      title="Cancelar"
+                      onClick={() => {
+                        setRutaEditandoId(null);
+                        setNombreEditado("");
+                      }}
+                    >
+                      <XIcon className="size-4" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {ra.nombre}
+                    <button
+                      className="icon-btn"
+                      type="button"
+                      title="Editar nombre"
+                      onClick={() => iniciarEdicionNombre(ra.id, ra.nombre)}
+                    >
+                      <Edit3Icon className="size-4" />
+                    </button>
+                  </>
+                )}
                 {ra.esPreferida ? <span className="tag ok"><span className="d" />Preferida</span> : null}
               </div>
               <div className="sub" style={{ fontFamily: "var(--font-mono)", fontSize: 11, marginTop: 2 }}>
@@ -512,11 +718,20 @@ function RutasTab({
                 <span style={{ color: "var(--ok)" }}>Configurados {ra.configPasos.length}/{ra.ruta.pasos.length}</span>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 6, alignSelf: "flex-end" }}>
+            <div className="route-tab-actions">
               <Link className="btn btn-primary" href={`/productos-servicios/${producto.id}/rutas/${ra.id}`}>
                 <CogIcon className="size-4" />
                 Configurar pasos
               </Link>
+              <button
+                className="icon-btn"
+                type="button"
+                title="Duplicar ruta"
+                disabled={duplicandoRutaId === ra.id}
+                onClick={() => duplicarRuta(ra.id, ra.nombre)}
+              >
+                <CopyIcon className="size-4" />
+              </button>
               {!ra.esPreferida ? (
                 <button className="icon-btn" type="button" title="Marcar preferida" onClick={() => marcarPreferida(ra.id)}>
                   <StarIcon className="size-4" />
@@ -652,7 +867,7 @@ function PasosTab({
         <div className="wiz-section">
           <div className="wiz-section-head">
             <div className="body">
-              <h2>Configurar pasos: {producto.nombre} → {rutaSeleccionada.nombre}</h2>
+              <h2>{rutaSeleccionada.nombre}</h2>
               <div className="helptext">
                 Para cada paso configurás la máquina, perfil, modos y slots de materiales. Los pasos OPCIONALES no se ejecutan a menos que el comercial los active.
               </div>
@@ -698,9 +913,6 @@ function PasosTab({
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--ok)" }} />
                 {rutaSeleccionada.configPasos.length}/{rutaSeleccionada.ruta.pasos.length} pasos configurados
               </div>
-              <Link className="btn" href={`/productos-servicios/${producto.id}/rutas/${rutaSeleccionada.id}`}>
-                Editar pasos enfocado <span aria-hidden="true">→</span>
-              </Link>
             </div>
           </div>
         </div>

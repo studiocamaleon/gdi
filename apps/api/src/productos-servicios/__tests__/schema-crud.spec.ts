@@ -264,7 +264,9 @@ describe('Schema CRUD — Modelo Universal V2', () => {
                 include: {
                   maquinaM1: true,
                   perfilM1: true,
-                  slotsMateriales: true,
+                  slotsMateriales: {
+                    include: { candidatos: { include: { variantes: true } } },
+                  },
                   rutaPaso: true,
                 },
                 orderBy: { rutaPaso: { orden: 'asc' } },
@@ -313,7 +315,12 @@ describe('Schema CRUD — Modelo Universal V2', () => {
           rutasAlternativas: {
             include: {
               configPasos: {
-                include: { slotsMateriales: true, rutaPaso: true },
+                include: {
+                  slotsMateriales: {
+                    include: { candidatos: { include: { variantes: true } } },
+                  },
+                  rutaPaso: true,
+                },
               },
             },
           },
@@ -327,10 +334,8 @@ describe('Schema CRUD — Modelo Universal V2', () => {
       const slot = impresion!.slotsMateriales[0];
       expect(slot.modoSeleccion).toBe('MOTOR_ELIGE_AUTO');
       expect(slot.criterioMotorAuto).toBe('MAYOR_APROVECHAMIENTO');
-      const candidatos = slot.materialesCandidatosJson as Array<{
-        variantId: string;
-      }>;
-      expect(candidatos.length).toBe(2); // 2 anchos de rollo (1.37m + 1.52m)
+      const variantes = slot.candidatos.flatMap((c) => c.variantes);
+      expect(variantes.length).toBe(2); // 2 anchos de rollo (1.37m + 1.52m)
     });
 
     it('Talonario emblocado tiene 3 pasos impresión con activación CONDICIONAL por capa', async () => {

@@ -43,6 +43,13 @@ const PIECE_COLORS = [
 type PieceStyle = (typeof PIECE_COLORS)[number];
 type Placement = NestingViewerInput["placements"][number];
 type VisualConfig = NonNullable<NestingViewerInput["visualConfig"]>;
+type DisplayTransform = {
+  rotated: boolean;
+  substrateWidthMm: number;
+  substrateHeightMm: number;
+  scale: number;
+  padPx: number;
+};
 
 function colorForKey(key: string): PieceStyle {
   let h = 0;
@@ -545,18 +552,38 @@ function SubstrateView({
 }: SubstrateViewProps) {
   const widthMm = substrate.widthMm;
   const heightMm = substrate.kind === "sheet" ? substrate.heightMm : substrate.lengthMm;
-  const longestMm = Math.max(widthMm, heightMm);
+  const displayLandscape = shouldDisplaySheetLandscape(substrate.kind, widthMm, heightMm);
+  const displayWidthMm = displayLandscape ? heightMm : widthMm;
+  const displayHeightMm = displayLandscape ? widthMm : heightMm;
+  const longestMm = Math.max(displayWidthMm, displayHeightMm);
   const scale = maxPx / longestMm;
-  const wPx = widthMm * scale;
-  const hPx = heightMm * scale;
+  const wPx = displayWidthMm * scale;
+  const hPx = displayHeightMm * scale;
   const padPx = 34;
   const effectiveVisualConfig = getEffectiveVisualConfig(visualConfig, widthMm, heightMm);
+  const displayTransform: DisplayTransform = {
+    rotated: displayLandscape,
+    substrateWidthMm: widthMm,
+    substrateHeightMm: heightMm,
+    scale,
+    padPx,
+  };
   const viewBoxW = wPx + padPx * 2;
   const viewBoxH = hPx + padPx * 2;
   const hasMargins = Object.values(effectiveVisualConfig.margins).some((value) => value > 0);
+  const largeSheet = substrate.kind === "sheet" && Math.max(widthMm, heightMm) >= 1000;
   const canvasMaxWidth = Math.min(
-    Math.max(viewBoxW, substrate.kind === "sheet" ? 520 : 680),
-    substrate.kind === "sheet" ? 760 : 980,
+    Math.max(viewBoxW, substrate.kind === "sheet" ? (largeSheet ? 820 : 520) : 680),
+    substrate.kind === "sheet" ? (largeSheet ? 1180 : 760) : 980,
+  );
+  const substrateRect = mapDisplayRect(displayTransform, 0, 0, widthMm, heightMm);
+  const printableArea = getPrintableArea(effectiveVisualConfig, widthMm, heightMm);
+  const printableClipRect = mapDisplayRect(
+    displayTransform,
+    printableArea.xMm,
+    printableArea.yMm,
+    printableArea.widthMm,
+    printableArea.heightMm,
   );
 
   return (
@@ -585,24 +612,19 @@ function SubstrateView({
               <line x1="0" y1="0" x2="0" y2="7" stroke="#8b8277" strokeWidth="1" opacity="0.2" />
             </pattern>
             <clipPath id={`printable-clip-${substrateIndex}`}>
-              {(() => {
-                const printableArea = getPrintableArea(effectiveVisualConfig, widthMm, heightMm);
-                return (
-                  <rect
-                    x={padPx + printableArea.xMm * scale}
-                    y={padPx + printableArea.yMm * scale}
-                    width={printableArea.widthMm * scale}
-                    height={printableArea.heightMm * scale}
-                  />
-                );
-              })()}
+              <rect
+                x={printableClipRect.x}
+                y={printableClipRect.y}
+                width={printableClipRect.width}
+                height={printableClipRect.height}
+              />
             </clipPath>
           </defs>
           <rect
-            x={padPx}
-            y={padPx}
-            width={wPx}
-            height={hPx}
+            x={substrateRect.x}
+            y={substrateRect.y}
+            width={substrateRect.width}
+            height={substrateRect.height}
             fill="#fbf6e7"
             stroke="#d9a85b"
             strokeWidth={1.2}
@@ -621,6 +643,7 @@ function SubstrateView({
             substrateWidthMm={widthMm}
             substrateHeightMm={heightMm}
             placements={placements}
+            displayTransform={displayTransform}
           />
           {hasMargins ? (
             <MarginsLayer
@@ -630,6 +653,7 @@ function SubstrateView({
               substrateWidthMm={widthMm}
               substrateHeightMm={heightMm}
               patternId={`margin-pattern-${substrateIndex}`}
+              displayTransform={displayTransform}
             />
           ) : null}
           <PrintableAreaLayer
@@ -638,6 +662,7 @@ function SubstrateView({
             scale={scale}
             substrateWidthMm={widthMm}
             substrateHeightMm={heightMm}
+            displayTransform={displayTransform}
           />
           <SpacingLayer
             visualConfig={effectiveVisualConfig}
@@ -645,13 +670,14 @@ function SubstrateView({
             padPx={padPx}
             scale={scale}
             clipPathId={`printable-clip-${substrateIndex}`}
+            displayTransform={displayTransform}
           />
           <DimensionLabels
             padPx={padPx}
             widthPx={wPx}
             heightPx={hPx}
-            widthMm={widthMm}
-            heightMm={heightMm}
+            widthMm={displayWidthMm}
+            heightMm={displayHeightMm}
             kind={substrate.kind}
           />
           {placements.map((placement, idx) => (
@@ -659,9 +685,8 @@ function SubstrateView({
               key={`${placement.pieceId}-${idx}`}
               placement={placement}
               index={idx}
-              padPx={padPx}
-              scale={scale}
               showLabels={showLabels}
+              displayTransform={displayTransform}
             />
           ))}
         </svg>
@@ -708,43 +733,63 @@ function DimensionLabels({
 function PlacementRect({
   placement,
   index,
-  padPx,
-  scale,
   showLabels,
+  displayTransform,
 }: {
   placement: Placement;
   index: number;
-  padPx: number;
-  scale: number;
   showLabels: boolean;
+  displayTransform: DisplayTransform;
 }) {
-  const x = padPx + placement.xMm * scale;
-  const y = padPx + placement.yMm * scale;
-  const w = placement.widthMm * scale;
-  const h = placement.heightMm * scale;
+  const rect = mapDisplayRect(displayTransform, placement.xMm, placement.yMm, placement.widthMm, placement.heightMm);
+  const { x, y, width: w, height: h } = rect;
   const style = colorForKey(placementGroupKey(placement));
   const baseLabel = placementLabel(placement);
   const label =
     placement.panelIndex && placement.panelCount
       ? `${baseLabel} · ${placement.panelIndex}/${placement.panelCount}`
       : baseLabel;
-  const overlapStartPx = Math.max(0, placement.overlapStartMm ?? 0) * scale;
-  const overlapEndPx = Math.max(0, placement.overlapEndMm ?? 0) * scale;
+  const overlapStartMm = Math.max(0, placement.overlapStartMm ?? 0);
+  const overlapEndMm = Math.max(0, placement.overlapEndMm ?? 0);
+  const verticalStart = overlapStartMm > 0
+    ? mapDisplayRect(displayTransform, placement.xMm, placement.yMm, Math.min(overlapStartMm, placement.widthMm), placement.heightMm)
+    : null;
+  const verticalEnd = overlapEndMm > 0
+    ? mapDisplayRect(
+      displayTransform,
+      placement.xMm + Math.max(0, placement.widthMm - overlapEndMm),
+      placement.yMm,
+      Math.min(overlapEndMm, placement.widthMm),
+      placement.heightMm,
+    )
+    : null;
+  const horizontalStart = overlapStartMm > 0
+    ? mapDisplayRect(displayTransform, placement.xMm, placement.yMm, placement.widthMm, Math.min(overlapStartMm, placement.heightMm))
+    : null;
+  const horizontalEnd = overlapEndMm > 0
+    ? mapDisplayRect(
+      displayTransform,
+      placement.xMm,
+      placement.yMm + Math.max(0, placement.heightMm - overlapEndMm),
+      placement.widthMm,
+      Math.min(overlapEndMm, placement.heightMm),
+    )
+    : null;
 
   return (
     <g>
       <rect x={x} y={y} width={w} height={h} fill={style.fill} stroke={style.stroke} strokeWidth={0.8} />
-      {placement.panelAxis === "vertical" && overlapStartPx > 0 ? (
-        <rect x={x} y={y} width={Math.min(overlapStartPx, w)} height={h} fill="#fef3c7" fillOpacity={0.58} stroke="#d97706" strokeWidth={0.35} />
+      {placement.panelAxis === "vertical" && verticalStart ? (
+        <rect x={verticalStart.x} y={verticalStart.y} width={verticalStart.width} height={verticalStart.height} fill="#fef3c7" fillOpacity={0.58} stroke="#d97706" strokeWidth={0.35} />
       ) : null}
-      {placement.panelAxis === "vertical" && overlapEndPx > 0 ? (
-        <rect x={x + Math.max(0, w - overlapEndPx)} y={y} width={Math.min(overlapEndPx, w)} height={h} fill="#fef3c7" fillOpacity={0.58} stroke="#d97706" strokeWidth={0.35} />
+      {placement.panelAxis === "vertical" && verticalEnd ? (
+        <rect x={verticalEnd.x} y={verticalEnd.y} width={verticalEnd.width} height={verticalEnd.height} fill="#fef3c7" fillOpacity={0.58} stroke="#d97706" strokeWidth={0.35} />
       ) : null}
-      {placement.panelAxis === "horizontal" && overlapStartPx > 0 ? (
-        <rect x={x} y={y} width={w} height={Math.min(overlapStartPx, h)} fill="#fef3c7" fillOpacity={0.58} stroke="#d97706" strokeWidth={0.35} />
+      {placement.panelAxis === "horizontal" && horizontalStart ? (
+        <rect x={horizontalStart.x} y={horizontalStart.y} width={horizontalStart.width} height={horizontalStart.height} fill="#fef3c7" fillOpacity={0.58} stroke="#d97706" strokeWidth={0.35} />
       ) : null}
-      {placement.panelAxis === "horizontal" && overlapEndPx > 0 ? (
-        <rect x={x} y={y + Math.max(0, h - overlapEndPx)} width={w} height={Math.min(overlapEndPx, h)} fill="#fef3c7" fillOpacity={0.58} stroke="#d97706" strokeWidth={0.35} />
+      {placement.panelAxis === "horizontal" && horizontalEnd ? (
+        <rect x={horizontalEnd.x} y={horizontalEnd.y} width={horizontalEnd.width} height={horizontalEnd.height} fill="#fef3c7" fillOpacity={0.58} stroke="#d97706" strokeWidth={0.35} />
       ) : null}
       {placement.rotated ? (
         <line x1={x} y1={y} x2={x + w} y2={y + h} stroke={style.text} strokeWidth={0.45} strokeDasharray="3 3" opacity={0.35} />
@@ -875,6 +920,35 @@ function getPrintableArea(visualConfig: VisualConfig, widthMm: number, heightMm:
   };
 }
 
+function shouldDisplaySheetLandscape(kind: "sheet" | "roll", widthMm: number, heightMm: number) {
+  return kind === "sheet" && heightMm > widthMm * 1.12 && Math.max(widthMm, heightMm) >= 1000;
+}
+
+function mapDisplayRect(
+  transform: DisplayTransform,
+  xMm: number,
+  yMm: number,
+  widthMm: number,
+  heightMm: number,
+) {
+  const { padPx, scale } = transform;
+  if (!transform.rotated) {
+    return {
+      x: padPx + xMm * scale,
+      y: padPx + yMm * scale,
+      width: widthMm * scale,
+      height: heightMm * scale,
+    };
+  }
+
+  return {
+    x: padPx + (transform.substrateHeightMm - yMm - heightMm) * scale,
+    y: padPx + xMm * scale,
+    width: heightMm * scale,
+    height: widthMm * scale,
+  };
+}
+
 function getPieceBleedMm(visualConfig: VisualConfig) {
   const explicit = visualConfig.pieceBleedMm;
   if (Number.isFinite(explicit) && explicit != null) {
@@ -885,24 +959,25 @@ function getPieceBleedMm(visualConfig: VisualConfig) {
 
 function PrintableAreaLayer({
   visualConfig,
-  padPx,
-  scale,
   substrateWidthMm,
   substrateHeightMm,
+  displayTransform,
 }: {
   visualConfig: VisualConfig;
   padPx: number;
   scale: number;
   substrateWidthMm: number;
   substrateHeightMm: number;
+  displayTransform: DisplayTransform;
 }) {
   const printableArea = getPrintableArea(visualConfig, substrateWidthMm, substrateHeightMm);
+  const rect = mapDisplayRect(displayTransform, printableArea.xMm, printableArea.yMm, printableArea.widthMm, printableArea.heightMm);
   return (
     <rect
-      x={padPx + printableArea.xMm * scale}
-      y={padPx + printableArea.yMm * scale}
-      width={printableArea.widthMm * scale}
-      height={printableArea.heightMm * scale}
+      x={rect.x}
+      y={rect.y}
+      width={rect.width}
+      height={rect.height}
       fill="#ffffff"
       fillOpacity={0.18}
       stroke="#9fd6b1"
@@ -914,11 +989,10 @@ function PrintableAreaLayer({
 
 function MarginsLayer({
   visualConfig,
-  padPx,
-  scale,
   substrateWidthMm,
   substrateHeightMm,
   patternId,
+  displayTransform,
 }: {
   visualConfig: VisualConfig;
   padPx: number;
@@ -926,18 +1000,23 @@ function MarginsLayer({
   substrateWidthMm: number;
   substrateHeightMm: number;
   patternId: string;
+  displayTransform: DisplayTransform;
 }) {
   const { leftMm, rightMm, topMm, bottomMm } = visualConfig.margins;
   const fill = `url(#${patternId})`;
+  const top = mapDisplayRect(displayTransform, 0, 0, substrateWidthMm, topMm);
+  const bottom = mapDisplayRect(displayTransform, 0, substrateHeightMm - bottomMm, substrateWidthMm, bottomMm);
+  const left = mapDisplayRect(displayTransform, 0, 0, leftMm, substrateHeightMm);
+  const right = mapDisplayRect(displayTransform, substrateWidthMm - rightMm, 0, rightMm, substrateHeightMm);
   return (
     <g opacity={0.95}>
-      {topMm > 0 ? <rect x={padPx} y={padPx} width={substrateWidthMm * scale} height={topMm * scale} fill={fill} /> : null}
+      {topMm > 0 ? <rect x={top.x} y={top.y} width={top.width} height={top.height} fill={fill} /> : null}
       {bottomMm > 0 ? (
-        <rect x={padPx} y={padPx + (substrateHeightMm - bottomMm) * scale} width={substrateWidthMm * scale} height={bottomMm * scale} fill={fill} />
+        <rect x={bottom.x} y={bottom.y} width={bottom.width} height={bottom.height} fill={fill} />
       ) : null}
-      {leftMm > 0 ? <rect x={padPx} y={padPx} width={leftMm * scale} height={substrateHeightMm * scale} fill={fill} /> : null}
+      {leftMm > 0 ? <rect x={left.x} y={left.y} width={left.width} height={left.height} fill={fill} /> : null}
       {rightMm > 0 ? (
-        <rect x={padPx + (substrateWidthMm - rightMm) * scale} y={padPx} width={rightMm * scale} height={substrateHeightMm * scale} fill={fill} />
+        <rect x={right.x} y={right.y} width={right.width} height={right.height} fill={fill} />
       ) : null}
     </g>
   );
@@ -945,11 +1024,10 @@ function MarginsLayer({
 
 function CostingOverlay({
   costingPreview,
-  padPx,
-  scale,
   substrateWidthMm,
   substrateHeightMm,
   placements,
+  displayTransform,
 }: {
   costingPreview?: NestingViewerInput["costingPreview"];
   padPx: number;
@@ -957,6 +1035,7 @@ function CostingOverlay({
   substrateWidthMm: number;
   substrateHeightMm: number;
   placements: NestingViewerInput["placements"];
+  displayTransform: DisplayTransform;
 }) {
   if (!costingPreview || costingPreview.strategy === "simple") return null;
 
@@ -964,17 +1043,7 @@ function CostingOverlay({
     return (
       <g>
         {placements.map((placement, idx) => (
-          <rect
-            key={`cost-${placement.pieceId}-${idx}`}
-            x={padPx + placement.xMm * scale}
-            y={padPx + placement.yMm * scale}
-            width={placement.widthMm * scale}
-            height={placement.heightMm * scale}
-            fill="#fff1c8"
-            fillOpacity={0.4}
-            stroke="#e7be58"
-            strokeWidth={0.5}
-          />
+          <CostingRect key={`cost-${placement.pieceId}-${idx}`} rect={mapDisplayRect(displayTransform, placement.xMm, placement.yMm, placement.widthMm, placement.heightMm)} />
         ))}
       </g>
     );
@@ -990,10 +1059,7 @@ function CostingOverlay({
   return (
     <g>
       <rect
-        x={padPx + bounds.xMm * scale}
-        y={padPx + bounds.yMm * scale}
-        width={bounds.widthMm * scale}
-        height={bounds.heightMm * scale}
+        {...svgRect(mapDisplayRect(displayTransform, bounds.xMm, bounds.yMm, bounds.widthMm, bounds.heightMm))}
         fill="#fff1c8"
         fillOpacity={0.62}
         stroke="#e7be58"
@@ -1001,10 +1067,7 @@ function CostingOverlay({
       />
       {costingPreview.wasteAreaMm2 && costingPreview.wasteAreaMm2 > 0 ? (
         <rect
-          x={padPx + bounds.xMm * scale}
-          y={padPx + bounds.yMm * scale}
-          width={bounds.widthMm * scale}
-          height={bounds.heightMm * scale}
+          {...svgRect(mapDisplayRect(displayTransform, bounds.xMm, bounds.yMm, bounds.widthMm, bounds.heightMm))}
           fill="#fef3ed"
           fillOpacity={0.3}
           stroke="#f4b9a0"
@@ -1016,18 +1079,39 @@ function CostingOverlay({
   );
 }
 
+function CostingRect({ rect }: { rect: ReturnType<typeof mapDisplayRect> }) {
+  return (
+    <rect
+      {...svgRect(rect)}
+      fill="#fff1c8"
+      fillOpacity={0.4}
+      stroke="#e7be58"
+      strokeWidth={0.5}
+    />
+  );
+}
+
+function svgRect(rect: ReturnType<typeof mapDisplayRect>) {
+  return {
+    x: rect.x,
+    y: rect.y,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
 function SpacingLayer({
   visualConfig,
   placements,
-  padPx,
-  scale,
   clipPathId,
+  displayTransform,
 }: {
   visualConfig: VisualConfig;
   placements: NestingViewerInput["placements"];
   padPx: number;
   scale: number;
   clipPathId: string;
+  displayTransform: DisplayTransform;
 }) {
   const sepH = visualConfig.spacing.horizontalMm;
   const sepV = visualConfig.spacing.verticalMm;
@@ -1045,29 +1129,42 @@ function SpacingLayer({
         const hasRightNeighbor = sepH > 0 && hasAdjacentPlacement(placement, placements, "right", sepH);
         const hasTopNeighbor = sepV > 0 && hasAdjacentPlacement(placement, placements, "top", sepV);
         const hasBottomNeighbor = sepV > 0 && hasAdjacentPlacement(placement, placements, "bottom", sepV);
+        const leftBleed = mapDisplayRect(displayTransform, leftGapX, placement.yMm, pieceBleedMm, placement.heightMm);
+        const rightBleed = mapDisplayRect(displayTransform, rightGapX, placement.yMm, hasRightNeighbor ? sepH : pieceBleedMm, placement.heightMm);
+        const topBleed = mapDisplayRect(displayTransform, placement.xMm, topGapY, placement.widthMm, pieceBleedMm);
+        const bottomBleed = mapDisplayRect(displayTransform, placement.xMm, bottomGapY, placement.widthMm, hasBottomNeighbor ? sepV : pieceBleedMm);
         return (
           <React.Fragment key={`spacing-${placement.pieceId}-${idx}`}>
             {pieceBleedMm > 0 && !hasLeftNeighbor ? (
-              <rect x={padPx + leftGapX * scale} y={padPx + placement.yMm * scale} width={Math.max(1, pieceBleedMm * scale)} height={placement.heightMm * scale} fill="#a8a29e" />
+              <rect {...svgRectWithMinimum(leftBleed)} fill="#a8a29e" />
             ) : null}
             {hasRightNeighbor ? (
-              <rect x={padPx + rightGapX * scale} y={padPx + placement.yMm * scale} width={Math.max(1, sepH * scale)} height={placement.heightMm * scale} fill="#a8a29e" />
+              <rect {...svgRectWithMinimum(rightBleed)} fill="#a8a29e" />
             ) : pieceBleedMm > 0 ? (
-              <rect x={padPx + rightGapX * scale} y={padPx + placement.yMm * scale} width={Math.max(1, pieceBleedMm * scale)} height={placement.heightMm * scale} fill="#a8a29e" />
+              <rect {...svgRectWithMinimum(rightBleed)} fill="#a8a29e" />
             ) : null}
             {pieceBleedMm > 0 && !hasTopNeighbor ? (
-              <rect x={padPx + placement.xMm * scale} y={padPx + topGapY * scale} width={placement.widthMm * scale} height={Math.max(1, pieceBleedMm * scale)} fill="#a8a29e" />
+              <rect {...svgRectWithMinimum(topBleed)} fill="#a8a29e" />
             ) : null}
             {hasBottomNeighbor ? (
-              <rect x={padPx + placement.xMm * scale} y={padPx + bottomGapY * scale} width={placement.widthMm * scale} height={Math.max(1, sepV * scale)} fill="#a8a29e" />
+              <rect {...svgRectWithMinimum(bottomBleed)} fill="#a8a29e" />
             ) : pieceBleedMm > 0 ? (
-              <rect x={padPx + placement.xMm * scale} y={padPx + bottomGapY * scale} width={placement.widthMm * scale} height={Math.max(1, pieceBleedMm * scale)} fill="#a8a29e" />
+              <rect {...svgRectWithMinimum(bottomBleed)} fill="#a8a29e" />
             ) : null}
           </React.Fragment>
         );
       })}
     </g>
   );
+}
+
+function svgRectWithMinimum(rect: ReturnType<typeof mapDisplayRect>) {
+  return {
+    x: rect.x,
+    y: rect.y,
+    width: Math.max(1, rect.width),
+    height: Math.max(1, rect.height),
+  };
 }
 
 function hasAdjacentPlacement(

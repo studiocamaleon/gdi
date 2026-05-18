@@ -1,17 +1,44 @@
 import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
 import type { CurrentAuth } from '../auth/auth.types';
 import { CurrentSession } from '../auth/current-auth.decorator';
+import { InstallMaterialPresetDto } from './dto/install-material-preset.dto';
 import { UpdateVariantePrecioReferenciaDto } from './dto/update-variante-precio-referencia.dto';
 import { UpsertMateriaPrimaDto } from './dto/upsert-materia-prima.dto';
+import { InventarioBibliotecaService } from './inventario-biblioteca.service';
 import { InventarioService } from './inventario.service';
 
 @Controller('inventario/materias-primas')
 export class InventarioController {
-  constructor(private readonly inventarioService: InventarioService) {}
+  constructor(
+    private readonly inventarioService: InventarioService,
+    private readonly bibliotecaService: InventarioBibliotecaService,
+  ) {}
 
   @Get()
   findAll(@CurrentSession() auth: CurrentAuth) {
     return this.inventarioService.findAllMateriasPrimas(auth);
+  }
+
+  @Get('biblioteca')
+  listarBiblioteca(@CurrentSession() auth: CurrentAuth) {
+    return this.bibliotecaService.listar(auth);
+  }
+
+  @Get('biblioteca/:key')
+  obtenerBiblioteca(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('key') key: string,
+  ) {
+    return this.bibliotecaService.obtener(auth, key);
+  }
+
+  @Post('biblioteca/:key/instalar')
+  instalarBiblioteca(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('key') key: string,
+    @Body() payload: InstallMaterialPresetDto,
+  ) {
+    return this.bibliotecaService.instalar(auth, key, payload);
   }
 
   @Get(':id')

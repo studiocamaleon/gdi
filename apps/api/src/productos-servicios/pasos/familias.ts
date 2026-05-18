@@ -14,7 +14,153 @@
  *     el primer producto que las use.
  */
 
-import type { DefinicionFamilia, FamiliaCodigo } from './types';
+import type {
+  CompatibilidadMaterialSlot,
+  DefinicionFamilia,
+  FamiliaCodigo,
+} from './types';
+
+const MP = {
+  sustratoHoja: {
+    familiasMateriaPrima: ['SUSTRATO'],
+    subfamiliasMateriaPrima: ['SUSTRATO_HOJA'],
+  },
+  sustratoImpresionArea: {
+    familiasMateriaPrima: ['SUSTRATO'],
+    subfamiliasMateriaPrima: [
+      'SUSTRATO_ROLLO_FLEXIBLE',
+      'SUSTRATO_RIGIDO',
+      'OBJETO_PROMOCIONAL_BASE',
+    ],
+  },
+  sustratoPieza: {
+    familiasMateriaPrima: ['SUSTRATO'],
+    subfamiliasMateriaPrima: ['SUSTRATO_RIGIDO', 'OBJETO_PROMOCIONAL_BASE'],
+  },
+  sustratoGrabable: {
+    familiasMateriaPrima: [
+      'SUSTRATO',
+      'METAL_ESTRUCTURA',
+      'POP_EXHIBIDOR',
+      'HERRAJE_ACCESORIO',
+    ],
+    subfamiliasMateriaPrima: [
+      'SUSTRATO_RIGIDO',
+      'OBJETO_PROMOCIONAL_BASE',
+      'CHAPA_METALICA',
+      'SEMIELABORADO_POP',
+      'ARGOLLA_LLAVERO_ACCESORIO',
+    ],
+  },
+  filmTransfer: {
+    familiasMateriaPrima: ['TRANSFERENCIA_LAMINACION'],
+    subfamiliasMateriaPrima: ['FILM_TRANSFERENCIA', 'PAPEL_TRANSFERENCIA'],
+  },
+  textil: {
+    familiasMateriaPrima: ['SUSTRATO'],
+    subfamiliasMateriaPrima: ['OBJETO_PROMOCIONAL_BASE'],
+  },
+  laminadoFilm: {
+    familiasMateriaPrima: ['TRANSFERENCIA_LAMINACION'],
+    subfamiliasMateriaPrima: ['LAMINADO_FILM'],
+  },
+  quimicoAcabado: {
+    familiasMateriaPrima: ['QUIMICO_AUXILIAR', 'PINTURA_RECUBRIMIENTO'],
+    subfamiliasMateriaPrima: ['QUIMICO_ACABADO', 'PRIMER_SELLADOR'],
+  },
+  filmMetalico: {
+    familiasMateriaPrima: ['TRANSFERENCIA_LAMINACION'],
+    subfamiliasMateriaPrima: ['LAMINADO_FILM', 'FILM_TRANSFERENCIA'],
+  },
+  matriz: {
+    familiasMateriaPrima: ['HERRAJE_ACCESORIO', 'METAL_ESTRUCTURA'],
+    subfamiliasMateriaPrima: [
+      'FIJACION_AUXILIAR',
+      'OJAL_OJALILLO_REMACHE',
+      'CHAPA_METALICA',
+    ],
+  },
+  pintura: {
+    familiasMateriaPrima: ['PINTURA_RECUBRIMIENTO'],
+    subfamiliasMateriaPrima: ['PINTURA_CARTELERIA', 'PRIMER_SELLADOR'],
+  },
+  grapas: {
+    familiasMateriaPrima: ['HERRAJE_ACCESORIO', 'TERMINACION_EDITORIAL'],
+    subfamiliasMateriaPrima: ['FIJACION_AUXILIAR', 'ANILLADO_ENCUADERNACION'],
+  },
+  anillo: {
+    familiasMateriaPrima: ['TERMINACION_EDITORIAL'],
+    subfamiliasMateriaPrima: ['ANILLADO_ENCUADERNACION'],
+  },
+  adhesivo: {
+    familiasMateriaPrima: ['ADHESIVO_TECNICO', 'QUIMICO_AUXILIAR'],
+    subfamiliasMateriaPrima: [
+      'ADHESIVO_LIQUIDO_ESTRUCTURAL',
+      'CINTA_DOBLE_FAZ_TECNICA',
+      'AUXILIAR_PROCESO',
+    ],
+  },
+  tapa: {
+    familiasMateriaPrima: ['TERMINACION_EDITORIAL', 'SUSTRATO'],
+    subfamiliasMateriaPrima: ['TAPA_ENCUADERNACION', 'SUSTRATO_HOJA'],
+  },
+  cartonBase: {
+    familiasMateriaPrima: ['SUSTRATO', 'POP_EXHIBIDOR'],
+    subfamiliasMateriaPrima: ['SUSTRATO_HOJA', 'SEMIELABORADO_POP'],
+  },
+  cinta: {
+    familiasMateriaPrima: ['ADHESIVO_TECNICO', 'PACKING_INSTALACION'],
+    subfamiliasMateriaPrima: [
+      'CINTA_DOBLE_FAZ_TECNICA',
+      'CONSUMIBLE_INSTALACION',
+      'SISTEMA_COLGADO_MONTAJE',
+    ],
+  },
+  packaging: {
+    familiasMateriaPrima: ['TERMINACION_EDITORIAL', 'PACKING_INSTALACION'],
+    subfamiliasMateriaPrima: ['EMBALAJE_PROTECCION', 'CONSUMIBLE_INSTALACION'],
+  },
+  plantillaCaja: {
+    familiasMateriaPrima: ['POP_EXHIBIDOR', 'SUSTRATO'],
+    subfamiliasMateriaPrima: [
+      'ACCESORIO_EXHIBIDOR_CARTON',
+      'SEMIELABORADO_POP',
+      'SUSTRATO_RIGIDO',
+      'SUSTRATO_HOJA',
+    ],
+  },
+  soldadura: {
+    familiasMateriaPrima: ['METAL_ESTRUCTURA', 'HERRAJE_ACCESORIO'],
+    subfamiliasMateriaPrima: [
+      'CHAPA_METALICA',
+      'PERFIL_ESTRUCTURAL',
+      'FIJACION_AUXILIAR',
+    ],
+  },
+  electricidad: {
+    familiasMateriaPrima: ['ELECTRONICA_CARTELERIA', 'NEON_LUMINARIA'],
+    subfamiliasMateriaPrima: [
+      'MODULO_LED_CARTELERIA',
+      'FUENTE_ALIMENTACION_LED',
+      'CABLEADO_CONECTICA',
+      'CONTROLADOR_LED',
+      'NEON_FLEX_LED',
+      'ACCESORIO_NEON_LED',
+    ],
+  },
+  etiqueta: {
+    familiasMateriaPrima: ['TERMINACION_EDITORIAL', 'PACKING_INSTALACION'],
+    subfamiliasMateriaPrima: ['ETIQUETADO_IDENTIFICACION'],
+  },
+  banding: {
+    familiasMateriaPrima: ['PACKING_INSTALACION', 'ADHESIVO_TECNICO'],
+    subfamiliasMateriaPrima: [
+      'CONSUMIBLE_INSTALACION',
+      'SISTEMA_COLGADO_MONTAJE',
+      'VELCRO_CIERRE_TECNICO',
+    ],
+  },
+} satisfies Record<string, CompatibilidadMaterialSlot>;
 
 // ============================================================================
 // 3.1 Pre-prensa (2)
@@ -93,6 +239,7 @@ const proof: DefinicionFamilia = {
       nombre: 'Sustrato del proof',
       tipo: 'SUSTRATO',
       requerido: true,
+      compatibilidadMaterial: MP.sustratoHoja,
     },
   ],
   permiteSlotsAdicionales: false,
@@ -130,6 +277,7 @@ const impresion_por_hoja: DefinicionFamilia = {
       nombre: 'Sustrato principal',
       tipo: 'SUSTRATO',
       requerido: true,
+      compatibilidadMaterial: MP.sustratoHoja,
     },
     {
       codigo: 'tinta_o_toner',
@@ -201,6 +349,7 @@ const impresion_por_area: DefinicionFamilia = {
       nombre: 'Sustrato principal',
       tipo: 'SUSTRATO',
       requerido: true,
+      compatibilidadMaterial: MP.sustratoImpresionArea,
     },
     {
       codigo: 'tinta',
@@ -254,6 +403,7 @@ const impresion_por_pieza: DefinicionFamilia = {
       nombre: 'Sustrato principal',
       tipo: 'SUSTRATO',
       requerido: true,
+      compatibilidadMaterial: MP.sustratoPieza,
     },
     {
       codigo: 'tinta',
@@ -298,12 +448,14 @@ const aplicacion_transfer: DefinicionFamilia = {
       nombre: 'Textil base',
       tipo: 'SUSTRATO',
       requerido: true,
+      compatibilidadMaterial: MP.textil,
     },
     {
       codigo: 'film_transfer',
       nombre: 'Film transfer impreso',
       tipo: 'INSUMO_PASO',
       requerido: true,
+      compatibilidadMaterial: MP.filmTransfer,
     },
   ],
   permiteSlotsAdicionales: false,
@@ -337,6 +489,7 @@ const grabado_laser: DefinicionFamilia = {
       nombre: 'Sustrato a grabar',
       tipo: 'SUSTRATO',
       requerido: true,
+      compatibilidadMaterial: MP.sustratoGrabable,
     },
   ],
   permiteSlotsAdicionales: false,
@@ -586,6 +739,7 @@ const laminado: DefinicionFamilia = {
       nombre: 'Film de laminado',
       tipo: 'INSUMO_PASO',
       requerido: true,
+      compatibilidadMaterial: MP.laminadoFilm,
     },
   ],
   permiteSlotsAdicionales: false,
@@ -614,6 +768,7 @@ const barniz: DefinicionFamilia = {
       nombre: 'Tipo de barniz',
       tipo: 'INSUMO_PASO',
       requerido: true,
+      compatibilidadMaterial: MP.quimicoAcabado,
     },
   ],
   permiteSlotsAdicionales: false,
@@ -641,12 +796,14 @@ const acabado_decorativo: DefinicionFamilia = {
       nombre: 'Film metálico (oro/plata/holograma)',
       tipo: 'INSUMO_PASO',
       requerido: true,
+      compatibilidadMaterial: MP.filmMetalico,
     },
     {
       codigo: 'matriz',
       nombre: 'Matriz custom (opcional)',
       tipo: 'OTRO',
       requerido: false,
+      compatibilidadMaterial: MP.matriz,
     },
   ],
   permiteSlotsAdicionales: false,
@@ -674,6 +831,7 @@ const pintura_superficial: DefinicionFamilia = {
       nombre: 'Pintura / laca',
       tipo: 'INSUMO_PASO',
       requerido: true,
+      compatibilidadMaterial: MP.pintura,
     },
   ],
   permiteSlotsAdicionales: false,
@@ -736,6 +894,7 @@ const encuadernado_engrapado: DefinicionFamilia = {
       nombre: 'Grapas',
       tipo: 'INSUMO_PASO',
       requerido: true,
+      compatibilidadMaterial: MP.grapas,
     },
   ],
   permiteSlotsAdicionales: false,
@@ -764,6 +923,7 @@ const encuadernado_anillado: DefinicionFamilia = {
       nombre: 'Anillo (variante por capacidad)',
       tipo: 'INSUMO_PASO',
       requerido: true,
+      compatibilidadMaterial: MP.anillo,
     },
   ],
   permiteSlotsAdicionales: false,
@@ -804,24 +964,28 @@ const engomado_emblocado: DefinicionFamilia = {
       nombre: 'Cola / goma',
       tipo: 'INSUMO_PASO',
       requerido: true,
+      compatibilidadMaterial: MP.adhesivo,
     },
     {
       codigo: 'carton_base',
       nombre: 'Cartón base (opcional)',
       tipo: 'INSUMO_PASO',
       requerido: false,
+      compatibilidadMaterial: MP.cartonBase,
     },
     {
       codigo: 'hoja_blanca_superior',
       nombre: 'Hoja blanca superior (opcional)',
       tipo: 'INSUMO_PASO',
       requerido: false,
+      compatibilidadMaterial: MP.sustratoHoja,
     },
     {
       codigo: 'tapa_cartulina',
       nombre: 'Tapa cartulina (opcional)',
       tipo: 'TAPA',
       requerido: false,
+      compatibilidadMaterial: MP.tapa,
     },
   ],
   permiteSlotsAdicionales: false,
@@ -845,12 +1009,19 @@ const armado_cajas: DefinicionFamilia = {
   modoActivacionDefault: 'OBLIGATORIO',
   multiplicadoresSoportados: [],
   slotsRequeridos: [
-    { codigo: 'cinta', nombre: 'Cinta', tipo: 'INSUMO_PASO', requerido: true },
+    {
+      codigo: 'cinta',
+      nombre: 'Cinta',
+      tipo: 'INSUMO_PASO',
+      requerido: true,
+      compatibilidadMaterial: MP.cinta,
+    },
     {
       codigo: 'plantilla_caja',
       nombre: 'Plantilla de caja',
       tipo: 'SUSTRATO',
       requerido: true,
+      compatibilidadMaterial: MP.plantillaCaja,
     },
   ],
   permiteSlotsAdicionales: false,
@@ -882,6 +1053,7 @@ const soldadura: DefinicionFamilia = {
       nombre: 'Electrodos',
       tipo: 'INSUMO_PASO',
       requerido: true,
+      compatibilidadMaterial: MP.soldadura,
     },
   ],
   permiteSlotsAdicionales: true,
@@ -929,14 +1101,22 @@ const instalacion_electrica: DefinicionFamilia = {
       nombre: 'Cables',
       tipo: 'INSUMO_PASO',
       requerido: true,
+      compatibilidadMaterial: MP.electricidad,
     },
     {
       codigo: 'transformador',
       nombre: 'Transformador',
       tipo: 'INSUMO_PASO',
       requerido: false,
+      compatibilidadMaterial: MP.electricidad,
     },
-    { codigo: 'leds', nombre: 'LEDs', tipo: 'INSUMO_PASO', requerido: false },
+    {
+      codigo: 'leds',
+      nombre: 'LEDs',
+      tipo: 'INSUMO_PASO',
+      requerido: false,
+      compatibilidadMaterial: MP.electricidad,
+    },
   ],
   permiteSlotsAdicionales: true,
   plantillasCompatibles: [],
@@ -967,8 +1147,15 @@ const embalaje: DefinicionFamilia = {
       nombre: 'Caja / bolsa',
       tipo: 'INSUMO_PASO',
       requerido: true,
+      compatibilidadMaterial: MP.packaging,
     },
-    { codigo: 'cinta', nombre: 'Cinta', tipo: 'INSUMO_PASO', requerido: false },
+    {
+      codigo: 'cinta',
+      nombre: 'Cinta',
+      tipo: 'INSUMO_PASO',
+      requerido: false,
+      compatibilidadMaterial: MP.cinta,
+    },
   ],
   permiteSlotsAdicionales: false,
   plantillasCompatibles: [],
@@ -1029,6 +1216,7 @@ const atado_banding: DefinicionFamilia = {
       nombre: 'Cinta / hilo',
       tipo: 'INSUMO_PASO',
       requerido: true,
+      compatibilidadMaterial: MP.banding,
     },
   ],
   permiteSlotsAdicionales: false,
@@ -1056,6 +1244,7 @@ const etiquetado_manual: DefinicionFamilia = {
       nombre: 'Etiqueta adhesiva',
       tipo: 'INSUMO_PASO',
       requerido: true,
+      compatibilidadMaterial: MP.etiqueta,
     },
   ],
   permiteSlotsAdicionales: false,

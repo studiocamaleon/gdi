@@ -9,7 +9,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import type {
   ActualizarProductoDto,
   CrearProductoDto,
+  MedidaPredefinidaDto,
 } from './dto/producto.dto';
+
+type MedidaPredefinidaNormalizada = {
+  id: string;
+  nombre: string;
+  anchoMm: number;
+  altoMm: number;
+  esDefault: boolean;
+};
 
 @Injectable()
 export class ProductosService {
@@ -41,6 +50,13 @@ export class ProductosService {
     const subcategoriaComercial = await this.assertSubcategoriaComercial(
       dto.subcategoriaComercialCodigo,
     );
+    const medidas = this.normalizarMedidasPredefinidas({
+      modoMedidas: dto.modoMedidas,
+      medidas: dto.medidasPredefinidasJson,
+      anchoDefault: dto.medidaDefaultAnchoMm,
+      altoDefault: dto.medidaDefaultAltoMm,
+    });
+    const medidaDefault = medidas.find((medida) => medida.esDefault);
 
     try {
       return await this.prisma.producto.create({
@@ -52,12 +68,16 @@ export class ProductosService {
           descripcion: dto.descripcion ?? null,
           unidadComercial: dto.unidadComercial,
           modoMedidas: dto.modoMedidas,
-          medidaDefaultAnchoMm: dto.medidaDefaultAnchoMm
-            ? new Prisma.Decimal(dto.medidaDefaultAnchoMm)
+          medidaDefaultAnchoMm: medidaDefault
+            ? new Prisma.Decimal(medidaDefault.anchoMm)
             : null,
-          medidaDefaultAltoMm: dto.medidaDefaultAltoMm
-            ? new Prisma.Decimal(dto.medidaDefaultAltoMm)
+          medidaDefaultAltoMm: medidaDefault
+            ? new Prisma.Decimal(medidaDefault.altoMm)
             : null,
+          medidasPredefinidasJson:
+            medidas.length > 0
+              ? (medidas as Prisma.InputJsonValue)
+              : Prisma.JsonNull,
           precioConfigJson: (dto.precioConfigJson ??
             Prisma.JsonNull) as Prisma.InputJsonValue,
           atributosComercialesJson: (dto.atributosComercialesJson ??
@@ -92,6 +112,29 @@ export class ProductosService {
     if (!existente) throw new NotFoundException(`Producto ${id} no encontrado`);
 
     const data: Prisma.ProductoUpdateInput = {};
+    const touchedMedidas =
+      dto.modoMedidas !== undefined ||
+      dto.medidaDefaultAnchoMm !== undefined ||
+      dto.medidaDefaultAltoMm !== undefined ||
+      dto.medidasPredefinidasJson !== undefined;
+    const medidas = touchedMedidas
+      ? this.normalizarMedidasPredefinidas({
+          modoMedidas: dto.modoMedidas ?? existente.modoMedidas,
+          medidas:
+            dto.medidasPredefinidasJson !== undefined
+              ? dto.medidasPredefinidasJson
+              : this.jsonToMedidas(existente.medidasPredefinidasJson),
+          anchoDefault:
+            dto.medidaDefaultAnchoMm !== undefined
+              ? dto.medidaDefaultAnchoMm
+              : this.decimalToNumber(existente.medidaDefaultAnchoMm),
+          altoDefault:
+            dto.medidaDefaultAltoMm !== undefined
+              ? dto.medidaDefaultAltoMm
+              : this.decimalToNumber(existente.medidaDefaultAltoMm),
+        })
+      : [];
+    const medidaDefault = medidas.find((medida) => medida.esDefault);
     if (dto.subcategoriaComercialCodigo !== undefined) {
       await this.assertSubcategoriaComercial(dto.subcategoriaComercialCodigo);
       data.subcategoriaComercial = {
@@ -104,17 +147,17 @@ export class ProductosService {
       data.unidadComercial = dto.unidadComercial;
     }
     if (dto.modoMedidas !== undefined) data.modoMedidas = dto.modoMedidas;
-    if (dto.medidaDefaultAnchoMm !== undefined) {
-      data.medidaDefaultAnchoMm =
-        dto.medidaDefaultAnchoMm === null
-          ? null
-          : new Prisma.Decimal(dto.medidaDefaultAnchoMm);
-    }
-    if (dto.medidaDefaultAltoMm !== undefined) {
-      data.medidaDefaultAltoMm =
-        dto.medidaDefaultAltoMm === null
-          ? null
-          : new Prisma.Decimal(dto.medidaDefaultAltoMm);
+    if (touchedMedidas) {
+      data.medidaDefaultAnchoMm = medidaDefault
+        ? new Prisma.Decimal(medidaDefault.anchoMm)
+        : null;
+      data.medidaDefaultAltoMm = medidaDefault
+        ? new Prisma.Decimal(medidaDefault.altoMm)
+        : null;
+      data.medidasPredefinidasJson =
+        medidas.length > 0
+          ? (medidas as Prisma.InputJsonValue)
+          : Prisma.JsonNull;
     }
     if (dto.precioConfigJson !== undefined) {
       data.precioConfigJson = dto.precioConfigJson as Prisma.InputJsonValue;
@@ -151,6 +194,80 @@ export class ProductosService {
     }
 
     return this.prisma.producto.delete({ where: { id } });
+  }
+
+  private decimalToNumber(value: Prisma.Decimal | null): number | null {
+    return value == null ? null : Number(value);
+  }
+
+  private jsonToMedidas(value: Prisma.JsonValue | null): MedidaPredefinidaDto[] | null {
+    return Array.isArray(value) ? (value as MedidaPredefinidaDto[]) : null;
+  }
+
+  private normalizarMedidasPredefinidas(input: {
+    modoMedidas: string;
+    medidas?: MedidaPredefinidaDto[] | null;
+    anchoDefault?: number | null;
+    altoDefault?: number | null;
+  }): MedidaPredefinidaNormalizada[] {
+    if (input.modoMedidas === 'LIBRE') return [];
+
+    const fuente =
+      input.medidas && input.medidas.length > 0
+        ? input.medidas
+        : input.anchoDefault && input.altoDefault
+          ? [
+              {
+                id: 'default',
+                nombre: `${input.anchoDefault} x ${input.altoDefault} mm`,
+                anchoMm: input.anchoDefault,
+                altoMm: input.altoDefault,
+                esDefault: true,
+              },
+            ]
+          : [];
+
+    if (input.modoMedidas === 'FIJA' && fuente.length === 0) {
+      throw new BadRequestException(
+        'Los productos con medida fija deben tener al menos una medida predefinida.',
+      );
+    }
+
+    const medidas = fuente.map((medida, index) => {
+      const anchoMm = Number(medida.anchoMm);
+      const altoMm = Number(medida.altoMm);
+      if (!Number.isFinite(anchoMm) || anchoMm <= 0) {
+        throw new BadRequestException('Cada medida debe tener ancho mayor a 0.');
+      }
+      if (!Number.isFinite(altoMm) || altoMm <= 0) {
+        throw new BadRequestException('Cada medida debe tener alto mayor a 0.');
+      }
+      return {
+        id:
+          typeof medida.id === 'string' && medida.id.trim()
+            ? medida.id.trim()
+            : `medida-${index + 1}`,
+        nombre:
+          typeof medida.nombre === 'string' && medida.nombre.trim()
+            ? medida.nombre.trim()
+            : `${anchoMm} x ${altoMm} mm`,
+        anchoMm,
+        altoMm,
+        esDefault: medida.esDefault === true,
+      };
+    });
+
+    const defaults = medidas.filter((medida) => medida.esDefault);
+    if (defaults.length > 1) {
+      throw new BadRequestException(
+        'Solo una medida predefinida puede ser predeterminada.',
+      );
+    }
+    if (medidas.length > 0 && defaults.length === 0) {
+      medidas[0].esDefault = true;
+    }
+
+    return medidas;
   }
 
   async obtenerProducto(tenantId: string, id: string) {
@@ -231,6 +348,43 @@ export class ProductosService {
                         sku: true,
                         nombreVariante: true,
                         precioReferencia: true,
+                      },
+                    },
+                    candidatos: {
+                      orderBy: { orden: 'asc' },
+                      include: {
+                        materiaPrima: {
+                          select: {
+                            id: true,
+                            codigo: true,
+                            nombre: true,
+                            familia: true,
+                            subfamilia: true,
+                            templateId: true,
+                          },
+                        },
+                        defaultVariante: {
+                          select: {
+                            id: true,
+                            sku: true,
+                            nombreVariante: true,
+                            precioReferencia: true,
+                          },
+                        },
+                        variantes: {
+                          orderBy: { orden: 'asc' },
+                          include: {
+                            variante: {
+                              select: {
+                                id: true,
+                                sku: true,
+                                nombreVariante: true,
+                                precioReferencia: true,
+                                atributosVarianteJson: true,
+                              },
+                            },
+                          },
+                        },
                       },
                     },
                   },

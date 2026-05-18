@@ -100,6 +100,95 @@ describe('Catálogo de familias', () => {
       expect(uniques.size).toBe(codigos.length);
     }
   });
+
+  it('todo slot material configurable declara compatibilidad de materia prima', () => {
+    for (const familia of Object.values(FAMILIAS)) {
+      for (const slot of familia.slotsRequeridos) {
+        if (slot.tipo === 'CONSUMIBLE_MAQUINA') continue;
+        expect(slot.compatibilidadMaterial).toBeDefined();
+        const compat = slot.compatibilidadMaterial!;
+        expect(
+          Boolean(compat.familiasMateriaPrima?.length) ||
+            Boolean(compat.subfamiliasMateriaPrima?.length) ||
+            Boolean(compat.templateIds?.length) ||
+            Boolean(compat.tipoTecnico?.length),
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('clasifica todas las subfamilias del catálogo de materias primas', () => {
+    const usadas = new Set<string>();
+    for (const familia of Object.values(FAMILIAS)) {
+      for (const slot of familia.slotsRequeridos) {
+        for (const subfamilia of slot.compatibilidadMaterial
+          ?.subfamiliasMateriaPrima ?? []) {
+          usadas.add(subfamilia);
+        }
+      }
+    }
+    const consumiblesMaquina = new Set(['TINTA_IMPRESION', 'TONER']);
+    const sinSlotDirecto = new Set([
+      'POLVO_DTF',
+      'FILAMENTO_3D',
+      'RESINA_3D',
+      'IMAN_CERAMICO_FLEXIBLE',
+      'ACCESORIO_MONTAJE_POP',
+      'PORTABANNER_ESTRUCTURA',
+      'PERFIL_BASTIDOR_TEXTIL',
+    ]);
+    const todas = [
+      'SUSTRATO_HOJA',
+      'SUSTRATO_ROLLO_FLEXIBLE',
+      'SUSTRATO_RIGIDO',
+      'OBJETO_PROMOCIONAL_BASE',
+      'TINTA_IMPRESION',
+      'TONER',
+      'FILM_TRANSFERENCIA',
+      'PAPEL_TRANSFERENCIA',
+      'LAMINADO_FILM',
+      'QUIMICO_ACABADO',
+      'AUXILIAR_PROCESO',
+      'POLVO_DTF',
+      'FILAMENTO_3D',
+      'RESINA_3D',
+      'MODULO_LED_CARTELERIA',
+      'FUENTE_ALIMENTACION_LED',
+      'CABLEADO_CONECTICA',
+      'CONTROLADOR_LED',
+      'NEON_FLEX_LED',
+      'ACCESORIO_NEON_LED',
+      'CHAPA_METALICA',
+      'PERFIL_ESTRUCTURAL',
+      'PINTURA_CARTELERIA',
+      'PRIMER_SELLADOR',
+      'ANILLADO_ENCUADERNACION',
+      'TAPA_ENCUADERNACION',
+      'IMAN_CERAMICO_FLEXIBLE',
+      'FIJACION_AUXILIAR',
+      'ACCESORIO_EXHIBIDOR_CARTON',
+      'ACCESORIO_MONTAJE_POP',
+      'SEMIELABORADO_POP',
+      'ARGOLLA_LLAVERO_ACCESORIO',
+      'OJAL_OJALILLO_REMACHE',
+      'PORTABANNER_ESTRUCTURA',
+      'SISTEMA_COLGADO_MONTAJE',
+      'PERFIL_BASTIDOR_TEXTIL',
+      'CINTA_DOBLE_FAZ_TECNICA',
+      'ADHESIVO_LIQUIDO_ESTRUCTURAL',
+      'VELCRO_CIERRE_TECNICO',
+      'EMBALAJE_PROTECCION',
+      'ETIQUETADO_IDENTIFICACION',
+      'CONSUMIBLE_INSTALACION',
+    ];
+    for (const subfamilia of todas) {
+      expect(
+        usadas.has(subfamilia) ||
+          consumiblesMaquina.has(subfamilia) ||
+          sinSlotDirecto.has(subfamilia),
+      ).toBe(true);
+    }
+  });
 });
 
 describe('Categorías', () => {

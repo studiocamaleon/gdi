@@ -1,6 +1,7 @@
 import {
   IsBoolean,
   IsEnum,
+  IsArray,
   IsNotEmpty,
   IsNumber,
   IsObject,
@@ -21,6 +22,14 @@ export enum ModoMedidasDto {
   FIJA = 'FIJA',
   LIBRE = 'LIBRE',
   COMERCIAL_ELIGE = 'COMERCIAL_ELIGE',
+}
+
+export interface MedidaPredefinidaDto {
+  id?: string;
+  nombre?: string;
+  anchoMm?: number;
+  altoMm?: number;
+  esDefault?: boolean;
 }
 
 export class CrearProductoDto {
@@ -60,6 +69,10 @@ export class CrearProductoDto {
   @IsNumber()
   @Min(0)
   medidaDefaultAltoMm?: number;
+
+  @IsOptional()
+  @IsArray()
+  medidasPredefinidasJson?: MedidaPredefinidaDto[];
 
   @IsOptional()
   @IsObject()
@@ -102,6 +115,10 @@ export class ActualizarProductoDto {
   @IsNumber()
   @Min(0)
   medidaDefaultAltoMm?: number | null;
+
+  @IsOptional()
+  @IsArray()
+  medidasPredefinidasJson?: MedidaPredefinidaDto[] | null;
 
   @IsOptional()
   @IsObject()

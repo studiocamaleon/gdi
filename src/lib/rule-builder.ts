@@ -115,12 +115,17 @@ export const RULE_FIELD_DEFINITIONS: RuleFieldDefinition[] = [
   },
 ];
 
-export function getRuleFields(options?: { includeMeasureFields?: boolean }) {
-  if (options?.includeMeasureFields) return RULE_FIELD_DEFINITIONS;
-  return RULE_FIELD_DEFINITIONS.filter(
-    (field) =>
-      !["piezaAnchoMaxMm", "piezaAltoMaxMm", "piezaAreaTotalM2"].includes(field.key),
-  );
+export function getRuleFields(options?: {
+  includeMeasureFields?: boolean;
+  extraFields?: RuleFieldDefinition[];
+}) {
+  const base = options?.includeMeasureFields
+    ? RULE_FIELD_DEFINITIONS
+    : RULE_FIELD_DEFINITIONS.filter(
+        (field) =>
+          !["piezaAnchoMaxMm", "piezaAltoMaxMm", "piezaAreaTotalM2"].includes(field.key),
+      );
+  return [...base, ...(options?.extraFields ?? [])];
 }
 
 export function createEmptyRuleGroup(fields = RULE_FIELD_DEFINITIONS): RuleGroupUI {

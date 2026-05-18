@@ -1,5 +1,11 @@
 import { apiRequest, ApiError } from "@/lib/api";
 import type {
+  InstallMaterialPresetPayload,
+  InstallMaterialPresetResponse,
+  MaterialPresetDetail,
+  MaterialPresetListItem,
+} from "@/lib/biblioteca-materias-primas";
+import type {
   MateriaPrima,
   MateriaPrimaPayload,
   UpdateVariantePrecioReferenciaPayload,
@@ -38,6 +44,27 @@ export async function toggleMateriaPrima(id: string) {
   return apiRequest<MateriaPrima>(`/inventario/materias-primas/${id}/toggle`, {
     method: "PATCH",
   });
+}
+
+export async function getBibliotecaMateriasPrimas() {
+  return apiRequest<MaterialPresetListItem[]>("/inventario/materias-primas/biblioteca");
+}
+
+export async function getBibliotecaMateriaPrimaByKey(key: string) {
+  return apiRequest<MaterialPresetDetail>(`/inventario/materias-primas/biblioteca/${key}`);
+}
+
+export async function instalarBibliotecaMateriaPrima(
+  key: string,
+  payload: InstallMaterialPresetPayload,
+) {
+  return apiRequest<InstallMaterialPresetResponse>(
+    `/inventario/materias-primas/biblioteca/${key}/instalar`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export async function updateVariantePrecioReferencia(

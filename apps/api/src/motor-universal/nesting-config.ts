@@ -219,9 +219,13 @@ export function resolveNestingConfig(
     maqParams.anchoUtil,
     paso.maquina?.anchoUtil,
   );
+  const shouldValidateRollWidthAgainstMachine =
+    geometry === 'ROLLO' && algorithm !== 'shelf-rollo' && algorithm !== 'maxrects-rollo';
   const rollWidthMm =
     materialRollWidthMm != null
-      ? machineMaxRollWidthMm != null && materialRollWidthMm > machineMaxRollWidthMm
+      ? shouldValidateRollWidthAgainstMachine &&
+        machineMaxRollWidthMm != null &&
+        materialRollWidthMm > machineMaxRollWidthMm
         ? null
         : materialRollWidthMm
       : machineMaxRollWidthMm;

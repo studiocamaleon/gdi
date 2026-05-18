@@ -17,6 +17,13 @@ async function fetchVarianteId(prisma, tenantId, sku) {
   return v.id;
 }
 
+async function fetchVariante(prisma, tenantId, sku) {
+  return prisma.materiaPrimaVariante.findFirstOrThrow({
+    where: { tenantId, sku },
+    select: { id: true, materiaPrimaId: true },
+  });
+}
+
 async function seedRutasYProductos(
   prisma,
   tenantId,
@@ -54,27 +61,32 @@ async function seedRutasYProductos(
     tenantId,
     'AUTOCOP-CFB-22X34',
   );
-  const viniloBlanco137VarId = await fetchVarianteId(
+  const viniloBlanco137 = await fetchVariante(
     prisma,
     tenantId,
     'VINILO-BLANCO-1370',
   );
-  const viniloBlanco152VarId = await fetchVarianteId(
+  const viniloBlanco152 = await fetchVariante(
     prisma,
     tenantId,
     'VINILO-BLANCO-1520',
   );
-  const mdf9VarId = await fetchVarianteId(prisma, tenantId, 'MDF-9MM-183X275');
-  const filmMateVarId = await fetchVarianteId(
+  const viniloBlanco137VarId = viniloBlanco137.id;
+  const viniloBlanco152VarId = viniloBlanco152.id;
+  const mdf9 = await fetchVariante(prisma, tenantId, 'MDF-9MM-183X275');
+  const mdf9VarId = mdf9.id;
+  const filmMate = await fetchVariante(
     prisma,
     tenantId,
     'BOPP-MATE-650',
   );
-  const filmBrilloVarId = await fetchVarianteId(
+  const filmBrillo = await fetchVariante(
     prisma,
     tenantId,
     'BOPP-BRILLO-650',
   );
+  const filmMateVarId = filmMate.id;
+  const filmBrilloVarId = filmBrillo.id;
   const bolsaVarId = await fetchVarianteId(prisma, tenantId, 'BOLSA-100');
 
   // Perfiles M-1 que vamos a usar
@@ -585,17 +597,30 @@ async function seedRutasYProductos(
           productoConfigPasoId: configPaso.id,
           slotCodigo: 'film',
           modoSeleccion: 'COMERCIAL_ELIGE',
-          materialesCandidatosJson: [
-            { variantId: filmMateVarId, default: true, label: 'BOPP Mate' },
-            {
-              variantId: filmBrilloVarId,
-              default: false,
-              label: 'BOPP Brillo',
-            },
-          ],
           estrategiaCosto: 'simple',
           formula: 'por_metro_lineal',
           aplicaMultiCaras: true,
+          candidatos: {
+            create: [
+              {
+                tenantId,
+                materiaPrimaId: filmMate.materiaPrimaId,
+                defaultVarianteId: filmMateVarId,
+                orden: 0,
+                variantes: {
+                  create: [{ tenantId, varianteId: filmMateVarId, orden: 0 }],
+                },
+              },
+              {
+                tenantId,
+                materiaPrimaId: filmBrillo.materiaPrimaId,
+                orden: 1,
+                variantes: {
+                  create: [{ tenantId, varianteId: filmBrilloVarId, orden: 0 }],
+                },
+              },
+            ],
+          },
           activo: true,
         },
       });
@@ -760,13 +785,25 @@ async function seedRutasYProductos(
           slotCodigo: 'sustrato_principal',
           modoSeleccion: 'MOTOR_ELIGE_AUTO',
           criterioMotorAuto: 'MAYOR_APROVECHAMIENTO',
-          materialesCandidatosJson: [
-            { variantId: viniloBlanco137VarId, label: 'Vinilo blanco 1.37m' },
-            { variantId: viniloBlanco152VarId, label: 'Vinilo blanco 1.52m' },
-          ],
           estrategiaCosto: 'simple',
           formula: 'por_metro_lineal',
           activo: true,
+          candidatos: {
+            create: [
+              {
+                tenantId,
+                materiaPrimaId: viniloBlanco137.materiaPrimaId,
+                defaultVarianteId: viniloBlanco137VarId,
+                orden: 0,
+                variantes: {
+                  create: [
+                    { tenantId, varianteId: viniloBlanco137VarId, orden: 0 },
+                    { tenantId, varianteId: viniloBlanco152VarId, orden: 1 },
+                  ],
+                },
+              },
+            ],
+          },
         },
       });
     }
@@ -1091,12 +1128,22 @@ async function seedRutasYProductos(
           productoConfigPasoId: configPaso.id,
           slotCodigo: 'sustrato_principal',
           modoSeleccion: 'COMERCIAL_ELIGE',
-          materialesCandidatosJson: [
-            { variantId: mdf9VarId, default: true, label: 'MDF 9mm' },
-          ],
           estrategiaCosto: 'plate-segments',
           formula: 'por_unidad_productiva',
           activo: true,
+          candidatos: {
+            create: [
+              {
+                tenantId,
+                materiaPrimaId: mdf9.materiaPrimaId,
+                defaultVarianteId: mdf9VarId,
+                orden: 0,
+                variantes: {
+                  create: [{ tenantId, varianteId: mdf9VarId, orden: 0 }],
+                },
+              },
+            ],
+          },
         },
       });
     }

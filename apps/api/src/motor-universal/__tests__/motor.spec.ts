@@ -258,7 +258,12 @@ describe('MotorUniversalService — smoke tests', () => {
         rutasAlternativas: {
           include: {
             configPasos: {
-              include: { rutaPaso: true, slotsMateriales: true },
+              include: {
+                rutaPaso: true,
+                slotsMateriales: {
+                  include: { candidatos: { include: { variantes: true } } },
+                },
+              },
             },
           },
         },
@@ -272,9 +277,7 @@ describe('MotorUniversalService — smoke tests', () => {
     const slotFilm = laminado!.slotsMateriales.find(
       (s) => s.slotCodigo === 'film',
     )!;
-    const filmDefault = (
-      slotFilm.materialesCandidatosJson as Array<{ variantId: string }>
-    )[0];
+    const filmDefault = slotFilm.candidatos[0].variantes[0];
 
     const result = await motorService.cotizar({
       tenantId,
@@ -283,7 +286,7 @@ describe('MotorUniversalService — smoke tests', () => {
         cantidad: 100,
         caras: 2,
         opcionalesActivados: { [laminado!.id]: true },
-        [`slotMaterial_${laminado!.id}_film`]: filmDefault.variantId,
+        [`slotMaterial_${laminado!.id}_film`]: filmDefault.varianteId,
       },
     });
 
@@ -417,7 +420,12 @@ describe('MotorUniversalService — smoke tests', () => {
         rutasAlternativas: {
           include: {
             configPasos: {
-              include: { rutaPaso: true, slotsMateriales: true },
+              include: {
+                rutaPaso: true,
+                slotsMateriales: {
+                  include: { candidatos: { include: { variantes: true } } },
+                },
+              },
             },
           },
         },
@@ -429,9 +437,7 @@ describe('MotorUniversalService — smoke tests', () => {
     const slot = impresion.slotsMateriales.find(
       (s) => s.slotCodigo === 'sustrato_principal',
     )!;
-    const candidato = (
-      slot.materialesCandidatosJson as Array<{ variantId: string }>
-    )[0];
+    const candidato = slot.candidatos[0].variantes[0];
 
     const result = await motorService.cotizar({
       tenantId,
@@ -439,7 +445,7 @@ describe('MotorUniversalService — smoke tests', () => {
       jobContext: {
         cantidad: 5,
         medidaCustomMm: { anchoMm: 200, altoMm: 300 },
-        [`slotMaterial_${impresion.id}_${slot.slotCodigo}`]: candidato.variantId,
+        [`slotMaterial_${impresion.id}_${slot.slotCodigo}`]: candidato.varianteId,
       },
     });
 

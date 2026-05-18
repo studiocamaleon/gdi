@@ -19,6 +19,7 @@ import {
   ActualizarProductoRutaAlternativaDto,
   AgregarPasoExtraDto,
   CrearProductoRutaAlternativaDto,
+  DuplicarProductoRutaAlternativaDto,
   UpsertProductoConfigPasoDto,
 } from './dto/producto-ruta.dto';
 import {
@@ -169,6 +170,21 @@ export class ProductosServiciosController {
     );
   }
 
+  @Post('productos/rutas-alternativas/:rutaAltId/duplicar')
+  async duplicarProductoRutaAlternativa(
+    @Req() req: RequestWithAuth,
+    @Param('rutaAltId') rutaAltId: string,
+    @Body() dto: DuplicarProductoRutaAlternativaDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.duplicarProductoRutaAlternativa(
+      tenantId,
+      rutaAltId,
+      dto,
+    );
+  }
+
   @Delete('productos/rutas-alternativas/:rutaAltId')
   @HttpCode(204)
   async eliminarProductoRutaAlternativa(
@@ -201,6 +217,33 @@ export class ProductosServiciosController {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
     return this.service.listarLookupsConfigPaso(tenantId);
+  }
+
+  @Get('materias-primas/buscar')
+  async buscarMateriasPrimas(
+    @Req() req: RequestWithAuth,
+    @Query('q') q?: string,
+    @Query('familias') familias?: string,
+    @Query('subfamilias') subfamilias?: string,
+    @Query('templateIds') templateIds?: string,
+    @Query('tipoTecnico') tipoTecnico?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    const split = (value?: string) =>
+      value
+        ?.split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+    return this.service.buscarMateriasPrimas(tenantId, {
+      q,
+      familias: split(familias),
+      subfamilias: split(subfamilias),
+      templateIds: split(templateIds),
+      tipoTecnico: split(tipoTecnico),
+      limit: limit ? Number(limit) : undefined,
+    });
   }
 
   @Get('cargos-directos')

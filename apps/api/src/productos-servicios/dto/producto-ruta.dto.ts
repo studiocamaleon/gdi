@@ -19,6 +19,7 @@ export enum ModoActivacionPasoDto {
   OBLIGATORIO = 'OBLIGATORIO',
   OPCIONAL = 'OPCIONAL',
   CONDICIONAL = 'CONDICIONAL',
+  NO_EJECUTAR = 'NO_EJECUTAR',
 }
 
 export enum ModoTiempoPasoDto {
@@ -84,6 +85,13 @@ export class ActualizarProductoRutaAlternativaDto {
   @IsOptional()
   @IsBoolean()
   activo?: boolean;
+}
+
+export class DuplicarProductoRutaAlternativaDto {
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  nombre?: string;
 }
 
 /**
@@ -184,7 +192,9 @@ export class UpsertSlotMaterialDto {
 
   @IsOptional()
   @IsArray()
-  materialesCandidatosJson?: Array<Record<string, unknown>>;
+  @ValidateNested({ each: true })
+  @Type(() => UpsertSlotMaterialCandidatoDto)
+  candidatos?: UpsertSlotMaterialCandidatoDto[];
 
   @IsOptional()
   @IsString()
@@ -197,6 +207,22 @@ export class UpsertSlotMaterialDto {
   @IsOptional()
   @IsBoolean()
   aplicaMultiCaras?: boolean;
+}
+
+export class UpsertSlotMaterialCandidatoDto {
+  @IsUUID()
+  materiaPrimaId!: string;
+
+  @IsOptional()
+  @IsUUID()
+  defaultVarianteId?: string | null;
+
+  @IsOptional()
+  orden?: number;
+
+  @IsArray()
+  @IsUUID(undefined, { each: true })
+  varianteIds!: string[];
 }
 
 /**

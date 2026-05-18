@@ -32,6 +32,12 @@ describe('modo color comercial', () => {
       detalleJson: { colores: 'CMYK+blanco' },
     },
     {
+      id: 'perfil-cmyk-barniz',
+      activo: true,
+      tipoPerfil: 'IMPRESION',
+      detalleJson: { colores: 'CMYK+barniz' },
+    },
+    {
       id: 'perfil-inactivo',
       activo: false,
       tipoPerfil: 'IMPRESION',
@@ -43,6 +49,7 @@ describe('modo color comercial', () => {
     expect(normalizeModoColor('K')).toBe('BN');
     expect(normalizeModoColor('cmyk')).toBe('CMYK');
     expect(normalizeModoColor('CMYK + white')).toBe('CMYK+blanco');
+    expect(normalizeModoColor('CMYK + varnish')).toBe('CMYK+barniz');
     expect(normalizeModoColor('CMYK + blanco + varnish')).toBe(
       'CMYK+blanco+barniz',
     );
@@ -64,6 +71,11 @@ describe('modo color comercial', () => {
         value: 'CMYK+blanco',
         label: 'CMYK + Blanco',
         perfilIds: ['perfil-cmyk-blanco'],
+      },
+      {
+        value: 'CMYK+barniz',
+        label: 'CMYK + Barniz',
+        perfilIds: ['perfil-cmyk-barniz'],
       },
     ]);
   });

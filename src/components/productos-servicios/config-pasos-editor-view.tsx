@@ -23,11 +23,14 @@ import {
   type HumanSelectOption,
 } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
 import { RuleBuilder } from "@/components/productos-servicios/rule-builder";
 import {
+  buscarMateriasPrimasConfigPaso,
   upsertConfigPaso,
   type LookupsConfigPaso,
+  type MateriaPrimaBusquedaItem,
   type UpsertConfigPasoPayload,
   type UpsertSlotMaterialPayload,
 } from "@/lib/productos-servicios-api";
@@ -48,9 +51,11 @@ import {
 import {
   getRuleFields,
   jsonLogicToRuleGroup,
+  type RuleFieldDefinition,
   validateRuleGroup,
 } from "@/lib/rule-builder";
 import { getVarianteOptionChips } from "@/lib/materias-primas-variantes-display";
+import { tecnologiaMaquinaItems } from "@/lib/maquinaria";
 
 interface Props {
   producto: ProductoDetalle;
@@ -63,7 +68,7 @@ interface Props {
 type ConfigState = Record<string, UpsertConfigPasoPayload>;
 type SavedConfigSnapshots = Record<string, string>;
 
-const MODOS_ACTIVACION = ["OBLIGATORIO", "OPCIONAL", "CONDICIONAL"];
+const MODOS_ACTIVACION = ["OBLIGATORIO", "OPCIONAL", "CONDICIONAL", "NO_EJECUTAR"];
 const MODOS_SELECCION = ["HARDCODED", "COMERCIAL_ELIGE", "MOTOR_ELIGE_AUTO"];
 const CRITERIOS_AUTO = ["MENOR_COSTO", "MAYOR_APROVECHAMIENTO", "MENOR_CAPACIDAD_QUE_CUMPLA"];
 const FORMULAS = [
@@ -73,6 +78,10 @@ const FORMULAS = [
   "por_metro_lineal",
   "fijo",
 ];
+const TECHNOLOGY_RULE_OPTIONS = tecnologiaMaquinaItems.map((item) => ({
+  value: item.value,
+  label: item.label,
+}));
 const NESTING_ALGORITHMS = [
   "auto",
   "shelf-rollo",
@@ -86,6 +95,7 @@ const MODO_COLOR_LABELS: Record<string, string> = {
   BN: "Blanco y negro",
   CMYK: "CMYK",
   "CMYK+blanco": "CMYK + Blanco",
+  "CMYK+barniz": "CMYK + Barniz",
   "CMYK+blanco+barniz": "CMYK + Blanco + Barniz",
 };
 const PLIEGO_IMPRESION_PRESETS = [
@@ -132,6 +142,10 @@ const COSTING_STRATEGY_OPTIONS = optionsFromLabels(COSTING_STRATEGIES, {
   "consumed-length": { label: "Largo consumido", descripcion: "Cobra placa completa y último tramo proporcional." },
   "plate-segments": { label: "Segmentos de placa", descripcion: "Cobra por escalones de ocupación de la placa." },
 });
+
+function optionLabel(options: HumanSelectOption[], value: string) {
+  return options.find((option) => option.value === value)?.label ?? value;
+}
 
 function normalizeForSnapshot(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -221,16 +235,6 @@ function centroCostoOption(centro: Pick<CentroCostoLookup, "id" | "codigo" | "no
   };
 }
 
-function materialVariantOptions(materiasPrimas: MateriaPrimaLookup[]) {
-  const options: HumanSelectOption[] = [];
-  for (const mp of materiasPrimas) {
-    for (const variante of mp.variantes) {
-      options.push(materialVariantOption(mp, variante));
-    }
-  }
-  return options;
-}
-
 function materialVariantOption(
   mp: Pick<MateriaPrimaLookup, "nombre" | "codigo" | "templateId">,
   variante: VarianteLookup,
@@ -251,6 +255,16 @@ function materialVariantOption(
     details: variantDetails,
     group: mp.nombre,
   };
+}
+
+function varianteOptionFromBusqueda(
+  mp: MateriaPrimaBusquedaItem,
+  variante: MateriaPrimaBusquedaItem["variantes"][number],
+): HumanSelectOption {
+  return materialVariantOption(
+    { nombre: mp.nombre, codigo: mp.codigo, templateId: mp.templateId },
+    variante,
+  );
 }
 
 function getMaterialVariantAttributeDetails(
@@ -388,6 +402,7 @@ function normalizeModoColor(value: unknown) {
   if (["BN", "B/N", "NEGRO", "K"].includes(normalized)) return "BN";
   if (normalized === "CMYK") return "CMYK";
   if (["CMYK+BLANCO", "CMYKBLANCO"].includes(normalized)) return "CMYK+blanco";
+  if (["CMYK+BARNIZ", "CMYKBARNIZ"].includes(normalized)) return "CMYK+barniz";
   if (
     [
       "CMYK+BLANCO+BARNIZ",
@@ -516,6 +531,313 @@ function readOptionalNumber(value: unknown): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+type SlotCompatibilidad = NonNullable<
+  CatalogoFamilias["familias"][number]["slotsRequeridos"][number]["compatibilidadMaterial"]
+>;
+
+function MaterialSearchSelect({
+  compatibilidad,
+  placeholder,
+  selectedIds = [],
+  onSelect,
+}: {
+  compatibilidad?: SlotCompatibilidad;
+  placeholder: string;
+  selectedIds?: string[];
+  onSelect: (materiaPrima: MateriaPrimaBusquedaItem) => void;
+}) {
+  const [query, setQuery] = React.useState("");
+  const [items, setItems] = React.useState<MateriaPrimaBusquedaItem[]>([]);
+  const [loading, setLoading] = React.useState(false);
+  const selectedSet = React.useMemo(() => new Set(selectedIds), [selectedIds]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    buscarMateriasPrimasConfigPaso({
+      q: query,
+      familias: compatibilidad?.familiasMateriaPrima,
+      subfamilias: compatibilidad?.subfamiliasMateriaPrima,
+      templateIds: compatibilidad?.templateIds,
+      tipoTecnico: compatibilidad?.tipoTecnico,
+      limit: 20,
+    })
+      .then((result) => {
+        if (!cancelled) setItems(result);
+      })
+      .catch(() => {
+        if (!cancelled) setItems([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [compatibilidad, query]);
+
+  return (
+    <div className="space-y-2">
+      <Input
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder={placeholder}
+        className="h-8 text-xs"
+      />
+      <div className="max-h-56 space-y-1 overflow-auto rounded border bg-white p-1">
+        {loading ? (
+          <div className="text-muted-foreground px-2 py-2 text-xs">Buscando...</div>
+        ) : items.length === 0 ? (
+          <div className="text-muted-foreground px-2 py-2 text-xs">
+            Sin materias primas compatibles.
+          </div>
+        ) : (
+          items.map((item) => {
+            const selected = selectedSet.has(item.id);
+            return (
+            <button
+              key={item.id}
+              type="button"
+              className={`flex w-full items-center justify-between gap-3 rounded px-2 py-2 text-left text-xs transition ${
+                selected ? "bg-muted/70 text-muted-foreground" : "hover:bg-muted"
+              }`}
+              onClick={() => {
+                if (!selected) onSelect(item);
+              }}
+              disabled={selected}
+            >
+              <span className="min-w-0">
+                <span className="block truncate font-medium">{item.nombre}</span>
+                <span className="text-muted-foreground block truncate">
+                  {item.codigo} · {item.subfamilia}
+                </span>
+              </span>
+              <span className="flex shrink-0 items-center gap-2">
+                <Badge variant="outline">{item.variantes.length}</Badge>
+                <Badge variant={selected ? "secondary" : "outline"}>
+                  {selected ? "Agregado" : "Agregar"}
+                </Badge>
+              </span>
+            </button>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+type SlotCandidateConfig = NonNullable<UpsertSlotMaterialPayload["candidatos"]>[number];
+type MaterialVariantSearchItem = MateriaPrimaBusquedaItem["variantes"][number];
+
+function textAttr(attrs: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const raw = attrs[key];
+    if (typeof raw === "string" && raw.trim()) return raw.trim();
+    if (typeof raw === "number" && Number.isFinite(raw)) return String(raw);
+  }
+  return "";
+}
+
+function numberAttr(attrs: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const raw = attrs[key];
+    const value = typeof raw === "string" ? Number(raw.replace(",", ".")) : Number(raw);
+    if (Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(value);
+}
+
+function getVariantAttributeSummary(variante: MaterialVariantSearchItem) {
+  const attrs = asRecord(variante.atributosVarianteJson);
+  const color = textAttr(attrs, ["colorBase", "color", "colorMaterial"]);
+  const espesor = numberAttr(attrs, ["espesor", "espesorMm", "espesor_mm"]);
+  const ancho = numberAttr(attrs, ["ancho", "anchoM", "ancho_m"]);
+  const alto = numberAttr(attrs, ["alto", "altoM", "alto_m"]);
+  const largo = numberAttr(attrs, ["largo", "largoM", "largo_m"]);
+  return { attrs, color, espesor, ancho, alto, largo };
+}
+
+function canUseColorThicknessSelector(materiaPrima: MateriaPrimaBusquedaItem) {
+  if (materiaPrima.subfamilia === "sustrato_rigido") return true;
+  return materiaPrima.variantes.some((variante) => {
+    const summary = getVariantAttributeSummary(variante);
+    return summary.color && summary.espesor !== null;
+  });
+}
+
+function getVariantMeasureLabel(summary: ReturnType<typeof getVariantAttributeSummary>) {
+  if (summary.ancho !== null && summary.alto !== null) {
+    return `${formatNumber(summary.ancho)} x ${formatNumber(summary.alto)} m`;
+  }
+  if (summary.ancho !== null && summary.largo !== null) {
+    return `${formatNumber(summary.ancho)} x ${formatNumber(summary.largo)} m`;
+  }
+  return "";
+}
+
+function patchEnabledVariantIds(
+  candidate: SlotCandidateConfig,
+  varianteId: string,
+  checked: boolean,
+) {
+  const nextIds = checked
+    ? [...candidate.varianteIds, varianteId]
+    : candidate.varianteIds.filter((id) => id !== varianteId);
+  const safeIds = nextIds.length > 0 ? Array.from(new Set(nextIds)) : [varianteId];
+  const defaultStillEnabled =
+    candidate.defaultVarianteId && safeIds.includes(candidate.defaultVarianteId);
+  return {
+    varianteIds: safeIds,
+    defaultVarianteId: defaultStillEnabled
+      ? candidate.defaultVarianteId
+      : safeIds[0] ?? null,
+  };
+}
+
+function ColorThicknessVariantSelector({
+  materiaPrima,
+  candidate,
+  onChange,
+}: {
+  materiaPrima: MateriaPrimaBusquedaItem;
+  candidate: SlotCandidateConfig;
+  onChange: (patch: Partial<SlotCandidateConfig>) => void;
+}) {
+  const variants = React.useMemo(
+    () =>
+      materiaPrima.variantes.map((variante) => ({
+        variante,
+        summary: getVariantAttributeSummary(variante),
+      })),
+    [materiaPrima.variantes],
+  );
+  const colors = React.useMemo(() => {
+    const unique = new Set(
+      variants.map((item) => item.summary.color || "Sin color").filter(Boolean),
+    );
+    return Array.from(unique);
+  }, [variants]);
+  const defaultVariant = variants.find(
+    (item) => item.variante.id === candidate.defaultVarianteId,
+  );
+  const [selectedColor, setSelectedColor] = React.useState(
+    defaultVariant?.summary.color || colors[0] || "Sin color",
+  );
+
+  React.useEffect(() => {
+    if (!colors.includes(selectedColor)) {
+      setSelectedColor(defaultVariant?.summary.color || colors[0] || "Sin color");
+    }
+  }, [colors, defaultVariant?.summary.color, selectedColor]);
+
+  const enabledVariantIds = React.useMemo(
+    () => new Set(candidate.varianteIds),
+    [candidate.varianteIds],
+  );
+  const visibleVariants = variants
+    .filter((item) => (item.summary.color || "Sin color") === selectedColor)
+    .sort((left, right) => {
+      const leftEspesor = left.summary.espesor ?? Number.POSITIVE_INFINITY;
+      const rightEspesor = right.summary.espesor ?? Number.POSITIVE_INFINITY;
+      return leftEspesor - rightEspesor;
+    });
+
+  return (
+    <div className="mb-2 space-y-3 rounded border bg-muted/20 p-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+          Color y espesor habilitados
+        </div>
+        <Badge variant="outline">{candidate.varianteIds.length} variantes</Badge>
+      </div>
+      <div className="space-y-1">
+        <div className="text-muted-foreground text-[11px] font-medium">Color</div>
+        <div className="flex flex-wrap gap-1.5">
+          {colors.map((color) => {
+            const count = variants.filter(
+              (item) => (item.summary.color || "Sin color") === color,
+            ).length;
+            const active = selectedColor === color;
+            return (
+              <button
+                key={color}
+                type="button"
+                className={`rounded border px-2.5 py-1 text-xs font-medium transition ${
+                  active
+                    ? "border-blue-600 bg-blue-50 text-blue-700"
+                    : "border-border bg-white text-muted-foreground hover:bg-muted"
+                }`}
+                onClick={() => setSelectedColor(color)}
+              >
+                {color}
+                <span className="ml-1 text-[10px] opacity-70">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="space-y-1">
+        <div className="text-muted-foreground text-[11px] font-medium">Espesor</div>
+        <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
+          {visibleVariants.map(({ variante, summary }) => {
+            const checked = enabledVariantIds.has(variante.id);
+            const medida = getVariantMeasureLabel(summary);
+            const precio = variante.precioReferencia
+              ? Number(variante.precioReferencia).toLocaleString("es-AR")
+              : null;
+            return (
+              <label
+                key={variante.id}
+                className={`min-w-0 rounded border px-2.5 py-2 text-xs transition ${
+                  checked
+                    ? "border-foreground bg-white shadow-sm"
+                    : "border-transparent bg-white/70 text-muted-foreground"
+                }`}
+              >
+                <span className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={checked}
+                    onChange={(event) =>
+                      onChange(patchEnabledVariantIds(candidate, variante.id, event.target.checked))
+                    }
+                  />
+                  <span className="min-w-0">
+                    <span className="block font-semibold text-foreground">
+                      {summary.espesor !== null
+                        ? `${formatNumber(summary.espesor)} mm`
+                        : variante.nombreVariante || variante.sku}
+                    </span>
+                    {medida ? (
+                      <span className="text-muted-foreground block truncate">{medida}</span>
+                    ) : null}
+                    {precio ? (
+                      <span className="text-muted-foreground block truncate">
+                        Ref. ${precio}
+                      </span>
+                    ) : null}
+                    {candidate.defaultVarianteId === variante.id ? (
+                      <span className="mt-1 inline-flex rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                        Predeterminada
+                      </span>
+                    ) : null}
+                  </span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Validación por tab ────────────────────────────────────────────
 
 interface TabValidacion {
@@ -591,6 +913,12 @@ function validarMateriales(
     if (slot.modoSeleccion === "MOTOR_ELIGE_AUTO" && !slot.criterioMotorAuto) {
       warnings.push(`${slotNombre(slot.slotCodigo, familia)}: sin criterio del sistema`);
     }
+    if (
+      (slot.modoSeleccion === "COMERCIAL_ELIGE" || slot.modoSeleccion === "MOTOR_ELIGE_AUTO") &&
+      (slot.candidatos?.length ?? 0) === 0
+    ) {
+      errores.push(`${slotNombre(slot.slotCodigo, familia)}: sin materiales candidatos`);
+    }
   }
   return { errores, warnings };
 }
@@ -638,6 +966,29 @@ export function ConfigPasosEditorView({
     () => new Map(catalogoFamilias.familias.map((f) => [f.codigo, f])),
     [catalogoFamilias],
   );
+  const technologyRuleFields = React.useMemo<RuleFieldDefinition[]>(
+    () =>
+      rutaAlternativa.ruta.pasos.flatMap((rutaPaso) => {
+        const configPaso = rutaAlternativa.configPasos.find(
+          (config) => config.rutaPasoId === rutaPaso.id,
+        );
+        const familia = familiasMap.get(rutaPaso.familiaCodigo);
+        const stepLabel = `Tecnología paso ${rutaPaso.orden} · ${
+          familia?.nombre ?? rutaPaso.familiaCodigo
+        }`;
+        return [
+          {
+            key: `tecnologia_${configPaso?.id ?? rutaPaso.id}`,
+            label: stepLabel,
+            kind: "select" as const,
+            valueKind: "string" as const,
+            operators: ["=", "!="],
+            options: TECHNOLOGY_RULE_OPTIONS,
+          },
+        ];
+      }),
+    [familiasMap, rutaAlternativa.configPasos, rutaAlternativa.ruta.pasos],
+  );
 
   // Estado: por cada paso de la ruta, su configuración (existente o nueva)
   const [configs, setConfigs] = React.useState<ConfigState>(() => {
@@ -673,7 +1024,12 @@ export function ConfigPasosEditorView({
           modoSeleccion: s.modoSeleccion as "HARDCODED" | "COMERCIAL_ELIGE" | "MOTOR_ELIGE_AUTO",
           criterioMotorAuto: s.criterioMotorAuto ?? null,
           materialVarianteId: s.materialVariante?.id ?? null,
-          materialesCandidatosJson: (s.materialesCandidatosJson as Array<Record<string, unknown>>) ?? [],
+          candidatos: s.candidatos.map((candidate) => ({
+            materiaPrimaId: candidate.materiaPrimaId,
+            defaultVarianteId: candidate.defaultVarianteId,
+            orden: candidate.orden,
+            varianteIds: candidate.variantes.map((item) => item.variante.id),
+          })),
           estrategiaCosto: s.estrategiaCosto,
           formula: s.formula,
           aplicaMultiCaras: s.aplicaMultiCaras,
@@ -681,6 +1037,28 @@ export function ConfigPasosEditorView({
       };
     }
     return initial;
+  });
+  const [candidateMaterials, setCandidateMaterials] = React.useState<
+    Record<string, MateriaPrimaBusquedaItem>
+  >(() => {
+    const map: Record<string, MateriaPrimaBusquedaItem> = {};
+    for (const config of rutaAlternativa.configPasos) {
+      for (const slot of config.slotsMateriales) {
+        for (const candidate of slot.candidatos) {
+          map[candidate.materiaPrimaId] = {
+            id: candidate.materiaPrima.id,
+            codigo: candidate.materiaPrima.codigo,
+            nombre: candidate.materiaPrima.nombre,
+            familia: candidate.materiaPrima.familia,
+            subfamilia: candidate.materiaPrima.subfamilia,
+            tipoTecnico: "",
+            templateId: candidate.materiaPrima.templateId,
+            variantes: candidate.variantes.map((item) => item.variante),
+          };
+        }
+      }
+    }
+    return map;
   });
 
   // JSON text por paso (sólo UI; al guardar se parsea de vuelta a objeto)
@@ -747,6 +1125,17 @@ export function ConfigPasosEditorView({
     setConfigs((prev) => ({ ...prev, [rutaPasoId]: { ...prev[rutaPasoId], ...patch } }));
   };
 
+  const toggleMultiplicador = (rutaPasoId: string, multiplicador: string) => {
+    setConfigs((prev) => {
+      const cfg = prev[rutaPasoId];
+      const current = cfg.multiplicadoresActivos ?? [];
+      const next = current.includes(multiplicador)
+        ? current.filter((item) => item !== multiplicador)
+        : [...current, multiplicador];
+      return { ...prev, [rutaPasoId]: { ...cfg, multiplicadoresActivos: next } };
+    });
+  };
+
   const hasUnsavedChanges = React.useCallback(
     (rutaPasoId: string) => {
       const savedSnapshot = savedConfigSnapshots[rutaPasoId];
@@ -777,7 +1166,7 @@ export function ConfigPasosEditorView({
       const cfg = prev[rutaPasoId];
       const params = asRecord(cfg.paramsPasoJson);
       const current = getNestingConfig(params);
-      const nextNesting = { ...current, pieceBleedMm: value };
+      const nextNesting: Record<string, unknown> = { ...current, pieceBleedMm: value };
       delete nextNesting.separationHMm;
       delete nextNesting.separationVMm;
       delete nextNesting.exteriorMarginFromSpacing;
@@ -970,6 +1359,81 @@ export function ConfigPasosEditorView({
     });
   };
 
+  const addSlotCandidate = (
+    rutaPasoId: string,
+    slotIdx: number,
+    materiaPrima: MateriaPrimaBusquedaItem,
+  ) => {
+    setCandidateMaterials((prev) => ({ ...prev, [materiaPrima.id]: materiaPrima }));
+    setConfigs((prev) => {
+      const cfg = prev[rutaPasoId];
+      const slots = [...(cfg.slotsMateriales ?? [])];
+      const slot = slots[slotIdx];
+      if (!slot) return prev;
+      const current = slot.candidatos ?? [];
+      if (current.some((candidate) => candidate.materiaPrimaId === materiaPrima.id)) {
+        return prev;
+      }
+      const variantIds = materiaPrima.variantes.map((variante) => variante.id);
+      slots[slotIdx] = {
+        ...slot,
+        candidatos: [
+          ...current,
+          {
+            materiaPrimaId: materiaPrima.id,
+            defaultVarianteId: variantIds[0] ?? null,
+            orden: current.length,
+            varianteIds: variantIds,
+          },
+        ],
+      };
+      return { ...prev, [rutaPasoId]: { ...cfg, slotsMateriales: slots } };
+    });
+  };
+
+  const removeSlotCandidate = (
+    rutaPasoId: string,
+    slotIdx: number,
+    materiaPrimaId: string,
+  ) => {
+    setConfigs((prev) => {
+      const cfg = prev[rutaPasoId];
+      const slots = [...(cfg.slotsMateriales ?? [])];
+      const slot = slots[slotIdx];
+      if (!slot) return prev;
+      slots[slotIdx] = {
+        ...slot,
+        candidatos: (slot.candidatos ?? []).filter(
+          (candidate) => candidate.materiaPrimaId !== materiaPrimaId,
+        ),
+      };
+      return { ...prev, [rutaPasoId]: { ...cfg, slotsMateriales: slots } };
+    });
+  };
+
+  const updateSlotCandidate = (
+    rutaPasoId: string,
+    slotIdx: number,
+    materiaPrimaId: string,
+    patch: Partial<NonNullable<UpsertSlotMaterialPayload["candidatos"]>[number]>,
+  ) => {
+    setConfigs((prev) => {
+      const cfg = prev[rutaPasoId];
+      const slots = [...(cfg.slotsMateriales ?? [])];
+      const slot = slots[slotIdx];
+      if (!slot) return prev;
+      slots[slotIdx] = {
+        ...slot,
+        candidatos: (slot.candidatos ?? []).map((candidate) =>
+          candidate.materiaPrimaId === materiaPrimaId
+            ? { ...candidate, ...patch }
+            : candidate,
+        ),
+      };
+      return { ...prev, [rutaPasoId]: { ...cfg, slotsMateriales: slots } };
+    });
+  };
+
   const removeSlot = (rutaPasoId: string, slotIdx: number) => {
     setConfigs((prev) => {
       const cfg = prev[rutaPasoId];
@@ -983,7 +1447,9 @@ export function ConfigPasosEditorView({
     const jsonText = jsonTexts[rutaPasoId];
     const paso = rutaAlternativa.ruta.pasos.find((p) => p.id === rutaPasoId);
     const familia = paso ? familiasMap.get(paso.familiaCodigo) : undefined;
-    const cantidadRelevante = requiereMecanismoCantidad(configs[rutaPasoId], familia);
+    const noEjecutar = configs[rutaPasoId].modoActivacion === "NO_EJECUTAR";
+    const cantidadRelevante =
+      !noEjecutar && requiereMecanismoCantidad(configs[rutaPasoId], familia);
     const paramsRes = textToJson(jsonText.params);
     const mecanismoRes = cantidadRelevante
       ? textToJson(jsonText.mecanismo)
@@ -1003,6 +1469,7 @@ export function ConfigPasosEditorView({
     if (configs[rutaPasoId].modoActivacion === "CONDICIONAL") {
       const camposRegla = getRuleFields({
         includeMeasureFields: producto.modoMedidas === "LIBRE",
+        extraFields: technologyRuleFields,
       });
       const parsedRule = jsonLogicToRuleGroup(condicionActivacionJson, camposRegla);
       if (parsedRule.supported) {
@@ -1016,11 +1483,18 @@ export function ConfigPasosEditorView({
 
     setGuardando(rutaPasoId);
     try {
-      const nestingConfig = getNestingConfig(configs[rutaPasoId].paramsPasoJson);
-      const paramsPasoJson = {
-        ...(paramsRes.value ?? {}),
-        ...(Object.keys(nestingConfig).length > 0 ? { nestingConfig } : {}),
-      };
+      const currentParams = asRecord(configs[rutaPasoId].paramsPasoJson);
+      const nestingConfig = getNestingConfig(currentParams);
+      const modoColorConfig = getModoColorConfig(currentParams);
+      const paramsPasoJson = { ...(paramsRes.value ?? {}) };
+      delete paramsPasoJson.nestingConfig;
+      delete paramsPasoJson.modoColorConfig;
+      if (Object.keys(nestingConfig).length > 0) {
+        paramsPasoJson.nestingConfig = nestingConfig;
+      }
+      if (Object.keys(modoColorConfig).length > 0) {
+        paramsPasoJson.modoColorConfig = modoColorConfig;
+      }
       await upsertConfigPaso(rutaAlternativa.id, {
         ...configs[rutaPasoId],
         centroCostoId: configs[rutaPasoId].maquinaM1Id
@@ -1049,15 +1523,18 @@ export function ConfigPasosEditorView({
     const cfg = configs[paso.id];
     const jsonText = jsonTexts[paso.id];
     const configExistente = rutaAlternativa.configPasos.find((cp) => cp.rutaPasoId === paso.id);
-    const cantidadRelevante = requiereMecanismoCantidad(cfg, familia);
-    const valBasico = validarBasico(cfg, familia);
-    const valMateriales = validarMateriales(cfg, familia);
-    const valAvanzado = validarAvanzado(
-      jsonText.params,
-      cantidadRelevante ? jsonText.mecanismo : "",
-      cfg,
-      familia ? { codigo: familia.codigo } : undefined,
-    );
+    const noEjecutar = cfg.modoActivacion === "NO_EJECUTAR";
+    const cantidadRelevante = !noEjecutar && requiereMecanismoCantidad(cfg, familia);
+    const valBasico = noEjecutar ? { errores: [], warnings: [] } : validarBasico(cfg, familia);
+    const valMateriales = noEjecutar ? { errores: [], warnings: [] } : validarMateriales(cfg, familia);
+    const valAvanzado = noEjecutar
+      ? { errores: [], warnings: [] }
+      : validarAvanzado(
+          jsonText.params,
+          cantidadRelevante ? jsonText.mecanismo : "",
+          cfg,
+          familia ? { codigo: familia.codigo } : undefined,
+        );
     const totalErrores =
       valBasico.errores.length + valMateriales.errores.length + valAvanzado.errores.length;
     const totalWarnings =
@@ -1072,7 +1549,9 @@ export function ConfigPasosEditorView({
     const optional = cfg.modoActivacion === "OPCIONAL";
     const status = totalErrores > 0 || totalWarnings > 0
       ? "warning"
-      : configExistente
+      : noEjecutar
+        ? "skipped"
+        : configExistente
         ? "done"
         : optional
           ? "optional"
@@ -1084,9 +1563,12 @@ export function ConfigPasosEditorView({
       cantidadRelevante,
       totalErrores,
       totalWarnings,
-      maquinaNombre: maquinaSel?.nombre ?? centroManual?.nombre ?? "Sin centro asignado",
+      maquinaNombre: noEjecutar
+        ? "No se ejecuta"
+        : maquinaSel?.nombre ?? centroManual?.nombre ?? "Sin centro asignado",
       status,
       optional,
+      skipped: noEjecutar,
     };
   };
 
@@ -1094,9 +1576,13 @@ export function ConfigPasosEditorView({
     0,
     rutaAlternativa.ruta.pasos.findIndex((paso) => paso.id === activePasoId),
   );
-  const doneCount = rutaAlternativa.ruta.pasos.filter(
-    (paso) => getPasoSummary(paso).status === "done",
-  ).length;
+  const stepSummaries = rutaAlternativa.ruta.pasos.map((paso) => ({
+    paso,
+    summary: getPasoSummary(paso),
+  }));
+  const skippedCount = stepSummaries.filter(({ summary }) => summary.skipped).length;
+  const activeStepCount = Math.max(0, rutaAlternativa.ruta.pasos.length - skippedCount);
+  const doneCount = stepSummaries.filter(({ summary }) => summary.status === "done").length;
   const activePaso = rutaAlternativa.ruta.pasos[activeIdx] ?? rutaAlternativa.ruta.pasos[0];
   const goPrev = () => {
     const prev = rutaAlternativa.ruta.pasos[Math.max(0, activeIdx - 1)];
@@ -1123,12 +1609,14 @@ export function ConfigPasosEditorView({
               <span>{rutaAlternativa.esPreferida ? "★" : "☆"}</span>
               {rutaAlternativa.nombre}
             </div>
-            <div className="sub">{rutaAlternativa.ruta.codigo} · v{rutaAlternativa.rutaVersion}</div>
           </div>
           <div className="side-progress">
-            <span>{doneCount}/{rutaAlternativa.ruta.pasos.length} pasos</span>
+            <span>
+              {doneCount}/{activeStepCount} activos
+              {skippedCount > 0 ? ` · ${skippedCount} omitido${skippedCount === 1 ? "" : "s"}` : ""}
+            </span>
             <div className="bar">
-              <span style={{ width: `${(doneCount / Math.max(1, rutaAlternativa.ruta.pasos.length)) * 100}%` }} />
+              <span style={{ width: `${(doneCount / Math.max(1, activeStepCount)) * 100}%` }} />
             </div>
           </div>
           <div className="pasos">
@@ -1142,16 +1630,18 @@ export function ConfigPasosEditorView({
                   onClick={() => setActivePasoId(paso.id)}
                 >
                   <span className="ix">
-                    {summary.status === "done" ? <CheckIcon className="size-3" /> : idx + 1}
+                    {summary.skipped ? "—" : summary.status === "done" ? <CheckIcon className="size-3" /> : idx + 1}
                   </span>
                   <span className="body">
                     <span className="ttl">{summary.familia?.nombre ?? paso.familiaCodigo}</span>
                     <span className="sub">{summary.maquinaNombre}</span>
                   </span>
                   <span className="status">
-                    {summary.status === "done"
-                      ? "✓"
-                      : summary.status === "warning"
+                    {summary.skipped
+                      ? "No ejecutar"
+                      : summary.status === "done"
+                        ? "✓"
+                        : summary.status === "warning"
                         ? "!"
                         : summary.optional
                           ? "Opt"
@@ -1178,13 +1668,15 @@ export function ConfigPasosEditorView({
                     onClick={() => setActivePasoId(paso.id)}
                     title={summary.familia?.nombre ?? paso.familiaCodigo}
                   >
-                    <span className="d">{summary.status === "done" ? "✓" : idx + 1}</span>
+                    <span className="d">{summary.skipped ? "—" : summary.status === "done" ? "✓" : idx + 1}</span>
                     <span className="lb">{(summary.familia?.nombre ?? paso.familiaCodigo).split(" ")[0]}</span>
                   </button>
                   {idx < rutaAlternativa.ruta.pasos.length - 1 && (
                     <div
                       className={`edge ${
+                        !summary.skipped &&
                         summary.status === "done" &&
+                        !getPasoSummary(rutaAlternativa.ruta.pasos[idx + 1]!).skipped &&
                         getPasoSummary(rutaAlternativa.ruta.pasos[idx + 1]!).status === "done"
                           ? "done"
                           : ""
@@ -1232,7 +1724,9 @@ export function ConfigPasosEditorView({
               ? profileOption(perfilGuardado, "guardado/no disponible")
               : undefined,
           );
-          const opcionesActivacion = (familia?.modosActivacionSoportados ?? MODOS_ACTIVACION).map(
+          const opcionesActivacion = Array.from(
+            new Set([...(familia?.modosActivacionSoportados ?? MODOS_ACTIVACION), "NO_EJECUTAR"]),
+          ).map(
             (m) => optionFromLabel(m, modoActivacionLabels),
           );
           const opcionesTiempo = (
@@ -1246,7 +1740,6 @@ export function ConfigPasosEditorView({
               "CONVERSION",
             ]
           ).map((m) => optionFromLabel(m, mecanismoCantidadLabels));
-          const opcionesVariantes = materialVariantOptions(lookups.materiasPrimas);
           const centroGuardado = configExistente?.centroCosto ?? null;
           const centroCostoOptions = ensureSelectedOption(
             lookups.centrosCosto.map((centro) => centroCostoOption(centro)),
@@ -1259,7 +1752,8 @@ export function ConfigPasosEditorView({
           ) ?? [];
           const slotsAutomaticos = familia?.slotsRequeridos.filter(isConsumibleMaquinaSlot) ?? [];
           const requiereMateriales = slotsManuales.length > 0 || slotsAutomaticos.length > 0;
-          const cantidadRelevante = requiereMecanismoCantidad(cfg, familia);
+          const noEjecutar = cfg.modoActivacion === "NO_EJECUTAR";
+          const cantidadRelevante = !noEjecutar && requiereMecanismoCantidad(cfg, familia);
           const mostrarNesting = nestingAplica(familia?.codigo, cfg);
           const mostrarSetupCleanupOverrides = Boolean(cfg.maquinaM1Id);
           const mostrarTiempoFijoOverride = cfg.modoTiempo === "T-1" && !cfg.maquinaM1Id;
@@ -1273,6 +1767,10 @@ export function ConfigPasosEditorView({
           const pliegoImpresionEsPersonalizado = pliegoImpresionPreset === "personalizado";
           const nestingMargins = asRecord(nestingConfig.margins);
           const nestingCosting = asRecord(nestingConfig.costing);
+          const nestingCostingStrategy =
+            typeof nestingCosting.strategy === "string" ? nestingCosting.strategy : "simple";
+          const nestingDefineCosteo = mostrarNesting && nestingCostingStrategy !== "simple";
+          const multiplicadoresSoportados = familia?.multiplicadoresSoportados ?? [];
           const sustratoPrincipal = cfg.slotsMateriales?.find(
             (slot) => slot.slotCodigo === "sustrato_principal",
           );
@@ -1311,14 +1809,16 @@ export function ConfigPasosEditorView({
           const mostrarPanelizado = panelizadoAplica(familia?.codigo, nestingConfig, maquinaParaDefaults);
           const resolvedPanelMaxWidth = getResolvedNestingNumber(panelizadoConfig.maxPanelWidthMm, undefined, 0);
           const resolvedPanelOverlap = getResolvedNestingNumber(panelizadoConfig.overlapMm, undefined, 20);
-          const valBasico = validarBasico(cfg, familia);
-          const valMateriales = validarMateriales(cfg, familia);
-          const valAvanzado = validarAvanzado(
-            jsonText.params,
-            cantidadRelevante ? jsonText.mecanismo : "",
-            cfg,
-            familia ? { codigo: familia.codigo } : undefined,
-          );
+          const valBasico = noEjecutar ? { errores: [], warnings: [] } : validarBasico(cfg, familia);
+          const valMateriales = noEjecutar ? { errores: [], warnings: [] } : validarMateriales(cfg, familia);
+          const valAvanzado = noEjecutar
+            ? { errores: [], warnings: [] }
+            : validarAvanzado(
+                jsonText.params,
+                cantidadRelevante ? jsonText.mecanismo : "",
+                cfg,
+                familia ? { codigo: familia.codigo } : undefined,
+              );
           const totalErrores =
             valBasico.errores.length + valMateriales.errores.length + valAvanzado.errores.length;
           const totalWarnings =
@@ -1333,16 +1833,18 @@ export function ConfigPasosEditorView({
                   <span style={{ color: "var(--muted-text)", fontFamily: "var(--font-mono)", fontSize: 12 }}>
                     Paso {idx + 1} de {rutaAlternativa.ruta.pasos.length}
                   </span>
-                  <span className={`tag ${totalErrores === 0 && totalWarnings === 0 ? "ok" : "warm"}`}>
-                    <span className="d" />
-                    {totalErrores > 0
-                      ? `${totalErrores} error${totalErrores === 1 ? "" : "es"}`
-                      : totalWarnings > 0
-                        ? `${totalWarnings} pendiente${totalWarnings === 1 ? "" : "s"}`
-                        : configExistente
-                          ? "Configurado"
-                          : "Pendiente"}
-                  </span>
+                  {!noEjecutar ? (
+                    <span className={`tag ${totalErrores === 0 && totalWarnings === 0 ? "ok" : "warm"}`}>
+                      <span className="d" />
+                      {totalErrores > 0
+                        ? `${totalErrores} error${totalErrores === 1 ? "" : "es"}`
+                        : totalWarnings > 0
+                          ? `${totalWarnings} pendiente${totalWarnings === 1 ? "" : "s"}`
+                          : configExistente
+                            ? "Configurado"
+                            : "Pendiente"}
+                    </span>
+                  ) : null}
                   <span className="tag muted">
                     {cfg.modoActivacion ? getLabel(modoActivacionLabels, cfg.modoActivacion).label : "Sin activación"}
                   </span>
@@ -1415,23 +1917,46 @@ export function ConfigPasosEditorView({
                           </button>
                         ))}
                       </div>
-                      <span className="help">Los pasos opcionales no se ejecutan a menos que el comercial los active.</span>
+                      <span className="help">
+                        No ejecutar apaga este paso solo para esta ruta del producto.
+                      </span>
                     </div>
                     <div className="field">
                       <label>Multiplicadores</label>
                       <div className="chip-row">
-                        {(cfg.multiplicadoresActivos?.length ? cfg.multiplicadoresActivos : ["caras"]).map((multiplicador) => (
-                          <span key={multiplicador} className="tag mono">{multiplicador}</span>
-                        ))}
-                        <span className="tag muted dashed">+ Agregar</span>
+                        {multiplicadoresSoportados.length > 0 ? (
+                          multiplicadoresSoportados.map((multiplicador) => {
+                            const activo = cfg.multiplicadoresActivos?.includes(multiplicador);
+                            return (
+                              <button
+                                key={multiplicador}
+                                type="button"
+                                className={`tag mono ${activo ? "active" : "muted dashed"}`}
+                                onClick={() => toggleMultiplicador(paso.id, multiplicador)}
+                                title={
+                                  multiplicador === "caras"
+                                    ? "Duplica tiempo y consumibles de máquina cuando el comercial elige doble faz. Los materiales se duplican por slot."
+                                    : "Activa o desactiva este multiplicador para el paso."
+                                }
+                              >
+                                {multiplicador}
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <span className="tag muted dashed">Sin multiplicadores</span>
+                        )}
                       </div>
-                      <span className="help">Variables que multiplican el costo del paso (ej: caras, colores).</span>
+                      <span className="help">
+                        Variables que multiplican el tiempo del paso. En materiales, caras se define por slot.
+                      </span>
                     </div>
                     {cfg.modoActivacion === "CONDICIONAL" && (
                       <div className="md:col-span-full">
                         <RuleBuilder
                           value={cfg.condicionActivacionJson as Record<string, unknown> | null | undefined}
                           includeMeasureFields={producto.modoMedidas === "LIBRE"}
+                          extraFields={technologyRuleFields}
                           onChange={(value) =>
                             updateConfig(paso.id, { condicionActivacionJson: value })
                           }
@@ -1445,6 +1970,8 @@ export function ConfigPasosEditorView({
                 </div>
               </section>
 
+              {!noEjecutar && (
+                <>
               <section className="section-block open">
                 <div className="sb-head">
                   <span className="num">02</span>
@@ -1569,8 +2096,8 @@ export function ConfigPasosEditorView({
 	                      {maquinaSel || perfilGuardado ? (
 	                        <div className="field">
                           <LabelConTooltip
-                            label="Perfil de la máquina"
-                            tooltip="Configuración operativa específica. Define la productividad."
+                            label="Perfil default de la máquina"
+                            tooltip="Perfil operativo base. Si el modo de color comercial está activo, el motor usa automáticamente un perfil compatible con el color elegido o default."
                           />
                           <HumanSelect
                             value={cfg.perfilM1Id ?? ""}
@@ -1770,6 +2297,13 @@ export function ConfigPasosEditorView({
                             </div>
                           );
                         }
+                        const selectedCandidates = slot.candidatos ?? [];
+                        const hardcodedMateria = Object.values(candidateMaterials).find(
+                          (materiaPrima) =>
+                            materiaPrima.variantes.some(
+                              (variante) => variante.id === slot.materialVarianteId,
+                            ),
+                        );
                         return (
                         <div key={slotIdx} className="bg-muted/30 space-y-2 rounded border p-2">
                           <div className="flex items-center justify-between">
@@ -1822,29 +2356,272 @@ export function ConfigPasosEditorView({
                             <div className="space-y-1">
                               <LabelConTooltip
                                 label="Costeo"
-                                tooltip="Estrategia de costeo del material. Las estrategias de nesting usan el acomodo calculado por el paso."
-                              />
-                              <HumanSelect
-                                value={slot.estrategiaCosto ?? "simple"}
-                                onValueChange={(v) =>
-                                  updateSlot(paso.id, slotIdx, { estrategiaCosto: v || "simple" })
+                                tooltip={
+                                  nestingDefineCosteo
+                                    ? "Este paso toma el costeo desde Acomodado / nesting. El valor del slot no se usa mientras esa estrategia esté activa."
+                                    : "Estrategia de costeo del material cuando no hay una estrategia activa en Acomodado / nesting."
                                 }
-                                options={COSTING_STRATEGY_OPTIONS}
-                                triggerClassName="min-h-9 text-xs"
                               />
+                              {nestingDefineCosteo ? (
+                                <div className="min-h-9 rounded border bg-muted/40 px-3 py-2 text-xs">
+                                  <div className="font-medium text-foreground">
+                                    {optionLabel(COSTING_STRATEGY_OPTIONS, nestingCostingStrategy)}
+                                  </div>
+                                  <div className="text-muted-foreground">
+                                    Definido en Acomodado / nesting
+                                  </div>
+                                </div>
+                              ) : (
+                                <HumanSelect
+                                  value={slot.estrategiaCosto ?? "simple"}
+                                  onValueChange={(v) =>
+                                    updateSlot(paso.id, slotIdx, { estrategiaCosto: v || "simple" })
+                                  }
+                                  options={COSTING_STRATEGY_OPTIONS}
+                                  triggerClassName="min-h-9 text-xs"
+                                />
+                              )}
                             </div>
                           </div>
                           {slot.modoSeleccion === "HARDCODED" && (
-                            <HumanSelect
-                              value={slot.materialVarianteId ?? ""}
-                              onValueChange={(v) =>
-                                updateSlot(paso.id, slotIdx, { materialVarianteId: v || null })
-                              }
-                              options={opcionesVariantes}
-                              placeholder="Elegir variante de material"
-                              triggerClassName="min-h-9 text-xs"
-                              contentClassName="max-h-80"
-                            />
+                            <div className="space-y-2 rounded border bg-background p-3">
+                              <LabelConTooltip
+                                label="Material fijo"
+                                tooltip="Elegí una materia prima compatible y luego una variante concreta para dejar fija en este paso."
+                              />
+                              <MaterialSearchSelect
+                                compatibilidad={slotDecl?.compatibilidadMaterial}
+                                placeholder="Buscar materia prima compatible..."
+                                selectedIds={hardcodedMateria ? [hardcodedMateria.id] : []}
+                                onSelect={(materiaPrima) => {
+                                  setCandidateMaterials((prev) => ({
+                                    ...prev,
+                                    [materiaPrima.id]: materiaPrima,
+                                  }));
+                                  updateSlot(paso.id, slotIdx, {
+                                    materialVarianteId: materiaPrima.variantes[0]?.id ?? null,
+                                  });
+                                }}
+                              />
+                              {hardcodedMateria && hardcodedMateria.variantes.length > 1 ? (
+                                <HumanSelect
+                                  value={slot.materialVarianteId ?? ""}
+                                  onValueChange={(v) =>
+                                    updateSlot(paso.id, slotIdx, {
+                                      materialVarianteId: v || null,
+                                    })
+                                  }
+                                  options={hardcodedMateria.variantes.map((variante) =>
+                                    varianteOptionFromBusqueda(hardcodedMateria, variante),
+                                  )}
+                                  placeholder="Elegir variante"
+                                  triggerClassName="min-h-8 text-xs"
+                                />
+                              ) : (
+                                <div className="text-muted-foreground text-xs">
+                                  Variante seleccionada:{" "}
+                                  {hardcodedMateria?.variantes.find(
+                                    (variante) => variante.id === slot.materialVarianteId,
+                                  )?.nombreVariante ??
+                                    hardcodedMateria?.variantes.find(
+                                      (variante) => variante.id === slot.materialVarianteId,
+                                    )?.sku ??
+                                    slot.materialVarianteId ??
+                                    "sin seleccionar"}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {slot.modoSeleccion !== "HARDCODED" && (
+                            <div className="space-y-2 rounded border bg-background p-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <LabelConTooltip
+                                  label="Materiales candidatos"
+                                  tooltip="Lista de variantes entre las que podrá elegir el comercial, o entre las que el sistema resolverá automáticamente."
+                                />
+                                <span className="text-muted-foreground text-[11px]">
+                                  {selectedCandidates.length} materia
+                                  {selectedCandidates.length === 1 ? "" : "s"}
+                                </span>
+                              </div>
+                              <MaterialSearchSelect
+                                compatibilidad={slotDecl?.compatibilidadMaterial}
+                                placeholder="Buscar materia prima compatible..."
+                                selectedIds={selectedCandidates.map(
+                                  (candidate) => candidate.materiaPrimaId,
+                                )}
+                                onSelect={(materiaPrima) =>
+                                  addSlotCandidate(paso.id, slotIdx, materiaPrima)
+                                }
+                              />
+                              <div className="space-y-2">
+                                {selectedCandidates.map((candidate) => {
+                                  const materiaPrima = candidateMaterials[candidate.materiaPrimaId];
+                                  const variantOptions =
+                                    materiaPrima?.variantes.map((variante) =>
+                                      varianteOptionFromBusqueda(materiaPrima, variante),
+                                    ) ?? [];
+                                  const enabledVariantIds = new Set(candidate.varianteIds);
+                                  return (
+                                    <div key={candidate.materiaPrimaId} className="rounded border bg-white p-2">
+                                      <div className="mb-2 flex items-center justify-between gap-2">
+                                        <div className="min-w-0 text-xs">
+                                          <div className="truncate font-medium">
+                                            {materiaPrima?.nombre ?? candidate.materiaPrimaId}
+                                          </div>
+                                          <div className="text-muted-foreground truncate">
+                                            {materiaPrima
+                                              ? `${materiaPrima.codigo} · ${materiaPrima.subfamilia}`
+                                              : "Materia prima cargada"}
+                                          </div>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          className="text-xs text-red-600"
+                                          onClick={() =>
+                                            removeSlotCandidate(
+                                              paso.id,
+                                              slotIdx,
+                                              candidate.materiaPrimaId,
+                                            )
+                                          }
+                                        >
+                                          Quitar
+                                        </button>
+                                      </div>
+                                      {materiaPrima && materiaPrima.variantes.length > 1 ? (
+                                        canUseColorThicknessSelector(materiaPrima) ? (
+                                          <ColorThicknessVariantSelector
+                                            materiaPrima={materiaPrima}
+                                            candidate={candidate}
+                                            onChange={(patch) =>
+                                              updateSlotCandidate(
+                                                paso.id,
+                                                slotIdx,
+                                                candidate.materiaPrimaId,
+                                                patch,
+                                              )
+                                            }
+                                          />
+                                        ) : (
+                                        <div className="mb-2 space-y-1 rounded border bg-muted/20 p-2">
+                                          <div className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+                                            Variantes habilitadas para cotizar
+                                          </div>
+                                          <div className="grid gap-1 sm:grid-cols-2">
+                                            {materiaPrima.variantes.map((variante) => {
+                                              const checked = enabledVariantIds.has(variante.id);
+                                              const option = varianteOptionFromBusqueda(
+                                                materiaPrima,
+                                                variante,
+                                              );
+                                              return (
+                                                <label
+                                                  key={variante.id}
+                                                  className={`flex items-start gap-3 rounded border px-3 py-2 text-xs transition ${
+                                                    checked
+                                                      ? "border-foreground/15 bg-white shadow-sm"
+                                                      : "border-transparent bg-white/70 text-muted-foreground"
+                                                  }`}
+                                                >
+                                                  <input
+                                                    type="checkbox"
+                                                    className="mt-0.5"
+                                                    checked={checked}
+                                                    onChange={(event) => {
+                                                      const nextIds = event.target.checked
+                                                        ? [...candidate.varianteIds, variante.id]
+                                                        : candidate.varianteIds.filter(
+                                                            (id) => id !== variante.id,
+                                                          );
+                                                      const safeIds =
+                                                        nextIds.length > 0
+                                                          ? Array.from(new Set(nextIds))
+                                                          : [variante.id];
+                                                      const defaultStillEnabled =
+                                                        candidate.defaultVarianteId &&
+                                                        safeIds.includes(candidate.defaultVarianteId);
+                                                      updateSlotCandidate(
+                                                        paso.id,
+                                                        slotIdx,
+                                                        candidate.materiaPrimaId,
+                                                        {
+                                                          varianteIds: safeIds,
+                                                          defaultVarianteId: defaultStillEnabled
+                                                            ? candidate.defaultVarianteId
+                                                            : safeIds[0] ?? null,
+                                                        },
+                                                      );
+                                                    }}
+                                                  />
+                                                  <span className="min-w-0">
+                                                    <span className="block text-sm font-medium leading-snug text-foreground">
+                                                      {option.label}
+                                                    </span>
+                                                    {option.description ? (
+                                                      <span className="text-muted-foreground block truncate">
+                                                        {option.description}
+                                                      </span>
+                                                    ) : null}
+                                                    {option.details && option.details.length > 0 ? (
+                                                      <span className="mt-1 flex flex-wrap gap-1">
+                                                        {option.details.map((detail) => (
+                                                          <span
+                                                            key={`${option.value}-${detail.label}-${detail.value}`}
+                                                            className="rounded border bg-muted px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground"
+                                                          >
+                                                            <span className="font-medium text-foreground">
+                                                              {detail.label}:
+                                                            </span>{" "}
+                                                            {detail.value}
+                                                          </span>
+                                                        ))}
+                                                      </span>
+                                                    ) : (
+                                                      <span className="text-muted-foreground mt-1 block text-[11px]">
+                                                        Sin atributos de variante cargados. Código: {variante.sku}
+                                                      </span>
+                                                    )}
+                                                  </span>
+                                                </label>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                        )
+                                      ) : null}
+                                      <div className="space-y-1">
+                                        <Label className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+                                          Variante predeterminada
+                                        </Label>
+                                        <HumanSelect
+                                          value={candidate.defaultVarianteId ?? ""}
+                                          onValueChange={(v) =>
+                                            updateSlotCandidate(
+                                              paso.id,
+                                              slotIdx,
+                                              candidate.materiaPrimaId,
+                                              { defaultVarianteId: v || null },
+                                            )
+                                          }
+                                          options={variantOptions.filter((option) =>
+                                            candidate.varianteIds.includes(option.value),
+                                          )}
+                                          placeholder="Elegir variante predeterminada"
+                                          triggerClassName="min-h-10 text-xs"
+                                          contentClassName="min-w-[520px]"
+                                        />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              {selectedCandidates.length === 0 ? (
+                                <p className="text-muted-foreground text-xs">
+                                  Agregá al menos una materia prima candidata para este slot.
+                                </p>
+                              ) : null}
+                            </div>
                           )}
                           {slot.modoSeleccion === "MOTOR_ELIGE_AUTO" && (
                             <div className="space-y-1">
@@ -2328,6 +3105,8 @@ export function ConfigPasosEditorView({
                     </div>
                     )}
                   </section>
+                </>
+              )}
             </div>
             </React.Fragment>
           );

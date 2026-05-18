@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
   CirclePlusIcon,
+  LibraryIcon,
   PencilIcon,
   ToggleLeftIcon,
 } from "lucide-react";
@@ -207,6 +208,13 @@ export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPan
                 <CirclePlusIcon className="size-4" />
                 Nueva materia prima
               </Button>
+              <Button
+                variant="outline"
+                onClick={() => router.push("/inventario/materias-primas/biblioteca")}
+              >
+                <LibraryIcon className="size-4" />
+                Instalar desde biblioteca
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -234,7 +242,14 @@ export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPan
               ) : (
                 materiasPrimasVisibles.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell>{item.nombre}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <span>{item.nombre}</span>
+                        <span className="text-xs text-muted-foreground">
+                          Canónico: {item.canonicalMaterialName ?? "Personalizado por tenant"}
+                        </span>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       {familiaMateriaPrimaItems.find((familia) => familia.value === item.familia)?.label ??
                         item.familia}

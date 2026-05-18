@@ -70,6 +70,7 @@ const geometriaGranFormatoOptions = [
 const coloresGranFormatoOptions = [
   option("CMYK", "CMYK"),
   option("CMYK+blanco", "CMYK + Blanco"),
+  option("CMYK+barniz", "CMYK + Barniz"),
   option("CMYK+blanco+barniz", "CMYK + Blanco + Barniz"),
 ];
 

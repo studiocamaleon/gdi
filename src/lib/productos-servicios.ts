@@ -18,6 +18,14 @@ export const unidadComercialProductoItems: Array<{
 
 export type ModoMedidasProducto = 'FIJA' | 'LIBRE' | 'COMERCIAL_ELIGE';
 
+export interface MedidaPredefinidaProducto {
+  id: string;
+  nombre: string;
+  anchoMm: number;
+  altoMm: number;
+  esDefault: boolean;
+}
+
 export interface AtributoComercialSchema {
   key: string;
   label: string;
@@ -73,6 +81,7 @@ export interface ProductoListItem {
   atributosComercialesJson: Record<string, unknown> | null;
   medidaDefaultAnchoMm: string | null;
   medidaDefaultAltoMm: string | null;
+  medidasPredefinidasJson: MedidaPredefinidaProducto[] | null;
   precioConfigJson: unknown;
   unidadComercial: string;
   modoMedidas: string;
@@ -209,7 +218,35 @@ export interface SlotMaterialDetalle {
     nombreVariante: string | null;
     precioReferencia: string | null;
   } | null;
-  materialesCandidatosJson: unknown;
+  candidatos: Array<{
+    id: string;
+    materiaPrimaId: string;
+    defaultVarianteId: string | null;
+    orden: number;
+    materiaPrima: {
+      id: string;
+      codigo: string;
+      nombre: string;
+      familia: string;
+      subfamilia: string;
+      templateId: string;
+    };
+    defaultVariante: {
+      id: string;
+      sku: string;
+      nombreVariante: string | null;
+      precioReferencia: string | null;
+    } | null;
+    variantes: Array<{
+      variante: {
+        id: string;
+        sku: string;
+        nombreVariante: string | null;
+        precioReferencia: string | null;
+        atributosVarianteJson?: Record<string, unknown> | null;
+      };
+    }>;
+  }>;
 }
 
 export interface CargoPasoDetalle {
@@ -261,7 +298,18 @@ export interface FamiliaListItem {
   mecanismosCantidadSoportados: string[];
   modosActivacionSoportados: string[];
   multiplicadoresSoportados: string[];
-  slotsRequeridos: Array<{ codigo: string; nombre: string; tipo: string; requerido: boolean }>;
+  slotsRequeridos: Array<{
+    codigo: string;
+    nombre: string;
+    tipo: string;
+    requerido: boolean;
+    compatibilidadMaterial?: {
+      familiasMateriaPrima?: string[];
+      subfamiliasMateriaPrima?: string[];
+      templateIds?: string[];
+      tipoTecnico?: string[];
+    };
+  }>;
   plantillasCompatibles: string[];
   inputsRequeridos: string[];
   outputsCanonicos: string[];

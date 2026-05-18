@@ -8,6 +8,7 @@ import { apiRequest } from '@/lib/api';
 import type {
   CargoDirectoCatalogo,
   CatalogoFamilias,
+  MedidaPredefinidaProducto,
   ProductoCategoriaComercial,
   ProductoDetalle,
   ProductoListItem,
@@ -51,6 +52,7 @@ export interface CrearProductoPayload {
   modoMedidas: 'FIJA' | 'LIBRE' | 'COMERCIAL_ELIGE';
   medidaDefaultAnchoMm?: number;
   medidaDefaultAltoMm?: number;
+  medidasPredefinidasJson?: MedidaPredefinidaProducto[];
   precioConfigJson?: Record<string, unknown>;
 }
 
@@ -71,6 +73,7 @@ export interface ActualizarProductoPayload {
   modoMedidas?: 'FIJA' | 'LIBRE' | 'COMERCIAL_ELIGE';
   medidaDefaultAnchoMm?: number | null;
   medidaDefaultAltoMm?: number | null;
+  medidasPredefinidasJson?: MedidaPredefinidaProducto[] | null;
   precioConfigJson?: Record<string, unknown>;
   activo?: boolean;
 }
@@ -178,6 +181,21 @@ export async function actualizarProductoRutaAlt(
   });
 }
 
+export interface DuplicarProductoRutaAltPayload {
+  nombre?: string;
+}
+
+export async function duplicarProductoRutaAlt(
+  rutaAltId: string,
+  payload: DuplicarProductoRutaAltPayload = {},
+) {
+  return apiRequest(`/productos-servicios/productos/rutas-alternativas/${rutaAltId}/duplicar`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
 export async function eliminarProductoRutaAlt(rutaAltId: string) {
   return apiRequest(`/productos-servicios/productos/rutas-alternativas/${rutaAltId}`, {
     method: 'DELETE',
@@ -195,7 +213,12 @@ export interface UpsertSlotMaterialPayload {
   criterioInputCampo?: string | null;
   criterioMaterialCampo?: string | null;
   materialVarianteId?: string | null;
-  materialesCandidatosJson?: Array<Record<string, unknown>>;
+  candidatos?: Array<{
+    materiaPrimaId: string;
+    defaultVarianteId?: string | null;
+    orden?: number;
+    varianteIds: string[];
+  }>;
   estrategiaCosto?: string;
   formula?: string;
   aplicaMultiCaras?: boolean;
@@ -396,6 +419,48 @@ export interface LookupsConfigPaso {
 
 export async function getLookupsConfigPaso(): Promise<LookupsConfigPaso> {
   return apiRequest<LookupsConfigPaso>('/productos-servicios/lookups-config-paso');
+}
+
+export interface BuscarMateriasPrimasParams {
+  q?: string;
+  familias?: string[];
+  subfamilias?: string[];
+  templateIds?: string[];
+  tipoTecnico?: string[];
+  limit?: number;
+}
+
+export interface MateriaPrimaBusquedaItem {
+  id: string;
+  codigo: string;
+  nombre: string;
+  familia: string;
+  subfamilia: string;
+  tipoTecnico: string;
+  templateId: string;
+  variantes: Array<{
+    id: string;
+    sku: string;
+    nombreVariante: string | null;
+    precioReferencia: string | null;
+    atributosVarianteJson?: Record<string, unknown> | null;
+  }>;
+}
+
+export async function buscarMateriasPrimasConfigPaso(
+  params: BuscarMateriasPrimasParams,
+): Promise<MateriaPrimaBusquedaItem[]> {
+  const search = new URLSearchParams();
+  if (params.q) search.set('q', params.q);
+  if (params.familias?.length) search.set('familias', params.familias.join(','));
+  if (params.subfamilias?.length) search.set('subfamilias', params.subfamilias.join(','));
+  if (params.templateIds?.length) search.set('templateIds', params.templateIds.join(','));
+  if (params.tipoTecnico?.length) search.set('tipoTecnico', params.tipoTecnico.join(','));
+  if (params.limit) search.set('limit', String(params.limit));
+  const qs = search.toString();
+  return apiRequest<MateriaPrimaBusquedaItem[]>(
+    `/productos-servicios/materias-primas/buscar${qs ? `?${qs}` : ''}`,
+  );
 }
 
 // ============================================================================

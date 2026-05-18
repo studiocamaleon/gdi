@@ -540,7 +540,16 @@ export interface SlotCargado {
   criterioInputCampo?: string | null;
   criterioMaterialCampo?: string | null;
   materialVarianteId: string | null;
-  materialesCandidatosJson: unknown;
+  candidatos: Array<{
+    id: string;
+    materiaPrimaId: string;
+    defaultVarianteId: string | null;
+    orden: number;
+    variantes: Array<{
+      varianteId: string;
+      orden: number;
+    }>;
+  }>;
   estrategiaCosto: string;
   formula: string;
   aplicaMultiCaras: boolean;

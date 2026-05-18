@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type {
   ActualizarProductoRutaAlternativaDto,
   CrearProductoRutaAlternativaDto,
+  DuplicarProductoRutaAlternativaDto,
 } from './dto/producto-ruta.dto';
 
 @Injectable()
@@ -115,6 +116,177 @@ export class ProductoRutasService {
     });
   }
 
+  async duplicarProductoRutaAlternativa(
+    tenantId: string,
+    rutaAltId: string,
+    dto: DuplicarProductoRutaAlternativaDto,
+  ) {
+    const origen = await this.prisma.productoRutaAlternativa.findFirst({
+      where: { id: rutaAltId, tenantId },
+      include: {
+        ruta: {
+          include: {
+            pasos: { orderBy: { orden: 'asc' } },
+          },
+        },
+        configPasos: {
+          include: {
+            slotsMateriales: {
+              include: {
+                candidatos: {
+                  include: { variantes: { orderBy: { orden: 'asc' } } },
+                  orderBy: { orden: 'asc' },
+                },
+              },
+              orderBy: { slotCodigo: 'asc' },
+            },
+            maquinasCandidatas: { orderBy: { orden: 'asc' } },
+            cargosDirectosPaso: true,
+          },
+        },
+      },
+    });
+    if (!origen)
+      throw new NotFoundException(
+        `Ruta alternativa ${rutaAltId} no encontrada`,
+      );
+
+    const nombre = dto.nombre?.trim() || `${origen.nombre} copia`;
+    const pasosOrigen = origen.ruta.pasos.filter(
+      (paso) => paso.version === origen.rutaVersion,
+    );
+    if (pasosOrigen.length === 0) {
+      throw new BadRequestException(
+        `La ruta "${origen.ruta.nombre}" no tiene pasos para la versión ${origen.rutaVersion}`,
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const ordenMax = await tx.productoRutaAlternativa.aggregate({
+        where: { tenantId, productoId: origen.productoId },
+        _max: { orden: true },
+      });
+
+      const alternativaDuplicada = await tx.productoRutaAlternativa.create({
+        data: {
+          tenantId,
+          productoId: origen.productoId,
+          rutaId: origen.rutaId,
+          rutaVersion: origen.rutaVersion,
+          nombre,
+          esPreferida: false,
+          reglaAutoSeleccionJson: this.jsonOrNull(
+            origen.reglaAutoSeleccionJson,
+          ),
+          orden: (ordenMax._max.orden ?? origen.orden) + 1,
+          activo: true,
+        },
+      });
+
+      for (const config of origen.configPasos) {
+        if (!pasosOrigen.some((paso) => paso.id === config.rutaPasoId)) continue;
+        const configDuplicada = await tx.productoConfigPaso.create({
+          data: {
+            tenantId,
+            productoRutaAlternativaId: alternativaDuplicada.id,
+            rutaPasoId: config.rutaPasoId,
+            modoActivacion: config.modoActivacion,
+            condicionActivacionJson: this.jsonOrNull(
+              config.condicionActivacionJson,
+            ),
+            modoTiempo: config.modoTiempo,
+            mecanismoCantidad: config.mecanismoCantidad,
+            mecanismoCantidadConfigJson: this.jsonOrNull(
+              config.mecanismoCantidadConfigJson,
+            ),
+            multiplicadoresActivos: config.multiplicadoresActivos,
+            paramsPasoJson: this.jsonOrNull(config.paramsPasoJson),
+            maquinaM1Id: config.maquinaM1Id,
+            perfilM1Id: config.perfilM1Id,
+            centroCostoId: config.centroCostoId,
+            setupOverrideMin: config.setupOverrideMin,
+            cleanupOverrideMin: config.cleanupOverrideMin,
+            tiempoFijoOverrideMin: config.tiempoFijoOverrideMin,
+            activo: config.activo,
+          },
+        });
+
+        for (const slot of config.slotsMateriales) {
+          const slotDuplicado = await tx.productoConfigPasoSlotMaterial.create({
+            data: {
+              tenantId,
+              productoConfigPasoId: configDuplicada.id,
+              slotCodigo: slot.slotCodigo,
+              modoSeleccion: slot.modoSeleccion,
+              criterioMotorAuto: slot.criterioMotorAuto,
+              criterioInputCampo: slot.criterioInputCampo,
+              criterioMaterialCampo: slot.criterioMaterialCampo,
+              materialVarianteId: slot.materialVarianteId,
+              estrategiaCosto: slot.estrategiaCosto,
+              formula: slot.formula,
+              aplicaMultiCaras: slot.aplicaMultiCaras,
+              activo: slot.activo,
+            },
+          });
+
+          for (const candidato of slot.candidatos) {
+            const candidatoDuplicado =
+              await tx.productoConfigPasoSlotMaterialCandidato.create({
+                data: {
+                  tenantId,
+                  slotMaterialId: slotDuplicado.id,
+                  materiaPrimaId: candidato.materiaPrimaId,
+                  defaultVarianteId: candidato.defaultVarianteId,
+                  orden: candidato.orden,
+                },
+              });
+            if (candidato.variantes.length > 0) {
+              await tx.productoConfigPasoSlotMaterialCandidatoVariante.createMany({
+                data: candidato.variantes.map((variante) => ({
+                  tenantId,
+                  candidatoId: candidatoDuplicado.id,
+                  varianteId: variante.varianteId,
+                  orden: variante.orden,
+                })),
+              });
+            }
+          }
+        }
+
+        if (config.maquinasCandidatas.length > 0) {
+          await tx.productoConfigPasoMaquinaCandidata.createMany({
+            data: config.maquinasCandidatas.map((maquina) => ({
+              tenantId,
+              productoConfigPasoId: configDuplicada.id,
+              maquinaId: maquina.maquinaId,
+              esPreferida: maquina.esPreferida,
+              orden: maquina.orden,
+              activo: maquina.activo,
+            })),
+          });
+        }
+
+        if (config.cargosDirectosPaso.length > 0) {
+          await tx.productoCargoDirectoPaso.createMany({
+            data: config.cargosDirectosPaso.map((cargo) => ({
+              tenantId,
+              productoConfigPasoId: configDuplicada.id,
+              cargoDirectoCatalogoId: cargo.cargoDirectoCatalogoId,
+              modoActivacion: cargo.modoActivacion,
+              condicionActivacionJson: this.jsonOrNull(
+                cargo.condicionActivacionJson,
+              ),
+              configOverrideJson: this.jsonOrNull(cargo.configOverrideJson),
+              activo: cargo.activo,
+            })),
+          });
+        }
+      }
+
+      return alternativaDuplicada;
+    });
+  }
+
   async eliminarProductoRutaAlternativa(tenantId: string, rutaAltId: string) {
     const existente = await this.prisma.productoRutaAlternativa.findFirst({
       where: { id: rutaAltId, tenantId },
@@ -127,4 +299,9 @@ export class ProductoRutasService {
       where: { id: rutaAltId },
     });
   }
+
+  private jsonOrNull(value: Prisma.JsonValue | null) {
+    return (value ?? Prisma.JsonNull) as Prisma.InputJsonValue;
+  }
+
 }

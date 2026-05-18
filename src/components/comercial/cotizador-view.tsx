@@ -41,6 +41,11 @@ import {
 } from "@/components/ui/table";
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
 import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
+import {
+  getSlotMaterialVariantDisplay,
+  getSlotMaterialVariantSortValue,
+  sortSlotMaterialVariantsByThickness,
+} from "@/lib/materiales-slot-display";
 import { getCatalogoFamilias } from "@/lib/productos-servicios-api";
 import {
   cotizar,
@@ -98,10 +103,20 @@ interface SlotComercialElige {
   familiaCodigo: string;
   modoActivacion: string | null;
   slotCodigo: string;
-  candidatos: Array<{
+  candidatos: SlotMaterialCandidato[];
+}
+
+interface SlotMaterialCandidato {
+  materiaPrimaId: string;
+  label: string;
+  defaultVarianteId?: string | null;
+  variantes: Array<{
     variantId: string;
-    label?: string;
-    default?: boolean;
+    label: string;
+    description: string;
+    sku: string;
+    isFallbackLabel: boolean;
+    sortEspesor: number | null;
   }>;
 }
 
@@ -120,6 +135,15 @@ interface ModoColorComercial {
 
 function materialSelectionKey(configPasoId: string, slotCodigo: string) {
   return `${configPasoId}_${slotCodigo}`;
+}
+
+function defaultSlotCandidateId(slot: SlotComercialElige) {
+  const firstWithDefault = slot.candidatos.find((candidate) => candidate.defaultVarianteId);
+  if (firstWithDefault?.defaultVarianteId) return firstWithDefault.defaultVarianteId;
+  if (slot.candidatos.length === 1 && slot.candidatos[0]?.variantes.length === 1) {
+    return slot.candidatos[0].variantes[0]?.variantId;
+  }
+  return undefined;
 }
 
 function getModoColorConfig(params: unknown): {
@@ -154,6 +178,9 @@ function normalizeModoColor(value: unknown): string | undefined {
   if (["CMYK+BLANCO", "CMYKBLANCO"].includes(normalized)) {
     return "CMYK+blanco";
   }
+  if (["CMYK+BARNIZ", "CMYKBARNIZ"].includes(normalized)) {
+    return "CMYK+barniz";
+  }
   if (
     [
       "CMYK+BLANCO+BARNIZ",
@@ -187,7 +214,7 @@ function getModosColorComercial(
           config.comercialElige === true ||
           (config.enabled !== false && options.length > 1);
         if (!comercialElige) return null;
-        return {
+        const modo: ModoColorComercial = {
           configPasoId: cp.id,
           familiaCodigo: cp.rutaPaso.familiaCodigo,
           modoActivacion: cp.modoActivacion,
@@ -195,6 +222,7 @@ function getModosColorComercial(
           options,
           defaultMode: normalizeModoColor(config.defaultMode),
         };
+        return modo;
       })
       .filter((modo): modo is ModoColorComercial => modo !== null) ?? []
   );
@@ -316,12 +344,33 @@ export function CotizadorView({
           familiaCodigo: cp.rutaPaso.familiaCodigo,
           modoActivacion: cp.modoActivacion,
           slotCodigo: s.slotCodigo,
-          candidatos:
-            (s.materialesCandidatosJson as Array<{
-              variantId: string;
-              label?: string;
-              default?: boolean;
-            }>) ?? [],
+          candidatos: s.candidatos.map((candidate) => ({
+            materiaPrimaId: candidate.materiaPrimaId,
+            label: candidate.materiaPrima.nombre,
+            defaultVarianteId: candidate.defaultVarianteId,
+            variantes: sortSlotMaterialVariantsByThickness(
+              candidate.variantes.map((item) => {
+                const variante = {
+                  sku: item.variante.sku,
+                  nombreVariante: item.variante.nombreVariante,
+                  precioReferencia: item.variante.precioReferencia,
+                  atributosVarianteJson: item.variante.atributosVarianteJson,
+                };
+                const display = getSlotMaterialVariantDisplay(
+                  candidate.materiaPrima,
+                  variante,
+                );
+                return {
+                  variantId: item.variante.id,
+                  label: display.label,
+                  description: display.description,
+                  sku: display.fallbackCode,
+                  isFallbackLabel: display.details.length === 0,
+                  sortEspesor: getSlotMaterialVariantSortValue(variante),
+                };
+              }),
+            ),
+          })),
         })),
       ) ?? [],
     [rutaSel],
@@ -402,7 +451,7 @@ export function CotizadorView({
     const slotMateriales: Record<string, string> = {};
     for (const slot of slotsComercialElige) {
       const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
-      const variantId = seleccionMaterial[key];
+      const variantId = seleccionMaterial[key] || defaultSlotCandidateId(slot);
       if (!variantId) continue;
       slotMateriales[key] = variantId;
       ctx[`slotMaterial_${key}`] = variantId;
@@ -527,51 +576,96 @@ export function CotizadorView({
       slot.configPasoId,
       slot.slotCodigo,
     );
-    const selectedMaterialId = seleccionMaterial[selectionKey] ?? "";
-    const selectedMaterial =
-      slot.candidatos.find((c) => c.variantId === selectedMaterialId) ?? null;
-    const defaultCandidate = slot.candidatos.find((c) => c.default);
-    const selectedMaterialLabel = selectedMaterial
-      ? `${selectedMaterial.label ?? selectedMaterial.variantId}${
-          selectedMaterial.default ? " (default)" : ""
-        }`
-      : "";
+    const selectedMaterialId =
+      seleccionMaterial[selectionKey] || defaultSlotCandidateId(slot) || "";
+    const selectedCandidate =
+      slot.candidatos.find((c) =>
+        c.variantes.some((variant) => variant.variantId === selectedMaterialId),
+      ) ?? slot.candidatos.find((c) => c.defaultVarianteId);
+    const selectedVariant = selectedCandidate?.variantes.find(
+      (variant) => variant.variantId === selectedMaterialId,
+    );
 
     return (
       <div key={selectionKey} className="space-y-1">
         <div className="text-muted-foreground text-xs">
           {familiaLabel(slot.familiaCodigo)} ·{" "}
           {slot.slotCodigo.replace(/_/g, " ")}
-          {defaultCandidate && !selectedMaterialId ? (
-            <span className="ml-1">
-              Sugerido: {defaultCandidate.label ?? defaultCandidate.variantId}
-            </span>
-          ) : null}
         </div>
         <Select
-          value={selectedMaterialId}
+          value={selectedCandidate?.materiaPrimaId ?? ""}
           onValueChange={(v) => {
+            const candidate = slot.candidatos.find((item) => item.materiaPrimaId === v);
+            const variantId =
+              candidate?.defaultVarianteId ??
+              (candidate?.variantes.length === 1 ? candidate.variantes[0]?.variantId : undefined) ??
+              candidate?.variantes[0]?.variantId ??
+              "";
             setResultado(null);
             setSeleccionMaterial((prev) => ({
               ...prev,
-              [selectionKey]: v ?? "",
+              [selectionKey]: variantId,
             }));
           }}
         >
           <SelectTrigger className="h-8 text-xs">
             <SelectDisplay
-              label={selectedMaterialLabel}
+              label={selectedCandidate?.label ?? ""}
               placeholder="Elegí un material"
             />
           </SelectTrigger>
           <SelectContent>
-            {slot.candidatos.map((c) => (
-              <SelectItem key={c.variantId} value={c.variantId}>
-                {c.label ?? c.variantId} {c.default && "(default)"}
+            {slot.candidatos.length === 0 ? (
+              <SelectItem value="__sin_candidatos__" disabled>
+                Sin materiales candidatos configurados
               </SelectItem>
-            ))}
+            ) : (
+              slot.candidatos.map((c) => (
+                <SelectItem key={c.materiaPrimaId} value={c.materiaPrimaId}>
+                  {c.label}
+                </SelectItem>
+              ))
+            )}
           </SelectContent>
         </Select>
+        {selectedCandidate && selectedCandidate.variantes.length > 1 ? (
+          <Select
+            value={selectedMaterialId}
+            onValueChange={(v) => {
+              setResultado(null);
+              setSeleccionMaterial((prev) => ({
+                ...prev,
+                [selectionKey]: v ?? "",
+              }));
+            }}
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectDisplay
+                label={selectedVariant?.label ?? ""}
+                placeholder="Elegí una variante"
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {selectedCandidate.variantes.map((variant) => (
+                <SelectItem key={variant.variantId} value={variant.variantId}>
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="truncate font-medium">
+                      {variant.label}
+                      {variant.variantId === selectedCandidate.defaultVarianteId
+                        ? " · predeterminada"
+                        : ""}
+                    </span>
+                    <span className="text-muted-foreground truncate text-[11px]">
+                      {variant.isFallbackLabel
+                        ? `Sin atributos descriptivos · ${variant.sku}`
+                        : variant.description}
+                    </span>
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
       </div>
     );
   };
@@ -744,7 +838,7 @@ export function CotizadorView({
                           setResultado(null);
                           setSeleccionModoColor((prev) => ({
                             ...prev,
-                            [modo.configPasoId]: normalizeModoColor(v) ?? v,
+                            [modo.configPasoId]: normalizeModoColor(v) ?? v ?? "",
                           }));
                         }}
                       >

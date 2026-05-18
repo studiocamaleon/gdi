@@ -19,6 +19,7 @@ const bcrypt = require("bcryptjs");
 const { seedCargosDirectosCatalogo } = require("./seed-modulos/cargos");
 const { seedCatalogoComercial } = require("./seed-modulos/catalogo-comercial");
 const { seedMaquinas } = require("./seed-modulos/maquinas");
+const { seedMaterialPresets } = require("./seed-modulos/material-presets");
 const { seedMateriales } = require("./seed-modulos/materiales");
 const { seedRutasYProductos } = require("./seed-modulos/rutas-productos");
 
@@ -49,6 +50,8 @@ async function main() {
   await prisma.maquina.deleteMany();
   await prisma.materiaPrimaVariante.deleteMany();
   await prisma.materiaPrima.deleteMany();
+  await prisma.materialPresetVariante.deleteMany();
+  await prisma.materialPreset.deleteMany();
   await prisma.authSession.deleteMany();
   await prisma.invitation.deleteMany();
   await prisma.centroCostoTarifaPeriodo.deleteMany();
@@ -646,6 +649,7 @@ async function main() {
   await seedCargosDirectosCatalogo(prisma, tenant.id);
 
   const catalogoComercial = await seedCatalogoComercial(prisma);
+  await seedMaterialPresets(prisma);
   const materialesCreados = await seedMateriales(prisma, tenant.id);
 
   const maquinasCreadas = await seedMaquinas(prisma, tenant.id, planta.id);
