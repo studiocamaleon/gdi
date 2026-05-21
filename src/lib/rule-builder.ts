@@ -64,7 +64,7 @@ export const RULE_FIELD_DEFINITIONS: RuleFieldDefinition[] = [
     label: "Tipo de copia",
     kind: "select",
     valueKind: "number",
-    operators: SELECT_OPERATORS,
+    operators: NUMBER_OPERATORS,
     options: [
       { value: "1", label: "Simple" },
       { value: "2", label: "Duplicado" },

@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  Param,
+  Patch,
   Post,
   Req,
   UnauthorizedException,
@@ -72,6 +74,29 @@ export class MotorUniversalController {
       clienteId: dto.clienteId ?? null,
       periodo: dto.periodo ?? null,
       cotizacionId: dto.cotizacionId,
+    });
+  }
+
+  @Patch('cotizacion-items/:id/recotizar')
+  async recotizarItem(
+    @Param('id') id: string,
+    @Body() dto: Pick<CotizarDto, 'jobContext' | 'rutaAlternativaId' | 'clienteId' | 'periodo'>,
+    @Req() req: RequestWithAuth,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) {
+      throw new UnauthorizedException(
+        'Falta tenant en el contexto de autenticación',
+      );
+    }
+
+    return this.motor.recotizarItem({
+      tenantId,
+      cotizacionItemId: id,
+      rutaAlternativaId: dto.rutaAlternativaId ?? null,
+      jobContext: dto.jobContext as never,
+      clienteId: dto.clienteId ?? null,
+      periodo: dto.periodo ?? null,
     });
   }
 }

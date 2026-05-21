@@ -30,6 +30,7 @@ import {
   normalizeGranFormatoPanelManualLayout,
   type GranFormatoMeasure,
   type GranFormatoPanelAxis,
+  type GranFormatoPanelAxisInput,
   type GranFormatoPiece,
 } from '../helpers/granformato-pieces';
 
@@ -69,7 +70,7 @@ export type EvaluateGranFormatoMixedShelfLayoutInput = {
   panelizado?: {
     activo: boolean;
     mode: 'automatico' | 'manual';
-    axis: GranFormatoPanelAxis;
+    axis: GranFormatoPanelAxisInput;
     overlapMm: number;
     maxPanelWidthMm: number;
     distribution: 'equilibrada' | 'libre';
@@ -82,7 +83,7 @@ export type EvaluateGranFormatoMixedShelfLayoutInput = {
 export type GranFormatoMixedShelfLayoutResult = {
   orientacion: GranFormatoNestingOrientation;
   panelizado: boolean;
-  panelAxis: GranFormatoPanelAxis | null;
+  panelAxis: GranFormatoPanelAxisInput | null;
   panelCount: number;
   panelOverlapMm: number | null;
   panelMaxWidthMm: number | null;
@@ -97,6 +98,21 @@ export type GranFormatoMixedShelfLayoutResult = {
 };
 
 // ─── Helpers post-procesamiento ─────────────────────────────────────
+
+function resolvePanelAxisSummary(
+  configuredAxis: GranFormatoPanelAxisInput | null | undefined,
+  placements: GranFormatoCostosPreviewPlacement[],
+): GranFormatoPanelAxisInput | null {
+  if (!configuredAxis) return null;
+  const axes = new Set(
+    placements
+      .map((placement) => placement.panelAxis)
+      .filter((axis): axis is GranFormatoPanelAxis => axis != null),
+  );
+  if (axes.size === 0) return null;
+  if (axes.size === 1) return [...axes][0];
+  return configuredAxis === 'automatic' ? 'automatic' : [...axes][0];
+}
 
 export function buildGranFormatoNestingOrientacion(
   placements: Array<{ rotated: boolean }>,
@@ -183,6 +199,7 @@ export function evaluateGranFormatoMixedShelfLayout(
       : buildGranFormatoPanelizedPieces({
           medidas: input.medidas,
           printableWidthMm: input.printableWidthMm,
+          allowRotation: input.permitirRotacion,
           panelAxis: input.panelizado.axis,
           overlapMm: input.panelizado.overlapMm,
           maxPanelWidthMm: input.panelizado.maxPanelWidthMm,
@@ -373,9 +390,15 @@ export function evaluateGranFormatoMixedShelfLayout(
   const pieceOrders = uniquePieceOrders([
     pieces,
     [...pieces].sort((a, b) => b.area - a.area),
-    [...pieces].sort((a, b) => b.widthMm - a.widthMm || b.heightMm - a.heightMm),
-    [...pieces].sort((a, b) => b.heightMm - a.heightMm || b.widthMm - a.widthMm),
-    [...pieces].sort((a, b) => b.shortestSide - a.shortestSide || b.area - a.area),
+    [...pieces].sort(
+      (a, b) => b.widthMm - a.widthMm || b.heightMm - a.heightMm,
+    ),
+    [...pieces].sort(
+      (a, b) => b.heightMm - a.heightMm || b.widthMm - a.widthMm,
+    ),
+    [...pieces].sort(
+      (a, b) => b.shortestSide - a.shortestSide || b.area - a.area,
+    ),
   ]);
   const bestState = pieceOrders
     .map((order) => solveOrder(order))
@@ -405,11 +428,15 @@ export function evaluateGranFormatoMixedShelfLayout(
     bestState.placements,
     Math.max(1, input.separacionVerticalMm / 2),
   );
+  const panelAxisSummary = resolvePanelAxisSummary(
+    input.panelizado?.activo ? input.panelizado.axis : null,
+    bestState.placements,
+  );
 
   return {
     orientacion: buildGranFormatoNestingOrientacion(bestState.placements),
     panelizado: input.panelizado?.activo === true,
-    panelAxis: input.panelizado?.activo ? input.panelizado.axis : null,
+    panelAxis: panelAxisSummary,
     panelCount: bestState.placements.reduce(
       (max, item) => Math.max(max, item.panelCount ?? 1),
       1,

@@ -63,6 +63,14 @@ function formatMm(mm: number): string {
   return `${Math.round(mm)}mm`;
 }
 
+function formatMeasurePair(widthMm: number, heightMm: number): string {
+  if (!Number.isFinite(widthMm) || !Number.isFinite(heightMm)) return "-";
+  if (widthMm >= 100 && heightMm >= 100) {
+    return `${formatNumber(widthMm / 10, 1)}×${formatNumber(heightMm / 10, 1)} cm`;
+  }
+  return `${formatMm(widthMm)}×${formatMm(heightMm)}`;
+}
+
 function formatM2(mm2: number): string {
   return `${formatNumber(mm2 / 1_000_000, 2)} m²`;
 }
@@ -117,11 +125,15 @@ function costingLabel(strategy: string) {
 }
 
 function placementLabel(placement: Placement): string {
+  if (placement.panelIndex && placement.panelCount) {
+    return formatMeasurePair(placement.widthMm, placement.heightMm);
+  }
   const meta = placement.meta as { label?: string } | undefined;
   if (meta?.label) return meta.label;
-  return `${formatMm(placement.usefulWidthMm ?? placement.widthMm)}×${formatMm(
+  return formatMeasurePair(
+    placement.usefulWidthMm ?? placement.widthMm,
     placement.usefulHeightMm ?? placement.heightMm,
-  )}`;
+  );
 }
 
 function placementGroupKey(placement: Placement): string {
@@ -749,6 +761,12 @@ function PlacementRect({
     placement.panelIndex && placement.panelCount
       ? `${baseLabel} · ${placement.panelIndex}/${placement.panelCount}`
       : baseLabel;
+  const labelFontSize = Math.min(
+    12,
+    Math.max(0, (w - 8) / Math.max(1, label.length * 0.62)),
+    Math.max(0, h * 0.22),
+  );
+  const showMainLabel = showLabels && w > 24 && h > 14 && labelFontSize >= 5;
   const overlapStartMm = Math.max(0, placement.overlapStartMm ?? 0);
   const overlapEndMm = Math.max(0, placement.overlapEndMm ?? 0);
   const verticalStart = overlapStartMm > 0
@@ -794,13 +812,14 @@ function PlacementRect({
       {placement.rotated ? (
         <line x1={x} y1={y} x2={x + w} y2={y + h} stroke={style.text} strokeWidth={0.45} strokeDasharray="3 3" opacity={0.35} />
       ) : null}
-      {showLabels && w > 24 && h > 14 ? (
+      {showMainLabel ? (
         <>
           <text
             x={x + w / 2}
-            y={y + h / 2 + 3}
+            y={y + h / 2}
             textAnchor="middle"
-            fontSize={Math.min(12, Math.max(7, Math.min(w, h) / 7))}
+            dominantBaseline="middle"
+            fontSize={labelFontSize}
             fontFamily="monospace"
             fontWeight={600}
             fill={style.text}

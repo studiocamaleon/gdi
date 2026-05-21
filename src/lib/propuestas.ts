@@ -34,6 +34,7 @@ export type CosteoPropuestaSnapshot = {
 
 export type PropuestaItem = {
   id: string;
+  cotizacionItemId?: string;
   productoNombre: string;
   productoCodigo: string;
   motorCodigo: string;

@@ -333,11 +333,38 @@ describe('resolveNestingConfig', () => {
     expect(config.panelizado).toMatchObject({
       enabled: true,
       mode: 'automatic',
-      axis: 'vertical',
+      axis: 'automatic',
       overlapMm: 20,
       maxPanelWidthMm: 1355,
       distribution: 'equilibrada',
       widthInterpretation: 'total',
     });
+  });
+
+  it('ignora ancho máximo de panel legacy demasiado chico', () => {
+    const config = resolveNestingConfig(
+      paso({
+        paramsPasoJson: {
+          nestingConfig: {
+            panelizado: { enabled: true, maxPanelWidthMm: 80 },
+          },
+        },
+        maquina: {
+          id: 'maq-1',
+          codigo: 'M1',
+          nombre: 'Máquina',
+          plantilla: 'impresora_gran_formato_por_area',
+          parametrosTecnicosJson: {
+            geometria: 'ROLLO',
+            anchoMaxRolloMm: 1370,
+            margenesNoImprimiblesMm: { izq: 5, der: 5 },
+          },
+        },
+      }),
+      jobContext,
+      null,
+    );
+
+    expect(config.panelizado.maxPanelWidthMm).toBe(1355);
   });
 });

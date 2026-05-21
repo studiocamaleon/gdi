@@ -123,7 +123,12 @@ export function runNestingForPaso(
 
   // ─── Caso 2: shelf-rollo (corte sobre rollo) ─────────────────────
   if (paso.familiaCodigo === 'plotter_corte') {
-    return runShelfRollo(paso, jobContext, materialResuelto, config);
+    return runShelfRollo(
+      paso,
+      jobContext,
+      materialResuelto,
+      disablePanelizado(config),
+    );
   }
 
   // ─── Caso 3: laminado en rollo sobre pliegos ya impresos ─────────
@@ -167,12 +172,12 @@ function runImpresionPorArea(
     return runShelfRollo(paso, jobContext, materialResuelto, config);
   }
 
-  if (config.machineGeometry === 'MESA_EXTENSORA') {
-    return runPackingSolverRectangleForArea(paso, jobContext, config);
+  if (isRollMaterial(materialResuelto?.atributosVarianteJson)) {
+    return runShelfRollo(paso, jobContext, materialResuelto, config);
   }
 
-  if (readNumber(materialResuelto?.atributosVarianteJson, 'largoRolloMm')) {
-    return runShelfRollo(paso, jobContext, materialResuelto, config);
+  if (config.machineGeometry === 'MESA_EXTENSORA') {
+    return runPackingSolverRectangleForArea(paso, jobContext, config);
   }
 
   if (config.sheetWidthMm && config.sheetHeightMm && !config.rollWidthMm) {
@@ -245,7 +250,10 @@ function runShelfRollo(
     rollWidthMm - config.margins.leftMm - config.margins.rightMm;
   if (printableWidthMm <= 0) return null;
 
-  const shelfInput: EvaluateGranFormatoMixedShelfLayoutInput = {
+  const baseShelfInput: Omit<
+    EvaluateGranFormatoMixedShelfLayoutInput,
+    'panelizado'
+  > = {
     printableWidthMm,
     marginLeftMm: config.margins.leftMm,
     marginStartMm: config.margins.startMm,
@@ -253,19 +261,6 @@ function runShelfRollo(
     separacionHorizontalMm: config.separationHMm,
     separacionVerticalMm: config.separationVMm,
     permitirRotacion: config.allowRotation,
-    panelizado: config.panelizado.enabled
-      ? {
-          activo: true,
-          mode:
-            config.panelizado.mode === 'manual' ? 'manual' : 'automatico',
-          axis: config.panelizado.axis,
-          overlapMm: config.panelizado.overlapMm,
-          maxPanelWidthMm: config.panelizado.maxPanelWidthMm,
-          distribution: config.panelizado.distribution,
-          widthInterpretation: config.panelizado.widthInterpretation,
-          manualLayout: config.panelizado.manualLayout,
-        }
-      : undefined,
     medidas: piezas.map((p, idx) => ({
       id: `pieza_${idx}`,
       cantidad: p.cantidad,
@@ -274,25 +269,22 @@ function runShelfRollo(
     })),
   };
 
-  const shelfResult =
-    config.algorithm === 'maxrects-rollo'
-      ? null
-      : evaluateGranFormatoMixedShelfLayout(shelfInput);
-  const maxRectsResult =
-    config.algorithm === 'shelf-rollo'
-      ? null
-      : evaluateGranFormatoMaxRectsRollLayout({
-          ...shelfInput,
-          upperBoundConsumedLengthMm: shelfResult?.consumedLengthMm ?? null,
-        });
-  const result =
-    config.algorithm === 'maxrects-rollo'
-      ? maxRectsResult
-      : config.algorithm === 'shelf-rollo'
-        ? shelfResult
-        : chooseBestRollLayout(shelfResult, maxRectsResult);
-  const algorithm =
-    result === maxRectsResult ? 'maxrects-rollo' : 'shelf-rollo';
+  const shelfInputs = buildShelfInputsForPanelizado(baseShelfInput, config);
+  const rollCandidates = shelfInputs
+    .map((shelfInput) =>
+      evaluateRollLayoutForConfiguredAlgorithm(shelfInput, config.algorithm),
+    )
+    .filter(
+      (
+        candidate,
+      ): candidate is {
+        result: GranFormatoMixedShelfLayoutResult;
+        algorithm: 'shelf-rollo' | 'maxrects-rollo';
+      } => candidate != null,
+    );
+  const bestRollCandidate = chooseBestRollCandidate(rollCandidates);
+  const result = bestRollCandidate?.result ?? null;
+  const algorithm = bestRollCandidate?.algorithm ?? 'shelf-rollo';
 
   if (!result) return null;
 
@@ -379,13 +371,116 @@ function runShelfRollo(
   };
 }
 
+function disablePanelizado(
+  config: NestingConfigResolved,
+): NestingConfigResolved {
+  return {
+    ...config,
+    panelizado: {
+      ...config.panelizado,
+      enabled: false,
+      manualLayout: null,
+    },
+  };
+}
+
+function isRollMaterial(attrs: Record<string, unknown> | null | undefined) {
+  return (
+    readNumber(attrs, 'largoRolloMm') != null ||
+    readNumber(attrs, 'largoRolloM') != null ||
+    readNumber(attrs, 'rollLengthMm') != null ||
+    readNumber(attrs, 'rollLengthM') != null ||
+    readNumber(attrs, 'longitudRolloMm') != null ||
+    readNumber(attrs, 'longitudRolloM') != null
+  );
+}
+
+function buildShelfInputsForPanelizado(
+  baseInput: Omit<EvaluateGranFormatoMixedShelfLayoutInput, 'panelizado'>,
+  config: NestingConfigResolved,
+): EvaluateGranFormatoMixedShelfLayoutInput[] {
+  if (!config.panelizado.enabled) {
+    return [baseInput];
+  }
+  const axisCandidates =
+    config.panelizado.mode === 'manual'
+      ? ([
+          config.panelizado.axis === 'horizontal' ? 'horizontal' : 'vertical',
+        ] as const)
+      : config.panelizado.axis === 'automatic'
+        ? (['automatic'] as const)
+        : ([config.panelizado.axis] as const);
+
+  return axisCandidates.map((axis) => ({
+    ...baseInput,
+    panelizado: {
+      activo: true,
+      mode: config.panelizado.mode === 'manual' ? 'manual' : 'automatico',
+      axis,
+      overlapMm: config.panelizado.overlapMm,
+      maxPanelWidthMm: config.panelizado.maxPanelWidthMm,
+      distribution: config.panelizado.distribution,
+      widthInterpretation: config.panelizado.widthInterpretation,
+      manualLayout: config.panelizado.manualLayout,
+    },
+  }));
+}
+
+function evaluateRollLayoutForConfiguredAlgorithm(
+  shelfInput: EvaluateGranFormatoMixedShelfLayoutInput,
+  algorithm: NestingConfigResolved['algorithm'],
+): {
+  result: GranFormatoMixedShelfLayoutResult;
+  algorithm: 'shelf-rollo' | 'maxrects-rollo';
+} | null {
+  const shelfResult =
+    algorithm === 'maxrects-rollo'
+      ? null
+      : evaluateGranFormatoMixedShelfLayout(shelfInput);
+  const maxRectsResult =
+    algorithm === 'shelf-rollo'
+      ? null
+      : evaluateGranFormatoMaxRectsRollLayout({
+          ...shelfInput,
+          upperBoundConsumedLengthMm: shelfResult?.consumedLengthMm ?? null,
+        });
+  const result =
+    algorithm === 'maxrects-rollo'
+      ? maxRectsResult
+      : algorithm === 'shelf-rollo'
+        ? shelfResult
+        : chooseBestRollLayout(shelfResult, maxRectsResult);
+  if (!result) return null;
+  return {
+    result,
+    algorithm: result === maxRectsResult ? 'maxrects-rollo' : 'shelf-rollo',
+  };
+}
+
+function chooseBestRollCandidate(
+  candidates: Array<{
+    result: GranFormatoMixedShelfLayoutResult;
+    algorithm: 'shelf-rollo' | 'maxrects-rollo';
+  }>,
+) {
+  return (
+    candidates.slice().sort((a, b) => {
+      const best = chooseBestRollLayout(a.result, b.result);
+      if (best === a.result) return -1;
+      if (best === b.result) return 1;
+      return 0;
+    })[0] ?? null
+  );
+}
+
 function chooseBestRollLayout(
   shelfResult: GranFormatoMixedShelfLayoutResult | null,
   maxRectsResult: GranFormatoMixedShelfLayoutResult | null,
 ): GranFormatoMixedShelfLayoutResult | null {
   if (!shelfResult) return maxRectsResult;
   if (!maxRectsResult) return shelfResult;
-  const lengthDiff = shelfResult.consumedLengthMm - maxRectsResult.consumedLengthMm;
+  const lengthDiff =
+    shelfResult.consumedLengthMm - maxRectsResult.consumedLengthMm;
   if (Math.abs(lengthDiff) > 1) {
     return lengthDiff > 0 ? maxRectsResult : shelfResult;
   }
@@ -594,12 +689,14 @@ function runGrid2DSingleForArea(
     separationVMm: config.separationVMm,
     allowRotation: config.allowRotation,
   });
-  const placements = mixedLayout?.placements ?? result.placements
-    .slice(0, Math.min(totalPiezas, piezasPorPliego))
-    .map((placement) => ({
-      ...placement,
-      substrateIndex: 0,
-    }));
+  const placements =
+    mixedLayout?.placements ??
+    result.placements
+      .slice(0, Math.min(totalPiezas, piezasPorPliego))
+      .map((placement) => ({
+        ...placement,
+        substrateIndex: 0,
+      }));
   const previewConsumedLengthMm =
     mixedLayout?.consumedLengthMm ?? result.metrics.largoConsumidoMm ?? 0;
 
@@ -673,7 +770,13 @@ function buildSingleSizeMixedLayout(input: {
     input.substrateHeightMm - input.margins.topMm - input.margins.bottomMm;
 
   const rowTypes = [
-    buildRowType(input.pieceWidthMm, input.pieceHeightMm, false, usableWidthMm, input.separationHMm),
+    buildRowType(
+      input.pieceWidthMm,
+      input.pieceHeightMm,
+      false,
+      usableWidthMm,
+      input.separationHMm,
+    ),
     ...(input.allowRotation && input.pieceWidthMm !== input.pieceHeightMm
       ? [
           buildRowType(
@@ -689,7 +792,10 @@ function buildSingleSizeMixedLayout(input: {
   if (rowTypes.length === 0) return null;
 
   const maxRows = rowTypes.map((row) =>
-    Math.floor((usableHeightMm + input.separationVMm) / (row.heightMm + input.separationVMm)),
+    Math.floor(
+      (usableHeightMm + input.separationVMm) /
+        (row.heightMm + input.separationVMm),
+    ),
   );
   let best: { counts: number[]; heightMm: number; capacity: number } | null =
     null;
@@ -779,7 +885,9 @@ function buildRowType(
     widthMm,
     heightMm,
     rotated,
-    columns: Math.floor((usableWidthMm + separationHMm) / (widthMm + separationHMm)),
+    columns: Math.floor(
+      (usableWidthMm + separationHMm) / (widthMm + separationHMm),
+    ),
   };
 }
 

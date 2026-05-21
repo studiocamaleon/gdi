@@ -1382,6 +1382,37 @@
     margin-top: 18px;
   }
 
+  .production-nesting-tabs {
+    display: inline-flex;
+    width: min(100%, max-content);
+    max-width: 100%;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--muted-bg);
+    overflow-x: auto;
+  }
+
+  .production-nesting-tabs button {
+    min-height: 32px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 650;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .production-nesting-tabs button.on {
+    background: #fff;
+    color: var(--ink);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  }
+
   .production-nesting {
     border: 0;
     border-radius: 0;
@@ -7156,11 +7187,12 @@
   }
 
   .ot-v1 .ap-qty-shortcuts button {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     min-width: 0;
-    height: 38px;
+    height: 40px;
     padding: 0 10px;
     overflow: hidden;
     color: var(--ink);
@@ -7186,6 +7218,35 @@
     color: var(--ok);
     background: var(--ok-bg);
     border-color: #cfe6d8;
+  }
+
+  .ot-v1 .ap-qty-shortcuts button.active::before,
+  .ot-v1 .ap-segmented button.active::before,
+  .ot-v1 .ap-variant-card.active::before,
+  .ot-v1 .ap-material-color.active::before,
+  .ot-v1 .ap-material-thickness.active::before {
+    content: "✓";
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+    background: var(--ok);
+    border-radius: 5px;
+  }
+
+  .ot-v1 .ap-qty-shortcuts button.active::before,
+  .ot-v1 .ap-segmented button.active::before,
+  .ot-v1 .ap-material-color.active::before,
+  .ot-v1 .ap-material-thickness.active::before {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
   }
 
   .ot-v1 .ap-specs,
@@ -7291,6 +7352,7 @@
     display: grid;
     gap: 4px;
     min-width: 0;
+    min-height: 40px;
     padding: 10px 12px;
     text-align: left;
     cursor: pointer;
@@ -7305,9 +7367,19 @@
   }
 
   .ot-v1 .ap-variant-card.active {
-    background: #fff;
-    border-color: var(--ink);
-    box-shadow: 0 0 0 3px rgba(20, 20, 26, .06);
+    background: var(--ok-bg);
+    border-color: #cfe6d8;
+    box-shadow: 0 1px 2px rgba(20, 20, 26, .08);
+  }
+
+  .ot-v1 .ap-variant-card.active::before {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+  }
+
+  .ot-v1 .ap-variant-card.active {
+    padding-left: 34px;
   }
 
   .ot-v1 .ap-variant-title {
@@ -7382,10 +7454,11 @@
   }
 
   .ot-v1 .ap-material-color {
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    min-height: 30px;
+    min-height: 40px;
     padding: 5px 9px;
     color: var(--ink-2);
     font-size: 12px;
@@ -7400,9 +7473,26 @@
 
   .ot-v1 .ap-material-color.active,
   .ot-v1 .ap-material-thickness.active {
-    background: #fff;
-    border-color: var(--ink);
+    color: var(--ok);
+    background: var(--ok-bg);
+    border-color: #cfe6d8;
     box-shadow: 0 1px 2px rgba(20, 20, 26, .08);
+  }
+
+  .ot-v1 .ap-material-color.active {
+    padding-left: 32px;
+  }
+
+  .ot-v1 .ap-material-thickness {
+    position: relative;
+  }
+
+  .ot-v1 .ap-material-thickness.active::before {
+    left: 8px;
+    width: 14px;
+    height: 14px;
+    font-size: 10px;
+    border-radius: 4px;
   }
 
   .ot-v1 .ap-material-thickness-grid {
@@ -7420,7 +7510,7 @@
     align-items: center;
     justify-content: center;
     min-width: 0;
-    min-height: 34px;
+    min-height: 40px;
     padding: 6px 8px;
     background: transparent;
     border-color: transparent;
@@ -7464,7 +7554,7 @@
     grid-auto-flow: column;
     gap: 3px;
     width: 100%;
-    height: 36px;
+    height: 40px;
     padding: 3px;
     background: #f1f1f3;
     border: 1px solid var(--border);
@@ -7472,8 +7562,13 @@
   }
 
   .ot-v1 .ap-segmented button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     min-width: 0;
-    height: 28px;
+    height: 32px;
     padding: 0 10px;
     overflow: hidden;
     color: var(--muted);
@@ -7494,9 +7589,82 @@
   }
 
   .ot-v1 .ap-segmented button.active {
-    color: var(--ink);
-    background: var(--surface);
+    color: var(--ok);
+    background: var(--ok-bg);
     box-shadow: 0 1px 2px rgba(20, 20, 26, .08);
+  }
+
+  .ot-v1 .ap-segmented button.active::before {
+    left: 10px;
+    width: 14px;
+    height: 14px;
+    font-size: 10px;
+    border-radius: 4px;
+  }
+
+  .ot-v1 .ap-option-list {
+    display: grid;
+    gap: 6px;
+    width: 100%;
+  }
+
+  .ot-v1 .ap-option-list button {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr);
+    gap: 9px;
+    align-items: center;
+    min-height: 40px;
+    padding: 9px 11px;
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-2);
+    transition: border-color .12s ease, background .12s ease, box-shadow .12s ease;
+  }
+
+  .ot-v1 .ap-option-list button:hover {
+    border-color: color-mix(in srgb, var(--ink) 28%, var(--border));
+  }
+
+  .ot-v1 .ap-option-list button.active {
+    color: var(--ok);
+    border-color: #cfe6d8;
+    background: var(--ok-bg);
+    box-shadow: 0 1px 2px rgba(20, 20, 26, .08);
+  }
+
+  .ot-v1 .ap-option-list button span:last-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .ot-v1 .ap-option-dot {
+    width: 14px;
+    height: 14px;
+    border: 1px solid #c8c8cf;
+    border-radius: 999px;
+    background: #fff;
+  }
+
+  .ot-v1 .ap-option-list button.active .ap-option-dot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: var(--ok);
+    border-color: var(--ok);
+    border-radius: 5px;
+  }
+
+  .ot-v1 .ap-option-list button.active .ap-option-dot::before {
+    content: "✓";
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1;
   }
 
   .ot-v1 .ap-spec-wide {
@@ -7529,13 +7697,6 @@
     color: var(--muted);
     font-size: 12px;
     text-align: center;
-  }
-
-  .ot-v1 .ap-optional-slots {
-    grid-column: 1 / -1;
-    margin: -2px 0 6px 28px;
-    padding-left: 12px;
-    border-left: 1px solid var(--border);
   }
 
   .ot-v1 .ap-spec .ap-select svg {
@@ -7634,6 +7795,76 @@
 
   .ot-v1 .ap-adi.on .mt.mono {
     font-weight: 600;
+  }
+
+  .ot-v1 .ap-optional-configs {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--hairline);
+  }
+
+  .ot-v1 .ap-optional-config-head {
+    display: grid;
+    gap: 2px;
+  }
+
+  .ot-v1 .ap-optional-config-head .ttl {
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .ot-v1 .ap-optional-config-head .sub {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .ot-v1 .ap-optional-config-grid {
+    display: grid;
+    gap: 10px;
+  }
+
+  .ot-v1 .ap-optional-config-card {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-2);
+  }
+
+  .ot-v1 .ap-optional-config-title {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--ok);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .ot-v1 .ap-optional-config-title .cb {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    color: #fff;
+    background: var(--ok);
+    border-radius: 5px;
+  }
+
+  .ot-v1 .ap-optional-config-title .cb svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .ot-v1 .ap-optional-config-fields {
+    display: grid;
+    gap: 10px;
   }
 
   .ot-v1 .ap-notas {
@@ -9124,6 +9355,216 @@
   .cmyk-register-cross-v {
     width: 1.5px;
     height: 7rem;
+  }
+}
+
+@layer components {
+  .panel-editor-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(8, 10, 14, 0.42);
+  }
+
+  .panel-editor-modal {
+    width: min(980px, 100%);
+    max-height: min(760px, calc(100vh - 48px));
+    overflow: auto;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    background: var(--surface);
+    box-shadow: 0 24px 72px rgba(0, 0, 0, 0.22);
+    padding: 18px;
+  }
+
+  .panel-editor-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+
+  .panel-editor-head h2 {
+    margin: 2px 0 0;
+    font-size: 22px;
+    font-weight: 650;
+    letter-spacing: 0;
+  }
+
+  .panel-editor-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 180px) minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .panel-editor-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .panel-editor-list button {
+    height: 36px;
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    background: var(--surface-2);
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .panel-editor-list button.on {
+    border-color: var(--ink);
+    background: var(--ink);
+    color: white;
+  }
+
+  .panel-editor-stage {
+    min-width: 0;
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    background: var(--surface-2);
+    padding: 14px;
+  }
+
+  .panel-editor-meta {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .panel-editor-meta strong {
+    color: var(--ink);
+    font-size: 14px;
+  }
+
+  .panel-bar {
+    position: relative;
+    display: flex;
+    min-height: 260px;
+    overflow: hidden;
+    border: 1px solid rgba(217, 119, 6, 0.42);
+    border-radius: 6px;
+    background: #fff7ed;
+  }
+
+  .panel-segment {
+    position: relative;
+    display: flex;
+    min-width: 36px;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 12px;
+    border-right: 1px solid rgba(217, 119, 6, 0.45);
+    background: rgba(244, 114, 182, 0.34);
+    padding: 12px;
+    color: var(--ink);
+  }
+
+  .panel-segment:nth-child(even) {
+    background: rgba(125, 211, 252, 0.34);
+  }
+
+  .panel-segment span {
+    color: var(--muted);
+    font-size: 13px;
+    font-family: var(--font-mono);
+  }
+
+  .panel-segment strong {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    font-size: 15px;
+    line-height: 1.2;
+  }
+
+  .panel-handle {
+    position: absolute;
+    top: 0;
+    right: -7px;
+    z-index: 2;
+    width: 14px;
+    height: 100%;
+    cursor: col-resize;
+    border: 0;
+    background: transparent;
+  }
+
+  .panel-handle::after {
+    content: "";
+    position: absolute;
+    top: 10px;
+    bottom: 10px;
+    left: 6px;
+    width: 2px;
+    border-radius: 999px;
+    background: rgba(8, 10, 14, 0.52);
+  }
+
+  .panel-editor-table {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .panel-editor-table div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    background: var(--surface);
+    padding: 8px 10px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .panel-editor-table strong {
+    color: var(--ink);
+    font-size: 12px;
+  }
+
+  .panel-editor-error {
+    margin-top: 10px;
+    border: 1px solid rgba(239, 68, 68, 0.22);
+    border-radius: 6px;
+    background: rgba(239, 68, 68, 0.08);
+    padding: 9px 10px;
+    color: #b91c1c;
+    font-size: 12px;
+  }
+
+  .panel-editor-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+
+  @media (max-width: 760px) {
+    .panel-editor-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .panel-editor-list {
+      flex-direction: row;
+      overflow: auto;
+    }
+
+    .panel-editor-list button {
+      min-width: 112px;
+    }
   }
 }
 

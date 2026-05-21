@@ -24,6 +24,7 @@ export type GranFormatoMeasure = {
 };
 
 export type GranFormatoPanelAxis = 'vertical' | 'horizontal';
+export type GranFormatoPanelAxisInput = GranFormatoPanelAxis | 'automatic';
 
 export type GranFormatoPiece = {
   id: string;
@@ -144,7 +145,8 @@ export function expandGranFormatoMeasuresToSinglePieces(
 export type BuildGranFormatoPanelizedPiecesInput = {
   medidas: GranFormatoMeasure[];
   printableWidthMm: number;
-  panelAxis: GranFormatoPanelAxis;
+  allowRotation?: boolean;
+  panelAxis: GranFormatoPanelAxisInput;
   overlapMm: number;
   maxPanelWidthMm: number;
   distribution: 'equilibrada' | 'libre';
@@ -185,6 +187,122 @@ export function buildGranFormatoPanelizedPieces(
     );
   };
 
+  const buildWholePiece = (
+    medida: GranFormatoMeasure,
+    sourcePieceId: string,
+  ): GranFormatoPiece => ({
+    id: sourcePieceId,
+    sourcePieceId,
+    originalWidthMm: medida.anchoMm,
+    originalHeightMm: medida.altoMm,
+    widthMm: medida.anchoMm,
+    heightMm: medida.altoMm,
+    usefulWidthMm: medida.anchoMm,
+    usefulHeightMm: medida.altoMm,
+    overlapStartMm: 0,
+    overlapEndMm: 0,
+    area: medida.anchoMm * medida.altoMm,
+    longestSide: Math.max(medida.anchoMm, medida.altoMm),
+    shortestSide: Math.min(medida.anchoMm, medida.altoMm),
+    panelIndex: null,
+    panelCount: null,
+    panelAxis: null,
+  });
+
+  const pieceCanFitWhole = (medida: GranFormatoMeasure) =>
+    medida.anchoMm <= input.printableWidthMm ||
+    (input.allowRotation !== false && medida.altoMm <= input.printableWidthMm);
+
+  const buildPanelsForAxis = (
+    medida: GranFormatoMeasure,
+    sourcePieceId: string,
+    panelAxis: GranFormatoPanelAxis,
+  ): GranFormatoPiece[] | null => {
+    const splitDimension =
+      panelAxis === 'vertical' ? medida.anchoMm : medida.altoMm;
+    const effectivePhysicalLimitMm = Math.min(
+      input.maxPanelWidthMm,
+      input.printableWidthMm,
+    );
+    const maxOverlapPerPanelMm = input.overlapMm * 2;
+    const effectiveUsefulLimitMm =
+      input.widthInterpretation === 'total'
+        ? effectivePhysicalLimitMm - maxOverlapPerPanelMm
+        : effectivePhysicalLimitMm;
+    if (effectiveUsefulLimitMm <= 0) {
+      return null;
+    }
+    if (splitDimension <= effectiveUsefulLimitMm) {
+      return [buildWholePiece(medida, sourcePieceId)];
+    }
+    const panelCountResolved = Math.max(
+      2,
+      Math.ceil(splitDimension / effectiveUsefulLimitMm),
+    );
+    const panelSizes = buildSplitSizes(
+      splitDimension,
+      panelCountResolved,
+      effectiveUsefulLimitMm,
+    );
+    const fits = panelSizes.every((segment, index) => {
+      const extraStart = index === 0 ? 0 : input.overlapMm;
+      const extraEnd = index === panelCountResolved - 1 ? 0 : input.overlapMm;
+      const physicalSize = segment + extraStart + extraEnd;
+      const withinConfiguredLimit =
+        input.widthInterpretation === 'total'
+          ? physicalSize <= effectivePhysicalLimitMm
+          : segment <= effectivePhysicalLimitMm;
+      const finalWidthMm =
+        panelAxis === 'vertical' ? physicalSize : medida.anchoMm;
+      const finalHeightMm =
+        panelAxis === 'horizontal' ? physicalSize : medida.altoMm;
+      const fitsRoll =
+        finalWidthMm <= input.printableWidthMm ||
+        (input.allowRotation !== false &&
+          finalHeightMm <= input.printableWidthMm);
+      return (
+        withinConfiguredLimit &&
+        physicalSize <= input.printableWidthMm &&
+        fitsRoll
+      );
+    });
+
+    if (!fits) {
+      return null;
+    }
+
+    return panelSizes.map((segment, index) => {
+      const extraStart = index === 0 ? 0 : input.overlapMm;
+      const extraEnd = index === panelCountResolved - 1 ? 0 : input.overlapMm;
+      const widthMm =
+        panelAxis === 'vertical'
+          ? segment + extraStart + extraEnd
+          : medida.anchoMm;
+      const heightMm =
+        panelAxis === 'horizontal'
+          ? segment + extraStart + extraEnd
+          : medida.altoMm;
+      return {
+        id: `${sourcePieceId}-panel-${index + 1}`,
+        sourcePieceId,
+        originalWidthMm: medida.anchoMm,
+        originalHeightMm: medida.altoMm,
+        widthMm,
+        heightMm,
+        usefulWidthMm: panelAxis === 'vertical' ? segment : medida.anchoMm,
+        usefulHeightMm: panelAxis === 'horizontal' ? segment : medida.altoMm,
+        overlapStartMm: extraStart,
+        overlapEndMm: extraEnd,
+        panelIndex: index + 1,
+        panelCount: panelCountResolved,
+        panelAxis,
+        area: medida.anchoMm * medida.altoMm,
+        longestSide: Math.max(widthMm, heightMm),
+        shortestSide: Math.min(widthMm, heightMm),
+      };
+    });
+  };
+
   for (const [medidaIndex, medida] of input.medidas.entries()) {
     for (
       let copyIndex = 0;
@@ -192,97 +310,64 @@ export function buildGranFormatoPanelizedPieces(
       copyIndex += 1
     ) {
       const sourcePieceId = `piece-${medidaIndex}-${copyIndex}`;
-      const splitDimension =
-        input.panelAxis === 'vertical' ? medida.anchoMm : medida.altoMm;
-      const effectivePhysicalLimitMm = Math.min(
-        input.maxPanelWidthMm,
-        input.printableWidthMm,
-      );
-      const maxOverlapPerPanelMm = input.overlapMm * 2;
-      const effectiveUsefulLimitMm =
-        input.widthInterpretation === 'total'
-          ? effectivePhysicalLimitMm - maxOverlapPerPanelMm
-          : effectivePhysicalLimitMm;
-      if (effectiveUsefulLimitMm <= 0) {
-        return null;
-      }
-      if (splitDimension <= effectiveUsefulLimitMm) {
-        pieces.push({
-          id: sourcePieceId,
-          sourcePieceId,
-          originalWidthMm: medida.anchoMm,
-          originalHeightMm: medida.altoMm,
-          widthMm: medida.anchoMm,
-          heightMm: medida.altoMm,
-          usefulWidthMm: medida.anchoMm,
-          usefulHeightMm: medida.altoMm,
-          overlapStartMm: 0,
-          overlapEndMm: 0,
-          area: medida.anchoMm * medida.altoMm,
-          longestSide: Math.max(medida.anchoMm, medida.altoMm),
-          shortestSide: Math.min(medida.anchoMm, medida.altoMm),
-          panelIndex: null,
-          panelCount: null,
-          panelAxis: null,
-        });
+      if (input.panelAxis === 'automatic') {
+        if (pieceCanFitWhole(medida)) {
+          pieces.push(buildWholePiece(medida, sourcePieceId));
+          continue;
+        }
+        const candidates = (['vertical', 'horizontal'] as const)
+          .map((axis) => ({
+            axis,
+            panels: buildPanelsForAxis(medida, sourcePieceId, axis),
+          }))
+          .filter(
+            (
+              candidate,
+            ): candidate is {
+              axis: GranFormatoPanelAxis;
+              panels: GranFormatoPiece[];
+            } =>
+              candidate.panels != null &&
+              candidate.panels.every(
+                (panel) =>
+                  panel.widthMm <= input.printableWidthMm ||
+                  (input.allowRotation !== false &&
+                    panel.heightMm <= input.printableWidthMm),
+              ),
+          )
+          .sort((a, b) => {
+            const panelsDiff = a.panels.length - b.panels.length;
+            if (panelsDiff !== 0) return panelsDiff;
+            const lengthA = a.panels.reduce(
+              (max, panel) => Math.max(max, panel.heightMm),
+              0,
+            );
+            const lengthB = b.panels.reduce(
+              (max, panel) => Math.max(max, panel.heightMm),
+              0,
+            );
+            return lengthA - lengthB;
+          });
+        const best = candidates[0]?.panels ?? null;
+        if (!best) {
+          return null;
+        }
+        pieces.push(...best);
         continue;
       }
-      const panelCountResolved = Math.max(
-        2,
-        Math.ceil(splitDimension / effectiveUsefulLimitMm),
+      if (pieceCanFitWhole(medida)) {
+        pieces.push(buildWholePiece(medida, sourcePieceId));
+        continue;
+      }
+      const axisPieces = buildPanelsForAxis(
+        medida,
+        sourcePieceId,
+        input.panelAxis,
       );
-      const panelSizes = buildSplitSizes(
-        splitDimension,
-        panelCountResolved,
-        effectiveUsefulLimitMm,
-      );
-      const fits = panelSizes.every((segment, index) => {
-        const extraStart = index === 0 ? 0 : input.overlapMm;
-        const extraEnd = index === panelCountResolved - 1 ? 0 : input.overlapMm;
-        const physicalSize = segment + extraStart + extraEnd;
-        const withinConfiguredLimit =
-          input.widthInterpretation === 'total'
-            ? physicalSize <= effectivePhysicalLimitMm
-            : segment <= effectivePhysicalLimitMm;
-        return withinConfiguredLimit && physicalSize <= input.printableWidthMm;
-      });
-
-      if (!fits) {
+      if (!axisPieces) {
         return null;
       }
-
-      panelSizes.forEach((segment, index) => {
-        const extraStart = index === 0 ? 0 : input.overlapMm;
-        const extraEnd = index === panelCountResolved - 1 ? 0 : input.overlapMm;
-        const widthMm =
-          input.panelAxis === 'vertical'
-            ? segment + extraStart + extraEnd
-            : medida.anchoMm;
-        const heightMm =
-          input.panelAxis === 'horizontal'
-            ? segment + extraStart + extraEnd
-            : medida.altoMm;
-        pieces.push({
-          id: `${sourcePieceId}-panel-${index + 1}`,
-          sourcePieceId,
-          originalWidthMm: medida.anchoMm,
-          originalHeightMm: medida.altoMm,
-          widthMm,
-          heightMm,
-          usefulWidthMm:
-            input.panelAxis === 'vertical' ? segment : medida.anchoMm,
-          usefulHeightMm:
-            input.panelAxis === 'horizontal' ? segment : medida.altoMm,
-          overlapStartMm: extraStart,
-          overlapEndMm: extraEnd,
-          panelIndex: index + 1,
-          panelCount: panelCountResolved,
-          panelAxis: input.panelAxis,
-          area: medida.anchoMm * medida.altoMm,
-          longestSide: Math.max(widthMm, heightMm),
-          shortestSide: Math.min(widthMm, heightMm),
-        });
-      });
+      pieces.push(...axisPieces);
     }
   }
 

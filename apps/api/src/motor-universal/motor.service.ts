@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FAMILIAS } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
@@ -626,11 +626,92 @@ export class MotorUniversalService {
       input.rutaAlternativaId ?? null,
     );
 
-    // 2.b Sprint 5.a — usar el desglose ya calculado en cotizar() (evita
-    // recalcular). Nota: cotizar() ya invocó calcularPrecioConSnapshots y dejó
-    // todo en `result.cotizacion.desglosePrecio`. Acá sólo lo usamos para
-    // poblar los campos de CotizacionItem.
-    const desglosePrecio = result.cotizacion.desglosePrecio;
+    // 3. Crear CotizacionItem con snapshot
+    const item = await this.prisma.cotizacionItem.create({
+      data: this.buildCotizacionItemData({
+        tenantId: input.tenantId,
+        cotizacionId,
+        productoId: input.productoId,
+        jobContext: input.jobContext,
+        producto,
+        cotizacion: result.cotizacion,
+      }),
+    });
+
+    return { result, cotizacionId, cotizacionItemId: item.id };
+  }
+
+  async recotizarItem(input: {
+    tenantId: string;
+    cotizacionItemId: string;
+    rutaAlternativaId?: string | null;
+    jobContext: JobContext;
+    clienteId?: string | null;
+    periodo?: string | null;
+  }): Promise<{
+    result: CotizarOutput;
+    cotizacionId?: string;
+    cotizacionItemId?: string;
+  }> {
+    const item = await this.prisma.cotizacionItem.findFirst({
+      where: { id: input.cotizacionItemId, tenantId: input.tenantId },
+      include: { cotizacion: { select: { id: true, estado: true, clienteId: true } } },
+    });
+    if (!item) {
+      throw new NotFoundException('No se encontró el item de cotización.');
+    }
+    if (item.cotizacion.estado !== 'borrador') {
+      throw new BadRequestException(
+        'Solo se pueden recotizar items de una cotización en borrador.',
+      );
+    }
+
+    const result = await this.cotizar({
+      tenantId: input.tenantId,
+      productoId: item.productoId,
+      rutaAlternativaId: input.rutaAlternativaId ?? item.rutaAlternativaId,
+      jobContext: input.jobContext,
+      clienteId: input.clienteId ?? item.cotizacion.clienteId ?? null,
+      periodo: input.periodo ?? null,
+    });
+    if (!result.exitoso || !result.cotizacion) {
+      return { result };
+    }
+
+    const producto = await this.cargarProductoYRuta(
+      input.tenantId,
+      item.productoId,
+      result.cotizacion.rutaAlternativaId ?? input.rutaAlternativaId ?? null,
+    );
+
+    await this.prisma.cotizacionItem.update({
+      where: { id: item.id },
+      data: this.buildCotizacionItemData({
+        tenantId: input.tenantId,
+        cotizacionId: item.cotizacionId,
+        productoId: item.productoId,
+        jobContext: input.jobContext,
+        producto,
+        cotizacion: result.cotizacion,
+      }),
+    });
+
+    return {
+      result,
+      cotizacionId: item.cotizacionId,
+      cotizacionItemId: item.id,
+    };
+  }
+
+  private buildCotizacionItemData(args: {
+    tenantId: string;
+    cotizacionId: string;
+    productoId: string;
+    jobContext: JobContext;
+    producto: ProductoCargado;
+    cotizacion: CotizacionResultado;
+  }) {
+    const desglosePrecio = args.cotizacion.desglosePrecio;
     const precioResultado = desglosePrecio
       ? {
           precioUnitario: desglosePrecio.precioBrutoUnitario,
@@ -644,70 +725,63 @@ export class MotorUniversalService {
         }
       : null;
 
-    // 3. Crear CotizacionItem con snapshot
-    const item = await this.prisma.cotizacionItem.create({
-      data: {
-        tenantId: input.tenantId,
-        cotizacionId,
-        productoId: input.productoId,
-        rutaAlternativaId: result.cotizacion.rutaAlternativaId,
-        cantidad: result.cotizacion.cantidadComercialPricing.toString(),
-        jobContextJson: input.jobContext as never,
-        snapshotJson: {
-          producto: {
-            id: producto.productoId,
-            codigo: producto.productoCodigo,
-            nombre: producto.productoNombre,
-            unidadComercial: producto.unidadComercial,
-            modoMedidas: producto.modoMedidas,
-          },
-          ruta: {
-            id: producto.rutaId,
-            codigo: producto.rutaCodigo,
-            nombre: producto.rutaNombre,
-            alternativa: producto.rutaAlternativaNombre,
-            pasos: producto.pasos.map((p) => ({
-              orden: p.rutaPasoOrden,
-              familia: p.familiaCodigo,
-              maquina: p.maquina?.codigo,
-              perfil: p.perfil?.nombre,
-              materialesEnSlots: p.slots.map((s) => ({
-                slot: s.slotCodigo,
-                modo: s.modoSeleccion,
-                materialSku: s.materialVariante?.sku,
-              })),
+    return {
+      tenantId: args.tenantId,
+      cotizacionId: args.cotizacionId,
+      productoId: args.productoId,
+      rutaAlternativaId: args.cotizacion.rutaAlternativaId,
+      cantidad: args.cotizacion.cantidadComercialPricing.toString(),
+      jobContextJson: args.jobContext as never,
+      snapshotJson: {
+        producto: {
+          id: args.producto.productoId,
+          codigo: args.producto.productoCodigo,
+          nombre: args.producto.productoNombre,
+          unidadComercial: args.producto.unidadComercial,
+          modoMedidas: args.producto.modoMedidas,
+        },
+        ruta: {
+          id: args.producto.rutaId,
+          codigo: args.producto.rutaCodigo,
+          nombre: args.producto.rutaNombre,
+          alternativa: args.producto.rutaAlternativaNombre,
+          pasos: args.producto.pasos.map((p) => ({
+            orden: p.rutaPasoOrden,
+            familia: p.familiaCodigo,
+            maquina: p.maquina?.codigo,
+            perfil: p.perfil?.nombre,
+            materialesEnSlots: p.slots.map((s) => ({
+              slot: s.slotCodigo,
+              modo: s.modoSeleccion,
+              materialSku: s.materialVariante?.sku,
             })),
-          },
-          ejecucion: {
-            cantidadEfectiva: result.cotizacion.cantidadEfectiva,
-            cantidadPedida: result.cotizacion.cantidadPedida,
-            cantidadComercialPricing:
-              result.cotizacion.cantidadComercialPricing,
-            unidadComercialPricing: result.cotizacion.unidadComercialPricing,
-            costos: result.cotizacion.costos,
-          },
-        } as never,
-        costoUnitario: result.cotizacion.costos.unitario.toString(),
-        costoTotal: result.cotizacion.costos.total.toString(),
-        precioUnitario: precioResultado?.precioUnitario?.toString() ?? null,
-        precioTotal: precioResultado?.precioTotal?.toString() ?? null,
-        trazabilidadJson: {
-          pasos: result.cotizacion.pasos,
-          cargosDirectosCotizacion: result.cotizacion.cargosDirectosCotizacion,
-        } as never,
-        // Sprint 5.a — snapshots inmutables del Tab Precio
-        precioConfigSnapshotJson: (precioResultado?.snapshots.precioConfig ??
-          null) as never,
-        impuestosSnapshotJson: (precioResultado?.snapshots.impuestos ??
-          null) as never,
-        comisionesSnapshotJson: (precioResultado?.snapshots.comisiones ??
-          null) as never,
-        precioEspecialClienteSnapshotJson: (precioResultado?.snapshots
-          .precioEspecialCliente ?? null) as never,
-      },
-    });
-
-    return { result, cotizacionId, cotizacionItemId: item.id };
+          })),
+        },
+        ejecucion: {
+          cantidadEfectiva: args.cotizacion.cantidadEfectiva,
+          cantidadPedida: args.cotizacion.cantidadPedida,
+          cantidadComercialPricing: args.cotizacion.cantidadComercialPricing,
+          unidadComercialPricing: args.cotizacion.unidadComercialPricing,
+          costos: args.cotizacion.costos,
+        },
+      } as never,
+      costoUnitario: args.cotizacion.costos.unitario.toString(),
+      costoTotal: args.cotizacion.costos.total.toString(),
+      precioUnitario: precioResultado?.precioUnitario?.toString() ?? null,
+      precioTotal: precioResultado?.precioTotal?.toString() ?? null,
+      trazabilidadJson: {
+        pasos: args.cotizacion.pasos,
+        cargosDirectosCotizacion: args.cotizacion.cargosDirectosCotizacion,
+      } as never,
+      precioConfigSnapshotJson: (precioResultado?.snapshots.precioConfig ??
+        null) as never,
+      impuestosSnapshotJson: (precioResultado?.snapshots.impuestos ??
+        null) as never,
+      comisionesSnapshotJson: (precioResultado?.snapshots.comisiones ??
+        null) as never,
+      precioEspecialClienteSnapshotJson: (precioResultado?.snapshots
+        .precioEspecialCliente ?? null) as never,
+    };
   }
 
   /**

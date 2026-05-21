@@ -70,7 +70,7 @@ export interface NestingOptions {
 export interface PanelizadoOptions {
   enabled: boolean;
   mode: 'automatic' | 'manual';
-  axis: 'vertical' | 'horizontal';
+  axis: 'automatic' | 'vertical' | 'horizontal';
   overlapMm: number;
   maxPanelWidthMm: number;
   distribution: 'equilibrada' | 'libre';

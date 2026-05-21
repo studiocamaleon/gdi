@@ -25,6 +25,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { RuleBuilder } from "@/components/productos-servicios/rule-builder";
 import {
   buscarMateriasPrimasConfigPaso,
@@ -115,9 +123,18 @@ const PLIEGO_IMPRESION_OPTIONS = PLIEGO_IMPRESION_PRESETS.map((preset) => ({
   label: preset.label,
   description: preset.description,
 }));
-const PANEL_AXIS_OPTIONS = optionsFromLabels(["vertical", "horizontal"], {
+const PANEL_AXIS_OPTIONS = optionsFromLabels(["automatic", "vertical", "horizontal"], {
+  automatic: { label: "Automática", descripcion: "Prueba dividir ancho y alto, y elige el mejor resultado." },
   vertical: { label: "Vertical", descripcion: "Divide el ancho de la pieza en paneles." },
   horizontal: { label: "Horizontal", descripcion: "Divide el alto de la pieza en paneles." },
+});
+const PANEL_MANUAL_AXIS_OPTIONS = optionsFromLabels(["vertical", "horizontal"], {
+  vertical: { label: "Vertical", descripcion: "Divide el ancho de la pieza en paneles." },
+  horizontal: { label: "Horizontal", descripcion: "Divide el alto de la pieza en paneles." },
+});
+const PANEL_MODE_OPTIONS = optionsFromLabels(["automatic", "manual"], {
+  automatic: { label: "Automático", descripcion: "El motor divide piezas grandes cuando no entran completas." },
+  manual: { label: "Manual", descripcion: "El usuario define la división de paneles." },
 });
 const PANEL_DISTRIBUTION_OPTIONS = optionsFromLabels(["equilibrada", "libre"], {
   equilibrada: { label: "Equilibrada", descripcion: "Paneles de tamaño similar." },
@@ -127,6 +144,7 @@ const PANEL_WIDTH_INTERPRETATION_OPTIONS = optionsFromLabels(["total", "util"], 
   total: { label: "Ancho total", descripcion: "El máximo incluye solapes." },
   util: { label: "Ancho útil", descripcion: "El máximo se interpreta sin contar solapes." },
 });
+const MIN_PANEL_MAX_WIDTH_MM = 300;
 
 const NESTING_ALGORITHM_OPTIONS = optionsFromLabels(NESTING_ALGORITHMS, {
   auto: { label: "Automático", descripcion: "El motor elige según la geometría y las piezas." },
@@ -416,8 +434,8 @@ function normalizeModoColor(value: unknown) {
   return value.trim();
 }
 
-function modosColorFromPerfil(perfil: { detalleJson?: Record<string, unknown> | null }) {
-  const detalle = asRecord(perfil.detalleJson);
+function modosColorFromPerfil(perfil: { detalleJson?: Record<string, unknown> | null } | null | undefined) {
+  const detalle = asRecord(perfil?.detalleJson);
   const raw = detalle.colores ?? detalle.modoColor;
   const values = Array.isArray(raw) ? raw : [raw];
   return Array.from(
@@ -435,27 +453,33 @@ function modoColorAplica(familiaCodigo: string | undefined, cfg: UpsertConfigPas
 }
 
 function buildModoColorOptions(
-  maquina: MaquinaLookup | null | undefined,
+  maquina:
+    | {
+        perfilesOperativos?: Array<{
+          detalleJson?: Record<string, unknown> | null;
+        }>;
+      }
+    | null
+    | undefined,
   configExistente: { modoColorOptions?: Array<{ value: string; label: string; perfilIds: string[] }> } | null | undefined,
 ) {
-  const backendOptions = configExistente?.modoColorOptions ?? [];
-  if (backendOptions.length > 0) {
-    return backendOptions.map((option) => ({
-      value: option.value,
-      label: option.label,
-      code: `${option.perfilIds.length} perfil${option.perfilIds.length === 1 ? "" : "es"}`,
-    }));
-  }
   const modes = new Map<string, number>();
   for (const perfil of maquina?.perfilesOperativos ?? []) {
     for (const mode of modosColorFromPerfil(perfil)) {
       modes.set(mode, (modes.get(mode) ?? 0) + 1);
     }
   }
-  return Array.from(modes.entries()).map(([mode, count]) => ({
+  const localOptions = Array.from(modes.entries()).map(([mode, count]) => ({
     value: mode,
     label: MODO_COLOR_LABELS[mode] ?? mode,
     code: `${count} perfil${count === 1 ? "" : "es"}`,
+  }));
+  if (localOptions.length > 0) return localOptions;
+  const backendOptions = configExistente?.modoColorOptions ?? [];
+  return backendOptions.map((option) => ({
+    value: option.value,
+    label: option.label,
+    code: `${option.perfilIds.length} perfil${option.perfilIds.length === 1 ? "" : "es"}`,
   }));
 }
 
@@ -470,14 +494,26 @@ function panelizadoAplica(
   familiaCodigo: string | undefined,
   nestingConfig: Record<string, unknown>,
   maquina: { parametrosTecnicosJson?: Record<string, unknown> | null } | null | undefined,
+  tieneSustratoRollo: boolean,
 ) {
-  if (!familiaCodigo || !["impresion_por_area", "plotter_corte"].includes(familiaCodigo)) {
+  if (familiaCodigo !== "impresion_por_area") {
     return false;
   }
   const algorithm = String(nestingConfig.algorithm ?? "auto");
   if (algorithm !== "auto" && algorithm !== "shelf-rollo" && algorithm !== "maxrects-rollo") return false;
   const geometria = String(asRecord(maquina?.parametrosTecnicosJson).geometria ?? "").toUpperCase();
-  return familiaCodigo === "plotter_corte" || geometria === "ROLLO" || geometria === "";
+  return geometria === "ROLLO" || geometria === "MESA_EXTENSORA" || geometria === "" || tieneSustratoRollo;
+}
+
+function sanitizeNestingConfigForFamilia(
+  nestingConfig: Record<string, unknown>,
+  familiaCodigo: string | undefined,
+) {
+  if (familiaCodigo === "impresion_por_area") return nestingConfig;
+  if (!("panelizado" in nestingConfig)) return nestingConfig;
+  const next = { ...nestingConfig };
+  delete next.panelizado;
+  return next;
 }
 
 function defaultNestingSeparationForFamily(familiaCodigo: string | undefined) {
@@ -508,6 +544,192 @@ function formatMm(value: unknown) {
   const n = readOptionalNumber(value);
   if (n === undefined) return null;
   return `${n} mm`;
+}
+
+type PanelAxis = "vertical" | "horizontal";
+type PanelManualLayout = {
+  items: Array<{
+    sourcePieceId: string;
+    pieceWidthMm: number;
+    pieceHeightMm: number;
+    axis: PanelAxis;
+    panels: Array<{
+      panelIndex: number;
+      usefulWidthMm: number;
+      usefulHeightMm: number;
+      overlapStartMm: number;
+      overlapEndMm: number;
+      finalWidthMm: number;
+      finalHeightMm: number;
+    }>;
+  }>;
+};
+
+function readManualLayout(value: unknown): PanelManualLayout | null {
+  const raw = asRecord(value);
+  if (!Array.isArray(raw.items)) return null;
+  const items = raw.items
+    .map((item) => {
+      const row = asRecord(item);
+      const panelsRaw = Array.isArray(row.panels) ? row.panels : [];
+      const sourcePieceId = typeof row.sourcePieceId === "string" ? row.sourcePieceId : "";
+      const pieceWidthMm = readOptionalNumber(row.pieceWidthMm);
+      const pieceHeightMm = readOptionalNumber(row.pieceHeightMm);
+      const axis: PanelAxis | null =
+        row.axis === "horizontal" ? "horizontal" : row.axis === "vertical" ? "vertical" : null;
+      const panels = panelsRaw
+        .map((panel) => {
+          const current = asRecord(panel);
+          return {
+            panelIndex: Math.max(1, Math.trunc(readOptionalNumber(current.panelIndex) ?? 1)),
+            usefulWidthMm: readOptionalNumber(current.usefulWidthMm) ?? 0,
+            usefulHeightMm: readOptionalNumber(current.usefulHeightMm) ?? 0,
+            overlapStartMm: readOptionalNumber(current.overlapStartMm) ?? 0,
+            overlapEndMm: readOptionalNumber(current.overlapEndMm) ?? 0,
+            finalWidthMm: readOptionalNumber(current.finalWidthMm) ?? 0,
+            finalHeightMm: readOptionalNumber(current.finalHeightMm) ?? 0,
+          };
+        })
+        .filter((panel) => panel.finalWidthMm > 0 && panel.finalHeightMm > 0)
+        .sort((a, b) => a.panelIndex - b.panelIndex);
+      if (!sourcePieceId || !pieceWidthMm || !pieceHeightMm || !axis || panels.length === 0) return null;
+      return {
+        sourcePieceId,
+        pieceWidthMm,
+        pieceHeightMm,
+        axis,
+        panels: panels.map((panel, index) => ({ ...panel, panelIndex: index + 1 })),
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item != null);
+  return items.length > 0 ? { items } : null;
+}
+
+function getProductoPanelMeasures(producto: ProductoDetalle) {
+  const predefinidas = Array.isArray(producto.medidasPredefinidasJson)
+    ? producto.medidasPredefinidasJson
+    : [];
+  if (predefinidas.length > 0) {
+    return predefinidas
+      .map((medida, index) => ({
+        sourcePieceId: `piece-${index}-0`,
+        label: medida.nombre || `Medida ${index + 1}`,
+        widthMm: Number(medida.anchoMm),
+        heightMm: Number(medida.altoMm),
+      }))
+      .filter((medida) => medida.widthMm > 0 && medida.heightMm > 0);
+  }
+  const widthMm = readOptionalNumber(producto.medidaDefaultAnchoMm);
+  const heightMm = readOptionalNumber(producto.medidaDefaultAltoMm);
+  return widthMm && heightMm
+    ? [{ sourcePieceId: "piece-0-0", label: "Medida del producto", widthMm, heightMm }]
+    : [];
+}
+
+function buildDefaultManualLayoutForMeasures(input: {
+  measures: Array<{ sourcePieceId: string; widthMm: number; heightMm: number }>;
+  axis: PanelAxis;
+  overlapMm: number;
+  maxPanelWidthMm: number | null;
+  printableWidthMm: number | null;
+  widthInterpretation: "total" | "util";
+}): PanelManualLayout {
+  return {
+    items: input.measures.map((measure) => {
+      const splitDimension = input.axis === "vertical" ? measure.widthMm : measure.heightMm;
+      const physicalLimit = Math.max(
+        1,
+        Math.min(
+          input.maxPanelWidthMm && input.maxPanelWidthMm > 0 ? input.maxPanelWidthMm : Number.POSITIVE_INFINITY,
+          input.printableWidthMm && input.printableWidthMm > 0 ? input.printableWidthMm : Number.POSITIVE_INFINITY,
+        ),
+      );
+      const usefulLimit =
+        input.widthInterpretation === "total"
+          ? Math.max(1, physicalLimit - input.overlapMm * 2)
+          : physicalLimit;
+      const panelCount = Math.max(1, Math.ceil(splitDimension / usefulLimit));
+      const base = Math.floor(splitDimension / panelCount);
+      const remainder = Math.round(splitDimension - base * panelCount);
+      const panels = Array.from({ length: panelCount }, (_, index) => {
+        const segment = base + (index < remainder ? 1 : 0);
+        const overlapStartMm = index === 0 ? 0 : input.overlapMm;
+        const overlapEndMm = index === panelCount - 1 ? 0 : input.overlapMm;
+        const usefulWidthMm = input.axis === "vertical" ? segment : measure.widthMm;
+        const usefulHeightMm = input.axis === "horizontal" ? segment : measure.heightMm;
+        return {
+          panelIndex: index + 1,
+          usefulWidthMm,
+          usefulHeightMm,
+          overlapStartMm,
+          overlapEndMm,
+          finalWidthMm: input.axis === "vertical" ? usefulWidthMm + overlapStartMm + overlapEndMm : measure.widthMm,
+          finalHeightMm: input.axis === "horizontal" ? usefulHeightMm + overlapStartMm + overlapEndMm : measure.heightMm,
+        };
+      });
+      return {
+        sourcePieceId: measure.sourcePieceId,
+        pieceWidthMm: measure.widthMm,
+        pieceHeightMm: measure.heightMm,
+        axis: input.axis,
+        panels,
+      };
+    }),
+  };
+}
+
+function recalculateManualLayoutItem(
+  item: PanelManualLayout["items"][number],
+): PanelManualLayout["items"][number] {
+  const panels = item.panels.map((panel, index) => {
+    const overlapStartMm = index === 0 ? 0 : panel.overlapStartMm;
+    const overlapEndMm = index === item.panels.length - 1 ? 0 : panel.overlapEndMm;
+    return {
+      ...panel,
+      panelIndex: index + 1,
+      overlapStartMm,
+      overlapEndMm,
+      finalWidthMm:
+        item.axis === "vertical"
+          ? panel.usefulWidthMm + overlapStartMm + overlapEndMm
+          : item.pieceWidthMm,
+      finalHeightMm:
+        item.axis === "horizontal"
+          ? panel.usefulHeightMm + overlapStartMm + overlapEndMm
+          : item.pieceHeightMm,
+    };
+  });
+  return { ...item, panels };
+}
+
+function validateManualLayoutItem(input: {
+  item: PanelManualLayout["items"][number];
+  maxPanelWidthMm: number | null;
+  printableWidthMm: number | null;
+  widthInterpretation: "total" | "util";
+}) {
+  const splitDimension = input.item.axis === "vertical" ? input.item.pieceWidthMm : input.item.pieceHeightMm;
+  const usefulTotal = input.item.panels.reduce(
+    (acc, panel) => acc + (input.item.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm),
+    0,
+  );
+  if (Math.abs(usefulTotal - splitDimension) > 1) {
+    return "La suma útil de los paneles no coincide con la medida original.";
+  }
+  const maxLimit = input.maxPanelWidthMm && input.maxPanelWidthMm > 0 ? input.maxPanelWidthMm : null;
+  const printableLimit = input.printableWidthMm && input.printableWidthMm > 0 ? input.printableWidthMm : null;
+  for (const panel of input.item.panels) {
+    const useful = input.item.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm;
+    const final = input.item.axis === "vertical" ? panel.finalWidthMm : panel.finalHeightMm;
+    if (useful <= 0 || final <= 0) return "Todos los paneles deben tener medidas mayores a 0.";
+    if (maxLimit && (input.widthInterpretation === "total" ? final : useful) > maxLimit) {
+      return "Hay paneles que superan el ancho máximo configurado.";
+    }
+    if (printableLimit && final > printableLimit) {
+      return "Hay paneles que no entran en el ancho imprimible estimado.";
+    }
+  }
+  return null;
 }
 
 function getPliegoPresetValue(pliegoImpresion: Record<string, unknown>) {
@@ -608,15 +830,9 @@ function MaterialSearchSelect({
             >
               <span className="min-w-0">
                 <span className="block truncate font-medium">{item.nombre}</span>
-                <span className="text-muted-foreground block truncate">
-                  {item.codigo} · {item.subfamilia}
-                </span>
               </span>
-              <span className="flex shrink-0 items-center gap-2">
-                <Badge variant="outline">{item.variantes.length}</Badge>
-                <Badge variant={selected ? "secondary" : "outline"}>
-                  {selected ? "Agregado" : "Agregar"}
-                </Badge>
+              <span className="text-muted-foreground shrink-0 text-[11px]">
+                {selected ? "Seleccionado" : "Seleccionar"}
               </span>
             </button>
             );
@@ -662,6 +878,31 @@ function getVariantAttributeSummary(variante: MaterialVariantSearchItem) {
   return { attrs, color, espesor, ancho, alto, largo };
 }
 
+function materiaPrimaLooksLikeRoll(materiaPrima: Pick<MateriaPrimaBusquedaItem, "codigo" | "nombre" | "familia" | "subfamilia"> | null | undefined) {
+  const text = [
+    materiaPrima?.codigo,
+    materiaPrima?.nombre,
+    materiaPrima?.familia,
+    materiaPrima?.subfamilia,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toUpperCase();
+  return text.includes("ROLLO") || text.includes("ROLL");
+}
+
+function varianteLooksLikeRoll(variante: { atributosVarianteJson?: Record<string, unknown> | null } | null | undefined) {
+  const attrs = asRecord(variante?.atributosVarianteJson);
+  return (
+    readOptionalNumber(attrs.largoRolloMm) != null ||
+    readOptionalNumber(attrs.largoRolloM) != null ||
+    readOptionalNumber(attrs.rollLengthMm) != null ||
+    readOptionalNumber(attrs.rollLengthM) != null ||
+    readOptionalNumber(attrs.longitudRolloMm) != null ||
+    readOptionalNumber(attrs.longitudRolloM) != null
+  );
+}
+
 function canUseColorThicknessSelector(materiaPrima: MateriaPrimaBusquedaItem) {
   if (materiaPrima.subfamilia === "sustrato_rigido") return true;
   return materiaPrima.variantes.some((variante) => {
@@ -678,6 +919,11 @@ function getVariantMeasureLabel(summary: ReturnType<typeof getVariantAttributeSu
     return `${formatNumber(summary.ancho)} x ${formatNumber(summary.largo)} m`;
   }
   return "";
+}
+
+function getDisplayPanelMaxWidth(value: unknown) {
+  const parsed = getResolvedNestingNumber(value, undefined, 0);
+  return parsed >= MIN_PANEL_MAX_WIDTH_MM ? parsed : 0;
 }
 
 function patchEnabledVariantIds(
@@ -954,6 +1200,262 @@ function validarAvanzado(
   return { errores, warnings };
 }
 
+function PanelManualEditorSheet({
+  open,
+  onOpenChange,
+  measures,
+  layout,
+  axis,
+  overlapMm,
+  maxPanelWidthMm,
+  printableWidthMm,
+  widthInterpretation,
+  onApply,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  measures: Array<{ sourcePieceId: string; label: string; widthMm: number; heightMm: number }>;
+  layout: PanelManualLayout | null;
+  axis: PanelAxis;
+  overlapMm: number;
+  maxPanelWidthMm: number | null;
+  printableWidthMm: number | null;
+  widthInterpretation: "total" | "util";
+  onApply: (layout: PanelManualLayout) => void;
+}) {
+  const [draft, setDraft] = React.useState<PanelManualLayout | null>(null);
+  const [selectedPieceId, setSelectedPieceId] = React.useState("");
+
+  React.useEffect(() => {
+    if (!open) return;
+    const next =
+      layout ??
+      buildDefaultManualLayoutForMeasures({
+        measures,
+        axis,
+        overlapMm,
+        maxPanelWidthMm,
+        printableWidthMm,
+        widthInterpretation,
+      });
+    setDraft(next);
+    setSelectedPieceId(next.items[0]?.sourcePieceId ?? "");
+  }, [axis, layout, maxPanelWidthMm, measures, open, overlapMm, printableWidthMm, widthInterpretation]);
+
+  const selectedItem = React.useMemo(
+    () => draft?.items.find((item) => item.sourcePieceId === selectedPieceId) ?? draft?.items[0] ?? null,
+    [draft, selectedPieceId],
+  );
+  const selectedMeasure = measures.find((measure) => measure.sourcePieceId === selectedItem?.sourcePieceId);
+  const validation = selectedItem
+    ? validateManualLayoutItem({ item: selectedItem, maxPanelWidthMm, printableWidthMm, widthInterpretation })
+    : null;
+  const allValid =
+    draft?.items.every(
+      (item) => !validateManualLayoutItem({ item, maxPanelWidthMm, printableWidthMm, widthInterpretation }),
+    ) ?? false;
+
+  const updateSelectedItem = (updater: (item: PanelManualLayout["items"][number]) => PanelManualLayout["items"][number]) => {
+    if (!selectedItem) return;
+    setDraft((current) =>
+      current
+        ? {
+            items: current.items.map((item) =>
+              item.sourcePieceId === selectedItem.sourcePieceId ? updater(item) : item,
+            ),
+          }
+        : current,
+    );
+  };
+
+  const splitEvenly = (item: PanelManualLayout["items"][number], panelCount: number) => {
+    const count = Math.max(1, panelCount);
+    const dimension = item.axis === "vertical" ? item.pieceWidthMm : item.pieceHeightMm;
+    const base = Math.floor(dimension / count);
+    const remainder = Math.round(dimension - base * count);
+    const panels = Array.from({ length: count }, (_, index) => {
+      const segment = base + (index < remainder ? 1 : 0);
+      const overlapStartMm = index === 0 ? 0 : overlapMm;
+      const overlapEndMm = index === count - 1 ? 0 : overlapMm;
+      return {
+        panelIndex: index + 1,
+        usefulWidthMm: item.axis === "vertical" ? segment : item.pieceWidthMm,
+        usefulHeightMm: item.axis === "horizontal" ? segment : item.pieceHeightMm,
+        overlapStartMm,
+        overlapEndMm,
+        finalWidthMm: item.axis === "vertical" ? segment + overlapStartMm + overlapEndMm : item.pieceWidthMm,
+        finalHeightMm: item.axis === "horizontal" ? segment + overlapStartMm + overlapEndMm : item.pieceHeightMm,
+      };
+    });
+    return { ...item, panels };
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="!w-[760px] !max-w-[92vw] overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>Editor manual de paneles</SheetTitle>
+          <SheetDescription>
+            Definí cómo se divide cada medida cuando la pieza no entra completa en el ancho imprimible del rollo.
+          </SheetDescription>
+        </SheetHeader>
+        <div className="space-y-4 px-4">
+          {measures.length === 0 ? (
+            <div className="rounded-md border bg-muted/20 p-4 text-sm text-muted-foreground">
+              Este producto no tiene una medida fija o predefinida para preparar el layout manual.
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {draft?.items.map((item, index) => {
+                  const measure = measures.find((current) => current.sourcePieceId === item.sourcePieceId);
+                  return (
+                    <button
+                      key={item.sourcePieceId}
+                      type="button"
+                      className={`rounded-md border px-3 py-2 text-left text-xs ${
+                        item.sourcePieceId === selectedItem?.sourcePieceId ? "border-foreground bg-muted" : "bg-background"
+                      }`}
+                      onClick={() => setSelectedPieceId(item.sourcePieceId)}
+                    >
+                      <span className="block font-medium">{measure?.label ?? `Pieza ${index + 1}`}</span>
+                      <span className="text-muted-foreground">{item.pieceWidthMm} × {item.pieceHeightMm} mm</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {selectedItem ? (
+                <div className="space-y-4 rounded-md border bg-background p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium">{selectedMeasure?.label ?? "Medida seleccionada"}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {selectedItem.pieceWidthMm} × {selectedItem.pieceHeightMm} mm · {selectedItem.panels.length} panel{selectedItem.panels.length === 1 ? "" : "es"}
+                      </div>
+                    </div>
+                    <HumanSelect
+                      value={selectedItem.axis}
+                      options={PANEL_MANUAL_AXIS_OPTIONS}
+                      triggerClassName="min-h-9 min-w-40 text-xs"
+                      onValueChange={(value) =>
+                        updateSelectedItem((item) => {
+                          const nextAxis = value === "horizontal" ? "horizontal" : "vertical";
+                          return splitEvenly({ ...item, axis: nextAxis }, item.panels.length);
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="flex h-20 overflow-hidden rounded-md border bg-muted/20">
+                    {selectedItem.panels.map((panel) => {
+                      const useful = selectedItem.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm;
+                      const total = selectedItem.axis === "vertical" ? selectedItem.pieceWidthMm : selectedItem.pieceHeightMm;
+                      return (
+                        <div
+                          key={panel.panelIndex}
+                          className="flex min-w-12 items-center justify-center border-r last:border-r-0"
+                          style={{ flexGrow: Math.max(1, useful), flexBasis: `${Math.max(5, (useful / total) * 100)}%` }}
+                        >
+                          <span className="text-xs font-medium">P{panel.panelIndex}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="grid gap-2">
+                    {selectedItem.panels.map((panel, index) => {
+                      const usefulValue = selectedItem.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm;
+                      const finalValue = selectedItem.axis === "vertical" ? panel.finalWidthMm : panel.finalHeightMm;
+                      return (
+                        <div key={panel.panelIndex} className="grid grid-cols-[80px_minmax(0,1fr)_120px] items-center gap-2 text-xs">
+                          <div className="font-medium">Panel {panel.panelIndex}</div>
+                          <Input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={String(usefulValue)}
+                            onChange={(event) =>
+                              updateSelectedItem((item) => {
+                                const panels = item.panels.map((current, currentIndex) => {
+                                  if (currentIndex !== index) return current;
+                                  const nextUseful = event.target.value === "" ? 1 : Math.max(1, Number(event.target.value));
+                                  return {
+                                    ...current,
+                                    usefulWidthMm: item.axis === "vertical" ? nextUseful : item.pieceWidthMm,
+                                    usefulHeightMm: item.axis === "horizontal" ? nextUseful : item.pieceHeightMm,
+                                  };
+                                });
+                                return recalculateManualLayoutItem({ ...item, panels });
+                              })
+                            }
+                            className="h-8 text-xs"
+                          />
+                          <div className="text-muted-foreground">final {Math.round(finalValue)} mm</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => updateSelectedItem((item) => splitEvenly(item, item.panels.length + 1))}
+                    >
+                      Agregar panel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={selectedItem.panels.length <= 1}
+                      onClick={() => updateSelectedItem((item) => splitEvenly(item, item.panels.length - 1))}
+                    >
+                      Quitar panel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => updateSelectedItem((item) => splitEvenly(item, item.panels.length))}
+                    >
+                      Equilibrar
+                    </Button>
+                  </div>
+                  {validation ? (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      {validation}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                      Layout válido para las medidas actuales.
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
+        <SheetFooter>
+          <Button
+            type="button"
+            disabled={!draft || !allValid}
+            onClick={() => {
+              if (!draft || !allValid) return;
+              onApply(draft);
+              onOpenChange(false);
+            }}
+          >
+            Aplicar layout manual
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export function ConfigPasosEditorView({
   producto,
   rutaAlternativa,
@@ -1042,6 +1544,18 @@ export function ConfigPasosEditorView({
     Record<string, MateriaPrimaBusquedaItem>
   >(() => {
     const map: Record<string, MateriaPrimaBusquedaItem> = {};
+    for (const materiaPrima of lookups.materiasPrimas) {
+      map[materiaPrima.id] = {
+        id: materiaPrima.id,
+        codigo: materiaPrima.codigo,
+        nombre: materiaPrima.nombre,
+        familia: materiaPrima.familia,
+        subfamilia: materiaPrima.subfamilia,
+        tipoTecnico: "",
+        templateId: materiaPrima.templateId,
+        variantes: materiaPrima.variantes,
+      };
+    }
     for (const config of rutaAlternativa.configPasos) {
       for (const slot of config.slotsMateriales) {
         for (const candidate of slot.candidatos) {
@@ -1095,6 +1609,7 @@ export function ConfigPasosEditorView({
     () => rutaAlternativa.ruta.pasos[0]?.id ?? "",
   );
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
+  const [panelEditorPasoId, setPanelEditorPasoId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const ids = rutaAlternativa.ruta.pasos.map((paso) => paso.id);
@@ -1484,16 +1999,64 @@ export function ConfigPasosEditorView({
     setGuardando(rutaPasoId);
     try {
       const currentParams = asRecord(configs[rutaPasoId].paramsPasoJson);
-      const nestingConfig = getNestingConfig(currentParams);
-      const modoColorConfig = getModoColorConfig(currentParams);
+      const nestingConfig = sanitizeNestingConfigForFamilia(
+        getNestingConfig(currentParams),
+        familia?.codigo,
+      );
+      const modoColorConfigRaw = getModoColorConfig(currentParams);
+      const configExistente = rutaAlternativa.configPasos.find(
+        (cp) => cp.rutaPasoId === rutaPasoId,
+      );
+      const maquinaSel = lookups.maquinas.find(
+        (m) => m.id === configs[rutaPasoId].maquinaM1Id,
+      );
+      const maquinaGuardada = maquinaSel ?? configExistente?.maquinaM1 ?? null;
+      const perfilGuardado =
+        maquinaSel?.perfilesOperativos.find((p) => p.id === configs[rutaPasoId].perfilM1Id) ??
+        configExistente?.perfilM1 ??
+        null;
+      const modoColorOptions = buildModoColorOptions(maquinaGuardada, configExistente);
+      const modoColorAllowed = Array.isArray(modoColorConfigRaw.allowedModes)
+        ? modoColorConfigRaw.allowedModes
+            .map((item) => normalizeModoColor(item))
+            .filter((item): item is string => item !== null)
+        : [];
+      const allowedForSave =
+        modoColorConfigRaw.enabled === true && modoColorAllowed.length > 0
+          ? modoColorAllowed.filter((mode) =>
+              modoColorOptions.some((option) => option.value === mode),
+            )
+          : modoColorOptions.map((option) => option.value);
+      const perfilDefaultMode = modosColorFromPerfil(perfilGuardado)[0] ?? "";
+      const defaultForSave =
+        allowedForSave.find((mode) => mode === perfilDefaultMode) ??
+        allowedForSave[0] ??
+        null;
+      const modoColorConfig =
+        modoColorConfigRaw.enabled === true
+          ? {
+              ...modoColorConfigRaw,
+              defaultMode: defaultForSave,
+              comercialElige: allowedForSave.length > 1,
+              allowedModes:
+                allowedForSave.length === modoColorOptions.length ? null : allowedForSave,
+            }
+          : modoColorConfigRaw;
+      const modoColorConfigClean = Object.fromEntries(
+        Object.entries(modoColorConfig).filter(([, value]) => {
+          if (value === "" || value === null || value === undefined) return false;
+          if (Array.isArray(value) && value.length === 0) return false;
+          return true;
+        }),
+      );
       const paramsPasoJson = { ...(paramsRes.value ?? {}) };
       delete paramsPasoJson.nestingConfig;
       delete paramsPasoJson.modoColorConfig;
       if (Object.keys(nestingConfig).length > 0) {
         paramsPasoJson.nestingConfig = nestingConfig;
       }
-      if (Object.keys(modoColorConfig).length > 0) {
-        paramsPasoJson.modoColorConfig = modoColorConfig;
+      if (Object.keys(modoColorConfigClean).length > 0) {
+        paramsPasoJson.modoColorConfig = modoColorConfigClean;
       }
       await upsertConfigPaso(rutaAlternativa.id, {
         ...configs[rutaPasoId],
@@ -1778,6 +2341,18 @@ export function ConfigPasosEditorView({
             .flatMap((materia) => materia.variantes)
             .find((variante) => variante.id === sustratoPrincipal?.materialVarianteId);
           const attrsSustrato = asRecord(varianteSustrato?.atributosVarianteJson);
+          const sustratoRolloDisponible =
+            varianteLooksLikeRoll(varianteSustrato) ||
+            (sustratoPrincipal?.candidatos ?? []).some((candidate) => {
+              const materiaPrima = candidateMaterials[candidate.materiaPrimaId];
+              if (!materiaPrima) return false;
+              if (materiaPrimaLooksLikeRoll(materiaPrima)) return true;
+              const enabledVariantIds = new Set(candidate.varianteIds);
+              return materiaPrima.variantes.some((variante) => {
+                const enabled = enabledVariantIds.size === 0 || enabledVariantIds.has(variante.id);
+                return enabled && varianteLooksLikeRoll(variante);
+              });
+            });
           const sustratoAnchoLabel = formatMm(attrsSustrato.anchoMm ?? attrsSustrato.widthMm);
           const sustratoAltoLabel = formatMm(
             attrsSustrato.largoMm ?? attrsSustrato.altoMm ?? attrsSustrato.heightMm,
@@ -1791,13 +2366,40 @@ export function ConfigPasosEditorView({
                 : maquinaSel ?? configExistente?.maquinaM1;
 	          const machineMargins = getMachineMargins(maquinaParaDefaults);
 	          const mostrarModoColor = modoColorAplica(familia?.codigo, cfg);
-	          const modoColorOptions = buildModoColorOptions(maquinaSel, configExistente);
+	          const modoColorOptions = buildModoColorOptions(maquinaGuardada, configExistente);
 	          const modoColorAllowed = Array.isArray(modoColorConfig.allowedModes)
 	            ? modoColorConfig.allowedModes
 	                .map((item) => normalizeModoColor(item))
 	                .filter((item): item is string => item !== null)
 	            : [];
-	          const modoColorDefault = normalizeModoColor(modoColorConfig.defaultMode) ?? "";
+	          const modoColorEnabled = modoColorConfig.enabled === true;
+	          const modoColorPerfilDefault = modosColorFromPerfil(perfilGuardado)[0] ?? "";
+	          const modoColorEffectiveAllowed =
+	            modoColorEnabled && modoColorAllowed.length > 0
+	              ? modoColorAllowed.filter((mode) =>
+	                  modoColorOptions.some((option) => option.value === mode),
+	                )
+	              : modoColorOptions.map((option) => option.value);
+	          const modoColorDefaultOptions =
+	            modoColorOptions.filter((option) =>
+	              modoColorEffectiveAllowed.includes(option.value),
+	            );
+	          const modoColorDefault =
+	            modoColorDefaultOptions.find((option) => option.value === modoColorPerfilDefault)?.value ??
+	            modoColorDefaultOptions[0]?.value ??
+	            "";
+	          const modoColorIsSelectable = modoColorDefaultOptions.length > 1;
+	          const modoColorSummary = !modoColorEnabled
+	            ? modoColorOptions.length > 1
+	              ? "Sin restricción: el comercial elige entre todos los modos compatibles."
+	              : modoColorOptions.length === 1
+	                ? `Sin restricción: se usa ${modoColorOptions[0]?.label} automáticamente.`
+	                : "La máquina/perfil todavía no declara modos de color."
+	            : modoColorIsSelectable
+	              ? "El comercial elegirá entre los modos permitidos."
+	              : `Modo fijo: ${
+	                  modoColorDefaultOptions[0]?.label ?? "sin modo disponible"
+	                }.`;
 	          const defaultSeparation = defaultNestingSeparationForFamily(familia?.codigo);
           const legacySeparationH = getResolvedNestingNumber(nestingConfig.separationHMm, undefined, defaultSeparation);
           const legacySeparationV = getResolvedNestingNumber(nestingConfig.separationVMm, undefined, defaultSeparation);
@@ -1806,9 +2408,46 @@ export function ConfigPasosEditorView({
             Math.max(legacySeparationH, legacySeparationV) / 2,
             0,
           );
-          const mostrarPanelizado = panelizadoAplica(familia?.codigo, nestingConfig, maquinaParaDefaults);
-          const resolvedPanelMaxWidth = getResolvedNestingNumber(panelizadoConfig.maxPanelWidthMm, undefined, 0);
+          const mostrarPanelizado = panelizadoAplica(
+            familia?.codigo,
+            nestingConfig,
+            maquinaParaDefaults,
+            sustratoRolloDisponible,
+          );
+          const resolvedPanelMaxWidth = getDisplayPanelMaxWidth(panelizadoConfig.maxPanelWidthMm);
           const resolvedPanelOverlap = getResolvedNestingNumber(panelizadoConfig.overlapMm, undefined, 20);
+          const panelizadoMode = panelizadoConfig.mode === "manual" ? "manual" : "automatic";
+          const panelizadoAxis =
+            panelizadoConfig.axis === "automatic" || panelizadoConfig.axis === "automatica"
+              ? "automatic"
+              : panelizadoConfig.axis === "horizontal"
+                ? "horizontal"
+                : panelizadoConfig.axis === "vertical"
+                  ? "vertical"
+                  : "automatic";
+          const panelizadoWidthInterpretation =
+            panelizadoConfig.widthInterpretation === "util" ? "util" : "total";
+          const panelManualLayout = readManualLayout(panelizadoConfig.manualLayout);
+          const panelMeasures = getProductoPanelMeasures(producto);
+          const rollWidthForPanelMm =
+            readOptionalNumber(attrsSustrato.anchoMm) ??
+            readOptionalNumber(attrsSustrato.widthMm) ??
+            readOptionalNumber(maquinaParaDefaults?.parametrosTecnicosJson?.anchoMaxRolloMm) ??
+            readOptionalNumber(maquinaParaDefaults?.parametrosTecnicosJson?.anchoMaxMm) ??
+            readOptionalNumber(maquinaParaDefaults?.parametrosTecnicosJson?.anchoUtil);
+          const printableWidthForPanelMm =
+            rollWidthForPanelMm != null
+              ? Math.max(0, rollWidthForPanelMm - (machineMargins.leftMm ?? 0) - (machineMargins.rightMm ?? 0))
+              : null;
+          const panelSummary =
+            panelizadoConfig.enabled === true
+              ? [
+                  panelizadoMode === "manual" ? "Manual" : "Automático",
+                  panelizadoAxis === "automatic" ? "dirección automática" : panelizadoAxis === "vertical" ? "vertical" : "horizontal",
+                  `${resolvedPanelOverlap} mm solape`,
+                  resolvedPanelMaxWidth > 0 ? `${resolvedPanelMaxWidth} mm máx.` : "máx. ancho imprimible",
+                ].join(" · ")
+              : "";
           const valBasico = noEjecutar ? { errores: [], warnings: [] } : validarBasico(cfg, familia);
           const valMateriales = noEjecutar ? { errores: [], warnings: [] } : validarMateriales(cfg, familia);
           const valAvanzado = noEjecutar
@@ -2111,98 +2750,111 @@ export function ConfigPasosEditorView({
 	                      {mostrarModoColor ? (
 	                        <div className="field md:col-span-full">
 	                          <LabelConTooltip
-	                            label="Modo de color comercial"
-	                            tooltip="Permite que el comercial elija el modo de color para este paso. El motor selecciona un perfil compatible y costea los consumibles correspondientes."
+	                            label="Modo de color del producto"
+	                            tooltip="Define si este producto usa todos los modos compatibles de la ruta/máquina o si limita modos específicos para cotizar."
 	                          />
 	                          <div className="space-y-3 rounded border bg-background/70 p-3">
-	                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-	                              <label className="flex items-center gap-2 text-xs">
+	                            <div className="rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+	                              {modoColorConfig.enabled === true ? (
+	                                <span>
+	                                  Este producto <strong className="text-foreground">limita</strong> los modos
+	                                  de color que se pueden cotizar. Si queda más de un modo permitido,
+	                                  el comercial deberá elegir al agregar el producto.
+	                                </span>
+	                              ) : (
+	                                <span>
+	                                  Sin configuración propia: el comercial verá todos los modos de color
+	                                  compatibles con la ruta, máquina y perfiles disponibles.
+	                                </span>
+	                              )}
+	                            </div>
+	                            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,0.7fr)_minmax(0,1.3fr)]">
+	                              <label className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-xs">
 	                                <input
+	                                  className="mt-0.5"
 	                                  type="checkbox"
 	                                  checked={modoColorConfig.enabled === true}
 	                                  onChange={(e) =>
 	                                    updateModoColorConfig(paso.id, {
 	                                      enabled: e.target.checked,
-	                                      comercialElige: e.target.checked ? true : null,
+	                                      comercialElige: e.target.checked
+	                                        ? modoColorDefaultOptions.length > 1
+	                                        : null,
+	                                      defaultMode:
+	                                        e.target.checked && !modoColorDefault
+	                                          ? (modoColorDefaultOptions[0]?.value ?? null)
+	                                          : modoColorDefault || null,
 	                                    })
 	                                  }
 	                                />
-	                                <span>Habilitar modo de color</span>
+	                                <span className="space-y-0.5">
+	                                  <span className="block font-medium text-foreground">
+	                                    Definir modos para este producto
+	                                  </span>
+	                                  <span className="block text-muted-foreground">
+	                                    Restringe las opciones disponibles en Agregar producto.
+	                                  </span>
+	                                </span>
 	                              </label>
-	                              <label className="flex items-center gap-2 text-xs">
-	                                <input
-	                                  type="checkbox"
-	                                  checked={modoColorConfig.comercialElige === true}
-	                                  disabled={modoColorConfig.enabled !== true}
-	                                  onChange={(e) =>
-	                                    updateModoColorConfig(paso.id, {
-	                                      comercialElige: e.target.checked,
-	                                    })
-	                                  }
-	                                />
-	                                <span>El comercial elige</span>
-	                              </label>
-	                              <div className="space-y-1">
+	                              <div className="space-y-2 rounded-md border bg-white px-3 py-2">
 	                                <LabelConTooltip
-	                                  label="Default"
-	                                  tooltip="Se usa como valor inicial si el comercial no eligió todavía."
+	                                  label="Modos de color"
+	                                  tooltip="Los modos salen de los perfiles de la máquina. Si hay más de uno permitido, el comercial elegirá al cotizar."
 	                                  iconSize="sm"
 	                                />
-	                                <HumanSelect
-	                                  value={modoColorDefault}
-	                                  onValueChange={(v) => updateModoColorConfig(paso.id, { defaultMode: v || null })}
-	                                  options={modoColorOptions}
-	                                  disabled={modoColorConfig.enabled !== true || modoColorOptions.length === 0}
-	                                  placeholder={modoColorOptions.length === 0 ? "Sin perfiles con color" : "Sin default"}
-	                                  triggerClassName="min-h-9 text-xs"
-	                                />
-	                              </div>
-	                            </div>
-	                            <div className="space-y-2">
-	                              <div className="text-xs font-medium text-muted-foreground">
-	                                Opciones permitidas
-	                              </div>
-	                              {modoColorOptions.length === 0 ? (
-	                                <p className="text-xs text-muted-foreground">
-	                                  La máquina/perfil todavía no declara modos de color.
-	                                </p>
-	                              ) : (
-	                                <div className="flex flex-wrap gap-2">
-	                                  {modoColorOptions.map((option) => {
-	                                    const checked =
-	                                      modoColorAllowed.length === 0 ||
-	                                      modoColorAllowed.includes(option.value);
-	                                    return (
-	                                      <label
-	                                        key={option.value}
-	                                        className="inline-flex items-center gap-2 rounded border bg-white px-2 py-1 text-xs"
-	                                      >
-	                                        <input
-	                                          type="checkbox"
-	                                          checked={checked}
-	                                          disabled={modoColorConfig.enabled !== true}
-	                                          onChange={(e) => {
-	                                            const current =
-	                                              modoColorAllowed.length > 0
-	                                                ? modoColorAllowed
-	                                                : modoColorOptions.map((item) => item.value);
-	                                            const next = e.target.checked
-	                                              ? Array.from(new Set([...current, option.value]))
-	                                              : current.filter((item) => item !== option.value);
+	                                {modoColorOptions.length === 0 ? (
+	                                  <p className="text-xs text-muted-foreground">
+	                                    La máquina/perfil todavía no declara modos de color.
+	                                  </p>
+	                                ) : (
+	                                  <div className="segmented w-full">
+	                                    {modoColorOptions.map((option) => {
+	                                      const selected = modoColorEffectiveAllowed.includes(option.value);
+	                                      const nextAllowed = selected
+	                                        ? modoColorEffectiveAllowed.filter((item) => item !== option.value)
+	                                        : [...modoColorEffectiveAllowed, option.value];
+	                                      const safeNextAllowed =
+	                                        nextAllowed.length > 0 ? nextAllowed : [option.value];
+	                                      const nextDefault =
+	                                        safeNextAllowed.includes(modoColorPerfilDefault)
+	                                          ? modoColorPerfilDefault
+	                                          : safeNextAllowed[0];
+	                                      return (
+	                                        <button
+	                                          key={option.value}
+	                                          type="button"
+	                                          className={selected ? "on" : ""}
+	                                          disabled={!modoColorEnabled}
+	                                          onClick={() => {
 	                                            updateModoColorConfig(paso.id, {
+	                                              enabled: true,
 	                                              allowedModes:
-	                                                next.length === modoColorOptions.length
+	                                                safeNextAllowed.length === modoColorOptions.length
 	                                                  ? null
-	                                                  : next,
+	                                                  : safeNextAllowed,
+	                                              defaultMode: nextDefault,
+	                                              comercialElige: safeNextAllowed.length > 1,
 	                                            });
 	                                          }}
-	                                        />
-	                                        <span>{option.label}</span>
-	                                      </label>
-	                                    );
-	                                  })}
+	                                          title={option.code}
+	                                        >
+	                                          {option.label}
+	                                        </button>
+	                                      );
+	                                    })}
+	                                  </div>
+	                                )}
+	                                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+	                                  <span>{modoColorSummary}</span>
+	                                  {modoColorDefault ? (
+	                                    <span className="tag muted">
+	                                      Default por perfil:{" "}
+	                                      {modoColorOptions.find((option) => option.value === modoColorDefault)
+	                                        ?.label ?? modoColorDefault}
+	                                    </span>
+	                                  ) : null}
 	                                </div>
-	                              )}
+	                              </div>
 	                            </div>
 	                          </div>
 	                        </div>
@@ -2304,6 +2956,15 @@ export function ConfigPasosEditorView({
                               (variante) => variante.id === slot.materialVarianteId,
                             ),
                         );
+                        const hardcodedVariante = hardcodedMateria?.variantes.find(
+                          (variante) => variante.id === slot.materialVarianteId,
+                        );
+                        const hardcodedVarianteLabel =
+                          hardcodedMateria && hardcodedVariante
+                            ? varianteOptionFromBusqueda(hardcodedMateria, hardcodedVariante).label
+                            : slot.materialVarianteId
+                              ? "Variante guardada"
+                              : "Sin seleccionar";
                         return (
                         <div key={slotIdx} className="bg-muted/30 space-y-2 rounded border p-2">
                           <div className="flex items-center justify-between">
@@ -2419,15 +3080,7 @@ export function ConfigPasosEditorView({
                                 />
                               ) : (
                                 <div className="text-muted-foreground text-xs">
-                                  Variante seleccionada:{" "}
-                                  {hardcodedMateria?.variantes.find(
-                                    (variante) => variante.id === slot.materialVarianteId,
-                                  )?.nombreVariante ??
-                                    hardcodedMateria?.variantes.find(
-                                      (variante) => variante.id === slot.materialVarianteId,
-                                    )?.sku ??
-                                    slot.materialVarianteId ??
-                                    "sin seleccionar"}
+                                  Variante: {hardcodedVarianteLabel}
                                 </div>
                               )}
                             </div>
@@ -2468,11 +3121,6 @@ export function ConfigPasosEditorView({
                                         <div className="min-w-0 text-xs">
                                           <div className="truncate font-medium">
                                             {materiaPrima?.nombre ?? candidate.materiaPrimaId}
-                                          </div>
-                                          <div className="text-muted-foreground truncate">
-                                            {materiaPrima
-                                              ? `${materiaPrima.codigo} · ${materiaPrima.subfamilia}`
-                                              : "Materia prima cargada"}
                                           </div>
                                         </div>
                                         <button
@@ -2886,32 +3534,68 @@ export function ConfigPasosEditorView({
                         </label>
 
                         {mostrarPanelizado && (
-                          <div className="space-y-3 rounded border bg-background/70 p-3">
-                            <label className="flex items-center gap-2 text-xs font-medium">
-                              <input
-                                type="checkbox"
-                                checked={panelizadoConfig.enabled === true}
-                                onChange={(e) =>
-                                  updateNestingPanelizado(paso.id, {
-                                    enabled: e.target.checked,
-                                    mode: "automatic",
-                                  })
-                                }
-                              />
-                              <span>Panelizar piezas grandes</span>
-                            </label>
+                          <div className="space-y-3 rounded border border-orange-200/70 bg-orange-50/30 p-3">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <label className="flex items-center gap-2 text-xs font-medium">
+                                <input
+                                  type="checkbox"
+                                  checked={panelizadoConfig.enabled === true}
+                                  onChange={(e) =>
+                                    updateNestingPanelizado(paso.id, {
+                                      enabled: e.target.checked,
+                                      mode: e.target.checked ? panelizadoMode : "automatic",
+                                      axis: e.target.checked ? panelizadoAxis : "automatic",
+                                      manualLayout: e.target.checked ? panelizadoConfig.manualLayout : null,
+                                    })
+                                  }
+                                />
+                                <span>Panelizar piezas grandes</span>
+                              </label>
+                              {panelSummary ? (
+                                <span className="rounded-full border bg-background px-2 py-1 text-[11px] text-muted-foreground">
+                                  {panelSummary}
+                                </span>
+                              ) : null}
+                            </div>
                             {panelizadoConfig.enabled === true && (
                               <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                                 <div className="space-y-1">
                                   <LabelConTooltip
-                                    label="Eje de panelizado"
+                                    label="Modo de panelizado"
+                                    tooltip="Automático divide las piezas grandes según reglas. Manual usa el layout de paneles definido por el usuario."
+                                    iconSize="sm"
+                                  />
+                                  <HumanSelect
+                                    value={panelizadoMode}
+                                    onValueChange={(v) =>
+                                      updateNestingPanelizado(paso.id, {
+                                        mode: v === "manual" ? "manual" : "automatic",
+                                        axis: v === "manual" && panelizadoAxis === "automatic" ? "vertical" : panelizadoAxis,
+                                        manualLayout: v === "manual" ? panelizadoConfig.manualLayout ?? null : null,
+                                      })
+                                    }
+                                    options={PANEL_MODE_OPTIONS}
+                                    triggerClassName="min-h-9 text-xs"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <LabelConTooltip
+                                    label="Dirección de panelizado"
                                     tooltip="Define si se divide el ancho o el alto de la pieza cuando no entra en el rollo."
                                     iconSize="sm"
                                   />
                                   <HumanSelect
-                                    value={String(panelizadoConfig.axis ?? "vertical")}
-                                    onValueChange={(v) => updateNestingPanelizado(paso.id, { axis: v || "vertical" })}
-                                    options={PANEL_AXIS_OPTIONS}
+                                    value={panelizadoMode === "manual" && panelizadoAxis === "automatic" ? "vertical" : panelizadoAxis}
+                                    onValueChange={(v) =>
+                                      updateNestingPanelizado(paso.id, {
+                                        axis:
+                                          panelizadoMode === "manual" && v === "automatic"
+                                            ? "vertical"
+                                            : v || "vertical",
+                                        manualLayout: panelizadoMode === "manual" ? null : panelizadoConfig.manualLayout,
+                                      })
+                                    }
+                                    options={panelizadoMode === "manual" ? PANEL_MANUAL_AXIS_OPTIONS : PANEL_AXIS_OPTIONS}
                                     triggerClassName="min-h-9 text-xs"
                                   />
                                 </div>
@@ -2936,8 +3620,8 @@ export function ConfigPasosEditorView({
                                 </div>
                                 <div className="space-y-1">
                                   <LabelConTooltip
-                                    label="Ancho máximo por panel"
-                                    tooltip="Límite físico de cada panel. Si queda en 0, el motor usa el ancho útil del rollo."
+                                    label="Ancho máximo por panel (mm)"
+                                    tooltip="Límite físico de cada panel en milímetros. Si queda en 0, el motor usa el ancho útil del rollo. Valores menores a 300 mm se tratan como 0 para evitar paneles demasiado angostos."
                                     iconSize="sm"
                                   />
                                   <Input
@@ -2983,8 +3667,51 @@ export function ConfigPasosEditorView({
                                     triggerClassName="min-h-9 text-xs"
                                   />
                                 </div>
+                                {panelizadoMode === "manual" ? (
+                                  <div className="space-y-1 md:col-span-3">
+                                    <LabelConTooltip
+                                      label="Layout manual de paneles"
+                                      tooltip="Define los cortes de panel para las medidas fijas o predefinidas del producto."
+                                      iconSize="sm"
+                                    />
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={panelMeasures.length === 0}
+                                        onClick={() => setPanelEditorPasoId(paso.id)}
+                                      >
+                                        Editar paneles
+                                      </Button>
+                                      <span className="text-xs text-muted-foreground">
+                                        {panelManualLayout
+                                          ? `${panelManualLayout.items.length} medida${panelManualLayout.items.length === 1 ? "" : "s"} con layout manual`
+                                          : "Sin layout manual guardado"}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ) : null}
                               </div>
                             )}
+                            <PanelManualEditorSheet
+                              open={panelEditorPasoId === paso.id}
+                              onOpenChange={(open) => setPanelEditorPasoId(open ? paso.id : null)}
+                              measures={panelMeasures}
+                              layout={panelManualLayout}
+                              axis={panelizadoAxis === "horizontal" ? "horizontal" : "vertical"}
+                              overlapMm={resolvedPanelOverlap}
+                              maxPanelWidthMm={resolvedPanelMaxWidth > 0 ? resolvedPanelMaxWidth : null}
+                              printableWidthMm={printableWidthForPanelMm}
+                              widthInterpretation={panelizadoWidthInterpretation}
+                              onApply={(layout) =>
+                                updateNestingPanelizado(paso.id, {
+                                  mode: "manual",
+                                  axis: layout.items[0]?.axis ?? (panelizadoAxis === "horizontal" ? "horizontal" : "vertical"),
+                                  manualLayout: layout,
+                                })
+                              }
+                            />
                           </div>
                         )}
 

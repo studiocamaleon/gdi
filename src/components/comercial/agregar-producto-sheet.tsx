@@ -1983,6 +1983,21 @@ function ApConfigStep({
     () => getSlotsOpcionalesPorPaso(slotsComercialElige),
     [slotsComercialElige],
   );
+  const opcionalesConfigurables = React.useMemo(
+    () =>
+      opcionalesRuta
+        .map((opcional) => ({
+          opcional,
+          slots: slotsMaterialesOpcionalesPorPaso.get(opcional.code) ?? [],
+        }))
+        .filter(
+          (item) =>
+            product.real &&
+            adi.includes(item.opcional.code) &&
+            item.slots.length > 0,
+        ),
+    [adi, opcionalesRuta, product.real, slotsMaterialesOpcionalesPorPaso],
+  );
   const pasosConCandidatas = getPasosConCandidatas(rutaSel);
   const modosColorComercial = getModosColorComercial(rutaSel).filter(
     (modo) =>
@@ -2158,7 +2173,33 @@ function ApConfigStep({
     </div>
   );
 
-  const renderMaterialSelect = (slot: SlotComercialElige) => {
+  const renderOptionList = (
+    name: string,
+    value: string,
+    options: Array<{ value: string; label: string }>,
+    onChange: (value: string) => void,
+  ) => (
+    <div className="ap-option-list" role="radiogroup" aria-label={name}>
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            className={selected ? "active" : ""}
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(option.value)}
+          >
+            <span className="ap-option-dot" aria-hidden="true" />
+            <span>{option.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const renderMaterialSelect = (slot: SlotComercialElige, options?: { showHint?: boolean }) => {
     const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
     const selected = motorConfig.seleccionMaterial[key] || defaultSlotCandidateId(slot) || "";
     const selectedCandidate =
@@ -2314,12 +2355,12 @@ function ApConfigStep({
           </div>
           )
         ) : null}
-        {!useAttributePicker && selectedVariant?.isFallbackLabel ? (
+        {options?.showHint !== false && !useAttributePicker && selectedVariant?.isFallbackLabel ? (
           <p className="ap-spec-hint">
             Esta variante no tiene atributos descriptivos cargados. Código interno:{" "}
             {selectedVariant.sku}
           </p>
-        ) : !useAttributePicker && selectedVariant?.description ? (
+        ) : options?.showHint !== false && !useAttributePicker && selectedVariant?.description ? (
           <p className="ap-spec-hint">{selectedVariant.description}</p>
         ) : null}
       </div>
@@ -2610,38 +2651,32 @@ function ApConfigStep({
                 modo.defaultMode ??
                 normalizeModoColor(modo.options[0]?.value) ??
                 "";
+              const modoOptions = modo.options.map((option) => ({
+                value: normalizeModoColor(option.value) ?? option.value,
+                label: option.label,
+              }));
               return (
-                <div className="ap-spec" key={modo.configPasoId}>
+                <div
+                  className={`ap-spec ${modoOptions.length > 2 ? "ap-spec-wide" : ""}`}
+                  key={modo.configPasoId}
+                >
                   <label>
                     {modosColorVisibles.length === 1
                       ? "Modo de color"
                       : `${humanizeCodigo(modo.familiaCodigo)} · color`}
                   </label>
-                  {modo.options.length <= 2
-                    ? renderSegmentedControl(
+                  {modoOptions.length > 2
+                    ? renderOptionList(
                         "Modo de color",
                         value,
-                        modo.options.map((option) => ({
-                          value: normalizeModoColor(option.value) ?? option.value,
-                          label: option.label,
-                        })),
+                        modoOptions,
                         (nextValue) => setModoColor(modo.configPasoId, nextValue),
                       )
-                    : (
-                        <select
-                          className="ap-native-select"
-                          value={value}
-                          onChange={(event) => setModoColor(modo.configPasoId, event.target.value)}
-                        >
-                          {modo.options.map((option) => {
-                            const optionValue = normalizeModoColor(option.value) ?? option.value;
-                            return (
-                              <option key={optionValue} value={optionValue}>
-                                {option.label}
-                              </option>
-                            );
-                          })}
-                        </select>
+                    : renderSegmentedControl(
+                        "Modo de color",
+                        value,
+                        modoOptions,
+                        (nextValue) => setModoColor(modo.configPasoId, nextValue),
                       )}
                 </div>
               );
@@ -2722,7 +2757,6 @@ function ApConfigStep({
           <div className="ap-adicionales">
             {opcionalesRuta.map((adicional) => {
               const selected = adi.includes(adicional.code);
-              const slotsPaso = slotsMaterialesOpcionalesPorPaso.get(adicional.code) ?? [];
               return (
                 <div key={adicional.code}>
                   <button
@@ -2743,11 +2777,6 @@ function ApConfigStep({
                       </span>
                     ) : null}
                   </button>
-                  {product.real && selected && slotsPaso.length > 0 ? (
-                    <div className="ap-optional-slots">
-                      {slotsPaso.map((slot) => renderMaterialSelect(slot))}
-                    </div>
-                  ) : null}
                 </div>
               );
             })}
@@ -2760,6 +2789,31 @@ function ApConfigStep({
             </div>
           </div>
         )}
+        {opcionalesConfigurables.length > 0 ? (
+          <div className="ap-optional-configs">
+            <div className="ap-optional-config-head">
+              <div className="ttl">Configurar opcionales activados</div>
+              <div className="sub">
+                Completá los datos necesarios para cotizar los opcionales seleccionados.
+              </div>
+            </div>
+            <div className="ap-optional-config-grid">
+              {opcionalesConfigurables.map(({ opcional, slots }) => (
+                <div className="ap-optional-config-card" key={opcional.code}>
+                  <div className="ap-optional-config-title">
+                    <span className="cb">
+                      <CheckIcon />
+                    </span>
+                    <span>{opcional.name}</span>
+                  </div>
+                  <div className="ap-optional-config-fields">
+                    {slots.map((slot) => renderMaterialSelect(slot, { showHint: false }))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="ap-config-section">

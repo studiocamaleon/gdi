@@ -716,7 +716,7 @@ async function seedRutasYProductos(
         perfilM1Id: rolandPerfil.id,
         paramsPasoJson: {
           nestingConfig: {
-            algorithm: 'shelf-rollo',
+            algorithm: 'auto',
             allowRotation: true,
             separationHMm: 5,
             separationVMm: 5,
@@ -754,15 +754,6 @@ async function seedRutasYProductos(
             allowRotation: true,
             separationHMm: 5,
             separationVMm: 5,
-            panelizado: {
-              enabled: false,
-              mode: 'automatic',
-              axis: 'vertical',
-              overlapMm: 20,
-              maxPanelWidthMm: 0,
-              distribution: 'equilibrada',
-              widthInterpretation: 'total',
-            },
             costing: { strategy: 'simple' },
           },
         },

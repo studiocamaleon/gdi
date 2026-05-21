@@ -23,9 +23,16 @@ import {
   TriangleAlertIcon,
   UserIcon,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import type { ClienteDetalle } from "@/lib/clientes";
 import type { ProductoListItem } from "@/lib/productos-servicios";
+import {
+  cotizar,
+  recotizarCotizacionItem,
+  type CotizarResponse,
+  type NestingViewerInput,
+} from "@/lib/productos-servicios-api";
 import {
   calcularCostoTotal,
   calcularResumen,
@@ -53,6 +60,27 @@ type CosteoMotor = NonNullable<PropuestaItem["costeo"]>;
 type PasoCosteo = CosteoMotor["pasos"][number];
 type MaterialCosteo = NonNullable<PasoCosteo["materiales"]>[number];
 type CargoPasoCosteo = NonNullable<PasoCosteo["cargosDirectosPaso"]>[number];
+type CotizacionExitosa = NonNullable<CotizarResponse["cotizacion"]>;
+type PanelEditorPaso = PasoCosteo & { nestingResult: NestingViewerInput };
+type PanelManualLayout = {
+  items: PanelLayoutItem[];
+};
+type PanelLayoutItem = {
+  sourcePieceId: string;
+  pieceWidthMm: number;
+  pieceHeightMm: number;
+  axis: "vertical" | "horizontal";
+  panels: PanelLayoutPanel[];
+};
+type PanelLayoutPanel = {
+  panelIndex: number;
+  usefulWidthMm: number;
+  usefulHeightMm: number;
+  overlapStartMm: number;
+  overlapEndMm: number;
+  finalWidthMm: number;
+  finalHeightMm: number;
+};
 
 const tipoMap: Record<TipoPropuesta, "orden" | "presupuesto"> = {
   orden_trabajo: "orden",
@@ -63,9 +91,340 @@ function fromOrdenTipo(value: "orden" | "presupuesto"): TipoPropuesta {
   return value === "orden" ? "orden_trabajo" : "presupuesto";
 }
 
+function getCotizacionNeto(cotizacion: CotizacionExitosa) {
+  return (
+    cotizacion.desglosePrecio?.precioNetoTotal ??
+    cotizacion.precio?.precioTotal ??
+    cotizacion.costos.total
+  );
+}
+
+function getCotizacionTotal(cotizacion: CotizacionExitosa) {
+  return (
+    cotizacion.desglosePrecio?.precioBrutoTotal ??
+    cotizacion.precio?.precioTotal ??
+    cotizacion.costos.total
+  );
+}
+
+function getCotizacionUnitario(cotizacion: CotizacionExitosa) {
+  return (
+    cotizacion.desglosePrecio?.precioBrutoUnitario ??
+    cotizacion.precio?.precioUnitario ??
+    cotizacion.costos.unitario
+  );
+}
+
+function getCotizacionImpuestos(cotizacion: CotizacionExitosa) {
+  return cotizacion.desglosePrecio
+    ? cotizacion.desglosePrecio.precioBrutoTotal -
+        cotizacion.desglosePrecio.precioNetoTotal
+    : 0;
+}
+
+function getCotizacionPasos(cotizacion: CotizacionExitosa) {
+  return cotizacion.pasos
+    .filter((paso) => paso.activado)
+    .map((paso) => ({
+      nombre: humanizeCodigo(paso.familiaCodigo),
+      centroCosto: paso.tiempo ? "Producción" : "Proceso",
+      minutos: paso.tiempo?.totalMin ?? 0,
+      origen: "base" as const,
+    }));
+}
+
+function applyCotizacionToItem(
+  item: PropuestaItem,
+  cotizacion: CotizacionExitosa,
+  jobContext: Record<string, unknown>,
+): PropuestaItem {
+  const subtotal = getCotizacionNeto(cotizacion);
+  const impuestoMonto = getCotizacionImpuestos(cotizacion);
+  const total = getCotizacionTotal(cotizacion);
+  const impuestoPorcentaje = subtotal > 0 ? (impuestoMonto / subtotal) * 100 : 0;
+
+  return {
+    ...item,
+    cantidad:
+      cotizacion.cantidadComercialPricing ??
+      cotizacion.cantidadEfectiva ??
+      item.cantidad,
+    precioUnitario: getCotizacionUnitario(cotizacion),
+    subtotal,
+    impuestoMonto,
+    impuestoPorcentaje,
+    total,
+    pasos: getCotizacionPasos(cotizacion),
+    costos: {
+      materiales: Math.round(cotizacion.costos.materialesTotal),
+      produccion: Math.round(cotizacion.costos.tiempoTotal),
+      terminacion: 0,
+      terceros: Math.round(cotizacion.costos.cargosDirectosTotal),
+    },
+    costeo: {
+      origen: "motor",
+      cantidadEfectiva: cotizacion.cantidadEfectiva,
+      cantidadPedida: cotizacion.cantidadPedida,
+      cantidadComercialPricing: cotizacion.cantidadComercialPricing,
+      unidadComercialPricing: cotizacion.unidadComercialPricing,
+      costos: cotizacion.costos,
+      pasos: cotizacion.pasos,
+      cargosDirectosCotizacion: cotizacion.cargosDirectosCotizacion,
+      desglosePrecio: cotizacion.desglosePrecio,
+    },
+    jobContext,
+    rutaAlternativaId: cotizacion.rutaAlternativaId ?? item.rutaAlternativaId,
+  };
+}
+
 function parseLocalDate(value: string) {
   const date = new Date(`${value}T12:00:00`);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isPanelEditableStep(paso: PasoCosteo): paso is PanelEditorPaso {
+  const nesting = paso.nestingResult;
+  return (
+    paso.familiaCodigo === "impresion_por_area" &&
+    Boolean(nesting?.visualConfig?.panelizado?.enabled) &&
+    (nesting?.algorithm === "shelf-rollo" ||
+      nesting?.algorithm === "maxrects-rollo") &&
+    nesting.placements.some((placement) => (placement.panelCount ?? 1) > 1)
+  );
+}
+
+function getSourcePiecesFromJobContext(
+  jobContext: Record<string, unknown> | undefined,
+) {
+  const piezas = Array.isArray(jobContext?.piezas)
+    ? (jobContext.piezas as Array<{
+        cantidad?: unknown;
+        anchoMm?: unknown;
+        altoMm?: unknown;
+      }>)
+    : [];
+  return piezas.flatMap((pieza, medidaIndex) => {
+    const cantidad = Math.max(1, Number(pieza.cantidad ?? 0) || 0);
+    const anchoMm = Number(pieza.anchoMm ?? 0);
+    const altoMm = Number(pieza.altoMm ?? 0);
+    return Array.from({ length: cantidad }, (_, copyIndex) => ({
+      sourcePieceId: `piece-${medidaIndex}-${copyIndex}`,
+      pieceWidthMm: anchoMm,
+      pieceHeightMm: altoMm,
+    }));
+  });
+}
+
+function getPanelAxis(
+  nesting: NestingViewerInput,
+): "vertical" | "horizontal" {
+  const placementAxis = nesting.placements.find((placement) => placement.panelAxis)
+    ?.panelAxis;
+  if (placementAxis === "horizontal") return "horizontal";
+  if (placementAxis === "vertical") return "vertical";
+  return nesting.visualConfig?.panelizado?.axis === "horizontal"
+    ? "horizontal"
+    : "vertical";
+}
+
+function inferSourcePieceId(pieceId: string) {
+  const panelMatch = pieceId.match(/^(piece-\d+-\d+)(?:-panel-\d+)?$/);
+  return panelMatch?.[1] ?? pieceId;
+}
+
+function buildPanelLayoutFromNesting(
+  item: PropuestaItem,
+  nesting: NestingViewerInput,
+): PanelManualLayout | null {
+  const sourcePieces = getSourcePiecesFromJobContext(item.jobContext);
+  if (!sourcePieces.length) return null;
+  const sourceById = new Map(sourcePieces.map((piece) => [piece.sourcePieceId, piece]));
+  const placementsBySource = new Map<string, NestingViewerInput["placements"]>();
+  for (const placement of nesting.placements) {
+    const sourcePieceId = inferSourcePieceId(placement.pieceId);
+    const current = placementsBySource.get(sourcePieceId) ?? [];
+    current.push(placement);
+    placementsBySource.set(sourcePieceId, current);
+  }
+  const fallbackAxis = getPanelAxis(nesting);
+
+  const items = sourcePieces.map((sourcePiece) => {
+    const placements = (placementsBySource.get(sourcePiece.sourcePieceId) ?? [])
+      .slice()
+      .sort((a, b) => (a.panelIndex ?? 1) - (b.panelIndex ?? 1));
+    const axis =
+      placements.find((placement) => placement.panelAxis)?.panelAxis ??
+      fallbackAxis;
+    const panels =
+      placements.length > 0
+        ? placements.map((placement, index) =>
+            buildPanelFromPlacement(sourcePiece, placement, axis, index, placements.length),
+          )
+        : [buildFullPanel(sourcePiece, axis)];
+
+    return {
+      sourcePieceId: sourcePiece.sourcePieceId,
+      pieceWidthMm: sourcePiece.pieceWidthMm,
+      pieceHeightMm: sourcePiece.pieceHeightMm,
+      axis,
+      panels,
+    };
+  });
+
+  return { items };
+}
+
+function buildFullPanel(
+  sourcePiece: { pieceWidthMm: number; pieceHeightMm: number },
+  axis: "vertical" | "horizontal",
+): PanelLayoutPanel {
+  return {
+    panelIndex: 1,
+    usefulWidthMm: sourcePiece.pieceWidthMm,
+    usefulHeightMm: sourcePiece.pieceHeightMm,
+    overlapStartMm: 0,
+    overlapEndMm: 0,
+    finalWidthMm: sourcePiece.pieceWidthMm,
+    finalHeightMm: sourcePiece.pieceHeightMm,
+  };
+}
+
+function buildPanelFromPlacement(
+  sourcePiece: { pieceWidthMm: number; pieceHeightMm: number },
+  placement: NestingViewerInput["placements"][number],
+  axis: "vertical" | "horizontal",
+  index: number,
+  total: number,
+): PanelLayoutPanel {
+  const overlapStartMm = Number(placement.overlapStartMm ?? 0);
+  const overlapEndMm = Number(placement.overlapEndMm ?? 0);
+  const usefulWidthMm =
+    axis === "vertical"
+      ? Number(placement.usefulWidthMm ?? placement.widthMm - overlapStartMm - overlapEndMm)
+      : sourcePiece.pieceWidthMm;
+  const usefulHeightMm =
+    axis === "horizontal"
+      ? Number(placement.usefulHeightMm ?? placement.heightMm - overlapStartMm - overlapEndMm)
+      : sourcePiece.pieceHeightMm;
+
+  return {
+    panelIndex: placement.panelIndex ?? index + 1,
+    usefulWidthMm: Math.max(1, Math.round(usefulWidthMm)),
+    usefulHeightMm: Math.max(1, Math.round(usefulHeightMm)),
+    overlapStartMm,
+    overlapEndMm,
+    finalWidthMm:
+      axis === "vertical"
+        ? Math.max(1, Math.round(usefulWidthMm + overlapStartMm + overlapEndMm))
+        : sourcePiece.pieceWidthMm,
+    finalHeightMm:
+      axis === "horizontal"
+        ? Math.max(1, Math.round(usefulHeightMm + overlapStartMm + overlapEndMm))
+        : sourcePiece.pieceHeightMm,
+  };
+}
+
+function updateManualLayoutItemSizes(
+  item: PanelLayoutItem,
+  sizes: number[],
+  overlapMm: number,
+): PanelLayoutItem {
+  const panels = sizes.map((size, index) => {
+    const overlapStartMm = index === 0 ? 0 : overlapMm;
+    const overlapEndMm = index === sizes.length - 1 ? 0 : overlapMm;
+    return {
+      panelIndex: index + 1,
+      usefulWidthMm: item.axis === "vertical" ? size : item.pieceWidthMm,
+      usefulHeightMm: item.axis === "horizontal" ? size : item.pieceHeightMm,
+      overlapStartMm,
+      overlapEndMm,
+      finalWidthMm:
+        item.axis === "vertical"
+          ? size + overlapStartMm + overlapEndMm
+          : item.pieceWidthMm,
+      finalHeightMm:
+        item.axis === "horizontal"
+          ? size + overlapStartMm + overlapEndMm
+          : item.pieceHeightMm,
+    };
+  });
+  return { ...item, panels };
+}
+
+function removePanelRuntimeOverride(
+  jobContext: Record<string, unknown>,
+  configPasoId: string,
+) {
+  const next = structuredClone(jobContext) as Record<string, unknown>;
+  const runtime =
+    typeof next.configPasoRuntime === "object" &&
+    next.configPasoRuntime !== null &&
+    !Array.isArray(next.configPasoRuntime)
+      ? ({ ...(next.configPasoRuntime as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  const stepRuntime =
+    typeof runtime[configPasoId] === "object" &&
+    runtime[configPasoId] !== null &&
+    !Array.isArray(runtime[configPasoId])
+      ? ({ ...(runtime[configPasoId] as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  const nestingConfig =
+    typeof stepRuntime.nestingConfig === "object" &&
+    stepRuntime.nestingConfig !== null &&
+    !Array.isArray(stepRuntime.nestingConfig)
+      ? ({ ...(stepRuntime.nestingConfig as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  delete nestingConfig.panelizado;
+  stepRuntime.nestingConfig = nestingConfig;
+  runtime[configPasoId] = stepRuntime;
+  next.configPasoRuntime = runtime;
+  return next;
+}
+
+function applyPanelRuntimeOverride(args: {
+  jobContext: Record<string, unknown>;
+  configPasoId: string;
+  nesting: NestingViewerInput;
+  layout: PanelManualLayout;
+}) {
+  const next = structuredClone(args.jobContext) as Record<string, unknown>;
+  const runtime =
+    typeof next.configPasoRuntime === "object" &&
+    next.configPasoRuntime !== null &&
+    !Array.isArray(next.configPasoRuntime)
+      ? ({ ...(next.configPasoRuntime as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  const stepRuntime =
+    typeof runtime[args.configPasoId] === "object" &&
+    runtime[args.configPasoId] !== null &&
+    !Array.isArray(runtime[args.configPasoId])
+      ? ({ ...(runtime[args.configPasoId] as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  const nestingConfig =
+    typeof stepRuntime.nestingConfig === "object" &&
+    stepRuntime.nestingConfig !== null &&
+    !Array.isArray(stepRuntime.nestingConfig)
+      ? ({ ...(stepRuntime.nestingConfig as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  const panelizado = args.nesting.visualConfig?.panelizado;
+  const axis = args.layout.items.find((item) => item.panels.length > 1)?.axis ?? "vertical";
+  nestingConfig.panelizado = {
+    enabled: true,
+    mode: "manual",
+    axis,
+    overlapMm: panelizado?.overlapMm ?? 0,
+    maxPanelWidthMm:
+      panelizado?.maxPanelWidthMm ??
+      args.nesting.visualConfig?.usableArea.widthMm ??
+      null,
+    distribution: panelizado?.distribution ?? "equilibrada",
+    widthInterpretation: panelizado?.widthInterpretation ?? "total",
+    manualLayout: args.layout,
+  };
+  stepRuntime.nestingConfig = nestingConfig;
+  runtime[args.configPasoId] = stepRuntime;
+  next.configPasoRuntime = runtime;
+  return next;
 }
 
 function formatPlazoEntrega(fechaEstimada: string, fechaCreacion: string) {
@@ -239,6 +598,24 @@ function humanizeCodigo(value: string) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function nestingPasoKey(paso: PasoCosteo) {
+  return `${paso.rutaPasoOrden}-${paso.familiaCodigo}-${paso.nestingResult?.algorithm ?? "nesting"}`;
+}
+
+function nestingTabLabel(result: NestingViewerInput | undefined) {
+  const algorithm = result?.algorithm;
+  const kind = result?.substrates[0]?.kind;
+  if (algorithm === "grid-2d-single") return "Acomodado en pliego";
+  if (algorithm === "grid-2d-multi") return "Acomodado multi-placa";
+  if (algorithm === "packingsolver-rectangle") return "Acomodado en placa";
+  if (algorithm === "maxrects-rollo") return "Acomodado en rollo";
+  if (algorithm === "shelf-rollo") return "Acomodado en rollo";
+  if (kind === "sheet") return "Acomodado en pliego";
+  if (kind === "roll") return "Acomodado en rollo";
+  if (kind === "board") return "Acomodado en placa";
+  return "Acomodado";
+}
+
 function getCostBuckets(item: PropuestaItem) {
   if (item.costeo?.origen === "motor") {
     return [
@@ -362,9 +739,11 @@ function CargosPasoList({ cargos }: { cargos: CargoPasoCosteo[] }) {
 function ProduccionItemView({
   item,
   calculoPendiente,
+  onEditPanels,
 }: {
   item: PropuestaItem;
   calculoPendiente: boolean;
+  onEditPanels: (paso: PanelEditorPaso) => void;
 }) {
   const costeoMotor = item.costeo?.origen === "motor" ? item.costeo : null;
   const pasosCosteoActivos = costeoMotor
@@ -374,8 +753,24 @@ function ProduccionItemView({
     ? pasosCosteoActivos
     : item.pasos.filter((paso) => paso.origen !== "opcional");
   const pasosConNesting = pasosCosteoActivos.filter(
-    (paso) => paso.nestingResult,
+    (paso): paso is PanelEditorPaso => Boolean(paso.nestingResult),
   );
+  const nestingTabs = pasosConNesting.map((paso, index) => ({
+    key: nestingPasoKey(paso),
+    label: nestingTabLabel(paso.nestingResult),
+    index: index + 1,
+    paso,
+  }));
+  const [activeNestingKey, setActiveNestingKey] = React.useState("");
+  const activeNestingTab =
+    nestingTabs.find((tab) => tab.key === activeNestingKey) ?? nestingTabs[0] ?? null;
+
+  React.useEffect(() => {
+    if (nestingTabs.length === 0) return;
+    if (!nestingTabs.some((tab) => tab.key === activeNestingKey)) {
+      setActiveNestingKey(nestingTabs[0]?.key ?? "");
+    }
+  }, [activeNestingKey, nestingTabs]);
 
   if (calculoPendiente) {
     return (
@@ -444,18 +839,53 @@ function ProduccionItemView({
             </div>
           </div>
           <div className="production-nestings">
-            {pasosConNesting.map((paso) => (
+            {nestingTabs.length > 1 ? (
+              <div className="production-nesting-tabs" role="tablist" aria-label="Nesting del item">
+                {nestingTabs.map((tab) => {
+                  const selected = tab.key === activeNestingTab?.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      className={selected ? "on" : ""}
+                      role="tab"
+                      aria-selected={selected}
+                      onClick={() => setActiveNestingKey(tab.key)}
+                    >
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+            {activeNestingTab ? (
               <div
                 className="production-nesting"
-                key={`${paso.rutaPasoOrden}-${paso.familiaCodigo}`}
+                key={activeNestingTab.key}
               >
+                {isPanelEditableStep(activeNestingTab.paso) ? (
+                  <div className="mb-3 flex justify-end">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => onEditPanels(activeNestingTab.paso)}
+                    >
+                      <Edit3Icon />
+                      Editar paneles
+                    </button>
+                  </div>
+                ) : null}
                 <NestingViewer
-                  result={paso.nestingResult!}
-                  costingDetails={paso.materiales ?? []}
-                  maxPx={paso.nestingResult?.substrates[0]?.kind === "sheet" ? 420 : 560}
+                  result={activeNestingTab.paso.nestingResult!}
+                  costingDetails={activeNestingTab.paso.materiales ?? []}
+                  maxPx={
+                    activeNestingTab.paso.nestingResult?.substrates[0]?.kind === "sheet"
+                      ? 420
+                      : 560
+                  }
                 />
               </div>
-            ))}
+            ) : null}
           </div>
         </div>
       ) : (
@@ -469,6 +899,285 @@ function ProduccionItemView({
       )}
     </div>
   );
+}
+
+function PanelesManualEditor({
+  item,
+  paso,
+  saving,
+  onClose,
+  onSave,
+  onRestoreAutomatic,
+}: {
+  item: PropuestaItem;
+  paso: PanelEditorPaso;
+  saving: boolean;
+  onClose: () => void;
+  onSave: (layout: PanelManualLayout) => void;
+  onRestoreAutomatic: () => void;
+}) {
+  const baseLayout = React.useMemo(
+    () => buildPanelLayoutFromNesting(item, paso.nestingResult),
+    [item, paso],
+  );
+  const editableSourceIds = React.useMemo(
+    () =>
+      (baseLayout?.items ?? [])
+        .filter((layoutItem) => layoutItem.panels.length > 1)
+        .map((layoutItem) => layoutItem.sourcePieceId),
+    [baseLayout],
+  );
+  const [layout, setLayout] = React.useState<PanelManualLayout | null>(
+    baseLayout,
+  );
+  const [selectedId, setSelectedId] = React.useState(
+    editableSourceIds[0] ?? "",
+  );
+  const barRef = React.useRef<HTMLDivElement | null>(null);
+  const dragIndex = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    setLayout(baseLayout);
+    setSelectedId(editableSourceIds[0] ?? "");
+  }, [baseLayout, editableSourceIds]);
+
+  const selected = layout?.items.find((layoutItem) => layoutItem.sourcePieceId === selectedId);
+  const panelizado = paso.nestingResult.visualConfig?.panelizado;
+  const overlapMm = Number(panelizado?.overlapMm ?? 0);
+  const printableLimit =
+    paso.nestingResult.visualConfig?.usableArea.widthMm ??
+    paso.nestingResult.substrates.find((sub) => sub.kind === "roll")?.widthMm ??
+    Number.POSITIVE_INFINITY;
+  const sizes =
+    selected?.panels.map((panel) =>
+      selected.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm,
+    ) ?? [];
+  const totalAxis =
+    selected?.axis === "horizontal"
+      ? selected.pieceHeightMm
+      : selected?.pieceWidthMm ?? 0;
+  const invalidMessage = selected
+    ? getManualLayoutInvalidMessage(selected, printableLimit)
+    : "No hay piezas panelizadas editables.";
+
+  function updateSizes(nextSizes: number[]) {
+    if (!layout || !selected) return;
+    setLayout({
+      items: layout.items.map((layoutItem) =>
+        layoutItem.sourcePieceId === selected.sourcePieceId
+          ? updateManualLayoutItemSizes(layoutItem, nextSizes, overlapMm)
+          : layoutItem,
+      ),
+    });
+  }
+
+  function moveBoundary(clientX: number) {
+    if (!barRef.current || !selected || dragIndex.current == null) return;
+    const rect = barRef.current.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const boundaryMm = Math.round(ratio * totalAxis);
+    const index = dragIndex.current;
+    const before = sizes.slice(0, index).reduce((acc, size) => acc + size, 0);
+    const after = sizes.slice(index + 2).reduce((acc, size) => acc + size, 0);
+    const minPanelMm = 20;
+    const minBoundary = before + minPanelMm;
+    const maxBoundary = totalAxis - after - minPanelMm;
+    const clamped = Math.min(maxBoundary, Math.max(minBoundary, boundaryMm));
+    const next = [...sizes];
+    next[index] = clamped - before;
+    next[index + 1] = totalAxis - after - clamped;
+    updateSizes(next);
+  }
+
+  React.useEffect(() => {
+    function onPointerMove(event: PointerEvent) {
+      if (dragIndex.current == null) return;
+      moveBoundary(event.clientX);
+    }
+    function onPointerUp() {
+      dragIndex.current = null;
+    }
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+  });
+
+  if (!layout) {
+    return (
+      <PanelEditorShell title="Editar paneles" onClose={onClose}>
+        <div className="op-empty">
+          <div className="ttl">No se pudo reconstruir el panelizado</div>
+          <div className="sub">El item no tiene piezas suficientes para armar un layout manual.</div>
+        </div>
+      </PanelEditorShell>
+    );
+  }
+
+  return (
+    <PanelEditorShell title="Editar paneles" onClose={onClose}>
+      <div className="panel-editor-grid">
+        {editableSourceIds.length > 1 ? (
+          <div className="panel-editor-list">
+            {editableSourceIds.map((sourceId, index) => (
+              <button
+                type="button"
+                key={sourceId}
+                className={sourceId === selectedId ? "on" : ""}
+                onClick={() => setSelectedId(sourceId)}
+              >
+                Pieza {index + 1}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="panel-editor-stage">
+          <div className="panel-editor-meta">
+            <strong>
+              {selected
+                ? `${formatMmAsCm(selected.pieceWidthMm)} x ${formatMmAsCm(
+                    selected.pieceHeightMm,
+                  )} cm`
+                : "Sin pieza seleccionada"}
+            </strong>
+            <span>
+              {selected?.axis === "horizontal" ? "Paneles horizontales" : "Paneles verticales"}
+            </span>
+          </div>
+
+          <div className="panel-bar" ref={barRef}>
+            {selected?.panels.map((panel, index) => {
+              const size = selected.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm;
+              const pct = totalAxis > 0 ? (size / totalAxis) * 100 : 0;
+              return (
+                <div
+                  className="panel-segment"
+                  key={panel.panelIndex}
+                  style={{ width: `${pct}%` }}
+                >
+                  <span>P-{String(index + 1).padStart(2, "0")}</span>
+                  <strong>
+                    {selected.axis === "vertical"
+                      ? `${formatMmAsCm(panel.usefulWidthMm)} x ${formatMmAsCm(panel.usefulHeightMm)} cm`
+                      : `${formatMmAsCm(panel.usefulWidthMm)} x ${formatMmAsCm(panel.usefulHeightMm)} cm`}
+                  </strong>
+                  {index < selected.panels.length - 1 ? (
+                    <button
+                      type="button"
+                      className="panel-handle"
+                      aria-label={`Mover división ${index + 1}`}
+                      onPointerDown={(event) => {
+                        event.preventDefault();
+                        dragIndex.current = index;
+                        event.currentTarget.setPointerCapture?.(event.pointerId);
+                      }}
+                    />
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="panel-editor-table">
+            {selected?.panels.map((panel) => (
+              <div key={panel.panelIndex}>
+                <span>Panel {panel.panelIndex}</span>
+                <strong>
+                  {formatMmAsCm(panel.finalWidthMm)} x {formatMmAsCm(panel.finalHeightMm)} cm
+                </strong>
+              </div>
+            ))}
+          </div>
+
+          {invalidMessage ? (
+            <div className="panel-editor-error">{invalidMessage}</div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="panel-editor-actions">
+        <button type="button" className="btn" onClick={onClose} disabled={saving}>
+          Cancelar
+        </button>
+        <button
+          type="button"
+          className="btn"
+          onClick={onRestoreAutomatic}
+          disabled={saving}
+        >
+          Restaurar automático
+        </button>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => onSave(layout)}
+          disabled={saving || Boolean(invalidMessage)}
+        >
+          {saving ? "Recotizando..." : "Guardar y recotizar"}
+        </button>
+      </div>
+    </PanelEditorShell>
+  );
+}
+
+function PanelEditorShell({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div className="panel-editor-overlay" role="dialog" aria-modal="true">
+      <div className="panel-editor-modal">
+        <div className="panel-editor-head">
+          <div>
+            <div className="cost-title">Panelizado manual</div>
+            <h2>{title}</h2>
+          </div>
+          <button type="button" className="btn" onClick={onClose}>
+            Cerrar
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function getManualLayoutInvalidMessage(
+  item: PanelLayoutItem,
+  printableLimit: number,
+) {
+  const usefulTotal = item.panels.reduce(
+    (acc, panel) =>
+      acc + (item.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm),
+    0,
+  );
+  const expected = item.axis === "vertical" ? item.pieceWidthMm : item.pieceHeightMm;
+  if (Math.abs(usefulTotal - expected) > 1) {
+    return "La suma de paneles no coincide con la medida original.";
+  }
+  const oversized = item.panels.some((panel) =>
+    item.axis === "vertical"
+      ? panel.finalWidthMm > printableLimit
+      : panel.finalHeightMm > printableLimit,
+  );
+  if (oversized) {
+    return "Hay un panel que supera el ancho imprimible del rollo.";
+  }
+  return "";
+}
+
+function formatMmAsCm(value: number) {
+  return new Intl.NumberFormat("es-AR", {
+    maximumFractionDigits: 1,
+  }).format(value / 10);
 }
 
 function PasoCostDetail({ paso }: { paso: PasoCosteo }) {
@@ -711,6 +1420,7 @@ function ProductRow({
   onToggle,
   onRemove,
   onEdit,
+  onEditPanels,
   onChangeFechaEntrega,
   fechaEstimada,
 }: {
@@ -720,6 +1430,7 @@ function ProductRow({
   onToggle: () => void;
   onRemove: () => void;
   onEdit: () => void;
+  onEditPanels: (item: PropuestaItem, paso: PanelEditorPaso) => void;
   onChangeFechaEntrega: (fechaEntrega: string) => void;
   fechaEstimada: string;
 }) {
@@ -885,6 +1596,7 @@ function ProductRow({
             <ProduccionItemView
               item={item}
               calculoPendiente={calculoPendiente}
+              onEditPanels={(paso) => onEditPanels(item, paso)}
             />
           ) : null}
         </div>
@@ -1083,6 +1795,11 @@ export function PropuestaFicha({
   );
   const [addOpen, setAddOpen] = React.useState(false);
   const [editingItem, setEditingItem] = React.useState<PropuestaItem | null>(null);
+  const [panelEditor, setPanelEditor] = React.useState<{
+    item: PropuestaItem;
+    paso: PanelEditorPaso;
+  } | null>(null);
+  const [panelSaving, setPanelSaving] = React.useState(false);
   const [clienteId, setClienteId] = React.useState("");
   const [canalVenta, setCanalVenta] = React.useState("mostrador");
   const [fechaEstimada, setFechaEstimada] = React.useState(offsetDate(7));
@@ -1107,6 +1824,82 @@ export function PropuestaFicha({
       }
       return next;
     });
+  }
+
+  async function recotizarPaneles(
+    item: PropuestaItem,
+    paso: PanelEditorPaso,
+    layout: PanelManualLayout | null,
+  ) {
+    if (!item.jobContext || !item.motorCodigo) return;
+    const configPasoId = paso.configPasoId;
+    if (!configPasoId) {
+      toast.error("No se pudo identificar el paso a recotizar.");
+      return;
+    }
+
+    const nextJobContext = layout
+      ? applyPanelRuntimeOverride({
+          jobContext: item.jobContext,
+          configPasoId,
+          nesting: paso.nestingResult,
+          layout,
+        })
+      : removePanelRuntimeOverride(item.jobContext, configPasoId);
+
+    setPanelSaving(true);
+    try {
+      const request = {
+        rutaAlternativaId: item.rutaAlternativaId ?? null,
+        jobContext: nextJobContext as never,
+        periodo: "2026-03",
+      };
+      const response = item.cotizacionItemId
+        ? await recotizarCotizacionItem(item.cotizacionItemId, request)
+        : {
+            result: await cotizar({
+              productoId: item.motorCodigo,
+              ...request,
+            }),
+          };
+      if (!response.result.exitoso || !response.result.cotizacion) {
+        toast.error(
+          response.result.errores[0]?.mensaje ??
+            "No se pudo recotizar el panelizado.",
+        );
+        return;
+      }
+      const updatedItem = applyCotizacionToItem(
+        item,
+        response.result.cotizacion,
+        nextJobContext,
+      );
+      setItems((current) =>
+        current.map((candidate) =>
+          candidate.id === item.id
+            ? {
+                ...updatedItem,
+                cotizacionItemId:
+                  response.cotizacionItemId ?? item.cotizacionItemId,
+              }
+            : candidate,
+        ),
+      );
+      setPanelEditor(null);
+      toast.success(
+        layout
+          ? "Paneles actualizados y recotizados."
+          : "Panelizado automático restaurado.",
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo recotizar el panelizado.",
+      );
+    } finally {
+      setPanelSaving(false);
+    }
   }
 
   return (
@@ -1252,6 +2045,9 @@ export function PropuestaFicha({
                     setEditingItem(item);
                     setAddOpen(true);
                   }}
+                  onEditPanels={(targetItem, paso) => {
+                    setPanelEditor({ item: targetItem, paso });
+                  }}
                   onChangeFechaEntrega={(fechaEntrega) => {
                     setItems((current) =>
                       current.map((candidate) =>
@@ -1339,6 +2135,22 @@ export function PropuestaFicha({
           setEditingItem(null);
         }}
       />
+      {panelEditor ? (
+        <PanelesManualEditor
+          item={panelEditor.item}
+          paso={panelEditor.paso}
+          saving={panelSaving}
+          onClose={() => {
+            if (!panelSaving) setPanelEditor(null);
+          }}
+          onSave={(layout) =>
+            void recotizarPaneles(panelEditor.item, panelEditor.paso, layout)
+          }
+          onRestoreAutomatic={() =>
+            void recotizarPaneles(panelEditor.item, panelEditor.paso, null)
+          }
+        />
+      ) : null}
     </section>
   );
 }

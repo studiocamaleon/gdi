@@ -2197,6 +2197,285 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(r!.placements.filter((p) => p.panelIndex == null)).toHaveLength(2);
   });
 
+  it('shelf-rollo con dirección automática resuelve un eje concreto para panelizar', () => {
+    const fakePaso = {
+      rutaPasoId: 'rp-rollo-auto',
+      rutaPasoOrden: 1,
+      familiaCodigo: 'impresion_por_area',
+      configPasoId: 'cp-rollo-auto',
+      modoActivacion: 'OBLIGATORIO',
+      condicionActivacionJson: null,
+      modoTiempo: 'T-3',
+      mecanismoCantidad: 'CALCULADO_POR_PASO',
+      mecanismoCantidadConfigJson: null,
+      multiplicadoresActivos: [],
+      paramsPasoJson: {
+        nestingConfig: {
+          algorithm: 'shelf-rollo',
+          allowRotation: false,
+          separationHMm: 5,
+          separationVMm: 5,
+          panelizado: {
+            enabled: true,
+            mode: 'automatic',
+            axis: 'automatic',
+            overlapMm: 20,
+            maxPanelWidthMm: 0,
+            distribution: 'equilibrada',
+            widthInterpretation: 'total',
+          },
+        },
+      },
+      maquinaM1Id: null,
+      perfilM1Id: null,
+      setupOverrideMin: null,
+      cleanupOverrideMin: null,
+      tiempoFijoOverrideMin: null,
+      slots: [],
+      cargosDirectosPaso: [],
+      maquina: {
+        id: 'm-rollo-auto',
+        codigo: 'ROLLO',
+        nombre: 'Rollo',
+        plantilla: 'IMPRESORA_GRAN_FORMATO_POR_AREA',
+        parametrosTecnicosJson: {
+          geometria: 'ROLLO',
+          anchoMaxRolloMm: 1370,
+          margenesNoImprimiblesMm: { izq: 5, der: 5, sup: 10, inf: 10 },
+        },
+      },
+    };
+    const r = runNestingForPaso(
+      fakePaso as never,
+      {
+        cantidad: 1,
+        piezas: [{ cantidad: 1, anchoMm: 1800, altoMm: 800 }],
+      },
+      { id: 'vinilo-137', atributosVarianteJson: { anchoMm: 1370 } },
+    );
+
+    expect(r).not.toBeNull();
+    expect(r!.visualConfig?.panelizado?.enabled).toBe(true);
+    expect(['vertical', 'horizontal']).toContain(
+      r!.visualConfig?.panelizado?.axis,
+    );
+    expect(r!.placements.filter((p) => p.panelIndex != null).length).toBe(2);
+  });
+
+  it('shelf-rollo con dirección automática no paneliza piezas que entran enteras', () => {
+    const fakePaso = {
+      rutaPasoId: 'rp-rollo-auto-mixto',
+      rutaPasoOrden: 1,
+      familiaCodigo: 'impresion_por_area',
+      configPasoId: 'cp-rollo-auto-mixto',
+      modoActivacion: 'OBLIGATORIO',
+      condicionActivacionJson: null,
+      modoTiempo: 'T-3',
+      mecanismoCantidad: 'CALCULADO_POR_PASO',
+      mecanismoCantidadConfigJson: null,
+      multiplicadoresActivos: [],
+      paramsPasoJson: {
+        nestingConfig: {
+          algorithm: 'shelf-rollo',
+          allowRotation: true,
+          separationHMm: 5,
+          separationVMm: 5,
+          panelizado: {
+            enabled: true,
+            mode: 'automatic',
+            axis: 'automatic',
+            overlapMm: 20,
+            maxPanelWidthMm: 0,
+            distribution: 'equilibrada',
+            widthInterpretation: 'total',
+          },
+        },
+      },
+      maquinaM1Id: null,
+      perfilM1Id: null,
+      setupOverrideMin: null,
+      cleanupOverrideMin: null,
+      tiempoFijoOverrideMin: null,
+      slots: [],
+      cargosDirectosPaso: [],
+      maquina: {
+        id: 'm-rollo-auto-mixto',
+        codigo: 'ROLLO',
+        nombre: 'Rollo',
+        plantilla: 'IMPRESORA_GRAN_FORMATO_POR_AREA',
+        parametrosTecnicosJson: {
+          geometria: 'ROLLO',
+          anchoMaxRolloMm: 1520,
+          margenesNoImprimiblesMm: { izq: 5, der: 5, sup: 10, inf: 10 },
+        },
+      },
+    };
+    const r = runNestingForPaso(
+      fakePaso as never,
+      {
+        cantidad: 1,
+        piezas: [
+          { cantidad: 1, anchoMm: 1600, altoMm: 1600 },
+          { cantidad: 1, anchoMm: 1500, altoMm: 1500 },
+        ],
+      },
+      { id: 'vinilo-152', atributosVarianteJson: { anchoMm: 1520 } },
+    );
+
+    expect(r).not.toBeNull();
+    expect(
+      r!.placements.filter(
+        (p) => p.pieceId === 'piece-0-0' && p.panelIndex != null,
+      ),
+    ).toHaveLength(2);
+    expect(
+      r!.placements.filter(
+        (p) => p.pieceId === 'piece-1-0' && p.panelIndex != null,
+      ),
+    ).toHaveLength(0);
+    expect(r!.placements.find((p) => p.pieceId === 'piece-1-0')).toMatchObject({
+      widthMm: 1500,
+      heightMm: 1500,
+    });
+  });
+
+  it('shelf-rollo con panelizado vertical automático conserva enteras las piezas que entran', () => {
+    const fakePaso = {
+      rutaPasoId: 'rp-rollo-vertical-mixto',
+      rutaPasoOrden: 1,
+      familiaCodigo: 'impresion_por_area',
+      configPasoId: 'cp-rollo-vertical-mixto',
+      modoActivacion: 'OBLIGATORIO',
+      condicionActivacionJson: null,
+      modoTiempo: 'T-3',
+      mecanismoCantidad: 'CALCULADO_POR_PASO',
+      mecanismoCantidadConfigJson: null,
+      multiplicadoresActivos: [],
+      paramsPasoJson: {
+        nestingConfig: {
+          algorithm: 'shelf-rollo',
+          allowRotation: true,
+          separationHMm: 5,
+          separationVMm: 5,
+          panelizado: {
+            enabled: true,
+            mode: 'automatic',
+            axis: 'vertical',
+            overlapMm: 20,
+            maxPanelWidthMm: 0,
+            distribution: 'equilibrada',
+            widthInterpretation: 'total',
+          },
+        },
+      },
+      maquinaM1Id: null,
+      perfilM1Id: null,
+      setupOverrideMin: null,
+      cleanupOverrideMin: null,
+      tiempoFijoOverrideMin: null,
+      slots: [],
+      cargosDirectosPaso: [],
+      maquina: {
+        id: 'm-rollo-vertical-mixto',
+        codigo: 'ROLLO',
+        nombre: 'Rollo',
+        plantilla: 'IMPRESORA_GRAN_FORMATO_POR_AREA',
+        parametrosTecnicosJson: {
+          geometria: 'ROLLO',
+          anchoMaxRolloMm: 1520,
+          margenesNoImprimiblesMm: { izq: 7.5, der: 7.5, sup: 7.5, inf: 7.5 },
+        },
+      },
+    };
+    const r = runNestingForPaso(
+      fakePaso as never,
+      {
+        cantidad: 1,
+        piezas: [
+          { cantidad: 1, anchoMm: 1600, altoMm: 1600 },
+          { cantidad: 1, anchoMm: 1500, altoMm: 1500 },
+        ],
+      },
+      { id: 'vinilo-152', atributosVarianteJson: { anchoMm: 1520 } },
+    );
+
+    expect(r).not.toBeNull();
+    expect(
+      r!.placements.filter(
+        (p) => p.pieceId === 'piece-0-0' && p.panelIndex != null,
+      ),
+    ).toHaveLength(2);
+    expect(
+      r!.placements.filter(
+        (p) => p.pieceId === 'piece-1-0' && p.panelIndex != null,
+      ),
+    ).toHaveLength(0);
+    expect(r!.placements.find((p) => p.pieceId === 'piece-1-0')).toMatchObject({
+      widthMm: 1500,
+      heightMm: 1500,
+    });
+  });
+
+  it('plotter_corte ignora panelizado aunque exista configuración accidental', () => {
+    const fakePaso = {
+      rutaPasoId: 'rp-plotter',
+      rutaPasoOrden: 1,
+      familiaCodigo: 'plotter_corte',
+      configPasoId: 'cp-plotter',
+      modoActivacion: 'OBLIGATORIO',
+      condicionActivacionJson: null,
+      modoTiempo: 'T-3',
+      mecanismoCantidad: 'CALCULADO_POR_PASO',
+      mecanismoCantidadConfigJson: null,
+      multiplicadoresActivos: [],
+      paramsPasoJson: {
+        nestingConfig: {
+          algorithm: 'shelf-rollo',
+          allowRotation: false,
+          separationHMm: 5,
+          separationVMm: 5,
+          panelizado: {
+            enabled: true,
+            mode: 'automatic',
+            axis: 'vertical',
+            overlapMm: 20,
+            maxPanelWidthMm: 0,
+            distribution: 'equilibrada',
+            widthInterpretation: 'total',
+          },
+        },
+      },
+      maquinaM1Id: null,
+      perfilM1Id: null,
+      setupOverrideMin: null,
+      cleanupOverrideMin: null,
+      tiempoFijoOverrideMin: null,
+      slots: [],
+      cargosDirectosPaso: [],
+      maquina: {
+        id: 'm-plotter',
+        codigo: 'PLOTTER',
+        nombre: 'Plotter',
+        plantilla: 'PLOTTER_DE_CORTE',
+        parametrosTecnicosJson: {
+          geometria: 'ROLLO',
+          anchoMaxRolloMm: 1370,
+          margenesNoImprimiblesMm: { izq: 5, der: 5, sup: 10, inf: 10 },
+        },
+      },
+    };
+    const r = runNestingForPaso(
+      fakePaso as never,
+      {
+        cantidad: 1,
+        piezas: [{ cantidad: 1, anchoMm: 1800, altoMm: 800 }],
+      },
+      { id: 'vinilo-137', atributosVarianteJson: { anchoMm: 1370 } },
+    );
+
+    expect(r).toBeNull();
+  });
+
   it('v3.1 grid-2d-multi: piezas todas iguales → cae a single (más eficiente)', () => {
     const fakePaso = {
       rutaPasoId: 'rp1',

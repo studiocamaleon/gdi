@@ -13,6 +13,8 @@ import {
   buildGranFormatoPanelizedPieces,
   buildGranFormatoPieceInstances,
   normalizeGranFormatoPanelManualLayout,
+  type GranFormatoPanelAxis,
+  type GranFormatoPanelAxisInput,
   type GranFormatoPiece,
 } from '../helpers/granformato-pieces';
 import {
@@ -26,6 +28,20 @@ import {
 type PackedRectData = {
   piece: GranFormatoPiece;
 };
+
+function resolvePanelAxisSummary(
+  configuredAxis: GranFormatoPanelAxisInput,
+  placements: GranFormatoCostosPreviewPlacement[],
+): GranFormatoPanelAxisInput | null {
+  const axes = new Set(
+    placements
+      .map((placement) => placement.panelAxis)
+      .filter((axis): axis is GranFormatoPanelAxis => axis != null),
+  );
+  if (axes.size === 0) return null;
+  if (axes.size === 1) return [...axes][0];
+  return configuredAxis === 'automatic' ? 'automatic' : [...axes][0];
+}
 
 function buildPieces(
   input: EvaluateGranFormatoMixedShelfLayoutInput,
@@ -45,6 +61,7 @@ function buildPieces(
       : buildGranFormatoPanelizedPieces({
           medidas: input.medidas,
           printableWidthMm: input.printableWidthMm,
+          allowRotation: input.permitirRotacion,
           panelAxis: input.panelizado.axis,
           overlapMm: input.panelizado.overlapMm,
           maxPanelWidthMm: input.panelizado.maxPanelWidthMm,
@@ -58,9 +75,15 @@ function uniquePieceOrders(pieces: GranFormatoPiece[]): GranFormatoPiece[][] {
   const orders = [
     pieces,
     [...pieces].sort((a, b) => b.area - a.area),
-    [...pieces].sort((a, b) => b.widthMm - a.widthMm || b.heightMm - a.heightMm),
-    [...pieces].sort((a, b) => b.heightMm - a.heightMm || b.widthMm - a.widthMm),
-    [...pieces].sort((a, b) => b.shortestSide - a.shortestSide || b.area - a.area),
+    [...pieces].sort(
+      (a, b) => b.widthMm - a.widthMm || b.heightMm - a.heightMm,
+    ),
+    [...pieces].sort(
+      (a, b) => b.heightMm - a.heightMm || b.widthMm - a.widthMm,
+    ),
+    [...pieces].sort(
+      (a, b) => b.shortestSide - a.shortestSide || b.area - a.area,
+    ),
   ];
   const seen = new Set<string>();
   return orders.filter((order) => {
@@ -168,9 +191,10 @@ function findBestForOrder(
 ) {
   const coarseStepMm = 25;
   const fineStepMm = 5;
-  let firstFit:
-    | { contentHeightMm: number; placements: GranFormatoCostosPreviewPlacement[] }
-    | null = null;
+  let firstFit: {
+    contentHeightMm: number;
+    placements: GranFormatoCostosPreviewPlacement[];
+  } | null = null;
 
   for (
     let height = lowerContentHeightMm;
@@ -226,11 +250,7 @@ export function evaluateGranFormatoMaxRectsRollLayout(
   );
   const maxCandidateHeightMm = pieces.reduce(
     (max, piece) =>
-      Math.max(
-        max,
-        piece.heightMm,
-        input.permitirRotacion ? piece.widthMm : 0,
-      ),
+      Math.max(max, piece.heightMm, input.permitirRotacion ? piece.widthMm : 0),
     0,
   );
   const lowerContentHeightMm = Math.max(
@@ -290,7 +310,9 @@ export function evaluateGranFormatoMaxRectsRollLayout(
   return {
     orientacion: buildGranFormatoNestingOrientacion(best.placements),
     panelizado: input.panelizado?.activo === true,
-    panelAxis: input.panelizado?.activo ? input.panelizado.axis : null,
+    panelAxis: input.panelizado?.activo
+      ? resolvePanelAxisSummary(input.panelizado.axis, best.placements)
+      : null,
     panelCount: best.placements.reduce(
       (max, item) => Math.max(max, item.panelCount ?? 1),
       1,

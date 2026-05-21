@@ -285,7 +285,7 @@ export interface NestingVisualConfig {
   panelizado?: {
     enabled: boolean;
     mode: 'automatic' | 'manual';
-    axis: 'vertical' | 'horizontal' | null;
+    axis: 'automatic' | 'vertical' | 'horizontal' | null;
     overlapMm: number | null;
     maxPanelWidthMm: number | null;
     distribution: 'equilibrada' | 'libre' | null;

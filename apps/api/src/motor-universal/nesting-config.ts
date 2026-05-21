@@ -17,13 +17,15 @@ export interface NestingCostingConfig {
 export interface NestingPanelizadoConfig {
   enabled: boolean;
   mode: 'automatic' | 'manual';
-  axis: 'vertical' | 'horizontal';
+  axis: 'automatic' | 'vertical' | 'horizontal';
   overlapMm: number;
   maxPanelWidthMm: number;
   distribution: 'equilibrada' | 'libre';
   widthInterpretation: 'total' | 'util';
   manualLayout?: Record<string, unknown> | null;
 }
+
+const MIN_PANEL_MAX_WIDTH_MM = 300;
 
 export interface NestingConfigResolved {
   algorithm: NestingAlgorithmPolicy;
@@ -367,14 +369,22 @@ function normalizePanelizado(
     config.maxPanelWidthMm,
   );
   const maxPanelWidthMm =
-    rawMaxPanelWidthMm != null && rawMaxPanelWidthMm > 0
+    rawMaxPanelWidthMm != null &&
+    rawMaxPanelWidthMm >= MIN_PANEL_MAX_WIDTH_MM
       ? rawMaxPanelWidthMm
       : printableWidthMm ?? 0;
 
   return {
     enabled: readBoolean(runtimeConfig.enabled, config.enabled, false),
     mode: modeRaw === 'manual' ? 'manual' : 'automatic',
-    axis: axisRaw === 'horizontal' ? 'horizontal' : 'vertical',
+    axis:
+      axisRaw === 'automatic' || axisRaw === 'automatica'
+        ? 'automatic'
+        : axisRaw === 'horizontal'
+          ? 'horizontal'
+          : axisRaw === 'vertical'
+            ? 'vertical'
+            : 'automatic',
     overlapMm:
       readNumber(runtimeConfig.overlapMm, config.overlapMm, 20) ?? 20,
     maxPanelWidthMm,

@@ -539,7 +539,7 @@ export interface NestingViewerInput {
     panelizado?: {
       enabled: boolean;
       mode: 'automatic' | 'manual';
-      axis: 'vertical' | 'horizontal' | null;
+      axis: 'automatic' | 'vertical' | 'horizontal' | null;
       overlapMm: number | null;
       maxPanelWidthMm: number | null;
       distribution: 'equilibrada' | 'libre' | null;
@@ -613,6 +613,7 @@ export interface CotizarResponse {
   cotizacion?: {
     productoId: string;
     productoNombre: string;
+    rutaAlternativaId?: string | null;
     rutaNombre: string;
     cantidadEfectiva: number;
     cantidadPedida: number;
@@ -662,6 +663,7 @@ export interface CotizarResponse {
     pasos: Array<{
       rutaPasoOrden: number;
       familiaCodigo: string;
+      configPasoId?: string;
       activado: boolean;
       razonNoActivado?: string;
       tiempo?: {
@@ -743,6 +745,20 @@ export async function cotizarYGuardar(
     body: JSON.stringify(req),
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+export async function recotizarCotizacionItem(
+  id: string,
+  req: Omit<CotizarRequest, 'productoId'>,
+): Promise<CotizarYGuardarResponse> {
+  return apiRequest<CotizarYGuardarResponse>(
+    `/motor-universal/cotizacion-items/${id}/recotizar`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(req),
+      headers: { 'Content-Type': 'application/json' },
+    },
+  );
 }
 
 // ================================================================================
