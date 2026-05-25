@@ -21,13 +21,15 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { HumanSelect } from "@/components/ui/human-select";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { PasosExtrasPanel } from "@/components/productos-servicios/pasos-extras-panel";
 import { TabPrecioCompleto } from "@/components/productos-servicios/tab-precio-completo";
-import { type TabPrecioConfig } from "@/components/productos-servicios/tab-precio-editor";
+import {
+  precioConfigKey,
+  type TabPrecioConfig,
+} from "@/components/productos-servicios/tab-precio-editor";
 import {
   actualizarProducto,
   actualizarProductoRutaAlt,
@@ -162,20 +164,25 @@ function MedidasPredefinidasEditor({
             />
             <button
               type="button"
-              className={`btn btn-ghost btn-sm ${medida.esDefault ? "on" : ""}`}
+              className={`icon-action medida-default-btn ${medida.esDefault ? "on" : ""}`}
               onClick={() => setDefault(medida.id)}
-              title="Marcar como predeterminada"
+              aria-pressed={medida.esDefault}
+              title={
+                medida.esDefault
+                  ? "Medida predeterminada"
+                  : "Marcar como predeterminada"
+              }
             >
-              <StarIcon />
+              <StarIcon size={13} fill={medida.esDefault ? "currentColor" : "none"} />
             </button>
             <button
               type="button"
-              className="btn btn-ghost btn-sm danger"
+              className="icon-action danger"
               onClick={() => removeMedida(medida.id)}
               disabled={medidas.length <= 1}
               title="Eliminar medida"
             >
-              <Trash2Icon />
+              <Trash2Icon size={13} />
             </button>
           </div>
         ))}
@@ -295,9 +302,6 @@ export function ProductoWorkspace({
                 {producto.activo ? "Activo" : "Inactivo"}
               </span>
             </h1>
-            <div className="meta">
-              <span className="code">{producto.codigo}</span>
-            </div>
             {producto.descripcion ? (
               <div style={{ fontSize: 13, color: "var(--muted-text)", marginTop: 6 }}>
                 {producto.descripcion}
@@ -364,6 +368,20 @@ export function ProductoWorkspace({
 
 function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
   const router = useRouter();
+  const identidadInicial = React.useMemo(
+    () => ({
+      nombre: producto.nombre,
+      descripcion: producto.descripcion ?? "",
+      subcategoriaComercialCodigo:
+        producto.subcategoriaComercial?.codigo ?? "producto_a_medida",
+      unidadComercial: producto.unidadComercial,
+      modoMedidas: producto.modoMedidas,
+      medidas: getMedidasPredefinidas(producto),
+      activo: producto.activo,
+    }),
+    [producto],
+  );
+  const [identidadPersistida, setIdentidadPersistida] = React.useState(identidadInicial);
   const [nombre, setNombre] = React.useState(producto.nombre);
   const [descripcion, setDescripcion] = React.useState(producto.descripcion ?? "");
   const [catalogoComercial, setCatalogoComercial] = React.useState<ProductoCategoriaComercial[]>([]);
@@ -377,6 +395,41 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
   );
   const [activo, setActivo] = React.useState(producto.activo);
   const [guardando, setGuardando] = React.useState(false);
+
+  const identidadActual = React.useMemo(
+    () => ({
+      nombre,
+      descripcion,
+      subcategoriaComercialCodigo,
+      unidadComercial,
+      modoMedidas,
+      medidas: modoMedidas === "LIBRE" ? [] : normalizeMedidasDraft(medidas),
+      activo,
+    }),
+    [
+      activo,
+      descripcion,
+      medidas,
+      modoMedidas,
+      nombre,
+      subcategoriaComercialCodigo,
+      unidadComercial,
+    ],
+  );
+  const identidadPersistidaNormalizada = React.useMemo(
+    () => ({
+      ...identidadPersistida,
+      medidas:
+        identidadPersistida.modoMedidas === "LIBRE"
+          ? []
+          : normalizeMedidasDraft(identidadPersistida.medidas),
+    }),
+    [identidadPersistida],
+  );
+  const dirty = React.useMemo(
+    () => JSON.stringify(identidadActual) !== JSON.stringify(identidadPersistidaNormalizada),
+    [identidadActual, identidadPersistidaNormalizada],
+  );
 
   React.useEffect(() => {
     getCatalogoComercial()
@@ -424,6 +477,15 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
         medidaDefaultAnchoMm: medidaDefault?.anchoMm ?? null,
         medidaDefaultAltoMm: medidaDefault?.altoMm ?? null,
         medidasPredefinidasJson: medidasNormalizadas,
+        activo,
+      });
+      setIdentidadPersistida({
+        nombre,
+        descripcion,
+        subcategoriaComercialCodigo,
+        unidadComercial,
+        modoMedidas,
+        medidas: medidasNormalizadas,
         activo,
       });
       toast.success("Identidad guardada");
@@ -517,14 +579,17 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
           {modoMedidas !== "LIBRE" && (
             <MedidasPredefinidasEditor medidas={medidas} onChange={setMedidas} />
           )}
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
-            <button type="button" className="btn btn-primary" onClick={guardar} disabled={guardando}>
-              <SaveIcon className="mr-2 size-4" />
-              {guardando ? "Guardando..." : "Guardar identidad"}
-            </button>
-          </div>
         </div>
       </div>
+      {(dirty || guardando) && (
+        <div className="save-sticky-footer">
+          <div className="pricing-sticky-footer-copy">Hay cambios sin guardar en identidad.</div>
+          <button type="button" className="btn btn-primary" onClick={guardar} disabled={guardando}>
+            <SaveIcon className="mr-2 size-4" />
+            {guardando ? "Guardando..." : "Guardar cambios"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1098,6 +1163,13 @@ function CargosTab({
 
 function PricingTab({ producto }: { producto: ProductoDetalle }) {
   const router = useRouter();
+  const [precioPersistido, setPrecioPersistido] = React.useState<TabPrecioConfig>(
+    () =>
+      (producto.precioConfigJson as TabPrecioConfig | null) ?? {
+        metodoCalculo: "por_margen",
+        detalle: { marginPct: 40, minimumMarginPct: 25 },
+      },
+  );
   const [precioConfig, setPrecioConfig] = React.useState<TabPrecioConfig>(
     () =>
       (producto.precioConfigJson as TabPrecioConfig | null) ?? {
@@ -1106,6 +1178,10 @@ function PricingTab({ producto }: { producto: ProductoDetalle }) {
       },
   );
   const [guardando, setGuardando] = React.useState(false);
+  const precioDirty = React.useMemo(
+    () => precioConfigKey(precioConfig) !== precioConfigKey(precioPersistido),
+    [precioConfig, precioPersistido],
+  );
 
   const guardar = async () => {
     setGuardando(true);
@@ -1113,29 +1189,26 @@ function PricingTab({ producto }: { producto: ProductoDetalle }) {
       await actualizarProducto(producto.id, {
         precioConfigJson: precioConfig as unknown as Record<string, unknown>,
       });
-      toast.success("Pricing guardado");
+      setPrecioPersistido(precioConfig);
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error guardando");
+      throw err instanceof Error ? err : new Error("Error guardando");
     } finally {
       setGuardando(false);
     }
   };
 
   return (
-    <div className="space-y-4">
+    <div>
       <TabPrecioCompleto
         productoId={producto.id}
         precioConfig={precioConfig}
         onChangePrecioConfig={setPrecioConfig}
         unidadComercial={producto.unidadComercial}
+        precioDirty={precioDirty}
+        guardandoPrecio={guardando}
+        onGuardarPrecio={guardar}
       />
-      <div className="flex justify-end">
-        <Button onClick={guardar} disabled={guardando}>
-          <SaveIcon className="mr-2 size-4" />
-          {guardando ? "Guardando..." : "Guardar pricing"}
-        </Button>
-      </div>
     </div>
   );
 }

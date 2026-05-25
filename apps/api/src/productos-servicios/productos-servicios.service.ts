@@ -2,8 +2,13 @@ import { Injectable } from '@nestjs/common';
 import type {
   ActualizarProductoDto,
   CrearProductoDto,
+  DuplicarProductoDto,
 } from './dto/producto.dto';
-import type { ActualizarRutaDto, CrearRutaDto } from './dto/ruta.dto';
+import type {
+  ActualizarRutaDto,
+  CrearRutaDto,
+  DuplicarRutaDto,
+} from './dto/ruta.dto';
 import type {
   ActualizarProductoRutaAlternativaDto,
   AgregarPasoExtraDto,
@@ -53,6 +58,10 @@ export class ProductosServiciosService {
     return this.productos.actualizarProducto(tenantId, id, dto);
   }
 
+  duplicarProducto(tenantId: string, id: string, dto: DuplicarProductoDto) {
+    return this.productos.duplicarProducto(tenantId, id, dto);
+  }
+
   eliminarProducto(tenantId: string, id: string) {
     return this.productos.eliminarProducto(tenantId, id);
   }
@@ -71,6 +80,10 @@ export class ProductosServiciosService {
 
   actualizarRuta(tenantId: string, id: string, dto: ActualizarRutaDto) {
     return this.rutas.actualizarRuta(tenantId, id, dto);
+  }
+
+  duplicarRuta(tenantId: string, id: string, dto: DuplicarRutaDto) {
+    return this.rutas.duplicarRuta(tenantId, id, dto);
   }
 
   eliminarRuta(tenantId: string, id: string) {

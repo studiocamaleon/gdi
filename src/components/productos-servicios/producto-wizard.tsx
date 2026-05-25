@@ -53,7 +53,10 @@ import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ProductoValidacionPanel } from "@/components/productos-servicios/producto-validacion-panel";
-import { type TabPrecioConfig } from "@/components/productos-servicios/tab-precio-editor";
+import {
+  precioConfigKey,
+  type TabPrecioConfig,
+} from "@/components/productos-servicios/tab-precio-editor";
 import { TabPrecioCompleto } from "@/components/productos-servicios/tab-precio-completo";
 import {
   actualizarProducto,
@@ -213,9 +216,14 @@ function MedidasPredefinidasWizard({
               variant={medida.esDefault ? "default" : "outline"}
               size="icon"
               onClick={() => setDefault(medida.id)}
-              title="Marcar como predeterminada"
+              aria-pressed={medida.esDefault}
+              title={
+                medida.esDefault
+                  ? "Medida predeterminada"
+                  : "Marcar como predeterminada"
+              }
             >
-              <StarIcon className="size-4" />
+              <StarIcon className="size-4" fill={medida.esDefault ? "currentColor" : "none"} />
             </Button>
             <Button
               type="button"
@@ -348,6 +356,13 @@ export function ProductoWizard({
   const [activo, setActivo] = React.useState(productoExistente?.activo ?? true);
 
   // Estado de step 5 — Precio
+  const [precioPersistido, setPrecioPersistido] = React.useState<TabPrecioConfig>(
+    () =>
+      (productoExistente?.precioConfigJson as TabPrecioConfig | null) ?? {
+        metodoCalculo: "por_margen",
+        detalle: { marginPct: 40, minimumMarginPct: 25 },
+      },
+  );
   const [precioConfig, setPrecioConfig] = React.useState<TabPrecioConfig>(
     () =>
       (productoExistente?.precioConfigJson as TabPrecioConfig | null) ?? {
@@ -357,6 +372,10 @@ export function ProductoWizard({
   );
 
   const [guardandoStep, setGuardandoStep] = React.useState(false);
+  const precioDirty = React.useMemo(
+    () => precioConfigKey(precioConfig) !== precioConfigKey(precioPersistido),
+    [precioConfig, precioPersistido],
+  );
 
   React.useEffect(() => {
     getCatalogoComercial()
@@ -468,10 +487,10 @@ export function ProductoWizard({
         precioConfigJson: precioConfig as unknown as Record<string, unknown>,
         activo,
       });
-      toast.success("Precio guardado");
+      setPrecioPersistido(precioConfig);
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error guardando");
+      throw err instanceof Error ? err : new Error("Error guardando");
     } finally {
       setGuardandoStep(false);
     }
@@ -630,6 +649,7 @@ export function ProductoWizard({
               producto={productoExistente}
               precioConfig={precioConfig}
               setPrecioConfig={setPrecioConfig}
+              precioDirty={precioDirty}
               guardandoStep={guardandoStep}
               guardarPrecio={guardarPrecio}
               validacion={valPrecio}
@@ -1257,6 +1277,7 @@ function StepPrecio({
   producto,
   precioConfig,
   setPrecioConfig,
+  precioDirty,
   guardandoStep,
   guardarPrecio,
   validacion,
@@ -1265,8 +1286,9 @@ function StepPrecio({
   producto: ProductoDetalle | undefined;
   precioConfig: TabPrecioConfig;
   setPrecioConfig: (v: TabPrecioConfig) => void;
+  precioDirty: boolean;
   guardandoStep: boolean;
-  guardarPrecio: () => void;
+  guardarPrecio: () => Promise<void>;
   validacion: ValidacionStep;
   unidadComercial: string;
 }) {
@@ -1277,6 +1299,9 @@ function StepPrecio({
         precioConfig={precioConfig}
         onChangePrecioConfig={setPrecioConfig}
         unidadComercial={producto?.unidadComercial ?? unidadComercial}
+        precioDirty={precioDirty}
+        guardandoPrecio={guardandoStep}
+        onGuardarPrecio={guardarPrecio}
       />
 
       {producto && (
@@ -1292,13 +1317,6 @@ function StepPrecio({
           </CardContent>
         </Card>
       )}
-
-      <div className="flex justify-end">
-        <Button onClick={guardarPrecio} disabled={guardandoStep || !producto}>
-          <SaveIcon className="mr-2 size-4" />
-          {guardandoStep ? "Guardando..." : "Guardar precio"}
-        </Button>
-      </div>
 
       {(validacion.errores.length > 0 || validacion.warnings.length > 0) && (
         <ListaValidacion validacion={validacion} />

@@ -136,7 +136,14 @@ export function runNestingForPaso(
     return runLaminadoRollo(paso, jobContext, materialResuelto, config);
   }
 
-  // ─── Caso 4: grid 2D single/multi (digital sobre pliego) ─────────
+  // ─── Caso 4: montaje sobre otro sustrato ─────────────────────────
+  // Reusa los algoritmos existentes, pero permite que las piezas vengan
+  // de la medida comercial o de outputs publicados por pasos anteriores.
+  if (paso.familiaCodigo === 'montaje_sobre_sustrato') {
+    return runMontajeSobreSustrato(paso, jobContext, materialResuelto, config);
+  }
+
+  // ─── Caso 5: grid 2D single/multi (digital sobre pliego) ─────────
   if (paso.familiaCodigo === 'impresion_por_hoja') {
     return runGrid2DSingle(paso, jobContext, materialResuelto, config);
   }
@@ -224,6 +231,79 @@ function runLaminadoRollo(
     materialResuelto,
     config,
   );
+}
+
+function runMontajeSobreSustrato(
+  paso: PasoCargado,
+  jobContext: JobContext,
+  materialResuelto: MaterialResueltoParaNesting | null,
+  config: NestingConfigResolved,
+): NestingDispatchResult | null {
+  const montajeContext = buildJobContextMontaje(paso, jobContext);
+  if (!montajeContext) return null;
+
+  if (config.algorithm === 'shelf-rollo' || config.algorithm === 'maxrects-rollo') {
+    return runShelfRollo(paso, montajeContext, materialResuelto, config);
+  }
+  if (config.algorithm === 'grid-2d-single') {
+    return runGrid2DSingleForArea(montajeContext, config);
+  }
+  if (config.algorithm === 'grid-2d-multi') {
+    return runGrid2DMultiForArea(paso, montajeContext, config);
+  }
+  if (config.algorithm === 'packingsolver-rectangle') {
+    return runPackingSolverRectangleForArea(paso, montajeContext, config);
+  }
+
+  if (isRollMaterial(materialResuelto?.atributosVarianteJson)) {
+    return runShelfRollo(paso, montajeContext, materialResuelto, config);
+  }
+  if (config.sheetWidthMm && config.sheetHeightMm) {
+    return runPackingSolverRectangleForArea(paso, montajeContext, config);
+  }
+  return null;
+}
+
+function buildJobContextMontaje(
+  paso: PasoCargado,
+  jobContext: JobContext,
+): JobContext | null {
+  const params = asRecord(paso.paramsPasoJson);
+  const fuente =
+    typeof params.fuentePiezasMontaje === 'string'
+      ? params.fuentePiezasMontaje
+      : 'piezas_jobcontext';
+  const ctx = jobContext as Record<string, unknown>;
+
+  if (fuente === 'pliegos_impresos') {
+    const cantidad = readPositiveNumberFromRecord(
+      ctx,
+      'pliegos_impresos',
+      'pliegos_calculados',
+    );
+    const anchoMm = readPositiveNumberFromRecord(
+      ctx,
+      'pliego_impresion_ancho_mm',
+    );
+    const altoMm = readPositiveNumberFromRecord(
+      ctx,
+      'pliego_impresion_alto_mm',
+    );
+    if (!cantidad || !anchoMm || !altoMm) return null;
+    return {
+      ...jobContext,
+      cantidad: Math.ceil(cantidad),
+      piezas: [{ cantidad: Math.ceil(cantidad), anchoMm, altoMm }],
+    };
+  }
+
+  const piezas = getPiezasParaNesting(jobContext);
+  if (piezas.length === 0) return null;
+  return {
+    ...jobContext,
+    cantidad: piezas.reduce((acc, pieza) => acc + pieza.cantidad, 0),
+    piezas,
+  };
 }
 
 function runShelfRollo(
@@ -1264,6 +1344,29 @@ function readNumber(
   if (typeof v === 'string') {
     const n = Number(v);
     if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function readPositiveNumberFromRecord(
+  record: Record<string, unknown>,
+  ...keys: string[]
+): number | null {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+      return value;
+    }
+    if (typeof value === 'string') {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    }
   }
   return null;
 }

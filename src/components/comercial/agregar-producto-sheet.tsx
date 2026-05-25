@@ -2769,7 +2769,7 @@ function ApConfigStep({
                     }
                     title={adicional.descripcion}
                   >
-                    <span className="cb">{selected ? <CheckIcon /> : null}</span>
+                    <span className="cb" />
                     <span className="lb">{adicional.name}</span>
                     {!product.real ? (
                       <span className="mt mono">

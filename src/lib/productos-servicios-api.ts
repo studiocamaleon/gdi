@@ -86,6 +86,23 @@ export async function actualizarProducto(id: string, payload: ActualizarProducto
   });
 }
 
+export interface DuplicarProductoPayload {
+  codigo?: string;
+  nombre?: string;
+  activo?: boolean;
+}
+
+export async function duplicarProducto(
+  id: string,
+  payload: DuplicarProductoPayload = {},
+): Promise<{ id: string }> {
+  return apiRequest<{ id: string }>(`/productos-servicios/productos/${id}/duplicar`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
 export async function eliminarProducto(id: string) {
   return apiRequest(`/productos-servicios/productos/${id}`, {
     method: 'DELETE',
@@ -132,6 +149,23 @@ export interface ActualizarRutaPayload {
 export async function actualizarRuta(id: string, payload: ActualizarRutaPayload) {
   return apiRequest(`/productos-servicios/rutas/${id}`, {
     method: 'PATCH',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export interface DuplicarRutaPayload {
+  codigo?: string;
+  nombre?: string;
+  activo?: boolean;
+}
+
+export async function duplicarRuta(
+  id: string,
+  payload: DuplicarRutaPayload = {},
+): Promise<{ id: string }> {
+  return apiRequest<{ id: string }>(`/productos-servicios/rutas/${id}/duplicar`, {
+    method: 'POST',
     body: JSON.stringify(payload),
     headers: { 'Content-Type': 'application/json' },
   });

@@ -83,6 +83,45 @@ function tiersToPayload(metodo: MetodoPrecio, tiers: TierBase[]): Array<Record<s
   });
 }
 
+function cleanForCompare(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(cleanForCompare);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, entry]) => [key, cleanForCompare(entry)]),
+  );
+}
+
+export function normalizePrecioConfig(config: TabPrecioConfig | null | undefined): TabPrecioConfig {
+  const metodo = config?.metodoCalculo ?? "por_margen";
+  const detalle = config?.detalle ?? {};
+  const usaTiers =
+    metodo === "margen_variable" ||
+    metodo === "variable_por_cantidad" ||
+    metodo === "fijado_por_cantidad" ||
+    metodo === "fijo_con_margen_variable";
+
+  if (usaTiers) {
+    return {
+      metodoCalculo: metodo,
+      detalle: {
+        tiers: tiersToPayload(metodo, tiersFromDetalle(metodo, detalle)),
+      },
+    };
+  }
+
+  return {
+    metodoCalculo: metodo,
+    detalle: cleanForCompare(detalle) as Record<string, unknown>,
+  };
+}
+
+export function precioConfigKey(config: TabPrecioConfig | null | undefined) {
+  return JSON.stringify(cleanForCompare(normalizePrecioConfig(config)));
+}
+
 function labelUnidad(unidadComercial?: string) {
   if (unidadComercial === "m2") return "m²";
   if (unidadComercial === "metro_lineal") return "metros lineales";
@@ -108,6 +147,7 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
     metodo === "fijo_con_margen_variable";
 
   const [tiers, setTiers] = React.useState<TierBase[]>(() => tiersFromDetalle(metodo, detalle));
+  const didMountTiers = React.useRef(false);
 
   // Si cambia el método, sincronizar tiers (limpiar si pasamos a no-tier)
   const lastMetodo = React.useRef(metodo);
@@ -120,6 +160,10 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
 
   // Cuando cambian los tiers, propagar al padre
   React.useEffect(() => {
+    if (!didMountTiers.current) {
+      didMountTiers.current = true;
+      return;
+    }
     if (usaTiers) {
       onChange({
         metodoCalculo: metodo,

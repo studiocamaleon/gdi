@@ -24,12 +24,26 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ExternalLinkIcon, InfoIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import {
+  ExternalLinkIcon,
+  InfoIcon,
+  PencilIcon,
+  PlusIcon,
+  SaveIcon,
+  Trash2Icon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { EstadoVacio } from "@/components/ui/estado-vacio";
 import { HumanSelect } from "@/components/ui/human-select";
@@ -72,14 +86,61 @@ interface Props {
   precioConfig: TabPrecioConfig;
   onChangePrecioConfig: (cfg: TabPrecioConfig) => void;
   unidadComercial?: string;
+  precioDirty?: boolean;
+  guardandoPrecio?: boolean;
+  onGuardarPrecio?: () => Promise<void> | void;
 }
+
+type PricingSaveState = {
+  dirty: boolean;
+  loaded: boolean;
+  saving: boolean;
+  save: () => Promise<void>;
+};
+
+const idleSaveState: PricingSaveState = {
+  dirty: false,
+  loaded: false,
+  saving: false,
+  save: async () => undefined,
+};
 
 export function TabPrecioCompleto({
   productoId,
   precioConfig,
   onChangePrecioConfig,
   unidadComercial,
+  precioDirty = false,
+  guardandoPrecio = false,
+  onGuardarPrecio,
 }: Props) {
+  const [impuestosState, setImpuestosState] = React.useState<PricingSaveState>(idleSaveState);
+  const [comisionesState, setComisionesState] = React.useState<PricingSaveState>(idleSaveState);
+  const [guardandoTodo, setGuardandoTodo] = React.useState(false);
+
+  const hasUnifiedSave = !!onGuardarPrecio;
+  const isDirty =
+    precioDirty ||
+    (impuestosState.loaded && impuestosState.dirty) ||
+    (comisionesState.loaded && comisionesState.dirty);
+  const isSaving =
+    guardandoTodo || guardandoPrecio || impuestosState.saving || comisionesState.saving;
+
+  const guardarCambios = async () => {
+    if (!onGuardarPrecio || !productoId || !isDirty || isSaving) return;
+    setGuardandoTodo(true);
+    try {
+      if (impuestosState.loaded && impuestosState.dirty) await impuestosState.save();
+      if (comisionesState.loaded && comisionesState.dirty) await comisionesState.save();
+      if (precioDirty) await onGuardarPrecio();
+      toast.success("Cambios de pricing guardados");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error guardando cambios");
+    } finally {
+      setGuardandoTodo(false);
+    }
+  };
+
   return (
     <div className="pricing-flow">
       {/* Sección 1 — Método de cálculo (siempre visible, no requiere productoId) */}
@@ -114,13 +175,30 @@ export function TabPrecioCompleto({
         </Card>
       ) : (
         <>
-          <SeccionImpuestos productoId={productoId} />
-          <SeccionComisiones productoId={productoId} />
+          <SeccionImpuestos
+            productoId={productoId}
+            onStateChange={hasUnifiedSave ? setImpuestosState : undefined}
+          />
+          <SeccionComisiones
+            productoId={productoId}
+            onStateChange={hasUnifiedSave ? setComisionesState : undefined}
+          />
           <SeccionPreciosEspeciales
             productoId={productoId}
             unidadComercial={unidadComercial}
           />
         </>
+      )}
+      {hasUnifiedSave && (isDirty || isSaving) && (
+        <div className="save-sticky-footer pricing-sticky-footer">
+          <div className="pricing-sticky-footer-copy">
+            {isDirty ? "Hay cambios sin guardar en pricing." : "No hay cambios pendientes."}
+          </div>
+          <Button onClick={guardarCambios} disabled={!productoId || !isDirty || isSaving}>
+            <SaveIcon className="mr-2 size-4" />
+            {isSaving ? "Guardando..." : "Guardar cambios"}
+          </Button>
+        </div>
       )}
     </div>
   );
@@ -130,7 +208,13 @@ export function TabPrecioCompleto({
 // SECCIÓN 2 — Impuestos
 // ════════════════════════════════════════════════════════════════════════
 
-function SeccionImpuestos({ productoId }: { productoId: string }) {
+function SeccionImpuestos({
+  productoId,
+  onStateChange,
+}: {
+  productoId: string;
+  onStateChange?: (state: PricingSaveState) => void;
+}) {
   const [catalogo, setCatalogo] = React.useState<ImpuestoCatalogoItem[]>([]);
   const [aplicados, setAplicados] = React.useState<ImpuestoAplicado[]>([]);
   const [seleccionados, setSeleccionados] = React.useState<string[]>([]);
@@ -172,41 +256,42 @@ function SeccionImpuestos({ productoId }: { productoId: string }) {
       .reduce((acc, c) => acc + c.porcentaje, 0);
   }, [catalogo, seleccionados]);
 
-  const guardar = async () => {
+  const guardar = React.useCallback(async () => {
     setGuardando(true);
+    const items = seleccionados.map((id, idx) => ({
+      impuestoCatalogoId: id,
+      orden: idx,
+    }));
     try {
-      const items = seleccionados.map((id, idx) => ({
-        impuestoCatalogoId: id,
-        orden: idx,
-      }));
       const nuevos = await setImpuestosAplicados(productoId, items);
       setAplicados(nuevos);
-      toast.success("Impuestos del producto actualizados");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error guardando");
+      if (!onStateChange) toast.success("Impuestos del producto actualizados");
     } finally {
       setGuardando(false);
     }
-  };
+  }, [onStateChange, productoId, seleccionados]);
+
+  React.useEffect(() => {
+    onStateChange?.({ dirty: !cargando && dirty, loaded: !cargando, saving: guardando, save: guardar });
+  }, [cargando, dirty, guardando, guardar, onStateChange]);
 
   return (
     <Card className="wiz-section pricing-section">
-      <CardHeader className="wiz-section-head">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <CardTitle>Impuestos</CardTitle>
-            <CardDescription>
-              Esquemas impositivos del catálogo del tenant que se aplican al cotizar este
-              producto.
-            </CardDescription>
-          </div>
+      <CardHeader className="wiz-section-head pricing-section-head">
+        <div className="body">
+          <CardTitle>Impuestos</CardTitle>
+          <CardDescription>
+            Esquemas impositivos del catálogo del tenant que se aplican al cotizar este producto.
+          </CardDescription>
+        </div>
+        <CardAction className="pricing-section-action">
           <Link href="/productos-servicios/impuestos-catalogo">
             <Button className="btn" variant="outline" size="sm">
               <ExternalLinkIcon className="mr-2 size-3" />
               Administrar catálogo
             </Button>
           </Link>
-        </div>
+        </CardAction>
       </CardHeader>
       <CardContent className="pricing-section-content">
         {cargando ? (
@@ -247,9 +332,20 @@ function SeccionImpuestos({ productoId }: { productoId: string }) {
                 <span className="text-muted-foreground">Total impuestos seleccionados:</span>{" "}
                 <span className="font-mono font-semibold">{totalPct.toFixed(2)}%</span>
               </div>
-              <Button className="btn btn-primary" onClick={guardar} disabled={!dirty || guardando} size="sm">
-                {guardando ? "Guardando..." : "Guardar selección"}
-              </Button>
+              {!onStateChange && (
+                <Button
+                  className="btn btn-primary"
+                  onClick={() => {
+                    guardar().catch((err) =>
+                      toast.error(err instanceof Error ? err.message : "Error guardando"),
+                    );
+                  }}
+                  disabled={!dirty || guardando}
+                  size="sm"
+                >
+                  {guardando ? "Guardando..." : "Guardar selección"}
+                </Button>
+              )}
             </div>
           </>
         )}
@@ -262,7 +358,13 @@ function SeccionImpuestos({ productoId }: { productoId: string }) {
 // SECCIÓN 3 — Comisiones (espejo de impuestos)
 // ════════════════════════════════════════════════════════════════════════
 
-function SeccionComisiones({ productoId }: { productoId: string }) {
+function SeccionComisiones({
+  productoId,
+  onStateChange,
+}: {
+  productoId: string;
+  onStateChange?: (state: PricingSaveState) => void;
+}) {
   const [catalogo, setCatalogo] = React.useState<ComisionCatalogoItem[]>([]);
   const [aplicadas, setAplicadas] = React.useState<ComisionAplicada[]>([]);
   const [seleccionadas, setSeleccionadas] = React.useState<string[]>([]);
@@ -304,41 +406,43 @@ function SeccionComisiones({ productoId }: { productoId: string }) {
       .reduce((acc, c) => acc + c.porcentaje, 0);
   }, [catalogo, seleccionadas]);
 
-  const guardar = async () => {
+  const guardar = React.useCallback(async () => {
     setGuardando(true);
+    const items = seleccionadas.map((id, idx) => ({
+      comisionCatalogoId: id,
+      orden: idx,
+    }));
     try {
-      const items = seleccionadas.map((id, idx) => ({
-        comisionCatalogoId: id,
-        orden: idx,
-      }));
       const nuevos = await setComisionesAplicadas(productoId, items);
       setAplicadas(nuevos);
-      toast.success("Comisiones del producto actualizadas");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error guardando");
+      if (!onStateChange) toast.success("Comisiones del producto actualizadas");
     } finally {
       setGuardando(false);
     }
-  };
+  }, [onStateChange, productoId, seleccionadas]);
+
+  React.useEffect(() => {
+    onStateChange?.({ dirty: !cargando && dirty, loaded: !cargando, saving: guardando, save: guardar });
+  }, [cargando, dirty, guardando, guardar, onStateChange]);
 
   return (
     <Card className="wiz-section pricing-section">
-      <CardHeader className="wiz-section-head">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <CardTitle>Comisiones</CardTitle>
-            <CardDescription>
-              Esquemas reusables de comisiones (vendedor, financiera, etc.) que se cobran al
-              cotizar este producto.
-            </CardDescription>
-          </div>
+      <CardHeader className="wiz-section-head pricing-section-head">
+        <div className="body">
+          <CardTitle>Comisiones</CardTitle>
+          <CardDescription>
+            Esquemas reusables de comisiones (vendedor, financiera, etc.) que se cobran al cotizar
+            este producto.
+          </CardDescription>
+        </div>
+        <CardAction className="pricing-section-action">
           <Link href="/productos-servicios/comisiones-catalogo">
             <Button className="btn" variant="outline" size="sm">
               <ExternalLinkIcon className="mr-2 size-3" />
               Administrar catálogo
             </Button>
           </Link>
-        </div>
+        </CardAction>
       </CardHeader>
       <CardContent className="pricing-section-content">
         {cargando ? (
@@ -379,9 +483,20 @@ function SeccionComisiones({ productoId }: { productoId: string }) {
                 <span className="text-muted-foreground">Total comisiones seleccionadas:</span>{" "}
                 <span className="font-mono font-semibold">{totalPct.toFixed(2)}%</span>
               </div>
-              <Button className="btn btn-primary" onClick={guardar} disabled={!dirty || guardando} size="sm">
-                {guardando ? "Guardando..." : "Guardar selección"}
-              </Button>
+              {!onStateChange && (
+                <Button
+                  className="btn btn-primary"
+                  onClick={() => {
+                    guardar().catch((err) =>
+                      toast.error(err instanceof Error ? err.message : "Error guardando"),
+                    );
+                  }}
+                  disabled={!dirty || guardando}
+                  size="sm"
+                >
+                  {guardando ? "Guardando..." : "Guardar selección"}
+                </Button>
+              )}
             </div>
           </>
         )}
@@ -506,15 +621,15 @@ function SeccionPreciosEspeciales({
 
   return (
     <Card className="wiz-section pricing-section">
-      <CardHeader className="wiz-section-head">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <CardTitle>Precios especiales por cliente</CardTitle>
-            <CardDescription>
-              Override del precio standard cuando el cliente X compra este producto. Cada
-              precio especial usa su propio método de cálculo.
-            </CardDescription>
-          </div>
+      <CardHeader className="wiz-section-head pricing-section-head">
+        <div className="body">
+          <CardTitle>Precios especiales por cliente</CardTitle>
+          <CardDescription>
+            Override del precio standard cuando el cliente X compra este producto. Cada precio
+            especial usa su propio método de cálculo.
+          </CardDescription>
+        </div>
+        <CardAction className="pricing-section-action">
           <Button
             size="sm"
             onClick={abrirNuevo}
@@ -523,7 +638,7 @@ function SeccionPreciosEspeciales({
             <PlusIcon className="mr-2 size-3" />
             Agregar
           </Button>
-        </div>
+        </CardAction>
       </CardHeader>
       <CardContent className="pricing-section-content">
         {cargando ? (

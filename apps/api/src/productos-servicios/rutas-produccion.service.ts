@@ -5,7 +5,11 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import type { ActualizarRutaDto, CrearRutaDto } from './dto/ruta.dto';
+import type {
+  ActualizarRutaDto,
+  CrearRutaDto,
+  DuplicarRutaDto,
+} from './dto/ruta.dto';
 import { FamiliasPasosService } from './familias-pasos.service';
 
 @Injectable()
@@ -74,6 +78,80 @@ export class RutasProduccionService {
       ) {
         throw new BadRequestException(
           `Ya existe una ruta con código "${dto.codigo}"`,
+        );
+      }
+      throw err;
+    }
+  }
+
+  async duplicarRuta(
+    tenantId: string,
+    id: string,
+    dto: DuplicarRutaDto = {},
+  ) {
+    const origen = await this.prisma.ruta.findFirst({
+      where: { id, tenantId },
+      include: {
+        pasos: { orderBy: { orden: 'asc' } },
+      },
+    });
+    if (!origen) throw new NotFoundException(`Ruta ${id} no encontrada`);
+
+    const pasosActuales = origen.pasos.filter(
+      (paso) => paso.version === origen.versionActual,
+    );
+    if (pasosActuales.length === 0) {
+      throw new BadRequestException(
+        `Ruta "${origen.nombre}" no tiene pasos para duplicar.`,
+      );
+    }
+
+    const nombre = dto.nombre?.trim() || `${origen.nombre} copia`;
+    const baseCodigo = dto.codigo?.trim() || this.codigoFromNombre(nombre);
+    const codigo = await this.nextCopyCode(tenantId, baseCodigo);
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const rutaDuplicada = await tx.ruta.create({
+          data: {
+            tenantId,
+            codigo,
+            nombre,
+            descripcion: origen.descripcion,
+            versionActual: 1,
+            activo: dto.activo ?? true,
+            pasos: {
+              create: pasosActuales.map((paso) => ({
+                tenantId,
+                version: 1,
+                orden: paso.orden,
+                familiaCodigo: paso.familiaCodigo,
+                activo: paso.activo,
+              })),
+            },
+          },
+          include: { pasos: true },
+        });
+
+        await tx.rutaVersion.create({
+          data: {
+            tenantId,
+            rutaId: rutaDuplicada.id,
+            version: 1,
+            snapshotJson: this.buildRutaSnapshot(rutaDuplicada.pasos),
+            cambios: `Copia de ${origen.nombre}`,
+          },
+        });
+
+        return rutaDuplicada;
+      });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new BadRequestException(
+          `Ya existe una ruta con código "${codigo}"`,
         );
       }
       throw err;
@@ -285,6 +363,32 @@ export class RutasProduccionService {
     }
 
     return this.prisma.ruta.delete({ where: { id } });
+  }
+
+  private async nextCopyCode(tenantId: string, codigoBase: string) {
+    const base = codigoBase.slice(0, 100);
+    for (let index = 1; index < 1000; index += 1) {
+      const suffix = `-${index}`;
+      const candidate =
+        index === 1 ? base : `${base.slice(0, 100 - suffix.length)}${suffix}`;
+      const exists = await this.prisma.ruta.findFirst({
+        where: { tenantId, codigo: candidate },
+        select: { id: true },
+      });
+      if (!exists) return candidate;
+    }
+    throw new BadRequestException('No se pudo generar un código de copia único.');
+  }
+
+  private codigoFromNombre(nombre: string) {
+    const codigo = nombre
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^A-Za-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-{2,}/g, '-')
+      .toUpperCase();
+    return codigo || 'RUTA-COPIA';
   }
 
   async obtenerRuta(tenantId: string, id: string) {

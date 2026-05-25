@@ -3,11 +3,31 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { GitBranchIcon, PlusIcon, SearchIcon } from "lucide-react";
+import { CopyIcon, GitBranchIcon, Loader2Icon, PlusIcon, SearchIcon } from "lucide-react";
+import { toast } from "sonner";
 
 import { EstadoVacio } from "@/components/ui/estado-vacio";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import type { FamiliaListItem, RutaListItem } from "@/lib/productos-servicios";
-import { getCatalogoFamilias } from "@/lib/productos-servicios-api";
+import { duplicarRuta, getCatalogoFamilias } from "@/lib/productos-servicios-api";
+
+const Ico = {
+  Arrow: (props: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
+  ),
+};
 
 function StepChain({
   pasos,
@@ -38,6 +58,9 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
   const rutas = initialRutas;
   const [familias, setFamilias] = React.useState<FamiliaListItem[]>([]);
   const [search, setSearch] = React.useState("");
+  const [duplicandoId, setDuplicandoId] = React.useState<string | null>(null);
+  const [rutaADuplicar, setRutaADuplicar] = React.useState<RutaListItem | null>(null);
+  const [nombreCopia, setNombreCopia] = React.useState("");
 
   React.useEffect(() => {
     getCatalogoFamilias()
@@ -65,6 +88,50 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
 
   const openRuta = (id: string) => {
     router.push(`/productos-servicios/rutas/${id}`);
+  };
+
+  const codigoPreview = React.useMemo(() => {
+    const codigo = nombreCopia
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^A-Za-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .replace(/-{2,}/g, "-")
+      .toUpperCase();
+    return codigo || "RUTA-COPIA";
+  }, [nombreCopia]);
+
+  const abrirDuplicarRuta = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    ruta: RutaListItem,
+  ) => {
+    event.stopPropagation();
+    if (duplicandoId) return;
+    setRutaADuplicar(ruta);
+    setNombreCopia(`${ruta.nombre} copia`);
+  };
+
+  const handleDuplicarRuta = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!rutaADuplicar || duplicandoId) return;
+    const nombre = nombreCopia.trim();
+    if (!nombre) {
+      toast.error("Ingresá un nombre para la copia");
+      return;
+    }
+    setDuplicandoId(rutaADuplicar.id);
+    try {
+      const duplicada = await duplicarRuta(rutaADuplicar.id, { nombre });
+      toast.success(`Ruta "${rutaADuplicar.nombre}" duplicada`);
+      setRutaADuplicar(null);
+      setNombreCopia("");
+      router.refresh();
+      router.push(`/productos-servicios/rutas/${duplicada.id}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo duplicar la ruta");
+    } finally {
+      setDuplicandoId(null);
+    }
   };
 
   return (
@@ -156,14 +223,31 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
                       </span>
                     </td>
                     <td className="right">
-                      <Link
-                        href={`/productos-servicios/rutas/${ruta.id}`}
-                        className="inline-flex items-center gap-2 text-[12.5px] font-medium text-[var(--ink)]"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        Ver / editar
-                        <span aria-hidden="true">→</span>
-                      </Link>
+                      <span className="actions">
+                        <button
+                          type="button"
+                          className="link-action"
+                          aria-label={`Duplicar ${ruta.nombre}`}
+                          title="Duplicar"
+                          disabled={duplicandoId === ruta.id}
+                          onClick={(event) => abrirDuplicarRuta(event, ruta)}
+                        >
+                          {duplicandoId === ruta.id ? (
+                            <Loader2Icon size={13} className="animate-spin" />
+                          ) : (
+                            <CopyIcon size={13} />
+                          )}
+                        </button>
+                        <Link
+                          href={`/productos-servicios/rutas/${ruta.id}`}
+                          className="link-action"
+                          aria-label={`Ver detalle de ${ruta.nombre}`}
+                          title="Ver detalle"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <Ico.Arrow />
+                        </Link>
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -172,6 +256,65 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
           )}
         </div>
       )}
+
+      <AlertDialog
+        open={Boolean(rutaADuplicar)}
+        onOpenChange={(open) => {
+          if (duplicandoId) return;
+          if (!open) {
+            setRutaADuplicar(null);
+            setNombreCopia("");
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <form onSubmit={handleDuplicarRuta}>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Duplicar ruta de producción</AlertDialogTitle>
+              <AlertDialogDescription>
+                Definí el nombre de la copia. Se copiarán los pasos de la versión actual y el
+                sistema generará el código automáticamente.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="mt-4 grid gap-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="nombre-copia-ruta">Nombre de la copia</Label>
+                <Input
+                  id="nombre-copia-ruta"
+                  autoFocus
+                  value={nombreCopia}
+                  onChange={(event) => setNombreCopia(event.target.value)}
+                  placeholder="Nombre de la nueva ruta"
+                  disabled={Boolean(duplicandoId)}
+                />
+              </div>
+              <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                Código sugerido: <span className="font-mono text-foreground">{codigoPreview}</span>
+              </div>
+            </div>
+            <AlertDialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={Boolean(duplicandoId)}
+                onClick={() => {
+                  setRutaADuplicar(null);
+                  setNombreCopia("");
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                loading={Boolean(duplicandoId)}
+                disabled={!nombreCopia.trim()}
+              >
+                Duplicar ruta
+              </Button>
+            </AlertDialogFooter>
+          </form>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -13,8 +13,16 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { ProductosServiciosService } from './productos-servicios.service';
-import { ActualizarProductoDto, CrearProductoDto } from './dto/producto.dto';
-import { ActualizarRutaDto, CrearRutaDto } from './dto/ruta.dto';
+import {
+  ActualizarProductoDto,
+  CrearProductoDto,
+  DuplicarProductoDto,
+} from './dto/producto.dto';
+import {
+  ActualizarRutaDto,
+  CrearRutaDto,
+  DuplicarRutaDto,
+} from './dto/ruta.dto';
 import {
   ActualizarProductoRutaAlternativaDto,
   AgregarPasoExtraDto,
@@ -94,6 +102,17 @@ export class ProductosServiciosController {
     return this.service.actualizarProducto(tenantId, id, dto);
   }
 
+  @Post('productos/:id/duplicar')
+  async duplicarProducto(
+    @Req() req: RequestWithAuth,
+    @Param('id') id: string,
+    @Body() dto: DuplicarProductoDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.duplicarProducto(tenantId, id, dto);
+  }
+
   @Delete('productos/:id')
   @HttpCode(204)
   async eliminarProducto(@Req() req: RequestWithAuth, @Param('id') id: string) {
@@ -132,6 +151,17 @@ export class ProductosServiciosController {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
     return this.service.actualizarRuta(tenantId, id, dto);
+  }
+
+  @Post('rutas/:id/duplicar')
+  async duplicarRuta(
+    @Req() req: RequestWithAuth,
+    @Param('id') id: string,
+    @Body() dto: DuplicarRutaDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.duplicarRuta(tenantId, id, dto);
   }
 
   @Delete('rutas/:id')

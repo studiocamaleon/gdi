@@ -98,6 +98,18 @@ const NESTING_ALGORITHMS = [
   "grid-2d-multi",
   "packingsolver-rectangle",
 ];
+const MONTAJE_SOURCE_OPTIONS = [
+  {
+    value: "piezas_jobcontext",
+    label: "Piezas del producto",
+    description: "Usa cantidad, ancho y alto cargados por el comercial.",
+  },
+  {
+    value: "pliegos_impresos",
+    label: "Pliegos impresos",
+    description: "Usa pliegos_impresos y el tamaño de pliego publicado por impresión.",
+  },
+];
 const COSTING_STRATEGIES = ["simple", "m2-exact", "consumed-length", "plate-segments"];
 const MODO_COLOR_LABELS: Record<string, string> = {
   BN: "Blanco y negro",
@@ -487,7 +499,13 @@ function nestingAplica(familiaCodigo: string | undefined, cfg: UpsertConfigPasoP
   if (!familiaCodigo) return false;
   if (familiaCodigo === "pre_prensa") return false;
   if (cfg.mecanismoCantidad === "CALCULADO_POR_PASO") return true;
-  return ["impresion_por_area", "impresion_por_hoja", "plotter_corte", "laminado"].includes(familiaCodigo);
+  return [
+    "impresion_por_area",
+    "impresion_por_hoja",
+    "plotter_corte",
+    "laminado",
+    "montaje_sobre_sustrato",
+  ].includes(familiaCodigo);
 }
 
 function panelizadoAplica(
@@ -1119,7 +1137,10 @@ function validarBasico(
 ): TabValidacion {
   const errores: string[] = [];
   const warnings: string[] = [];
-  if (familia?.relacionMaquinaSoportada.includes("M-1") && !cfg.maquinaM1Id) {
+  const soportaManual = familia?.relacionMaquinaSoportada.includes("M-0") ?? false;
+  const soportaMaquina = familia?.relacionMaquinaSoportada.includes("M-1") ?? false;
+  const requiereMaquina = cfg.modoTiempo === "T-3" || (soportaMaquina && !soportaManual);
+  if (requiereMaquina && !cfg.maquinaM1Id) {
     errores.push("Falta máquina principal");
   }
   if (cfg.maquinaM1Id && !cfg.perfilM1Id) {
@@ -1131,6 +1152,15 @@ function validarBasico(
   }
   if (!cfg.maquinaM1Id && cfg.modoTiempo && !cfg.centroCostoId) {
     warnings.push("Centro de costo horario sin definir");
+  }
+  if (cfg.modoTiempo === "T-2") {
+    const params = asRecord(cfg.paramsPasoJson);
+    const horasEstimadas = readOptionalNumber(params.horasEstimadas);
+    const productividad = readOptionalNumber(params.productivityValue);
+    const campoHoras = typeof params.campoHorasJobContext === "string" ? params.campoHorasJobContext.trim() : "";
+    if (!horasEstimadas && !productividad && !campoHoras) {
+      warnings.push("Productividad u horas del paso sin definir");
+    }
   }
   return { errores, warnings };
 }
@@ -1808,6 +1838,34 @@ export function ConfigPasosEditorView({
     });
   };
 
+  const updateStepParams = (
+    rutaPasoId: string,
+    patch: Record<string, unknown>,
+  ) => {
+    setConfigs((prev) => {
+      const cfg = prev[rutaPasoId];
+      const params = { ...asRecord(cfg.paramsPasoJson), ...patch };
+      for (const key of Object.keys(params)) {
+        const value = params[key];
+        if (
+          value === "" ||
+          value === null ||
+          value === undefined ||
+          (typeof value === "number" && !Number.isFinite(value))
+        ) {
+          delete params[key];
+        }
+      }
+      return {
+        ...prev,
+        [rutaPasoId]: {
+          ...cfg,
+          paramsPasoJson: Object.keys(params).length > 0 ? params : null,
+        },
+      };
+    });
+  };
+
   const updateModoColorConfig = (
     rutaPasoId: string,
     patch: Record<string, unknown>,
@@ -2049,7 +2107,7 @@ export function ConfigPasosEditorView({
           return true;
         }),
       );
-      const paramsPasoJson = { ...(paramsRes.value ?? {}) };
+      const paramsPasoJson = { ...(paramsRes.value ?? {}), ...currentParams };
       delete paramsPasoJson.nestingConfig;
       delete paramsPasoJson.modoColorConfig;
       if (Object.keys(nestingConfig).length > 0) {
@@ -2320,6 +2378,14 @@ export function ConfigPasosEditorView({
           const mostrarNesting = nestingAplica(familia?.codigo, cfg);
           const mostrarSetupCleanupOverrides = Boolean(cfg.maquinaM1Id);
           const mostrarTiempoFijoOverride = cfg.modoTiempo === "T-1" && !cfg.maquinaM1Id;
+          const mostrarProductividadPropia = cfg.modoTiempo === "T-2";
+          const paramsPaso = asRecord(cfg.paramsPasoJson);
+          const productividadPropia = readOptionalNumber(paramsPaso.productivityValue);
+          const horasEstimadasPaso = readOptionalNumber(paramsPaso.horasEstimadas);
+          const soportaPasoManual = familia?.relacionMaquinaSoportada.includes("M-0") ?? false;
+          const requiereMaquinaPrincipal =
+            cfg.modoTiempo === "T-3" ||
+            ((familia?.relacionMaquinaSoportada.includes("M-1") ?? false) && !soportaPasoManual);
           const mostrarOverridesTiempo = mostrarSetupCleanupOverrides || mostrarTiempoFijoOverride;
 	          const nestingConfig = getNestingConfig(cfg.paramsPasoJson);
 	          const modoColorConfig = getModoColorConfig(cfg.paramsPasoJson);
@@ -2678,6 +2744,61 @@ export function ConfigPasosEditorView({
                         />
                       </div>
                     )}
+                    {mostrarProductividadPropia && (
+                      <div className="field md:col-span-full">
+                        <LabelConTooltip
+                          label="Tiempo propio del paso"
+                          tooltip="Usalo para pasos manuales o externos que no dependen de una máquina. Podés definir una productividad o un tiempo fijo estimado."
+                          iconSize="sm"
+                        />
+                        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                          <div className="space-y-1">
+                            <span className="text-muted-foreground text-xs">Productividad</span>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                min={0}
+                                step={1}
+                                value={productividadPropia ?? ""}
+                                onChange={(event) =>
+                                  updateStepParams(paso.id, {
+                                    productivityValue:
+                                      event.target.value === "" ? null : Number(event.target.value),
+                                  })
+                                }
+                                placeholder="Ej. 500"
+                              />
+                              <span className="text-muted-foreground whitespace-nowrap text-xs">
+                                unidades/h
+                              </span>
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-muted-foreground text-xs">Horas estimadas</span>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                min={0}
+                                step={0.25}
+                                value={horasEstimadasPaso ?? ""}
+                                onChange={(event) =>
+                                  updateStepParams(paso.id, {
+                                    horasEstimadas:
+                                      event.target.value === "" ? null : Number(event.target.value),
+                                  })
+                                }
+                                placeholder="Opcional"
+                              />
+                              <span className="text-muted-foreground whitespace-nowrap text-xs">h</span>
+                            </div>
+                          </div>
+                        </div>
+                        <span className="help">
+                          Si completás horas estimadas, el motor usa ese tiempo fijo. Si no, calcula
+                          cantidad / productividad.
+                        </span>
+                      </div>
+                    )}
                     {cantidadRelevante && (
                       <div className="field">
                         <LabelConTooltip
@@ -2689,6 +2810,24 @@ export function ConfigPasosEditorView({
                           onValueChange={(v) => updateConfig(paso.id, { mecanismoCantidad: v || null })}
                           options={opcionesCantidad}
                           placeholder="Elegir"
+                        />
+                      </div>
+                    )}
+                    {familia?.codigo === "montaje_sobre_sustrato" && (
+                      <div className="field">
+                        <LabelConTooltip
+                          label="Piezas a montar"
+                          tooltip="Define qué medidas usa el paso para calcular el nesting del material de montaje."
+                        />
+                        <HumanSelect
+                          value={String(paramsPaso.fuentePiezasMontaje ?? "piezas_jobcontext")}
+                          onValueChange={(value) =>
+                            updateStepParams(paso.id, {
+                              fuentePiezasMontaje: value || "piezas_jobcontext",
+                            })
+                          }
+                          options={MONTAJE_SOURCE_OPTIONS}
+                          placeholder="Elegir origen"
                         />
                       </div>
                     )}
@@ -2709,11 +2848,16 @@ export function ConfigPasosEditorView({
                         <LabelConTooltip
                           label={
                             <>
-                              Máquina principal <span className="req">*</span>
+                              Máquina principal{" "}
+                              {requiereMaquinaPrincipal ? <span className="req">*</span> : null}
                             </>
                           }
-                          tooltip="Máquina del taller que ejecuta este paso. La lista filtra por compatibilidad con la familia."
-                          required
+                          tooltip={
+                            requiereMaquinaPrincipal
+                              ? "Máquina del taller que ejecuta este paso. La lista filtra por compatibilidad con la familia."
+                              : "Opcional. Dejala sin asignar si este paso se ejecuta manualmente y usa centro de costo."
+                          }
+                          required={requiereMaquinaPrincipal}
                         />
                         <HumanSelect
                           value={cfg.maquinaM1Id ?? ""}

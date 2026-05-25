@@ -129,6 +129,17 @@ const MP = {
       'SUSTRATO_HOJA',
     ],
   },
+  sustratoMontaje: {
+    familiasMateriaPrima: ['SUSTRATO', 'MAGNETICO_FIJACION', 'POP_EXHIBIDOR'],
+    subfamiliasMateriaPrima: [
+      'SUSTRATO_RIGIDO',
+      'SUSTRATO_ROLLO_FLEXIBLE',
+      'SUSTRATO_HOJA',
+      'IMAN_CERAMICO_FLEXIBLE',
+      'SEMIELABORADO_POP',
+      'ACCESORIO_MONTAJE_POP',
+    ],
+  },
   soldadura: {
     familiasMateriaPrima: ['METAL_ESTRUCTURA', 'HERRAJE_ACCESORIO'],
     subfamiliasMateriaPrima: [
@@ -1084,6 +1095,61 @@ const ensamble_estructural: DefinicionFamilia = {
   paramsPasoSchema: [],
 };
 
+const montaje_sobre_sustrato: DefinicionFamilia = {
+  codigo: 'montaje_sobre_sustrato',
+  nombre: 'Montado sobre material',
+  categoria: 'estructural_montaje',
+  descripcion:
+    'Monta una salida impresa o cortada sobre otro sustrato, calculando el consumo del material de montaje con nesting propio.',
+  relacionMaquinaSoportada: ['M-0', 'M-1'],
+  modosTiempoSoportados: ['T-2', 'T-3'],
+  mecanismosCantidadSoportados: ['CALCULADO_POR_PASO'],
+  modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL', 'CONDICIONAL'],
+  modoActivacionDefault: 'OPCIONAL',
+  multiplicadoresSoportados: [],
+  slotsRequeridos: [
+    {
+      codigo: 'sustrato_montaje',
+      nombre: 'Material de montaje',
+      tipo: 'SUSTRATO',
+      requerido: true,
+      compatibilidadMaterial: MP.sustratoMontaje,
+    },
+    {
+      codigo: 'adhesivo_montaje',
+      nombre: 'Adhesivo de montaje',
+      tipo: 'INSUMO_PASO',
+      requerido: false,
+      compatibilidadMaterial: MP.adhesivo,
+    },
+  ],
+  permiteSlotsAdicionales: true,
+  plantillasCompatibles: [],
+  inputsRequeridos: [],
+  outputsCanonicos: [
+    'piezas_montadas',
+    'm2_calculados',
+    'aprovechamiento_pct',
+  ],
+  validaciones: [],
+  paramsPasoSchema: [
+    {
+      campo: 'fuentePiezasMontaje',
+      etiqueta: 'Piezas a montar',
+      tipo: 'enum',
+      valoresPermitidos: ['piezas_jobcontext', 'pliegos_impresos'],
+      default: 'piezas_jobcontext',
+      descripcion:
+        'Define si el montaje usa las piezas del producto o los pliegos ya impresos por un paso anterior.',
+    },
+  ],
+  productosTipicos: [
+    'Vinilo impreso montado en PVC',
+    'Papel adhesivo montado en imán',
+    'Cartelería en foamboard',
+  ],
+};
+
 const instalacion_electrica: DefinicionFamilia = {
   codigo: 'instalacion_electrica',
   nombre: 'Instalación eléctrica luminosos',
@@ -1481,6 +1547,7 @@ export const FAMILIAS: Record<FamiliaCodigo, DefinicionFamilia> = {
   engomado_emblocado,
   armado_cajas,
   soldadura,
+  montaje_sobre_sustrato,
   ensamble_estructural,
   instalacion_electrica,
   embalaje,

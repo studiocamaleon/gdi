@@ -132,3 +132,22 @@ export class ActualizarProductoDto {
   @IsBoolean()
   activo?: boolean;
 }
+
+export class DuplicarProductoDto {
+  @IsOptional()
+  @IsString()
+  @Length(3, 50)
+  @Matches(/^[A-Za-z0-9_-]+$/, {
+    message: 'Código solo letras/números/_/-, sin espacios',
+  })
+  codigo?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 200)
+  nombre?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  activo?: boolean;
+}

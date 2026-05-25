@@ -84,3 +84,20 @@ export class ActualizarRutaDto {
   @IsString()
   cambios?: string;
 }
+
+export class DuplicarRutaDto {
+  @IsOptional()
+  @IsString()
+  @Length(3, 100)
+  @Matches(/^[A-Za-z0-9_-]+$/)
+  codigo?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 200)
+  nombre?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  activo?: boolean;
+}

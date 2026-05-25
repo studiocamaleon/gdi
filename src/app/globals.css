@@ -3850,6 +3850,62 @@
     color: var(--ink);
   }
 
+  .icon-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--muted-text);
+    cursor: pointer;
+    transition:
+      border-color .15s ease,
+      background .15s ease,
+      color .15s ease,
+      box-shadow .15s ease;
+  }
+
+  .icon-action:hover {
+    color: var(--ink);
+    background: var(--surface-2);
+    border-color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--ink);
+  }
+
+  .icon-action:disabled {
+    cursor: not-allowed;
+    opacity: .45;
+    box-shadow: none;
+  }
+
+  .icon-action:disabled:hover {
+    color: var(--muted-text);
+    background: #fff;
+    border-color: var(--border);
+  }
+
+  .icon-action.danger:hover {
+    color: var(--danger);
+    border-color: #f0cfc4;
+    background: #fff7f4;
+    box-shadow: inset 0 0 0 1px #f0cfc4;
+  }
+
+  .medida-default-btn.on {
+    color: var(--ink);
+    background: #eeeeef;
+    border-color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--ink), 0 1px 2px rgba(20, 20, 26, .06);
+  }
+
+  .medida-default-btn.on:hover {
+    background: #e8e8e9;
+    border-color: var(--ink);
+  }
+
   .toolbar {
     display: flex;
     align-items: center;
@@ -4150,18 +4206,46 @@
   .tbl .actions {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     color: var(--muted-text);
     font-size: 12.5px;
   }
 
-  .tbl .actions a {
-    color: var(--ink);
+  .tbl .actions a,
+  .tbl .actions .link-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    padding: 0;
+    color: var(--muted-text);
     font-weight: 500;
+    font: inherit;
+    cursor: pointer;
+    transition:
+      border-color .15s ease,
+      background .15s ease,
+      color .15s ease,
+      box-shadow .15s ease;
   }
 
-  .tbl .actions a:hover {
-    text-decoration: underline;
+  .tbl .actions .link-action:disabled {
+    cursor: default;
+    opacity: .55;
+  }
+
+  .tbl .actions a:hover,
+  .tbl .actions .link-action:not(:disabled):hover {
+    color: var(--ink);
+    background: var(--surface-2);
+    border-color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--ink);
+    text-decoration: none;
   }
 
   .tbl-scroll {
@@ -5042,6 +5126,7 @@
     display: flex;
     flex-direction: column;
     gap: 14px;
+    padding-bottom: 104px;
   }
 
   .pricing-flow .wiz-section {
@@ -5060,6 +5145,27 @@
     gap: 12px;
     padding: 0;
     margin-bottom: 14px;
+  }
+
+  .pricing-section .pricing-section-head {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: 12px;
+    row-gap: 4px;
+  }
+
+  .pricing-section .pricing-section-action {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    justify-self: end;
+    align-self: start;
+  }
+
+  .pricing-section .pricing-section-action .btn,
+  .pricing-section .pricing-section-action button {
+    width: auto;
+    white-space: nowrap;
   }
 
   .pricing-section [data-slot="card-title"] {
@@ -6429,6 +6535,39 @@
     border-top: 1px solid var(--border);
   }
 
+  .save-sticky-footer,
+  .pricing-sticky-footer {
+    position: fixed !important;
+    right: 32px;
+    bottom: 24px !important;
+    left: calc(var(--sidebar-width, 16rem) + 32px);
+    z-index: 60;
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, .96);
+    border: 1px solid var(--border);
+    border-radius: var(--r-3);
+    box-shadow: 0 16px 40px -24px rgba(20, 20, 26, .55);
+    backdrop-filter: blur(8px);
+  }
+
+  .pricing-sticky-footer-copy {
+    color: var(--muted-text);
+    font-size: 12.5px;
+  }
+
+  @media (max-width: 900px) {
+    .save-sticky-footer,
+    .pricing-sticky-footer {
+      right: 16px;
+      bottom: 16px !important;
+      left: 16px;
+    }
+  }
+
   .ot-v1 .ap-head {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
@@ -7215,9 +7354,10 @@
   }
 
   .ot-v1 .ap-qty-shortcuts button.active {
-    color: var(--ok);
-    background: var(--ok-bg);
-    border-color: #cfe6d8;
+    color: var(--ink);
+    background: #eeeeef;
+    border-color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--ink), 0 1px 2px rgba(20, 20, 26, .06);
   }
 
   .ot-v1 .ap-qty-shortcuts button.active::before,
@@ -7225,7 +7365,7 @@
   .ot-v1 .ap-variant-card.active::before,
   .ot-v1 .ap-material-color.active::before,
   .ot-v1 .ap-material-thickness.active::before {
-    content: "✓";
+    content: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -7241,6 +7381,7 @@
 
   .ot-v1 .ap-qty-shortcuts button.active::before,
   .ot-v1 .ap-segmented button.active::before,
+  .ot-v1 .ap-variant-card.active::before,
   .ot-v1 .ap-material-color.active::before,
   .ot-v1 .ap-material-thickness.active::before {
     position: absolute;
@@ -7367,19 +7508,16 @@
   }
 
   .ot-v1 .ap-variant-card.active {
-    background: var(--ok-bg);
-    border-color: #cfe6d8;
-    box-shadow: 0 1px 2px rgba(20, 20, 26, .08);
+    color: var(--ink);
+    background: #eeeeef;
+    border-color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--ink), 0 1px 2px rgba(20, 20, 26, .06);
   }
 
   .ot-v1 .ap-variant-card.active::before {
     position: absolute;
     top: 8px;
     left: 8px;
-  }
-
-  .ot-v1 .ap-variant-card.active {
-    padding-left: 34px;
   }
 
   .ot-v1 .ap-variant-title {
@@ -7401,6 +7539,11 @@
     line-height: 1.3;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .ot-v1 .ap-variant-card.active .ap-variant-title,
+  .ot-v1 .ap-variant-card.active .ap-variant-meta {
+    color: var(--ink);
   }
 
   .ot-v1 .ap-variant-badge {
@@ -7473,14 +7616,10 @@
 
   .ot-v1 .ap-material-color.active,
   .ot-v1 .ap-material-thickness.active {
-    color: var(--ok);
-    background: var(--ok-bg);
-    border-color: #cfe6d8;
-    box-shadow: 0 1px 2px rgba(20, 20, 26, .08);
-  }
-
-  .ot-v1 .ap-material-color.active {
-    padding-left: 32px;
+    color: var(--ink);
+    background: #eeeeef;
+    border-color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--ink), 0 1px 2px rgba(20, 20, 26, .06);
   }
 
   .ot-v1 .ap-material-thickness {
@@ -7526,6 +7665,11 @@
     font-size: 13px;
     font-weight: 750;
     line-height: 1.15;
+  }
+
+  .ot-v1 .ap-material-color.active small,
+  .ot-v1 .ap-material-thickness.active .ap-material-thickness-title {
+    color: var(--ink);
   }
 
   .ot-v1 .ap-material-default-star {
@@ -7589,9 +7733,9 @@
   }
 
   .ot-v1 .ap-segmented button.active {
-    color: var(--ok);
-    background: var(--ok-bg);
-    box-shadow: 0 1px 2px rgba(20, 20, 26, .08);
+    color: var(--ink);
+    background: #eeeeef;
+    box-shadow: inset 0 0 0 1px var(--ink), 0 1px 2px rgba(20, 20, 26, .06);
   }
 
   .ot-v1 .ap-segmented button.active::before {
@@ -7631,10 +7775,10 @@
   }
 
   .ot-v1 .ap-option-list button.active {
-    color: var(--ok);
-    border-color: #cfe6d8;
-    background: var(--ok-bg);
-    box-shadow: 0 1px 2px rgba(20, 20, 26, .08);
+    color: var(--ink);
+    border-color: var(--ink);
+    background: #eeeeef;
+    box-shadow: inset 0 0 0 1px var(--ink), 0 1px 2px rgba(20, 20, 26, .06);
   }
 
   .ot-v1 .ap-option-list button span:last-child {
@@ -7651,17 +7795,12 @@
   }
 
   .ot-v1 .ap-option-list button.active .ap-option-dot {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    background: var(--ok);
-    border-color: var(--ok);
-    border-radius: 5px;
+    background: var(--ink);
+    border-color: var(--ink);
   }
 
   .ot-v1 .ap-option-list button.active .ap-option-dot::before {
-    content: "✓";
+    content: none;
     font-size: 10px;
     font-weight: 800;
     line-height: 1;
@@ -7736,8 +7875,10 @@
   }
 
   .ot-v1 .ap-adi.on {
-    background: var(--ok-bg);
-    border-color: #cfe6d8;
+    color: var(--ink);
+    background: #eeeeef;
+    border-color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--ink), 0 1px 2px rgba(20, 20, 26, .06);
   }
 
   .ot-v1 .ap-adi .cb {
@@ -7754,9 +7895,7 @@
   }
 
   .ot-v1 .ap-adi.on .cb {
-    color: #fff;
-    background: var(--ok);
-    border-color: var(--ok);
+    display: none;
   }
 
   .ot-v1 .ap-adi .cb svg {
@@ -7777,7 +7916,7 @@
 
   .ot-v1 .ap-adi.on .lb,
   .ot-v1 .ap-adi.on .mt {
-    color: var(--ok);
+    color: var(--ink);
   }
 
   .ot-v1 .ap-adi .mt {
@@ -7794,6 +7933,8 @@
   }
 
   .ot-v1 .ap-adi.on .mt.mono {
+    color: var(--ink);
+    background: #fff;
     font-weight: 600;
   }
 
@@ -7840,13 +7981,13 @@
     display: flex;
     align-items: center;
     gap: 9px;
-    color: var(--ok);
+    color: var(--ink);
     font-size: 13px;
     font-weight: 700;
   }
 
   .ot-v1 .ap-optional-config-title .cb {
-    display: inline-flex;
+    display: none;
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
@@ -9581,4 +9722,36 @@
   .cmyk-register-ring-sm {
     animation: none;
   }
+}
+
+/* Final override: selected controls in the add-product sheet should be neutral, not success/black filled. */
+.ot-v1 .ap-qty-shortcuts button.active,
+.ot-v1 .ap-segmented button.active,
+.ot-v1 .ap-option-list button.active,
+.ot-v1 .ap-variant-card.active,
+.ot-v1 .ap-material-color.active,
+.ot-v1 .ap-material-thickness.active,
+.ot-v1 .ap-adi.on {
+  color: var(--ink) !important;
+  background: #eeeeef !important;
+  border-color: var(--ink) !important;
+  box-shadow: inset 0 0 0 1px var(--ink), 0 1px 2px rgba(20, 20, 26, .06) !important;
+}
+
+.ot-v1 .ap-qty-shortcuts button.active::before,
+.ot-v1 .ap-segmented button.active::before,
+.ot-v1 .ap-option-list button.active .ap-option-dot::before,
+.ot-v1 .ap-variant-card.active::before,
+.ot-v1 .ap-material-color.active::before,
+.ot-v1 .ap-material-thickness.active::before {
+  content: none !important;
+}
+
+.ot-v1 .ap-variant-card.active .ap-variant-title,
+.ot-v1 .ap-variant-card.active .ap-variant-meta,
+.ot-v1 .ap-material-color.active small,
+.ot-v1 .ap-material-thickness.active .ap-material-thickness-title,
+.ot-v1 .ap-adi.on .lb,
+.ot-v1 .ap-adi.on .mt {
+  color: var(--ink) !important;
 }

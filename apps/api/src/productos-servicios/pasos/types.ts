@@ -45,6 +45,7 @@ export type FamiliaCodigo =
   | 'armado_cajas'
   // Estructural / montaje
   | 'soldadura'
+  | 'montaje_sobre_sustrato'
   | 'ensamble_estructural'
   | 'instalacion_electrica'
   // Operaciones manuales

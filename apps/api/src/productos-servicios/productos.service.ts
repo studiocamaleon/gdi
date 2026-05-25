@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type {
   ActualizarProductoDto,
   CrearProductoDto,
+  DuplicarProductoDto,
   MedidaPredefinidaDto,
 } from './dto/producto.dto';
 
@@ -194,6 +195,297 @@ export class ProductosService {
     }
 
     return this.prisma.producto.delete({ where: { id } });
+  }
+
+  async duplicarProducto(
+    tenantId: string,
+    id: string,
+    dto: DuplicarProductoDto = {},
+  ) {
+    const origen = await this.prisma.producto.findFirst({
+      where: { id, tenantId },
+      include: {
+        rutasAlternativas: {
+          include: {
+            configPasos: {
+              include: {
+                slotsMateriales: {
+                  include: {
+                    candidatos: {
+                      include: { variantes: { orderBy: { orden: 'asc' } } },
+                      orderBy: { orden: 'asc' },
+                    },
+                  },
+                  orderBy: { slotCodigo: 'asc' },
+                },
+                maquinasCandidatas: { orderBy: { orden: 'asc' } },
+                cargosDirectosPaso: true,
+              },
+            },
+          },
+          orderBy: { orden: 'asc' },
+        },
+        pasosExtras: { orderBy: { ordenInterno: 'asc' } },
+        cargosDirectosCotizacion: true,
+        impuestosAplicados: { orderBy: { orden: 'asc' } },
+        comisionesAplicadas: { orderBy: { orden: 'asc' } },
+        preciosEspecialesClientes: true,
+      },
+    });
+    if (!origen) throw new NotFoundException(`Producto ${id} no encontrado`);
+
+    const nombre = dto.nombre?.trim() || `${origen.nombre} copia`;
+    const baseCodigo = dto.codigo?.trim() || this.codigoFromNombre(nombre);
+    const codigo = await this.nextCopyCode(tenantId, baseCodigo);
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const productoDuplicado = await tx.producto.create({
+          data: {
+            tenantId,
+            subcategoriaComercialId: origen.subcategoriaComercialId,
+            codigo,
+            nombre,
+            descripcion: origen.descripcion,
+            unidadComercial: origen.unidadComercial,
+            modoMedidas: origen.modoMedidas,
+            medidaDefaultAnchoMm: origen.medidaDefaultAnchoMm,
+            medidaDefaultAltoMm: origen.medidaDefaultAltoMm,
+            medidasPredefinidasJson: this.jsonOrNull(origen.medidasPredefinidasJson),
+            precioConfigJson: this.jsonOrNull(origen.precioConfigJson),
+            atributosComercialesJson: this.jsonOrNull(origen.atributosComercialesJson),
+            activo: dto.activo ?? false,
+          },
+          include: {
+            subcategoriaComercial: { include: { categoria: true } },
+          },
+        });
+
+        for (const rutaAlt of origen.rutasAlternativas) {
+          const rutaDuplicada = await tx.productoRutaAlternativa.create({
+            data: {
+              tenantId,
+              productoId: productoDuplicado.id,
+              rutaId: rutaAlt.rutaId,
+              rutaVersion: rutaAlt.rutaVersion,
+              nombre: rutaAlt.nombre,
+              esPreferida: rutaAlt.esPreferida,
+              reglaAutoSeleccionJson: this.jsonOrNull(rutaAlt.reglaAutoSeleccionJson),
+              orden: rutaAlt.orden,
+              activo: rutaAlt.activo,
+            },
+          });
+
+          for (const config of rutaAlt.configPasos) {
+            const configDuplicada = await tx.productoConfigPaso.create({
+              data: {
+                tenantId,
+                productoRutaAlternativaId: rutaDuplicada.id,
+                rutaPasoId: config.rutaPasoId,
+                modoActivacion: config.modoActivacion,
+                condicionActivacionJson: this.jsonOrNull(config.condicionActivacionJson),
+                modoTiempo: config.modoTiempo,
+                mecanismoCantidad: config.mecanismoCantidad,
+                mecanismoCantidadConfigJson: this.jsonOrNull(config.mecanismoCantidadConfigJson),
+                multiplicadoresActivos: config.multiplicadoresActivos,
+                paramsPasoJson: this.jsonOrNull(config.paramsPasoJson),
+                maquinaM1Id: config.maquinaM1Id,
+                perfilM1Id: config.perfilM1Id,
+                centroCostoId: config.centroCostoId,
+                setupOverrideMin: config.setupOverrideMin,
+                cleanupOverrideMin: config.cleanupOverrideMin,
+                tiempoFijoOverrideMin: config.tiempoFijoOverrideMin,
+                activo: config.activo,
+              },
+            });
+
+            for (const slot of config.slotsMateriales) {
+              const slotDuplicado = await tx.productoConfigPasoSlotMaterial.create({
+                data: {
+                  tenantId,
+                  productoConfigPasoId: configDuplicada.id,
+                  slotCodigo: slot.slotCodigo,
+                  modoSeleccion: slot.modoSeleccion,
+                  criterioMotorAuto: slot.criterioMotorAuto,
+                  criterioInputCampo: slot.criterioInputCampo,
+                  criterioMaterialCampo: slot.criterioMaterialCampo,
+                  materialVarianteId: slot.materialVarianteId,
+                  estrategiaCosto: slot.estrategiaCosto,
+                  formula: slot.formula,
+                  aplicaMultiCaras: slot.aplicaMultiCaras,
+                  activo: slot.activo,
+                },
+              });
+
+              for (const candidato of slot.candidatos) {
+                const candidatoDuplicado =
+                  await tx.productoConfigPasoSlotMaterialCandidato.create({
+                    data: {
+                      tenantId,
+                      slotMaterialId: slotDuplicado.id,
+                      materiaPrimaId: candidato.materiaPrimaId,
+                      defaultVarianteId: candidato.defaultVarianteId,
+                      orden: candidato.orden,
+                    },
+                  });
+                if (candidato.variantes.length > 0) {
+                  await tx.productoConfigPasoSlotMaterialCandidatoVariante.createMany({
+                    data: candidato.variantes.map((variante) => ({
+                      tenantId,
+                      candidatoId: candidatoDuplicado.id,
+                      varianteId: variante.varianteId,
+                      orden: variante.orden,
+                    })),
+                  });
+                }
+              }
+            }
+
+            if (config.maquinasCandidatas.length > 0) {
+              await tx.productoConfigPasoMaquinaCandidata.createMany({
+                data: config.maquinasCandidatas.map((maquina) => ({
+                  tenantId,
+                  productoConfigPasoId: configDuplicada.id,
+                  maquinaId: maquina.maquinaId,
+                  esPreferida: maquina.esPreferida,
+                  orden: maquina.orden,
+                  activo: maquina.activo,
+                })),
+              });
+            }
+
+            if (config.cargosDirectosPaso.length > 0) {
+              await tx.productoCargoDirectoPaso.createMany({
+                data: config.cargosDirectosPaso.map((cargo) => ({
+                  tenantId,
+                  productoConfigPasoId: configDuplicada.id,
+                  cargoDirectoCatalogoId: cargo.cargoDirectoCatalogoId,
+                  modoActivacion: cargo.modoActivacion,
+                  condicionActivacionJson: this.jsonOrNull(cargo.condicionActivacionJson),
+                  configOverrideJson: this.jsonOrNull(cargo.configOverrideJson),
+                  activo: cargo.activo,
+                })),
+              });
+            }
+          }
+        }
+
+        if (origen.pasosExtras.length > 0) {
+          await tx.productoPasoExtra.createMany({
+            data: origen.pasosExtras.map((paso) => ({
+              tenantId,
+              productoId: productoDuplicado.id,
+              insertarDespuesDeRutaPasoId: paso.insertarDespuesDeRutaPasoId,
+              ordenInterno: paso.ordenInterno,
+              familiaCodigo: paso.familiaCodigo,
+              modoActivacion: paso.modoActivacion,
+              condicionActivacionJson: this.jsonOrNull(paso.condicionActivacionJson),
+              modoTiempo: paso.modoTiempo,
+              mecanismoCantidad: paso.mecanismoCantidad,
+              mecanismoCantidadConfigJson: this.jsonOrNull(paso.mecanismoCantidadConfigJson),
+              multiplicadoresActivos: paso.multiplicadoresActivos,
+              paramsPasoJson: this.jsonOrNull(paso.paramsPasoJson),
+              maquinaM1Id: paso.maquinaM1Id,
+              perfilM1Id: paso.perfilM1Id,
+              configSlotsMaterialesJson: this.jsonOrNull(paso.configSlotsMaterialesJson),
+              configMaquinasCandidatasJson: this.jsonOrNull(paso.configMaquinasCandidatasJson),
+              configCargosDirectosJson: this.jsonOrNull(paso.configCargosDirectosJson),
+              activo: paso.activo,
+            })),
+          });
+        }
+
+        if (origen.cargosDirectosCotizacion.length > 0) {
+          await tx.productoCargoDirectoCotizacion.createMany({
+            data: origen.cargosDirectosCotizacion.map((cargo) => ({
+              tenantId,
+              productoId: productoDuplicado.id,
+              cargoDirectoCatalogoId: cargo.cargoDirectoCatalogoId,
+              modoActivacion: cargo.modoActivacion,
+              condicionActivacionJson: this.jsonOrNull(cargo.condicionActivacionJson),
+              configOverrideJson: this.jsonOrNull(cargo.configOverrideJson),
+              activo: cargo.activo,
+            })),
+          });
+        }
+
+        if (origen.impuestosAplicados.length > 0) {
+          await tx.productoImpuestoAplicado.createMany({
+            data: origen.impuestosAplicados.map((impuesto) => ({
+              tenantId,
+              productoId: productoDuplicado.id,
+              impuestoCatalogoId: impuesto.impuestoCatalogoId,
+              orden: impuesto.orden,
+            })),
+          });
+        }
+
+        if (origen.comisionesAplicadas.length > 0) {
+          await tx.productoComisionAplicada.createMany({
+            data: origen.comisionesAplicadas.map((comision) => ({
+              tenantId,
+              productoId: productoDuplicado.id,
+              comisionCatalogoId: comision.comisionCatalogoId,
+              orden: comision.orden,
+            })),
+          });
+        }
+
+        if (origen.preciosEspecialesClientes.length > 0) {
+          await tx.productoPrecioEspecialClienteV2.createMany({
+            data: origen.preciosEspecialesClientes.map((precio) => ({
+              tenantId,
+              productoId: productoDuplicado.id,
+              clienteId: precio.clienteId,
+              configJson: this.jsonOrNull(precio.configJson),
+              activo: precio.activo,
+            })),
+          });
+        }
+
+        return productoDuplicado;
+      });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new BadRequestException(
+          `Ya existe un producto con código "${codigo}"`,
+        );
+      }
+      throw err;
+    }
+  }
+
+  private async nextCopyCode(tenantId: string, codigoBase: string) {
+    const base = codigoBase.slice(0, 50);
+    for (let index = 1; index < 1000; index += 1) {
+      const suffix = `-${index}`;
+      const candidate =
+        index === 1 ? base : `${base.slice(0, 50 - suffix.length)}${suffix}`;
+      const exists = await this.prisma.producto.findFirst({
+        where: { tenantId, codigo: candidate },
+        select: { id: true },
+      });
+      if (!exists) return candidate;
+    }
+    throw new BadRequestException('No se pudo generar un código de copia único.');
+  }
+
+  private codigoFromNombre(nombre: string) {
+    const codigo = nombre
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^A-Za-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-{2,}/g, '-')
+      .toUpperCase();
+    return codigo || 'PRODUCTO-COPIA';
+  }
+
+  private jsonOrNull(value: Prisma.JsonValue | null) {
+    return (value ?? Prisma.JsonNull) as Prisma.InputJsonValue;
   }
 
   private decimalToNumber(value: Prisma.Decimal | null): number | null {

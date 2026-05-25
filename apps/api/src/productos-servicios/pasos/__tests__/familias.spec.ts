@@ -16,8 +16,8 @@ import {
 import type { CategoriaFamiliaCodigo, FamiliaCodigo } from '../types';
 
 describe('Catálogo de familias', () => {
-  it('contiene exactamente 38 familias', () => {
-    expect(FAMILIAS_TOTAL).toBe(38);
+  it('contiene exactamente 39 familias', () => {
+    expect(FAMILIAS_TOTAL).toBe(39);
   });
 
   it('todas las familias tienen categoría válida', () => {
@@ -132,7 +132,6 @@ describe('Catálogo de familias', () => {
       'POLVO_DTF',
       'FILAMENTO_3D',
       'RESINA_3D',
-      'IMAN_CERAMICO_FLEXIBLE',
       'ACCESORIO_MONTAJE_POP',
       'PORTABANNER_ESTRUCTURA',
       'PERFIL_BASTIDOR_TEXTIL',
@@ -216,7 +215,7 @@ describe('Helpers', () => {
     expect(() => getFamilia('familia_inexistente' as FamiliaCodigo)).toThrow();
   });
 
-  it('listarFamilias devuelve los 38 códigos', () => {
-    expect(listarFamilias().length).toBe(38);
+  it('listarFamilias devuelve los 39 códigos', () => {
+    expect(listarFamilias().length).toBe(39);
   });
 });
