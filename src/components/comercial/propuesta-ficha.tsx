@@ -26,11 +26,11 @@ import {
 import { toast } from "sonner";
 
 import type { ClienteDetalle } from "@/lib/clientes";
+import type { CurrentUser } from "@/lib/auth";
 import type { ProductoListItem } from "@/lib/productos-servicios";
 import {
   cotizar,
   recotizarCotizacionItem,
-  type CotizarResponse,
   type NestingViewerInput,
 } from "@/lib/productos-servicios-api";
 import {
@@ -39,10 +39,8 @@ import {
   CANALES_VENTA,
   formatCurrency,
   formatUnidad,
-  MOCK_CLIENTES_PROPUESTA,
-  MOCK_ITEMS,
-  MOCK_VENDEDOR,
   offsetDate,
+  type CotizacionPropuestaSnapshot,
   type PropuestaItem,
   type TipoPropuesta,
 } from "@/lib/propuestas";
@@ -52,15 +50,15 @@ import { NestingViewer } from "@/components/nesting/nesting-viewer";
 type PropuestaFichaProps = {
   initialClientes: ClienteDetalle[];
   initialProductos: ProductoListItem[];
+  currentUser: CurrentUser | null;
 };
 
 type OrdenTab = "productos" | "produccion" | "pagos" | "archivos" | "costos";
 type InnerTab = "specs" | "costos" | "produccion";
-type CosteoMotor = NonNullable<PropuestaItem["costeo"]>;
-type PasoCosteo = CosteoMotor["pasos"][number];
+type PasoCosteo = CotizacionPropuestaSnapshot["pasos"][number];
 type MaterialCosteo = NonNullable<PasoCosteo["materiales"]>[number];
 type CargoPasoCosteo = NonNullable<PasoCosteo["cargosDirectosPaso"]>[number];
-type CotizacionExitosa = NonNullable<CotizarResponse["cotizacion"]>;
+type CotizacionExitosa = CotizacionPropuestaSnapshot;
 type PanelEditorPaso = PasoCosteo & { nestingResult: NestingViewerInput };
 type PanelManualLayout = {
   items: PanelLayoutItem[];
@@ -154,24 +152,8 @@ function applyCotizacionToItem(
     impuestoMonto,
     impuestoPorcentaje,
     total,
+    cotizacion,
     pasos: getCotizacionPasos(cotizacion),
-    costos: {
-      materiales: Math.round(cotizacion.costos.materialesTotal),
-      produccion: Math.round(cotizacion.costos.tiempoTotal),
-      terminacion: 0,
-      terceros: Math.round(cotizacion.costos.cargosDirectosTotal),
-    },
-    costeo: {
-      origen: "motor",
-      cantidadEfectiva: cotizacion.cantidadEfectiva,
-      cantidadPedida: cotizacion.cantidadPedida,
-      cantidadComercialPricing: cotizacion.cantidadComercialPricing,
-      unidadComercialPricing: cotizacion.unidadComercialPricing,
-      costos: cotizacion.costos,
-      pasos: cotizacion.pasos,
-      cargosDirectosCotizacion: cotizacion.cargosDirectosCotizacion,
-      desglosePrecio: cotizacion.desglosePrecio,
-    },
     jobContext,
     rutaAlternativaId: cotizacion.rutaAlternativaId ?? item.rutaAlternativaId,
   };
@@ -238,7 +220,6 @@ function buildPanelLayoutFromNesting(
 ): PanelManualLayout | null {
   const sourcePieces = getSourcePiecesFromJobContext(item.jobContext);
   if (!sourcePieces.length) return null;
-  const sourceById = new Map(sourcePieces.map((piece) => [piece.sourcePieceId, piece]));
   const placementsBySource = new Map<string, NestingViewerInput["placements"]>();
   for (const placement of nesting.placements) {
     const sourcePieceId = inferSourcePieceId(placement.pieceId);
@@ -258,9 +239,9 @@ function buildPanelLayoutFromNesting(
     const panels =
       placements.length > 0
         ? placements.map((placement, index) =>
-            buildPanelFromPlacement(sourcePiece, placement, axis, index, placements.length),
+            buildPanelFromPlacement(sourcePiece, placement, axis, index),
           )
-        : [buildFullPanel(sourcePiece, axis)];
+        : [buildFullPanel(sourcePiece)];
 
     return {
       sourcePieceId: sourcePiece.sourcePieceId,
@@ -276,7 +257,6 @@ function buildPanelLayoutFromNesting(
 
 function buildFullPanel(
   sourcePiece: { pieceWidthMm: number; pieceHeightMm: number },
-  axis: "vertical" | "horizontal",
 ): PanelLayoutPanel {
   return {
     panelIndex: 1,
@@ -294,7 +274,6 @@ function buildPanelFromPlacement(
   placement: NestingViewerInput["placements"][number],
   axis: "vertical" | "horizontal",
   index: number,
-  total: number,
 ): PanelLayoutPanel {
   const overlapStartMm = Number(placement.overlapStartMm ?? 0);
   const overlapEndMm = Number(placement.overlapEndMm ?? 0);
@@ -617,19 +596,10 @@ function nestingTabLabel(result: NestingViewerInput | undefined) {
 }
 
 function getCostBuckets(item: PropuestaItem) {
-  if (item.costeo?.origen === "motor") {
-    return [
-      { key: "materiales", label: "Materiales", amount: item.costeo.costos.materialesTotal },
-      { key: "centro-costo", label: "Centro de costo", amount: item.costeo.costos.tiempoTotal },
-      { key: "cargos", label: "Cargos directos", amount: item.costeo.costos.cargosDirectosTotal },
-    ].filter((bucket) => bucket.amount > 0);
-  }
-
   return [
-    { key: "materiales", label: "Materiales", amount: item.costos.materiales },
-    { key: "centro-costo", label: "Centro de costo", amount: item.costos.produccion },
-    { key: "terminacion", label: "Terminación", amount: item.costos.terminacion },
-    { key: "terceros", label: "Terceros", amount: item.costos.terceros },
+    { key: "materiales", label: "Materiales", amount: item.cotizacion.costos.materialesTotal },
+    { key: "centro-costo", label: "Centro de costo", amount: item.cotizacion.costos.tiempoTotal },
+    { key: "cargos", label: "Cargos directos", amount: item.cotizacion.costos.cargosDirectosTotal },
   ].filter((bucket) => bucket.amount > 0);
 }
 
@@ -745,13 +715,8 @@ function ProduccionItemView({
   calculoPendiente: boolean;
   onEditPanels: (paso: PanelEditorPaso) => void;
 }) {
-  const costeoMotor = item.costeo?.origen === "motor" ? item.costeo : null;
-  const pasosCosteoActivos = costeoMotor
-    ? getVisibleCostSteps(costeoMotor.pasos)
-    : [];
-  const pasosActivos = costeoMotor
-    ? pasosCosteoActivos
-    : item.pasos.filter((paso) => paso.origen !== "opcional");
+  const pasosCosteoActivos = getVisibleCostSteps(item.cotizacion.pasos);
+  const pasosActivos = pasosCosteoActivos;
   const pasosConNesting = pasosCosteoActivos.filter(
     (paso): paso is PanelEditorPaso => Boolean(paso.nestingResult),
   );
@@ -802,15 +767,10 @@ function ProduccionItemView({
         <div className="cost-title">Ruta de producción</div>
         <div className="production-route">
           {pasosActivos.map((paso, index) => {
-            const isMotorStep = "familiaCodigo" in paso;
-            const title = isMotorStep
-              ? humanizeCodigo(paso.familiaCodigo)
-              : paso.nombre;
-            const detail = isMotorStep
-              ? paso.tiempo
-                ? `${formatTiempoPaso(paso)} · ${getCentroCostoLabel(paso)}`
-                : getCentroCostoLabel(paso)
-              : `${paso.centroCosto} · ${paso.minutos} min`;
+            const title = humanizeCodigo(paso.familiaCodigo);
+            const detail = paso.tiempo
+              ? `${formatTiempoPaso(paso)} · ${getCentroCostoLabel(paso)}`
+              : getCentroCostoLabel(paso);
             return (
               <div className="production-step" key={`${title}-${index}`}>
                 <span>{index + 1}</span>
@@ -1213,20 +1173,17 @@ function CostosItemView({
   margen: number;
   calculoPendiente: boolean;
 }) {
-  const costeoMotor = item.costeo?.origen === "motor" ? item.costeo : null;
   const precioNeto = item.subtotal;
   const margenMonto = precioNeto - costo;
   const costoUnitario = item.cantidad > 0 ? costo / item.cantidad : 0;
   const buckets = getCostBuckets(item);
-  const cargosPaso = (costeoMotor?.pasos ?? [])
+  const cargosPaso = item.cotizacion.pasos
     .flatMap((paso) => paso.cargosDirectosPaso ?? [])
     .filter((cargo) => cargo.monto > 0);
-  const cargosCotizacion = (costeoMotor?.cargosDirectosCotizacion ?? []).filter(
+  const cargosCotizacion = item.cotizacion.cargosDirectosCotizacion.filter(
     (cargo) => cargo.monto > 0,
   );
-  const visibleCostSteps = costeoMotor
-    ? getVisibleCostSteps(costeoMotor.pasos)
-    : [];
+  const visibleCostSteps = getVisibleCostSteps(item.cotizacion.pasos);
   const [expandedCostSteps, setExpandedCostSteps] = React.useState<Set<string>>(
     () => new Set(),
   );
@@ -1256,9 +1213,7 @@ function CostosItemView({
     <div className="op-costs">
       <div className="cost-hero">
         <div>
-          <div className="cost-eyebrow">
-            {costeoMotor ? "Costeo del Motor Universal" : "Costo estimado preliminar"}
-          </div>
+          <div className="cost-eyebrow">Costeo del Motor Universal</div>
           <div className="cost-main">{formatCurrency(costo)}</div>
           <div className="cost-sub">
             Costo por {formatUnidad(item.unidadMedida)}: {formatCurrency(costoUnitario)} ·{" "}
@@ -1298,8 +1253,7 @@ function CostosItemView({
         </div>
       </div>
 
-      {costeoMotor ? (
-        <div className="cost-section">
+      <div className="cost-section">
           <div className="cost-title">Desglose por paso</div>
           <div className="cost-steps-table-wrap">
             <table className="cost-steps-table">
@@ -1385,8 +1339,7 @@ function CostosItemView({
               </tbody>
             </table>
           </div>
-        </div>
-      ) : null}
+      </div>
 
       {cargosPaso.length > 0 || cargosCotizacion.length > 0 ? (
         <div className="cost-section">
@@ -1621,23 +1574,20 @@ function EmptyTab({
 }
 
 function calcularCargosDirectosItems(items: PropuestaItem[]) {
-  return items.reduce((acc, item) => {
-    if (item.costeo?.origen === "motor") {
-      return acc + item.costeo.costos.cargosDirectosTotal;
-    }
-
-    return acc + item.costos.terceros;
-  }, 0);
+  return items.reduce(
+    (acc, item) => acc + item.cotizacion.costos.cargosDirectosTotal,
+    0,
+  );
 }
 
 function calcularComisionesItems(items: PropuestaItem[]) {
   return items.reduce((acc, item) => {
-    const desglose = item.costeo?.desglosePrecio;
+    const desglose = item.cotizacion.desglosePrecio;
     if (!desglose) return acc;
 
     const cantidad =
-      item.costeo?.cantidadComercialPricing ??
-      item.costeo?.cantidadEfectiva ??
+      item.cotizacion.cantidadComercialPricing ??
+      item.cotizacion.cantidadEfectiva ??
       item.cantidad;
 
     return acc + desglose.totalComisiones * cantidad;
@@ -1747,7 +1697,7 @@ function ResumenBar({
             />
           </div>
           <div className="m-foot">
-            <span>Costo estimado</span>
+            <span>Costo motor</span>
             <span className="mono">{formatCurrency(costoTotal)}</span>
           </div>
         </div>
@@ -1778,21 +1728,13 @@ function ResumenBar({
 export function PropuestaFicha({
   initialClientes,
   initialProductos,
+  currentUser,
 }: PropuestaFichaProps) {
   const [tipo, setTipo] = React.useState<TipoPropuesta>("orden_trabajo");
   const ordenTipo = tipoMap[tipo];
   const [tab, setTab] = React.useState<OrdenTab>("productos");
-  const [openIds, setOpenIds] = React.useState<Set<string>>(
-    () =>
-      new Set(
-        initialProductos.length > 0
-          ? []
-          : [MOCK_ITEMS[1]?.id ?? MOCK_ITEMS[0]?.id ?? ""],
-      ),
-  );
-  const [items, setItems] = React.useState<PropuestaItem[]>(
-    initialProductos.length > 0 ? [] : MOCK_ITEMS,
-  );
+  const [openIds, setOpenIds] = React.useState<Set<string>>(() => new Set());
+  const [items, setItems] = React.useState<PropuestaItem[]>([]);
   const [addOpen, setAddOpen] = React.useState(false);
   const [editingItem, setEditingItem] = React.useState<PropuestaItem | null>(null);
   const [panelEditor, setPanelEditor] = React.useState<{
@@ -1806,10 +1748,7 @@ export function PropuestaFicha({
   const [fechaCreacion] = React.useState(() => offsetDate(0));
 
   const clienteItems = React.useMemo(() => {
-    const source =
-      initialClientes.length > 0 ? initialClientes : MOCK_CLIENTES_PROPUESTA;
-
-    return [...source]
+    return [...initialClientes]
       .sort((a, b) => a.nombre.localeCompare(b.nombre))
       .map((cliente) => ({ value: cliente.id, label: cliente.nombre }));
   }, [initialClientes]);
@@ -1966,8 +1905,12 @@ export function PropuestaFicha({
 
         <FieldCard label="Vendedor" icon={<UserIcon />}>
           <div className="ctrl-input has-avatar">
-            <span className="av-sm">LG</span>
-            <span>{MOCK_VENDEDOR.nombreCompleto}</span>
+            <span className="av-sm">
+              {(currentUser?.nombreCompleto ?? currentUser?.email ?? "US")
+                .slice(0, 2)
+                .toUpperCase()}
+            </span>
+            <span>{currentUser?.nombreCompleto ?? currentUser?.email ?? "Usuario actual"}</span>
           </div>
         </FieldCard>
 

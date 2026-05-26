@@ -4,6 +4,7 @@ import { PropuestaFicha } from "@/components/comercial/propuesta-ficha";
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
 import { getClientes } from "@/lib/clientes-api";
 import type { ClienteDetalle } from "@/lib/clientes";
+import { tryGetCurrentUser, type CurrentUser } from "@/lib/auth";
 import { getProductos } from "@/lib/productos-servicios-api";
 import type { ProductoListItem } from "@/lib/productos-servicios";
 
@@ -20,6 +21,7 @@ export default function CrearPropuestaPage() {
 async function CrearPropuestaContent() {
   let clientes: ClienteDetalle[] = [];
   let productos: ProductoListItem[] = [];
+  let currentUser: CurrentUser | null = null;
 
   try {
     clientes = await getClientes();
@@ -33,5 +35,17 @@ async function CrearPropuestaContent() {
     productos = [];
   }
 
-  return <PropuestaFicha initialClientes={clientes} initialProductos={productos} />;
+  try {
+    currentUser = (await tryGetCurrentUser())?.currentUser ?? null;
+  } catch {
+    currentUser = null;
+  }
+
+  return (
+    <PropuestaFicha
+      initialClientes={clientes}
+      initialProductos={productos}
+      currentUser={currentUser}
+    />
+  );
 }

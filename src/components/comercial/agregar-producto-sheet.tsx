@@ -18,6 +18,7 @@ import { toast } from "sonner";
 
 import {
   formatCurrency,
+  type CotizacionPropuestaSnapshot,
   type PasoProduccionPropuesta,
   type PropuestaItem,
   type UnidadPropuesta,
@@ -56,7 +57,7 @@ type CatalogAdicional = {
   name: string;
   monto?: number;
   descripcion?: string;
-  origen?: "paso" | "cargo" | "mock";
+  origen?: "paso" | "cargo";
 };
 
 type CatalogProduct = {
@@ -89,6 +90,8 @@ type PiezaInput = {
   altoMm: number;
 };
 
+type ModoCotizacionLineal = "nesting" | "directo";
+
 type SlotComercialElige = {
   configPasoId: string;
   familiaCodigo: string;
@@ -109,6 +112,7 @@ type SlotMaterialCandidato = {
     isFallbackLabel: boolean;
     sortEspesor: number | null;
     espesorLabel: string | null;
+    anchoLabel: string | null;
     colorLabel: string | null;
     missingPrice: boolean;
   }>;
@@ -137,11 +141,12 @@ type MotorConfigState = {
   seleccionMaterial: Record<string, string>;
   seleccionMaquina: Record<string, string>;
   seleccionModoColor: Record<string, string>;
+  modoCotizacionLineal: ModoCotizacionLineal;
   zonaInstalacion: string;
   m2Instalados: number;
 };
 
-type CotizacionExitosa = NonNullable<CotizarResponse["cotizacion"]>;
+type CotizacionExitosa = CotizacionPropuestaSnapshot;
 
 type AgregarProductoSheetProps = {
   open: boolean;
@@ -153,328 +158,6 @@ type AgregarProductoSheetProps = {
   onSaveItem?: (item: PropuestaItem) => void;
 };
 
-const CATALOG_PRODUCTS: CatalogProduct[] = [
-  {
-    real: false,
-    code: "TAR-001",
-    name: "Tarjetas personales",
-    family: "Digital",
-    categoriaComercialCodigo: "impresion_hoja",
-    categoriaComercialNombre: "Impresión comercial en hoja",
-    subcategoriaComercialCodigo: "tarjetas",
-    subcategoriaComercialNombre: "Tarjetas",
-    cobro: "Por unidad",
-    unidad: "u.",
-    medidasMode: "fija",
-    precioBase: 68,
-    precioConfigJson: undefined,
-    descripcion: "Tarjetas estándar 9 x 5 cm en papel ilustración.",
-    specs: [
-      {
-        key: "material",
-        label: "Material",
-        type: "select",
-        options: [
-          "Papel ilustración 300g",
-          "Cartulina mate 250g",
-          "Reciclado 350g",
-        ],
-        def: "Papel ilustración 300g",
-      },
-      {
-        key: "medidas",
-        label: "Medidas",
-        type: "select",
-        options: ["9 x 5 cm", "8.5 x 5.5 cm", "9 x 4 cm"],
-        def: "9 x 5 cm",
-      },
-      {
-        key: "color",
-        label: "Color",
-        type: "select",
-        options: ["4/4 + barniz", "4/4", "4/0", "1/0 negro"],
-        def: "4/4 + barniz",
-      },
-      {
-        key: "acabado",
-        label: "Acabado",
-        type: "select",
-        options: ["Mate", "Brillante", "Soft touch"],
-        def: "Mate",
-      },
-    ],
-    adicionales: [
-      { code: "cantos_redondeados", name: "Cantos redondeados", monto: 1500, origen: "mock" },
-      { code: "empaque_premium", name: "Empaque premium", monto: 800, origen: "mock" },
-      { code: "estampado_oro", name: "Estampado en oro", monto: 4500, origen: "mock" },
-      { code: "uv_selectivo", name: "UV selectivo", monto: 3200, origen: "mock" },
-    ],
-    qtyDefault: 500,
-    costoUnitario: 36,
-    impuestoPct: 21,
-  },
-  {
-    real: false,
-    code: "VIN-120",
-    name: "Vinilo impreso con instalación",
-    family: "Gran formato",
-    categoriaComercialCodigo: "gran_formato_flexible",
-    categoriaComercialNombre: "Gran formato flexible",
-    subcategoriaComercialCodigo: "vinilos_impresos",
-    subcategoriaComercialNombre: "Vinilos impresos",
-    cobro: "Por m²",
-    unidad: "m²",
-    medidasMode: "calculada",
-    precioBase: 18500,
-    precioConfigJson: undefined,
-    descripcion: "Vinilo impreso solvente con instalación incluida en CABA.",
-    specs: [
-      {
-        key: "material",
-        label: "Material",
-        type: "select",
-        options: [
-          "Vinilo blanco brillante",
-          "Vinilo blanco mate",
-          "Vinilo translúcido",
-          "Vinilo microperforado",
-        ],
-        def: "Vinilo blanco brillante",
-      },
-      { key: "medidas", label: "Medidas", type: "text", def: "120 x 80 cm x 4" },
-      {
-        key: "tecnologia",
-        label: "Tecnología",
-        type: "select",
-        options: ["Solvente", "Eco-solvente", "Látex", "UV"],
-        def: "Solvente",
-      },
-      {
-        key: "instalacion",
-        label: "Instalación",
-        type: "select",
-        options: ["CABA", "GBA Norte", "GBA Sur", "Interior país", "Sin instalación"],
-        def: "CABA",
-      },
-    ],
-    adicionales: [
-      { code: "viatico_caba", name: "Viático CABA", monto: 12000 },
-      { code: "laminado_brillo", name: "Laminado brillo", monto: 8500 },
-      { code: "instalacion_nocturna", name: "Instalación nocturna", monto: 15000 },
-      { code: "ojales_metalicos", name: "Ojales metálicos", monto: 2500 },
-    ],
-    qtyDefault: 3.84,
-    costoUnitario: 15470,
-    impuestoPct: 21,
-  },
-  {
-    real: false,
-    code: "TAL-050",
-    name: "Talonarios numerados",
-    family: "Talonario",
-    categoriaComercialCodigo: "editorial_encuadernacion",
-    categoriaComercialNombre: "Editorial, formularios y encuadernación",
-    subcategoriaComercialCodigo: "talonarios",
-    subcategoriaComercialNombre: "Talonarios",
-    cobro: "Por unidad",
-    unidad: "u.",
-    medidasMode: "fija",
-    precioBase: 2800,
-    precioConfigJson: undefined,
-    descripcion: "Talonarios numerados, hasta 3 copias por hoja.",
-    specs: [
-      {
-        key: "hojas",
-        label: "Hojas",
-        type: "select",
-        options: [
-          "25 hojas x 2 copias",
-          "50 hojas x 2 copias",
-          "50 hojas x 3 copias",
-          "100 hojas x 3 copias",
-        ],
-        def: "50 hojas x 3 copias",
-      },
-      {
-        key: "tamano",
-        label: "Tamaño",
-        type: "select",
-        options: ["1/3 oficio", "1/2 oficio", "A5", "A6"],
-        def: "1/3 oficio",
-      },
-      { key: "numerado", label: "Numerado", type: "text", def: "001 - 1500" },
-      {
-        key: "encuadernacion",
-        label: "Encuadernación",
-        type: "select",
-        options: ["Engomado + tapa", "Espiralado", "Grapado"],
-        def: "Engomado + tapa",
-      },
-    ],
-    adicionales: [
-      { code: "numerado_custom", name: "Numerado custom", monto: 2200 },
-      { code: "tapa_carton_gruesa", name: "Tapa cartón gruesa", monto: 1800 },
-    ],
-    qtyDefault: 25,
-    costoUnitario: 1540,
-    impuestoPct: 21,
-  },
-  {
-    real: false,
-    code: "FOL-200",
-    name: "Folletos tríptico",
-    family: "Offset",
-    categoriaComercialCodigo: "impresion_hoja",
-    categoriaComercialNombre: "Impresión comercial en hoja",
-    subcategoriaComercialCodigo: "volantes_folletos",
-    subcategoriaComercialNombre: "Volantes y folletos",
-    cobro: "Por unidad",
-    unidad: "u.",
-    medidasMode: "fija",
-    precioBase: 95,
-    precioConfigJson: undefined,
-    descripcion: "Folleto A4 doblado en 3 (tríptico).",
-    specs: [
-      {
-        key: "material",
-        label: "Material",
-        type: "select",
-        options: ["Ilustración 150g", "Ilustración 200g", "Mate 170g"],
-        def: "Ilustración 150g",
-      },
-      {
-        key: "medidas",
-        label: "Medidas",
-        type: "select",
-        options: ["A4 abierto", "A3 abierto", "Custom"],
-        def: "A4 abierto",
-      },
-      {
-        key: "color",
-        label: "Color",
-        type: "select",
-        options: ["4/4", "4/1", "4/0"],
-        def: "4/4",
-      },
-      {
-        key: "plegado",
-        label: "Plegado",
-        type: "select",
-        options: ["Tríptico", "Díptico", "Acordeón"],
-        def: "Tríptico",
-      },
-    ],
-    adicionales: [
-      { code: "laminado_brillo", name: "Laminado brillo", monto: 4500 },
-      { code: "uv_selectivo", name: "UV selectivo", monto: 6800 },
-    ],
-    qtyDefault: 1000,
-    costoUnitario: 52,
-    impuestoPct: 21,
-  },
-  {
-    real: false,
-    code: "LON-080",
-    name: "Lona impresa",
-    family: "Gran formato",
-    categoriaComercialCodigo: "gran_formato_flexible",
-    categoriaComercialNombre: "Gran formato flexible",
-    subcategoriaComercialCodigo: "lonas_banners",
-    subcategoriaComercialNombre: "Lonas y banners",
-    cobro: "Por m²",
-    unidad: "m²",
-    medidasMode: "calculada",
-    precioBase: 14200,
-    precioConfigJson: undefined,
-    descripcion: "Lona front 13 oz con ojales perimetrales.",
-    specs: [
-      {
-        key: "material",
-        label: "Material",
-        type: "select",
-        options: ["Lona front 13 oz", "Lona back 9 oz", "Lona blockout"],
-        def: "Lona front 13 oz",
-      },
-      { key: "medidas", label: "Medidas", type: "text", def: "200 x 100 cm" },
-      {
-        key: "terminacion",
-        label: "Terminación",
-        type: "select",
-        options: ["Ojales perimetrales", "Dobladillo + ojales", "Bolsillos"],
-        def: "Ojales perimetrales",
-      },
-      {
-        key: "instalacion",
-        label: "Instalación",
-        type: "select",
-        options: ["Sin instalación", "CABA", "GBA"],
-        def: "Sin instalación",
-      },
-    ],
-    adicionales: [
-      { code: "anti_viento", name: "Refuerzo anti-viento", monto: 5200 },
-      { code: "bolsillos_canos", name: "Bolsillos para caños", monto: 3800 },
-    ],
-    qtyDefault: 2,
-    costoUnitario: 11800,
-    impuestoPct: 21,
-  },
-  {
-    real: false,
-    code: "BAN-040",
-    name: "Banner roll-up",
-    family: "Stand",
-    categoriaComercialCodigo: "gran_formato_flexible",
-    categoriaComercialNombre: "Gran formato flexible",
-    subcategoriaComercialCodigo: "rollups_displays",
-    subcategoriaComercialNombre: "Roll-ups y displays",
-    cobro: "Por unidad",
-    unidad: "u.",
-    medidasMode: "fija",
-    precioBase: 48000,
-    precioConfigJson: undefined,
-    descripcion: "Banner roll-up 85 x 200 cm con bolsa de transporte.",
-    specs: [
-      {
-        key: "material",
-        label: "Material",
-        type: "select",
-        options: ["Polipropileno", "Lona vinílica"],
-        def: "Polipropileno",
-      },
-      {
-        key: "medidas",
-        label: "Medidas",
-        type: "select",
-        options: ["85 x 200 cm", "100 x 200 cm", "120 x 200 cm"],
-        def: "85 x 200 cm",
-      },
-      {
-        key: "estructura",
-        label: "Estructura",
-        type: "select",
-        options: ["Aluminio estándar", "Aluminio premium"],
-        def: "Aluminio estándar",
-      },
-      {
-        key: "bolsa",
-        label: "Bolsa",
-        type: "select",
-        options: ["Incluida", "No incluida"],
-        def: "Incluida",
-      },
-    ],
-    adicionales: [
-      { code: "diseno_arte", name: "Diseño de arte", monto: 18000 },
-      { code: "envio_corredor", name: "Envío corredor", monto: 6500 },
-    ],
-    qtyDefault: 2,
-    costoUnitario: 28000,
-    impuestoPct: 21,
-  },
-];
-
-const RECENT_CODES = ["TAR-001", "VIN-120", "FOL-200"];
 const ZONAS_VIATICO = [
   { value: "CABA", label: "CABA" },
   { value: "GBA_NORTE", label: "GBA Norte" },
@@ -500,6 +183,7 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   seleccionMaterial: {},
   seleccionMaquina: {},
   seleccionModoColor: {},
+  modoCotizacionLineal: "nesting",
   zonaInstalacion: "CABA",
   m2Instalados: 0,
 };
@@ -759,6 +443,9 @@ function getSlotsComercialElige(ruta: RutaAlternativaDetalle | null) {
                   espesorLabel: getVariantThicknessLabel(
                     item.variante.atributosVarianteJson,
                   ),
+                  anchoLabel: getVariantWidthLabel(
+                    item.variante.atributosVarianteJson,
+                  ),
                   colorLabel: getVariantColorLabel(
                     item.variante.atributosVarianteJson,
                   ),
@@ -918,6 +605,25 @@ function getVariantThicknessLabel(attrs: Record<string, unknown> | null | undefi
     { value: attrs?.espesorMm, unit: "mm" },
     { value: attrs?.espesor_mm, unit: "mm" },
     { value: attrs?.espesorMicrones, unit: "mic" },
+  ];
+  const entry = entries.find(
+    ({ value }) => value !== undefined && value !== null && value !== "",
+  );
+  const raw = entry?.value;
+  const value =
+    typeof raw === "string" ? Number(raw.replace(",", ".")) : Number(raw);
+  if (!Number.isFinite(value)) return null;
+  return `${formatNumberForSpec(value)} ${entry?.unit ?? "mm"}`;
+}
+
+function getVariantWidthLabel(attrs: Record<string, unknown> | null | undefined) {
+  const entries = [
+    { value: attrs?.ancho, unit: "mm" },
+    { value: attrs?.anchoMm, unit: "mm" },
+    { value: attrs?.ancho_mm, unit: "mm" },
+    { value: attrs?.anchoRolloMm, unit: "mm" },
+    { value: attrs?.anchoUtilMm, unit: "mm" },
+    { value: attrs?.widthMm, unit: "mm" },
   ];
   const entry = entries.find(
     ({ value }) => value !== undefined && value !== null && value !== "",
@@ -1204,6 +910,26 @@ function labelPrecioUnitario(unidad: string) {
   return "Precio por unidad";
 }
 
+function isMetroLinealConMedidasVariables(productoDetalle: ProductoDetalle | null) {
+  return (
+    productoDetalle?.unidadComercial === "metro_lineal" &&
+    (productoDetalle.modoMedidas === "LIBRE" ||
+      productoDetalle.modoMedidas === "COMERCIAL_ELIGE")
+  );
+}
+
+function usaPiezasParaCotizar(
+  productoDetalle: ProductoDetalle | null,
+  config: Pick<MotorConfigState, "modoCotizacionLineal">,
+) {
+  return (
+    (productoDetalle?.modoMedidas === "LIBRE" &&
+      !isMetroLinealConMedidasVariables(productoDetalle)) ||
+    (isMetroLinealConMedidasVariables(productoDetalle) &&
+      config.modoCotizacionLineal === "nesting")
+  );
+}
+
 function getCotizacionPasos(cotizacion: CotizacionExitosa): PasoProduccionPropuesta[] {
   return cotizacion.pasos
     .filter((paso) => paso.activado)
@@ -1229,8 +955,9 @@ function buildJobContext(
     productoDetalle,
     config.medidaPredefinidaId,
   );
+  const cotizaConPiezas = usaPiezasParaCotizar(productoDetalle, config);
   const cantidadTrabajo =
-    productoDetalle?.modoMedidas === "LIBRE"
+    cotizaConPiezas
       ? config.piezas.reduce(
           (total, pieza) =>
             total + (Number.isFinite(pieza.cantidad) ? pieza.cantidad : 0),
@@ -1246,7 +973,7 @@ function buildJobContext(
   };
 
   const piezasContexto =
-    productoDetalle?.modoMedidas === "LIBRE" && config.piezas.length > 0
+    cotizaConPiezas && config.piezas.length > 0
       ? config.piezas
       : medidaPredefinida
         ? [
@@ -1281,6 +1008,15 @@ function buildJobContext(
     if (medidaPredefinida) {
       ctx.medidaPredefinidaId = medidaPredefinida.id;
       ctx.medidaPredefinidaNombre = medidaLabel(medidaPredefinida);
+    }
+  }
+
+  if (isMetroLinealConMedidasVariables(productoDetalle)) {
+    ctx.modoCotizacionLineal = config.modoCotizacionLineal;
+    if (config.modoCotizacionLineal === "directo") {
+      ctx.cantidadComercialPricing = qty;
+      ctx.cantidadComercial = qty;
+      ctx.metrosLineales = qty;
     }
   }
 
@@ -1342,7 +1078,7 @@ function calcularCantidadComercial(
   config: MotorConfigState | undefined,
   qty: number,
 ) {
-  if (productoDetalle?.modoMedidas === "LIBRE" && config?.piezas.length) {
+  if (config && usaPiezasParaCotizar(productoDetalle, config) && config.piezas.length) {
     const totalPiezas = config.piezas.reduce(
       (total, pieza) =>
         total + (Number.isFinite(pieza.cantidad) ? pieza.cantidad : 0),
@@ -1351,6 +1087,7 @@ function calcularCantidadComercial(
     if (product.unidad !== "m²" && product.unidad !== "ml") {
       return totalPiezas > 0 ? totalPiezas : qty;
     }
+    if (product.unidad === "ml") return qty;
 
     const areaTotalM2 = config.piezas.reduce(
       (total, pieza) =>
@@ -1415,7 +1152,7 @@ function buildPresentableSpecs(
     setSpec("espesor", espesor);
     setSpec("espesor_material", espesor);
   }
-  if (productoDetalle?.modoMedidas === "LIBRE" && config.piezas.length > 0) {
+  if (usaPiezasParaCotizar(productoDetalle, config) && config.piezas.length > 0) {
     const medidas = config.piezas
       .map((pieza) => {
         const unidad = pieza.cantidad === 1 ? "unidad" : "unidades";
@@ -1532,8 +1269,10 @@ function buildItem(
     fechaEntrega?: string;
   },
 ) {
-  const totals = getTotals(product, qty, adi);
   const cotizacion = getCotizacionExitosa(options?.cotizacion ?? null);
+  if (!cotizacion) {
+    throw new Error("La propuesta solo puede agregar productos cotizados por el Motor Universal.");
+  }
   const selectedAdicionales = product.adicionales
     .filter((adicional) => adi.includes(adicional.code))
     .map((adicional) => adicional.name);
@@ -1557,37 +1296,21 @@ function buildItem(
       : product.unidad === "ml"
         ? "metro_lineal"
         : "unidad";
-  const terminacion = selectedAdicionales.length > 0 ? 16 : 8;
-  const pasos: PasoProduccionPropuesta[] = cotizacion
-    ? getCotizacionPasos(cotizacion)
-    : [
-        { nombre: "Preprensa", centroCosto: "Preprensa", minutos: 12, origen: "base" },
-        {
-          nombre: product.family === "Gran formato" ? "Impresión gran formato" : "Impresión",
-          centroCosto: product.family,
-          minutos: product.unidad === "m²" ? 42 : 28,
-          origen: "base",
-        },
-        {
-          nombre: "Terminación",
-          centroCosto: "Terminación",
-          minutos: terminacion,
-          origen: selectedAdicionales.length > 0 ? "opcional" : "base",
-        },
-      ];
-  const precioUnitario = cotizacion ? getCotizacionUnitario(cotizacion) : product.precioBase;
-  const subtotal = cotizacion ? getCotizacionNeto(cotizacion) : totals.subtotalConAdi;
-  const impuestoMonto = cotizacion ? getCotizacionImpuestos(cotizacion) : totals.impuestos;
-  const total = cotizacion ? getCotizacionTotal(cotizacion) : totals.total;
+  const pasos: PasoProduccionPropuesta[] = getCotizacionPasos(cotizacion);
+  const precioUnitario = getCotizacionUnitario(cotizacion);
+  const subtotal = getCotizacionNeto(cotizacion);
+  const impuestoMonto = getCotizacionImpuestos(cotizacion);
+  const total = getCotizacionTotal(cotizacion);
   const impuestoPorcentaje =
-    cotizacion && subtotal > 0 ? (impuestoMonto / subtotal) * 100 : product.impuestoPct;
-  const costoEstimado = cotizacion?.costos.total ?? totals.costoEstimado;
-  const cantidadComercial = calcularCantidadComercial(
-    product,
-    options?.productoDetalle ?? null,
-    options?.motorConfig,
-    qty,
-  );
+    subtotal > 0 ? (impuestoMonto / subtotal) * 100 : product.impuestoPct;
+  const cantidadComercial =
+    cotizacion.cantidadComercialPricing ??
+    calcularCantidadComercial(
+      product,
+      options?.productoDetalle ?? null,
+      options?.motorConfig,
+      qty,
+    );
   const jobContext = options
     ? buildJobContext(
         options.productoDetalle,
@@ -1620,26 +1343,8 @@ function buildItem(
     total,
     fechaEntrega: options?.fechaEntrega || undefined,
     especificaciones,
+    cotizacion,
     pasos,
-    costos: {
-      materiales: Math.round(cotizacion?.costos.materialesTotal ?? costoEstimado * 0.46),
-      produccion: Math.round(cotizacion?.costos.tiempoTotal ?? costoEstimado * 0.34),
-      terminacion: Math.round(cotizacion ? 0 : costoEstimado * 0.16),
-      terceros: Math.round(cotizacion?.costos.cargosDirectosTotal ?? costoEstimado * 0.04),
-    },
-    costeo: cotizacion
-      ? {
-          origen: "motor",
-          cantidadEfectiva: cotizacion.cantidadEfectiva,
-          cantidadPedida: cotizacion.cantidadPedida,
-          cantidadComercialPricing: cotizacion.cantidadComercialPricing,
-          unidadComercialPricing: cotizacion.unidadComercialPricing,
-          costos: cotizacion.costos,
-          pasos: cotizacion.pasos,
-          cargosDirectosCotizacion: cotizacion.cargosDirectosCotizacion,
-          desglosePrecio: cotizacion.desglosePrecio,
-        }
-      : undefined,
     adicionales,
     notaProduccion: notaProduccion || undefined,
     rutaAlternativaId: options?.motorConfig.rutaAlternativaId ?? null,
@@ -1723,6 +1428,11 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
     ),
     seleccionMaquina,
     seleccionModoColor,
+    modoCotizacionLineal:
+      typeof ctx.modoCotizacionLineal === "string" &&
+      ctx.modoCotizacionLineal === "directo"
+        ? "directo"
+        : "nesting",
     zonaInstalacion:
       typeof ctx.zonaInstalacion === "string"
         ? ctx.zonaInstalacion
@@ -1737,30 +1447,17 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
 function getQtyFromItem(item: PropuestaItem) {
   const ctxCantidad = Number(item.jobContext?.cantidad);
   if (Number.isFinite(ctxCantidad) && ctxCantidad > 0) return ctxCantidad;
-  if (item.costeo?.cantidadPedida && item.costeo.cantidadPedida > 0) {
-    return item.costeo.cantidadPedida;
+  if (item.cotizacion.cantidadPedida && item.cotizacion.cantidadPedida > 0) {
+    return item.cotizacion.cantidadPedida;
   }
   return item.cantidad;
 }
 
 function cotizacionFromItem(item: PropuestaItem): CotizarResponse | null {
-  if (item.costeo?.origen !== "motor") return null;
   return {
     exitoso: true,
     errores: [],
-    cotizacion: {
-      productoId: item.motorCodigo,
-      productoNombre: item.productoNombre,
-      rutaNombre: item.rutaAlternativaId ?? "Ruta seleccionada",
-      cantidadEfectiva: item.costeo.cantidadEfectiva,
-      cantidadPedida: item.costeo.cantidadPedida,
-      cantidadComercialPricing: item.costeo.cantidadComercialPricing,
-      unidadComercialPricing: item.costeo.unidadComercialPricing,
-      costos: item.costeo.costos,
-      desglosePrecio: item.costeo.desglosePrecio,
-      pasos: item.costeo.pasos,
-      cargosDirectosCotizacion: item.costeo.cargosDirectosCotizacion,
-    },
+    cotizacion: item.cotizacion,
   };
 }
 
@@ -1783,10 +1480,7 @@ function ApSelectStep({
   products,
   loadingProductId,
 }: SelectStepProps) {
-  const recientes = RECENT_CODES.map((code) =>
-    products.find((product) => product.code === code),
-  ).filter(Boolean) as CatalogProduct[];
-  const visibleRecientes = recientes.length > 0 ? recientes : products.slice(0, 3);
+  const visibleRecientes = products.slice(0, 3);
   const families = React.useMemo(
     () => ["Todos", ...Array.from(new Set(products.map((product) => product.family)))],
     [products],
@@ -2366,6 +2060,81 @@ function ApConfigStep({
       </div>
     );
   };
+
+  const renderLinearMaterialWidthSelect = (slot: SlotComercialElige) => {
+    const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
+    const selected = motorConfig.seleccionMaterial[key] || defaultSlotCandidateId(slot) || "";
+    const selectedCandidate =
+      slot.candidatos.find((candidate) =>
+        candidate.variantes.some((variant) => variant.variantId === selected),
+      ) ?? slot.candidatos.find((candidate) => candidate.defaultVarianteId);
+    const selectedVariant = selectedCandidate?.variantes.find(
+      (variant) => variant.variantId === selected,
+    );
+    const selectMaterial = (materiaPrimaId: string) => {
+      const candidate = slot.candidatos.find((item) => item.materiaPrimaId === materiaPrimaId);
+      const variantId =
+        candidate?.defaultVarianteId ??
+        (candidate?.variantes.length === 1 ? candidate.variantes[0]?.variantId : undefined) ??
+        candidate?.variantes[0]?.variantId ??
+        "";
+      setMaterial(key, variantId);
+    };
+    const variantOptions = selectedCandidate?.variantes ?? [];
+
+    return (
+      <React.Fragment key={`lineal-${key}`}>
+        <div className="ap-spec">
+          <label>Material</label>
+          <select
+            className="ap-native-select"
+            value={selectedCandidate?.materiaPrimaId ?? ""}
+            onChange={(event) => selectMaterial(event.target.value)}
+          >
+            {slot.candidatos.length === 0 ? (
+              <option value="">Sin materiales candidatos configurados</option>
+            ) : !selectedCandidate ? (
+              <option value="">Elegí material</option>
+            ) : null}
+            {slot.candidatos.map((candidate) => (
+              <option key={candidate.materiaPrimaId} value={candidate.materiaPrimaId}>
+                {candidate.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="ap-spec ap-spec-wide">
+          <label>Ancho de material</label>
+          {variantOptions.length > 1 ? (
+            renderSegmentedControl(
+              "Ancho de material",
+              selected,
+              variantOptions.map((variant) => ({
+                value: variant.variantId,
+                label:
+                  variant.anchoLabel ??
+                  variant.espesorLabel ??
+                  variant.label,
+              })),
+              (value) => setMaterial(key, value),
+            )
+          ) : (
+            <div className="ctrl-input">
+              <span>
+                {selectedVariant?.anchoLabel ??
+                  selectedVariant?.espesorLabel ??
+                  selectedVariant?.label ??
+                  "Sin ancho configurado"}
+              </span>
+            </div>
+          )}
+          {selectedVariant?.description ? (
+            <p className="ap-spec-hint">{selectedVariant.description}</p>
+          ) : null}
+        </div>
+      </React.Fragment>
+    );
+  };
   const usaCaras =
     rutaSel?.configPasos.filter(isExecutableConfigPaso).some(
       (config) =>
@@ -2376,6 +2145,21 @@ function ApConfigStep({
       product.subcategoriaComercialCodigo,
     );
   const esTalonario = product.subcategoriaComercialCodigo === "talonarios";
+  const metroLinealConMedidasVariables = isMetroLinealConMedidasVariables(productoDetalle);
+  const mostrarEditorPiezas = usaPiezasParaCotizar(productoDetalle, motorConfig);
+  const mostrarMaterialLinealDirecto =
+    metroLinealConMedidasVariables && !mostrarEditorPiezas;
+  const slotsMaterialesLinealDirecto = mostrarMaterialLinealDirecto
+    ? slotsMaterialesPrincipales
+    : [];
+  const slotKeysLinealDirecto = new Set(
+    slotsMaterialesLinealDirecto.map((slot) =>
+      materialSelectionKey(slot.configPasoId, slot.slotCodigo),
+    ),
+  );
+  const slotsMaterialesGenerales = slotsMaterialesPrincipales.filter(
+    (slot) => !slotKeysLinealDirecto.has(materialSelectionKey(slot.configPasoId, slot.slotCodigo)),
+  );
   const hasQuantityShortcuts = !["m²", "m2", "ml"].includes(product.unidad.toLowerCase());
   const exactPricingQuantities = getExactPricingQuantities(product);
   const usesExactPricingQuantities = exactPricingQuantities.length > 0;
@@ -2421,7 +2205,7 @@ function ApConfigStep({
           <input
             type="number"
             value={qty}
-            step={product.unidad === "m²" ? 0.1 : 1}
+            step={product.unidad === "m²" || product.unidad === "ml" ? 0.1 : 1}
             min="0"
             onChange={(event) => setQty(Number.parseFloat(event.target.value) || 0)}
           />
@@ -2446,6 +2230,94 @@ function ApConfigStep({
         ) : null}
       </div>
     );
+  };
+
+  const renderPiezasEditor = () => (
+    <div className="ap-spec ap-spec-wide">
+      <div className="ap-piezas">
+        <div className="ap-pieza-head" aria-hidden="true">
+          <span>Cantidad</span>
+          <span />
+          <span>Ancho</span>
+          <span />
+          <span>Alto</span>
+          <span />
+          <span />
+        </div>
+        {motorConfig.piezas.map((pieza, index) => (
+          <div className="ap-pieza-row" key={pieza.uiKey}>
+            <input
+              ref={(node) => {
+                cantidadPiezaRefs.current[pieza.uiKey] = node;
+              }}
+              type="number"
+              min="1"
+              value={pieza.cantidad}
+              onChange={(event) =>
+                updatePieza(index, { cantidad: Number(event.target.value) || 0 })
+              }
+              aria-label="Cantidad de piezas"
+            />
+            <span>x</span>
+            <input
+              type="number"
+              min="0"
+              value={pieza.anchoMm}
+              onChange={(event) =>
+                updatePieza(index, { anchoMm: Number(event.target.value) || 0 })
+              }
+              aria-label="Ancho en mm"
+            />
+            <span>x</span>
+            <input
+              type="number"
+              min="0"
+              value={pieza.altoMm}
+              onChange={(event) =>
+                updatePieza(index, { altoMm: Number(event.target.value) || 0 })
+              }
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                addPieza();
+              }}
+              aria-label="Alto en mm"
+            />
+            <span>mm</span>
+            <button
+              type="button"
+              className="ap-qty-btn"
+              onClick={() => removePieza(index)}
+              aria-label="Quitar pieza"
+            >
+              <XIcon />
+            </button>
+          </div>
+        ))}
+        <button type="button" className="adi-add" onClick={addPieza}>
+          <PlusIcon />
+          Agregar pieza
+        </button>
+      </div>
+    </div>
+  );
+
+  const setModoCotizacionLineal = (modo: ModoCotizacionLineal) => {
+    setMotorConfig((current) => ({
+      ...current,
+      modoCotizacionLineal: modo,
+      piezas:
+        modo === "nesting" && current.piezas.length === 0
+          ? [
+              {
+                uiKey: `pz-${Date.now()}`,
+                cantidad: 1,
+                anchoMm: 1000,
+                altoMm: 500,
+              },
+            ]
+          : current.piezas,
+    }));
   };
 
   return (
@@ -2501,74 +2373,36 @@ function ApConfigStep({
               </div>
             ) : null}
 
-            {productoDetalle.modoMedidas === "LIBRE" ? (
-              <div className="ap-spec ap-spec-wide">
-                <div className="ap-piezas">
-                  <div className="ap-pieza-head" aria-hidden="true">
-                    <span>Cantidad</span>
-                    <span />
-                    <span>Ancho</span>
-                    <span />
-                    <span>Alto</span>
-                    <span />
-                    <span />
-                  </div>
-                  {motorConfig.piezas.map((pieza, index) => (
-                    <div className="ap-pieza-row" key={pieza.uiKey}>
-                      <input
-                        ref={(node) => {
-                          cantidadPiezaRefs.current[pieza.uiKey] = node;
-                        }}
-                        type="number"
-                        min="1"
-                        value={pieza.cantidad}
-                        onChange={(event) =>
-                          updatePieza(index, { cantidad: Number(event.target.value) || 0 })
-                        }
-                        aria-label="Cantidad de piezas"
-                      />
-                      <span>x</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={pieza.anchoMm}
-                        onChange={(event) =>
-                          updatePieza(index, { anchoMm: Number(event.target.value) || 0 })
-                        }
-                        aria-label="Ancho en mm"
-                      />
-                      <span>x</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={pieza.altoMm}
-                        onChange={(event) =>
-                          updatePieza(index, { altoMm: Number(event.target.value) || 0 })
-                        }
-                        onKeyDown={(event) => {
-                          if (event.key !== "Enter") return;
-                          event.preventDefault();
-                          addPieza();
-                        }}
-                        aria-label="Alto en mm"
-                      />
-                      <span>mm</span>
-                      <button
-                        type="button"
-                        className="ap-qty-btn"
-                        onClick={() => removePieza(index)}
-                        aria-label="Quitar pieza"
-                      >
-                        <XIcon />
-                      </button>
-                    </div>
-                  ))}
-                  <button type="button" className="adi-add" onClick={addPieza}>
-                    <PlusIcon />
-                    Agregar pieza
-                  </button>
+            {metroLinealConMedidasVariables ? (
+              <>
+                <div className="ap-spec ap-spec-wide">
+                  <label>Modo de cotización lineal</label>
+                  {renderSegmentedControl(
+                    "Modo de cotización lineal",
+                    motorConfig.modoCotizacionLineal,
+                    [
+                      { value: "nesting", label: "Calcular por piezas" },
+                      { value: "directo", label: "Ingresar ml" },
+                    ],
+                    (value) => setModoCotizacionLineal(value as ModoCotizacionLineal),
+                  )}
                 </div>
-              </div>
+                {mostrarEditorPiezas ? (
+                  renderPiezasEditor()
+                ) : (
+                  <>
+                    {slotsMaterialesLinealDirecto.map((slot) =>
+                      renderLinearMaterialWidthSelect(slot),
+                    )}
+                    <div className="ap-spec ap-spec-wide">
+                      <label>Largo a cotizar</label>
+                      {renderQuantityControl()}
+                    </div>
+                  </>
+                )}
+              </>
+            ) : productoDetalle.modoMedidas === "LIBRE" ? (
+              renderPiezasEditor()
             ) : (
               <>
                 {medidasPredefinidas.length > 1 ? (
@@ -2682,7 +2516,7 @@ function ApConfigStep({
               );
             })}
 
-            {slotsMaterialesPrincipales.map((slot) => renderMaterialSelect(slot))}
+            {slotsMaterialesGenerales.map((slot) => renderMaterialSelect(slot))}
 
             {pasosConCandidatas.map((paso) => {
               const selectedId = motorConfig.seleccionMaquina[paso.configPasoId] ?? "";
@@ -3006,10 +2840,7 @@ export function AgregarProductoSheet({
   const [cotizacionError, setCotizacionError] = React.useState<string | null>(null);
   const suppressNextCotizacionClear = React.useRef(false);
   const catalogProducts = React.useMemo(
-    () =>
-      productos.length > 0
-        ? productos.map(mapProductoReal)
-        : CATALOG_PRODUCTS,
+    () => productos.map(mapProductoReal),
     [productos],
   );
   const isEditing = Boolean(editingItem);
@@ -3051,46 +2882,8 @@ export function AgregarProductoSheet({
       }
 
       if (!nextProduct) {
-        nextProduct = {
-          real: false,
-          code: itemToEdit.productoCodigo,
-          name: itemToEdit.productoNombre,
-          family: itemToEdit.subcategoriaComercialNombre,
-          categoriaComercialCodigo: itemToEdit.categoriaComercialCodigo,
-          categoriaComercialNombre: itemToEdit.categoriaComercialNombre,
-          subcategoriaComercialCodigo: itemToEdit.subcategoriaComercialCodigo,
-          subcategoriaComercialNombre: itemToEdit.subcategoriaComercialNombre,
-          cobro:
-            itemToEdit.unidadMedida === "m2"
-              ? "Por m²"
-              : itemToEdit.unidadMedida === "metro_lineal"
-                ? "Por metro lineal"
-                : "Por unidad",
-          unidad:
-            itemToEdit.unidadMedida === "m2"
-              ? "m²"
-              : itemToEdit.unidadMedida === "metro_lineal"
-                ? "ml"
-                : "u.",
-          medidasMode: itemToEdit.jobContext?.piezas ? "calculada" : "fija",
-          precioBase: itemToEdit.precioUnitario,
-          precioConfigJson: undefined,
-          descripcion: itemToEdit.varianteNombre ?? itemToEdit.categoriaComercialNombre,
-          specs: itemToEdit.atributosSchema.map((attr) => ({
-            key: attr.key,
-            label: attr.label,
-            type: attr.tipo === "select" ? "select" : "text",
-            def: itemToEdit.especificaciones[attr.key] ?? "",
-          })),
-          adicionales: itemToEdit.adicionales.map((adicional) => ({
-            code: adicional,
-            name: adicional,
-            origen: "mock" as const,
-          })),
-          qtyDefault: itemToEdit.cantidad,
-          costoUnitario: 0,
-          impuestoPct: itemToEdit.impuestoPorcentaje,
-        };
+        toast.error("No pude encontrar el producto original para editar este item.");
+        return;
       }
 
       if (cancelled) return;
@@ -3161,12 +2954,14 @@ export function AgregarProductoSheet({
       detalle?.rutasAlternativas[0] ??
       null;
     const medidaDefault = detalle ? getMedidaDefault(detalle) : null;
+    const iniciaConPiezas =
+      detalle?.modoMedidas === "LIBRE" || isMetroLinealConMedidasVariables(detalle);
     setMotorConfig({
       ...DEFAULT_MOTOR_CONFIG,
       rutaAlternativaId: rutaPreferida?.id ?? "",
       medidaPredefinidaId: medidaDefault?.id ?? "",
       piezas:
-        detalle?.modoMedidas === "LIBRE"
+        iniciaConPiezas
           ? [
               {
                 uiKey: `pz-${Date.now()}`,

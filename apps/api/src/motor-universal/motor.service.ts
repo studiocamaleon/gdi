@@ -487,6 +487,7 @@ export class MotorUniversalService {
     const cantidadComercialPricing = this.resolverCantidadComercialPricing(
       producto,
       jobContext,
+      pasosEjecutados,
     );
     const costoUnitarioComercial =
       cantidadComercialPricing > 0 ? total / cantidadComercialPricing : 0;
@@ -911,6 +912,7 @@ export class MotorUniversalService {
   private resolverCantidadComercialPricing(
     producto: ProductoCargado,
     jobContext: JobContext,
+    pasosEjecutados: PasoEjecutado[],
   ): number {
     const unidad = producto.unidadComercial?.toLowerCase();
     const cantidadFallback = this.numeroPositivo(jobContext.cantidad) ?? 1;
@@ -937,6 +939,7 @@ export class MotorUniversalService {
         this.numeroPositivo(jobContext.metrosLineales) ??
         this.numeroPositivo(jobContext.metroLineal) ??
         this.numeroPositivo(jobContext.ml) ??
+        this.resolverMetrosLinealesDesdeNesting(pasosEjecutados) ??
         cantidadFallback
       );
     }
@@ -946,6 +949,18 @@ export class MotorUniversalService {
       this.numeroPositivo(jobContext.cantidadComercialPricing) ??
       cantidadFallback
     );
+  }
+
+  private resolverMetrosLinealesDesdeNesting(
+    pasosEjecutados: PasoEjecutado[],
+  ): number | undefined {
+    for (const paso of pasosEjecutados) {
+      const nesting = paso.nestingResult;
+      if (nesting?.unidad !== 'm_lineales') continue;
+      const cantidad = this.numeroPositivo(nesting.cantidadCalculada);
+      if (cantidad) return cantidad;
+    }
+    return undefined;
   }
 
   private calcularM2ComercialDesdePiezas(
