@@ -124,7 +124,7 @@ function getCotizacionPasos(cotizacion: CotizacionExitosa) {
   return cotizacion.pasos
     .filter((paso) => paso.activado)
     .map((paso) => ({
-      nombre: humanizeCodigo(paso.familiaCodigo),
+      nombre: paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo),
       centroCosto: paso.tiempo ? "Producción" : "Proceso",
       minutos: paso.tiempo?.totalMin ?? 0,
       origen: "base" as const,
@@ -767,7 +767,7 @@ function ProduccionItemView({
         <div className="cost-title">Ruta de producción</div>
         <div className="production-route">
           {pasosActivos.map((paso, index) => {
-            const title = humanizeCodigo(paso.familiaCodigo);
+            const title = paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo);
             const detail = paso.tiempo
               ? `${formatTiempoPaso(paso)} · ${getCentroCostoLabel(paso)}`
               : getCentroCostoLabel(paso);
@@ -1296,7 +1296,11 @@ function CostosItemView({
                                   aria-hidden="true"
                                 />
                               ) : null}
-                              <span>{visibleIndex + 1}. {humanizeCodigo(paso.familiaCodigo)}</span>
+                              <span>
+                                {visibleIndex + 1}.{" "}
+                                {paso.nombreVisible?.trim() ||
+                                  humanizeCodigo(paso.familiaCodigo)}
+                              </span>
                             </span>
                           </div>
                         </td>

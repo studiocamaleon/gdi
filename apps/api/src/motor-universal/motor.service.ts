@@ -46,9 +46,13 @@ import {
 import { calculateSustratoToPliegoConversion } from '../productos-servicios/nesting/helpers/sustrato-to-pliego';
 import {
   getModoColorsFromPerfil,
+  MODO_COLOR_LABELS,
   modoColorMatchesPerfil,
   normalizeModoColor,
 } from '../productos-servicios/modo-color-comercial';
+
+const MODO_SIN_IMPRESION = 'SIN_IMPRESION';
+const FAMILIAS_IMPRESION = new Set(['impresion_por_area', 'impresion_por_hoja']);
 
 /**
  * G-M9 — Resuelve la unidad efectiva de un material consumido. Cuando la
@@ -1139,8 +1143,10 @@ export class MotorUniversalService {
       pasoConMaquina,
       jobContext,
     );
+    const sinImpresion = this.esModoSinImpresion(pasoConMaquina, jobContext);
     if (
       modoColorElegido &&
+      !sinImpresion &&
       !this.findPerfilCompatiblePorModoColor(pasoConMaquina, modoColorElegido)
     ) {
       errores.push({
@@ -1166,7 +1172,9 @@ export class MotorUniversalService {
         costoTotal: 0,
       };
     }
-    const perfilResuelto = this.resolverPerfil(pasoConMaquina, jobContext);
+    const perfilResuelto = sinImpresion
+      ? null
+      : this.resolverPerfil(pasoConMaquina, jobContext);
     paso = pasoConMaquina; // todo lo siguiente usa el paso con máquina resuelta
 
     // c.1) RESOLVER MATERIAL PRELIMINAR (necesario para el nesting de pliegos
@@ -1190,7 +1198,11 @@ export class MotorUniversalService {
       this.debeAutocalcularNestingSiNoHayOutput(paso, jobContext) ||
       this.debeCalcularNestingLaminado(paso);
     if (debeCalcularNestingProductivo) {
-      nestingDispatch = runNestingForPaso(paso, jobContext, materialPreliminar);
+      nestingDispatch = runNestingForPaso(
+        paso,
+        this.getJobContextParaNesting(paso, jobContext),
+        materialPreliminar,
+      );
     }
     if (
       paso.familiaCodigo === 'laminado' &&
@@ -1261,14 +1273,16 @@ export class MotorUniversalService {
         costoTotal: 0,
       };
     }
-    const tiempo = this.calcularTiempo(
-      pasoConPerfil,
-      jobContext,
-      errores,
-      tarifasMap,
-      periodo,
-      nestingDispatch,
-    );
+    const tiempo = sinImpresion
+      ? this.tiempoCero()
+      : this.calcularTiempo(
+          pasoConPerfil,
+          jobContext,
+          errores,
+          tarifasMap,
+          periodo,
+          nestingDispatch,
+        );
 
     // f) MATERIALES (D.5) — F.2.5: HARDCODED + COMERCIAL_ELIGE + MOTOR_ELIGE_AUTO.
     //    Si hay nesting con cantidad calculada, usamos esa cantidad para fórmulas
@@ -1289,11 +1303,13 @@ export class MotorUniversalService {
     // g) CARGOS DIRECTOS A NIVEL PASO (G-M3 / D.6)
     //    Base de PORCENTAJE_SOBRE_BASE = subtotal del PASO (tiempo + materiales).
     const subtotalPaso = tiempo.costo + materialesCosto;
-    const cargosDirectosPaso = this.aplicarCargosPaso(
-      paso.cargosDirectosPaso,
-      jobContext,
-      subtotalPaso,
-    );
+    const cargosDirectosPaso = sinImpresion
+      ? []
+      : this.aplicarCargosPaso(
+          paso.cargosDirectosPaso,
+          jobContext,
+          subtotalPaso,
+        );
     const cargosPasoTotal = cargosDirectosPaso.reduce(
       (acc, c) => acc + c.monto,
       0,
@@ -1343,6 +1359,7 @@ export class MotorUniversalService {
       rutaPasoId: paso.rutaPasoId,
       rutaPasoOrden: paso.rutaPasoOrden,
       familiaCodigo: paso.familiaCodigo,
+      nombreVisible: this.resolverNombreVisiblePaso(paso, jobContext),
       configPasoId: paso.configPasoId,
       activado: true,
       tiempo,
@@ -1396,6 +1413,105 @@ export class MotorUniversalService {
       });
     }
     return ejecutados;
+  }
+
+  private esPasoImpresion(paso: Pick<PasoCargado, 'familiaCodigo'>) {
+    return FAMILIAS_IMPRESION.has(paso.familiaCodigo);
+  }
+
+  private esModoSinImpresion(paso: PasoCargado, jobContext: JobContext) {
+    return (
+      this.esPasoImpresion(paso) &&
+      this.resolverModoColorComercial(paso, jobContext) === MODO_SIN_IMPRESION
+    );
+  }
+
+  private tiempoCero(): NonNullable<PasoEjecutado['tiempo']> {
+    return {
+      setupMin: 0,
+      runMin: 0,
+      cleanupMin: 0,
+      tiempoFijoMin: 0,
+      totalMin: 0,
+      costo: 0,
+    };
+  }
+
+  private getJobContextParaNesting(paso: PasoCargado, jobContext: JobContext) {
+    if (!this.esModoSinImpresion(paso, jobContext)) return jobContext;
+
+    const currentRuntime =
+      jobContext.configPasoRuntime &&
+      typeof jobContext.configPasoRuntime === 'object' &&
+      !Array.isArray(jobContext.configPasoRuntime)
+        ? jobContext.configPasoRuntime
+        : {};
+    const currentPasoRuntime =
+      currentRuntime[paso.configPasoId] &&
+      typeof currentRuntime[paso.configPasoId] === 'object' &&
+      !Array.isArray(currentRuntime[paso.configPasoId])
+        ? currentRuntime[paso.configPasoId]
+        : {};
+    const currentNesting =
+      currentPasoRuntime.nestingConfig &&
+      typeof currentPasoRuntime.nestingConfig === 'object' &&
+      !Array.isArray(currentPasoRuntime.nestingConfig)
+        ? currentPasoRuntime.nestingConfig
+        : {};
+
+    return {
+      ...jobContext,
+      configPasoRuntime: {
+        ...currentRuntime,
+        [paso.configPasoId]: {
+          ...currentPasoRuntime,
+          nestingConfig: {
+            ...currentNesting,
+            pieceBleedMm: 0,
+            separationHMm: 0,
+            separationVMm: 0,
+            margins: {
+              leftMm: 0,
+              rightMm: 0,
+              topMm: 0,
+              bottomMm: 0,
+              startMm: 0,
+              endMm: 0,
+            },
+            extraMargins: {
+              leftMm: 0,
+              rightMm: 0,
+              topMm: 0,
+              bottomMm: 0,
+              startMm: 0,
+              endMm: 0,
+            },
+          },
+        },
+      },
+    } satisfies JobContext;
+  }
+
+  private resolverNombreVisiblePaso(paso: PasoCargado, jobContext: JobContext) {
+    if (this.esModoSinImpresion(paso, jobContext)) return 'Material sin impresión';
+
+    const base = paso.nombreVisible?.trim() || this.humanizarCodigo(paso.familiaCodigo);
+    if (!this.esPasoImpresion(paso)) return base;
+
+    const modoColor = this.resolverModoColorComercial(paso, jobContext);
+    if (!modoColor || modoColor === MODO_SIN_IMPRESION) return base;
+    const label = MODO_COLOR_LABELS[modoColor] ?? modoColor;
+    return base.toLocaleLowerCase('es-AR').includes(label.toLocaleLowerCase('es-AR'))
+      ? base
+      : `${base} ${label}`;
+  }
+
+  private humanizarCodigo(value: string) {
+    return value
+      .replaceAll('_', ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/^\w/, (char) => char.toUpperCase());
   }
 
   private debeAutocalcularNestingSiNoHayOutput(
@@ -2047,13 +2163,15 @@ export class MotorUniversalService {
     }
 
     ejecutados.push(
-      ...this.calcularConsumiblesMaquina(
-        paso,
-        jobContext,
-        nestingDispatch,
-        errores,
-        materialPreliminar,
-      ),
+      ...(this.esModoSinImpresion(paso, jobContext)
+        ? []
+        : this.calcularConsumiblesMaquina(
+            paso,
+            jobContext,
+            nestingDispatch,
+            errores,
+            materialPreliminar,
+          )),
     );
 
     return ejecutados;
@@ -2597,18 +2715,23 @@ export class MotorUniversalService {
     const candidatoVarianteIds = this.getSlotCandidatoVarianteIds(slot);
     if (candidatoVarianteIds.length === 0) return null;
 
+    const eleccionExplicita = this.getEleccionMaterialComercial(
+      slot,
+      jobContext,
+      paso,
+    );
+
     if (slot.modoSeleccion === 'COMERCIAL_ELIGE') {
-      const eleccion = this.getEleccionMaterialComercial(
-        slot,
-        jobContext,
-        paso,
-      );
-      return eleccion && candidatoVarianteIds.includes(eleccion)
-        ? await this.cargarVariantePorId(eleccion)
+      return eleccionExplicita && candidatoVarianteIds.includes(eleccionExplicita)
+        ? await this.cargarVariantePorId(eleccionExplicita)
         : null;
     }
 
     if (slot.modoSeleccion === 'MOTOR_ELIGE_AUTO') {
+      if (eleccionExplicita && candidatoVarianteIds.includes(eleccionExplicita)) {
+        return await this.cargarVariantePorId(eleccionExplicita);
+      }
+
       // Cargar todos los candidatos con su info
       const variantes = await Promise.all(
         candidatoVarianteIds.map((variantId) =>
@@ -3775,6 +3898,7 @@ export class MotorUniversalService {
         rutaPasoId: cp.rutaPaso.id,
         rutaPasoOrden: snapshotPaso?.orden ?? cp.rutaPaso.orden,
         familiaCodigo: snapshotPaso?.familiaCodigo ?? cp.rutaPaso.familiaCodigo,
+        nombreVisible: cp.nombreVisible,
         configPasoId: cp.id,
         modoActivacion: cp.modoActivacion,
         condicionActivacionJson: cp.condicionActivacionJson,

@@ -692,15 +692,17 @@ function SubstrateView({
             heightMm={displayHeightMm}
             kind={substrate.kind}
           />
-          {placements.map((placement, idx) => (
-            <PlacementRect
-              key={`${placement.pieceId}-${idx}`}
-              placement={placement}
-              index={idx}
-              showLabels={showLabels}
-              displayTransform={displayTransform}
-            />
-          ))}
+          <g clipPath={substrate.kind === "roll" ? `url(#printable-clip-${substrateIndex})` : undefined}>
+            {placements.map((placement, idx) => (
+              <PlacementRect
+                key={`${placement.pieceId}-${idx}`}
+                placement={placement}
+                index={idx}
+                showLabels={showLabels}
+                displayTransform={displayTransform}
+              />
+            ))}
+          </g>
         </svg>
       </div>
     </div>

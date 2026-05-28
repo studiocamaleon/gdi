@@ -96,6 +96,8 @@ type SlotComercialElige = {
   configPasoId: string;
   familiaCodigo: string;
   modoActivacion: string | null;
+  modoSeleccion: string;
+  formula: string;
   slotCodigo: string;
   candidatos: SlotMaterialCandidato[];
 };
@@ -113,6 +115,7 @@ type SlotMaterialCandidato = {
     sortEspesor: number | null;
     espesorLabel: string | null;
     anchoLabel: string | null;
+    anchoMm: number | null;
     colorLabel: string | null;
     missingPrice: boolean;
   }>;
@@ -405,17 +408,16 @@ function isExecutableConfigPaso(
   return config.rutaPaso.activo && config.modoActivacion !== "NO_EJECUTAR";
 }
 
-function getSlotsComercialElige(ruta: RutaAlternativaDetalle | null) {
-  return (
-    ruta?.configPasos
-      .filter(isExecutableConfigPaso)
-      .flatMap((config) =>
-        config.slotsMateriales
-          .filter((slot) => slot.modoSeleccion === "COMERCIAL_ELIGE")
-          .map((slot) => ({
+function mapSlotMaterial(
+  config: RutaAlternativaDetalle["configPasos"][number],
+  slot: RutaAlternativaDetalle["configPasos"][number]["slotsMateriales"][number],
+): SlotComercialElige {
+  return {
           configPasoId: config.id,
           familiaCodigo: config.rutaPaso.familiaCodigo,
           modoActivacion: config.modoActivacion,
+          modoSeleccion: slot.modoSeleccion,
+          formula: slot.formula,
           slotCodigo: slot.slotCodigo,
           candidatos: slot.candidatos.map((candidate) => ({
             materiaPrimaId: candidate.materiaPrimaId,
@@ -446,6 +448,9 @@ function getSlotsComercialElige(ruta: RutaAlternativaDetalle | null) {
                   anchoLabel: getVariantWidthLabel(
                     item.variante.atributosVarianteJson,
                   ),
+                  anchoMm: getVariantWidthMm(
+                    item.variante.atributosVarianteJson,
+                  ),
                   colorLabel: getVariantColorLabel(
                     item.variante.atributosVarianteJson,
                   ),
@@ -454,9 +459,62 @@ function getSlotsComercialElige(ruta: RutaAlternativaDetalle | null) {
               }),
             ),
           })),
-          })),
+        };
+}
+
+function getSlotsComercialElige(ruta: RutaAlternativaDetalle | null) {
+  return (
+    ruta?.configPasos
+      .filter(isExecutableConfigPaso)
+      .flatMap((config) =>
+        config.slotsMateriales
+          .filter((slot) => slot.modoSeleccion === "COMERCIAL_ELIGE")
+          .map((slot) => mapSlotMaterial(config, slot)),
       ) ?? []
   );
+}
+
+function getSlotsMaterialesLinealDirecto(ruta: RutaAlternativaDetalle | null) {
+  return (
+    ruta?.configPasos
+      .filter(isExecutableConfigPaso)
+      .flatMap((config) =>
+        config.slotsMateriales
+          .filter(
+            (slot) =>
+              slot.formula === "por_metro_lineal" &&
+              (slot.modoSeleccion === "COMERCIAL_ELIGE" ||
+                slot.modoSeleccion === "MOTOR_ELIGE_AUTO"),
+          )
+          .map((slot) => mapSlotMaterial(config, slot)),
+      ) ?? []
+  );
+}
+
+function mergeSlotsMateriales(slots: SlotComercialElige[]) {
+  const deduped = new Map<string, SlotComercialElige>();
+  for (const slot of slots) {
+    deduped.set(materialSelectionKey(slot.configPasoId, slot.slotCodigo), slot);
+  }
+  return Array.from(deduped.values());
+}
+
+function getSlotsParaCotizacion(
+  ruta: RutaAlternativaDetalle | null,
+  productoDetalle: ProductoDetalle | null,
+  config: Pick<MotorConfigState, "modoCotizacionLineal">,
+) {
+  const slotsComerciales = getSlotsComercialElige(ruta);
+  if (
+    isMetroLinealConMedidasVariables(productoDetalle) &&
+    config.modoCotizacionLineal === "directo"
+  ) {
+    return mergeSlotsMateriales([
+      ...slotsComerciales,
+      ...getSlotsMaterialesLinealDirecto(ruta),
+    ]);
+  }
+  return slotsComerciales;
 }
 
 function getModoColorConfig(params: unknown): {
@@ -486,6 +544,18 @@ function normalizeModoColor(value: unknown): string | undefined {
     .replace(/W/g, "BLANCO")
     .replace(/BARNIZ|VARNISH|VERNIS/g, "BARNIZ");
   if (!normalized) return undefined;
+  if (
+    [
+      "SINIMPRESION",
+      "SIN_IMPRESION",
+      "NOIMPRESION",
+      "NO_PRINT",
+      "NOPRINT",
+      "SINPRINT",
+    ].includes(normalized)
+  ) {
+    return "SIN_IMPRESION";
+  }
   if (["BN", "B/N", "K", "NEGRO", "BLACK"].includes(normalized)) return "BN";
   if (normalized === "CMYK") return "CMYK";
   if (["CMYK+BLANCO", "CMYKBLANCO"].includes(normalized)) return "CMYK+blanco";
@@ -590,6 +660,12 @@ function formatNumberForSpec(value: number) {
   }).format(value);
 }
 
+function parseDecimalInput(value: string) {
+  const normalized = value.trim().replace(",", ".");
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function getTextAttr(attrs: Record<string, unknown> | null | undefined, keys: string[]) {
   for (const key of keys) {
     const raw = attrs?.[key];
@@ -617,22 +693,32 @@ function getVariantThicknessLabel(attrs: Record<string, unknown> | null | undefi
 }
 
 function getVariantWidthLabel(attrs: Record<string, unknown> | null | undefined) {
-  const entries = [
-    { value: attrs?.ancho, unit: "mm" },
-    { value: attrs?.anchoMm, unit: "mm" },
-    { value: attrs?.ancho_mm, unit: "mm" },
-    { value: attrs?.anchoRolloMm, unit: "mm" },
-    { value: attrs?.anchoUtilMm, unit: "mm" },
-    { value: attrs?.widthMm, unit: "mm" },
+  const value = getVariantWidthMm(attrs);
+  return value ? `${formatNumberForSpec(value / 10)} cm` : null;
+}
+
+function getVariantWidthMm(attrs: Record<string, unknown> | null | undefined) {
+  const mmEntries = [
+    attrs?.anchoMm,
+    attrs?.ancho_mm,
+    attrs?.anchoRolloMm,
+    attrs?.anchoUtilMm,
+    attrs?.widthMm,
   ];
-  const entry = entries.find(
-    ({ value }) => value !== undefined && value !== null && value !== "",
+  const rawMm = mmEntries.find(
+    (value) => value !== undefined && value !== null && value !== "",
   );
-  const raw = entry?.value;
-  const value =
-    typeof raw === "string" ? Number(raw.replace(",", ".")) : Number(raw);
-  if (!Number.isFinite(value)) return null;
-  return `${formatNumberForSpec(value)} ${entry?.unit ?? "mm"}`;
+  const valueMm =
+    typeof rawMm === "string" ? Number(rawMm.replace(",", ".")) : Number(rawMm);
+  if (Number.isFinite(valueMm) && valueMm > 0) return valueMm;
+
+  const rawAncho = attrs?.ancho;
+  const ancho =
+    typeof rawAncho === "string"
+      ? Number(rawAncho.replace(",", "."))
+      : Number(rawAncho);
+  if (!Number.isFinite(ancho) || ancho <= 0) return null;
+  return ancho <= 10 ? ancho * 1000 : ancho;
 }
 
 function getVariantColorLabel(attrs: Record<string, unknown> | null | undefined) {
@@ -818,12 +904,16 @@ function mapProductoReal(producto: ProductoListItem | ProductoDetalle): CatalogP
     specs: schema
       .filter((spec) => spec.visible)
       .sort((a, b) => a.orden - b.orden)
-      .map((spec) => ({
-        key: spec.key,
-        label: spec.label,
-        type: spec.tipo === "select" ? "select" : "text",
-        def: getCommercialSpecFallback(producto, spec.key, atributos),
-      })),
+      .map((spec) => {
+        const def = getCommercialSpecFallback(producto, spec.key, atributos);
+        return {
+          key: spec.key,
+          label: spec.label,
+          type: (spec.tipo === "select" ? "select" : "text") as CatalogSpec["type"],
+          def,
+        };
+      })
+      .filter((spec) => shouldShowCommercialSpec(spec, spec.def, { real: true })),
     adicionales: getOpcionales(producto),
     qtyDefault: getCantidadDefault(producto),
     costoUnitario: 0,
@@ -934,7 +1024,7 @@ function getCotizacionPasos(cotizacion: CotizacionExitosa): PasoProduccionPropue
   return cotizacion.pasos
     .filter((paso) => paso.activado)
     .map((paso) => ({
-      nombre: humanizeCodigo(paso.familiaCodigo),
+      nombre: paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo),
       centroCosto: paso.tiempo ? "Producción" : "Proceso",
       minutos: paso.tiempo?.totalMin ?? 0,
       origen: "base",
@@ -943,6 +1033,23 @@ function getCotizacionPasos(cotizacion: CotizacionExitosa): PasoProduccionPropue
 
 function defaultSpecs(product: CatalogProduct) {
   return Object.fromEntries(product.specs.map((spec) => [spec.key, spec.def]));
+}
+
+function getSelectedLinearMaterialWidthMm(
+  slotsComercialElige: SlotComercialElige[],
+  config: MotorConfigState,
+) {
+  for (const slot of slotsComercialElige) {
+    if (slot.formula !== "por_metro_lineal") continue;
+    const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
+    const selected = config.seleccionMaterial[key] || defaultSlotCandidateId(slot);
+    if (!selected) continue;
+    for (const candidate of slot.candidatos) {
+      const variant = candidate.variantes.find((item) => item.variantId === selected);
+      if (variant?.anchoMm) return variant.anchoMm;
+    }
+  }
+  return null;
 }
 
 function buildJobContext(
@@ -956,8 +1063,13 @@ function buildJobContext(
     config.medidaPredefinidaId,
   );
   const cotizaConPiezas = usaPiezasParaCotizar(productoDetalle, config);
+  const cotizaLinealDirecto =
+    isMetroLinealConMedidasVariables(productoDetalle) &&
+    config.modoCotizacionLineal === "directo";
   const cantidadTrabajo =
-    cotizaConPiezas
+    cotizaLinealDirecto
+      ? 1
+      : cotizaConPiezas
       ? config.piezas.reduce(
           (total, pieza) =>
             total + (Number.isFinite(pieza.cantidad) ? pieza.cantidad : 0),
@@ -971,10 +1083,27 @@ function buildJobContext(
     numerosXTalonario: config.numerosXTalonario,
     opcionalesActivados: config.opcionalesActivados,
   };
+  const anchoMaterialLinealMm =
+    cotizaLinealDirecto
+      ? getSelectedLinearMaterialWidthMm(slotsComercialElige, config)
+      : null;
+  const piezaLinealDirecta =
+    anchoMaterialLinealMm && qty > 0
+      ? [
+          {
+            uiKey: "lineal-directo",
+            cantidad: 1,
+            anchoMm: anchoMaterialLinealMm,
+            altoMm: qty * 1000,
+          },
+        ]
+      : [];
 
   const piezasContexto =
     cotizaConPiezas && config.piezas.length > 0
       ? config.piezas
+      : piezaLinealDirecta.length > 0
+        ? piezaLinealDirecta
       : medidaPredefinida
         ? [
             {
@@ -1013,10 +1142,14 @@ function buildJobContext(
 
   if (isMetroLinealConMedidasVariables(productoDetalle)) {
     ctx.modoCotizacionLineal = config.modoCotizacionLineal;
-    if (config.modoCotizacionLineal === "directo") {
+    if (cotizaLinealDirecto) {
       ctx.cantidadComercialPricing = qty;
       ctx.cantidadComercial = qty;
       ctx.metrosLineales = qty;
+      if (anchoMaterialLinealMm) {
+        ctx.anchoMaterialMm = anchoMaterialLinealMm;
+        ctx.largoMaterialMm = qty * 1000;
+      }
     }
   }
 
@@ -1239,7 +1372,6 @@ function hasUsefulSpecValue(value: string | undefined) {
   return (
     normalized.length > 0 &&
     normalized !== "a definir" &&
-    normalized !== "medidas libres" &&
     !normalized.includes("opcional")
   );
 }
@@ -1247,10 +1379,13 @@ function hasUsefulSpecValue(value: string | undefined) {
 function shouldShowCommercialSpec(
   spec: CatalogSpec,
   value: string | undefined,
-  product: CatalogProduct,
+  product: Pick<CatalogProduct, "real">,
 ) {
   const hiddenKeys = new Set(["tipo_pieza", "tipoPieza", "tipo_de_pieza"]);
   if (hiddenKeys.has(spec.key)) return false;
+  if (spec.key === "uso_aplicacion" && value?.trim().toLowerCase() === "interior / exterior") {
+    return false;
+  }
   return product.real ? hasUsefulSpecValue(value) : true;
 }
 
@@ -1323,6 +1458,22 @@ function buildItem(
   if (jobContext && notaProduccion) {
     jobContext.notasProduccion = notaProduccion;
   }
+  const atributosSchema = product.specs.map((spec, index) => ({
+    key: spec.key,
+    label: spec.label,
+    tipo: spec.type,
+    visible: shouldShowCommercialSpec(spec, especificaciones[spec.key], product),
+    orden: (index + 1) * 10,
+  }));
+  if (especificaciones.modo_color && !atributosSchema.some((attr) => attr.key === "modo_color")) {
+    atributosSchema.push({
+      key: "modo_color",
+      label: "Modo de color",
+      tipo: "text",
+      visible: true,
+      orden: atributosSchema.length * 10 + 10,
+    });
+  }
 
   return {
     id: options?.itemId ?? crypto.randomUUID(),
@@ -1349,13 +1500,7 @@ function buildItem(
     notaProduccion: notaProduccion || undefined,
     rutaAlternativaId: options?.motorConfig.rutaAlternativaId ?? null,
     jobContext,
-    atributosSchema: product.specs.map((spec, index) => ({
-      key: spec.key,
-      label: spec.label,
-      tipo: spec.type,
-      visible: shouldShowCommercialSpec(spec, especificaciones[spec.key], product),
-      orden: (index + 1) * 10,
-    })),
+    atributosSchema,
   } satisfies PropuestaItem;
 }
 
@@ -1668,6 +1813,10 @@ function ApConfigStep({
   );
   const slotsComercialElige = React.useMemo(
     () => getSlotsComercialElige(rutaSel),
+    [rutaSel],
+  );
+  const slotsLinealesDirectos = React.useMemo(
+    () => getSlotsMaterialesLinealDirecto(rutaSel),
     [rutaSel],
   );
   const slotsMaterialesPrincipales = slotsComercialElige.filter(
@@ -2128,9 +2277,6 @@ function ApConfigStep({
               </span>
             </div>
           )}
-          {selectedVariant?.description ? (
-            <p className="ap-spec-hint">{selectedVariant.description}</p>
-          ) : null}
         </div>
       </React.Fragment>
     );
@@ -2150,7 +2296,7 @@ function ApConfigStep({
   const mostrarMaterialLinealDirecto =
     metroLinealConMedidasVariables && !mostrarEditorPiezas;
   const slotsMaterialesLinealDirecto = mostrarMaterialLinealDirecto
-    ? slotsMaterialesPrincipales
+    ? slotsLinealesDirectos.filter((slot) => slot.modoActivacion !== "OPCIONAL")
     : [];
   const slotKeysLinealDirecto = new Set(
     slotsMaterialesLinealDirecto.map((slot) =>
@@ -2207,7 +2353,7 @@ function ApConfigStep({
             value={qty}
             step={product.unidad === "m²" || product.unidad === "ml" ? 0.1 : 1}
             min="0"
-            onChange={(event) => setQty(Number.parseFloat(event.target.value) || 0)}
+            onChange={(event) => setQty(parseDecimalInput(event.target.value))}
           />
           <span className="ap-qty-unit">{product.unidad}</span>
           <button type="button" className="ap-qty-btn" onClick={() => setQty(qty + 1)}>
@@ -2999,7 +3145,11 @@ export function AgregarProductoSheet({
       return;
     }
     const rutaSel = getRutaSeleccionada(productoDetalle, motorConfig.rutaAlternativaId);
-    const slotsComercialElige = getSlotsComercialElige(rutaSel);
+    const slotsComercialElige = getSlotsParaCotizacion(
+      rutaSel,
+      productoDetalle,
+      motorConfig,
+    );
     setCotizando(true);
     setCotizacion(null);
     setCotizacionError(null);
@@ -3036,10 +3186,15 @@ export function AgregarProductoSheet({
         return;
       }
       const rutaSel = getRutaSeleccionada(productoDetalle, motorConfig.rutaAlternativaId);
+      const slotsComercialElige = getSlotsParaCotizacion(
+        rutaSel,
+        productoDetalle,
+        motorConfig,
+      );
       const nextItem = buildItem(product, qty, specs, adi, {
         productoDetalle,
         motorConfig,
-        slotsComercialElige: getSlotsComercialElige(rutaSel),
+        slotsComercialElige,
         cotizacion,
         notaProduccion,
         itemId: editingItem?.id,

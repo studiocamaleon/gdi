@@ -657,7 +657,6 @@ async function seedRutasYProductos(
         material: 'Vinilo blanco brillante',
         medidas: 'Medidas libres',
         tecnologia: 'Látex',
-        uso_aplicacion: 'Interior / exterior',
       },
       precioConfigJson: {
         metodoCalculo: 'margen_variable',

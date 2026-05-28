@@ -267,6 +267,7 @@ export interface UpsertConfigPasoPayload {
   mecanismoCantidadConfigJson?: Record<string, unknown> | null;
   multiplicadoresActivos?: string[];
   paramsPasoJson?: Record<string, unknown> | null;
+  nombreVisible?: string | null;
   maquinaM1Id?: string | null;
   perfilM1Id?: string | null;
   centroCostoId?: string | null;
@@ -697,6 +698,7 @@ export interface CotizarResponse {
     pasos: Array<{
       rutaPasoOrden: number;
       familiaCodigo: string;
+      nombreVisible?: string | null;
       configPasoId?: string;
       activado: boolean;
       razonNoActivado?: string;

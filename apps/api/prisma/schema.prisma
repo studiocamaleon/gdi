@@ -1450,6 +1450,8 @@ model ProductoConfigPaso {
   multiplicadoresActivos      String[]                             @default([])
   /// Params custom declarados por la familia (gap H19 de Fase E).
   paramsPasoJson              Json?
+  /// Nombre operativo visible para propuesta/OT. La familia técnica sigue en RutaPaso.
+  nombreVisible               String?
   maquinaM1Id                 String?                              @db.Uuid
   perfilM1Id                  String?                              @db.Uuid
   centroCostoId               String?                              @db.Uuid

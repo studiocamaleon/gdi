@@ -131,6 +131,11 @@ export class UpsertProductoConfigPasoDto {
   paramsPasoJson?: Record<string, unknown> | null;
 
   @IsOptional()
+  @IsString()
+  @Length(1, 120)
+  nombreVisible?: string | null;
+
+  @IsOptional()
   @IsUUID()
   maquinaM1Id?: string | null;
 

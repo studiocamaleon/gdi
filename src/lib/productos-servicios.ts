@@ -136,6 +136,7 @@ export interface ConfigPasoDetalle {
   mecanismoCantidadConfigJson?: unknown;
   multiplicadoresActivos: string[];
   paramsPasoJson: unknown;
+  nombreVisible?: string | null;
   maquinaM1: {
     id: string;
     codigo: string;

@@ -92,6 +92,30 @@ export class JobContextDto {
   @IsOptional()
   @IsObject()
   configPasoRuntime?: Record<string, Record<string, unknown>>;
+
+  @IsOptional()
+  @IsString()
+  modoCotizacionLineal?: string;
+
+  @IsOptional()
+  @IsNumber()
+  cantidadComercialPricing?: number;
+
+  @IsOptional()
+  @IsNumber()
+  cantidadComercial?: number;
+
+  @IsOptional()
+  @IsNumber()
+  metrosLineales?: number;
+
+  @IsOptional()
+  @IsNumber()
+  anchoMaterialMm?: number;
+
+  @IsOptional()
+  @IsNumber()
+  largoMaterialMm?: number;
 }
 
 export class CotizarDto {

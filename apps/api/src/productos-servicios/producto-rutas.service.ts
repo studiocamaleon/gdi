@@ -201,6 +201,7 @@ export class ProductoRutasService {
             ),
             multiplicadoresActivos: config.multiplicadoresActivos,
             paramsPasoJson: this.jsonOrNull(config.paramsPasoJson),
+            nombreVisible: config.nombreVisible,
             maquinaM1Id: config.maquinaM1Id,
             perfilM1Id: config.perfilM1Id,
             centroCostoId: config.centroCostoId,

@@ -160,6 +160,8 @@ export interface PasoEjecutado {
   rutaPasoId: string;
   rutaPasoOrden: number;
   familiaCodigo: string;
+  /** Nombre operativo final para propuesta/OT. */
+  nombreVisible?: string | null;
   /** Configuración del producto para este paso. */
   configPasoId: string;
   /** Si se activó (true/false según D.1). */
@@ -416,6 +418,7 @@ export interface PasoCargado {
   rutaPasoId: string;
   rutaPasoOrden: number;
   familiaCodigo: string;
+  nombreVisible?: string | null;
   configPasoId: string;
   modoActivacion: string | null;
   condicionActivacionJson: unknown;

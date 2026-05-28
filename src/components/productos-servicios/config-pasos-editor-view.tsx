@@ -112,6 +112,7 @@ const MONTAJE_SOURCE_OPTIONS = [
 ];
 const COSTING_STRATEGIES = ["simple", "m2-exact", "consumed-length", "plate-segments"];
 const MODO_COLOR_LABELS: Record<string, string> = {
+  SIN_IMPRESION: "Sin impresión",
   BN: "Blanco y negro",
   CMYK: "CMYK",
   "CMYK+blanco": "CMYK + Blanco",
@@ -429,6 +430,18 @@ function normalizeModoColor(value: unknown) {
     .replace(/W/g, "BLANCO")
     .replace(/BARNIZ|VARNISH|VERNIS/g, "BARNIZ");
   if (!normalized) return null;
+  if (
+    [
+      "SINIMPRESION",
+      "SIN_IMPRESION",
+      "NOIMPRESION",
+      "NO_PRINT",
+      "NOPRINT",
+      "SINPRINT",
+    ].includes(normalized)
+  ) {
+    return "SIN_IMPRESION";
+  }
   if (["BN", "B/N", "NEGRO", "K"].includes(normalized)) return "BN";
   if (normalized === "CMYK") return "CMYK";
   if (["CMYK+BLANCO", "CMYKBLANCO"].includes(normalized)) return "CMYK+blanco";
@@ -474,8 +487,10 @@ function buildModoColorOptions(
     | null
     | undefined,
   configExistente: { modoColorOptions?: Array<{ value: string; label: string; perfilIds: string[] }> } | null | undefined,
+  includeSinImpresion = false,
 ) {
   const modes = new Map<string, number>();
+  if (includeSinImpresion) modes.set("SIN_IMPRESION", 0);
   for (const perfil of maquina?.perfilesOperativos ?? []) {
     for (const mode of modosColorFromPerfil(perfil)) {
       modes.set(mode, (modes.get(mode) ?? 0) + 1);
@@ -484,15 +499,22 @@ function buildModoColorOptions(
   const localOptions = Array.from(modes.entries()).map(([mode, count]) => ({
     value: mode,
     label: MODO_COLOR_LABELS[mode] ?? mode,
-    code: `${count} perfil${count === 1 ? "" : "es"}`,
+    code:
+      mode === "SIN_IMPRESION"
+        ? "sin perfil"
+        : `${count} perfil${count === 1 ? "" : "es"}`,
   }));
   if (localOptions.length > 0) return localOptions;
   const backendOptions = configExistente?.modoColorOptions ?? [];
-  return backendOptions.map((option) => ({
+  const options = backendOptions.map((option) => ({
     value: option.value,
     label: option.label,
     code: `${option.perfilIds.length} perfil${option.perfilIds.length === 1 ? "" : "es"}`,
   }));
+  if (includeSinImpresion && !options.some((option) => option.value === "SIN_IMPRESION")) {
+    options.unshift({ value: "SIN_IMPRESION", label: "Sin impresión", code: "sin perfil" });
+  }
+  return options;
 }
 
 function nestingAplica(familiaCodigo: string | undefined, cfg: UpsertConfigPasoPayload) {
@@ -1545,6 +1567,7 @@ export function ConfigPasosEditorView({
         mecanismoCantidadConfigJson: (existente?.mecanismoCantidadConfigJson as Record<string, unknown> | null | undefined) ?? null,
         multiplicadoresActivos: existente?.multiplicadoresActivos ?? [],
         paramsPasoJson: (existente?.paramsPasoJson as Record<string, unknown> | null | undefined) ?? null,
+        nombreVisible: existente?.nombreVisible ?? null,
         maquinaM1Id: existente?.maquinaM1?.id ?? null,
         perfilM1Id: existente?.perfilM1?.id ?? null,
         centroCostoId: existente?.maquinaM1 ? null : (existente?.centroCosto?.id ?? null),
@@ -2073,7 +2096,13 @@ export function ConfigPasosEditorView({
         maquinaSel?.perfilesOperativos.find((p) => p.id === configs[rutaPasoId].perfilM1Id) ??
         configExistente?.perfilM1 ??
         null;
-      const modoColorOptions = buildModoColorOptions(maquinaGuardada, configExistente);
+      const modoColorOptions = buildModoColorOptions(
+        maquinaGuardada,
+        configExistente,
+        ["impresion_por_hoja", "impresion_por_area"].includes(
+          rutaAlternativa.ruta.pasos.find((paso) => paso.id === rutaPasoId)?.familiaCodigo ?? "",
+        ),
+      );
       const modoColorAllowed = Array.isArray(modoColorConfigRaw.allowedModes)
         ? modoColorConfigRaw.allowedModes
             .map((item) => normalizeModoColor(item))
@@ -2097,7 +2126,10 @@ export function ConfigPasosEditorView({
               defaultMode: defaultForSave,
               comercialElige: allowedForSave.length > 1,
               allowedModes:
-                allowedForSave.length === modoColorOptions.length ? null : allowedForSave,
+                allowedForSave.length === modoColorOptions.length &&
+                !allowedForSave.includes("SIN_IMPRESION")
+                  ? null
+                  : allowedForSave,
             }
           : modoColorConfigRaw;
       const modoColorConfigClean = Object.fromEntries(
@@ -2243,6 +2275,10 @@ export function ConfigPasosEditorView({
           <div className="pasos">
             {rutaAlternativa.ruta.pasos.map((paso, idx) => {
               const summary = getPasoSummary(paso);
+              const pasoLabel =
+                configs[paso.id]?.nombreVisible?.trim() ||
+                summary.familia?.nombre ||
+                paso.familiaCodigo;
               return (
                 <button
                   type="button"
@@ -2254,7 +2290,7 @@ export function ConfigPasosEditorView({
                     {summary.skipped ? "—" : summary.status === "done" ? <CheckIcon className="size-3" /> : idx + 1}
                   </span>
                   <span className="body">
-                    <span className="ttl">{summary.familia?.nombre ?? paso.familiaCodigo}</span>
+                    <span className="ttl">{pasoLabel}</span>
                     <span className="sub">{summary.maquinaNombre}</span>
                   </span>
                   <span className="status">
@@ -2281,16 +2317,20 @@ export function ConfigPasosEditorView({
           <div className="mini-graph">
             {rutaAlternativa.ruta.pasos.map((paso, idx) => {
               const summary = getPasoSummary(paso);
+              const pasoLabel =
+                configs[paso.id]?.nombreVisible?.trim() ||
+                summary.familia?.nombre ||
+                paso.familiaCodigo;
               return (
                 <React.Fragment key={paso.id}>
                   <button
                     type="button"
                     className={`mn ${summary.status} ${summary.optional ? "optional" : ""} ${paso.id === activePasoId ? "active" : ""}`}
                     onClick={() => setActivePasoId(paso.id)}
-                    title={summary.familia?.nombre ?? paso.familiaCodigo}
+                    title={pasoLabel}
                   >
                     <span className="d">{summary.skipped ? "—" : summary.status === "done" ? "✓" : idx + 1}</span>
-                    <span className="lb">{(summary.familia?.nombre ?? paso.familiaCodigo).split(" ")[0]}</span>
+                    <span className="lb">{pasoLabel.split(" ")[0]}</span>
                   </button>
                   {idx < rutaAlternativa.ruta.pasos.length - 1 && (
                     <div
@@ -2316,6 +2356,7 @@ export function ConfigPasosEditorView({
           const idx = rutaAlternativa.ruta.pasos.findIndex((item) => item.id === paso.id);
           const familia = familiasMap.get(paso.familiaCodigo);
           const cfg = configs[paso.id];
+          const pasoLabel = cfg.nombreVisible?.trim() || familia?.nombre || paso.familiaCodigo;
           const jsonText = jsonTexts[paso.id];
           const configExistente = rutaAlternativa.configPasos.find(
             (cp) => cp.rutaPasoId === paso.id,
@@ -2432,7 +2473,11 @@ export function ConfigPasosEditorView({
                 : maquinaSel ?? configExistente?.maquinaM1;
 	          const machineMargins = getMachineMargins(maquinaParaDefaults);
 	          const mostrarModoColor = modoColorAplica(familia?.codigo, cfg);
-	          const modoColorOptions = buildModoColorOptions(maquinaGuardada, configExistente);
+	          const modoColorOptions = buildModoColorOptions(
+	            maquinaGuardada,
+	            configExistente,
+	            ["impresion_por_hoja", "impresion_por_area"].includes(paso.familiaCodigo),
+	          );
 	          const modoColorAllowed = Array.isArray(modoColorConfig.allowedModes)
 	            ? modoColorConfig.allowedModes
 	                .map((item) => normalizeModoColor(item))
@@ -2554,7 +2599,7 @@ export function ConfigPasosEditorView({
                     {cfg.modoActivacion ? getLabel(modoActivacionLabels, cfg.modoActivacion).label : "Sin activación"}
                   </span>
                 </div>
-                <h1>{familia?.nombre ?? paso.familiaCodigo}</h1>
+                <h1>{pasoLabel}</h1>
                 <div className="sub">
                   {maquinaGuardada ? (
                     <>
@@ -2608,6 +2653,21 @@ export function ConfigPasosEditorView({
                 </div>
                 <div className="sb-body">
                   <div className="wiz-grid">
+                    <div className="field md:col-span-full">
+                      <LabelConTooltip
+                        label="Nombre visible del paso"
+                        tooltip="Nombre operativo que verá comercial y producción. Si lo dejás vacío, se usa el nombre técnico de la familia."
+                      />
+                      <Input
+                        value={cfg.nombreVisible ?? ""}
+                        placeholder={familia?.nombre ?? paso.familiaCodigo}
+                        onChange={(event) =>
+                          updateConfig(paso.id, {
+                            nombreVisible: event.target.value || null,
+                          })
+                        }
+                      />
+                    </div>
                     <div className="field">
                       <label>Cuándo se ejecuta</label>
                       <div className="segmented">
@@ -2973,7 +3033,8 @@ export function ConfigPasosEditorView({
 	                                            updateModoColorConfig(paso.id, {
 	                                              enabled: true,
 	                                              allowedModes:
-	                                                safeNextAllowed.length === modoColorOptions.length
+	                                                safeNextAllowed.length === modoColorOptions.length &&
+	                                                !safeNextAllowed.includes("SIN_IMPRESION")
 	                                                  ? null
 	                                                  : safeNextAllowed,
 	                                              defaultMode: nextDefault,

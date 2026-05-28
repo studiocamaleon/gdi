@@ -18,7 +18,6 @@ const SCHEMAS = {
     ['medidas', 'Medidas'],
     ['material', 'Material'],
     ['tecnologia', 'Tecnología'],
-    ['uso_aplicacion', 'Uso/Aplicación'],
   ],
   rigido: [
     ['medidas', 'Medidas'],

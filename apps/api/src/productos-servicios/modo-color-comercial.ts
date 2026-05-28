@@ -1,4 +1,5 @@
 export const MODO_COLOR_LABELS: Record<string, string> = {
+  SIN_IMPRESION: 'Sin impresión',
   BN: 'Blanco y negro',
   CMYK: 'CMYK',
   'CMYK+blanco': 'CMYK + Blanco',
@@ -22,6 +23,18 @@ export function normalizeModoColor(value: unknown): string | null {
     .replace(/W/g, 'BLANCO')
     .replace(/BARNIZ|VARNISH|VERNIS/g, 'BARNIZ');
   if (!normalized) return null;
+  if (
+    [
+      'SINIMPRESION',
+      'SIN_IMPRESION',
+      'NOIMPRESION',
+      'NO_PRINT',
+      'NOPRINT',
+      'SINPRINT',
+    ].includes(normalized)
+  ) {
+    return 'SIN_IMPRESION';
+  }
   if (['BN', 'B/N', 'NEGRO', 'K'].includes(normalized)) return 'BN';
   if (normalized === 'CMYK') return 'CMYK';
   if (['CMYK+BLANCO', 'CMYKBLANCO'].includes(normalized)) {
@@ -76,14 +89,16 @@ export function buildModoColorOptionsFromProfiles(
   }>,
   allowedModes?: unknown,
 ) {
-  const allowed = Array.isArray(allowedModes)
-    ? new Set(
-        allowedModes
-          .map((item) => normalizeModoColor(item))
-          .filter((item): item is string => item !== null),
-      )
+  const allowedValues = Array.isArray(allowedModes)
+    ? allowedModes
+        .map((item) => normalizeModoColor(item))
+        .filter((item): item is string => item !== null)
     : null;
+  const allowed = allowedValues ? new Set(allowedValues) : null;
   const map = new Map<string, Set<string>>();
+  if (allowed?.has('SIN_IMPRESION')) {
+    map.set('SIN_IMPRESION', new Set<string>());
+  }
   for (const perfil of perfiles) {
     if (perfil.activo === false) continue;
     const modes = getModoColorsFromPerfil(perfil);

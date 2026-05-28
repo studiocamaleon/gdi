@@ -177,6 +177,7 @@ export class ConfigPasosService {
         multiplicadoresActivos: dto.multiplicadoresActivos ?? [],
         paramsPasoJson: (dto.paramsPasoJson ??
           Prisma.JsonNull) as Prisma.InputJsonValue,
+        nombreVisible: dto.nombreVisible?.trim() || null,
         maquinaM1Id: dto.maquinaM1Id ?? null,
         perfilM1Id: dto.perfilM1Id ?? null,
         centroCostoId,
