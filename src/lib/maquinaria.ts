@@ -211,6 +211,7 @@ export type MaquinariaTemplateDefinition = {
   geometry: GeometriaTrabajoMaquina;
   defaultProductionUnit: UnidadProduccionMaquina;
   allowedProductionUnits?: UnidadProduccionMaquina[];
+  allowedProfileTypes?: TipoPerfilOperativoMaquina[];
   visibleSections: MaquinariaTemplateSectionId[];
   sections: MaquinariaTemplateSection[];
   help: MaquinariaTemplateHelp;
@@ -554,6 +555,7 @@ export type Maquina = {
   altoUtil: number | null;
   espesorMaximo: number | null;
   pesoMaximo: number | null;
+  gramajeMaxGr: number | null;
   fechaAlta: string;
   activo: boolean;
   observaciones: string;
@@ -607,9 +609,9 @@ export type MaquinaPayload = {
   consumibles: Array<{
     id?: string;
     materiaPrimaVarianteId: string;
-    nombre: string;
-    tipo: TipoConsumibleMaquina;
-    unidad: UnidadConsumoMaquina;
+    nombre?: string;
+    tipo?: TipoConsumibleMaquina;
+    unidad?: UnidadConsumoMaquina;
     rendimientoEstimado?: number;
     consumoBase?: number;
     perfilOperativoId?: string;

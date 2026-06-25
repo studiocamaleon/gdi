@@ -25,6 +25,7 @@ export type SubfamiliaMateriaPrima =
   | "film_transferencia"
   | "papel_transferencia"
   | "laminado_film"
+  | "laminado_pouch"
   | "quimico_acabado"
   | "auxiliar_proceso"
   | "polvo_dtf"

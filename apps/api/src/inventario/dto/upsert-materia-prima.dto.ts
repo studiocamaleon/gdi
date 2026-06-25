@@ -41,6 +41,7 @@ export enum SubfamiliaMateriaPrimaDto {
   film_transferencia = 'film_transferencia',
   papel_transferencia = 'papel_transferencia',
   laminado_film = 'laminado_film',
+  laminado_pouch = 'laminado_pouch',
   quimico_acabado = 'quimico_acabado',
   auxiliar_proceso = 'auxiliar_proceso',
   polvo_dtf = 'polvo_dtf',

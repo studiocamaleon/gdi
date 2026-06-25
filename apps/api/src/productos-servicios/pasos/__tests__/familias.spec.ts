@@ -16,8 +16,8 @@ import {
 import type { CategoriaFamiliaCodigo, FamiliaCodigo } from '../types';
 
 describe('Catálogo de familias', () => {
-  it('contiene exactamente 39 familias', () => {
-    expect(FAMILIAS_TOTAL).toBe(39);
+  it('contiene exactamente 41 familias', () => {
+    expect(FAMILIAS_TOTAL).toBe(41);
   });
 
   it('todas las familias tienen categoría válida', () => {
@@ -146,6 +146,7 @@ describe('Catálogo de familias', () => {
       'FILM_TRANSFERENCIA',
       'PAPEL_TRANSFERENCIA',
       'LAMINADO_FILM',
+      'LAMINADO_POUCH',
       'QUIMICO_ACABADO',
       'AUXILIAR_PROCESO',
       'POLVO_DTF',
@@ -188,6 +189,23 @@ describe('Catálogo de familias', () => {
       ).toBe(true);
     }
   });
+
+  it('plastificado_pouch usa solo pouch térmico como material calculado', () => {
+    const familia = getFamilia('plastificado_pouch');
+    expect(familia.categoria).toBe('terminaciones');
+    expect(familia.mecanismosCantidadSoportados).toEqual([
+      'CALCULADO_POR_PASO',
+    ]);
+    expect(familia.slotsRequeridos).toHaveLength(1);
+    expect(familia.slotsRequeridos[0]).toMatchObject({
+      codigo: 'pouch',
+      tipo: 'INSUMO_PASO',
+      compatibilidadMaterial: {
+        familiasMateriaPrima: ['TRANSFERENCIA_LAMINACION'],
+        subfamiliasMateriaPrima: ['LAMINADO_POUCH'],
+      },
+    });
+  });
 });
 
 describe('Categorías', () => {
@@ -215,7 +233,7 @@ describe('Helpers', () => {
     expect(() => getFamilia('familia_inexistente' as FamiliaCodigo)).toThrow();
   });
 
-  it('listarFamilias devuelve los 39 códigos', () => {
-    expect(listarFamilias().length).toBe(39);
+  it('listarFamilias devuelve los 41 códigos', () => {
+    expect(listarFamilias().length).toBe(41);
   });
 });

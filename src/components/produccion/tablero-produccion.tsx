@@ -48,9 +48,40 @@ import {
 } from "@/lib/tablero-produccion-mock";
 
 type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
-type Mode = "items" | "estacion" | "linea";
+type Mode = "items" | "estacion" | "kanban";
 type StatusFilter = "all" | "in-progress" | "blocked" | "delayed" | "due-today";
 type PriorityFilter = "all" | "urgent" | "high" | "normal";
+type KanbanBucketKey = "not-started" | "today" | "delayed" | "active";
+
+const DEFAULT_BOARD_MODE: Mode = "items";
+const BOARD_MODE_STORAGE_KEY = "grafoprint:produccion:tablero-default-mode:v1";
+const BOARD_MODE_LABELS: Record<Mode, string> = {
+  items: "Por items",
+  estacion: "Por estación",
+  kanban: "Kanban",
+};
+
+function isBoardMode(value: string | null): value is Mode {
+  return value === "items" || value === "estacion" || value === "kanban";
+}
+
+function readStoredBoardMode(): Mode {
+  if (typeof window === "undefined") return DEFAULT_BOARD_MODE;
+  try {
+    const saved = window.localStorage.getItem(BOARD_MODE_STORAGE_KEY);
+    return isBoardMode(saved) ? saved : DEFAULT_BOARD_MODE;
+  } catch {
+    return DEFAULT_BOARD_MODE;
+  }
+}
+
+function writeStoredBoardMode(mode: Mode) {
+  try {
+    window.localStorage.setItem(BOARD_MODE_STORAGE_KEY, mode);
+  } catch {
+    // La preferencia es conveniente, no crítica: si el navegador bloquea storage, la UI sigue funcionando.
+  }
+}
 
 const TIco: Record<string, IconComponent> = {
   Layout: LayoutDashboardIcon,
@@ -771,6 +802,81 @@ function ByStationView({ onOpen }: { onOpen: (code: string) => void }) {
   return <StationGrid onSelect={setStationKey} />;
 }
 
+function getCurrentStep(item: TableroItem) {
+  return item.steps.find((step) => step.status === "current" || step.status === "blocked");
+}
+
+function getKanbanBucket(item: TableroItem): KanbanBucketKey {
+  if (!item.steps.some((step) => step.status === "done")) return "not-started";
+  if (/Hoy/i.test(item.dueDate)) return "today";
+  if (!item.onTrack) return "delayed";
+  return "active";
+}
+
+function KanbanCard({ item, onOpen }: { item: TableroItem; onOpen: (code: string) => void }) {
+  const step = getCurrentStep(item);
+  const meta = step ? PROD_STEPS[step.key] : null;
+  const IconCmp = meta ? getStepIcon(meta.ico) : LayoutDashboardIcon;
+
+  return (
+    <button type="button" className={`kan-card priority-${item.priority} ${item.blocked ? "blocked" : !item.onTrack ? "delayed" : ""}`} onClick={() => onOpen(item.code)}>
+      <div className="kan-card-top">
+        <span className="item-code">{item.code}</span>
+        <span className="ot-badge">{item.otCode}</span>
+        {item.priority !== "normal" ? <span className={`prio-pill prio-${item.priority}`}>{priorityLabel(item.priority)}</span> : null}
+        <span className="kan-pct">{item.progressPct}%</span>
+      </div>
+      <div className="kan-title">{item.product}</div>
+      <div className="kan-meta">{item.customer} · {item.spec}</div>
+      <div className="kan-step">
+        <span className="kan-step-ico">{item.blocked ? <BanIcon /> : <IconCmp />}</span>
+        <div>
+          <div className="tec">{meta?.tec ?? "Sin paso actual"}</div>
+          <div className="sub">{step?.sub ?? item.statusLine}</div>
+        </div>
+      </div>
+      <div className="kan-progress" aria-label={`Avance ${item.progressPct}%`}><span style={{ width: `${item.progressPct}%` }} /></div>
+      <div className="kan-foot">
+        <span className={`due ${!item.onTrack || /Hoy/i.test(item.dueDate) ? "warn" : ""}`}><ClockIcon />{item.dueDate} · {item.dueIn}</span>
+        <span className="op"><span className="mini-av">{item.operator.iniciales}</span>{item.operator.nombre.split(" ")[0]}</span>
+      </div>
+    </button>
+  );
+}
+
+function KanbanView({ items, onOpen }: { items: TableroItem[]; onOpen: (code: string) => void }) {
+  const columns: Array<{ key: KanbanBucketKey; title: string; description: string }> = [
+    { key: "not-started", title: "No iniciados", description: "Sin pasos completados" },
+    { key: "today", title: "Vencen hoy", description: "Prioridad de despacho" },
+    { key: "delayed", title: "Con retraso", description: "Fuera del plan" },
+    { key: "active", title: "En curso", description: "Avanzando sin retraso" },
+  ];
+  const grouped = columns.map((column) => ({
+    ...column,
+    items: items.filter((item) => getKanbanBucket(item) === column.key),
+  }));
+
+  return (
+    <div className="kanban-board" aria-label="Kanban de producción">
+      {grouped.map((column) => (
+        <section key={column.key} className={`kan-col kan-${column.key}`}>
+          <div className="kan-col-head">
+            <div>
+              <h2>{column.title}</h2>
+              <p>{column.description}</p>
+            </div>
+            <span>{column.items.length}</span>
+          </div>
+          <div className="kan-col-body">
+            {column.items.length === 0 ? <div className="kan-empty">No hay items en esta columna.</div> : null}
+            {column.items.map((item) => <KanbanCard key={item.code} item={item} onOpen={onOpen} />)}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 function parseDurH(value?: string) {
   if (!value || value === "—") return 1;
   let total = 0;
@@ -910,9 +1016,59 @@ function TimelineView({ onOpen }: { onOpen: (code: string) => void }) {
 }
 
 export function TableroProduccion() {
-  const [mode, setMode] = React.useState<Mode>("items");
+  const [mode, setMode] = React.useState<Mode>(DEFAULT_BOARD_MODE);
+  const [defaultMode, setDefaultMode] = React.useState<Mode>(DEFAULT_BOARD_MODE);
+  const [tabMenu, setTabMenu] = React.useState<{ mode: Mode; x: number; y: number } | null>(null);
   const [selectedCode, setSelectedCode] = React.useState<string | null>(null);
   const [filters, setFilters] = React.useState<{ status: StatusFilter; priority: PriorityFilter; query: string }>({ status: "all", priority: "all", query: "" });
+
+  React.useEffect(() => {
+    const savedMode = readStoredBoardMode();
+    setDefaultMode(savedMode);
+    setMode(savedMode);
+  }, []);
+
+  React.useEffect(() => {
+    if (!tabMenu) return undefined;
+
+    const closeMenu = () => setTabMenu(null);
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeMenu();
+    };
+
+    window.addEventListener("click", closeMenu);
+    window.addEventListener("resize", closeMenu);
+    window.addEventListener("scroll", closeMenu, true);
+    window.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      window.removeEventListener("click", closeMenu);
+      window.removeEventListener("resize", closeMenu);
+      window.removeEventListener("scroll", closeMenu, true);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [tabMenu]);
+
+  const tabEntries: Array<{ mode: Mode; label: string; count?: number }> = [
+    { mode: "items", label: BOARD_MODE_LABELS.items, count: PROD_ITEMS.length },
+    { mode: "estacion", label: BOARD_MODE_LABELS.estacion },
+    { mode: "kanban", label: BOARD_MODE_LABELS.kanban },
+  ];
+
+  const tabMenuStyle = React.useMemo<React.CSSProperties | undefined>(() => {
+    if (!tabMenu || typeof window === "undefined") return undefined;
+    return {
+      left: Math.max(12, Math.min(tabMenu.x, Math.max(12, window.innerWidth - 244))),
+      top: Math.max(12, Math.min(tabMenu.y, Math.max(12, window.innerHeight - 72))),
+    };
+  }, [tabMenu]);
+
+  const setDefaultBoardMode = (nextMode: Mode) => {
+    writeStoredBoardMode(nextMode);
+    setDefaultMode(nextMode);
+    setMode(nextMode);
+    setTabMenu(null);
+  };
 
   const filtered = React.useMemo(() => {
     return PROD_ITEMS.filter((item) => {
@@ -961,10 +1117,38 @@ export function TableroProduccion() {
         </div>
 
         <div className="dash-tabs">
-          <button type="button" className={`dash-tab ${mode === "items" ? "on" : ""}`} onClick={() => setMode("items")}><span>Por items</span><span className="count">{PROD_ITEMS.length}</span></button>
-          <button type="button" className={`dash-tab ${mode === "estacion" ? "on" : ""}`} onClick={() => setMode("estacion")}><span>Por estación</span></button>
-          <button type="button" className={`dash-tab ${mode === "linea" ? "on" : ""}`} onClick={() => setMode("linea")}><span>Línea de tiempo</span></button>
+          {tabEntries.map((entry) => (
+            <button
+              key={entry.mode}
+              type="button"
+              className={`dash-tab ${mode === entry.mode ? "on" : ""}`}
+              aria-selected={mode === entry.mode}
+              onClick={() => setMode(entry.mode)}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                setTabMenu({ mode: entry.mode, x: event.clientX, y: event.clientY });
+              }}
+            >
+              <span>{entry.label}</span>
+              {typeof entry.count === "number" ? <span className="count">{entry.count}</span> : null}
+              {defaultMode === entry.mode ? <span className="default-mark">Pred.</span> : null}
+            </button>
+          ))}
         </div>
+
+        {tabMenu ? (
+          <div
+            className="dash-tab-menu"
+            role="menu"
+            style={tabMenuStyle}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button type="button" role="menuitem" onClick={() => setDefaultBoardMode(tabMenu.mode)}>
+              {defaultMode === tabMenu.mode ? <CheckIcon /> : <LayoutDashboardIcon />}
+              <span>{defaultMode === tabMenu.mode ? "Vista predeterminada" : "Elegir como predeterminada"}</span>
+            </button>
+          </div>
+        ) : null}
 
         {mode === "items" ? (
           <>
@@ -976,7 +1160,12 @@ export function TableroProduccion() {
           </>
         ) : null}
         {mode === "estacion" ? <ByStationView onOpen={setSelectedCode} /> : null}
-        {mode === "linea" ? <TimelineView onOpen={setSelectedCode} /> : null}
+        {mode === "kanban" ? (
+          <>
+            <FiltersBar filters={filters} setFilters={setFilters} counts={counts} />
+            <KanbanView items={filtered} onOpen={setSelectedCode} />
+          </>
+        ) : null}
       </div>
 
       <ItemDetailSheet item={selectedItem} onClose={() => setSelectedCode(null)} />

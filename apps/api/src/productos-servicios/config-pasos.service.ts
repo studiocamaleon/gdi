@@ -67,6 +67,11 @@ export class ConfigPasosService {
       rutaPaso.familiaCodigo,
       dto,
     );
+    const maquinasCandidatas = await this.validarMaquinasCandidatasCompatibles(
+      tenantId,
+      rutaPaso.familiaCodigo,
+      dto,
+    );
 
     if (dto.maquinaM1Id) {
       const maquina = await this.prisma.maquina.findFirst({
@@ -254,8 +259,119 @@ export class ConfigPasosService {
         }
       }
 
+      if (dto.maquinasCandidatas) {
+        await tx.productoConfigPasoMaquinaCandidata.deleteMany({
+          where: { productoConfigPasoId: configPaso.id },
+        });
+        if (maquinasCandidatas.length > 0) {
+          await tx.productoConfigPasoMaquinaCandidata.createMany({
+            data: maquinasCandidatas.map((maquina, index) => ({
+              tenantId,
+              productoConfigPasoId: configPaso.id,
+              maquinaId: maquina.maquinaId,
+              esPreferida: maquina.esPreferida,
+              orden: maquina.orden ?? index,
+              activo: true,
+            })),
+          });
+        }
+      }
+
       return configPaso;
     });
+  }
+
+  private async validarMaquinasCandidatasCompatibles(
+    tenantId: string,
+    familiaCodigo: string,
+    dto: UpsertProductoConfigPasoDto,
+  ) {
+    if (!dto.maquinasCandidatas) return [];
+    const unique = new Map<
+      string,
+      { maquinaId: string; esPreferida?: boolean; orden?: number }
+    >();
+    for (const [index, candidate] of dto.maquinasCandidatas.entries()) {
+      if (!unique.has(candidate.maquinaId)) {
+        unique.set(candidate.maquinaId, {
+          maquinaId: candidate.maquinaId,
+          esPreferida: candidate.esPreferida,
+          orden: candidate.orden ?? index,
+        });
+      }
+    }
+    const candidates = Array.from(unique.values()).sort(
+      (a, b) => (a.orden ?? 0) - (b.orden ?? 0),
+    );
+    if (candidates.length === 0) return [];
+
+    const maquinas = await this.prisma.maquina.findMany({
+      where: {
+        tenantId,
+        activo: true,
+        id: { in: candidates.map((candidate) => candidate.maquinaId) },
+      },
+      include: {
+        perfilesOperativos: {
+          where: { activo: true },
+          select: { id: true, tipoPerfil: true },
+        },
+      },
+    });
+    const maquinasById = new Map(maquinas.map((maquina) => [maquina.id, maquina]));
+    const familia = FAMILIAS[familiaCodigo as FamiliaCodigo];
+
+    for (const candidate of candidates) {
+      const maquina = maquinasById.get(candidate.maquinaId);
+      if (!maquina) {
+        throw new BadRequestException(
+          'Una máquina candidata no existe o no está activa.',
+        );
+      }
+      if (
+        familia?.plantillasCompatibles.length &&
+        !familia.plantillasCompatibles.includes(maquina.plantilla)
+      ) {
+        throw new BadRequestException(
+          `La máquina candidata ${maquina.nombre} no es compatible con la familia ${familiaCodigo}.`,
+        );
+      }
+      const tienePerfilCompatible = maquina.perfilesOperativos.some((perfil) =>
+        tipoPerfilCompatibleConFamilia(
+          familiaCodigo,
+          String(perfil.tipoPerfil ?? ''),
+        ),
+      );
+      if (!tienePerfilCompatible) {
+        throw new BadRequestException(
+          `La máquina candidata ${maquina.nombre} no tiene perfiles operativos compatibles con ${familiaCodigo}.`,
+        );
+      }
+
+      if (
+        familiaCodigo === 'plotter_corte' &&
+        maquina.plantilla === 'IMPRESORA_GRAN_FORMATO_POR_AREA'
+      ) {
+        const params = (maquina.parametrosTecnicosJson ?? {}) as Record<
+          string,
+          unknown
+        >;
+        if (params.soportaCorteIntegrado !== true) {
+          throw new BadRequestException(
+            'La impresora gran formato candidata debe tener corte integrado activo.',
+          );
+        }
+      }
+    }
+
+    const preferredId =
+      candidates.find((candidate) => candidate.esPreferida)?.maquinaId ??
+      candidates[0]?.maquinaId;
+    return candidates.map((candidate, index) => ({
+      maquinaId: candidate.maquinaId,
+      esPreferida: candidate.maquinaId === preferredId,
+      orden: candidate.orden ?? index,
+    }));
   }
 
   private async validarSlotsMaterialesCompatibles(

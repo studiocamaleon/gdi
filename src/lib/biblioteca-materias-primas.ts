@@ -12,6 +12,7 @@ export type MaterialPresetVariant = {
   nombreVarianteSugerido: string | null;
   formato: string;
   espesor: number | null;
+  gramaje?: number | null;
   color: string;
   recomendada: boolean;
   atributosVariante: Record<string, unknown>;
@@ -70,6 +71,9 @@ export type InstallMaterialPresetResponse = {
 };
 
 export const bibliotecaUses: Record<string, { nm: string; code: string }> = {
+  impresion_offset: { nm: "Impresión offset", code: "Offset" },
+  impresion_digital: { nm: "Impresión digital", code: "Digital" },
+  impresion_por_hoja: { nm: "Impresión por hoja", code: "Hoja" },
   impresion_directa_uv: { nm: "Impresión UV", code: "UV" },
   ploteo_vinilo: { nm: "Aplicación de vinilo", code: "Vinilo" },
   router_cnc: { nm: "Router CNC", code: "CNC" },
@@ -78,12 +82,26 @@ export const bibliotecaUses: Record<string, { nm: string; code: string }> = {
   letras_corporeas: { nm: "Letras corpóreas", code: "Corpóreas" },
   pop_signage: { nm: "POP / Señalética", code: "Señalética" },
   cajas_luz: { nm: "Cajas de luz", code: "Cajas luz" },
+  papeleria_comercial: { nm: "Papelería comercial", code: "Papelería" },
+  editorial: { nm: "Editorial", code: "Editorial" },
+  folleteria: { nm: "Folletería", code: "Folletería" },
+  tarjeteria: { nm: "Tarjetería", code: "Tarjetas" },
+  formularios: { nm: "Formularios", code: "Formularios" },
+  talonarios: { nm: "Talonarios", code: "Talonarios" },
+  etiquetas: { nm: "Etiquetas", code: "Etiquetas" },
+  stickers: { nm: "Stickers", code: "Stickers" },
+  packaging: { nm: "Packaging", code: "Packaging" },
 };
 
 export const bibliotecaFamilias: Record<string, { nm: string; key: string; parent: string }> = {
   sustrato_rigido: {
     nm: "Sustrato rígido",
     key: "sustrato_rigido",
+    parent: "sustrato",
+  },
+  sustrato_hoja: {
+    nm: "Sustrato hoja",
+    key: "sustrato_hoja",
     parent: "sustrato",
   },
 };

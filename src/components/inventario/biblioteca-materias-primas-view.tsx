@@ -168,6 +168,46 @@ function MaterialIcon({ kind, size = 28 }: { kind: string; size?: number }) {
           <rect x="3" y="21.5" width="26" height="1.5" rx=".3" fill={inks.fill} />
         </svg>
       );
+    case "paper":
+      return (
+        <svg width={size} height={size} viewBox="0 0 32 32">
+          <path d="M8 4h12l4 4v20H8Z" fill="#fff" stroke={inks.fill} strokeWidth="1.2" />
+          <path d="M20 4v5h5" fill="none" stroke={inks.fill} strokeWidth="1.2" />
+          <path d="M11 15h12M11 19h12M11 23h8" stroke={inks.line} strokeWidth=".75" opacity=".7" />
+        </svg>
+      );
+    case "coated":
+      return (
+        <svg width={size} height={size} viewBox="0 0 32 32">
+          <rect x="6" y="5" width="20" height="24" rx="2" fill="#fff" stroke={inks.fill} strokeWidth="1.2" />
+          <path d="M9 10h14M9 14h14M9 18h14" stroke={inks.line} strokeWidth=".65" opacity=".55" />
+          <path d="M9 24c4-4 10-4 14 0" stroke={inks.fill} strokeWidth="1" fill="none" />
+          <path d="M22 7l2 2M20 9l4 4" stroke="#d4d2cd" strokeWidth="1.1" />
+        </svg>
+      );
+    case "copy":
+      return (
+        <svg width={size} height={size} viewBox="0 0 32 32">
+          <rect x="7" y="4" width="16" height="20" rx="1.5" fill="#fff" stroke={inks.line} strokeWidth="1" />
+          <rect x="10" y="8" width="16" height="20" rx="1.5" fill="#fff" stroke={inks.fill} strokeWidth="1.2" />
+          <path d="M13 14h10M13 18h10M13 22h7" stroke={inks.line} strokeWidth=".75" opacity=".65" />
+        </svg>
+      );
+    case "adhesive":
+      return (
+        <svg width={size} height={size} viewBox="0 0 32 32">
+          <path d="M6 5h20v22H6Z" fill="#fff" stroke={inks.fill} strokeWidth="1.2" />
+          <path d="M18 27c0-5 3-8 8-8" fill="#f4f1e8" stroke={inks.fill} strokeWidth="1.2" />
+          <path d="M11 11h10M11 15h10" stroke={inks.line} strokeWidth=".75" opacity=".65" />
+        </svg>
+      );
+    case "kraft":
+      return (
+        <svg width={size} height={size} viewBox="0 0 32 32">
+          <rect x="5" y="5" width="22" height="22" rx="2" fill="#d4a35f" stroke={inks.fill} strokeWidth="1.2" />
+          <path d="M8 11c4-2 9 2 16 0M8 17c5-2 10 2 16 0M8 23c5-2 10 2 16 0" stroke="#8c6530" strokeWidth=".7" fill="none" opacity=".45" />
+        </svg>
+      );
     default:
       return (
         <svg width={size} height={size} viewBox="0 0 32 32">
@@ -180,9 +220,17 @@ function MaterialIcon({ kind, size = 28 }: { kind: string; size?: number }) {
 export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
   const [items, setItems] = React.useState(initialItems);
   const [query, setQuery] = React.useState("");
+  const [familyFilter, setFamilyFilter] = React.useState("all");
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [wizardKey, setWizardKey] = React.useState<string | null>(null);
   const selectedItem = items.find((item) => item.canonicalKey === wizardKey) ?? null;
+  const familyOptions = React.useMemo(() => {
+    const keys = Array.from(new Set(items.map((item) => item.subfamilia)));
+    return keys.map((key) => ({
+      key,
+      label: bibliotecaFamilias[key]?.nm ?? key,
+    }));
+  }, [items]);
   const counts = {
     all: items.length,
     installed: items.filter((item) => item.installState.status !== "not-installed").length,
@@ -192,10 +240,21 @@ export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
     const hay = `${item.nombreCanonico} ${item.aliasDisponibles.join(" ")} ${item.descripcionCorta}`.toLowerCase();
     const q = query.trim().toLowerCase();
     if (q && !hay.includes(q)) return false;
+    if (familyFilter !== "all" && item.subfamilia !== familyFilter) return false;
     if (statusFilter === "installed") return item.installState.status !== "not-installed";
     if (statusFilter === "not-installed") return item.installState.status === "not-installed";
     return true;
   });
+  const visibleGroups = React.useMemo(() => {
+    const order = new Map<string, number>(familyOptions.map((option, index) => [option.key, index]));
+    const groups = new Map<string, MaterialPresetListItem[]>();
+    for (const item of visibleItems) {
+      groups.set(item.subfamilia, [...(groups.get(item.subfamilia) ?? []), item]);
+    }
+    return Array.from(groups.entries()).sort(
+      ([a], [b]) => (order.get(a) ?? 999) - (order.get(b) ?? 999),
+    );
+  }, [familyOptions, visibleItems]);
   const updateItem = (next: MaterialPresetListItem) => {
     setItems((prev) =>
       prev.map((item) => (item.canonicalKey === next.canonicalKey ? next : item)),
@@ -230,7 +289,12 @@ export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
           </div>
           <div className="bm-filter">
             <span className="lbl">Familia</span>
-            <span className="v">Sustrato rígido</span>
+            <select value={familyFilter} onChange={(event) => setFamilyFilter(event.target.value)} aria-label="Filtrar por familia">
+              <option value="all">Todas</option>
+              {familyOptions.map((option) => (
+                <option key={option.key} value={option.key}>{option.label}</option>
+              ))}
+            </select>
             <BIco.ChevDn />
           </div>
           <div className="bm-filter">
@@ -251,9 +315,22 @@ export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
           </div>
         </div>
 
-        <div className="bm-grid">
-          {visibleItems.map((item) => (
-            <MaterialCard key={item.canonicalKey} item={item} onConfigure={setWizardKey} />
+        <div className="bm-family-stack">
+          {visibleGroups.map(([familyKey, familyItems]) => (
+            <section key={familyKey} className="bm-family-section">
+              <div className="bm-family-head">
+                <div>
+                  <h2>{bibliotecaFamilias[familyKey]?.nm ?? humanizeEnum(familyKey)}</h2>
+                  <p>{familySectionDescription(familyKey)}</p>
+                </div>
+                <span>{familyItems.length} materiales</span>
+              </div>
+              <div className="bm-grid">
+                {familyItems.map((item) => (
+                  <MaterialCard key={item.canonicalKey} item={item} onConfigure={setWizardKey} />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       </div>
@@ -544,7 +621,7 @@ function StepVariantes({
       <div className="bm-section">
         <div className="bm-section-head">
           <div className="ttl">Variantes a instalar</div>
-          <div className="sub">Seleccioná las medidas, espesores y colores que realmente usás.</div>
+          <div className="sub">{variantHelpText(item)}</div>
         </div>
         <div className="bm-variant-actions">
           <button className="quick" onClick={setRecommended} type="button">Seleccionar comunes</button>
@@ -561,7 +638,7 @@ function StepVariantes({
                 <button key={variant.id} className={`bm-variant ${checked ? "checked" : ""} ${variant.instalada ? "installed" : ""}`} onClick={() => toggle(variant)} type="button">
                   <span className="bm-check">{checked && <BIco.Check />}</span>
                   <div className="bm-variant-info">
-                    <div className="nm">{variant.espesor} mm · {variant.color}{variant.recomendada && !variant.instalada && <span className="rec">recom.</span>}</div>
+                    <div className="nm">{variantDescriptor(item, variant)}{variant.recomendada && !variant.instalada && <span className="rec">recom.</span>}</div>
                     <div className="sub">SKU sugerido · {variant.skuSugerido}</div>
                   </div>
                   {variant.instalada ? <span className="bm-variant-installed-tag">ya instalada</span> : <span style={{ width: 70 }} />}
@@ -602,7 +679,7 @@ function StepPreview({
         <div className="head"><div className="ic-box"><MaterialIcon kind={item.iconKind} size={28} /></div><div style={{ flex: 1 }}><h3>{draft.visibleName || "—"}</h3><div className="bm-preview-meta">{draft.codigo} · {selectedVariants.length} variantes nuevas</div></div><span className="bm-canonical-pill"><span className="ic"><BIco.Sparkles /></span>{item.canonicalKey}</span></div>
         <div className="bm-preview-row"><span className="k">Nombre visible</span><span className="v">{draft.visibleName}</span></div>
         <div className="bm-preview-row"><span className="k">Nombre canónico</span><span className="v">{item.nombreCanonico}<span className="muted">conservado para reportes</span></span></div>
-        <div className="bm-preview-row"><span className="k">Familia</span><span className="v muted">Sustrato · Sustrato rígido</span></div>
+        <div className="bm-preview-row"><span className="k">Familia</span><span className="v muted">{familyLine(item)}</span></div>
         <div className="bm-preview-row"><span className="k">Template</span><span className="v mono">{item.templateId}</span></div>
       </div>
       <div className="bm-preview-card">
@@ -611,7 +688,7 @@ function StepPreview({
           {selectedVariants.map((variant) => (
             <div key={variant.id} className="bm-preview-item">
               <span className="ic"><BIco.CheckCircle /></span>
-              <span className="nm">{variant.formato} · {variant.espesor} mm · {variant.color}</span>
+              <span className="nm">{variant.formato} · {variantDescriptor(item, variant)}</span>
               <span className="sku">{variant.skuSugerido}</span>
             </div>
           ))}
@@ -652,6 +729,70 @@ function StepListo({
       </div>
     </div>
   );
+}
+
+function familyLine(item: MaterialPresetListItem) {
+  return `${humanizeEnum(item.familia)} · ${bibliotecaFamilias[item.subfamilia]?.nm ?? humanizeEnum(item.subfamilia)}`;
+}
+
+function familySectionDescription(familyKey: string) {
+  if (familyKey === "sustrato_rigido") {
+    return "Placas y tableros para señalética, POP, corte y mecanizado.";
+  }
+  if (familyKey === "sustrato_hoja") {
+    return "Papeles, cartulinas y pliegos para impresión por hoja.";
+  }
+  return "Materiales canónicos disponibles para instalar en inventario.";
+}
+
+function variantHelpText(item: MaterialPresetListItem) {
+  if (item.templateId === "sustrato_hoja_v1") {
+    return "Seleccioná los formatos, gramajes y acabados que realmente usás.";
+  }
+  return "Seleccioná las medidas, espesores y colores que realmente usás.";
+}
+
+function variantDescriptor(item: MaterialPresetListItem, variant: MaterialPresetVariant) {
+  if (item.templateId === "sustrato_hoja_v1") {
+    const attrs = variant.atributosVariante;
+    const gramaje = variant.gramaje ?? numberAttr(attrs, "gramaje") ?? numberAttr(attrs, "gramajeGr");
+    const material = stringAttr(attrs, "material") ?? item.nombreCanonico;
+    const acabado = stringAttr(attrs, "acabado");
+    const color = stringAttr(attrs, "color") ?? variant.color;
+    return [gramaje ? `${formatNumber(gramaje)} g/m²` : null, material, acabado, color && color !== "Blanco" ? color : null]
+      .filter(Boolean)
+      .join(" · ");
+  }
+  return [variant.espesor ? `${formatNumber(variant.espesor)} mm` : null, variant.color]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function numberAttr(attrs: Record<string, unknown>, key: string) {
+  const value = attrs[key];
+  if (typeof value === "number") return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function stringAttr(attrs: Record<string, unknown>, key: string) {
+  const value = attrs[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function formatNumber(value: number) {
+  return Number.isInteger(value) ? String(value) : String(value).replace(".", ",");
+}
+
+function humanizeEnum(value: string) {
+  return value
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function statusLabel(state: MaterialPresetListItem["installState"]) {

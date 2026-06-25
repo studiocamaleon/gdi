@@ -41,37 +41,43 @@ export class CentroCostoRecursoMaquinaPeriodoItemDto {
   vidaUtilMeses: number;
 
   @Type(() => Number)
+  @IsOptional()
   @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0)
-  potenciaNominalKw: number;
+  potenciaNominalKw?: number;
 
   @Type(() => Number)
+  @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   @Max(100)
-  factorCargaPct: number;
+  factorCargaPct?: number;
 
   @Type(() => Number)
+  @IsOptional()
   @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0)
-  tarifaEnergiaKwh: number;
+  tarifaEnergiaKwh?: number;
 
   @Type(() => Number)
+  @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
-  horasProgramadasMes: number;
+  horasProgramadasMes?: number;
 
   @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  @Max(100)
-  disponibilidadPct: number;
-
-  @Type(() => Number)
+  @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   @Max(100)
-  eficienciaPct: number;
+  disponibilidadPct?: number;
+
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100)
+  eficienciaPct?: number;
 
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })

@@ -74,18 +74,6 @@ const coloresGranFormatoOptions = [
   option("CMYK+blanco+barniz", "CMYK + Blanco + Barniz"),
 ];
 
-const modoCalidadOptions = [
-  option("DRAFT", "Borrador"),
-  option("NORMAL", "Normal"),
-  option("ALTA", "Alta calidad"),
-];
-
-const modoOperacionMesaOptions = [
-  option("ROLLO", "Rollo"),
-  option("RIGIDO", "Rígido"),
-  option("HOJAS", "Hojas"),
-];
-
 const tipoCorteOptions = [
   option("COMPLETO", "Corte completo"),
   option("KISS_CUT", "Kiss cut"),
@@ -260,7 +248,6 @@ function buildLaserSections(): MaquinariaTemplateSection[] {
       fields: [
         field({ key: "anchoUtil", label: "Ancho útil máximo", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Ancho máx de pliego (ej. 320mm)." }),
         field({ key: "largoUtil", label: "Largo útil máximo", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Largo máx de pliego (ej. 1200mm)." }),
-        field({ key: "espesorMaximo", label: "Espesor máximo", scope: "maquina", kind: "number", unit: "mm", description: "Espesor máx admitido (ej. 0.4mm)." }),
         field({ key: "gramajeMaxGr", label: "Gramaje máximo", scope: "maquina", kind: "number", unit: "g_m2", required: true, description: "Gramaje máx de papel (ej. 400gr)." }),
       ],
     }),
@@ -299,27 +286,17 @@ function buildLaserSections(): MaquinariaTemplateSection[] {
 function buildGranFormatoSections(): MaquinariaTemplateSection[] {
   return [
     section({
-      id: "capacidades_fisicas",
-      title: "Capacidades físicas",
-      description: "Para rollo: anchoUtil del rollo. Para mesa: medidas de la cama.",
-      fields: [
-        field({ key: "anchoUtil", label: "Ancho útil", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Ancho máx imprimible (ej. 1370mm)." }),
-        field({ key: "largoUtil", label: "Largo útil de mesa", scope: "maquina", kind: "number", unit: "mm", description: "Se usa cuando la geometría es Mesa extensora." }),
-        field({ key: "espesorMaximo", label: "Espesor máximo", scope: "maquina", kind: "number", unit: "mm", description: "Espesor máx (rollo: ~1mm; mesa: cm)." }),
-      ],
-    }),
-    section({
       id: "parametros_tecnicos",
       title: "Parámetros técnicos",
       description: "Tecnología y geometría definen las variantes de esta plantilla unificada.",
       fields: [
         field({ key: "tecnologia", label: "Tecnología", scope: "maquina", kind: "select", required: true, options: tecnologiaGranFormatoOptions, description: "Tipo de impresión (LATEX, UV, etc.)." }),
         field({ key: "geometria", label: "Geometría", scope: "maquina", kind: "select", required: true, options: geometriaGranFormatoOptions, description: "Rollo o mesa extensora." }),
-        field({ key: "anchoMinRolloMm", label: "Ancho mínimo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Se usa cuando la geometría es Rollo." }),
-        field({ key: "anchoMaxRolloMm", label: "Ancho máximo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Se usa cuando la geometría es Rollo." }),
+        field({ key: "anchoMinRolloMm", label: "Ancho mínimo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Se usa cuando la máquina admite trabajos en rollo." }),
+        field({ key: "anchoMaxRolloMm", label: "Ancho máximo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Se usa cuando la máquina admite trabajos en rollo." }),
         field({ key: "anchoMesaMm", label: "Ancho de mesa", scope: "maquina", kind: "number", unit: "mm", description: "Se usa cuando la geometría es Mesa extensora." }),
         field({ key: "largoMesaMm", label: "Largo de mesa", scope: "maquina", kind: "number", unit: "mm", description: "Se usa cuando la geometría es Mesa extensora." }),
-        field({ key: "alturaMaxCabezalMm", label: "Altura máxima del cabezal", scope: "maquina", kind: "number", unit: "mm", description: "Se usa cuando la geometría es Mesa extensora." }),
+        field({ key: "alturaMaxCabezalMm", label: "Altura máxima del cabezal", scope: "maquina", kind: "number", unit: "mm", description: "Restricción para materiales rígidos en mesa extensora." }),
         field({ key: "soportaCorteIntegrado", label: "Soporta corte integrado", scope: "maquina", kind: "boolean", description: "Permite usar perfiles de corte en esta impresora para trabajos tipo plotter." }),
         field({ key: "margenesNoImprimiblesMm", label: "Márgenes no imprimibles", scope: "maquina", kind: "textarea", required: true, description: "Distancia que la máquina no puede imprimir en cada borde." }),
         field({ key: "coloresSoportados", label: "Colores soportados", scope: "maquina", kind: "multiselect", options: coloresGranFormatoOptions, description: "Modos de color (CMYK, +blanco, +barniz)." }),
@@ -328,17 +305,14 @@ function buildGranFormatoSections(): MaquinariaTemplateSection[] {
     section({
       id: "perfiles_operativos",
       title: "Perfiles operativos",
-      description: "Cada perfil = combinación de pasadas + colores + calidad.",
+      description: "Cada perfil define productividad y canales de impresión.",
       fields: [
-        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Latex CMYK 6 pasadas normal." }),
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Latex CMYK normal." }),
         field({ key: "productivityValue", label: "Productividad", scope: "perfil_operativo", kind: "number", unit: "m2_h", required: true, description: "m²/hora." }),
         field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de preparación inicial." }),
         field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza al terminar." }),
         field({ key: "feedReloadMin", label: "Recarga rollo", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de recarga de rollo." }),
-        field({ key: "numeroPasadas", label: "Número de pasadas", scope: "perfil_operativo", kind: "number", description: "PASS (4, 6, 8). Influye en calidad y velocidad." }),
         field({ key: "colores", label: "Colores", scope: "perfil_operativo", kind: "select", options: coloresGranFormatoOptions, description: "Modo de color del perfil." }),
-        field({ key: "modoCalidad", label: "Calidad", scope: "perfil_operativo", kind: "select", options: modoCalidadOptions, description: "Borrador, normal o alta." }),
-        field({ key: "modoOperacion", label: "Modo de operación", scope: "perfil_operativo", kind: "select", options: modoOperacionMesaOptions, description: "Se usa cuando la geometría es Mesa extensora." }),
         field({ key: "tipoCorte", label: "Tipo de corte", scope: "perfil_operativo", kind: "select", options: tipoCorteOptions, description: "Se usa en perfiles de corte integrado." }),
         field({ key: "factorComplejidad", label: "Factor complejidad (JSON)", scope: "perfil_operativo", kind: "textarea", description: "Se usa en perfiles de corte integrado. Ej: { SIMPLE: 1.0, INTERMEDIO: 1.5, COMPLEJO: 3.0 }." }),
       ],
@@ -714,6 +688,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     description: "Impresora digital láser por tóner. Imprime sobre pliegos de papel/cartulina.",
     geometry: "pliego",
     defaultProductionUnit: "ppm",
+    allowedProfileTypes: ["impresion"],
     visibleSections: commonTemplateSections,
     sections: buildLaserSections(),
     help: {
@@ -732,6 +707,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     description: "Impresora unificada para LATEX, SOLVENTE, UV, SUBLIMACION, DTF (rollo o mesa). Productividad m²/h.",
     geometry: "rollo",
     defaultProductionUnit: "m2_h",
+    allowedProfileTypes: ["impresion"],
     visibleSections: commonTemplateSections,
     sections: buildGranFormatoSections(),
     help: {
@@ -755,6 +731,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     geometry: "pliego",
     defaultProductionUnit: "cortes_min",
     allowedProductionUnits: ["cortes_min", "ciclo"],
+    allowedProfileTypes: ["corte"],
     visibleSections: commonTemplateSections,
     sections: buildGuillotinaSections(),
     help: {
@@ -773,6 +750,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     description: "Cuchilla móvil que corta vinilos en rollo. Soporta corte completo o kiss-cut.",
     geometry: "rollo",
     defaultProductionUnit: "m2_h",
+    allowedProfileTypes: ["corte"],
     visibleSections: commonTemplateSections,
     sections: buildPlotterCorteSections(),
     help: {
@@ -791,6 +769,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     description: "Plotter inkjet técnico para planos, mapas, fotos sobre rollo.",
     geometry: "rollo",
     defaultProductionUnit: "m2_h",
+    allowedProfileTypes: ["impresion"],
     visibleSections: commonTemplateSections,
     sections: buildPlotterCadSections(),
     help: {
@@ -806,6 +785,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     description: "Aplica film transparente (BOPP brillo, mate, UV) sobre pliegos.",
     geometry: "rollo",
     defaultProductionUnit: "m_min",
+    allowedProfileTypes: ["laminado"],
     visibleSections: commonTemplateSections,
     sections: buildLaminadoraBoppSections(),
     help: {
@@ -824,6 +804,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     description: "Láser CO2 o Fibra para corte y grabado de materiales rígidos.",
     geometry: "plano",
     defaultProductionUnit: "hora",
+    allowedProfileTypes: ["corte", "grabado"],
     visibleSections: commonTemplateSections,
     sections: buildCorteLaserSections(),
     help: {
@@ -839,6 +820,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     description: "Control Numérico Computarizado para corte/fresado/perforado de materiales rígidos.",
     geometry: "volumen",
     defaultProductionUnit: "m2_h",
+    allowedProfileTypes: ["mecanizado"],
     visibleSections: commonTemplateSections,
     sections: buildRouterCncSections(),
     help: {
@@ -854,6 +836,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     description: "Encuadernación con espiral plástico o wire-O.",
     geometry: "pliego",
     defaultProductionUnit: "hora",
+    allowedProfileTypes: ["fabricacion"],
     visibleSections: commonTemplateSections,
     sections: buildAnilladoraSections(),
     help: {
@@ -869,6 +852,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     description: "Equipo de soldadura para herrería y cartelería estructural.",
     geometry: "volumen",
     defaultProductionUnit: "hora",
+    allowedProfileTypes: ["fabricacion"],
     visibleSections: commonTemplateSections,
     sections: buildSoldadoraSections(),
     help: {
@@ -884,6 +868,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     description: "Cabina presurizada para aplicación de pintura sobre rígidos.",
     geometry: "volumen",
     defaultProductionUnit: "m2_h",
+    allowedProfileTypes: ["fabricacion"],
     visibleSections: commonTemplateSections,
     sections: buildCabinaPinturaSections(),
     help: {
@@ -899,6 +884,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     description: "Mesa digital para corte con herramientas intercambiables (cuchilla, fresa).",
     geometry: "plano",
     defaultProductionUnit: "m2",
+    allowedProfileTypes: ["corte"],
     visibleSections: commonTemplateSections,
     sections: buildMesaCorteSections(),
     help: {

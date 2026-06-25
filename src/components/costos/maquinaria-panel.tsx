@@ -72,6 +72,7 @@ import {
   type MaquinariaTemplateField,
   type MaquinariaTemplateOption,
   type PlantillaMaquinaria,
+  type TipoPerfilOperativoMaquina,
   type TipoConsumibleMaquina,
   type UnidadConsumoMaquina,
 } from "@/lib/maquinaria";
@@ -254,7 +255,6 @@ function emptyMaquina(plantaId: string): MaquinaPayload {
 
 function maquinaToPayload(maquina: Maquina): MaquinaPayload {
   return {
-    codigo: maquina.codigo,
     nombre: maquina.nombre,
     plantilla: maquina.plantilla,
     plantillaVersion: maquina.plantillaVersion,
@@ -272,6 +272,7 @@ function maquinaToPayload(maquina: Maquina): MaquinaPayload {
     altoUtil: maquina.altoUtil ?? undefined,
     espesorMaximo: maquina.espesorMaximo ?? undefined,
     pesoMaximo: maquina.pesoMaximo ?? undefined,
+    gramajeMaxGr: maquina.gramajeMaxGr ?? undefined,
     activo: maquina.activo,
     observaciones: maquina.observaciones || undefined,
     parametrosTecnicos: (maquina.parametrosTecnicos as Record<string, unknown> | null) ?? {},
@@ -396,9 +397,181 @@ function getSelectedLabels(options: MaquinariaTemplateOption[] | undefined, valu
     .join(", ");
 }
 
+function isColorModeMultiselect(field: MaquinariaTemplateField) {
+  return (
+    field.kind === "multiselect" &&
+    Boolean(field.options?.some((optionItem) => optionItem.value === "CMYK"))
+  );
+}
+
+const COLOR_CHANNEL_META: Record<
+  string,
+  { label: string; className: string; textClassName?: string }
+> = {
+  C: {
+    label: "C",
+    className: "border-cyan-300 bg-cyan-400",
+    textClassName: "text-cyan-950",
+  },
+  M: {
+    label: "M",
+    className: "border-fuchsia-300 bg-fuchsia-500",
+    textClassName: "text-white",
+  },
+  Y: {
+    label: "Y",
+    className: "border-yellow-300 bg-yellow-300",
+    textClassName: "text-yellow-950",
+  },
+  K: {
+    label: "K",
+    className: "border-neutral-700 bg-neutral-950",
+    textClassName: "text-white",
+  },
+  blanco: {
+    label: "W",
+    className: "border-neutral-300 bg-white",
+    textClassName: "text-neutral-700",
+  },
+  barniz: {
+    label: "V",
+    className: "border-amber-300 bg-amber-100",
+    textClassName: "text-amber-900",
+  },
+};
+
+function getColorModeChannels(value: string) {
+  const normalized = value.trim().toUpperCase();
+  if (["BN", "B/N", "NEGRO", "K"].includes(normalized)) return ["K"];
+
+  const normalizedLower = normalized.toLowerCase();
+  const channels = ["C", "M", "Y", "K"];
+  if (normalizedLower.includes("blanco")) channels.push("blanco");
+  if (normalizedLower.includes("barniz")) channels.push("barniz");
+  return channels;
+}
+
 function getGranFormatoGeometria(form: MaquinaPayload) {
   const value = (form.parametrosTecnicos ?? {}).geometria;
   return typeof value === "string" ? value : "";
+}
+
+const GRAN_FORMATO_CM_FIELD_KEYS = new Set([
+  "anchoMinRolloMm",
+  "anchoMaxRolloMm",
+  "anchoMesaMm",
+  "largoMesaMm",
+  "alturaMaxCabezalMm",
+]);
+
+function shouldDisplayGranFormatoFieldInCm(
+  field: MaquinariaTemplateField,
+  form: MaquinaPayload,
+) {
+  return (
+    form.plantilla === "impresora_gran_formato_por_area" &&
+    field.kind === "number" &&
+    field.unit === "mm" &&
+    GRAN_FORMATO_CM_FIELD_KEYS.has(field.key)
+  );
+}
+
+function mmToCmForInput(value: unknown) {
+  if (typeof value !== "number") return value;
+  return Number((value / 10).toFixed(4));
+}
+
+function cmToMmForPayload(value: unknown) {
+  if (typeof value !== "number") return value;
+  return Number((value * 10).toFixed(4));
+}
+
+function getRequiredConsumibleKeys(
+  form: MaquinaPayload,
+  perfiles: LocalPerfil[],
+) {
+  const requiredKeys = new Set<string>();
+  const parametrosTecnicos = (form.parametrosTecnicos ?? {}) as Record<
+    string,
+    unknown
+  >;
+
+  if (form.plantilla === "impresora_laser") {
+    for (const canal of requiredChannelsForLaserMachine(form, perfiles)) {
+      requiredKeys.add(`maquina::${canal}`);
+    }
+    return requiredKeys;
+  }
+
+  if (!PRINTER_TEMPLATES_WITH_CONSUMIBLES.has(form.plantilla)) {
+    return requiredKeys;
+  }
+
+  for (const perfil of perfiles) {
+    if (!perfil.id) continue;
+    for (const canal of requiredChannelsForPerfil(perfil, parametrosTecnicos)) {
+      requiredKeys.add(`${perfil.id}::${canal}`);
+    }
+  }
+
+  return requiredKeys;
+}
+
+function normalizeRequiredPrinterConsumibles(
+  form: MaquinaPayload,
+  perfiles: LocalPerfil[],
+) {
+  const requiredKeys = getRequiredConsumibleKeys(form, perfiles);
+  if (requiredKeys.size === 0) return form.consumibles;
+
+  return form.consumibles.map((consumible) => {
+    const canal = canalFromConsumible(consumible);
+    if (!canal) return consumible;
+    const key = `${consumible.perfilOperativoId ?? "maquina"}::${canal}`;
+    return requiredKeys.has(key) ? { ...consumible, activo: true } : consumible;
+  });
+}
+
+function getDefaultOpenSection(plantilla: PlantillaMaquinaria) {
+  return plantilla === "impresora_gran_formato_por_area"
+    ? "parametros_tecnicos"
+    : "capacidades_fisicas";
+}
+
+function getAllowedProfileTypes(form: MaquinaPayload): TipoPerfilOperativoMaquina[] {
+  const template = getMaquinariaTemplate(form.plantilla);
+  const baseTypes = template?.allowedProfileTypes ?? ["impresion"];
+  if (
+    form.plantilla === "impresora_gran_formato_por_area" &&
+    form.parametrosTecnicos?.soportaCorteIntegrado === true
+  ) {
+    return Array.from(new Set([...baseTypes, "corte"]));
+  }
+  return baseTypes;
+}
+
+function getDefaultProfileType(form: MaquinaPayload): TipoPerfilOperativoMaquina {
+  return getAllowedProfileTypes(form)[0] ?? "impresion";
+}
+
+function cleanPerfilDetailsForType(perfil: LocalPerfil): LocalPerfil {
+  if (perfil.tipoPerfil === "corte" || perfil.tipoPerfil === "mixto") return perfil;
+  const detalle = { ...(perfil.detalle ?? {}) };
+  delete detalle.tipoCorte;
+  delete detalle.factorComplejidad;
+  return { ...perfil, detalle };
+}
+
+function normalizePerfilTypeForTemplate(
+  perfil: LocalPerfil,
+  form: MaquinaPayload,
+): LocalPerfil {
+  const allowedTypes = getAllowedProfileTypes(form);
+  if (allowedTypes.includes(perfil.tipoPerfil)) return cleanPerfilDetailsForType(perfil);
+  return cleanPerfilDetailsForType({
+    ...perfil,
+    tipoPerfil: getDefaultProfileType(form),
+  });
 }
 
 function shouldShowMaquinaField(field: MaquinariaTemplateField, form: MaquinaPayload) {
@@ -407,7 +580,7 @@ function shouldShowMaquinaField(field: MaquinariaTemplateField, form: MaquinaPay
   const mesaOnly = new Set(["largoUtil", "anchoMesaMm", "largoMesaMm", "alturaMaxCabezalMm"]);
   const rolloOnly = new Set(["anchoMinRolloMm", "anchoMaxRolloMm"]);
   if (mesaOnly.has(field.key)) return geometria === "MESA_EXTENSORA";
-  if (rolloOnly.has(field.key)) return geometria === "" || geometria === "ROLLO";
+  if (rolloOnly.has(field.key)) return geometria === "" || geometria === "ROLLO" || geometria === "MESA_EXTENSORA";
   return true;
 }
 
@@ -418,15 +591,13 @@ function shouldShowPerfilField(
 ) {
   if (form.plantilla !== "impresora_gran_formato_por_area") return true;
   const corteFieldKeys = new Set(["tipoCorte", "factorComplejidad"]);
-  const impresionFieldKeys = new Set(["numeroPasadas", "colores", "modoCalidad"]);
+  const impresionFieldKeys = new Set(["colores"]);
   const isCorte = perfil?.tipoPerfil === "corte";
   const isMixto = perfil?.tipoPerfil === "mixto";
 
   if (corteFieldKeys.has(field.key)) return isCorte || isMixto;
   if (impresionFieldKeys.has(field.key)) return !isCorte || isMixto;
-  if (field.key !== "modoOperacion") return true;
-  if (isCorte || isMixto) return true;
-  return getGranFormatoGeometria(form) === "MESA_EXTENSORA";
+  return true;
 }
 
 function cleanGranFormatoGeometryFields(form: MaquinaPayload, nextGeometria: unknown): MaquinaPayload {
@@ -445,8 +616,6 @@ function cleanGranFormatoGeometryFields(form: MaquinaPayload, nextGeometria: unk
       perfilesOperativos: form.perfilesOperativos,
     };
   }
-  delete parametrosTecnicos.anchoMinRolloMm;
-  delete parametrosTecnicos.anchoMaxRolloMm;
   return { ...form, geometriaTrabajo: "plano", parametrosTecnicos };
 }
 
@@ -503,9 +672,17 @@ interface FieldInputProps {
   field: MaquinariaTemplateField;
   value: unknown;
   onChange: (value: unknown) => void;
+  max?: number;
+  renderColorModeCards?: boolean;
 }
 
-function FieldInput({ field, value, onChange }: FieldInputProps) {
+function FieldInput({
+  field,
+  value,
+  onChange,
+  max,
+  renderColorModeCards = false,
+}: FieldInputProps) {
   const id = `field-${field.scope}-${field.key}`;
 
   if (STRUCTURED_MARGIN_FIELDS.has(field.key)) {
@@ -589,11 +766,17 @@ function FieldInput({ field, value, onChange }: FieldInputProps) {
             id={id}
             type="number"
             inputMode="decimal"
+            max={max}
             value={typeof value === "number" ? value : value ? Number(value) : ""}
             placeholder={field.placeholder}
             onChange={(e) => {
               const v = e.target.value;
-              onChange(v === "" ? undefined : Number(v));
+              if (v === "") {
+                onChange(undefined);
+                return;
+              }
+              const parsed = Number(v);
+              onChange(typeof max === "number" && parsed > max ? max : parsed);
             }}
           />
           {field.unit && (
@@ -639,6 +822,52 @@ function FieldInput({ field, value, onChange }: FieldInputProps) {
         : typeof value === "string" && value
           ? [value]
           : [];
+      if (renderColorModeCards && isColorModeMultiselect(field)) {
+        return (
+          <div className="flex flex-wrap gap-2">
+            {field.options?.map((opt) => {
+              const selected = current.includes(opt.value);
+              const channels = getColorModeChannels(opt.value);
+
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => {
+                    const next = selected
+                      ? current.filter((v) => v !== opt.value)
+                      : [...current, opt.value];
+                    onChange(next);
+                  }}
+                  className={`min-w-[10rem] rounded-md border px-3 py-2 text-left transition ${
+                    selected
+                      ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary/30"
+                      : "border-border bg-background hover:border-primary/40 hover:bg-muted/40"
+                  }`}
+                >
+                  <span className="mb-2 flex items-center gap-1.5">
+                    {channels.map((channel) => {
+                      const meta = COLOR_CHANNEL_META[channel];
+                      return (
+                        <span
+                          key={channel}
+                          className={`flex size-6 items-center justify-center rounded-full border text-[10px] font-semibold ${meta.className} ${meta.textClassName ?? ""}`}
+                        >
+                          {meta.label}
+                        </span>
+                      );
+                    })}
+                  </span>
+                  <span className="block text-sm font-medium leading-tight">
+                    {opt.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        );
+      }
       return (
         <div className="flex flex-col gap-1.5">
           {current.length > 0 && (
@@ -714,8 +943,7 @@ export function MaquinariaPanel({
       const q = filterText.toLowerCase();
       result = result.filter(
         (m) =>
-          m.nombre.toLowerCase().includes(q) ||
-          m.codigo.toLowerCase().includes(q),
+          m.nombre.toLowerCase().includes(q),
       );
     }
     if (filterPlantilla !== "all") {
@@ -725,10 +953,11 @@ export function MaquinariaPanel({
   }, [maquinas, filterText, filterPlantilla]);
 
   const openNueva = React.useCallback(() => {
+    const initialForm = emptyMaquina(plantas[0]?.id ?? "");
     setEditingId(null);
-    setForm(emptyMaquina(plantas[0]?.id ?? ""));
+    setForm(initialForm);
     setPerfiles([]);
-    setOpenSection("capacidades_fisicas");
+    setOpenSection(getDefaultOpenSection(initialForm.plantilla));
     setIsSheetOpen(true);
   }, [plantas]);
 
@@ -737,12 +966,17 @@ export function MaquinariaPanel({
     const payload = maquinaToPayload(maquina);
     setForm(payload);
     setPerfiles(
-      payload.perfilesOperativos.map((p, i) => ({
-        ...p,
-        uiKey: `p-${i}-${Date.now()}`,
-      })),
+      payload.perfilesOperativos.map((p, i) =>
+        normalizePerfilTypeForTemplate(
+          {
+            ...p,
+            uiKey: `p-${i}-${Date.now()}`,
+          },
+          payload,
+        ),
+      ),
     );
-    setOpenSection("capacidades_fisicas");
+    setOpenSection(getDefaultOpenSection(payload.plantilla));
     setIsSheetOpen(true);
   }, []);
 
@@ -784,6 +1018,7 @@ export function MaquinariaPanel({
       consumibles: [],
     }));
     setPerfiles([]); // los perfiles también dependen del template
+    setOpenSection(getDefaultOpenSection(newPlantilla));
   };
 
   const handleMaquinaFieldChange = (field: MaquinariaTemplateField, value: unknown) => {
@@ -791,6 +1026,21 @@ export function MaquinariaPanel({
       const next = setMaquinaFieldValue(current, field.key, value);
       return field.key === "geometria" ? cleanGranFormatoGeometryFields(next, value) : next;
     });
+    if (field.key === "gramajeMaxGr" && typeof value === "number") {
+      setPerfiles((current) =>
+        current.map((perfil) => {
+          const currentMax = Number(getPerfilFieldValue(perfil, "gramajeMaxGr"));
+          if (!Number.isFinite(currentMax) || currentMax <= value) return perfil;
+          return setPerfilFieldValue(perfil, "gramajeMaxGr", value);
+        }),
+      );
+    }
+    if (field.key === "soportaCorteIntegrado" && value !== true) {
+      const nextForm = setMaquinaFieldValue(form, field.key, value);
+      setPerfiles((current) =>
+        current.map((perfil) => normalizePerfilTypeForTemplate(perfil, nextForm)),
+      );
+    }
     if (field.key === "geometria" && value !== "MESA_EXTENSORA") {
       setPerfiles((current) =>
         current.map((perfil) => {
@@ -809,7 +1059,7 @@ export function MaquinariaPanel({
         uiKey: `p-${Date.now()}-${Math.random()}`,
         id: crypto.randomUUID(),
         nombre: "Nuevo perfil",
-        tipoPerfil: "impresion",
+        tipoPerfil: getDefaultProfileType(form),
         activo: true,
         detalle: {},
       },
@@ -882,7 +1132,10 @@ export function MaquinariaPanel({
     }
     setSaving(true);
     try {
-      const perfilesOperativos = perfiles.map((perfil) => {
+      const normalizedPerfiles = perfiles.map((perfil) =>
+        normalizePerfilTypeForTemplate(perfil, form),
+      );
+      const perfilesOperativos = normalizedPerfiles.map((perfil) => {
         const payloadPerfil: Partial<LocalPerfil> = { ...perfil };
         delete payloadPerfil.uiKey;
         return payloadPerfil as NonNullable<MaquinaPayload["perfilesOperativos"]>[number];
@@ -890,6 +1143,7 @@ export function MaquinariaPanel({
       const payload: MaquinaPayload = {
         ...form,
         perfilesOperativos,
+        consumibles: normalizeRequiredPrinterConsumibles(form, normalizedPerfiles),
       };
       if (editingId) {
         const updated = await updateMaquina(editingId, payload);
@@ -951,7 +1205,7 @@ export function MaquinariaPanel({
             <label htmlFor="filter-text">Buscar</label>
             <input
               id="filter-text"
-              placeholder="Nombre o código..."
+              placeholder="Nombre..."
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
             />
@@ -1085,15 +1339,6 @@ export function MaquinariaPanel({
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <div className="min-w-0 space-y-1">
-                    <Label htmlFor="codigo">Código</Label>
-                    <Input
-                      id="codigo"
-                      value={form.codigo ?? ""}
-                      placeholder="auto"
-                      onChange={(e) => setForm({ ...form, codigo: e.target.value })}
-                    />
-                  </div>
-                  <div className="min-w-0 space-y-1">
                     <Label htmlFor="nombre">Nombre *</Label>
                     <Input
                       id="nombre"
@@ -1193,32 +1438,34 @@ export function MaquinariaPanel({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="min-w-0 space-y-1">
-                    <LabelConTooltip
-                      label="Geometría de trabajo"
-                      tooltip="Forma del sustrato sobre el que opera la máquina. Pliego = hojas precortadas; Rollo = bobina continua; Plano/Cilindrico/Volumen = piezas tridimensionales."
-                    />
-                    <Select
-                      value={form.geometriaTrabajo}
-                      onValueChange={(v) =>
-                        setForm({
-                          ...form,
-                          geometriaTrabajo: (v ?? "pliego") as MaquinaPayload["geometriaTrabajo"],
-                        })
-                      }
-                    >
-                      <SelectTrigger className="w-full min-w-0">
-                        <SelectDisplay label={getGeometriaTrabajoMaquinaLabel(form.geometriaTrabajo)} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {geometriaTrabajoMaquinaItems.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {form.plantilla !== "impresora_gran_formato_por_area" ? (
+                    <div className="min-w-0 space-y-1">
+                      <LabelConTooltip
+                        label="Geometría de trabajo"
+                        tooltip="Forma del sustrato sobre el que opera la máquina. Pliego = hojas precortadas; Rollo = bobina continua; Plano/Cilindrico/Volumen = piezas tridimensionales."
+                      />
+                      <Select
+                        value={form.geometriaTrabajo}
+                        onValueChange={(v) =>
+                          setForm({
+                            ...form,
+                            geometriaTrabajo: (v ?? "pliego") as MaquinaPayload["geometriaTrabajo"],
+                          })
+                        }
+                      >
+                        <SelectTrigger className="w-full min-w-0">
+                          <SelectDisplay label={getGeometriaTrabajoMaquinaLabel(form.geometriaTrabajo)} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {geometriaTrabajoMaquinaItems.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : null}
                 </div>
               </CardContent>
             </Card>
@@ -1277,24 +1524,50 @@ export function MaquinariaPanel({
                         </p>
                       )
                     ) : (
-                      sec.fields.filter((field) => shouldShowMaquinaField(field, form)).map((field) => (
-                        <div key={field.key} className="space-y-1">
-                          <Label htmlFor={`field-${field.scope}-${field.key}`} className="text-sm">
-                            {field.label}
-                            {field.required && <span className="text-destructive"> *</span>}
-                          </Label>
-                          <FieldInput
-                            field={field}
-                            value={getMaquinaFieldValue(form, field.key)}
-                            onChange={(v) => handleMaquinaFieldChange(field, v)}
-                          />
-                          {getFriendlyFieldDescription(field) && (
-                            <p className="text-muted-foreground text-xs">
-                              {getFriendlyFieldDescription(field)}
-                            </p>
-                          )}
-                        </div>
-                      ))
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        {sec.fields.filter((field) => shouldShowMaquinaField(field, form)).map((field) => {
+                          const displayInCm = shouldDisplayGranFormatoFieldInCm(field, form);
+                          const displayField: MaquinariaTemplateField = displayInCm
+                            ? { ...field, unit: "cm" }
+                            : field;
+                          const fieldValue = getMaquinaFieldValue(form, field.key);
+                          const fullWidth =
+                            field.kind === "textarea" ||
+                            field.kind === "multiselect" ||
+                            STRUCTURED_MARGIN_FIELDS.has(field.key);
+
+                          return (
+                            <div
+                              key={field.key}
+                              className={`space-y-1 ${fullWidth ? "md:col-span-2" : ""}`}
+                            >
+                              <Label htmlFor={`field-${field.scope}-${field.key}`} className="text-sm">
+                                {field.label}
+                                {field.required && <span className="text-destructive"> *</span>}
+                              </Label>
+                              <FieldInput
+                                field={displayField}
+                                value={displayInCm ? mmToCmForInput(fieldValue) : fieldValue}
+                                renderColorModeCards={
+                                  form.plantilla === "impresora_gran_formato_por_area" &&
+                                  field.key === "coloresSoportados"
+                                }
+                                onChange={(v) =>
+                                  handleMaquinaFieldChange(
+                                    field,
+                                    displayInCm ? cmToMmForPayload(v) : v,
+                                  )
+                                }
+                              />
+                              {getFriendlyFieldDescription(field) && (
+                                <p className="text-muted-foreground text-xs">
+                                  {getFriendlyFieldDescription(field)}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     )}
                   </CardContent>
                 )}
@@ -1383,6 +1656,7 @@ function ConsumiblesImpresionEditor({
         detalle: { ...(existing?.detalle ?? {}), color: canal },
         observaciones: existing?.observaciones,
         ...patch,
+        activo: true,
       };
       const next = [...current.consumibles];
       if (idx >= 0) next[idx] = nextItem;
@@ -1454,7 +1728,7 @@ function ConsumiblesImpresionEditor({
               const selectedOption = opciones.find((item) => item.variante.id === selected);
 
               return (
-                <div key={`laser-${canal}`} className="grid grid-cols-1 gap-2 rounded-md bg-background p-2 md:grid-cols-[120px_1fr_120px_110px_80px] md:items-end">
+                <div key={`laser-${canal}`} className="grid grid-cols-1 gap-2 rounded-md bg-background p-2 md:grid-cols-[120px_1fr_120px] md:items-end">
                   <div className="space-y-1">
                     <Label className="text-xs">Canal</Label>
                     <div className="flex items-center gap-2 text-sm font-medium">
@@ -1483,9 +1757,6 @@ function ConsumiblesImpresionEditor({
                             : `${CANAL_META[canal].label} · máquina`,
                           tipo: consumibleTipoFor(form.plantilla, canal),
                           unidad: consumibleUnidadFor(form.plantilla),
-                          rendimientoEstimado:
-                            existing?.rendimientoEstimado ??
-                            getDefaultRendimientoEstimado(variante?.variante, form.plantilla),
                         });
                       }}
                     >
@@ -1528,34 +1799,6 @@ function ConsumiblesImpresionEditor({
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <Label className="text-xs">Contenido</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      step={1}
-                      disabled={!existing}
-                      value={existing?.rendimientoEstimado ?? ""}
-                      placeholder="g"
-                      onChange={(event) =>
-                        upsertConsumible(null, canal, {
-                          rendimientoEstimado: event.target.value === "" ? undefined : Number(event.target.value),
-                        })
-                      }
-                    />
-                  </div>
-
-                  <label className="flex items-center gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      disabled={!existing}
-                      checked={existing?.activo ?? false}
-                      onChange={(event) =>
-                        upsertConsumible(null, canal, { activo: event.target.checked })
-                      }
-                    />
-                    Activo
-                  </label>
                 </div>
               );
             })}
@@ -1613,7 +1856,7 @@ function ConsumiblesImpresionEditor({
                 const selectedOption = opciones.find((item) => item.variante.id === selected);
 
                 return (
-                  <div key={`${perfil.uiKey}-${canal}`} className="grid grid-cols-1 gap-2 rounded-md bg-background p-2 md:grid-cols-[120px_1fr_120px_110px_80px] md:items-end">
+                  <div key={`${perfil.uiKey}-${canal}`} className="grid grid-cols-1 gap-2 rounded-md bg-background p-2 md:grid-cols-[120px_1fr_120px] md:items-end">
                     <div className="space-y-1">
                       <Label className="text-xs">Canal</Label>
                       <div className="flex items-center gap-2 text-sm font-medium">
@@ -1642,9 +1885,6 @@ function ConsumiblesImpresionEditor({
                               : `${CANAL_META[canal].label} · ${perfil.nombre}`,
                             tipo: consumibleTipoFor(form.plantilla, canal),
                             unidad: consumibleUnidadFor(form.plantilla),
-                            rendimientoEstimado:
-                              existing?.rendimientoEstimado ??
-                              getDefaultRendimientoEstimado(variante?.variante, form.plantilla),
                           });
                         }}
                       >
@@ -1687,34 +1927,6 @@ function ConsumiblesImpresionEditor({
                       />
                     </div>
 
-                    <div className="space-y-1">
-                      <Label className="text-xs">Contenido</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        step={1}
-                        disabled={!existing}
-                        value={existing?.rendimientoEstimado ?? ""}
-                        placeholder={form.plantilla === "impresora_laser" ? "g" : "ml"}
-                        onChange={(event) =>
-                          upsertConsumible(perfil, canal, {
-                            rendimientoEstimado: event.target.value === "" ? undefined : Number(event.target.value),
-                          })
-                        }
-                      />
-                    </div>
-
-                    <label className="flex items-center gap-2 text-xs">
-                      <input
-                        type="checkbox"
-                        disabled={!existing}
-                        checked={existing?.activo ?? false}
-                        onChange={(event) =>
-                          upsertConsumible(perfil, canal, { activo: event.target.checked })
-                        }
-                      />
-                      Activo
-                    </label>
                   </div>
                 );
               })}
@@ -1765,16 +1977,6 @@ function getSelectedConsumibleVariantFallback(
   return null;
 }
 
-function getDefaultRendimientoEstimado(
-  variante: MateriaPrimaVariante | undefined,
-  plantilla: PlantillaMaquinaria,
-) {
-  const attrs = variante?.atributosVariante ?? {};
-  const volumen = Number(attrs.volumenMl ?? attrs.volumenPresentacion ?? 0);
-  if (Number.isFinite(volumen) && volumen > 0) return volumen;
-  return plantilla === "impresora_laser" ? 500 : undefined;
-}
-
 // ─── Sub-componente: editor de perfiles ────────────────────────────
 
 interface PerfilesProps {
@@ -1796,6 +1998,10 @@ function PerfilesOperativosEditor({
   onEliminar,
   onDuplicar,
 }: PerfilesProps) {
+  const allowedProfileTypeItems = tipoPerfilOperativoMaquinaItems.filter((item) =>
+    getAllowedProfileTypes(form).includes(item.value),
+  );
+
   return (
     <div className="space-y-3">
       {perfiles.length === 0 ? (
@@ -1833,7 +2039,7 @@ function PerfilesOperativosEditor({
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="min-w-0 space-y-1">
                 <LabelConTooltip
                   label="Tipo de perfil"
@@ -1843,7 +2049,13 @@ function PerfilesOperativosEditor({
                 <Select
                   value={perfil.tipoPerfil}
                   onValueChange={(v) => {
-                    const next = setPerfilFieldValue(perfil, "tipoPerfil", v ?? "impresion");
+                    const next = cleanPerfilDetailsForType(
+                      setPerfilFieldValue(
+                        perfil,
+                        "tipoPerfil",
+                        v ?? getDefaultProfileType(form),
+                      ),
+                    );
                     setPerfiles((prev) =>
                       prev.map((p) => (p.uiKey === perfil.uiKey ? next : p)),
                     );
@@ -1859,7 +2071,7 @@ function PerfilesOperativosEditor({
                     />
                   </SelectTrigger>
                   <SelectContent>
-                    {tipoPerfilOperativoMaquinaItems.map((item) => (
+                    {allowedProfileTypeItems.map((item) => (
                       <SelectItem key={item.value} value={item.value}>
                         {item.label}
                       </SelectItem>
@@ -1867,8 +2079,15 @@ function PerfilesOperativosEditor({
                   </SelectContent>
                 </Select>
               </div>
-              {sectionFields.filter((field) => shouldShowPerfilField(field, form, perfil)).map((field) => (
-                <div key={field.key} className="min-w-0 space-y-1">
+              {sectionFields.filter((field) => shouldShowPerfilField(field, form, perfil)).map((field) => {
+                const profileFieldMax =
+                  field.key === "gramajeMaxGr" &&
+                  typeof form.gramajeMaxGr === "number"
+                    ? form.gramajeMaxGr
+                    : undefined;
+
+                return (
+                  <div key={field.key} className="min-w-0 space-y-1">
                   <Label
                     htmlFor={`p-${perfil.uiKey}-${field.key}`}
                     className="text-xs"
@@ -1879,6 +2098,7 @@ function PerfilesOperativosEditor({
                   <FieldInput
                     field={field}
                     value={getPerfilFieldValue(perfil, field.key)}
+                    max={profileFieldMax}
                     onChange={(v) => {
                       const next = setPerfilFieldValue(perfil, field.key, v);
                       setPerfiles((prev) =>
@@ -1891,8 +2111,9 @@ function PerfilesOperativosEditor({
                       {getFriendlyFieldDescription(field)}
                     </p>
                   )}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
         ))

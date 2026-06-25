@@ -160,6 +160,7 @@ export function CostosPanel({
   const [activeTab, setActiveTab] = React.useState("plantas");
   const [selectedCentro, setSelectedCentro] = React.useState<CentroCosto | null>(null);
   const [isConfiguratorOpen, setIsConfiguratorOpen] = React.useState(false);
+  const [configuracionRefreshKey, setConfiguracionRefreshKey] = React.useState(0);
   const [editingPlantaId, setEditingPlantaId] = React.useState<string | null>(null);
   const [editingAreaId, setEditingAreaId] = React.useState<string | null>(null);
   const [editingCentroId, setEditingCentroId] = React.useState<string | null>(null);
@@ -261,6 +262,11 @@ export function CostosPanel({
         setPlantas(nextPlantas);
         setAreas(nextAreas);
         setCentros(nextCentros);
+        setSelectedCentro((current) =>
+          current
+            ? nextCentros.find((centro) => centro.id === current.id) ?? current
+            : current,
+        );
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "No se pudo refrescar costos.");
       }
@@ -327,6 +333,7 @@ export function CostosPanel({
         setEditingCentroId(null);
         setCentroForm(createEmptyCentro(centroForm.plantaId, ""));
         reloadAll();
+        setConfiguracionRefreshKey((current) => current + 1);
       } catch (error) {
         toast.error(
           error instanceof Error
@@ -366,6 +373,7 @@ export function CostosPanel({
       try {
         await toggleCentroCosto(id);
         reloadAll();
+        setConfiguracionRefreshKey((current) => current + 1);
       } catch (error) {
         toast.error(
           error instanceof Error ? error.message : "No se pudo cambiar el centro.",
@@ -1279,6 +1287,7 @@ export function CostosPanel({
         plantas={plantas}
         areas={areas}
         empleados={empleados}
+        refreshKey={configuracionRefreshKey}
         onConfigured={async () => {
           reloadAll();
         }}

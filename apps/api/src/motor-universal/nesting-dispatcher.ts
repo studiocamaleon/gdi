@@ -62,10 +62,10 @@ export interface NestingDispatchResult {
   /**
    * Cantidad CALCULADA del paso, en la unidad correcta:
    *  - Para shelf-rollo: metros lineales consumidos del rollo.
-   *  - Para grid-2d-single y grid-2d-multi: pliegos necesarios.
+   *  - Para grid-2d-single y grid-2d-multi: pliegos/pouches necesarios.
    */
   cantidadCalculada: number;
-  unidad: 'm_lineales' | 'pliegos' | 'm2' | 'piezas';
+  unidad: 'm_lineales' | 'pliegos' | 'pouches' | 'm2' | 'piezas';
   /** Aprovechamiento del sustrato (%). */
   aprovechamientoPct: number;
   /** Para visualización: bins/sustratos consumidos. */
@@ -76,6 +76,8 @@ export interface NestingDispatchResult {
   metricasRaw: NestingResult['metrics'];
   /** Solo grid-2d-single: piezas por pliego (útil para outputs canónicos). */
   piezasPorPliego?: number;
+  /** Solo plastificado_pouch: piezas por pouch. */
+  piezasPorPouch?: number;
   /** Solo shelf-rollo: largo consumido del rollo en mm. */
   consumedLengthMm?: number;
   /** Cantidad de instancias de pieza efectivamente acomodadas. */
@@ -136,14 +138,19 @@ export function runNestingForPaso(
     return runLaminadoRollo(paso, jobContext, materialResuelto, config);
   }
 
-  // ─── Caso 4: montaje sobre otro sustrato ─────────────────────────
+  // ─── Caso 4: plastificado pouch sobre formato finito ──────────────
+  if (paso.familiaCodigo === 'plastificado_pouch') {
+    return runPlastificadoPouch(jobContext, materialResuelto, config);
+  }
+
+  // ─── Caso 5: montaje sobre otro sustrato ─────────────────────────
   // Reusa los algoritmos existentes, pero permite que las piezas vengan
   // de la medida comercial o de outputs publicados por pasos anteriores.
   if (paso.familiaCodigo === 'montaje_sobre_sustrato') {
     return runMontajeSobreSustrato(paso, jobContext, materialResuelto, config);
   }
 
-  // ─── Caso 5: grid 2D single/multi (digital sobre pliego) ─────────
+  // ─── Caso 6: grid 2D single/multi (digital sobre pliego) ─────────
   if (paso.familiaCodigo === 'impresion_por_hoja') {
     return runGrid2DSingle(paso, jobContext, materialResuelto, config);
   }
@@ -231,6 +238,25 @@ function runLaminadoRollo(
     materialResuelto,
     config,
   );
+}
+
+function runPlastificadoPouch(
+  jobContext: JobContext,
+  materialResuelto: MaterialResueltoParaNesting | null,
+  config: NestingConfigResolved,
+): NestingDispatchResult | null {
+  if (!materialResuelto || !config.sheetWidthMm || !config.sheetHeightMm) {
+    return null;
+  }
+
+  const result = runGrid2DSingleForArea(jobContext, config, 'Pouch');
+  if (!result) return null;
+
+  return {
+    ...result,
+    unidad: 'pouches',
+    piezasPorPouch: result.piezasPorPliego,
+  };
 }
 
 function runMontajeSobreSustrato(
@@ -721,6 +747,7 @@ function runPackingSolverRectangleForArea(
 function runGrid2DSingleForArea(
   jobContext: JobContext,
   config: NestingConfigResolved,
+  substrateLabel = 'Placa',
 ): NestingDispatchResult | null {
   const piezas = getPiezasParaNesting(jobContext);
   const pieza = piezas[0];
@@ -821,7 +848,7 @@ function runGrid2DSingleForArea(
       separationHMm: config.separationHMm,
       separationVMm: config.separationVMm,
       allowRotation: config.allowRotation,
-      substrateLabel: 'Placa',
+      substrateLabel,
     }),
   };
 }

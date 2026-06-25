@@ -10,6 +10,7 @@ import {
   Grid2X2Icon,
   PackageIcon,
   SaveIcon,
+  StarIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -64,6 +65,7 @@ import {
 } from "@/lib/rule-builder";
 import { getVarianteOptionChips } from "@/lib/materias-primas-variantes-display";
 import { tecnologiaMaquinaItems } from "@/lib/maquinaria";
+import { getMachineTechnology, machineTechnologyLabel } from "@/lib/maquinaria-tecnologias";
 
 interface Props {
   producto: ProductoDetalle;
@@ -256,6 +258,41 @@ function maquinaCompatibleConFamilia(
     params.soportaCorteIntegrado === true &&
     maquina.perfilesOperativos.some((perfil) => perfilCompatibleConFamilia("plotter_corte", perfil))
   );
+}
+
+function maquinaCandidataCompatibleConFamilia(
+  familiaCodigo: string | undefined,
+  plantillasCompatibles: string[] | undefined,
+  maquina: MaquinaLookup,
+) {
+  return (
+    maquinaCompatibleConFamilia(familiaCodigo, plantillasCompatibles, maquina) &&
+    maquina.perfilesOperativos.some((perfil) => perfilCompatibleConFamilia(familiaCodigo, perfil))
+  );
+}
+
+function normalizeMaquinasCandidatas(
+  candidatas: NonNullable<UpsertConfigPasoPayload["maquinasCandidatas"]>,
+) {
+  const unique = new Map<string, { maquinaId: string; esPreferida?: boolean; orden?: number }>();
+  for (const [index, candidata] of candidatas.entries()) {
+    if (!candidata.maquinaId || unique.has(candidata.maquinaId)) continue;
+    unique.set(candidata.maquinaId, {
+      maquinaId: candidata.maquinaId,
+      esPreferida: candidata.esPreferida,
+      orden: candidata.orden ?? index,
+    });
+  }
+  const values = Array.from(unique.values()).sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+  const preferredId =
+    values.find((candidata) => candidata.esPreferida)?.maquinaId ??
+    values[0]?.maquinaId ??
+    null;
+  return values.map((candidata, index) => ({
+    maquinaId: candidata.maquinaId,
+    esPreferida: candidata.maquinaId === preferredId,
+    orden: index,
+  }));
 }
 
 function centroCostoOption(centro: Pick<CentroCostoLookup, "id" | "codigo" | "nombre">): HumanSelectOption {
@@ -1574,6 +1611,13 @@ export function ConfigPasosEditorView({
         setupOverrideMin: existente?.setupOverrideMin ?? null,
         cleanupOverrideMin: existente?.cleanupOverrideMin ?? null,
         tiempoFijoOverrideMin: existente?.tiempoFijoOverrideMin ?? null,
+        maquinasCandidatas: normalizeMaquinasCandidatas(
+          existente?.maquinasCandidatas?.map((candidata, index) => ({
+            maquinaId: candidata.maquinaId,
+            esPreferida: candidata.esPreferida,
+            orden: candidata.orden ?? index,
+          })) ?? [],
+        ),
         slotsMateriales: existente?.slotsMateriales.map<UpsertSlotMaterialPayload>((s) => ({
           slotCodigo: s.slotCodigo,
           modoSeleccion: s.modoSeleccion as "HARDCODED" | "COMERCIAL_ELIGE" | "MOTOR_ELIGE_AUTO",
@@ -1691,6 +1735,34 @@ export function ConfigPasosEditorView({
 
   const updateConfig = (rutaPasoId: string, patch: Partial<UpsertConfigPasoPayload>) => {
     setConfigs((prev) => ({ ...prev, [rutaPasoId]: { ...prev[rutaPasoId], ...patch } }));
+  };
+
+  const toggleMaquinaCandidata = (rutaPasoId: string, maquinaId: string, checked: boolean) => {
+    setConfigs((prev) => {
+      const cfg = prev[rutaPasoId];
+      const current = cfg.maquinasCandidatas ?? [];
+      const next = checked
+        ? normalizeMaquinasCandidatas([
+            ...current,
+            { maquinaId, esPreferida: current.length === 0, orden: current.length },
+          ])
+        : normalizeMaquinasCandidatas(current.filter((candidata) => candidata.maquinaId !== maquinaId));
+      return { ...prev, [rutaPasoId]: { ...cfg, maquinasCandidatas: next } };
+    });
+  };
+
+  const setMaquinaCandidataPreferida = (rutaPasoId: string, maquinaId: string) => {
+    setConfigs((prev) => {
+      const cfg = prev[rutaPasoId];
+      const current = cfg.maquinasCandidatas ?? [];
+      const next = normalizeMaquinasCandidatas(
+        current.map((candidata) => ({
+          ...candidata,
+          esPreferida: candidata.maquinaId === maquinaId,
+        })),
+      );
+      return { ...prev, [rutaPasoId]: { ...cfg, maquinasCandidatas: next } };
+    });
   };
 
   const toggleMultiplicador = (rutaPasoId: string, multiplicador: string) => {
@@ -2364,6 +2436,32 @@ export function ConfigPasosEditorView({
           const maquinasCompatibles = lookups.maquinas.filter((m) =>
             maquinaCompatibleConFamilia(paso.familiaCodigo, familia?.plantillasCompatibles, m),
           );
+          const soportaM2 = familia?.relacionMaquinaSoportada.includes("M-2") ?? false;
+          const maquinasCandidatasCompatibles = lookups.maquinas.filter((m) =>
+            maquinaCandidataCompatibleConFamilia(
+              paso.familiaCodigo,
+              familia?.plantillasCompatibles,
+              m,
+            ),
+          );
+          const candidatasCfg = normalizeMaquinasCandidatas(cfg.maquinasCandidatas ?? []);
+          const candidatasSeleccionadas = new Set(
+            candidatasCfg.map((candidata) => candidata.maquinaId),
+          );
+          const candidataPreferidaId =
+            candidatasCfg.find((candidata) => candidata.esPreferida)?.maquinaId ??
+            candidatasCfg[0]?.maquinaId ??
+            null;
+          const tecnologiasCandidatas = Array.from(
+            new Set(
+              candidatasCfg
+                .map((candidata) =>
+                  maquinasCandidatasCompatibles.find((maquina) => maquina.id === candidata.maquinaId),
+                )
+                .filter((maquina): maquina is MaquinaLookup => Boolean(maquina))
+                .map((maquina) => getMachineTechnology(maquina) ?? "sin_tecnologia"),
+            ),
+          );
           const maquinaSel = lookups.maquinas.find((m) => m.id === cfg.maquinaM1Id);
           const maquinaGuardada = maquinaSel ?? configExistente?.maquinaM1 ?? null;
           const maquinaOptions = ensureSelectedOption(
@@ -2951,6 +3049,86 @@ export function ConfigPasosEditorView({
                           />
 	                        </div>
 	                      ) : null}
+                      {soportaM2 ? (
+                        <div className="field md:col-span-full">
+                          <LabelConTooltip
+                            label="Tecnologías / máquinas candidatas"
+                            tooltip="Máquinas que este producto puede usar para este paso. En la OT el comercial elegirá tecnología; si una tecnología tiene una sola máquina, no se muestra selector de máquina."
+                          />
+                          <div className="space-y-2 rounded-md border bg-background/70 p-3">
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                              <span>
+                                {candidatasCfg.length === 0
+                                  ? "Sin candidatas configuradas."
+                                  : `${candidatasCfg.length} máquina${candidatasCfg.length === 1 ? "" : "s"} · ${tecnologiasCandidatas.length} tecnología${tecnologiasCandidatas.length === 1 ? "" : "s"}`}
+                              </span>
+                              {candidataPreferidaId ? (
+                                <span className="tag muted">
+                                  Preferida:{" "}
+                                  {lookups.maquinas.find((maquina) => maquina.id === candidataPreferidaId)
+                                    ?.nombre ?? "sin máquina"}
+                                </span>
+                              ) : null}
+                            </div>
+                            {maquinasCandidatasCompatibles.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">
+                                No hay máquinas compatibles con perfiles activos para esta familia.
+                              </p>
+                            ) : (
+                              <div className="grid gap-2 md:grid-cols-2">
+                                {maquinasCandidatasCompatibles.map((maquina) => {
+                                  const selected = candidatasSeleccionadas.has(maquina.id);
+                                  const preferred = selected && candidataPreferidaId === maquina.id;
+                                  return (
+                                    <div
+                                      key={maquina.id}
+                                      className={`flex items-center gap-3 rounded-md border bg-white px-3 py-2 text-xs ${
+                                        selected ? "border-foreground/40" : ""
+                                      }`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={selected}
+                                        onChange={(event) =>
+                                          toggleMaquinaCandidata(
+                                            paso.id,
+                                            maquina.id,
+                                            event.target.checked,
+                                          )
+                                        }
+                                      />
+                                      <div className="min-w-0 flex-1">
+                                        <div className="truncate font-medium text-foreground">
+                                          {maquina.nombre}
+                                        </div>
+                                        <div className="truncate text-muted-foreground">
+                                          {machineTechnologyLabel(maquina)} · {maquina.codigo}
+                                        </div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        className={`grid size-8 place-items-center rounded border ${
+                                          preferred
+                                            ? "border-foreground bg-foreground text-background"
+                                            : "bg-background text-muted-foreground"
+                                        }`}
+                                        disabled={!selected}
+                                        title="Marcar como preferida"
+                                        onClick={() => setMaquinaCandidataPreferida(paso.id, maquina.id)}
+                                      >
+                                        <StarIcon
+                                          className="size-4"
+                                          fill={preferred ? "currentColor" : "none"}
+                                        />
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
 	                      {mostrarModoColor ? (
 	                        <div className="field md:col-span-full">
 	                          <LabelConTooltip

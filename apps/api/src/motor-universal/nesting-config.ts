@@ -74,6 +74,8 @@ export function resolveNestingConfig(
   const machineMarginSource =
     paso.familiaCodigo === 'laminado'
       ? asRecord(maqParams.margenesDesperdicioMm)
+      : paso.familiaCodigo === 'plastificado_pouch'
+        ? uniformMargins(readNumber(materialAttrs.margenNoUsableMm) ?? 0)
       : asRecord(maqParams.margenesNoImprimiblesMm);
   const machineMargins = normalizeMargins(
     machineMarginSource,
@@ -110,6 +112,7 @@ export function resolveNestingConfig(
     readNumber(
       runtimeNestingConfig.separationHMm,
       nestingConfig.separationHMm,
+      params.separacionEntrePiezasMm,
       params.separacionHorizontalMm,
       machineSheetGapMm,
       defaultSeparationForFamily(paso.familiaCodigo),
@@ -118,20 +121,30 @@ export function resolveNestingConfig(
     readNumber(
       runtimeNestingConfig.separationVMm,
       nestingConfig.separationVMm,
+      params.separacionEntrePiezasMm,
       params.separacionVerticalMm,
       machineSheetGapMm,
       defaultSeparationForFamily(paso.familiaCodigo),
     ) ?? defaultSeparationForFamily(paso.familiaCodigo);
+  const configuredPieceBleedMm = readNumber(
+    runtimeNestingConfig.pieceBleedMm,
+    nestingConfig.pieceBleedMm,
+  );
   const pieceBleedMm = Math.max(
     0,
-    readNumber(
-      runtimeNestingConfig.pieceBleedMm,
-      nestingConfig.pieceBleedMm,
-      Math.max(legacySeparationHMm, legacySeparationVMm) / 2,
-    ) ?? 0,
+    configuredPieceBleedMm ??
+      (paso.familiaCodigo === 'plastificado_pouch'
+        ? 0
+        : Math.max(legacySeparationHMm, legacySeparationVMm) / 2),
   );
-  const separationHMm = pieceBleedMm * 2;
-  const separationVMm = pieceBleedMm * 2;
+  const separationHMm =
+    paso.familiaCodigo === 'plastificado_pouch'
+      ? Math.max(0, legacySeparationHMm)
+      : pieceBleedMm * 2;
+  const separationVMm =
+    paso.familiaCodigo === 'plastificado_pouch'
+      ? Math.max(0, legacySeparationVMm)
+      : pieceBleedMm * 2;
   const baseMargins = {
     leftMm: readNumber(
       runtimeMargins.leftMm,
@@ -243,7 +256,7 @@ export function resolveNestingConfig(
     ),
   );
   const purchaseSheetWidthMm = readNumber(materialAttrs.anchoMm);
-  const purchaseSheetHeightMm = readNumber(materialAttrs.largoMm);
+  const purchaseSheetHeightMm = readNumber(materialAttrs.altoMm, materialAttrs.largoMm);
   const configuredPrintSheetWidthMm =
     paso.familiaCodigo === 'impresion_por_hoja'
       ? readNumber(
@@ -310,6 +323,9 @@ function defaultMarginForFamily(familiaCodigo: string) {
       endMm: 0,
     };
   }
+  if (familiaCodigo === 'plastificado_pouch') {
+    return { leftMm: 0, rightMm: 0, topMm: 0, bottomMm: 0 };
+  }
   return { leftMm: 0, rightMm: 0, topMm: 0, bottomMm: 0 };
 }
 
@@ -318,6 +334,16 @@ function defaultSeparationForFamily(familiaCodigo: string) {
     familiaCodigo === 'plotter_corte'
     ? 5
     : 0;
+}
+
+function uniformMargins(value: number) {
+  const margin = Number.isFinite(value) ? Math.max(0, value) : 0;
+  return {
+    leftMm: margin,
+    rightMm: margin,
+    topMm: margin,
+    bottomMm: margin,
+  };
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

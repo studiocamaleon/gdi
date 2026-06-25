@@ -7,10 +7,11 @@ import {
   TipoDireccion,
 } from '@prisma/client';
 import { CurrentAuth } from '../auth/auth.types';
-import { PaginationDto, paginatedResponse } from '../common/dto/pagination.dto';
+import { paginatedResponse } from '../common/dto/pagination.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ClienteContactoDto } from './dto/contacto.dto';
 import { ClienteDireccionDto, TipoDireccionDto } from './dto/direccion.dto';
+import { ClientesQueryDto } from './dto/clientes-query.dto';
 import { UpsertClienteDto } from './dto/upsert-cliente.dto';
 
 type ClienteCompleto = Cliente & {
@@ -22,8 +23,20 @@ type ClienteCompleto = Cliente & {
 export class ClientesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(auth: CurrentAuth, pagination: PaginationDto) {
-    const where = { tenantId: auth.tenantId };
+  async findAll(auth: CurrentAuth, pagination: ClientesQueryDto) {
+    const query = pagination.q?.trim();
+    const where: Prisma.ClienteWhereInput = {
+      tenantId: auth.tenantId,
+      ...(query
+        ? {
+            OR: [
+              { nombre: { contains: query, mode: 'insensitive' } },
+              { razonSocial: { contains: query, mode: 'insensitive' } },
+              { emailPrincipal: { contains: query, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
 
     const [clientes, total] = await this.prisma.$transaction([
       this.prisma.cliente.findMany({

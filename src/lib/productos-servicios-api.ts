@@ -258,6 +258,12 @@ export interface UpsertSlotMaterialPayload {
   aplicaMultiCaras?: boolean;
 }
 
+export interface UpsertMaquinaCandidataPayload {
+  maquinaId: string;
+  esPreferida?: boolean;
+  orden?: number;
+}
+
 export interface UpsertConfigPasoPayload {
   rutaPasoId: string;
   modoActivacion?: string | null;
@@ -275,6 +281,7 @@ export interface UpsertConfigPasoPayload {
   cleanupOverrideMin?: number | null;
   tiempoFijoOverrideMin?: number | null;
   slotsMateriales?: UpsertSlotMaterialPayload[];
+  maquinasCandidatas?: UpsertMaquinaCandidataPayload[];
 }
 
 export async function upsertConfigPaso(rutaAltId: string, payload: UpsertConfigPasoPayload) {
@@ -518,7 +525,7 @@ export interface NestingViewerInput {
     | 'grid-2d-multi'
     | 'packingsolver-rectangle';
   cantidadCalculada: number;
-  unidad: 'm_lineales' | 'pliegos' | 'm2' | 'piezas';
+  unidad: 'm_lineales' | 'pliegos' | 'pouches' | 'm2' | 'piezas';
   aprovechamientoPct: number;
   substrates: Array<
     | { kind: 'sheet'; count: number; widthMm: number; heightMm: number }
@@ -542,6 +549,7 @@ export interface NestingViewerInput {
     meta?: unknown;
   }>;
   piezasPorPliego?: number;
+  piezasPorPouch?: number;
   consumedLengthMm?: number;
   piezasAcomodadas: number;
   outputsCanonicos?: Record<string, unknown>;

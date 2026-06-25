@@ -206,15 +206,18 @@ export class MaquinaConsumibleItemDto {
   })
   materiaPrimaVarianteId: string;
 
+  @IsOptional()
   @IsString()
   @MinLength(1)
-  nombre: string;
+  nombre?: string;
 
+  @IsOptional()
   @IsEnum(TipoConsumibleMaquinaDto)
-  tipo: TipoConsumibleMaquinaDto;
+  tipo?: TipoConsumibleMaquinaDto;
 
+  @IsOptional()
   @IsEnum(UnidadConsumoMaquinaDto)
-  unidad: UnidadConsumoMaquinaDto;
+  unidad?: UnidadConsumoMaquinaDto;
 
   @IsOptional()
   @Type(() => Number)

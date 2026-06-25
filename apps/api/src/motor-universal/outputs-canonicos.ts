@@ -227,19 +227,24 @@ function computeOutput(
     return null;
   }
 
+  if (key === 'piezas_laminadas' && familia.codigo === 'plastificado_pouch') {
+    return Number(jobContext.cantidad ?? 0) || null;
+  }
+
   // ─── Outputs "X realizados" — la mayoría son cantidad efectiva ────
   // piezas_impresas, piezas_cortadas, piezas_aplicadas, piezas_grabadas,
   // piezas_troqueladas, piezas_perforadas, piezas_laminadas, piezas_barnizadas,
   // piezas_decoradas, piezas_pintadas, piezas_lijadas, piezas_soldadas,
   // piezas_ensambladas, piezas_contadas, libros_engrapados, libros_anillados,
   // blocks_emblocados, cajas_armadas, cajas_embaladas, atados_completados,
-  // luminosos_instalados, pliegos_plegados, etc.
+  // trabajos_manuales_realizados, luminosos_instalados, pliegos_plegados, etc.
   if (
     key.startsWith('piezas_') ||
     key.startsWith('libros_') ||
     key.startsWith('blocks_') ||
     key.startsWith('cajas_') ||
     key.startsWith('atados_') ||
+    key.startsWith('trabajos_') ||
     key.startsWith('luminosos_') ||
     key.startsWith('pliegos_')
   ) {

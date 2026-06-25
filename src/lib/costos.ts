@@ -192,6 +192,16 @@ export type CentroCostoTarifaPeriodo = {
   updatedAt: string;
 };
 
+export type RepartoAbsorbidoCentroCosto = {
+  total: number;
+  desglose: {
+    desdeCentroCostoId: string;
+    desdeCentroCodigo: string;
+    desdeCentroNombre: string;
+    monto: number;
+  }[];
+};
+
 export type CentroCostoConfiguracionDetalle = {
   periodo: string;
   centro: CentroCosto;
@@ -201,6 +211,7 @@ export type CentroCostoConfiguracionDetalle = {
   capacidad: CentroCostoCapacidad | null;
   tarifaBorrador: CentroCostoTarifaPeriodo | null;
   tarifaPublicada: CentroCostoTarifaPeriodo | null;
+  repartoAbsorbido?: RepartoAbsorbidoCentroCosto;
   advertencias: string[];
   empleadosDisponibilidad: EmpleadoDisponibilidadCentroCosto[];
 };
@@ -270,12 +281,12 @@ export type CentroCostoRecursoMaquinariaPayload = {
   valorCompra: number;
   valorResidual: number;
   vidaUtilMeses: number;
-  potenciaNominalKw: number;
-  factorCargaPct: number;
-  tarifaEnergiaKwh: number;
-  horasProgramadasMes: number;
-  disponibilidadPct: number;
-  eficienciaPct: number;
+  potenciaNominalKw?: number;
+  factorCargaPct?: number;
+  tarifaEnergiaKwh?: number;
+  horasProgramadasMes?: number;
+  disponibilidadPct?: number;
+  eficienciaPct?: number;
   mantenimientoMensual: number;
   segurosMensual: number;
   otrosFijosMensual: number;

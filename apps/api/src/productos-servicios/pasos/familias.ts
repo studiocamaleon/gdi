@@ -1,5 +1,5 @@
 /**
- * Catálogo CERRADO de FAMILIAS de paso (31 familias).
+ * Catálogo CERRADO de FAMILIAS de paso.
  *
  * Modificar este archivo (agregar/quitar familias) requiere deploy de código.
  * Decisión: hardcoded en TS por estabilidad del modelo conceptual y tipado fuerte.
@@ -63,6 +63,10 @@ const MP = {
   laminadoFilm: {
     familiasMateriaPrima: ['TRANSFERENCIA_LAMINACION'],
     subfamiliasMateriaPrima: ['LAMINADO_FILM'],
+  },
+  laminadoPouch: {
+    familiasMateriaPrima: ['TRANSFERENCIA_LAMINACION'],
+    subfamiliasMateriaPrima: ['LAMINADO_POUCH'],
   },
   quimicoAcabado: {
     familiasMateriaPrima: ['QUIMICO_AUXILIAR', 'PINTURA_RECUBRIMIENTO'],
@@ -169,6 +173,25 @@ const MP = {
       'CONSUMIBLE_INSTALACION',
       'SISTEMA_COLGADO_MONTAJE',
       'VELCRO_CIERRE_TECNICO',
+    ],
+  },
+  insumoManual: {
+    familiasMateriaPrima: [
+      'ADHESIVO_TECNICO',
+      'PACKING_INSTALACION',
+      'HERRAJE_ACCESORIO',
+      'TERMINACION_EDITORIAL',
+      'QUIMICO_AUXILIAR',
+    ],
+    subfamiliasMateriaPrima: [
+      'CINTA_DOBLE_FAZ_TECNICA',
+      'CONSUMIBLE_INSTALACION',
+      'SISTEMA_COLGADO_MONTAJE',
+      'VELCRO_CIERRE_TECNICO',
+      'OJAL_OJALILLO_REMACHE',
+      'FIJACION_AUXILIAR',
+      'ETIQUETADO_IDENTIFICACION',
+      'AUXILIAR_PROCESO',
     ],
   },
 } satisfies Record<string, CompatibilidadMaterialSlot>;
@@ -651,9 +674,10 @@ const cnc: DefinicionFamilia = {
 
 const plegado: DefinicionFamilia = {
   codigo: 'plegado',
-  nombre: 'Plegado',
+  nombre: 'Plegado manual',
   categoria: 'corte_y_formado',
   descripcion: 'Plegado de pliegos para folletos, dípticos, trípticos.',
+  visibleEnSelector: false,
   relacionMaquinaSoportada: ['M-0', 'M-1'],
   modosTiempoSoportados: ['T-2', 'T-3'],
   mecanismosCantidadSoportados: ['HEREDAR_DEL_OUTPUT_CANONICO'],
@@ -760,6 +784,44 @@ const laminado: DefinicionFamilia = {
   validaciones: [],
   paramsPasoSchema: [],
   productosTipicos: ['Tarjetas Premium', 'Vinilo plastificado', 'Cuadros'],
+};
+
+const plastificado_pouch: DefinicionFamilia = {
+  codigo: 'plastificado_pouch',
+  nombre: 'Plastificado pouch',
+  categoria: 'terminaciones',
+  descripcion:
+    'Plastificado térmico en pouch A4/A3 con acomodo de piezas y corte posterior.',
+  relacionMaquinaSoportada: ['M-0'],
+  modosTiempoSoportados: ['T-2'],
+  mecanismosCantidadSoportados: ['CALCULADO_POR_PASO'],
+  modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL'],
+  modoActivacionDefault: 'OPCIONAL',
+  multiplicadoresSoportados: [],
+  slotsRequeridos: [
+    {
+      codigo: 'pouch',
+      nombre: 'Pouch térmico',
+      tipo: 'INSUMO_PASO',
+      requerido: true,
+      compatibilidadMaterial: MP.laminadoPouch,
+    },
+  ],
+  permiteSlotsAdicionales: false,
+  plantillasCompatibles: [],
+  inputsRequeridos: ['cantidad'],
+  outputsCanonicos: ['piezas_laminadas'],
+  validaciones: [],
+  paramsPasoSchema: [
+    {
+      campo: 'separacionEntrePiezasMm',
+      etiqueta: 'Separación entre piezas',
+      tipo: 'number',
+      requerido: false,
+      default: 0,
+    },
+  ],
+  productosTipicos: ['Credenciales plastificadas', 'Menús plastificados', 'Tarjetas rígidas pouch'],
 };
 
 const barniz: DefinicionFamilia = {
@@ -1193,7 +1255,7 @@ const instalacion_electrica: DefinicionFamilia = {
 };
 
 // ============================================================================
-// 3.7 Operaciones manuales (5 + 2 sub-categoría)
+// 3.7 Operaciones manuales
 // ============================================================================
 
 const embalaje: DefinicionFamilia = {
@@ -1247,6 +1309,7 @@ const conteo_manual: DefinicionFamilia = {
   nombre: 'Conteo manual',
   categoria: 'operaciones_manuales',
   descripcion: 'Verificación de cantidad o compaginado.',
+  visibleEnSelector: false,
   relacionMaquinaSoportada: ['M-0'],
   modosTiempoSoportados: ['T-2'],
   mecanismosCantidadSoportados: [
@@ -1270,6 +1333,7 @@ const atado_banding: DefinicionFamilia = {
   nombre: 'Atado / banding',
   categoria: 'operaciones_manuales',
   descripcion: 'Atado de paquetes con cinta o hilo.',
+  visibleEnSelector: false,
   relacionMaquinaSoportada: ['M-0'],
   modosTiempoSoportados: ['T-2'],
   mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
@@ -1298,6 +1362,7 @@ const etiquetado_manual: DefinicionFamilia = {
   nombre: 'Etiquetado manual',
   categoria: 'operaciones_manuales',
   descripcion: 'Aplicación manual de etiquetas adhesivas.',
+  visibleEnSelector: false,
   relacionMaquinaSoportada: ['M-0'],
   modosTiempoSoportados: ['T-2'],
   mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
@@ -1326,6 +1391,7 @@ const control_calidad: DefinicionFamilia = {
   nombre: 'Control de calidad',
   categoria: 'operaciones_manuales',
   descripcion: 'Verificación visual o técnica de calidad final.',
+  visibleEnSelector: false,
   relacionMaquinaSoportada: ['M-0'],
   modosTiempoSoportados: ['T-1', 'T-2'],
   mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
@@ -1339,6 +1405,54 @@ const control_calidad: DefinicionFamilia = {
   outputsCanonicos: ['piezas_verificadas'],
   validaciones: [],
   paramsPasoSchema: [],
+};
+
+const trabajo_manual: DefinicionFamilia = {
+  codigo: 'trabajo_manual',
+  nombre: 'Trabajo manual',
+  categoria: 'operaciones_manuales',
+  descripcion:
+    'Tarea manual genérica configurable por producto/ruta. Usar nombre visible para identificar la operación concreta.',
+  relacionMaquinaSoportada: ['M-0'],
+  modosTiempoSoportados: ['T-2'],
+  mecanismosCantidadSoportados: [
+    'DIRECT_FROM_JOBCONTEXT',
+    'HEREDAR_DEL_OUTPUT_CANONICO',
+    'CONVERSION',
+  ],
+  modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL', 'CONDICIONAL'],
+  modoActivacionDefault: 'OPCIONAL',
+  multiplicadoresSoportados: [],
+  slotsRequeridos: [
+    {
+      codigo: 'insumo_manual',
+      nombre: 'Insumo manual (opcional)',
+      tipo: 'INSUMO_PASO',
+      requerido: false,
+      compatibilidadMaterial: MP.insumoManual,
+    },
+  ],
+  permiteSlotsAdicionales: true,
+  plantillasCompatibles: [],
+  inputsRequeridos: [],
+  outputsCanonicos: ['trabajos_manuales_realizados'],
+  validaciones: [],
+  paramsPasoSchema: [
+    {
+      campo: 'tipoTrabajo',
+      etiqueta: 'Tipo de trabajo',
+      tipo: 'string',
+      requerido: false,
+      descripcion:
+        'Texto opcional para documentar la operación. El nombre visible del paso es el label principal.',
+    },
+  ],
+  productosTipicos: [
+    'Pegado de cinta bifaz',
+    'Plegado manual',
+    'Colocación de velcro',
+    'Control o retoque manual',
+  ],
 };
 
 const modificacion_pre: DefinicionFamilia = {
@@ -1538,6 +1652,7 @@ export const FAMILIAS: Record<FamiliaCodigo, DefinicionFamilia> = {
   perforado,
   corte_manual,
   laminado,
+  plastificado_pouch,
   barniz,
   acabado_decorativo,
   pintura_superficial,
@@ -1555,6 +1670,7 @@ export const FAMILIAS: Record<FamiliaCodigo, DefinicionFamilia> = {
   atado_banding,
   etiquetado_manual,
   control_calidad,
+  trabajo_manual,
   modificacion_pre,
   modificacion_post,
   envio,

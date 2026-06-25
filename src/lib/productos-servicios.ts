@@ -188,6 +188,7 @@ export interface ConfigPasoDetalle {
       codigo: string;
       nombre: string;
       plantilla: string;
+      parametrosTecnicosJson?: Record<string, unknown> | null;
       perfilesOperativos?: Array<{
         id: string;
         activo?: boolean;
@@ -293,6 +294,7 @@ export interface FamiliaListItem {
   nombre: string;
   categoria: string;
   descripcion?: string;
+  visibleEnSelector?: boolean;
   relacionMaquinaSoportada: string[];
   modoActivacionDefault: string;
   modosTiempoSoportados: string[];

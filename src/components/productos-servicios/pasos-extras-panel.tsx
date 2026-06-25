@@ -49,7 +49,9 @@ export function PasosExtrasPanel({ productoId, pasosExtras, catalogoFamilias }: 
   const [modoTiempo, setModoTiempo] = React.useState<"T-1" | "T-2" | "T-3" | "T-4">("T-2");
   const [agregando, setAgregando] = React.useState(false);
 
-  const familias = catalogoFamilias.familias;
+  const familias = catalogoFamilias.familias.filter(
+    (familia) => familia.visibleEnSelector !== false,
+  );
   const familiasPorCategoria = React.useMemo(() => {
     const map = new Map<string, typeof familias>();
     for (const f of familias) {

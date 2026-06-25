@@ -140,13 +140,16 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
   // Familias agrupadas por categoría para el selector
   const familiasPorCategoria = React.useMemo(() => {
     const map = new Map<string, typeof catalogoFamilias.familias>();
-    for (const f of catalogoFamilias.familias) {
+    const familiasUsadas = new Set(pasos.map((paso) => paso.familiaCodigo));
+    for (const f of catalogoFamilias.familias.filter(
+      (familia) => familia.visibleEnSelector !== false || familiasUsadas.has(familia.codigo),
+    )) {
       const arr = map.get(f.categoria) ?? [];
       arr.push(f);
       map.set(f.categoria, arr);
     }
     return map;
-  }, [catalogoFamilias]);
+  }, [catalogoFamilias, pasos]);
 
   const familiaNombre = React.useCallback(
     (codigo: string): string => {

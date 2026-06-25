@@ -65,6 +65,7 @@ const subfamiliaMateriaPrimaLabels: Record<SubfamiliaMateriaPrima, string> = {
   film_transferencia: "Film transferencia",
   papel_transferencia: "Papel transferencia",
   laminado_film: "Laminado film",
+  laminado_pouch: "Laminado pouch",
   quimico_acabado: "Químico acabado",
   auxiliar_proceso: "Auxiliar proceso",
   polvo_dtf: "Polvo DTF",

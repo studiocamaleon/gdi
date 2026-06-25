@@ -557,6 +557,36 @@ describe('MotorUniversalService — smoke tests', () => {
     );
   });
 
+  it('PPM en impresion por hoja calcula paginas A4 equivalentes por minuto', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      periodo: '2026-03',
+      jobContext: { cantidad: 300, caras: 1 },
+    });
+
+    expect(result.exitoso).toBe(true);
+    const prePrensa = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'pre_prensa',
+    );
+    const impresion = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'impresion_por_hoja',
+    );
+    expect(prePrensa).toBeDefined();
+    expect(impresion).toBeDefined();
+
+    const pliegos = (prePrensa!.outputsCanonicos as Record<string, unknown>)
+      .pliegos_calculados as number;
+    expect(pliegos).toBe(30);
+    expect(impresion!.tiempo!.runMin).toBeCloseTo(0.75, 2);
+    expect(impresion!.tiempo!.totalMin).toBe(8);
+  });
+
   it('F.2.6: Talonario con tipoCopia=3 multiplica el tiempo del paso impresión', async () => {
     if (!tenantId) return;
     const talonario = await prisma.producto.findFirstOrThrow({

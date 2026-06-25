@@ -939,11 +939,11 @@ export class MotorUniversalService {
     ) {
       return (
         this.numeroPositivo(jobContext.cantidadComercial) ??
-        this.numeroPositivo(jobContext.cantidadComercialPricing) ??
         this.numeroPositivo(jobContext.metrosLineales) ??
         this.numeroPositivo(jobContext.metroLineal) ??
         this.numeroPositivo(jobContext.ml) ??
         this.resolverMetrosLinealesDesdeNesting(pasosEjecutados) ??
+        this.numeroPositivo(jobContext.cantidadComercialPricing) ??
         cantidadFallback
       );
     }
@@ -1212,6 +1212,24 @@ export class MotorUniversalService {
     ) {
       errores.push(
         this.errorNestingLaminadoInvalido(paso, jobContext, materialPreliminar),
+      );
+      return {
+        rutaPasoId: paso.rutaPasoId,
+        rutaPasoOrden: paso.rutaPasoOrden,
+        familiaCodigo: paso.familiaCodigo,
+        configPasoId: paso.configPasoId,
+        activado: true,
+        costoTotal: 0,
+      };
+    }
+    if (
+      paso.familiaCodigo === 'plastificado_pouch' &&
+      materialPreliminar &&
+      paso.mecanismoCantidad === 'CALCULADO_POR_PASO' &&
+      !nestingDispatch
+    ) {
+      errores.push(
+        this.errorNestingPouchInvalido(paso, jobContext, materialPreliminar),
       );
       return {
         rutaPasoId: paso.rutaPasoId,
@@ -1692,7 +1710,13 @@ export class MotorUniversalService {
           paso,
           jobContext,
         );
-        runMin = (cantidadEfectiva / productividad) * 60;
+        runMin = this.calcularTiempoRunPorProductividad(
+          cantidadEfectiva,
+          productividad,
+          paso,
+          jobContext,
+          nestingDispatch,
+        );
       }
     }
 
@@ -1970,6 +1994,50 @@ export class MotorUniversalService {
       },
       sugerencia:
         'Verificá que impresión publique pliegos y medidas, y que el film tenga ancho en sus atributos.',
+    };
+  }
+
+  private errorNestingPouchInvalido(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    material: {
+      atributosVarianteJson?: Record<string, unknown> | null;
+    },
+  ): ErrorMotor {
+    const piezas = Array.isArray(jobContext.piezas) && jobContext.piezas.length > 0
+      ? jobContext.piezas
+      : jobContext.medidaCustomMm
+        ? [
+            {
+              cantidad: Number(jobContext.cantidad ?? 0),
+              anchoMm: jobContext.medidaCustomMm.anchoMm,
+              altoMm: jobContext.medidaCustomMm.altoMm,
+            },
+          ]
+        : [];
+    const pieza = piezas[0] ?? null;
+    const attrs = material.atributosVarianteJson ?? {};
+    const anchoPouchMm = Number(attrs.anchoMm ?? attrs.ancho ?? 0);
+    const altoPouchMm = Number(attrs.altoMm ?? attrs.largoMm ?? attrs.alto ?? 0);
+    const margenNoUsableMm = Number(attrs.margenNoUsableMm ?? 0);
+
+    return {
+      codigo: 'nesting_pouch_invalido',
+      severidad: 'ERROR',
+      mensaje:
+        'La pieza no entra en el pouch seleccionado considerando margen no usable y separación.',
+      rutaPasoId: paso.rutaPasoId,
+      rutaPasoOrden: paso.rutaPasoOrden,
+      familiaCodigo: paso.familiaCodigo,
+      contexto: {
+        piezaAnchoMm: pieza?.anchoMm ?? null,
+        piezaAltoMm: pieza?.altoMm ?? null,
+        anchoPouchMm,
+        altoPouchMm,
+        margenNoUsableMm,
+      },
+      sugerencia:
+        'Elegí un pouch más grande, reducí el margen no usable o ajustá la separación entre piezas.',
     };
   }
 
@@ -3218,6 +3286,76 @@ export class MotorUniversalService {
     return Number(jobContext.cantidad ?? 0);
   }
 
+  private calcularTiempoRunPorProductividad(
+    cantidadEfectiva: number,
+    productividad: number,
+    paso: PasoCargado,
+    jobContext: JobContext,
+    nestingDispatch: NestingDispatchResult | null,
+  ): number {
+    if (
+      !Number.isFinite(cantidadEfectiva) ||
+      cantidadEfectiva <= 0 ||
+      !Number.isFinite(productividad) ||
+      productividad <= 0
+    ) {
+      return 0;
+    }
+
+    const unidad = String(paso.perfil?.productivityUnit ?? '').toUpperCase();
+
+    if (unidad === 'PPM') {
+      const factorA4 = this.factorA4EquivalenteParaImpresionPorHoja(
+        paso,
+        jobContext,
+        nestingDispatch,
+      );
+      return (cantidadEfectiva * factorA4) / productividad;
+    }
+
+    if (
+      unidad === 'CORTES_MIN' ||
+      unidad === 'GOLPES_MIN' ||
+      unidad === 'PLIEGOS_MIN' ||
+      unidad === 'M_MIN'
+    ) {
+      return cantidadEfectiva / productividad;
+    }
+
+    return (cantidadEfectiva / productividad) * 60;
+  }
+
+  private factorA4EquivalenteParaImpresionPorHoja(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    nestingDispatch: NestingDispatchResult | null,
+  ): number {
+    if (paso.familiaCodigo !== 'impresion_por_hoja') {
+      return 1;
+    }
+
+    const sheet = nestingDispatch?.substrates.find(
+      (substrate): substrate is Extract<
+        (typeof nestingDispatch.substrates)[number],
+        { kind: 'sheet' }
+      > => substrate.kind === 'sheet',
+    );
+    const ctx = jobContext as Record<string, unknown>;
+    const anchoMm = Number(sheet?.widthMm ?? ctx.pliego_impresion_ancho_mm ?? 0);
+    const altoMm = Number(sheet?.heightMm ?? ctx.pliego_impresion_alto_mm ?? 0);
+    if (
+      !Number.isFinite(anchoMm) ||
+      anchoMm <= 0 ||
+      !Number.isFinite(altoMm) ||
+      altoMm <= 0
+    ) {
+      return 1;
+    }
+
+    const areaA4Mm2 = 210 * 297;
+    return Math.max(1, (anchoMm * altoMm) / areaA4Mm2);
+  }
+
   /**
    * G-F2 — Resuelve qué máquina usar cuando el paso tiene candidatas M-2.
    *
@@ -3273,6 +3411,10 @@ export class MotorUniversalService {
       perfilesCompatibles.length > 0
         ? perfilesCompatibles
         : elegida.perfilesOperativos;
+    const perfilPreservado = perfilesElegibles.find(
+      (perfil) => perfil.id === paso.perfilM1Id,
+    );
+    const perfilBase = perfilPreservado ?? perfilesElegibles[0];
 
     return {
       ...paso,
@@ -3289,21 +3431,21 @@ export class MotorUniversalService {
         cleanupMin: p.cleanupMin,
         detalleJson: p.detalleJson,
       })),
-      // Reset perfil M-1 (se vuelve a resolver con resolverPerfil sobre los
-      // perfiles de la nueva máquina).
-      perfil: perfilesElegibles[0]
+      // Mantener el perfil modelado cuando sigue disponible en la máquina
+      // elegida; si no existe, usar el primer perfil elegible.
+      perfil: perfilBase
         ? {
-            id: perfilesElegibles[0].id,
-            nombre: perfilesElegibles[0].nombre,
-            tipoPerfil: perfilesElegibles[0].tipoPerfil,
-            productivityValue: perfilesElegibles[0].productivityValue,
-            productivityUnit: perfilesElegibles[0].productivityUnit,
-            setupMin: perfilesElegibles[0].setupMin,
-            cleanupMin: perfilesElegibles[0].cleanupMin,
-            detalleJson: perfilesElegibles[0].detalleJson,
+            id: perfilBase.id,
+            nombre: perfilBase.nombre,
+            tipoPerfil: perfilBase.tipoPerfil,
+            productivityValue: perfilBase.productivityValue,
+            productivityUnit: perfilBase.productivityUnit,
+            setupMin: perfilBase.setupMin,
+            cleanupMin: perfilBase.cleanupMin,
+            detalleJson: perfilBase.detalleJson,
           }
         : paso.perfil,
-      perfilM1Id: perfilesElegibles[0]?.id ?? paso.perfilM1Id,
+      perfilM1Id: perfilBase?.id ?? paso.perfilM1Id,
     };
   }
 

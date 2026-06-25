@@ -1,8 +1,34 @@
 import { ApiError, apiRequest } from "@/lib/api";
 import { ClienteDetalle, ClientePayload } from "@/lib/clientes";
 
-export async function getClientes() {
-  const res = await apiRequest<{ data: ClienteDetalle[] }>("/clientes?limit=200");
+type ClientesQuery = {
+  q?: string;
+  page?: number;
+  limit?: number;
+};
+
+export type ClientesListResponse = {
+  data: ClienteDetalle[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+};
+
+function buildClientesPath(params: ClientesQuery = {}) {
+  const searchParams = new URLSearchParams();
+  searchParams.set("limit", String(params.limit ?? 200));
+  if (params.page) searchParams.set("page", String(params.page));
+  if (params.q?.trim()) searchParams.set("q", params.q.trim());
+  return `/clientes?${searchParams.toString()}`;
+}
+
+export async function listClientes(params: ClientesQuery = {}) {
+  return apiRequest<ClientesListResponse>(buildClientesPath(params));
+}
+
+export async function getClientes(params: ClientesQuery = {}) {
+  const res = await listClientes(params);
   return res.data;
 }
 

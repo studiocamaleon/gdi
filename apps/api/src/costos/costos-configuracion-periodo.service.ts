@@ -50,6 +50,8 @@ export class CostosConfiguracionPeriodoService {
       centro.tarifasPeriodo.find(
         (tarifa) => tarifa.estado === EstadoTarifaCentroCostoPeriodo.PUBLICADA,
       ) ?? null;
+    const costoMensualAbsorbidoReparto =
+      repartoPeriodo.absorbidoByCentroId.get(id) ?? new Prisma.Decimal(0);
 
     return {
       periodo: normalizedPeriodo,
@@ -82,10 +84,14 @@ export class CostosConfiguracionPeriodoService {
       tarifaPublicada: tarifaPublicada
         ? this.mapper.toTarifaResponse(tarifaPublicada)
         : null,
+      repartoAbsorbido: {
+        total: this.mapper.decimalToNumber(costoMensualAbsorbidoReparto),
+        desglose: repartoPeriodo.desgloseByCentroId.get(id) ?? [],
+      },
       advertencias: this.tarifas.buildAdvertencias(
         centro,
         normalizedPeriodo,
-        repartoPeriodo.absorbidoByCentroId.get(id),
+        costoMensualAbsorbidoReparto,
       ),
       empleadosDisponibilidad,
     };
@@ -824,12 +830,14 @@ export class CostosConfiguracionPeriodoService {
     const valorCompra = new Prisma.Decimal(item.valorCompra);
     const valorResidual = new Prisma.Decimal(item.valorResidual);
     const vidaUtilMeses = Math.max(1, Math.round(item.vidaUtilMeses));
-    const potenciaNominalKw = new Prisma.Decimal(item.potenciaNominalKw);
-    const factorCargaPct = new Prisma.Decimal(item.factorCargaPct);
-    const tarifaEnergiaKwh = new Prisma.Decimal(item.tarifaEnergiaKwh);
-    const horasProgramadasMes = new Prisma.Decimal(item.horasProgramadasMes);
-    const disponibilidadPct = new Prisma.Decimal(item.disponibilidadPct);
-    const eficienciaPct = new Prisma.Decimal(item.eficienciaPct);
+    const potenciaNominalKw = new Prisma.Decimal(item.potenciaNominalKw ?? 0);
+    const factorCargaPct = new Prisma.Decimal(item.factorCargaPct ?? 100);
+    const tarifaEnergiaKwh = new Prisma.Decimal(item.tarifaEnergiaKwh ?? 0);
+    const horasProgramadasMes = new Prisma.Decimal(
+      item.horasProgramadasMes ?? 160,
+    );
+    const disponibilidadPct = new Prisma.Decimal(item.disponibilidadPct ?? 85);
+    const eficienciaPct = new Prisma.Decimal(item.eficienciaPct ?? 85);
     const mantenimientoMensual = new Prisma.Decimal(item.mantenimientoMensual);
     const segurosMensual = new Prisma.Decimal(item.segurosMensual);
     const otrosFijosMensual = new Prisma.Decimal(item.otrosFijosMensual);

@@ -43,12 +43,7 @@ const RULES: Record<PlantillaMaquinariaDto, MachineTemplateRule> = {
   // Si geometria=ROLLO: anchoMinRolloMm, anchoMaxRolloMm.
   // Si geometria=MESA_EXTENSORA: anchoMesaMm, largoMesaMm, alturaMaxCabezalMm.
   [PlantillaMaquinariaDto.impresora_gran_formato_por_area]: {
-    requiredMachineKeys: [
-      'anchoUtil',
-      'tecnologia',
-      'geometria',
-      'margenesNoImprimiblesMm',
-    ],
+    requiredMachineKeys: ['tecnologia', 'geometria', 'margenesNoImprimiblesMm'],
   },
 
   // ─── §7 GUILLOTINA ──────────────────────────────────────────────

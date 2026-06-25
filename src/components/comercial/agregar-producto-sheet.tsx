@@ -29,6 +29,7 @@ import {
   type CotizarResponse,
 } from "@/lib/productos-servicios-api";
 import type {
+  ConfigPasoDetalle,
   ProductoDetalle,
   ProductoListItem,
   RutaAlternativaDetalle,
@@ -43,6 +44,8 @@ import {
   getSlotMaterialVariantSortValue,
   sortSlotMaterialVariantsByThickness,
 } from "@/lib/materiales-slot-display";
+import { evaluarJsonLogicBoolean } from "@/lib/json-logic";
+import { getMachineTechnology, machineTechnologyLabel } from "@/lib/maquinaria-tecnologias";
 
 type CatalogSpec = {
   key: string;
@@ -58,6 +61,7 @@ type CatalogAdicional = {
   monto?: number;
   descripcion?: string;
   origen?: "paso" | "cargo";
+  configPasoId?: string;
 };
 
 type CatalogProduct = {
@@ -96,6 +100,7 @@ type SlotComercialElige = {
   configPasoId: string;
   familiaCodigo: string;
   modoActivacion: string | null;
+  condicionActivacionJson: unknown;
   modoSeleccion: string;
   formula: string;
   slotCodigo: string;
@@ -125,6 +130,7 @@ type ModoColorComercial = {
   configPasoId: string;
   familiaCodigo: string;
   modoActivacion: string | null;
+  condicionActivacionJson: unknown;
   options: Array<{
     value: string;
     label: string;
@@ -408,6 +414,31 @@ function isExecutableConfigPaso(
   return config.rutaPaso.activo && config.modoActivacion !== "NO_EJECUTAR";
 }
 
+function isConfigPasoVisibleForContext(
+  config: ConfigPasoDetalle,
+  motorConfig: MotorConfigState,
+  ruleContext: Record<string, unknown>,
+) {
+  if (!isExecutableConfigPaso(config)) return false;
+  const modo = config.modoActivacion ?? "OBLIGATORIO";
+  if (modo === "OPCIONAL") return Boolean(motorConfig.opcionalesActivados[config.id]);
+  if (modo === "CONDICIONAL") {
+    return evaluarJsonLogicBoolean(config.condicionActivacionJson, ruleContext, false);
+  }
+  return modo === "OBLIGATORIO";
+}
+
+function isConfigPasoAvailableForOptionalToggle(
+  config: ConfigPasoDetalle,
+  ruleContext: Record<string, unknown>,
+) {
+  if (!isExecutableConfigPaso(config)) return false;
+  if (config.modoActivacion === "CONDICIONAL") {
+    return evaluarJsonLogicBoolean(config.condicionActivacionJson, ruleContext, false);
+  }
+  return true;
+}
+
 function mapSlotMaterial(
   config: RutaAlternativaDetalle["configPasos"][number],
   slot: RutaAlternativaDetalle["configPasos"][number]["slotsMateriales"][number],
@@ -416,6 +447,7 @@ function mapSlotMaterial(
           configPasoId: config.id,
           familiaCodigo: config.rutaPaso.familiaCodigo,
           modoActivacion: config.modoActivacion,
+          condicionActivacionJson: config.condicionActivacionJson,
           modoSeleccion: slot.modoSeleccion,
           formula: slot.formula,
           slotCodigo: slot.slotCodigo,
@@ -462,10 +494,14 @@ function mapSlotMaterial(
         };
 }
 
-function getSlotsComercialElige(ruta: RutaAlternativaDetalle | null) {
+function getSlotsComercialElige(
+  ruta: RutaAlternativaDetalle | null,
+  includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
+) {
   return (
     ruta?.configPasos
       .filter(isExecutableConfigPaso)
+      .filter(includeConfig)
       .flatMap((config) =>
         config.slotsMateriales
           .filter((slot) => slot.modoSeleccion === "COMERCIAL_ELIGE")
@@ -474,10 +510,14 @@ function getSlotsComercialElige(ruta: RutaAlternativaDetalle | null) {
   );
 }
 
-function getSlotsMaterialesLinealDirecto(ruta: RutaAlternativaDetalle | null) {
+function getSlotsMaterialesLinealDirecto(
+  ruta: RutaAlternativaDetalle | null,
+  includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
+) {
   return (
     ruta?.configPasos
       .filter(isExecutableConfigPaso)
+      .filter(includeConfig)
       .flatMap((config) =>
         config.slotsMateriales
           .filter(
@@ -503,15 +543,16 @@ function getSlotsParaCotizacion(
   ruta: RutaAlternativaDetalle | null,
   productoDetalle: ProductoDetalle | null,
   config: Pick<MotorConfigState, "modoCotizacionLineal">,
+  includeConfig?: (config: ConfigPasoDetalle) => boolean,
 ) {
-  const slotsComerciales = getSlotsComercialElige(ruta);
+  const slotsComerciales = getSlotsComercialElige(ruta, includeConfig);
   if (
     isMetroLinealConMedidasVariables(productoDetalle) &&
     config.modoCotizacionLineal === "directo"
   ) {
     return mergeSlotsMateriales([
       ...slotsComerciales,
-      ...getSlotsMaterialesLinealDirecto(ruta),
+      ...getSlotsMaterialesLinealDirecto(ruta, includeConfig),
     ]);
   }
   return slotsComerciales;
@@ -573,10 +614,14 @@ function normalizeModoColor(value: unknown): string | undefined {
   return value.trim();
 }
 
-function getModosColorComercial(ruta: RutaAlternativaDetalle | null) {
+function getModosColorComercial(
+  ruta: RutaAlternativaDetalle | null,
+  includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
+) {
   return (
     ruta?.configPasos
       .filter(isExecutableConfigPaso)
+      .filter(includeConfig)
       .map((config) => {
         const modoConfig = getModoColorConfig(config.paramsPasoJson);
         const allowedModes = Array.isArray(modoConfig.allowedModes)
@@ -597,6 +642,7 @@ function getModosColorComercial(ruta: RutaAlternativaDetalle | null) {
           configPasoId: config.id,
           familiaCodigo: config.rutaPaso.familiaCodigo,
           modoActivacion: config.modoActivacion,
+          condicionActivacionJson: config.condicionActivacionJson,
           options,
           defaultMode: normalizeModoColor(modoConfig.defaultMode),
         };
@@ -606,17 +652,64 @@ function getModosColorComercial(ruta: RutaAlternativaDetalle | null) {
   );
 }
 
-function getPasosConCandidatas(ruta: RutaAlternativaDetalle | null) {
+type MaquinaCandidataComercial = NonNullable<ConfigPasoDetalle["maquinasCandidatas"]>[number];
+
+type TecnologiaCandidataComercial = {
+  value: string;
+  label: string;
+  candidatas: MaquinaCandidataComercial[];
+};
+
+function getCandidateTechnology(candidate: MaquinaCandidataComercial) {
+  return getMachineTechnology(candidate.maquina) ?? "sin_tecnologia";
+}
+
+function getPreferredCandidate(candidates: MaquinaCandidataComercial[]) {
+  return candidates.find((candidate) => candidate.esPreferida) ?? candidates[0] ?? null;
+}
+
+function getPasosConTecnologias(
+  ruta: RutaAlternativaDetalle | null,
+  includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
+) {
   return (
     ruta?.configPasos
       .filter(isExecutableConfigPaso)
+      .filter(includeConfig)
       .filter((config) => (config.maquinasCandidatas?.length ?? 0) > 1)
       .map((config) => ({
         configPasoId: config.id,
         familiaCodigo: config.rutaPaso.familiaCodigo,
-        candidatas: config.maquinasCandidatas ?? [],
+        tecnologias: Array.from(
+          (config.maquinasCandidatas ?? []).reduce((map, candidate) => {
+            const value = getCandidateTechnology(candidate);
+            const current = map.get(value);
+            if (current) {
+              current.candidatas.push(candidate);
+            } else {
+              map.set(value, {
+                value,
+                label: machineTechnologyLabel(candidate.maquina),
+                candidatas: [candidate],
+              });
+            }
+            return map;
+          }, new Map<string, TecnologiaCandidataComercial>()).values(),
+        ),
       })) ?? []
   );
+}
+
+function getActiveMachineForConfig(
+  config: ConfigPasoDetalle,
+  motorConfig: MotorConfigState,
+) {
+  const candidates = config.maquinasCandidatas ?? [];
+  const selectedId = motorConfig.seleccionMaquina[config.id];
+  const selected = selectedId
+    ? candidates.find((candidate) => candidate.maquinaId === selectedId)
+    : null;
+  return selected?.maquina ?? getPreferredCandidate(candidates)?.maquina ?? config.maquinaM1;
 }
 
 function getProductoNecesitaInstalacion(producto: ProductoDetalle | null) {
@@ -639,19 +732,17 @@ function getSlotsOpcionalesPorPaso(slots: SlotComercialElige[]) {
 function isActiveConfigPaso(
   config: RutaAlternativaDetalle["configPasos"][number],
   motorConfig: MotorConfigState,
+  ruleContext: Record<string, unknown>,
 ) {
-  return (
-    isExecutableConfigPaso(config) &&
-    (config.modoActivacion !== "OPCIONAL" ||
-      Boolean(motorConfig.opcionalesActivados[config.id]))
-  );
+  return isConfigPasoVisibleForContext(config, motorConfig, ruleContext);
 }
 
 function getActiveConfigPasos(
   ruta: RutaAlternativaDetalle | null,
   motorConfig: MotorConfigState,
+  ruleContext: Record<string, unknown>,
 ) {
-  return ruta?.configPasos.filter((config) => isActiveConfigPaso(config, motorConfig)) ?? [];
+  return ruta?.configPasos.filter((config) => isActiveConfigPaso(config, motorConfig, ruleContext)) ?? [];
 }
 
 function formatNumberForSpec(value: number) {
@@ -766,42 +857,36 @@ function getSelectedMaterialSummaries(
     );
 }
 
-const IMPRESSION_TECH_LABELS: Record<string, string> = {
-  LATEX: "Látex",
-  SOLVENTE: "Solvente",
-  UV: "UV",
-  SUBLIMACION: "Sublimación",
-  DTF_UV: "DTF UV",
-  DTF_TEXTIL: "DTF textil",
-};
-
-function getMachineTemplate(config: RutaAlternativaDetalle["configPasos"][number]) {
-  return config.maquinaM1?.plantilla?.toUpperCase() ?? "";
+function getMachineTemplate(
+  config: RutaAlternativaDetalle["configPasos"][number],
+  motorConfig: MotorConfigState,
+) {
+  return getActiveMachineForConfig(config, motorConfig)?.plantilla?.toUpperCase() ?? "";
 }
 
 function getImpressionProcessLabel(
   config: RutaAlternativaDetalle["configPasos"][number],
+  motorConfig: MotorConfigState,
 ) {
-  const tecnologia = config.maquinaM1?.parametrosTecnicosJson?.tecnologia;
-  const normalizedTech =
-    typeof tecnologia === "string" ? tecnologia.trim().toUpperCase() : "";
-  const techLabel = IMPRESSION_TECH_LABELS[normalizedTech];
+  const machine = getActiveMachineForConfig(config, motorConfig);
+  const techLabel = machine ? machineTechnologyLabel(machine) : null;
   return techLabel ? `Impresión ${techLabel}` : "Impresión";
 }
 
 function getProcessLabels(
   rutaSeleccionada: RutaAlternativaDetalle | null,
   config: MotorConfigState,
+  ruleContext: Record<string, unknown>,
 ) {
   const labels: string[] = [];
-  for (const paso of getActiveConfigPasos(rutaSeleccionada, config)) {
+  for (const paso of getActiveConfigPasos(rutaSeleccionada, config, ruleContext)) {
     const familia = paso.rutaPaso.familiaCodigo;
-    const template = getMachineTemplate(paso);
+    const template = getMachineTemplate(paso, config);
     if (
       familia.startsWith("impresion_") ||
       template.includes("IMPRESORA")
     ) {
-      labels.push(getImpressionProcessLabel(paso));
+      labels.push(getImpressionProcessLabel(paso, config));
       continue;
     }
     if (familia.includes("laser") || template.includes("LASER")) {
@@ -818,6 +903,8 @@ function getProcessLabels(
 function getOpcionales(
   producto: ProductoListItem | ProductoDetalle,
   rutaSeleccionada?: RutaAlternativaDetalle | null,
+  motorConfig?: MotorConfigState,
+  ruleContext: Record<string, unknown> = {},
 ): CatalogAdicional[] {
   const opcionales = new Map<string, CatalogAdicional>();
 
@@ -840,21 +927,33 @@ function getOpcionales(
     for (const ruta of rutas) {
       for (const config of ruta.configPasos) {
         if (!isExecutableConfigPaso(config)) continue;
+        const configAvailable = isConfigPasoAvailableForOptionalToggle(
+          config,
+          ruleContext,
+        );
         if (config.modoActivacion === "OPCIONAL") {
-          opcionales.set(config.id, {
-            code: config.id,
-            name: humanizeCodigo(config.rutaPaso.familiaCodigo),
-            descripcion: "Paso productivo opcional.",
-            origen: "paso",
-          });
+          if (configAvailable) {
+            opcionales.set(config.id, {
+              code: config.id,
+              name: humanizeCodigo(config.rutaPaso.familiaCodigo),
+              descripcion: "Paso productivo opcional.",
+              origen: "paso",
+              configPasoId: config.id,
+            });
+          }
         }
         for (const cargo of config.cargosDirectosPaso) {
           if (cargo.modoActivacion !== "OPCIONAL") continue;
+          const parentActive = motorConfig
+            ? isConfigPasoVisibleForContext(config, motorConfig, ruleContext)
+            : configAvailable;
+          if (!parentActive) continue;
           opcionales.set(cargo.id, {
             code: cargo.id,
             name: cargo.cargoDirectoCatalogo.nombre,
             descripcion: "Cargo directo opcional del paso.",
             origen: "cargo",
+            configPasoId: config.id,
           });
         }
       }
@@ -1057,6 +1156,7 @@ function buildJobContext(
   config: MotorConfigState,
   qty: number,
   slotsComercialElige: SlotComercialElige[],
+  includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
 ) {
   const medidaPredefinida = getSelectedPredefinedMeasure(
     productoDetalle,
@@ -1182,7 +1282,22 @@ function buildJobContext(
   }
 
   const rutaSel = getRutaSeleccionada(productoDetalle, config.rutaAlternativaId);
-  const modosColorComercial = getModosColorComercial(rutaSel).filter(
+  const tecnologiasActivas = new Set<string>();
+  for (const configPaso of rutaSel?.configPasos ?? []) {
+    if (!includeConfig(configPaso)) continue;
+    const machine = getActiveMachineForConfig(configPaso, config);
+    if (!machine) continue;
+    const technology = getMachineTechnology(machine);
+    if (!technology) continue;
+    ctx[`tecnologia_${configPaso.id}`] = technology;
+    ctx[`tecnologia_${configPaso.rutaPasoId}`] = technology;
+    tecnologiasActivas.add(technology);
+  }
+  if (tecnologiasActivas.size === 1) {
+    ctx.tecnologia = Array.from(tecnologiasActivas)[0];
+  }
+
+  const modosColorComercial = getModosColorComercial(rutaSel, includeConfig).filter(
     (modo) =>
       modo.modoActivacion !== "OPCIONAL" ||
       Boolean(config.opcionalesActivados[modo.configPasoId]),
@@ -1233,12 +1348,23 @@ function calcularCantidadComercial(
   return qty;
 }
 
+function getCantidadDesdeNestingLineal(cotizacion: CotizacionExitosa) {
+  for (const paso of cotizacion.pasos) {
+    const nesting = paso.nestingResult;
+    if (nesting?.unidad !== "m_lineales") continue;
+    const cantidad = Number(nesting.cantidadCalculada);
+    if (Number.isFinite(cantidad) && cantidad > 0) return cantidad;
+  }
+  return null;
+}
+
 function buildPresentableSpecs(
   product: CatalogProduct,
   productoDetalle: ProductoDetalle | null,
   config: MotorConfigState,
   specs: Record<string, string>,
   slotsComercialElige: SlotComercialElige[],
+  ruleContext: Record<string, unknown>,
 ) {
   const base = Object.fromEntries(
     product.specs.map((spec) => [spec.key, specs[spec.key] ?? spec.def]),
@@ -1253,7 +1379,7 @@ function buildPresentableSpecs(
   const hardcodedMaterials =
     rutaSeleccionada?.configPasos
       .filter(
-        (paso) => isExecutableConfigPaso(paso) && paso.modoActivacion !== "OPCIONAL",
+        (paso) => isConfigPasoVisibleForContext(paso, config, ruleContext),
       )
       .flatMap((paso) => paso.slotsMateriales)
       .filter(
@@ -1312,7 +1438,9 @@ function buildPresentableSpecs(
   if (hasSpec("caras") || product.subcategoriaComercialCodigo === "tarjetas") {
     setSpec("caras", config.caras === 2 ? "Doble faz" : "Simple faz");
   }
-  const modosColor = getModosColorComercial(rutaSeleccionada);
+  const modosColor = getModosColorComercial(rutaSeleccionada, (paso) =>
+    isConfigPasoVisibleForContext(paso, config, ruleContext),
+  );
   const selectedModoColorLabels = modosColor
     .filter(
       (modo) =>
@@ -1338,7 +1466,7 @@ function buildPresentableSpecs(
     setSpec("color", selectedModoColorLabels.join(" · "));
     base.modo_color = selectedModoColorLabels.join(" · ");
   }
-  const processLabels = getProcessLabels(rutaSeleccionada, config);
+  const processLabels = getProcessLabels(rutaSeleccionada, config, ruleContext);
   if (processLabels.length > 0) {
     const proceso = processLabels.join(" / ");
     setSpec("tecnologia", proceso);
@@ -1366,7 +1494,7 @@ function buildPresentableSpecs(
   return base;
 }
 
-function hasUsefulSpecValue(value: string | undefined) {
+function hasUsefulSpecValue(value: string | undefined): value is string {
   if (!value) return false;
   const normalized = value.trim().toLowerCase();
   return (
@@ -1376,13 +1504,26 @@ function hasUsefulSpecValue(value: string | undefined) {
   );
 }
 
+function isModoColorDuplicateSpec(
+  key: string,
+  value: string | undefined,
+  specs?: Record<string, string>,
+) {
+  if (!["impresion", "impresion_color", "color"].includes(key)) return false;
+  const modoColor = specs?.modo_color;
+  if (!hasUsefulSpecValue(value) || !hasUsefulSpecValue(modoColor)) return false;
+  return value.trim().toLowerCase() === modoColor.trim().toLowerCase();
+}
+
 function shouldShowCommercialSpec(
   spec: CatalogSpec,
   value: string | undefined,
   product: Pick<CatalogProduct, "real">,
+  specs?: Record<string, string>,
 ) {
   const hiddenKeys = new Set(["tipo_pieza", "tipoPieza", "tipo_de_pieza"]);
   if (hiddenKeys.has(spec.key)) return false;
+  if (isModoColorDuplicateSpec(spec.key, value, specs)) return false;
   if (spec.key === "uso_aplicacion" && value?.trim().toLowerCase() === "interior / exterior") {
     return false;
   }
@@ -1398,6 +1539,7 @@ function buildItem(
     productoDetalle: ProductoDetalle | null;
     motorConfig: MotorConfigState;
     slotsComercialElige: SlotComercialElige[];
+    ruleContext: Record<string, unknown>;
     cotizacion?: CotizarResponse | null;
     notaProduccion?: string;
     itemId?: string;
@@ -1421,6 +1563,7 @@ function buildItem(
         options.motorConfig,
         specs,
         options.slotsComercialElige,
+        options.ruleContext,
       )
     : Object.fromEntries(
         product.specs.map((spec) => [spec.key, specs[spec.key] ?? spec.def]),
@@ -1439,13 +1582,22 @@ function buildItem(
   const impuestoPorcentaje =
     subtotal > 0 ? (impuestoMonto / subtotal) * 100 : product.impuestoPct;
   const cantidadComercial =
-    cotizacion.cantidadComercialPricing ??
-    calcularCantidadComercial(
-      product,
-      options?.productoDetalle ?? null,
-      options?.motorConfig,
-      qty,
-    );
+    product.unidad === "ml"
+      ? getCantidadDesdeNestingLineal(cotizacion) ??
+        cotizacion.cantidadComercialPricing ??
+        calcularCantidadComercial(
+          product,
+          options?.productoDetalle ?? null,
+          options?.motorConfig,
+          qty,
+        )
+      : cotizacion.cantidadComercialPricing ??
+        calcularCantidadComercial(
+          product,
+          options?.productoDetalle ?? null,
+          options?.motorConfig,
+          qty,
+        );
   const jobContext = options
     ? buildJobContext(
         options.productoDetalle,
@@ -1462,7 +1614,7 @@ function buildItem(
     key: spec.key,
     label: spec.label,
     tipo: spec.type,
-    visible: shouldShowCommercialSpec(spec, especificaciones[spec.key], product),
+    visible: shouldShowCommercialSpec(spec, especificaciones[spec.key], product, especificaciones),
     orden: (index + 1) * 10,
   }));
   if (especificaciones.modo_color && !atributosSchema.some((attr) => attr.key === "modo_color")) {
@@ -1804,20 +1956,36 @@ function ApConfigStep({
   const cotizacionExitosa = getCotizacionExitosa(cotizacion);
   const cotizacionErrores = cotizacion && !cotizacion.exitoso ? cotizacion.errores : [];
   const rutaSel = getRutaSeleccionada(productoDetalle, motorConfig.rutaAlternativaId);
+  const slotsParaReglas = React.useMemo(
+    () =>
+      getSlotsParaCotizacion(rutaSel, productoDetalle, {
+        modoCotizacionLineal: motorConfig.modoCotizacionLineal,
+      }),
+    [motorConfig.modoCotizacionLineal, productoDetalle, rutaSel],
+  );
+  const ruleContext = React.useMemo(
+    () => buildJobContext(productoDetalle, motorConfig, qty, slotsParaReglas),
+    [motorConfig, productoDetalle, qty, slotsParaReglas],
+  );
+  const includeVisibleConfig = React.useCallback(
+    (config: ConfigPasoDetalle) =>
+      isConfigPasoVisibleForContext(config, motorConfig, ruleContext),
+    [motorConfig, ruleContext],
+  );
   const opcionalesRuta = React.useMemo(
     () =>
       product.real && productoDetalle
-        ? getOpcionales(productoDetalle, rutaSel)
+        ? getOpcionales(productoDetalle, rutaSel, motorConfig, ruleContext)
         : product.adicionales,
-    [product, productoDetalle, rutaSel],
+    [motorConfig, product, productoDetalle, rutaSel, ruleContext],
   );
   const slotsComercialElige = React.useMemo(
-    () => getSlotsComercialElige(rutaSel),
-    [rutaSel],
+    () => getSlotsComercialElige(rutaSel, includeVisibleConfig),
+    [includeVisibleConfig, rutaSel],
   );
   const slotsLinealesDirectos = React.useMemo(
-    () => getSlotsMaterialesLinealDirecto(rutaSel),
-    [rutaSel],
+    () => getSlotsMaterialesLinealDirecto(rutaSel, includeVisibleConfig),
+    [includeVisibleConfig, rutaSel],
   );
   const slotsMaterialesPrincipales = slotsComercialElige.filter(
     (slot) => slot.modoActivacion !== "OPCIONAL",
@@ -1841,11 +2009,13 @@ function ApConfigStep({
         ),
     [adi, opcionalesRuta, product.real, slotsMaterialesOpcionalesPorPaso],
   );
-  const pasosConCandidatas = getPasosConCandidatas(rutaSel);
-  const modosColorComercial = getModosColorComercial(rutaSel).filter(
-    (modo) =>
-      modo.modoActivacion !== "OPCIONAL" ||
-      Boolean(motorConfig.opcionalesActivados[modo.configPasoId]),
+  const pasosConTecnologias = React.useMemo(
+    () => getPasosConTecnologias(rutaSel, includeVisibleConfig),
+    [includeVisibleConfig, rutaSel],
+  );
+  const modosColorComercial = React.useMemo(
+    () => getModosColorComercial(rutaSel, includeVisibleConfig),
+    [includeVisibleConfig, rutaSel],
   );
   const modosColorVisibles = modosColorComercial;
   const necesitaInstalacion = getProductoNecesitaInstalacion(productoDetalle);
@@ -1951,6 +2121,69 @@ function ApConfigStep({
     }
   }, [adi, opcionalesRuta, product.real, setMotorConfig, toggleAdi]);
 
+  React.useEffect(() => {
+    if (!product.real) return;
+    const optionalCodes = new Set(opcionalesRuta.map((opcional) => opcional.code));
+    const materialKeys = new Set(
+      slotsComercialElige.map((slot) =>
+        materialSelectionKey(slot.configPasoId, slot.slotCodigo),
+      ),
+    );
+    const machineKeys = new Set(pasosConTecnologias.map((paso) => paso.configPasoId));
+    const colorKeys = new Set(modosColorComercial.map((modo) => modo.configPasoId));
+
+    setMotorConfig((current) => {
+      const opcionalesActivados = Object.fromEntries(
+        Object.entries(current.opcionalesActivados).filter(([key]) =>
+          optionalCodes.has(key),
+        ),
+      );
+      const seleccionMaterial = Object.fromEntries(
+        Object.entries(current.seleccionMaterial).filter(([key]) =>
+          materialKeys.has(key),
+        ),
+      );
+      const seleccionMaquina = Object.fromEntries(
+        Object.entries(current.seleccionMaquina).filter(([key]) =>
+          machineKeys.has(key),
+        ),
+      );
+      const seleccionModoColor = Object.fromEntries(
+        Object.entries(current.seleccionModoColor).filter(([key]) =>
+          colorKeys.has(key),
+        ),
+      );
+
+      if (
+        Object.keys(opcionalesActivados).length ===
+          Object.keys(current.opcionalesActivados).length &&
+        Object.keys(seleccionMaterial).length ===
+          Object.keys(current.seleccionMaterial).length &&
+        Object.keys(seleccionMaquina).length ===
+          Object.keys(current.seleccionMaquina).length &&
+        Object.keys(seleccionModoColor).length ===
+          Object.keys(current.seleccionModoColor).length
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        opcionalesActivados,
+        seleccionMaterial,
+        seleccionMaquina,
+        seleccionModoColor,
+      };
+    });
+  }, [
+    modosColorComercial,
+    opcionalesRuta,
+    pasosConTecnologias,
+    product.real,
+    setMotorConfig,
+    slotsComercialElige,
+  ]);
+
   const setMaterial = React.useCallback(
     (key: string, value: string) => {
       setMotorConfig((current) => ({
@@ -1995,8 +2228,17 @@ function ApConfigStep({
     value: string,
     options: Array<{ value: string; label: string }>,
     onChange: (value: string) => void,
+    equalWidth = false,
   ) => (
-    <div className="ap-segmented" role="radiogroup">
+    <div
+      className={`ap-segmented${equalWidth ? " ap-segmented-equal" : ""}${options.length === 1 ? " ap-segmented-single" : ""}`}
+      role="radiogroup"
+      style={
+        equalWidth
+          ? ({ "--ap-segmented-count": options.length } as React.CSSProperties)
+          : undefined
+      }
+    >
       {options.map((option) => {
         const selected = option.value === value;
         return (
@@ -2321,7 +2563,11 @@ function ApConfigStep({
     if (usesExactPricingQuantities) {
       return (
         <div className="ap-qty-line">
-          <div className="ap-qty-shortcuts ap-qty-options" aria-label="Cantidades permitidas">
+          <div
+            className="ap-qty-shortcuts ap-qty-options ap-qty-options-equal"
+            aria-label="Cantidades permitidas"
+            style={{ "--ap-qty-count": exactPricingQuantities.length } as React.CSSProperties}
+          >
             {exactPricingQuantities.map((value) => (
               <button
                 key={value}
@@ -2495,7 +2741,7 @@ function ApConfigStep({
         </div>
 
         {product.real && productoDetalle?.rutasAlternativas.length ? (
-          <div className="ap-specs">
+          <div className="ap-specs ap-specs-calculo">
             {productoDetalle.rutasAlternativas.length > 1 ? (
               <div className="ap-spec">
                 <label>Seleccionar ruta de producción</label>
@@ -2565,6 +2811,7 @@ function ApConfigStep({
                         label: medidaLabel(medida),
                       })),
                       (value) => updateMotorConfig({ medidaPredefinidaId: value }),
+                      true,
                     )}
                   </div>
                 ) : null}
@@ -2587,6 +2834,7 @@ function ApConfigStep({
                   ],
                   (value) =>
                     updateMotorConfig({ caras: Number(value) as 1 | 2 }),
+                  true,
                 )}
               </div>
             ) : null}
@@ -2657,6 +2905,7 @@ function ApConfigStep({
                         value,
                         modoOptions,
                         (nextValue) => setModoColor(modo.configPasoId, nextValue),
+                        true,
                       )}
                 </div>
               );
@@ -2664,24 +2913,59 @@ function ApConfigStep({
 
             {slotsMaterialesGenerales.map((slot) => renderMaterialSelect(slot))}
 
-            {pasosConCandidatas.map((paso) => {
-              const selectedId = motorConfig.seleccionMaquina[paso.configPasoId] ?? "";
+            {pasosConTecnologias.map((paso) => {
+              const allCandidates = paso.tecnologias.flatMap((tech) => tech.candidatas);
+              const selectedId =
+                motorConfig.seleccionMaquina[paso.configPasoId] ||
+                getPreferredCandidate(allCandidates)?.maquinaId ||
+                "";
+              const selectedCandidate =
+                allCandidates.find((candidate) => candidate.maquinaId === selectedId) ??
+                getPreferredCandidate(allCandidates);
+              const selectedTechnologyValue = selectedCandidate
+                ? getCandidateTechnology(selectedCandidate)
+                : paso.tecnologias[0]?.value;
+              const selectedTechnology =
+                paso.tecnologias.find((tech) => tech.value === selectedTechnologyValue) ??
+                paso.tecnologias[0];
+              const techOptions = paso.tecnologias.map((tech) => ({
+                value: tech.value,
+                label: tech.label,
+                code: `${tech.candidatas.length} máquina${tech.candidatas.length === 1 ? "" : "s"}`,
+              }));
+              const setTechnology = (technologyValue: string) => {
+                const tech = paso.tecnologias.find((item) => item.value === technologyValue);
+                const candidate = tech ? getPreferredCandidate(tech.candidatas) : null;
+                if (candidate) setMaquina(paso.configPasoId, candidate.maquinaId);
+              };
               return (
                 <div className="ap-spec" key={paso.configPasoId}>
-                  <label>{humanizeCodigo(paso.familiaCodigo)} · máquina</label>
-                  <select
-                    className="ap-native-select"
-                    value={selectedId}
-                    onChange={(event) => setMaquina(paso.configPasoId, event.target.value)}
-                  >
-                    <option value="">Usar preferida</option>
-                    {paso.candidatas.map((candidata) => (
-                      <option key={candidata.maquinaId} value={candidata.maquinaId}>
-                        {candidata.maquina.nombre}
-                        {candidata.esPreferida ? " · preferida" : ""}
-                      </option>
-                    ))}
-                  </select>
+                  <label>
+                    {pasosConTecnologias.length === 1
+                      ? "Tecnología de impresión"
+                      : `${humanizeCodigo(paso.familiaCodigo)} · tecnología`}
+                  </label>
+                  {renderSegmentedControl(
+                    "Tecnología de impresión",
+                    selectedTechnology?.value ?? "",
+                    techOptions,
+                    setTechnology,
+                    true,
+                  )}
+                  {selectedTechnology && selectedTechnology.candidatas.length > 1 ? (
+                    <select
+                      className="ap-native-select"
+                      value={selectedId}
+                      onChange={(event) => setMaquina(paso.configPasoId, event.target.value)}
+                    >
+                      {selectedTechnology.candidatas.map((candidata) => (
+                        <option key={candidata.maquinaId} value={candidata.maquinaId}>
+                          {candidata.maquina.nombre}
+                          {candidata.esPreferida ? " · preferida" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
                 </div>
               );
             })}
@@ -3145,10 +3429,26 @@ export function AgregarProductoSheet({
       return;
     }
     const rutaSel = getRutaSeleccionada(productoDetalle, motorConfig.rutaAlternativaId);
+    const slotsParaReglas = getSlotsParaCotizacion(
+      rutaSel,
+      productoDetalle,
+      motorConfig,
+    );
+    const ruleContext = buildJobContext(productoDetalle, motorConfig, qty, slotsParaReglas);
     const slotsComercialElige = getSlotsParaCotizacion(
       rutaSel,
       productoDetalle,
       motorConfig,
+      (config) => isConfigPasoVisibleForContext(config, motorConfig, ruleContext),
+    );
+    const includeVisibleConfig = (config: ConfigPasoDetalle) =>
+      isConfigPasoVisibleForContext(config, motorConfig, ruleContext);
+    const jobContext = buildJobContext(
+      productoDetalle,
+      motorConfig,
+      qty,
+      slotsComercialElige,
+      includeVisibleConfig,
     );
     setCotizando(true);
     setCotizacion(null);
@@ -3157,12 +3457,7 @@ export function AgregarProductoSheet({
       const res = await cotizar({
         productoId: product.id,
         rutaAlternativaId: motorConfig.rutaAlternativaId || null,
-        jobContext: buildJobContext(
-          productoDetalle,
-          motorConfig,
-          qty,
-          slotsComercialElige,
-        ) as never,
+        jobContext: jobContext as never,
         periodo: "2026-03",
       });
       setCotizacion(res);
@@ -3186,15 +3481,23 @@ export function AgregarProductoSheet({
         return;
       }
       const rutaSel = getRutaSeleccionada(productoDetalle, motorConfig.rutaAlternativaId);
+      const slotsParaReglas = getSlotsParaCotizacion(
+        rutaSel,
+        productoDetalle,
+        motorConfig,
+      );
+      const ruleContext = buildJobContext(productoDetalle, motorConfig, qty, slotsParaReglas);
       const slotsComercialElige = getSlotsParaCotizacion(
         rutaSel,
         productoDetalle,
         motorConfig,
+        (config) => isConfigPasoVisibleForContext(config, motorConfig, ruleContext),
       );
       const nextItem = buildItem(product, qty, specs, adi, {
         productoDetalle,
         motorConfig,
         slotsComercialElige,
+        ruleContext,
         cotizacion,
         notaProduccion,
         itemId: editingItem?.id,

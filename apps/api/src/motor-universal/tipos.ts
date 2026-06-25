@@ -207,9 +207,9 @@ export interface NestingEjecutado {
     | 'grid-2d-single'
     | 'grid-2d-multi'
     | 'packingsolver-rectangle';
-  /** Cantidad calculada en su unidad (m_lineales, pliegos, m2, piezas). */
+  /** Cantidad calculada en su unidad (m_lineales, pliegos, pouches, m2, piezas). */
   cantidadCalculada: number;
-  unidad: 'm_lineales' | 'pliegos' | 'm2' | 'piezas';
+  unidad: 'm_lineales' | 'pliegos' | 'pouches' | 'm2' | 'piezas';
   aprovechamientoPct: number;
   /** Sustratos consumidos. Para visualizar el "envase" (rollo o pliego). */
   substrates: Array<
@@ -235,6 +235,7 @@ export interface NestingEjecutado {
     meta?: unknown;
   }>;
   piezasPorPliego?: number;
+  piezasPorPouch?: number;
   consumedLengthMm?: number;
   piezasAcomodadas: number;
   /** Datos normalizados para que el SVG muestre cómo pensó el motor. */

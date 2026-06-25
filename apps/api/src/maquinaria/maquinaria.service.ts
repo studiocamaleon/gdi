@@ -47,6 +47,8 @@ import {
 } from './maquinaria-template-machine-rules';
 import { validatePerfilOperativoByTemplate } from './maquinaria-template-profile-rules';
 import {
+  consumableTypeForChannel,
+  consumableUnitForTemplate,
   getConsumableChannelFromDetail,
   getPerfilConsumableChannels,
   isConsumableChannel,
@@ -449,19 +451,14 @@ export class MaquinariaService {
   }
 
   async update(auth: CurrentAuth, id: string, payload: UpsertMaquinaDto) {
-    await this.findMaquinaOrThrow(auth, id);
+    const existing = await this.findMaquinaOrThrow(auth, id);
     await this.validateReferences(auth, payload);
-    if (!payload.codigo?.trim()) {
-      throw new BadRequestException(
-        'El codigo de la maquina es obligatorio para actualizar.',
-      );
-    }
 
     try {
       const maquina = await this.prisma.$transaction(async (tx) => {
         await tx.maquina.update({
           where: { id },
-          data: this.buildMaquinaWriteData(auth, payload),
+          data: this.buildMaquinaWriteData(auth, payload, existing.codigo),
         });
 
         await this.replaceNestedData(tx, auth.tenantId, id, payload);
@@ -591,6 +588,19 @@ export class MaquinariaService {
       }
     }
 
+    const consumibleVariantIds = Array.from(
+      new Set(payload.consumibles.map((item) => item.materiaPrimaVarianteId)),
+    );
+    const consumibleVariantes = consumibleVariantIds.length
+      ? await tx.materiaPrimaVariante.findMany({
+          where: { tenantId, id: { in: consumibleVariantIds } },
+          include: { materiaPrima: { select: { nombre: true } } },
+        })
+      : [];
+    const consumibleVarianteById = new Map(
+      consumibleVariantes.map((item) => [item.id, item]),
+    );
+
     const persistedConsumibleIds = new Set<string>();
     for (const consumible of payload.consumibles) {
       const perfilOperativoId = consumible.perfilOperativoId
@@ -598,8 +608,12 @@ export class MaquinariaService {
         : null;
 
       if (consumible.perfilOperativoId && !perfilOperativoId) {
+        const consumibleName = this.getConsumibleDisplayName(
+          consumible,
+          consumibleVarianteById.get(consumible.materiaPrimaVarianteId),
+        );
         throw new BadRequestException(
-          `El consumible ${consumible.nombre.trim()} referencia un perfil operativo inexistente.`,
+          `El consumible ${consumibleName} referencia un perfil operativo inexistente.`,
         );
       }
 
@@ -611,6 +625,8 @@ export class MaquinariaService {
             maquinaId,
             consumible,
             perfilOperativoId ?? undefined,
+            payload.plantilla,
+            consumibleVarianteById.get(consumible.materiaPrimaVarianteId),
           ),
         });
         persistedConsumibleIds.add(consumible.id);
@@ -623,6 +639,8 @@ export class MaquinariaService {
           maquinaId,
           consumible,
           perfilOperativoId ?? undefined,
+          payload.plantilla,
+          consumibleVarianteById.get(consumible.materiaPrimaVarianteId),
         ),
       });
       persistedConsumibleIds.add(created.id);
@@ -766,21 +784,55 @@ export class MaquinariaService {
     maquinaId: string,
     payload: MaquinaConsumibleItemDto,
     perfilOperativoId?: string,
+    plantilla?: PlantillaMaquinariaDto,
+    variante?: {
+      sku: string;
+      nombreVariante: string | null;
+      materiaPrima: { nombre: string };
+    },
   ) {
+    const channel = getConsumableChannelFromDetail(payload.detalle ?? {});
+    const tipo =
+      payload.tipo ??
+      consumableTypeForChannel(plantilla ?? '', channel ?? 'negro');
+    const unidad = payload.unidad ?? consumableUnitForTemplate(plantilla ?? '');
+
     return {
       tenantId,
       maquinaId,
       perfilOperativoId: perfilOperativoId ?? null,
       materiaPrimaVarianteId: payload.materiaPrimaVarianteId,
-      nombre: payload.nombre.trim(),
-      tipo: this.toPrismaEnum<TipoConsumibleMaquina>(payload.tipo),
-      unidad: this.toPrismaEnum<UnidadConsumoMaquina>(payload.unidad),
+      nombre: this.getConsumibleDisplayName(payload, variante),
+      tipo: this.toPrismaEnum<TipoConsumibleMaquina>(tipo),
+      unidad: this.toPrismaEnum<UnidadConsumoMaquina>(unidad),
       rendimientoEstimado: this.toDecimal(payload.rendimientoEstimado),
       consumoBase: this.toDecimal(payload.consumoBase),
       activo: payload.activo,
       detalleJson: this.toNullableJson(payload.detalle),
       observaciones: payload.observaciones?.trim() || null,
     };
+  }
+
+  private getConsumibleDisplayName(
+    payload: Pick<
+      MaquinaConsumibleItemDto,
+      'nombre' | 'detalle' | 'materiaPrimaVarianteId'
+    >,
+    variante?: {
+      sku: string;
+      nombreVariante: string | null;
+      materiaPrima: { nombre: string };
+    },
+  ) {
+    const explicitName = payload.nombre?.trim();
+    if (explicitName) return explicitName;
+
+    const channel = getConsumableChannelFromDetail(payload.detalle ?? {});
+    const materialName = variante
+      ? `${variante.materiaPrima.nombre} · ${variante.nombreVariante ?? variante.sku}`
+      : payload.materiaPrimaVarianteId;
+
+    return channel ? `${channel} · ${materialName}` : materialName;
   }
 
   private buildComponenteDesgasteData(
@@ -905,7 +957,7 @@ export class MaquinariaService {
     );
     if (consumiblesActivos.length === 0) return false;
 
-    if (payload.plantilla === 'impresora_laser') {
+    if (payload.plantilla === PlantillaMaquinariaDto.impresora_laser) {
       const channelsFromMachine = requiredConsumableChannelsFromColorMode(
         payload.parametrosTecnicos?.coloresSoportados ??
           payload.parametrosTecnicos?.configuracionColor ??
@@ -935,8 +987,6 @@ export class MaquinariaService {
             getConsumableChannelFromDetail(detalle) === channel;
           const hasConsumableData =
             Boolean(consumible.materiaPrimaVarianteId) &&
-            Boolean(consumible.tipo) &&
-            Boolean(consumible.unidad) &&
             Number(consumible.consumoBase ?? 0) > 0;
           return channelMatches && hasConsumableData;
         }),
@@ -960,8 +1010,6 @@ export class MaquinariaService {
             consumible.perfilOperativoId === perfil.id &&
             getConsumableChannelFromDetail(detalle) === channel &&
             Boolean(consumible.materiaPrimaVarianteId) &&
-            Boolean(consumible.tipo) &&
-            Boolean(consumible.unidad) &&
             Number(consumible.consumoBase ?? 0) > 0
           );
         });
@@ -1075,7 +1123,10 @@ export class MaquinariaService {
       }
 
       try {
-        validatePerfilOperativoByTemplate(payload.plantilla, perfil);
+        validatePerfilOperativoByTemplate(payload.plantilla, perfil, {
+          ...(payload.parametrosTecnicos ?? {}),
+          gramajeMaxGr: payload.gramajeMaxGr,
+        });
       } catch (error) {
         throw new BadRequestException(
           error instanceof Error
@@ -1119,8 +1170,17 @@ export class MaquinariaService {
     );
 
     for (const consumible of payload.consumibles) {
-      const consumibleName = consumible.nombre.trim() || 'sin nombre';
       const variante = varianteById.get(consumible.materiaPrimaVarianteId);
+      const consumibleName = this.getConsumibleDisplayName(
+        consumible,
+        variante
+          ? {
+              sku: variante.sku,
+              nombreVariante: variante.nombreVariante,
+              materiaPrima: { nombre: variante.materiaPrima.nombre },
+            }
+          : undefined,
+      );
       if (!variante) {
         throw new BadRequestException(
           `El consumible ${consumibleName} referencia una variante de materia prima inexistente.`,
@@ -1247,25 +1307,7 @@ export class MaquinariaService {
       return;
     }
 
-    const geometriaTecnica =
-      typeof payload.parametrosTecnicos?.geometria === 'string'
-        ? payload.parametrosTecnicos.geometria
-        : null;
-    if (!geometriaTecnica) return;
-
-    const expectedByTechnicalGeometry: Record<
-      string,
-      GeometriaTrabajoMaquinaDto
-    > = {
-      ROLLO: GeometriaTrabajoMaquinaDto.rollo,
-      MESA_EXTENSORA: GeometriaTrabajoMaquinaDto.plano,
-    };
-    const expected = expectedByTechnicalGeometry[geometriaTecnica];
-    if (!expected || payload.geometriaTrabajo === expected) return;
-
-    throw new BadRequestException(
-      `La geometria de trabajo ${payload.geometriaTrabajo} no coincide con la geometria tecnica ${geometriaTecnica}. Debe ser ${expected}.`,
-    );
+    return;
   }
 
   private validateTechnicalPayload(payload: UpsertMaquinaDto) {
@@ -1378,6 +1420,7 @@ export class MaquinariaService {
       altoUtil: this.toNumber(maquina.altoUtil),
       espesorMaximo: this.toNumber(maquina.espesorMaximo),
       pesoMaximo: this.toNumber(maquina.pesoMaximo),
+      gramajeMaxGr: this.toNumber(maquina.gramajeMaxGr),
       fechaAlta: maquina.fechaAlta?.toISOString().slice(0, 10) ?? '',
       activo: maquina.activo,
       observaciones: maquina.observaciones ?? '',

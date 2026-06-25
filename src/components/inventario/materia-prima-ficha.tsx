@@ -85,6 +85,7 @@ const subfamiliaMateriaPrimaItems: Array<{ value: SubfamiliaMateriaPrima; label:
   { value: "film_transferencia", label: "Film transferencia" },
   { value: "papel_transferencia", label: "Papel transferencia" },
   { value: "laminado_film", label: "Laminado film" },
+  { value: "laminado_pouch", label: "Laminado pouch" },
   { value: "quimico_acabado", label: "Químico acabado" },
   { value: "auxiliar_proceso", label: "Auxiliar proceso" },
   { value: "polvo_dtf", label: "Polvo DTF" },
@@ -269,6 +270,11 @@ function normalizeVarianteAtributos(
       normalized.largoRolloMm ?? normalized.largoMm,
       1000,
     );
+  } else if (normalizedTemplateId === "laminado_pouch_v1") {
+    setNumberIfMissing(normalized, "ancho", normalized.anchoMm);
+    setNumberIfMissing(normalized, "alto", normalized.altoMm ?? normalized.largoMm);
+    setNumberIfMissing(normalized, "margenNoUsable", normalized.margenNoUsableMm);
+    setNumberIfMissing(normalized, "espesor", normalized.espesorMicrones);
   }
 
   const aliasMap: Record<string, string> = {
@@ -418,6 +424,12 @@ function buildPayload(
       setLegacyNumber(normalized, "anchoMm", normalized.ancho);
       setLegacyNumber(normalized, "largoMm", normalized.largo, 1000);
       setLegacyNumber(normalized, "largoRolloMm", normalized.largo, 1000);
+    } else if (normalizedTemplateId === "laminado_pouch_v1") {
+      setLegacyNumber(normalized, "anchoMm", normalized.ancho);
+      setLegacyNumber(normalized, "altoMm", normalized.alto);
+      setLegacyNumber(normalized, "largoMm", normalized.alto);
+      setLegacyNumber(normalized, "margenNoUsableMm", normalized.margenNoUsable);
+      setLegacyNumber(normalized, "espesorMicrones", normalized.espesor);
     } else if (
       normalizedTemplateId === "tinta_impresion_v1" ||
       normalizedTemplateId === "quimico_acabado_v1"

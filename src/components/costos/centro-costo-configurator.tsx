@@ -104,6 +104,7 @@ type CentroCostoConfiguratorProps = {
   plantas: Planta[];
   areas: AreaCosto[];
   empleados: EmpleadoDetalle[];
+  refreshKey?: number;
   onConfigured: () => Promise<void> | void;
 };
 
@@ -507,6 +508,7 @@ export function CentroCostoConfigurator({
   plantas,
   areas,
   empleados,
+  refreshKey,
   onConfigured,
 }: CentroCostoConfiguratorProps) {
   const [periodo, setPeriodo] = React.useState(getCurrentPeriodo());
@@ -869,16 +871,18 @@ export function CentroCostoConfigurator({
       );
       setDraftTariff(detail.tarifaBorrador?.tarifaCalculada ?? null);
       setPublishedTariff(detail.tarifaPublicada?.tarifaCalculada ?? null);
-      const reparto = extractRepartoAbsorbido(
-        (detail.tarifaBorrador?.resumen as
-          | Record<string, unknown>
-          | null
-          | undefined) ??
-          (detail.tarifaPublicada?.resumen as
+      const reparto =
+        detail.repartoAbsorbido ??
+        extractRepartoAbsorbido(
+          (detail.tarifaBorrador?.resumen as
             | Record<string, unknown>
             | null
-            | undefined),
-      );
+            | undefined) ??
+            (detail.tarifaPublicada?.resumen as
+              | Record<string, unknown>
+              | null
+              | undefined),
+        );
       setRepartoAbsorbidoTotal(reparto.total);
       setRepartoAbsorbidoDesglose(reparto.desglose);
       setWarnings(detail.advertencias);
@@ -903,7 +907,7 @@ export function CentroCostoConfigurator({
         );
       }
     });
-  }, [centro, loadConfiguracion, open, periodo]);
+  }, [centro, loadConfiguracion, open, periodo, refreshKey]);
 
   React.useEffect(() => {
     if (!open) {
@@ -2691,240 +2695,12 @@ export function CentroCostoConfigurator({
                                     </FieldGroup>
                                   </section>
 
-                                  <section className="rounded-lg border border-border/60 bg-muted/5 p-3">
-                                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                                      2. Energía y Uso
-                                    </p>
-                                    <FieldGroup className="grid gap-3 md:grid-cols-2">
-                                      <Field>
-                                        <FieldLabelWithTooltip
-                                          label="Potencia nominal (kW)"
-                                          help="Potencia eléctrica nominal de placa de la máquina."
-                                        />
-                                        <Input
-                                          inputMode="decimal"
-                                          value={
-                                            item.potenciaNominalKw === 0
-                                              ? ""
-                                              : String(item.potenciaNominalKw)
-                                          }
-                                          onChange={(event) =>
-                                            setMachineCostsForm((current) =>
-                                              current.map((cost) =>
-                                                cost.centroCostoRecursoId ===
-                                                resource.id
-                                                  ? {
-                                                      ...cost,
-                                                      potenciaNominalKw:
-                                                        event.target.value ===
-                                                        ""
-                                                          ? 0
-                                                          : Number(
-                                                              event.target
-                                                                .value,
-                                                            ) || 0,
-                                                    }
-                                                  : cost,
-                                              ),
-                                            )
-                                          }
-                                        />
-                                      </Field>
-                                      <Field>
-                                        <FieldLabelWithTooltip
-                                          label="Factor de carga (%)"
-                                          help="Porcentaje promedio de uso de potencia respecto al nominal."
-                                        />
-                                        <Input
-                                          inputMode="decimal"
-                                          value={
-                                            item.factorCargaPct === 0
-                                              ? ""
-                                              : String(item.factorCargaPct)
-                                          }
-                                          onChange={(event) =>
-                                            setMachineCostsForm((current) =>
-                                              current.map((cost) =>
-                                                cost.centroCostoRecursoId ===
-                                                resource.id
-                                                  ? {
-                                                      ...cost,
-                                                      factorCargaPct:
-                                                        event.target.value ===
-                                                        ""
-                                                          ? 0
-                                                          : Number(
-                                                              event.target
-                                                                .value,
-                                                            ) || 0,
-                                                    }
-                                                  : cost,
-                                              ),
-                                            )
-                                          }
-                                        />
-                                      </Field>
-                                      <Field>
-                                        <FieldLabelWithTooltip
-                                          label={`Tarifa energía (${systemCurrencyCode}/kWh)`}
-                                          help="Costo unitario de energía eléctrica por kWh."
-                                        />
-                                        <Input
-                                          inputMode="decimal"
-                                          value={
-                                            item.tarifaEnergiaKwh === 0
-                                              ? ""
-                                              : String(item.tarifaEnergiaKwh)
-                                          }
-                                          onChange={(event) =>
-                                            setMachineCostsForm((current) =>
-                                              current.map((cost) =>
-                                                cost.centroCostoRecursoId ===
-                                                resource.id
-                                                  ? {
-                                                      ...cost,
-                                                      tarifaEnergiaKwh:
-                                                        event.target.value ===
-                                                        ""
-                                                          ? 0
-                                                          : Number(
-                                                              event.target
-                                                                .value,
-                                                            ) || 0,
-                                                    }
-                                                  : cost,
-                                              ),
-                                            )
-                                          }
-                                        />
-                                      </Field>
-                                      <Field>
-                                        <FieldLabelWithTooltip
-                                          label="Horas programadas/mes"
-                                          help="Horas planificadas de operación mensual antes de pérdidas."
-                                        />
-                                        <Input
-                                          inputMode="decimal"
-                                          value={
-                                            item.horasProgramadasMes === 0
-                                              ? ""
-                                              : String(item.horasProgramadasMes)
-                                          }
-                                          onChange={(event) =>
-                                            setMachineCostsForm((current) =>
-                                              current.map((cost) =>
-                                                cost.centroCostoRecursoId ===
-                                                resource.id
-                                                  ? {
-                                                      ...cost,
-                                                      horasProgramadasMes:
-                                                        event.target.value ===
-                                                        ""
-                                                          ? 0
-                                                          : Number(
-                                                              event.target
-                                                                .value,
-                                                            ) || 0,
-                                                    }
-                                                  : cost,
-                                              ),
-                                            )
-                                          }
-                                        />
-                                      </Field>
-                                    </FieldGroup>
-                                  </section>
                                 </div>
 
                                 <div className="space-y-3">
                                   <section className="rounded-lg border border-border/60 bg-muted/5 p-3">
                                     <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                                      3. Productividad Real
-                                    </p>
-                                    <FieldGroup className="grid gap-3 md:grid-cols-3">
-                                      <Field>
-                                        <FieldLabelWithTooltip
-                                          label="Disponibilidad (%)"
-                                          help="Porcentaje de tiempo disponible (descontando paradas y fallas)."
-                                        />
-                                        <Input
-                                          inputMode="decimal"
-                                          value={
-                                            item.disponibilidadPct === 0
-                                              ? ""
-                                              : String(item.disponibilidadPct)
-                                          }
-                                          onChange={(event) =>
-                                            setMachineCostsForm((current) =>
-                                              current.map((cost) =>
-                                                cost.centroCostoRecursoId ===
-                                                resource.id
-                                                  ? {
-                                                      ...cost,
-                                                      disponibilidadPct:
-                                                        event.target.value ===
-                                                        ""
-                                                          ? 0
-                                                          : Number(
-                                                              event.target
-                                                                .value,
-                                                            ) || 0,
-                                                    }
-                                                  : cost,
-                                              ),
-                                            )
-                                          }
-                                        />
-                                      </Field>
-                                      <Field>
-                                        <FieldLabelWithTooltip
-                                          label="Eficiencia (%)"
-                                          help="Rendimiento operativo real sobre el tiempo disponible."
-                                        />
-                                        <Input
-                                          inputMode="decimal"
-                                          value={
-                                            item.eficienciaPct === 0
-                                              ? ""
-                                              : String(item.eficienciaPct)
-                                          }
-                                          onChange={(event) =>
-                                            setMachineCostsForm((current) =>
-                                              current.map((cost) =>
-                                                cost.centroCostoRecursoId ===
-                                                resource.id
-                                                  ? {
-                                                      ...cost,
-                                                      eficienciaPct:
-                                                        event.target.value ===
-                                                        ""
-                                                          ? 0
-                                                          : Number(
-                                                              event.target
-                                                                .value,
-                                                            ) || 0,
-                                                    }
-                                                  : cost,
-                                              ),
-                                            )
-                                          }
-                                        />
-                                      </Field>
-                                      <Field>
-                                        <FieldLabelWithTooltip
-                                          label="Horas productivas"
-                                          help="Resultado calculado: horas programadas × disponibilidad × eficiencia."
-                                        />
-                                        <div className="flex min-h-10 items-center rounded-md border px-3 text-sm text-muted-foreground">
-                                          {formatNumber(item.horasProductivas)}
-                                        </div>
-                                      </Field>
-                                    </FieldGroup>
-                                  </section>
-
-                                  <section className="rounded-lg border border-border/60 bg-muted/5 p-3">
-                                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                                      4. Costos Fijos Mensuales
+                                      2. Costos Fijos Mensuales
                                     </p>
                                     <FieldGroup className="grid gap-3 md:grid-cols-3">
                                       <Field>
@@ -3036,21 +2812,13 @@ export function CentroCostoConfigurator({
                                 </div>
                               </div>
 
-                              <div className="grid gap-2 rounded-xl border border-border/70 bg-muted/10 p-3 text-xs md:grid-cols-2 lg:grid-cols-4">
+                              <div className="grid gap-2 rounded-xl border border-border/70 bg-muted/10 p-3 text-xs md:grid-cols-3">
                                 <div className="flex flex-col">
                                   <span className="text-muted-foreground">
                                     Amortización
                                   </span>
                                   <span className="font-medium text-foreground">
                                     {formatMoney(item.amortizacionMensual)}
-                                  </span>
-                                </div>
-                                <div className="flex flex-col">
-                                  <span className="text-muted-foreground">
-                                    Energía
-                                  </span>
-                                  <span className="font-medium text-foreground">
-                                    {formatMoney(item.energiaMensual)}
                                   </span>
                                 </div>
                                 <div className="flex flex-col">

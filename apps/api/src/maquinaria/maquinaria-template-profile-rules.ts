@@ -21,6 +21,7 @@ type PerfilTemplateRule = {
   allowedProfileKeys: Set<string>;
   requiredProfileKeys: Set<string>;
   modeSourceKeys: Set<string>;
+  allowedProfileTypes: Set<TipoPerfilOperativoMaquinaDto>;
 };
 
 /**
@@ -59,6 +60,7 @@ function buildRule(params: {
   /** Claves obligatorias (universales o detalle). */
   requiredFieldKeys: string[];
   modeSourceKeys?: string[];
+  allowedProfileTypes: TipoPerfilOperativoMaquinaDto[];
 }): PerfilTemplateRule {
   return {
     allowedProfileKeys: new Set([
@@ -67,6 +69,7 @@ function buildRule(params: {
     ]),
     requiredProfileKeys: new Set(params.requiredFieldKeys),
     modeSourceKeys: new Set(params.modeSourceKeys ?? []),
+    allowedProfileTypes: new Set(params.allowedProfileTypes),
   };
 }
 
@@ -74,12 +77,7 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // ─── §5 IMPRESORA_LASER ─────────────────────────────────────────
   // Discriminantes (detalle): caras, colores, gramajeMinGr, gramajeMaxGr.
   [PlantillaMaquinariaDto.impresora_laser]: buildRule({
-    detalleKeys: [
-      'caras',
-      'colores',
-      'gramajeMinGr',
-      'gramajeMaxGr',
-    ],
+    detalleKeys: ['caras', 'colores', 'gramajeMinGr', 'gramajeMaxGr'],
     requiredFieldKeys: [
       'nombre',
       'productivityValue',
@@ -87,11 +85,12 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
       'caras',
     ],
     modeSourceKeys: ['caras', 'colores'],
+    allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.impresion],
   }),
 
   // ─── §6 IMPRESORA_GRAN_FORMATO_POR_AREA ─────────────────────────
-  // Discriminantes (detalle): numeroPasadas, colores, modoCalidad, modoOperacion
-  // (solo si plantilla geometria=MESA_EXTENSORA).
+  // Compatibilidad: numeroPasadas, modoCalidad y modoOperacion se toleran
+  // en datos viejos, pero el modo funcional sale de colores/tipoCorte.
   [PlantillaMaquinariaDto.impresora_gran_formato_por_area]: buildRule({
     detalleKeys: [
       'numeroPasadas',
@@ -102,7 +101,11 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
       'factorComplejidad',
     ],
     requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit'],
-    modeSourceKeys: ['modoCalidad', 'colores', 'tipoCorte'],
+    modeSourceKeys: ['colores', 'tipoCorte'],
+    allowedProfileTypes: [
+      TipoPerfilOperativoMaquinaDto.impresion,
+      TipoPerfilOperativoMaquinaDto.corte,
+    ],
   }),
 
   // ─── §7 GUILLOTINA ──────────────────────────────────────────────
@@ -112,6 +115,7 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   [PlantillaMaquinariaDto.guillotina]: buildRule({
     detalleKeys: ['gramajeMinGr', 'gramajeMaxGr', 'pliegosMaxPorTanda'],
     requiredFieldKeys: ['nombre', 'pliegosMaxPorTanda', 'gramajeMaxGr'],
+    allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.corte],
   }),
 
   // ─── §8 PLOTTER_DE_CORTE ────────────────────────────────────────
@@ -126,6 +130,7 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
       'tipoCorte',
     ],
     modeSourceKeys: ['tipoCorte', 'modoOperacion'],
+    allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.corte],
   }),
 
   // ─── §10 PLOTTER_CAD ────────────────────────────────────────────
@@ -140,6 +145,7 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
       'calidad',
     ],
     modeSourceKeys: ['tipoTrabajo', 'calidad'],
+    allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.impresion],
   }),
 
   // ─── §9 LAMINADORA_BOPP_ROLLO ───────────────────────────────────
@@ -147,6 +153,7 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   [PlantillaMaquinariaDto.laminadora_bopp_rollo]: buildRule({
     detalleKeys: [],
     requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit'],
+    allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.laminado],
   }),
 
   // ─── §11 CORTE_LASER ────────────────────────────────────────────
@@ -154,6 +161,10 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   [PlantillaMaquinariaDto.corte_laser]: buildRule({
     detalleKeys: [],
     requiredFieldKeys: ['nombre'],
+    allowedProfileTypes: [
+      TipoPerfilOperativoMaquinaDto.corte,
+      TipoPerfilOperativoMaquinaDto.grabado,
+    ],
   }),
 
   // ─── §12 ROUTER_CNC ─────────────────────────────────────────────
@@ -161,6 +172,7 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   [PlantillaMaquinariaDto.router_cnc]: buildRule({
     detalleKeys: [],
     requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit'],
+    allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.mecanizado],
   }),
 
   // ─── §13 ANILLADORA ─────────────────────────────────────────────
@@ -175,24 +187,28 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
       'tipoAnillo',
     ],
     modeSourceKeys: ['tipoAnillo'],
+    allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.fabricacion],
   }),
 
   // ─── §15 SOLDADORA (pendiente, sin perfilado detallado todavía) ──
   [PlantillaMaquinariaDto.soldadora]: buildRule({
     detalleKeys: [],
     requiredFieldKeys: ['nombre'],
+    allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.fabricacion],
   }),
 
   // ─── §15 CABINA_PINTURA (pendiente) ─────────────────────────────
   [PlantillaMaquinariaDto.cabina_pintura]: buildRule({
     detalleKeys: [],
     requiredFieldKeys: ['nombre'],
+    allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.fabricacion],
   }),
 
   // ─── MESA_DE_CORTE (postergada — evaluar) ────────────────────────
   [PlantillaMaquinariaDto.mesa_de_corte]: buildRule({
     detalleKeys: ['tipoCorte', 'modoOperacion'],
     requiredFieldKeys: ['nombre'],
+    allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.corte],
   }),
 };
 
@@ -210,6 +226,11 @@ function hasValue(value: unknown) {
   }
 
   return true;
+}
+
+function toFiniteNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function getPerfilFieldValue(
@@ -235,9 +256,24 @@ function getPerfilFieldValue(
 export function validatePerfilOperativoByTemplate(
   plantilla: PlantillaMaquinariaDto,
   perfil: MaquinaPerfilOperativoItemDto,
+  parametrosTecnicos?: Record<string, unknown>,
 ) {
   const rule = RULES[plantilla];
   const perfilName = perfil.nombre.trim() || 'sin nombre';
+  const allowedProfileTypes = new Set(rule.allowedProfileTypes);
+
+  if (
+    plantilla === PlantillaMaquinariaDto.impresora_gran_formato_por_area &&
+    parametrosTecnicos?.soportaCorteIntegrado !== true
+  ) {
+    allowedProfileTypes.delete(TipoPerfilOperativoMaquinaDto.corte);
+  }
+
+  if (!allowedProfileTypes.has(perfil.tipoPerfil)) {
+    throw new Error(
+      `El perfil operativo ${perfilName} usa tipo ${perfil.tipoPerfil}, que no corresponde a la plantilla ${plantilla}.`,
+    );
+  }
 
   for (const detailKey of Object.keys(perfil.detalle ?? {})) {
     if (!rule.allowedProfileKeys.has(detailKey)) {
@@ -252,6 +288,25 @@ export function validatePerfilOperativoByTemplate(
     if (!hasValue(value)) {
       throw new Error(
         `El perfil operativo ${perfilName} debe completar el campo ${requiredKey} para la plantilla ${plantilla}.`,
+      );
+    }
+  }
+
+  if (
+    plantilla === PlantillaMaquinariaDto.impresora_laser &&
+    parametrosTecnicos
+  ) {
+    const machineMaxGramaje = toFiniteNumber(parametrosTecnicos.gramajeMaxGr);
+    const profileMaxGramaje = toFiniteNumber(
+      getPerfilFieldValue(perfil, 'gramajeMaxGr'),
+    );
+    if (
+      machineMaxGramaje !== null &&
+      profileMaxGramaje !== null &&
+      profileMaxGramaje > machineMaxGramaje
+    ) {
+      throw new Error(
+        `El perfil operativo ${perfilName} no puede superar el gramaje maximo de la maquina (${machineMaxGramaje} g/m²).`,
       );
     }
   }

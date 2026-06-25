@@ -18,16 +18,18 @@ import {
   PackageIcon,
   PlusIcon,
   SaveIcon,
+  SearchIcon,
   SquareIcon,
   Trash2Icon,
   TriangleAlertIcon,
   UserIcon,
+  XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import type { ClienteDetalle } from "@/lib/clientes";
 import type { CurrentUser } from "@/lib/auth";
-import type { ProductoListItem } from "@/lib/productos-servicios";
+import type { CargoDirectoCatalogo, ProductoListItem } from "@/lib/productos-servicios";
 import {
   cotizar,
   recotizarCotizacionItem,
@@ -41,15 +43,18 @@ import {
   formatUnidad,
   offsetDate,
   type CotizacionPropuestaSnapshot,
+  type PropuestaCargoDirecto,
   type PropuestaItem,
   type TipoPropuesta,
 } from "@/lib/propuestas";
 import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sheet";
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
+import { listClientes } from "@/lib/clientes-api";
 
 type PropuestaFichaProps = {
   initialClientes: ClienteDetalle[];
   initialProductos: ProductoListItem[];
+  initialCargosDirectos: CargoDirectoCatalogo[];
   currentUser: CurrentUser | null;
 };
 
@@ -510,15 +515,300 @@ function FieldCard({
   );
 }
 
+function normalizeClienteQuery(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function sortClientesByName(clientes: ClienteDetalle[]) {
+  return [...clientes].sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+
+function mergeClientes(
+  current: ClienteDetalle[],
+  incoming: ClienteDetalle[],
+) {
+  const map = new Map<string, ClienteDetalle>();
+  for (const cliente of [...current, ...incoming]) {
+    map.set(cliente.id, cliente);
+  }
+  return sortClientesByName([...map.values()]);
+}
+
+function ClienteCombobox({
+  value,
+  onChange,
+  initialClientes,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  initialClientes: ClienteDetalle[];
+}) {
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+  const [options, setOptions] = React.useState(() =>
+    sortClientesByName(initialClientes),
+  );
+  const [total, setTotal] = React.useState(initialClientes.length);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [debouncedQuery, setDebouncedQuery] = React.useState("");
+
+  const selectedCliente = React.useMemo(
+    () => options.find((cliente) => cliente.id === value) ?? null,
+    [options, value],
+  );
+
+  const visibleOptions = React.useMemo(() => {
+    const normalized = normalizeClienteQuery(query);
+    if (!normalized) return options;
+    return options.filter((cliente) => {
+      const haystack = [
+        cliente.nombre,
+        cliente.razonSocial,
+        cliente.email,
+        cliente.contacto,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(normalized);
+    });
+  }, [options, query]);
+
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query), 220);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  React.useEffect(() => {
+    setOptions((current) => mergeClientes(current, initialClientes));
+    setTotal((current) => Math.max(current, initialClientes.length));
+  }, [initialClientes]);
+
+  React.useEffect(() => {
+    if (!open) return undefined;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  React.useEffect(() => {
+    if (!open) return undefined;
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    listClientes({ q: debouncedQuery, limit: 30 })
+      .then((response) => {
+        if (cancelled) return;
+        setOptions((current) => mergeClientes(current, response.data));
+        setTotal(response.total);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setError("No se pudieron cargar clientes.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuery, open]);
+
+  const selectCliente = (cliente: ClienteDetalle) => {
+    setOptions((current) => mergeClientes(current, [cliente]));
+    onChange(cliente.id);
+    setQuery("");
+    setOpen(false);
+  };
+
+  return (
+    <div className="cliente-combobox" ref={rootRef}>
+      <button
+        type="button"
+        className="cliente-combobox-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className={selectedCliente ? "" : "placeholder"}>
+          {selectedCliente?.nombre ?? "Seleccionar cliente"}
+        </span>
+        <ChevronRightIcon />
+      </button>
+
+      {open ? (
+        <div className="cliente-combobox-popover">
+          <div className="cliente-combobox-search">
+            <SearchIcon />
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Buscar por nombre, razón social o email..."
+              aria-label="Buscar cliente"
+            />
+            {query ? (
+              <button type="button" onClick={() => setQuery("")} aria-label="Limpiar búsqueda">
+                <XIcon />
+              </button>
+            ) : null}
+          </div>
+
+          <div className="cliente-combobox-results" role="listbox">
+            {visibleOptions.map((cliente) => (
+              <button
+                key={cliente.id}
+                type="button"
+                className={`cliente-option ${cliente.id === value ? "selected" : ""}`}
+                role="option"
+                aria-selected={cliente.id === value}
+                onClick={() => selectCliente(cliente)}
+              >
+                <span className="cliente-option-main">
+                  <strong>{cliente.nombre}</strong>
+                  <small>
+                    {[cliente.razonSocial, cliente.email].filter(Boolean).join(" · ") ||
+                      "Sin datos adicionales"}
+                  </small>
+                </span>
+                {cliente.id === value ? <CheckIcon /> : null}
+              </button>
+            ))}
+
+            {!loading && visibleOptions.length === 0 ? (
+              <div className="cliente-combobox-empty">
+                No encontramos clientes con esa búsqueda.
+              </div>
+            ) : null}
+          </div>
+
+          <div className="cliente-combobox-foot">
+            <span>
+              {loading
+                ? "Buscando clientes..."
+                : `Mostrando ${Math.min(visibleOptions.length, total)} de ${total}`}
+            </span>
+            {error ? <span className="error">{error}</span> : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CanalVentaSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const [open, setOpen] = React.useState(false);
+  const selected = CANALES_VENTA.find((canal) => canal.value === value);
+
+  React.useEffect(() => {
+    if (!open) return undefined;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  const selectCanal = (nextValue: string) => {
+    onChange(nextValue);
+    setOpen(false);
+  };
+
+  return (
+    <div className="cliente-combobox canal-combobox" ref={rootRef}>
+      <button
+        type="button"
+        className="cliente-combobox-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span>{selected?.label ?? "Seleccionar canal"}</span>
+        <ChevronRightIcon />
+      </button>
+
+      {open ? (
+        <div className="cliente-combobox-popover canal-combobox-popover">
+          <div className="cliente-combobox-results canal-combobox-results" role="listbox">
+            {CANALES_VENTA.map((canal) => (
+              <button
+                key={canal.value}
+                type="button"
+                className={`cliente-option canal-option ${canal.value === value ? "selected" : ""}`}
+                role="option"
+                aria-selected={canal.value === value}
+                onClick={() => selectCanal(canal.value)}
+              >
+                <span className="cliente-option-main">
+                  <strong>{canal.label}</strong>
+                </span>
+                {canal.value === value ? <CheckIcon /> : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function formatCantidadItem(item: PropuestaItem) {
-  const maximumFractionDigits = item.unidadMedida === "m2" ? 2 : 0;
+  const acceptsDecimals =
+    item.unidadMedida === "m2" || item.unidadMedida === "metro_lineal";
+  const maximumFractionDigits = acceptsDecimals ? 2 : 0;
   const minimumFractionDigits =
-    item.unidadMedida === "m2" && !Number.isInteger(item.cantidad) ? 2 : 0;
+    acceptsDecimals && !Number.isInteger(item.cantidad) ? 2 : 0;
 
   return item.cantidad.toLocaleString("es-AR", {
     minimumFractionDigits,
     maximumFractionDigits,
   });
+}
+
+function isDuplicateModoColorSpec(item: PropuestaItem, key: string) {
+  if (!["impresion", "impresion_color", "color"].includes(key)) return false;
+  const value = item.especificaciones[key]?.trim().toLowerCase();
+  const modoColor = item.especificaciones.modo_color?.trim().toLowerCase();
+  return Boolean(value && modoColor && value === modoColor);
 }
 
 function formatCantidadCosto(value: number, unidad: string) {
@@ -557,6 +847,7 @@ function formatUnidadCosto(unidad: string, cantidad = 1) {
     m_2: "m²",
     unidad: "u.",
     unidades: "u.",
+    pouches: "pouches",
   };
   return labels[normalized] ?? unidad;
 }
@@ -1402,6 +1693,7 @@ function ProductRow({
         attr.visible &&
         !["tipo_pieza", "tipoPieza", "tipo_de_pieza"].includes(attr.key),
     )
+    .filter((attr) => !isDuplicateModoColorSpec(item, attr.key))
     .sort((a, b) => a.orden - b.orden)
     .map((attr) => ({
       lbl: attr.label,
@@ -1598,25 +1890,90 @@ function calcularComisionesItems(items: PropuestaItem[]) {
   }, 0);
 }
 
+function asNumber(value: unknown, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getCargoConfig(cargo: CargoDirectoCatalogo | null) {
+  return (cargo?.configJson ?? {}) as Record<string, unknown>;
+}
+
+function getCargoDefaultMonto(cargo: CargoDirectoCatalogo | null) {
+  const config = getCargoConfig(cargo);
+  const zonas = Array.isArray(config.zonas) ? config.zonas : [];
+  const firstZona = zonas[0] as { monto?: unknown } | undefined;
+  return asNumber(config.monto ?? firstZona?.monto, 0);
+}
+
+function getCargoDefaultPorcentaje(cargo: CargoDirectoCatalogo | null) {
+  const config = getCargoConfig(cargo);
+  return asNumber(config.porcentaje ?? config.porcentajeDefault, 0);
+}
+
+function getCargoDefaultPrecioUnidad(cargo: CargoDirectoCatalogo | null) {
+  const config = getCargoConfig(cargo);
+  return asNumber(config.precioPorUnidad, 0);
+}
+
+function getCargoInputLabel(cargo: CargoDirectoCatalogo | null) {
+  const config = getCargoConfig(cargo);
+  const inputCantidad = typeof config.inputCantidad === "string" ? config.inputCantidad : "cantidad";
+  const unidad = typeof config.unidad === "string" ? config.unidad : "";
+  const labels: Record<string, string> = {
+    distanciaKm: "Distancia",
+    bultos: "Bultos",
+    horas: "Horas",
+    viajes: "Viajes",
+    paradas: "Paradas",
+    cajas: "Cajas",
+    cantidad: "Cantidad",
+  };
+  const label = labels[inputCantidad] ?? humanizeCodigo(inputCantidad);
+  return unidad ? `${label} (${unidad})` : label;
+}
+
+function calcularResumenOrden(items: PropuestaItem[], cargosOrden: PropuestaCargoDirecto[]) {
+  const productos = calcularResumen(items);
+  const cargosSubtotal = cargosOrden.reduce((acc, cargo) => acc + cargo.montoNeto, 0);
+  const cargosImpuestos = cargosOrden.reduce((acc, cargo) => acc + cargo.impuestoMonto, 0);
+  const cargosTotal = cargosOrden.reduce((acc, cargo) => acc + cargo.total, 0);
+
+  return {
+    productos,
+    cargosSubtotal,
+    cargosImpuestos,
+    cargosTotal,
+    subtotal: productos.subtotal + cargosSubtotal,
+    impuestos: productos.impuestos + cargosImpuestos,
+    total: productos.total + cargosTotal,
+    cantidadItems: productos.cantidadItems,
+  };
+}
+
 function ResumenBar({
   items,
+  cargosOrden,
   tipo,
   fechaEstimada,
   fechaCreacion,
 }: {
   items: PropuestaItem[];
+  cargosOrden: PropuestaCargoDirecto[];
   tipo: "orden" | "presupuesto";
   fechaEstimada: string;
   fechaCreacion: string;
 }) {
-  const resumen = calcularResumen(items);
+  const resumen = calcularResumenOrden(items, cargosOrden);
   const subtotal = resumen.subtotal;
   const impuestos = resumen.impuestos;
   const costoTotal = items.reduce(
     (acc, item) => acc + calcularCostoTotal(item),
     0,
   );
-  const cargos = calcularCargosDirectosItems(items);
+  const cargosItems = calcularCargosDirectosItems(items);
+  const cargosOrdenTotal = resumen.cargosSubtotal;
+  const cargos = cargosItems + cargosOrdenTotal;
   const comisiones = calcularComisionesItems(items);
   const totalConCargos = resumen.total;
   const margen = subtotal > 0 ? ((subtotal - costoTotal) / subtotal) * 100 : 0;
@@ -1666,7 +2023,11 @@ function ResumenBar({
           <div className="lbl">Cargos directos</div>
           <div className="val">{formatCurrency(cargos)}</div>
           <div className="hint">
-            {cargos > 0 ? "Incluidos en subtotal" : "Sin cargos configurados"}
+            {cargosOrdenTotal > 0
+              ? `${cargosOrden.length} cargo${cargosOrden.length === 1 ? "" : "s"} de orden`
+              : cargosItems > 0
+              ? "Incluidos en productos"
+              : "Sin cargos configurados"}
           </div>
         </div>
         <div className="rbsep">·</div>
@@ -1729,9 +2090,326 @@ function ResumenBar({
   );
 }
 
+function buildCargoOrdenSnapshot({
+  cargo,
+  monto,
+  porcentaje,
+  precioUnidad,
+  cantidadInput,
+  zonaCodigo,
+  subtotalBase,
+  nota,
+}: {
+  cargo: CargoDirectoCatalogo;
+  monto: number;
+  porcentaje: number;
+  precioUnidad: number;
+  cantidadInput: number;
+  zonaCodigo: string;
+  subtotalBase: number;
+  nota: string;
+}): PropuestaCargoDirecto {
+  const config = getCargoConfig(cargo);
+  const zonas = Array.isArray(config.zonas) ? config.zonas : [];
+  const zona =
+    zonaCodigo && zonas.length > 0
+      ? (zonas.find(
+          (candidate) =>
+            typeof candidate === "object" &&
+            candidate !== null &&
+            "codigo" in candidate &&
+            String((candidate as { codigo: unknown }).codigo) === zonaCodigo,
+        ) as { codigo?: string; nombre?: string; monto?: number } | undefined)
+      : undefined;
+  let montoNeto = monto;
+  let detalle = "Monto fijo";
+  const nextConfig: Record<string, unknown> = { ...config };
+
+  if (cargo.modoCalculo === "MONTO_FIJO_PLANO") {
+    montoNeto = zona ? asNumber(zona.monto, monto) : monto;
+    nextConfig.montoAplicado = montoNeto;
+    if (zona) {
+      nextConfig.zonaAplicada = {
+        codigo: zona.codigo,
+        nombre: zona.nombre,
+        monto: montoNeto,
+      };
+      detalle = zona.nombre ? `Zona ${zona.nombre}` : `Zona ${zona.codigo}`;
+    }
+  }
+
+  if (cargo.modoCalculo === "PORCENTAJE_SOBRE_BASE") {
+    montoNeto = (subtotalBase * porcentaje) / 100;
+    nextConfig.porcentajeAplicado = porcentaje;
+    detalle = `${porcentaje.toLocaleString("es-AR", { maximumFractionDigits: 2 })}% sobre subtotal`;
+  }
+
+  if (cargo.modoCalculo === "POR_UNIDAD_INPUT") {
+    montoNeto = precioUnidad * cantidadInput;
+    nextConfig.precioPorUnidadAplicado = precioUnidad;
+    nextConfig.cantidadAplicada = cantidadInput;
+    detalle = `${cantidadInput.toLocaleString("es-AR")} x ${formatCurrency(precioUnidad)}`;
+  }
+
+  const montoRedondeado = Math.max(0, Math.round(montoNeto));
+  const impuestoPorcentaje = 21;
+  const impuestoMonto = Math.round(montoRedondeado * (impuestoPorcentaje / 100));
+
+  return {
+    id: `cargo-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    cargoDirectoCatalogoId: cargo.id,
+    codigoSnapshot: cargo.codigo,
+    nombreSnapshot: cargo.nombre,
+    descripcionSnapshot: cargo.descripcion,
+    modoCalculoSnapshot: cargo.modoCalculo as PropuestaCargoDirecto["modoCalculoSnapshot"],
+    configSnapshot: nextConfig,
+    baseCalculo: subtotalBase,
+    cantidadInput:
+      cargo.modoCalculo === "POR_UNIDAD_INPUT" ? cantidadInput : undefined,
+    montoNeto: montoRedondeado,
+    impuestoPorcentaje,
+    impuestoMonto,
+    total: montoRedondeado + impuestoMonto,
+    detalle,
+    nota: nota.trim() || undefined,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function CargoOrdenSheet({
+  open,
+  cargos,
+  subtotalBase,
+  onClose,
+  onAdd,
+}: {
+  open: boolean;
+  cargos: CargoDirectoCatalogo[];
+  subtotalBase: number;
+  onClose: () => void;
+  onAdd: (cargo: PropuestaCargoDirecto) => void;
+}) {
+  const [cargoId, setCargoId] = React.useState("");
+  const selectedCargo = cargos.find((cargo) => cargo.id === cargoId) ?? null;
+  const selectedConfig = getCargoConfig(selectedCargo);
+  const zonas = Array.isArray(selectedConfig.zonas)
+    ? (selectedConfig.zonas as Array<{ codigo?: string; nombre?: string; monto?: number }>)
+    : [];
+  const [monto, setMonto] = React.useState(0);
+  const [porcentaje, setPorcentaje] = React.useState(0);
+  const [precioUnidad, setPrecioUnidad] = React.useState(0);
+  const [cantidadInput, setCantidadInput] = React.useState(1);
+  const [zonaCodigo, setZonaCodigo] = React.useState("");
+  const [nota, setNota] = React.useState("");
+
+  React.useEffect(() => {
+    if (!open) return;
+    const first = cargos[0];
+    setCargoId(first?.id ?? "");
+  }, [cargos, open]);
+
+  React.useEffect(() => {
+    setMonto(getCargoDefaultMonto(selectedCargo));
+    setPorcentaje(getCargoDefaultPorcentaje(selectedCargo));
+    setPrecioUnidad(getCargoDefaultPrecioUnidad(selectedCargo));
+    setCantidadInput(1);
+    setZonaCodigo(zonas[0]?.codigo ?? "");
+    setNota("");
+  }, [selectedCargo?.id]);
+
+  if (!open) return null;
+
+  const preview = selectedCargo
+    ? buildCargoOrdenSnapshot({
+        cargo: selectedCargo,
+        monto,
+        porcentaje,
+        precioUnidad,
+        cantidadInput,
+        zonaCodigo,
+        subtotalBase,
+        nota,
+      })
+    : null;
+
+  const handleAdd = () => {
+    if (!selectedCargo || !preview) {
+      toast.error("Seleccioná un cargo del catálogo.");
+      return;
+    }
+    if (preview.montoNeto <= 0) {
+      toast.error("El monto del cargo debe ser mayor a cero.");
+      return;
+    }
+    onAdd(preview);
+  };
+
+  return (
+    <>
+      <div className="sheet-backdrop" onClick={onClose} />
+      <aside className="sheet sheet-ap cargo-sheet" aria-modal="true" role="dialog">
+        <div className="sheet-head">
+          <span className="sheet-ico">
+            <CircleDollarSignIcon />
+          </span>
+          <div className="body">
+            <h2>Agregar cargo a la OT</h2>
+            <div className="sub">
+              Usa el catálogo de Costos, pero guarda un snapshot para esta orden.
+            </div>
+          </div>
+          <button type="button" className="close" onClick={onClose} aria-label="Cerrar">
+            <XIcon />
+          </button>
+        </div>
+
+        <div className="sheet-body cargo-sheet-body">
+          {cargos.length === 0 ? (
+            <div className="orden-tab-empty">
+              <div className="ttl">Sin cargos disponibles</div>
+              <div className="sub">Creá cargos en Costos &gt; Cargos directos.</div>
+            </div>
+          ) : (
+            <>
+              <div className="cargo-field">
+                <label>Cargo</label>
+                <select value={cargoId} onChange={(event) => setCargoId(event.target.value)}>
+                  {cargos.map((cargo) => (
+                    <option key={cargo.id} value={cargo.id}>
+                      {cargo.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedCargo ? (
+                <div className="cargo-calc-card">
+                  <div>
+                    <span className="lbl">Tipo de cálculo</span>
+                    <strong>{selectedCargo.modoCalculo.replaceAll("_", " ")}</strong>
+                  </div>
+                  <div>
+                    <span className="lbl">Base actual</span>
+                    <strong>{formatCurrency(subtotalBase)}</strong>
+                  </div>
+                </div>
+              ) : null}
+
+              {selectedCargo?.modoCalculo === "MONTO_FIJO_PLANO" ? (
+                <>
+                  {zonas.length > 0 ? (
+                    <div className="cargo-field">
+                      <label>Zona</label>
+                      <select
+                        value={zonaCodigo}
+                        onChange={(event) => setZonaCodigo(event.target.value)}
+                      >
+                        {zonas.map((zona) => (
+                          <option key={zona.codigo} value={zona.codigo}>
+                            {zona.nombre ?? zona.codigo} · {formatCurrency(asNumber(zona.monto))}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+                  {zonas.length === 0 ? (
+                    <div className="cargo-field">
+                      <label>Monto neto</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={monto}
+                        onChange={(event) => setMonto(Number(event.target.value) || 0)}
+                      />
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+
+              {selectedCargo?.modoCalculo === "PORCENTAJE_SOBRE_BASE" ? (
+                <div className="cargo-field">
+                  <label>Porcentaje sobre subtotal</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={porcentaje}
+                    onChange={(event) => setPorcentaje(Number(event.target.value) || 0)}
+                  />
+                </div>
+              ) : null}
+
+              {selectedCargo?.modoCalculo === "POR_UNIDAD_INPUT" ? (
+                <div className="cargo-grid-2">
+                  <div className="cargo-field">
+                    <label>{getCargoInputLabel(selectedCargo)}</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={cantidadInput}
+                      onChange={(event) => setCantidadInput(Number(event.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="cargo-field">
+                    <label>Precio por unidad</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={precioUnidad}
+                      onChange={(event) => setPrecioUnidad(Number(event.target.value) || 0)}
+                    />
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="cargo-field">
+                <label>Nota interna</label>
+                <textarea
+                  rows={3}
+                  value={nota}
+                  onChange={(event) => setNota(event.target.value)}
+                  placeholder="Opcional"
+                />
+              </div>
+
+              {preview ? (
+                <div className="cargo-preview">
+                  <span>
+                    {preview.nombreSnapshot}
+                    <small>{preview.detalle}</small>
+                  </span>
+                  <strong>{formatCurrency(preview.total)}</strong>
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
+
+        <div className="sheet-foot">
+          <button type="button" className="btn" onClick={onClose}>
+            Cancelar
+          </button>
+          <div className="spacer" />
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleAdd}
+            disabled={cargos.length === 0}
+          >
+            <PlusIcon />
+            Agregar cargo
+          </button>
+        </div>
+      </aside>
+    </>
+  );
+}
+
 export function PropuestaFicha({
   initialClientes,
   initialProductos,
+  initialCargosDirectos,
   currentUser,
 }: PropuestaFichaProps) {
   const [tipo, setTipo] = React.useState<TipoPropuesta>("orden_trabajo");
@@ -1739,7 +2417,9 @@ export function PropuestaFicha({
   const [tab, setTab] = React.useState<OrdenTab>("productos");
   const [openIds, setOpenIds] = React.useState<Set<string>>(() => new Set());
   const [items, setItems] = React.useState<PropuestaItem[]>([]);
+  const [cargosOrden, setCargosOrden] = React.useState<PropuestaCargoDirecto[]>([]);
   const [addOpen, setAddOpen] = React.useState(false);
+  const [cargoOpen, setCargoOpen] = React.useState(false);
   const [editingItem, setEditingItem] = React.useState<PropuestaItem | null>(null);
   const [panelEditor, setPanelEditor] = React.useState<{
     item: PropuestaItem;
@@ -1750,12 +2430,7 @@ export function PropuestaFicha({
   const [canalVenta, setCanalVenta] = React.useState("mostrador");
   const [fechaEstimada, setFechaEstimada] = React.useState(offsetDate(7));
   const [fechaCreacion] = React.useState(() => offsetDate(0));
-
-  const clienteItems = React.useMemo(() => {
-    return [...initialClientes]
-      .sort((a, b) => a.nombre.localeCompare(b.nombre))
-      .map((cliente) => ({ value: cliente.id, label: cliente.nombre }));
-  }, [initialClientes]);
+  const fechaEstimadaInputRef = React.useRef<HTMLInputElement | null>(null);
 
   function toggle(id: string) {
     setOpenIds((prev) => {
@@ -1890,21 +2565,11 @@ export function PropuestaFicha({
 
       <div className="orden-form">
         <FieldCard label="Cliente" icon={<UserIcon />}>
-          <div className="ctrl-select">
-            <select
-              value={clienteId}
-              onChange={(event) => setClienteId(event.target.value)}
-              aria-label="Cliente"
-            >
-              <option value="">Seleccionar cliente</option>
-              {clienteItems.map((cliente) => (
-                <option key={cliente.value} value={cliente.value}>
-                  {cliente.label}
-                </option>
-              ))}
-            </select>
-            <ChevronRightIcon />
-          </div>
+          <ClienteCombobox
+            value={clienteId}
+            onChange={setClienteId}
+            initialClientes={initialClientes}
+          />
         </FieldCard>
 
         <FieldCard label="Vendedor" icon={<UserIcon />}>
@@ -1919,27 +2584,16 @@ export function PropuestaFicha({
         </FieldCard>
 
         <FieldCard label="Canal de venta" icon={<PackageIcon />}>
-          <div className="ctrl-select">
-            <select
-              value={canalVenta}
-              onChange={(event) => setCanalVenta(event.target.value)}
-              aria-label="Canal de venta"
-            >
-              {CANALES_VENTA.map((canal) => (
-                <option key={canal.value} value={canal.value}>
-                  {canal.label}
-                </option>
-              ))}
-            </select>
-            <ChevronRightIcon />
-          </div>
+          <CanalVentaSelect value={canalVenta} onChange={setCanalVenta} />
         </FieldCard>
 
         <FieldCard label="Fecha estimada" icon={<CalendarIcon />} hint="Entrega">
           <div className="ctrl-input">
             <input
+              ref={fechaEstimadaInputRef}
               type="date"
               value={fechaEstimada}
+              onClick={() => fechaEstimadaInputRef.current?.showPicker?.()}
               onChange={(event) => setFechaEstimada(event.target.value)}
               aria-label="Fecha estimada"
             />
@@ -1950,17 +2604,27 @@ export function PropuestaFicha({
       <div className="orden-main-full">
         <div className="orden-tabs-row">
           <OrdenTabs value={tab} onChange={setTab} count={items.length} />
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => {
-              setEditingItem(null);
-              setAddOpen(true);
-            }}
-          >
-            <PlusIcon />
-            Agregar producto
-          </button>
+          <div className="orden-actions">
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setCargoOpen(true)}
+            >
+              <CircleDollarSignIcon />
+              Agregar cargo
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setEditingItem(null);
+                setAddOpen(true);
+              }}
+            >
+              <PlusIcon />
+              Agregar producto
+            </button>
+          </div>
         </div>
 
         {tab === "productos" ? (
@@ -2023,6 +2687,57 @@ export function PropuestaFicha({
           </div>
         ) : null}
 
+        {tab === "productos" && cargosOrden.length > 0 ? (
+          <section className="orden-cargos-card">
+            <div className="orden-cargos-head">
+              <div>
+                <div className="ttl">Cargos de la orden</div>
+                <div className="sub">Aplicados al total general con snapshot del catálogo.</div>
+              </div>
+              <button type="button" className="btn" onClick={() => setCargoOpen(true)}>
+                <PlusIcon />
+                Agregar cargo
+              </button>
+            </div>
+            <div className="orden-cargos-list">
+              {cargosOrden.map((cargo) => (
+                <div className="orden-cargo-row" key={cargo.id}>
+                  <div className="cargo-main">
+                    <span className="cargo-code">{humanizeCodigo(cargo.codigoSnapshot)}</span>
+                    <strong>{cargo.nombreSnapshot}</strong>
+                    <small>{cargo.detalle}</small>
+                    {cargo.nota ? <em>{cargo.nota}</em> : null}
+                  </div>
+                  <div className="cargo-num">
+                    <span>Neto</span>
+                    <strong>{formatCurrency(cargo.montoNeto)}</strong>
+                  </div>
+                  <div className="cargo-num">
+                    <span>IVA</span>
+                    <strong>{formatCurrency(cargo.impuestoMonto)}</strong>
+                  </div>
+                  <div className="cargo-num total">
+                    <span>Total</span>
+                    <strong>{formatCurrency(cargo.total)}</strong>
+                  </div>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    onClick={() =>
+                      setCargosOrden((current) =>
+                        current.filter((candidate) => candidate.id !== cargo.id),
+                      )
+                    }
+                    aria-label={`Eliminar cargo ${cargo.nombreSnapshot}`}
+                  >
+                    <Trash2Icon />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         {tab === "produccion" ? (
           <EmptyTab
             title="Programacion de produccion"
@@ -2051,6 +2766,7 @@ export function PropuestaFicha({
         {tab === "productos" ? (
           <ResumenBar
             items={items}
+            cargosOrden={cargosOrden}
             tipo={ordenTipo}
             fechaEstimada={fechaEstimada}
             fechaCreacion={fechaCreacion}
@@ -2080,6 +2796,17 @@ export function PropuestaFicha({
           setOpenIds((current) => new Set([...current, item.id]));
           setAddOpen(false);
           setEditingItem(null);
+        }}
+      />
+      <CargoOrdenSheet
+        open={cargoOpen}
+        cargos={initialCargosDirectos}
+        subtotalBase={calcularResumen(items).subtotal}
+        onClose={() => setCargoOpen(false)}
+        onAdd={(cargo) => {
+          setCargosOrden((current) => [...current, cargo]);
+          setCargoOpen(false);
+          toast.success(`${cargo.nombreSnapshot} agregado a la orden.`);
         }}
       />
       {panelEditor ? (

@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { HumanSelect, optionFromLabel } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -35,17 +34,165 @@ import {
   eliminarCargoDirecto,
 } from "@/lib/productos-servicios-api";
 import type { CargoDirectoCatalogo } from "@/lib/productos-servicios";
-import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { EstadoVacio } from "@/components/ui/estado-vacio";
-import {
-  getLabel,
-  modoActivacionLabels,
-  modoCalculoCargoLabels,
-} from "@/lib/labels-humanos";
+import { getLabel, modoCalculoCargoLabels } from "@/lib/labels-humanos";
 
-const MODOS_CALCULO = ["MONTO_FIJO_PLANO", "PORCENTAJE_SOBRE_BASE", "POR_UNIDAD_INPUT"];
-const MODOS_ACTIVACION = ["OBLIGATORIO", "OPCIONAL", "CONDICIONAL"];
+type CargoModoUi =
+  | "MONTO_FIJO_PLANO"
+  | "TABLA_IMPORTES"
+  | "PORCENTAJE_SOBRE_BASE"
+  | "POR_UNIDAD_INPUT";
+
+type ZonaCargoDraft = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  monto: string;
+};
+
+const MODOS_CARGO_UI: Array<{ value: CargoModoUi; label: string; description: string }> = [
+  {
+    value: "MONTO_FIJO_PLANO",
+    label: "Monto fijo editable",
+    description: "Un importe sugerido que el comercial puede ajustar al agregarlo a la OT.",
+  },
+  {
+    value: "TABLA_IMPORTES",
+    label: "Tabla de importes / zonas",
+    description: "Importes predefinidos por zona, destino o categoría.",
+  },
+  {
+    value: "PORCENTAJE_SOBRE_BASE",
+    label: "Porcentaje sobre subtotal",
+    description: "Un porcentaje aplicado sobre el subtotal neto de productos.",
+  },
+  {
+    value: "POR_UNIDAD_INPUT",
+    label: "Por unidad",
+    description: "Precio por kilómetro, bulto, hora, viaje u otra unidad.",
+  },
+];
+
+const INPUT_CANTIDAD_OPTIONS = [
+  { value: "distanciaKm", label: "Distancia", unit: "km" },
+  { value: "bultos", label: "Bultos", unit: "bultos" },
+  { value: "horas", label: "Horas", unit: "h" },
+  { value: "viajes", label: "Viajes", unit: "viajes" },
+  { value: "paradas", label: "Paradas", unit: "paradas" },
+  { value: "cajas", label: "Cajas", unit: "cajas" },
+];
+
+const UNIDAD_OPTIONS = [
+  { value: "km", label: "Kilómetros" },
+  { value: "bultos", label: "Bultos" },
+  { value: "h", label: "Horas" },
+  { value: "viajes", label: "Viajes" },
+  { value: "paradas", label: "Paradas" },
+  { value: "cajas", label: "Cajas" },
+  { value: "u", label: "Unidades" },
+];
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function asNumberString(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? String(parsed) : "";
+}
+
+function modoUiFromCargo(cargo: CargoDirectoCatalogo): CargoModoUi {
+  const config = asRecord(cargo.configJson);
+  if (cargo.modoCalculo === "MONTO_FIJO_PLANO" && Array.isArray(config.zonas)) {
+    return "TABLA_IMPORTES";
+  }
+  return cargo.modoCalculo as CargoModoUi;
+}
+
+function zonasFromConfig(config: Record<string, unknown>): ZonaCargoDraft[] {
+  const zonas = Array.isArray(config.zonas) ? config.zonas : [];
+  return zonas
+    .map((zona, index) => {
+      const item = asRecord(zona);
+      return {
+        id: `zona-${Date.now()}-${index}`,
+        codigo: String(item.codigo ?? ""),
+        nombre: String(item.nombre ?? ""),
+        monto: asNumberString(item.monto),
+      };
+    })
+    .filter((zona) => zona.codigo || zona.nombre || zona.monto);
+}
+
+function modoMotorFromUi(
+  modo: CargoModoUi,
+): "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT" {
+  if (modo === "TABLA_IMPORTES") return "MONTO_FIJO_PLANO";
+  return modo;
+}
+
+function slugifyCodigo(value: string) {
+  const normalized = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 44);
+  return normalized || "cargo";
+}
+
+function generarCodigoCargo(nombre: string, existentes: CargoDirectoCatalogo[]) {
+  const base = slugifyCodigo(nombre);
+  const codigos = new Set(existentes.map((cargo) => cargo.codigo));
+  if (!codigos.has(base)) return base;
+
+  for (let index = 2; index < 1000; index += 1) {
+    const suffix = `_${index}`;
+    const candidate = `${base.slice(0, 50 - suffix.length)}${suffix}`;
+    if (!codigos.has(candidate)) return candidate;
+  }
+
+  return `${base.slice(0, 37)}_${Date.now().toString(36)}`;
+}
+
+function selectClassName() {
+  return "border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none";
+}
+
+function formatConfigResumen(cargo: CargoDirectoCatalogo) {
+  const config = asRecord(cargo.configJson);
+  if (cargo.modoCalculo === "MONTO_FIJO_PLANO") {
+    const zonas = Array.isArray(config.zonas) ? config.zonas : [];
+    if (zonas.length > 0) return `${zonas.length} importe${zonas.length === 1 ? "" : "s"}`;
+    const monto = Number(config.monto ?? 0);
+    return monto > 0
+      ? new Intl.NumberFormat("es-AR", {
+          style: "currency",
+          currency: "ARS",
+          maximumFractionDigits: 0,
+        }).format(monto)
+      : "Sin monto";
+  }
+  if (cargo.modoCalculo === "PORCENTAJE_SOBRE_BASE") {
+    const pct = Number(config.porcentaje ?? config.porcentajeDefault ?? 0);
+    return pct > 0 ? `${pct}% sobre subtotal` : "Sin porcentaje";
+  }
+  if (cargo.modoCalculo === "POR_UNIDAD_INPUT") {
+    const precio = Number(config.precioPorUnidad ?? 0);
+    const unidad = typeof config.unidad === "string" ? config.unidad : "";
+    const formatted = new Intl.NumberFormat("es-AR", {
+      style: "currency",
+      currency: "ARS",
+      maximumFractionDigits: 0,
+    }).format(precio);
+    return `${formatted}${unidad ? ` / ${unidad}` : ""}`;
+  }
+  return "Sin configuración";
+}
 
 export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoDirectoCatalogo[] }) {
   const router = useRouter();
@@ -57,9 +204,13 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
   const [codigo, setCodigo] = React.useState("");
   const [nombre, setNombre] = React.useState("");
   const [descripcion, setDescripcion] = React.useState("");
-  const [modoCalculo, setModoCalculo] = React.useState("MONTO_FIJO_PLANO");
-  const [modosActivacion, setModosActivacion] = React.useState<string[]>(["OPCIONAL"]);
-  const [configJsonStr, setConfigJsonStr] = React.useState("{}");
+  const [modoCalculo, setModoCalculo] = React.useState<CargoModoUi>("MONTO_FIJO_PLANO");
+  const [montoFijo, setMontoFijo] = React.useState("");
+  const [zonas, setZonas] = React.useState<ZonaCargoDraft[]>([]);
+  const [porcentaje, setPorcentaje] = React.useState("");
+  const [precioPorUnidad, setPrecioPorUnidad] = React.useState("");
+  const [inputCantidad, setInputCantidad] = React.useState("cantidad");
+  const [unidad, setUnidad] = React.useState("");
 
   const abrirNuevo = () => {
     setEditando(null);
@@ -67,19 +218,28 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
     setNombre("");
     setDescripcion("");
     setModoCalculo("MONTO_FIJO_PLANO");
-    setModosActivacion(["OPCIONAL"]);
-    setConfigJsonStr("{}");
+    setMontoFijo("");
+    setZonas([]);
+    setPorcentaje("");
+    setPrecioPorUnidad("");
+    setInputCantidad("cantidad");
+    setUnidad("");
     setOpenSheet(true);
   };
 
   const abrirEditar = (c: CargoDirectoCatalogo) => {
+    const config = asRecord(c.configJson);
     setEditando(c);
     setCodigo(c.codigo);
     setNombre(c.nombre);
     setDescripcion(c.descripcion ?? "");
-    setModoCalculo(c.modoCalculo);
-    setModosActivacion(c.modosActivacionSoportados);
-    setConfigJsonStr(JSON.stringify(c.configJson ?? {}, null, 2));
+    setModoCalculo(modoUiFromCargo(c));
+    setMontoFijo(asNumberString(config.monto));
+    setZonas(zonasFromConfig(config));
+    setPorcentaje(asNumberString(config.porcentaje ?? config.porcentajeDefault));
+    setPrecioPorUnidad(asNumberString(config.precioPorUnidad));
+    setInputCantidad(typeof config.inputCantidad === "string" ? config.inputCantidad : "cantidad");
+    setUnidad(typeof config.unidad === "string" ? config.unidad : "");
     setOpenSheet(true);
   };
 
@@ -87,30 +247,77 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
     setGuardando(true);
     try {
       let configJson: Record<string, unknown> = {};
-      try {
-        configJson = JSON.parse(configJsonStr || "{}");
-      } catch {
-        toast.error("El JSON de configuración no es válido");
-        setGuardando(false);
-        return;
+      if (modoCalculo === "MONTO_FIJO_PLANO") {
+        const monto = Number(montoFijo);
+        if (!Number.isFinite(monto) || monto <= 0) {
+          toast.error("Ingresá un monto fijo mayor a cero.");
+          setGuardando(false);
+          return;
+        }
+        configJson = { monto };
+      }
+      if (modoCalculo === "TABLA_IMPORTES") {
+        const zonasValidas = zonas
+          .map((zona) => ({
+            codigo: zona.codigo.trim(),
+            nombre: zona.nombre.trim(),
+            monto: Number(zona.monto),
+          }))
+          .filter((zona) => zona.codigo && zona.nombre && Number.isFinite(zona.monto) && zona.monto > 0);
+        if (zonasValidas.length === 0) {
+          toast.error("Agregá al menos una zona con código, nombre y monto.");
+          setGuardando(false);
+          return;
+        }
+        configJson = { zonas: zonasValidas };
+      }
+      if (modoCalculo === "PORCENTAJE_SOBRE_BASE") {
+        const porcentajeValor = Number(porcentaje);
+        if (!Number.isFinite(porcentajeValor) || porcentajeValor <= 0) {
+          toast.error("Ingresá un porcentaje mayor a cero.");
+          setGuardando(false);
+          return;
+        }
+        configJson = {
+          porcentajeDefault: porcentajeValor,
+          baseDeCalculo: "SUBTOTAL_PRODUCTOS",
+        };
+      }
+      if (modoCalculo === "POR_UNIDAD_INPUT") {
+        const precio = Number(precioPorUnidad);
+        if (!Number.isFinite(precio) || precio <= 0) {
+          toast.error("Ingresá un precio por unidad mayor a cero.");
+          setGuardando(false);
+          return;
+        }
+        if (!inputCantidad.trim()) {
+          toast.error("Ingresá el nombre del dato a cargar.");
+          setGuardando(false);
+          return;
+        }
+        configJson = {
+          precioPorUnidad: precio,
+          unidad: unidad.trim(),
+          inputCantidad: inputCantidad.trim(),
+        };
       }
 
       if (editando) {
         await actualizarCargoDirecto(editando.id, {
           nombre,
           descripcion: descripcion || undefined,
-          modoCalculo: modoCalculo as "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT",
-          modosActivacionSoportados: modosActivacion,
+          modoCalculo: modoMotorFromUi(modoCalculo),
+          modosActivacionSoportados: ["OPCIONAL"],
           configJson,
         });
         toast.success(`Cargo "${nombre}" actualizado`);
       } else {
         await crearCargoDirecto({
-          codigo,
+          codigo: generarCodigoCargo(nombre, initialCargos),
           nombre,
           descripcion: descripcion || undefined,
-          modoCalculo: modoCalculo as "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT",
-          modosActivacionSoportados: modosActivacion,
+          modoCalculo: modoMotorFromUi(modoCalculo),
+          modosActivacionSoportados: ["OPCIONAL"],
           configJson,
         });
         toast.success(`Cargo "${nombre}" creado`);
@@ -138,10 +345,21 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
     }
   };
 
-  const toggleModoActivacion = (m: string) => {
-    setModosActivacion((prev) =>
-      prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m],
+  const addZona = () => {
+    setZonas((current) => [
+      ...current,
+      { id: `zona-${Date.now()}`, codigo: "", nombre: "", monto: "" },
+    ]);
+  };
+
+  const updateZona = (id: string, patch: Partial<ZonaCargoDraft>) => {
+    setZonas((current) =>
+      current.map((zona) => (zona.id === id ? { ...zona, ...patch } : zona)),
     );
+  };
+
+  const removeZona = (id: string) => {
+    setZonas((current) => current.filter((zona) => zona.id !== id));
   };
 
   return (
@@ -167,21 +385,20 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
               <SheetTitle>{editando ? "Editar cargo" : "Nuevo cargo directo"}</SheetTitle>
               <SheetDescription>
                 {editando
-                  ? "Editar los datos del cargo."
-                  : "Crear un nuevo cargo en el catálogo del tenant."}
+                  ? "Editá los valores sugeridos que luego podrá aplicar el comercial."
+                  : "Creá una plantilla de cargo para usarla en órdenes de trabajo."}
               </SheetDescription>
             </SheetHeader>
             <div className="space-y-4 px-4">
-              <div className="space-y-2">
-                <Label htmlFor="codigo">Código *</Label>
-                <Input
-                  id="codigo"
-                  value={codigo}
-                  onChange={(e) => setCodigo(e.target.value)}
-                  disabled={!!editando}
-                  placeholder="recargo_urgencia"
-                />
-              </div>
+              {editando ? (
+                <div className="space-y-2">
+                  <Label htmlFor="codigo">Código del sistema</Label>
+                  <Input id="codigo" value={codigo} disabled />
+                  <p className="text-muted-foreground text-xs">
+                    Se generó automáticamente al crear el cargo.
+                  </p>
+                </div>
+              ) : null}
               <div className="space-y-2">
                 <Label htmlFor="nombre">Nombre *</Label>
                 <Input
@@ -201,82 +418,172 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
                 />
               </div>
               <div className="space-y-2">
-                <LabelConTooltip
-                  label="Modo de cálculo"
-                  required
-                  htmlFor="modoCalculo"
-                  tooltip="Cómo se calcula el monto del cargo: monto fijo, porcentaje sobre subtotal, o precio por unidad de input."
-                />
-                <HumanSelect
+                <Label htmlFor="modoCalculo">Modo de cálculo *</Label>
+                <select
                   id="modoCalculo"
                   value={modoCalculo}
-                  onValueChange={(v) => setModoCalculo(v || "MONTO_FIJO_PLANO")}
-                  options={MODOS_CALCULO.map((m) => optionFromLabel(m, modoCalculoCargoLabels))}
-                />
+                  onChange={(event) => setModoCalculo(event.target.value as CargoModoUi)}
+                  className={selectClassName()}
+                >
+                  {MODOS_CARGO_UI.map((modo) => (
+                    <option key={modo.value} value={modo.value}>
+                      {modo.label}
+                    </option>
+                  ))}
+                </select>
                 <p className="text-muted-foreground text-xs">
-                  {getLabel(modoCalculoCargoLabels, modoCalculo).descripcion}
+                  {MODOS_CARGO_UI.find((modo) => modo.value === modoCalculo)?.description}
                 </p>
               </div>
-              <div className="space-y-2">
-                <LabelConTooltip
-                  label="¿Cuándo se aplica?"
-                  tooltip="Marcá los modos de activación que el modelador podrá elegir cuando asocie este cargo a un producto/paso."
-                />
-                <div className="flex flex-wrap gap-2">
-                  {MODOS_ACTIVACION.map((m) => {
-                    const lbl = getLabel(modoActivacionLabels, m);
-                    return (
-                      <label
-                        key={m}
-                        className="hover:bg-accent flex items-center gap-2 rounded border px-2 py-1 text-xs"
-                        title={lbl.descripcion}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={modosActivacion.includes(m)}
-                          onChange={() => toggleModoActivacion(m)}
-                        />
-                        <span>{lbl.label}</span>
-                      </label>
-                    );
-                  })}
+
+              {modoCalculo === "MONTO_FIJO_PLANO" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="montoFijo">Monto sugerido *</Label>
+                  <Input
+                    id="montoFijo"
+                    type="number"
+                    min="0"
+                    value={montoFijo}
+                    onChange={(event) => setMontoFijo(event.target.value)}
+                    placeholder="5000"
+                  />
+                  <p className="text-muted-foreground text-xs">
+                    Al aplicarlo en una OT, el comercial puede ajustar este importe.
+                  </p>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <LabelConTooltip
-                  label="Configuración (JSON)"
-                  htmlFor="configJson"
-                  tooltip="Valores default para este cargo. El formato depende del modo de cálculo elegido."
-                />
-                <Textarea
-                  id="configJson"
-                  value={configJsonStr}
-                  onChange={(e) => setConfigJsonStr(e.target.value)}
-                  rows={6}
-                  className="font-mono text-xs"
-                  placeholder={
-                    modoCalculo === "MONTO_FIJO_PLANO"
-                      ? '{"monto": 5000} o {"zonas": [{"codigo": "CABA", "monto": 3000}, ...]}'
-                      : modoCalculo === "PORCENTAJE_SOBRE_BASE"
-                        ? '{"porcentajeDefault": 30}'
-                        : '{"precioPorUnidad": 80, "unidad": "km", "inputCantidad": "distanciaKm"}'
-                  }
-                />
-                <p className="text-muted-foreground text-xs">
-                  {modoCalculo === "MONTO_FIJO_PLANO" &&
-                    "Ej. monto único: { monto: 500 }. Con zonas: { zonas: [{codigo, nombre, monto}, ...] }."}
-                  {modoCalculo === "PORCENTAJE_SOBRE_BASE" &&
-                    "Ej. { porcentajeDefault: 30 } aplica 30% sobre subtotal."}
-                  {modoCalculo === "POR_UNIDAD_INPUT" &&
-                    "Ej. { precioPorUnidad: 80, inputCantidad: 'distanciaKm' } cobra $80 × cantidad de km del JobContext."}
-                </p>
-              </div>
+              ) : null}
+
+              {modoCalculo === "TABLA_IMPORTES" ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <Label>Zonas o importes</Label>
+                    <Button type="button" variant="outline" size="sm" onClick={addZona}>
+                      <PlusIcon className="mr-2 size-3" />
+                      Agregar zona
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    {zonas.length === 0 ? (
+                      <div className="text-muted-foreground rounded-md border border-dashed p-3 text-xs">
+                        Agregá opciones como CABA, GBA Norte, Retiro en taller o Fuera de zona.
+                      </div>
+                    ) : null}
+                    {zonas.map((zona) => (
+                      <div key={zona.id} className="grid grid-cols-[88px_1fr_96px_32px] gap-2">
+                        <Input
+                          value={zona.codigo}
+                          onChange={(event) => updateZona(zona.id, { codigo: event.target.value })}
+                          placeholder="CABA"
+                          aria-label="Código de zona"
+                        />
+                        <Input
+                          value={zona.nombre}
+                          onChange={(event) => updateZona(zona.id, { nombre: event.target.value })}
+                          placeholder="CABA"
+                          aria-label="Nombre de zona"
+                        />
+                        <Input
+                          type="number"
+                          min="0"
+                          value={zona.monto}
+                          onChange={(event) => updateZona(zona.id, { monto: event.target.value })}
+                          placeholder="3000"
+                          aria-label="Monto de zona"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeZona(zona.id)}
+                          aria-label="Eliminar zona"
+                        >
+                          <Trash2Icon className="size-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {modoCalculo === "PORCENTAJE_SOBRE_BASE" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="porcentaje">Porcentaje sugerido *</Label>
+                  <Input
+                    id="porcentaje"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={porcentaje}
+                    onChange={(event) => setPorcentaje(event.target.value)}
+                    placeholder="30"
+                  />
+                  <p className="text-muted-foreground text-xs">
+                    Se aplica sobre el subtotal neto de productos de la OT.
+                  </p>
+                </div>
+              ) : null}
+
+              {modoCalculo === "POR_UNIDAD_INPUT" ? (
+                <div className="grid gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="inputCantidad">Dato que cargará el comercial *</Label>
+                    <select
+                      id="inputCantidad"
+                      value={inputCantidad}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setInputCantidad(next);
+                        const option = INPUT_CANTIDAD_OPTIONS.find((item) => item.value === next);
+                        if (option) setUnidad(option.unit);
+                      }}
+                      className={selectClassName()}
+                    >
+                      {INPUT_CANTIDAD_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-muted-foreground text-xs">
+                      Este dato se pedirá al aplicar el cargo en la OT.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="unidad">Unidad visible</Label>
+                      <select
+                        id="unidad"
+                        value={unidad}
+                        onChange={(event) => setUnidad(event.target.value)}
+                        className={selectClassName()}
+                      >
+                        {UNIDAD_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="precioPorUnidad">Precio por unidad *</Label>
+                      <Input
+                        id="precioPorUnidad"
+                        type="number"
+                        min="0"
+                        value={precioPorUnidad}
+                        onChange={(event) => setPrecioPorUnidad(event.target.value)}
+                        placeholder="80"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
             <SheetFooter>
               <Button variant="outline" onClick={() => setOpenSheet(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handleGuardar} disabled={guardando || !nombre || !codigo}>
+              <Button onClick={handleGuardar} disabled={guardando || !nombre}>
                 {guardando ? "Guardando..." : editando ? "Guardar cambios" : "Crear"}
               </Button>
             </SheetFooter>
@@ -307,7 +614,7 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
                 <TableRow>
                   <TableHead>Nombre</TableHead>
                   <TableHead>Modo cálculo</TableHead>
-                  <TableHead>Modos activación</TableHead>
+                  <TableHead>Valor sugerido</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -330,21 +637,7 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {c.modosActivacionSoportados.map((m) => {
-                          const lbl = getLabel(modoActivacionLabels, m);
-                          return (
-                            <Badge
-                              key={m}
-                              variant="secondary"
-                              className="text-[10px]"
-                              title={lbl.descripcion}
-                            >
-                              {lbl.label}
-                            </Badge>
-                          );
-                        })}
-                      </div>
+                      <span className="text-sm">{formatConfigResumen(c)}</span>
                     </TableCell>
                     <TableCell>
                       <Badge variant={c.activo ? "default" : "secondary"}>

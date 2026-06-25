@@ -34,6 +34,7 @@ export class FamiliasPasosService {
           nombre: f.nombre,
           categoria: f.categoria,
           descripcion: f.descripcion,
+          visibleEnSelector: f.visibleEnSelector ?? true,
           relacionMaquinaSoportada: f.relacionMaquinaSoportada,
           modoActivacionDefault: f.modoActivacionDefault,
           modosTiempoSoportados: f.modosTiempoSoportados,

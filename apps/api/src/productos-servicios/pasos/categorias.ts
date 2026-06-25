@@ -1,7 +1,7 @@
 /**
  * Categorías de alto nivel del catálogo de familias.
  *
- * Las 9 categorías agrupan las 31 familias para UI y navegación.
+ * Las 9 categorías agrupan las familias para UI y navegación.
  * Ver `docs/motor-por-pasos-analisis/01-tipos-de-paso.md` §1.
  */
 

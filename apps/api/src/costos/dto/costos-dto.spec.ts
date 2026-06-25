@@ -7,11 +7,32 @@ import {
 } from './upsert-centro-recursos-maquinaria.dto';
 
 describe('Costos DTO validation', () => {
+  it('acepta maquinaria sin campos de energia y productividad', async () => {
+    const dto = plainToInstance(UpsertCentroRecursosMaquinariaDto, {
+      recursos: [
+        {
+          centroCostoRecursoId: '550e8400-e29b-41d4-a716-446655440000',
+          metodoDepreciacion: MetodoDepreciacionMaquinaDto.lineal,
+          valorCompra: 1000,
+          valorResidual: 0,
+          vidaUtilMeses: 12,
+          mantenimientoMensual: 0,
+          segurosMensual: 0,
+          otrosFijosMensual: 0,
+        },
+      ],
+    });
+
+    const errors = await validate(dto);
+
+    expect(errors).toHaveLength(0);
+  });
+
   it('rechaza porcentajes de maquinaria mayores a 100', async () => {
     const dto = plainToInstance(UpsertCentroRecursosMaquinariaDto, {
       recursos: [
         {
-          centroCostoRecursoId: '11111111-1111-1111-1111-111111111111',
+          centroCostoRecursoId: '550e8400-e29b-41d4-a716-446655440000',
           metodoDepreciacion: MetodoDepreciacionMaquinaDto.lineal,
           valorCompra: 1000,
           valorResidual: 0,

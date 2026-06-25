@@ -48,6 +48,28 @@ export type PropuestaItem = {
   }>;
 };
 
+export type PropuestaCargoDirecto = {
+  id: string;
+  cargoDirectoCatalogoId: string;
+  codigoSnapshot: string;
+  nombreSnapshot: string;
+  descripcionSnapshot?: string | null;
+  modoCalculoSnapshot:
+    | "MONTO_FIJO_PLANO"
+    | "PORCENTAJE_SOBRE_BASE"
+    | "POR_UNIDAD_INPUT";
+  configSnapshot: Record<string, unknown>;
+  baseCalculo: number;
+  cantidadInput?: number;
+  montoNeto: number;
+  impuestoPorcentaje: number;
+  impuestoMonto: number;
+  total: number;
+  detalle: string;
+  nota?: string;
+  createdAt: string;
+};
+
 export type PropuestaResumen = {
   subtotal: number;
   impuestos: number;

@@ -95,6 +95,24 @@ export class InventarioBibliotecaService {
     if (selectedVariants.length === 0 && customVariants.length === 0) {
       throw new BadRequestException('Seleccioná al menos una variante.');
     }
+    const firstVariant = selectedVariants[0] ?? null;
+    const firstCustomVariant = customVariants[0] ?? null;
+    const unidadStock = this.resolveMaterialUnit(
+      firstVariant?.unidadStock,
+      firstCustomVariant?.unidadStock,
+      preset.templateId,
+      'stock',
+    );
+    const unidadCompra = this.resolveMaterialUnit(
+      firstVariant?.unidadCompra,
+      firstCustomVariant?.unidadCompra,
+      preset.templateId,
+      'compra',
+    );
+    const initialAttributes = this.initialAttributesForPreset(
+      preset.templateId,
+      firstVariant?.atributosVarianteJson ?? firstCustomVariant?.atributosVariante,
+    );
 
     const existingMaterials = await this.prisma.materiaPrima.findMany({
       where: { tenantId: auth.tenantId, materialPresetId: preset.id },
@@ -136,17 +154,12 @@ export class InventarioBibliotecaService {
               subfamilia: preset.subfamilia,
               tipoTecnico: preset.tipoTecnico,
               templateId: preset.templateId,
-              unidadStock: UnidadMateriaPrima.UNIDAD,
-              unidadCompra: UnidadMateriaPrima.UNIDAD,
+              unidadStock,
+              unidadCompra,
               esConsumible: false,
               esRepuesto: false,
               activo: true,
-              atributosTecnicosJson: this.toInputJson({
-                ancho: 1.22,
-                alto: 2.44,
-                espesor: 3,
-                colorBase: 'blanco',
-              }),
+              atributosTecnicosJson: this.toInputJson(initialAttributes),
             },
             select: { id: true },
           }));
@@ -282,6 +295,7 @@ export class InventarioBibliotecaService {
           nombreVarianteSugerido: variant.nombreVarianteSugerido,
           formato: variant.formato,
           espesor: variant.espesor ? Number(variant.espesor) : null,
+          gramaje: this.numberFromJson(variant.atributosVarianteJson, 'gramaje'),
           color: variant.color,
           recomendada: variant.recomendada,
           atributosVariante: variant.atributosVarianteJson,
@@ -335,8 +349,69 @@ export class InventarioBibliotecaService {
       : [];
   }
 
+  private numberFromJson(value: Prisma.JsonValue, key: string) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const raw = (value as Record<string, unknown>)[key];
+    if (typeof raw === 'number') return raw;
+    if (typeof raw === 'string' && raw.trim()) {
+      const parsed = Number(raw);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  }
+
   private toApiEnum(value: string) {
     return value.toLowerCase();
+  }
+
+  private resolveMaterialUnit(
+    presetVariantUnit: UnidadMateriaPrima | null | undefined,
+    customVariantUnit: string | undefined,
+    templateId: string,
+    role: 'stock' | 'compra',
+  ) {
+    if (presetVariantUnit) return presetVariantUnit;
+    if (customVariantUnit) return customVariantUnit.toUpperCase() as UnidadMateriaPrima;
+    if (templateId === 'sustrato_hoja_v1') {
+      return role === 'stock' ? UnidadMateriaPrima.HOJA : UnidadMateriaPrima.RESMA;
+    }
+    return UnidadMateriaPrima.UNIDAD;
+  }
+
+  private initialAttributesForPreset(templateId: string, attributes: unknown) {
+    const source =
+      attributes && typeof attributes === 'object' && !Array.isArray(attributes)
+        ? (attributes as Record<string, unknown>)
+        : {};
+    if (templateId === 'sustrato_hoja_v1') {
+      return this.pickAttributes(source, [
+        'formatoComercial',
+        'ancho',
+        'alto',
+        'gramaje',
+        'material',
+        'color',
+        'acabado',
+        'anchoMm',
+        'altoMm',
+        'largoMm',
+        'gramajeGr',
+      ]);
+    }
+    if (templateId === 'sustrato_rigido_v1') {
+      return this.pickAttributes(source, ['ancho', 'alto', 'espesor', 'colorBase']);
+    }
+    return source;
+  }
+
+  private pickAttributes(source: Record<string, unknown>, keys: string[]) {
+    const picked: Record<string, unknown> = {};
+    for (const key of keys) {
+      if (source[key] !== undefined && source[key] !== null) {
+        picked[key] = source[key];
+      }
+    }
+    return picked;
   }
 
   private toInputJson(value: unknown): Prisma.InputJsonValue {

@@ -34,6 +34,7 @@ export type FamiliaCodigo =
   | 'corte_manual' // [Fase E]
   // Terminaciones
   | 'laminado'
+  | 'plastificado_pouch'
   | 'barniz'
   | 'acabado_decorativo'
   | 'pintura_superficial'
@@ -54,6 +55,7 @@ export type FamiliaCodigo =
   | 'atado_banding'
   | 'etiquetado_manual'
   | 'control_calidad'
+  | 'trabajo_manual'
   // Modificaciones físicas (sub-categoría dentro de manuales)
   | 'modificacion_pre'
   | 'modificacion_post'
@@ -157,6 +159,7 @@ export type SubfamiliaMateriaPrimaCompat =
   | 'FILM_TRANSFERENCIA'
   | 'PAPEL_TRANSFERENCIA'
   | 'LAMINADO_FILM'
+  | 'LAMINADO_POUCH'
   | 'QUIMICO_ACABADO'
   | 'AUXILIAR_PROCESO'
   | 'POLVO_DTF'
@@ -302,6 +305,8 @@ export interface DefinicionFamilia {
   nombre: string;
   categoria: CategoriaFamiliaCodigo;
   descripcion?: string;
+  /** Si false, queda disponible para productos existentes pero no aparece al crear pasos nuevos. */
+  visibleEnSelector?: boolean;
 
   // --- Comportamiento ---
   /** Tipos de relación máquina soportados. La mayoría tiene una sola, algunas pueden ser ['M-1', 'M-2'] o ['M-0', 'M-1']. */

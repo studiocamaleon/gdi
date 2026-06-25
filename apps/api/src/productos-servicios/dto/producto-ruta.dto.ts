@@ -97,6 +97,20 @@ export class DuplicarProductoRutaAlternativaDto {
 /**
  * DTO para upsert de la configuración de UN paso del producto.
  */
+export class UpsertMaquinaCandidataDto {
+  @IsUUID()
+  maquinaId!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  esPreferida?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  orden?: number;
+}
+
 export class UpsertProductoConfigPasoDto {
   @IsUUID()
   rutaPasoId!: string;
@@ -170,6 +184,12 @@ export class UpsertProductoConfigPasoDto {
   @ValidateNested({ each: true })
   @Type(() => UpsertSlotMaterialDto)
   slotsMateriales?: UpsertSlotMaterialDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => UpsertMaquinaCandidataDto)
+  maquinasCandidatas?: UpsertMaquinaCandidataDto[];
 }
 
 export class UpsertSlotMaterialDto {

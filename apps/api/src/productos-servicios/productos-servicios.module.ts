@@ -17,7 +17,7 @@ import { PrecioModule } from './precio/precio.module';
  * F.3 — endpoints CRUD del catálogo (productos, rutas, cargos, familias).
  *
  * Sub-módulos:
- * - pasos/    → catálogo de 38 familias (hardcoded en TS)
+ * - pasos/    → catálogo de familias de paso (hardcoded en TS)
  * - nesting/  → algoritmos de nesting (extraídos en F.1)
  * - costing/  → helpers de carga de tarifas (extraídos en F.1)
  * - precio/   → Tab Precio v2 (Sprint 5.a): catálogos de impuestos y

@@ -49,6 +49,8 @@ type DisplayTransform = {
   substrateHeightMm: number;
   scale: number;
   padPx: number;
+  offsetXMm?: number;
+  offsetYMm?: number;
 };
 
 function colorForKey(key: string): PieceStyle {
@@ -96,6 +98,8 @@ function labelUnidad(u: NestingViewerInput["unidad"]): string {
       return "m lineales";
     case "pliegos":
       return "pliegos";
+    case "pouches":
+      return "pouches";
     case "m2":
       return "m²";
     case "piezas":
@@ -580,6 +584,12 @@ function SubstrateView({
     scale,
     padPx,
   };
+  const placementTransform = getCenteredPlacementTransform(
+    displayTransform,
+    placements,
+    effectiveVisualConfig,
+    substrate.kind,
+  );
   const viewBoxW = wPx + padPx * 2;
   const viewBoxH = hPx + padPx * 2;
   const hasMargins = Object.values(effectiveVisualConfig.margins).some((value) => value > 0);
@@ -656,6 +666,7 @@ function SubstrateView({
             substrateHeightMm={heightMm}
             placements={placements}
             displayTransform={displayTransform}
+            placementTransform={placementTransform}
           />
           {hasMargins ? (
             <MarginsLayer
@@ -682,7 +693,7 @@ function SubstrateView({
             padPx={padPx}
             scale={scale}
             clipPathId={`printable-clip-${substrateIndex}`}
-            displayTransform={displayTransform}
+            displayTransform={placementTransform}
           />
           <DimensionLabels
             padPx={padPx}
@@ -699,7 +710,7 @@ function SubstrateView({
                 placement={placement}
                 index={idx}
                 showLabels={showLabels}
-                displayTransform={displayTransform}
+                displayTransform={placementTransform}
               />
             ))}
           </g>
@@ -945,6 +956,37 @@ function shouldDisplaySheetLandscape(kind: "sheet" | "roll", widthMm: number, he
   return kind === "sheet" && heightMm > widthMm * 1.12 && Math.max(widthMm, heightMm) >= 1000;
 }
 
+function getCenteredPlacementTransform(
+  transform: DisplayTransform,
+  placements: NestingViewerInput["placements"],
+  visualConfig: VisualConfig,
+  substrateKind: "sheet" | "roll",
+): DisplayTransform {
+  if (substrateKind !== "sheet" || placements.length === 0) return transform;
+
+  const bounds = placements.reduce(
+    (acc, placement) => ({
+      minX: Math.min(acc.minX, placement.xMm),
+      minY: Math.min(acc.minY, placement.yMm),
+      maxX: Math.max(acc.maxX, placement.xMm + placement.widthMm),
+      maxY: Math.max(acc.maxY, placement.yMm + placement.heightMm),
+    }),
+    { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity },
+  );
+
+  const usableArea = visualConfig.usableArea;
+  const contentWidthMm = bounds.maxX - bounds.minX;
+  const contentHeightMm = bounds.maxY - bounds.minY;
+  const extraXMm = usableArea.widthMm - contentWidthMm;
+  const extraYMm = usableArea.heightMm - contentHeightMm;
+
+  return {
+    ...transform,
+    offsetXMm: extraXMm > 0.01 ? usableArea.xMm + extraXMm / 2 - bounds.minX : 0,
+    offsetYMm: extraYMm > 0.01 ? usableArea.yMm + extraYMm / 2 - bounds.minY : 0,
+  };
+}
+
 function mapDisplayRect(
   transform: DisplayTransform,
   xMm: number,
@@ -953,18 +995,20 @@ function mapDisplayRect(
   heightMm: number,
 ) {
   const { padPx, scale } = transform;
+  const displayXMm = xMm + (transform.offsetXMm ?? 0);
+  const displayYMm = yMm + (transform.offsetYMm ?? 0);
   if (!transform.rotated) {
     return {
-      x: padPx + xMm * scale,
-      y: padPx + yMm * scale,
+      x: padPx + displayXMm * scale,
+      y: padPx + displayYMm * scale,
       width: widthMm * scale,
       height: heightMm * scale,
     };
   }
 
   return {
-    x: padPx + (transform.substrateHeightMm - yMm - heightMm) * scale,
-    y: padPx + xMm * scale,
+    x: padPx + (transform.substrateHeightMm - displayYMm - heightMm) * scale,
+    y: padPx + displayXMm * scale,
     width: heightMm * scale,
     height: widthMm * scale,
   };
@@ -1049,6 +1093,7 @@ function CostingOverlay({
   substrateHeightMm,
   placements,
   displayTransform,
+  placementTransform,
 }: {
   costingPreview?: NestingViewerInput["costingPreview"];
   padPx: number;
@@ -1057,6 +1102,7 @@ function CostingOverlay({
   substrateHeightMm: number;
   placements: NestingViewerInput["placements"];
   displayTransform: DisplayTransform;
+  placementTransform: DisplayTransform;
 }) {
   if (!costingPreview || costingPreview.strategy === "simple") return null;
 
@@ -1064,7 +1110,7 @@ function CostingOverlay({
     return (
       <g>
         {placements.map((placement, idx) => (
-          <CostingRect key={`cost-${placement.pieceId}-${idx}`} rect={mapDisplayRect(displayTransform, placement.xMm, placement.yMm, placement.widthMm, placement.heightMm)} />
+          <CostingRect key={`cost-${placement.pieceId}-${idx}`} rect={mapDisplayRect(placementTransform, placement.xMm, placement.yMm, placement.widthMm, placement.heightMm)} />
         ))}
       </g>
     );
